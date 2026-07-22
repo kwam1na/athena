@@ -25,7 +25,7 @@ import { ok, userError } from "../../shared/commandResult";
 import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
-import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import { listOrganizationStoresReadDefinition } from "../operationAdmission/readDefinitions";
 import type { OperationQueryCtx } from "../operationAdmission/types";
 
@@ -51,30 +51,30 @@ export const getAll = query({
   args: {
     organizationId: v.id("organization"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listOrganizationStoresReadDefinition,
     async (
       ctx: OperationQueryCtx,
       args: { organizationId: Id<"organization"> },
     ) => {
-    const admittedActor = ctx.operationAdmission.actor;
-    if (
-      admittedActor.kind === "shared_demo" &&
-      args.organizationId !== admittedActor.organizationId
-    )
-      return [];
-    const stores = await ctx.db
-      .query(entity)
-      .filter((q) => q.eq(q.field("organizationId"), args.organizationId))
-      .collect();
+      const admittedActor = ctx.operationAdmission.actor;
+      if (
+        admittedActor.kind === "shared_demo" &&
+        args.organizationId !== admittedActor.organizationId
+      )
+        return [];
+      const stores = await ctx.db
+        .query(entity)
+        .filter((q) => q.eq(q.field("organizationId"), args.organizationId))
+        .collect();
 
-    // // const reelVersions = await ctx.
-    // const reelVersions = await listItemsInR2Directory({
-    //   directory: `stores/${args.organizationId}/assets/hero`,
-    //   firstLevelOnly: true,
-    // });
+      // // const reelVersions = await ctx.
+      // const reelVersions = await listItemsInR2Directory({
+      //   directory: `stores/${args.organizationId}/assets/hero`,
+      //   firstLevelOnly: true,
+      // });
 
-    return stores;
+      return stores;
     },
   ),
 });
@@ -105,7 +105,7 @@ export const getAllByOrganization = action({
       internal.inventory.stores.getAllInternal,
       {
         organizationId: args.organizationId,
-      }
+      },
     );
 
     const reelVersions = await Promise.all(
@@ -114,12 +114,12 @@ export const getAllByOrganization = action({
           directory: `stores/${store._id}/assets/hero`,
           firstLevelOnly: true,
         });
-      })
+      }),
     );
 
     const storesWithReelVersions = stores.map((store) => {
       const storeReelVersions = reelVersions.find((reelVersion) =>
-        reelVersion.directory.includes(store._id)
+        reelVersion.directory.includes(store._id),
       );
 
       const extractedVersions =
@@ -189,13 +189,13 @@ export const getByIdOrSlug = internalQuery({
         q.or(
           q.and(
             q.eq(q.field("_id"), args.identifier),
-            q.eq(q.field("organizationId"), args.organizationId)
+            q.eq(q.field("organizationId"), args.organizationId),
           ),
           q.and(
             q.eq(q.field("slug"), args.identifier),
-            q.eq(q.field("organizationId"), args.organizationId)
-          )
-        )
+            q.eq(q.field("organizationId"), args.organizationId),
+          ),
+        ),
       )
       .first();
 
@@ -236,7 +236,10 @@ export const remove = mutation({
   },
   handler: async (ctx, args) => {
     requireNonDemoFoundationMutation({ storeId: args.id });
-    await requireSharedDemoCapabilityIfApplicable(ctx, "administration.destructive");
+    await requireSharedDemoCapabilityIfApplicable(
+      ctx,
+      "administration.destructive",
+    );
     await ctx.db.delete("store", args.id);
 
     return { message: "OK" };
@@ -275,7 +278,9 @@ export const patchConfigV2 = mutation({
     const shouldMirrorLegacy = args.mirrorLegacy !== false;
     const config = shouldMirrorLegacy
       ? mirrorLegacyKeys(nextV2Config, store.config)
-      : toV2OnlyConfig(store.config ? { ...store.config, ...nextV2Config } : nextV2Config);
+      : toV2OnlyConfig(
+          store.config ? { ...store.config, ...nextV2Config } : nextV2Config,
+        );
 
     await ctx.db.patch("store", args.id, { config });
 
@@ -305,7 +310,9 @@ export const patchConfigV2Command = mutation({
     const shouldMirrorLegacy = args.mirrorLegacy !== false;
     const config = shouldMirrorLegacy
       ? mirrorLegacyKeys(nextV2Config, store.config)
-      : toV2OnlyConfig(store.config ? { ...store.config, ...nextV2Config } : nextV2Config);
+      : toV2OnlyConfig(
+          store.config ? { ...store.config, ...nextV2Config } : nextV2Config,
+        );
 
     await ctx.db.patch("store", args.id, { config });
 
@@ -398,7 +405,10 @@ export const migrateConfigToV2Page = mutation({
 
     for (const store of page.page) {
       const currentConfig = store.config || {};
-      const nextConfig = mirrorLegacyKeys(toV2Config(currentConfig), currentConfig);
+      const nextConfig = mirrorLegacyKeys(
+        toV2Config(currentConfig),
+        currentConfig,
+      );
 
       if (JSON.stringify(currentConfig) === JSON.stringify(nextConfig)) {
         continue;
@@ -551,11 +561,11 @@ export const uploadImageAssets = action({
     const uploadPromises = args.images.map(async (imgBuffer) => {
       return uploadFileToR2(
         imgBuffer,
-        `stores/${args.storeId}/assets/${crypto.randomUUID()}.webp`
+        `stores/${args.storeId}/assets/${crypto.randomUUID()}.webp`,
       );
     });
     const images = (await Promise.all(uploadPromises)).filter(
-      (url) => url !== undefined
+      (url) => url !== undefined,
     );
 
     await Promise.all(
@@ -563,8 +573,8 @@ export const uploadImageAssets = action({
         ctx.runMutation(internal.inventory.stores.createImageAsset, {
           storeId: args.storeId,
           url,
-        })
-      )
+        }),
+      ),
     );
 
     return { success: true, images };
@@ -591,7 +601,7 @@ export const updateLandingPageReel = action({
     });
 
     const doesVersionExist = versions?.items?.some((version) =>
-      version.key.includes(`hero/v${args.data.reelVersion}`)
+      version.key.includes(`hero/v${args.data.reelVersion}`),
     );
 
     if (!doesVersionExist) {

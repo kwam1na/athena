@@ -9,8 +9,8 @@ import {
 import type { Id } from "../../_generated/dataModel";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import { registerTerminalOperationDefinition } from "../../operationAdmission/definitions";
-import { admitSharedDemoPublicMutation } from "../../operationAdmission/publicMutation";
-import { admitSharedDemoPublicQuery } from "../../operationAdmission/publicQuery";
+import { withOperationMutationAdmission } from "../../operationAdmission/publicMutation";
+import { withOperationReadAdmission } from "../../operationAdmission/publicQuery";
 import {
   getPosTerminalByFingerprintReadDefinition,
   getPosTerminalHealthReadDefinition,
@@ -979,7 +979,7 @@ export const listTerminals = query({
     storeId: v.id("store"),
   },
   returns: v.array(terminalReturnValidator),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listPosTerminalsReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireStoreMemberAccessWithCtx(ctx, {
@@ -1000,7 +1000,7 @@ export const getTerminalByFingerprint = query({
     fingerprintHash: v.string(),
   },
   returns: v.union(terminalReturnValidator, v.null()),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getPosTerminalByFingerprintReadDefinition,
     async (ctx, args: { fingerprintHash: string; storeId: Id<"store"> }) => {
       await requireStoreMemberAccessWithCtx(ctx, {
@@ -1020,7 +1020,7 @@ export const listTerminalHealthSummaries = query({
     storeId: v.id("store"),
   },
   returns: v.array(terminalHealthSummaryReturnValidator),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listPosTerminalHealthReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireStoreMemberAccessWithCtx(ctx, {
@@ -1040,7 +1040,7 @@ export const getTerminalHealthSummary = query({
     terminalId: v.id("posTerminal"),
   },
   returns: v.union(terminalHealthSummaryReturnValidator, v.null()),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getPosTerminalHealthReadDefinition,
     async (
       ctx,
@@ -1389,7 +1389,7 @@ export const registerTerminal = mutation({
     browserInfo: browserInfoValidator,
   },
   returns: commandResultValidator(terminalProvisioningReturnValidator),
-  handler: admitSharedDemoPublicMutation(
+  handler: withOperationMutationAdmission(
     registerTerminalOperationDefinition,
     async (ctx, args) => {
       try {

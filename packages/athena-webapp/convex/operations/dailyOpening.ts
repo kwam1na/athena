@@ -7,8 +7,8 @@ import {
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { startStoreDayOperationDefinition } from "../operationAdmission/definitions";
-import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
-import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import { getDailyOpeningSnapshotReadDefinition } from "../operationAdmission/readDefinitions";
 import type { OperationMutationCtx } from "../operationAdmission/types";
 import { commandResultValidator } from "../lib/commandResultValidators";
@@ -1575,7 +1575,7 @@ export const getDailyOpeningSnapshot = query({
     startAt: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getDailyOpeningSnapshotReadDefinition,
     async (
       ctx,
@@ -1617,7 +1617,7 @@ export const startStoreDay = mutation({
     storeId: v.id("store"),
   },
   returns: commandResultValidator(v.any()),
-  handler: admitSharedDemoPublicMutation(
+  handler: withOperationMutationAdmission(
     startStoreDayOperationDefinition,
     async (ctx: OperationMutationCtx, args) => {
       const admittedActor = ctx.operationAdmission.actor;

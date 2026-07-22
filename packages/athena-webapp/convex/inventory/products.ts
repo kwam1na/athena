@@ -29,7 +29,7 @@ import {
 } from "./catalogSummary";
 import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
-import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import { listInventoryProductsReadDefinition } from "../operationAdmission/readDefinitions";
 import type { OperationQueryCtx } from "../operationAdmission/types";
 import {
@@ -87,9 +87,7 @@ async function productHasPendingCheckoutRegisterCatalogDependency(
     .withIndex("by_productId", (q) => q.eq("productId", productId))
     .collect();
   const dependencies = await Promise.all(
-    skus.map((sku) =>
-      hasPendingCheckoutRegisterCatalogDependency(ctx, sku),
-    ),
+    skus.map((sku) => hasPendingCheckoutRegisterCatalogDependency(ctx, sku)),
   );
   return dependencies.some(Boolean);
 }
@@ -275,7 +273,7 @@ export const getAll = query({
       }),
     ),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listInventoryProductsReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -295,202 +293,205 @@ export const getAll = query({
         subcategory?: string[];
       },
     ) => {
-    let categoryId: Id<"category"> | undefined;
-    let subcategoryId: Id<"subcategory"> | undefined;
+      let categoryId: Id<"category"> | undefined;
+      let subcategoryId: Id<"subcategory"> | undefined;
 
-    if (args.category && args.category.length > 0) {
-      const categorySlug = args.category[0];
-      const s = await ctx.db
-        .query("category")
-        .withIndex("by_storeId_slug", (q) =>
-          q.eq("storeId", args.storeId).eq("slug", categorySlug),
-        )
-        .first();
-      categoryId = s?._id;
-    }
-
-    if (args.category && !categoryId) {
-      return [];
-    }
-
-    // this will fetch all products with the given subcategory.
-    // not problematic because the subcategory name is the same as
-    // the one in the db because the it's not set by the frontend
-    if (args.subcategory && args.subcategory.length > 0) {
-      const subcategorySlug = args.subcategory[0];
-      let s;
-      if (categoryId) {
-        s = await ctx.db
-          .query("subcategory")
-          .withIndex("by_categoryId_slug", (q) =>
-            q.eq("categoryId", categoryId).eq("slug", subcategorySlug),
+      if (args.category && args.category.length > 0) {
+        const categorySlug = args.category[0];
+        const s = await ctx.db
+          .query("category")
+          .withIndex("by_storeId_slug", (q) =>
+            q.eq("storeId", args.storeId).eq("slug", categorySlug),
           )
           .first();
-      } else {
-        s = await ctx.db
-          .query("subcategory")
-          .withIndex("by_slug", (q) => q.eq("slug", subcategorySlug))
-          .first();
+        categoryId = s?._id;
       }
-      subcategoryId = s?._id;
-    }
 
-    if (args.subcategory && !subcategoryId) {
-      return [];
-    }
+      if (args.category && !categoryId) {
+        return [];
+      }
 
-    // Use index for products query, then filter by category/subcategory in memory
-    const allProducts = await ctx.db
-      .query(entity)
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .collect();
+      // this will fetch all products with the given subcategory.
+      // not problematic because the subcategory name is the same as
+      // the one in the db because the it's not set by the frontend
+      if (args.subcategory && args.subcategory.length > 0) {
+        const subcategorySlug = args.subcategory[0];
+        let s;
+        if (categoryId) {
+          s = await ctx.db
+            .query("subcategory")
+            .withIndex("by_categoryId_slug", (q) =>
+              q.eq("categoryId", categoryId).eq("slug", subcategorySlug),
+            )
+            .first();
+        } else {
+          s = await ctx.db
+            .query("subcategory")
+            .withIndex("by_slug", (q) => q.eq("slug", subcategorySlug))
+            .first();
+        }
+        subcategoryId = s?._id;
+      }
 
-    const storefrontHiddenCategoryIds = new Set<Id<"category">>();
-    const storefrontHiddenSubcategoryIds = new Set<Id<"subcategory">>();
+      if (args.subcategory && !subcategoryId) {
+        return [];
+      }
 
-    if (args.excludeStorefrontHidden) {
-      const categories = await ctx.db
-        .query("category")
-        .filter((q) => q.eq(q.field("storeId"), args.storeId))
+      // Use index for products query, then filter by category/subcategory in memory
+      const allProducts = await ctx.db
+        .query(entity)
+        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
         .collect();
 
-      categories
-        .filter(
-          (category) =>
-            category.slug === "pos-quick-add" ||
-            category.showOnStorefront === false,
-        )
-        .forEach((category) => storefrontHiddenCategoryIds.add(category._id));
+      const storefrontHiddenCategoryIds = new Set<Id<"category">>();
+      const storefrontHiddenSubcategoryIds = new Set<Id<"subcategory">>();
 
-      const uncategorizedSubcategories = await ctx.db
-        .query("subcategory")
-        .withIndex("by_slug", (q) => q.eq("slug", "uncategorized"))
-        .collect();
+      if (args.excludeStorefrontHidden) {
+        const categories = await ctx.db
+          .query("category")
+          .filter((q) => q.eq(q.field("storeId"), args.storeId))
+          .collect();
 
-      uncategorizedSubcategories
-        .filter((subcategory) => subcategory.storeId === args.storeId)
-        .forEach((subcategory) =>
-          storefrontHiddenSubcategoryIds.add(subcategory._id),
-        );
-    }
+        categories
+          .filter(
+            (category) =>
+              category.slug === "pos-quick-add" ||
+              category.showOnStorefront === false,
+          )
+          .forEach((category) => storefrontHiddenCategoryIds.add(category._id));
 
-    const requestedAvailability = args.availability;
-    const includeHiddenSkus =
-      args.isVisible === false ||
-      requestedAvailability === "archived" ||
-      requestedAvailability === "unarchived";
+        const uncategorizedSubcategories = await ctx.db
+          .query("subcategory")
+          .withIndex("by_slug", (q) => q.eq("slug", "uncategorized"))
+          .collect();
 
-    // Filter by category/subcategory in memory
-    const products = allProducts.filter((product) => {
-      if (requestedAvailability) {
-        if (requestedAvailability === "unarchived") {
-          if (product.availability === "archived") {
+        uncategorizedSubcategories
+          .filter((subcategory) => subcategory.storeId === args.storeId)
+          .forEach((subcategory) =>
+            storefrontHiddenSubcategoryIds.add(subcategory._id),
+          );
+      }
+
+      const requestedAvailability = args.availability;
+      const includeHiddenSkus =
+        args.isVisible === false ||
+        requestedAvailability === "archived" ||
+        requestedAvailability === "unarchived";
+
+      // Filter by category/subcategory in memory
+      const products = allProducts.filter((product) => {
+        if (requestedAvailability) {
+          if (requestedAvailability === "unarchived") {
+            if (product.availability === "archived") {
+              return false;
+            }
+          } else if (product.availability !== requestedAvailability) {
             return false;
           }
-        } else if (product.availability !== requestedAvailability) {
+        } else {
+          if (product.availability !== "live") {
+            return false;
+          }
+          if (product.isVisible === false) {
+            return false;
+          }
+        }
+
+        if (
+          storefrontHiddenCategoryIds.has(product.categoryId) ||
+          storefrontHiddenSubcategoryIds.has(product.subcategoryId)
+        ) {
           return false;
         }
-      } else {
-        if (product.availability !== "live") {
+
+        if (subcategoryId) {
+          return product.subcategoryId === subcategoryId;
+        }
+        if (categoryId) {
+          return product.categoryId === categoryId;
+        }
+        return true;
+      });
+
+      // Use index for SKUs query, then filter colors/lengths in memory
+      // (Convex indexes don't support dynamic OR conditions)
+      const allSkus = await ctx.db
+        .query("productSku")
+        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+        .collect();
+
+      // Filter by color and length in memory
+      const skus = allSkus.filter((sku) => {
+        if (!includeHiddenSkus && sku.isVisible === false) {
           return false;
         }
-        if (product.isVisible === false) {
-          return false;
+        if (args.color && args.length) {
+          const colorMatch = sku.color ? args.color.includes(sku.color) : false;
+          const lengthMatch = sku.length && args.length.includes(sku.length);
+          return colorMatch && lengthMatch;
         }
-      }
-
-      if (
-        storefrontHiddenCategoryIds.has(product.categoryId) ||
-        storefrontHiddenSubcategoryIds.has(product.subcategoryId)
-      ) {
-        return false;
-      }
-
-      if (subcategoryId) {
-        return product.subcategoryId === subcategoryId;
-      }
-      if (categoryId) {
-        return product.categoryId === categoryId;
-      }
-      return true;
-    });
-
-    // Use index for SKUs query, then filter colors/lengths in memory
-    // (Convex indexes don't support dynamic OR conditions)
-    const allSkus = await ctx.db
-      .query("productSku")
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .collect();
-
-    // Filter by color and length in memory
-    const skus = allSkus.filter((sku) => {
-      if (!includeHiddenSkus && sku.isVisible === false) {
-        return false;
-      }
-      if (args.color && args.length) {
-        const colorMatch = sku.color ? args.color.includes(sku.color) : false;
-        const lengthMatch = sku.length && args.length.includes(sku.length);
-        return colorMatch && lengthMatch;
-      }
-      if (args.color) {
-        return sku.color ? args.color.includes(sku.color) : false;
-      }
-      if (args.length) {
-        return sku.length && args.length.includes(sku.length);
-      }
-      return true;
-    });
-
-    type SkusByProductId = { [key: string]: (typeof skus)[0][] };
-
-    // Map SKUs by productId for easier lookup
-    const skusByProductId: SkusByProductId = skus.reduce(
-      (acc: SkusByProductId, sku) => {
-        if (!acc[sku.productId]) {
-          acc[sku.productId] = [];
+        if (args.color) {
+          return sku.color ? args.color.includes(sku.color) : false;
         }
-        acc[sku.productId].push(sku);
-        return acc;
-      },
-      {},
-    );
+        if (args.length) {
+          return sku.length && args.length.includes(sku.length);
+        }
+        return true;
+      });
 
-    // Filter by visibility if specified
-    const visibleProducts =
-      args.isVisible !== undefined
-        ? products.filter((p) => p.isVisible === args.isVisible)
-        : products;
+      type SkusByProductId = { [key: string]: (typeof skus)[0][] };
 
-    // Attach SKUs and inventory data to products
-    const productsWithSkus = visibleProducts
-      .map((product) => {
-        const skus = skusByProductId[product._id] || [];
-        const validSkus = skus
-          .filter((sku) => {
-            // If filtering for unresolved issues (missing images or prices)
-            if (args.filters?.isMissingImages || args.filters?.isMissingPrice) {
-              const hasMissingImage =
-                args.filters?.isMissingImages && sku.images.length === 0;
-              const hasMissingPrice =
-                args.filters?.isMissingPrice &&
-                (sku.price === 0 || sku.price === undefined);
-              return hasMissingImage || hasMissingPrice;
-            }
-            // Default behavior: only show SKUs with valid prices
-            return args.filters?.isPriceZero ? true : sku.price > 0;
-          })
-          .sort((a, b) => a.price - b.price);
+      // Map SKUs by productId for easier lookup
+      const skusByProductId: SkusByProductId = skus.reduce(
+        (acc: SkusByProductId, sku) => {
+          if (!acc[sku.productId]) {
+            acc[sku.productId] = [];
+          }
+          acc[sku.productId].push(sku);
+          return acc;
+        },
+        {},
+      );
 
-        return {
-          ...product,
-          inventoryCount: calculateTotalInventoryCount(skus),
-          quantityAvailable: calculateTotalAvailableCount(skus),
-          skus: validSkus,
-        };
-      })
-      .filter((product) => product.skus.length > 0);
+      // Filter by visibility if specified
+      const visibleProducts =
+        args.isVisible !== undefined
+          ? products.filter((p) => p.isVisible === args.isVisible)
+          : products;
 
-    return productsWithSkus;
+      // Attach SKUs and inventory data to products
+      const productsWithSkus = visibleProducts
+        .map((product) => {
+          const skus = skusByProductId[product._id] || [];
+          const validSkus = skus
+            .filter((sku) => {
+              // If filtering for unresolved issues (missing images or prices)
+              if (
+                args.filters?.isMissingImages ||
+                args.filters?.isMissingPrice
+              ) {
+                const hasMissingImage =
+                  args.filters?.isMissingImages && sku.images.length === 0;
+                const hasMissingPrice =
+                  args.filters?.isMissingPrice &&
+                  (sku.price === 0 || sku.price === undefined);
+                return hasMissingImage || hasMissingPrice;
+              }
+              // Default behavior: only show SKUs with valid prices
+              return args.filters?.isPriceZero ? true : sku.price > 0;
+            })
+            .sort((a, b) => a.price - b.price);
+
+          return {
+            ...product,
+            inventoryCount: calculateTotalInventoryCount(skus),
+            quantityAvailable: calculateTotalAvailableCount(skus),
+            skus: validSkus,
+          };
+        })
+        .filter((product) => product.skus.length > 0);
+
+      return productsWithSkus;
     },
   ),
 });
@@ -1112,7 +1113,8 @@ export const updateSku = mutation({
     await requireAuthenticatedAthenaUserWithCtx(ctx);
     // Get current SKU data for validation
     const currentSku = await ctx.db.get("productSku", args.id);
-    if (currentSku) requireNonDemoFoundationMutation({ storeId: currentSku.storeId });
+    if (currentSku)
+      requireNonDemoFoundationMutation({ storeId: currentSku.storeId });
     if (!currentSku) throw new Error("SKU not found");
 
     if (args.barcode) {
@@ -1190,7 +1192,8 @@ export const update = mutation({
     await requireAuthenticatedAthenaUserWithCtx(ctx);
     const { id, ...rest } = args;
     const productBefore = await ctx.db.get("product", args.id);
-    if (productBefore) requireNonDemoFoundationMutation({ storeId: productBefore.storeId });
+    if (productBefore)
+      requireNonDemoFoundationMutation({ storeId: productBefore.storeId });
     const taxonomyChanged =
       productBefore &&
       ((args.categoryId !== undefined &&
@@ -1466,9 +1469,7 @@ export const removeAllProductsForStore = mutation({
       .collect();
 
     const pendingCheckoutDependencies = await Promise.all(
-      skus.map((sku) =>
-        hasPendingCheckoutRegisterCatalogDependency(ctx, sku),
-      ),
+      skus.map((sku) => hasPendingCheckoutRegisterCatalogDependency(ctx, sku)),
     );
 
     // Delete all SKUs using Promise.all
@@ -1540,10 +1541,7 @@ export const batchUpdateSkuPrices = mutation({
           .map((update) => ctx.db.get("productSku", update.id)),
       )
     ).filter((sku): sku is NonNullable<typeof sku> => sku !== null);
-    const skuIdsByStore = new Map<
-      Id<"store">,
-      Array<Id<"productSku">>
-    >();
+    const skuIdsByStore = new Map<Id<"store">, Array<Id<"productSku">>>();
     for (const sku of successfulSkus) {
       const skuIds = skuIdsByStore.get(sku.storeId) ?? [];
       skuIds.push(sku._id);

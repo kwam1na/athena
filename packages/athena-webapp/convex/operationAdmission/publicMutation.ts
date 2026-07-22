@@ -40,11 +40,18 @@ export function admitPublicMutation<
       );
     }
 
-    const operationAdmission = await (options.resolveAdmission ??
+    const operationAdmission = await (
+      options.resolveAdmission ??
       ((resolverCtx, resolverArgs, resolverDefinition) =>
-        resolveOperationAdmission(resolverCtx, resolverArgs, resolverDefinition, {
-          normalAdapter: createNormalUserOperationAdapter(),
-        })))(ctx, args, definition);
+        resolveOperationAdmission(
+          resolverCtx,
+          resolverArgs,
+          resolverDefinition,
+          {
+            normalAdapter: createNormalUserOperationAdapter(),
+          },
+        ))
+    )(ctx, args, definition);
 
     return handler(
       Object.assign(Object.create(Object.getPrototypeOf(ctx)), ctx, {
@@ -60,18 +67,12 @@ type SharedDemoMutationHandler = (
   args: any,
 ) => Promise<any>;
 
-export function admitSharedDemoPublicMutation<
+export function withOperationMutationAdmission<
   Handler extends SharedDemoMutationHandler,
->(
-  definition: OperationDefinition,
-  handler: Handler,
-) {
+>(definition: OperationDefinition, handler: Handler) {
   return admitPublicMutation(definition, handler, {
     resolveAdmission: resolveSharedDemoOperationAdmission,
-  }) as (
-    ctx: MutationCtx,
-    args: Parameters<Handler>[1],
-  ) => ReturnType<Handler>;
+  }) as (ctx: MutationCtx, args: Parameters<Handler>[1]) => ReturnType<Handler>;
 }
 
 export function resolveSharedDemoOperationAdmission<

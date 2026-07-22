@@ -1,5 +1,5 @@
 ---
-title: Athena Shared Demo Read Admission Rail
+title: Athena Read Admission Rail
 date: 2026-07-22
 category: docs/solutions/architecture-patterns
 module: Athena Convex public read admission
@@ -12,10 +12,10 @@ applies_when:
   - "A shared-demo read surface is using ad hoc store checks or write capability bridges"
   - "A migration wave needs exact read inventory coverage while reporting reads stay out of scope"
 tags: [athena, convex, read-admission, shared-demo, authz, operations, pos]
-delivery_diff_fingerprint: ee57fb63b15b352657f271cfffcdd31432428a048d590d332ee48fae8b807f0a
+delivery_diff_fingerprint: ae34f9fd3e67654363c099a024c7f95e12f153e7343fc32c273ed1df9a32257d
 ---
 
-# Athena Shared Demo Read Admission Rail
+# Athena Read Admission Rail
 
 ## Problem
 
@@ -26,7 +26,7 @@ Shared-demo read behavior was spread across helper-level store checks and read-c
 Use a query counterpart to the operation admission rail:
 
 - Declare read metadata in `packages/athena-webapp/convex/operationAdmission/readDefinitions.ts`.
-- Wrap exported public query handlers with `admitSharedDemoPublicQuery(...)` from `packages/athena-webapp/convex/operationAdmission/publicQuery.ts`.
+- Wrap exported public query handlers with `withOperationReadAdmission(...)` from `packages/athena-webapp/convex/operationAdmission/publicQuery.ts`.
 - Keep read admission metadata on explicit read intents such as `daily_operations.view`, not platform write capabilities.
 - Resolve normal-user and shared-demo actors in read adapters before the domain read model runs.
 - Clamp shared-demo reads to the actor's server-owned organization and store.
@@ -74,7 +74,7 @@ After, the exported query declares read intent and admits the actor before the h
 ```ts
 export const getDailyOperationsSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getDailyOperationsSnapshotReadDefinition,
     async (ctx, args) => buildDailyOperationsSnapshotWithCtx(ctx, args),
   ),

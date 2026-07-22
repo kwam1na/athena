@@ -31,7 +31,7 @@ import {
   getCustomerTransactions as getCustomerTransactionsQuery,
   searchCustomers as searchCustomersQuery,
 } from "../application/queries/searchCustomers";
-import { admitSharedDemoPublicQuery } from "../../operationAdmission/publicQuery";
+import { withOperationReadAdmission } from "../../operationAdmission/publicQuery";
 import {
   findPotentialPosCustomerMatchesReadDefinition,
   findPosCustomerByStoreFrontUserReadDefinition,
@@ -201,21 +201,21 @@ export const searchCustomers = query({
     searchQuery: v.string(),
   },
   returns: v.array(customerSummaryValidator),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     searchPosCustomersReadDefinition,
     async (
       ctx: OperationQueryCtx,
       args: { searchQuery: string; storeId: Id<"store"> },
     ) => {
-    const access = await requirePosCustomerStoreReadAccess(ctx, {
-      storeId: args.storeId,
-      failureMessage: "You cannot search customers for this store.",
-    });
-    if (!access.ok) {
-      return [];
-    }
+      const access = await requirePosCustomerStoreReadAccess(ctx, {
+        storeId: args.storeId,
+        failureMessage: "You cannot search customers for this store.",
+      });
+      if (!access.ok) {
+        return [];
+      }
 
-    return searchCustomersQuery(ctx, args);
+      return searchCustomersQuery(ctx, args);
     },
   ),
 });
@@ -244,18 +244,18 @@ export const getCustomerById = query({
     }),
     v.null(),
   ),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getPosCustomerByIdReadDefinition,
     async (ctx: OperationQueryCtx, args: { customerId: Id<"posCustomer"> }) => {
-    const access = await requirePosCustomerReadAccessById(ctx, {
-      customerId: args.customerId,
-      failureMessage: "You cannot view this customer.",
-    });
-    if (!access.ok) {
-      return null;
-    }
+      const access = await requirePosCustomerReadAccessById(ctx, {
+        customerId: args.customerId,
+        failureMessage: "You cannot view this customer.",
+      });
+      if (!access.ok) {
+        return null;
+      }
 
-    return getCustomerByIdQuery(ctx, args);
+      return getCustomerByIdQuery(ctx, args);
     },
   ),
 });
@@ -359,21 +359,21 @@ export const getCustomerTransactions = query({
       completedAt: v.number(),
     }),
   ),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getPosCustomerTransactionsReadDefinition,
     async (
       ctx: OperationQueryCtx,
       args: { customerId: Id<"posCustomer">; limit?: number },
     ) => {
-    const access = await requirePosCustomerReadAccessById(ctx, {
-      customerId: args.customerId,
-      failureMessage: "You cannot view this customer.",
-    });
-    if (!access.ok) {
-      return [];
-    }
+      const access = await requirePosCustomerReadAccessById(ctx, {
+        customerId: args.customerId,
+        failureMessage: "You cannot view this customer.",
+      });
+      if (!access.ok) {
+        return [];
+      }
 
-    return getCustomerTransactionsQuery(ctx, args);
+      return getCustomerTransactionsQuery(ctx, args);
     },
   ),
 });
@@ -471,29 +471,29 @@ export const findByStoreFrontUser = query({
     }),
     v.null(),
   ),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     findPosCustomerByStoreFrontUserReadDefinition,
     async (
       ctx: OperationQueryCtx,
       args: { storeFrontUserId: Id<"storeFrontUser"> },
     ) => {
-    const storeFrontUser = await ctx.db.get(
-      "storeFrontUser",
-      args.storeFrontUserId,
-    );
-    if (!storeFrontUser) {
-      return null;
-    }
+      const storeFrontUser = await ctx.db.get(
+        "storeFrontUser",
+        args.storeFrontUserId,
+      );
+      if (!storeFrontUser) {
+        return null;
+      }
 
-    const access = await requirePosCustomerStoreReadAccess(ctx, {
-      storeId: storeFrontUser.storeId,
-      failureMessage: "You cannot view this customer.",
-    });
-    if (!access.ok) {
-      return null;
-    }
+      const access = await requirePosCustomerStoreReadAccess(ctx, {
+        storeId: storeFrontUser.storeId,
+        failureMessage: "You cannot view this customer.",
+      });
+      if (!access.ok) {
+        return null;
+      }
 
-    return findByStoreFrontUserQuery(ctx, args);
+      return findByStoreFrontUserQuery(ctx, args);
     },
   ),
 });
@@ -524,21 +524,21 @@ export const findPotentialMatches = query({
       }),
     ),
   }),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     findPotentialPosCustomerMatchesReadDefinition,
     async (
       ctx: OperationQueryCtx,
       args: { email?: string; phone?: string; storeId: Id<"store"> },
     ) => {
-    const access = await requirePosCustomerStoreReadAccess(ctx, {
-      storeId: args.storeId,
-      failureMessage: "You cannot view potential matches for this store.",
-    });
-    if (!access.ok) {
-      return { storeFrontUsers: [], guests: [] };
-    }
+      const access = await requirePosCustomerStoreReadAccess(ctx, {
+        storeId: args.storeId,
+        failureMessage: "You cannot view potential matches for this store.",
+      });
+      if (!access.ok) {
+        return { storeFrontUsers: [], guests: [] };
+      }
 
-    return findPotentialMatchesQuery(ctx, args);
+      return findPotentialMatchesQuery(ctx, args);
     },
   ),
 });

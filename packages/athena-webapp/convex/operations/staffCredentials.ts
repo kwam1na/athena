@@ -13,7 +13,7 @@ import {
   refreshTerminalStaffAuthorityOperationDefinition,
   validateRestoredPosLocalStaffProofOperationDefinition,
 } from "../operationAdmission/definitions";
-import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
+import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
 import { operationalRoleValidator, type OperationalRole } from "./staffRoles";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
@@ -37,9 +37,7 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
-import {
-  requireSharedDemoCapabilityIfApplicable,
-} from "../sharedDemo/actor";
+import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
 
 export const STAFF_CREDENTIAL_STATUS = v.union(
   v.literal("pending"),
@@ -74,10 +72,7 @@ const localStaffAuthorityRecordValidator = v.object({
 });
 
 export type StaffCredentialStatus =
-  | "pending"
-  | "active"
-  | "suspended"
-  | "revoked";
+  "pending" | "active" | "suspended" | "revoked";
 type StaffCredentialReaderCtx = Pick<QueryCtx, "db"> | Pick<MutationCtx, "db">;
 type PublicStaffCredential = Omit<
   Doc<"staffCredential">,
@@ -312,7 +307,11 @@ async function requirePosTerminalAuthorityWithCtx(
   },
 ): Promise<PosTerminalAuthorizationResult> {
   const terminal = await ctx.db.get("posTerminal", args.terminalId);
-  if (!terminal || terminal.storeId !== args.storeId || terminal.status !== "active") {
+  if (
+    !terminal ||
+    terminal.storeId !== args.storeId ||
+    terminal.status !== "active"
+  ) {
     return terminalAuthorizationFailedResult();
   }
 
@@ -694,7 +693,10 @@ export async function updateStaffCredentialWithCtx(
 
   await ctx.db.patch("staffCredential", existingCredential._id, updates);
 
-  const credential = await ctx.db.get("staffCredential", existingCredential._id);
+  const credential = await ctx.db.get(
+    "staffCredential",
+    existingCredential._id,
+  );
   if (!credential) return null;
   return toPublicStaffCredential(credential);
 }
@@ -745,8 +747,7 @@ export async function authenticateStaffCredentialWithCtx(
   if (!activeCredential.pinHash || activeCredential.pinHash !== args.pinHash) {
     const failedAuthenticationAttempts =
       (activeCredential.failedAuthenticationAttempts ?? 0) + 1;
-    const shouldLock =
-      failedAuthenticationAttempts >= STAFF_AUTH_FAILURE_LIMIT;
+    const shouldLock = failedAuthenticationAttempts >= STAFF_AUTH_FAILURE_LIMIT;
 
     await ctx.db.patch("staffCredential", activeCredential._id, {
       failedAuthenticationAttempts,
@@ -867,11 +868,10 @@ export async function authenticateStaffCredentialForTerminalWithCtx(
         session.expiresAt > now &&
         session.terminalId !== args.terminalId,
     );
-    const activeExpenseSessionsOnOtherTerminals =
-      activeExpenseSessions.filter(
-        (session) =>
-          session.expiresAt > now && session.terminalId !== args.terminalId,
-      );
+    const activeExpenseSessionsOnOtherTerminals = activeExpenseSessions.filter(
+      (session) =>
+        session.expiresAt > now && session.terminalId !== args.terminalId,
+    );
 
     if (
       activeSessionsOnOtherTerminals.length > 0 ||
@@ -1264,18 +1264,19 @@ export const updateStaffCredential = mutation({
   },
 });
 
-const authenticateStaffCredentialAdmittedHandler = admitSharedDemoPublicMutation(
-  authenticateStaffCredentialOperationDefinition,
-  async (ctx, args) => {
-    try {
-      await requireStaffAuthenticationStoreAccessWithCtx(ctx, args.storeId);
-    } catch {
-      return staffStoreAuthorizationFailedResult();
-    }
+const authenticateStaffCredentialAdmittedHandler =
+  withOperationMutationAdmission(
+    authenticateStaffCredentialOperationDefinition,
+    async (ctx, args) => {
+      try {
+        await requireStaffAuthenticationStoreAccessWithCtx(ctx, args.storeId);
+      } catch {
+        return staffStoreAuthorizationFailedResult();
+      }
 
-    return authenticateStaffCredentialWithCtx(ctx, args);
-  },
-);
+      return authenticateStaffCredentialWithCtx(ctx, args);
+    },
+  );
 
 export const authenticateStaffCredential = mutation({
   args: {
@@ -1302,18 +1303,18 @@ export const authenticateStaffCredentialForTerminal = mutation({
     terminalId: v.id("posTerminal"),
     username: v.string(),
   },
-  handler: admitSharedDemoPublicMutation(
+  handler: withOperationMutationAdmission(
     authenticateStaffCredentialForTerminalOperationDefinition,
     async (ctx, args) => {
-    const terminalAuthority = await requirePosTerminalAuthorityWithCtx(ctx, {
-      storeId: args.storeId,
-      terminalId: args.terminalId,
-    });
-    if (terminalAuthority.kind !== "ok") {
-      return terminalAuthority;
-    }
+      const terminalAuthority = await requirePosTerminalAuthorityWithCtx(ctx, {
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      });
+      if (terminalAuthority.kind !== "ok") {
+        return terminalAuthority;
+      }
 
-    return authenticateStaffCredentialForTerminalWithCtx(ctx, args);
+      return authenticateStaffCredentialForTerminalWithCtx(ctx, args);
     },
   ),
 });
@@ -1326,18 +1327,18 @@ export const validateRestoredPosLocalStaffProof = mutation({
     terminalId: v.id("posTerminal"),
     token: v.string(),
   },
-  handler: admitSharedDemoPublicMutation(
+  handler: withOperationMutationAdmission(
     validateRestoredPosLocalStaffProofOperationDefinition,
     async (ctx, args) => {
-    const terminalAuthority = await requirePosTerminalAuthorityWithCtx(ctx, {
-      storeId: args.storeId,
-      terminalId: args.terminalId,
-    });
-    if (terminalAuthority.kind !== "ok") {
-      return terminalAuthority;
-    }
+      const terminalAuthority = await requirePosTerminalAuthorityWithCtx(ctx, {
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      });
+      if (terminalAuthority.kind !== "ok") {
+        return terminalAuthority;
+      }
 
-    return validateRestoredPosLocalStaffProofWithCtx(ctx, args);
+      return validateRestoredPosLocalStaffProofWithCtx(ctx, args);
     },
   ),
 });
@@ -1348,118 +1349,119 @@ export const refreshTerminalStaffAuthority = mutation({
     terminalId: v.id("posTerminal"),
   },
   returns: commandResultValidator(v.array(localStaffAuthorityRecordValidator)),
-  handler: admitSharedDemoPublicMutation(
+  handler: withOperationMutationAdmission(
     refreshTerminalStaffAuthorityOperationDefinition,
     async (ctx, args) => {
-    const terminalAuthority = await requirePosTerminalAuthorityWithCtx(ctx, {
-      storeId: args.storeId,
-      terminalId: args.terminalId,
-    });
-    if (terminalAuthority.kind !== "ok") {
-      return terminalAuthority;
-    }
+      const terminalAuthority = await requirePosTerminalAuthorityWithCtx(ctx, {
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      });
+      if (terminalAuthority.kind !== "ok") {
+        return terminalAuthority;
+      }
 
-    const refreshedAt = Date.now();
-    const credentials = await ctx.db
-      .query("staffCredential")
-      .withIndex("by_storeId_status", (q) =>
-        q.eq("storeId", args.storeId).eq("status", "active"),
-      )
-      .take(STAFF_AUTHORITY_REFRESH_LIMIT + 1);
-    const [profiles, roleAssignments] = await Promise.all([
-      ctx.db
-        .query("staffProfile")
+      const refreshedAt = Date.now();
+      const credentials = await ctx.db
+        .query("staffCredential")
         .withIndex("by_storeId_status", (q) =>
           q.eq("storeId", args.storeId).eq("status", "active"),
         )
-        .take(STAFF_AUTHORITY_REFRESH_LIMIT + 1),
-      ctx.db
-        .query("staffRoleAssignment")
-        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-        .take(STAFF_AUTHORITY_REFRESH_LIMIT + 1),
-    ]);
-    if (
-      credentials.length > STAFF_AUTHORITY_REFRESH_LIMIT ||
-      profiles.length > STAFF_AUTHORITY_REFRESH_LIMIT ||
-      roleAssignments.length > STAFF_AUTHORITY_REFRESH_LIMIT
-    ) {
-      return userError({
-        code: "precondition_failed",
-        message:
-          "Staff sign-in list is too large to refresh safely. Contact support before using offline sign-in.",
-      });
-    }
-    const activeProfilesById = new Map(
-      profiles.map((profile) => [profile._id, profile]),
-    );
-    const activePosRolesByStaffProfileId = new Map<
-      Id<"staffProfile">,
-      Array<"cashier" | "manager">
-    >();
-    for (const assignment of roleAssignments) {
+        .take(STAFF_AUTHORITY_REFRESH_LIMIT + 1);
+      const [profiles, roleAssignments] = await Promise.all([
+        ctx.db
+          .query("staffProfile")
+          .withIndex("by_storeId_status", (q) =>
+            q.eq("storeId", args.storeId).eq("status", "active"),
+          )
+          .take(STAFF_AUTHORITY_REFRESH_LIMIT + 1),
+        ctx.db
+          .query("staffRoleAssignment")
+          .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+          .take(STAFF_AUTHORITY_REFRESH_LIMIT + 1),
+      ]);
       if (
-        assignment.status !== "active" ||
-        (assignment.role !== "cashier" && assignment.role !== "manager")
+        credentials.length > STAFF_AUTHORITY_REFRESH_LIMIT ||
+        profiles.length > STAFF_AUTHORITY_REFRESH_LIMIT ||
+        roleAssignments.length > STAFF_AUTHORITY_REFRESH_LIMIT
       ) {
-        continue;
+        return userError({
+          code: "precondition_failed",
+          message:
+            "Staff sign-in list is too large to refresh safely. Contact support before using offline sign-in.",
+        });
       }
-      const roles = activePosRolesByStaffProfileId.get(assignment.staffProfileId) ?? [];
-      roles.push(assignment.role);
-      activePosRolesByStaffProfileId.set(assignment.staffProfileId, roles);
-    }
-    const authority = [];
+      const activeProfilesById = new Map(
+        profiles.map((profile) => [profile._id, profile]),
+      );
+      const activePosRolesByStaffProfileId = new Map<
+        Id<"staffProfile">,
+        Array<"cashier" | "manager">
+      >();
+      for (const assignment of roleAssignments) {
+        if (
+          assignment.status !== "active" ||
+          (assignment.role !== "cashier" && assignment.role !== "manager")
+        ) {
+          continue;
+        }
+        const roles =
+          activePosRolesByStaffProfileId.get(assignment.staffProfileId) ?? [];
+        roles.push(assignment.role);
+        activePosRolesByStaffProfileId.set(assignment.staffProfileId, roles);
+      }
+      const authority = [];
 
-    for (const credential of credentials) {
-      if (
-        !credential.pinHash ||
-        !credential.localPinVerifier ||
-        !credential.localVerifierVersion
-      ) {
-        continue;
+      for (const credential of credentials) {
+        if (
+          !credential.pinHash ||
+          !credential.localPinVerifier ||
+          !credential.localVerifierVersion
+        ) {
+          continue;
+        }
+
+        const staffProfile = activeProfilesById.get(credential.staffProfileId);
+        if (
+          !staffProfile ||
+          staffProfile.storeId !== args.storeId ||
+          staffProfile.status !== "active"
+        ) {
+          continue;
+        }
+
+        const activeRoles =
+          activePosRolesByStaffProfileId.get(credential.staffProfileId) ?? [];
+
+        if (activeRoles.length === 0) {
+          continue;
+        }
+
+        const expiresAt = refreshedAt + POS_LOCAL_STAFF_PROOF_TTL_MS;
+
+        authority.push({
+          activeRoles,
+          credentialId: credential._id,
+          credentialVersion: credential.localVerifierVersion,
+          displayName:
+            staffProfile.fullName ??
+            [staffProfile.firstName, staffProfile.lastName]
+              .filter(Boolean)
+              .join(" ") ??
+            null,
+          expiresAt,
+          issuedAt: refreshedAt,
+          organizationId: credential.organizationId,
+          refreshedAt,
+          staffProfileId: credential.staffProfileId,
+          status: credential.status,
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+          username: credential.username,
+          verifier: credential.localPinVerifier,
+        });
       }
 
-      const staffProfile = activeProfilesById.get(credential.staffProfileId);
-      if (
-        !staffProfile ||
-        staffProfile.storeId !== args.storeId ||
-        staffProfile.status !== "active"
-      ) {
-        continue;
-      }
-
-      const activeRoles =
-        activePosRolesByStaffProfileId.get(credential.staffProfileId) ?? [];
-
-      if (activeRoles.length === 0) {
-        continue;
-      }
-
-      const expiresAt = refreshedAt + POS_LOCAL_STAFF_PROOF_TTL_MS;
-
-      authority.push({
-        activeRoles,
-        credentialId: credential._id,
-        credentialVersion: credential.localVerifierVersion,
-        displayName:
-          staffProfile.fullName ??
-          [staffProfile.firstName, staffProfile.lastName]
-            .filter(Boolean)
-            .join(" ") ??
-          null,
-        expiresAt,
-        issuedAt: refreshedAt,
-        organizationId: credential.organizationId,
-        refreshedAt,
-        staffProfileId: credential.staffProfileId,
-        status: credential.status,
-        storeId: args.storeId,
-        terminalId: args.terminalId,
-        username: credential.username,
-        verifier: credential.localPinVerifier,
-      });
-    }
-
-    return ok(authority);
+      return ok(authority);
     },
   ),
 });
@@ -1488,19 +1490,20 @@ export const authenticateStaffCredentialForApproval = mutation({
       requestedByStaffProfileId: v.optional(v.id("staffProfile")),
     }),
   ),
-  handler: admitSharedDemoPublicMutation(
+  handler: withOperationMutationAdmission(
     authenticateStaffCredentialForApprovalOperationDefinition,
     async (ctx, args) => {
-    try {
-      await requireStaffAuthenticationStoreAccessWithCtx(ctx, args.storeId);
-    } catch {
-      return userError({
-        code: "authorization_failed",
-        message: "You do not have access to authenticate staff for this store.",
-      });
-    }
+      try {
+        await requireStaffAuthenticationStoreAccessWithCtx(ctx, args.storeId);
+      } catch {
+        return userError({
+          code: "authorization_failed",
+          message:
+            "You do not have access to authenticate staff for this store.",
+        });
+      }
 
-    return authenticateStaffCredentialForApprovalWithCtx(ctx, args);
+      return authenticateStaffCredentialForApprovalWithCtx(ctx, args);
     },
   ),
 });

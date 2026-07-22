@@ -8,7 +8,7 @@ import {
   ingestLocalEventsOperationDefinition,
   ingestRegisterSessionActivityOperationDefinition,
 } from "../../operationAdmission/definitions";
-import { admitSharedDemoPublicMutation } from "../../operationAdmission/publicMutation";
+import { withOperationMutationAdmission } from "../../operationAdmission/publicMutation";
 import type { OperationMutationCtx } from "../../operationAdmission/types";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
@@ -178,100 +178,105 @@ export const ingestLocalEvents = mutation({
     events: v.array(posLocalSyncUploadEventValidator),
   },
   returns: localSyncResultValidator,
-  handler: admitSharedDemoPublicMutation(
+  handler: withOperationMutationAdmission(
     ingestLocalEventsOperationDefinition,
     async (ctx, args) => {
-    if (args.events.length > MAX_LOCAL_SYNC_EVENTS_PER_REQUEST) {
-      return userError({
-        code: "validation_failed",
-        message: `Sync uploads can include at most ${MAX_LOCAL_SYNC_EVENTS_PER_REQUEST} events.`,
-      });
-    }
-
-    const pendingDefinitionCount = args.events.filter(
-      (event: (typeof args.events)[number]) =>
-        event.eventType === "pending_checkout_item_defined",
-    ).length;
-    if (pendingDefinitionCount > MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST) {
-      return userError({
-        code: "validation_failed",
-        message: `Sync uploads can include at most ${MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST} pending checkout items.`,
-      });
-    }
-
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
-
-    let athenaUser;
-    try {
-      const admittedActor = (ctx as OperationMutationCtx).operationAdmission
-        .actor;
-      if (admittedActor.kind === "shared_demo") {
-        const capabilities = new Set<SharedDemoCapability>(
-          args.events.map((event: (typeof args.events)[number]) =>
-            sharedDemoCapabilityForSyncEvent(event.eventType),
-          ),
-        );
-        for (const capability of capabilities) {
-          requireSharedDemoCapability(capability);
-        }
-        athenaUser = await ctx.db.get("athenaUser", admittedActor.athenaUserId);
-        if (!athenaUser) throw new Error("Sign in again to continue.");
-      } else {
-        athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      if (args.events.length > MAX_LOCAL_SYNC_EVENTS_PER_REQUEST) {
+        return userError({
+          code: "validation_failed",
+          message: `Sync uploads can include at most ${MAX_LOCAL_SYNC_EVENTS_PER_REQUEST} events.`,
+        });
       }
-      await requireOrganizationMemberRoleWithCtx(ctx, {
-        allowedRoles: ["full_admin", "pos_only"],
-        failureMessage: "You do not have access to sync this POS terminal.",
-        organizationId: store.organizationId,
-        userId: athenaUser._id,
-      });
-    } catch {
-      return userError({
-        code: "authorization_failed",
-        message: "You do not have access to sync this POS terminal.",
-      });
-    }
-    const terminal = await ctx.db.get("posTerminal", args.terminalId);
-    const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
-      args.syncSecretHash,
-    );
-    if (
-      !terminal ||
-      terminal.storeId !== args.storeId ||
-      terminal.status !== "active" ||
-      !terminal.syncSecretHash ||
-      terminal.syncSecretHash !== submittedSyncSecretHash
-    ) {
-      return userError({
-        code: "authorization_failed",
-        message: "You do not have access to sync this POS terminal.",
-        metadata: { terminalAuthorizationFailure: true },
-      });
-    }
 
-    const result = await ingestLocalEventsWithCtx(ctx, {
-      ...args,
-      submittedByUserId: athenaUser._id,
-      submittedAt: args.submittedAt ?? Date.now(),
-    });
+      const pendingDefinitionCount = args.events.filter(
+        (event: (typeof args.events)[number]) =>
+          event.eventType === "pending_checkout_item_defined",
+      ).length;
+      if (
+        pendingDefinitionCount > MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST
+      ) {
+        return userError({
+          code: "validation_failed",
+          message: `Sync uploads can include at most ${MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST} pending checkout items.`,
+        });
+      }
 
-    if (
-      result.kind === "ok" &&
-      shouldScheduleRegisterCloseoutNotifications()
-    ) {
-      await scheduleRegisterCloseoutNotifications(ctx, {
-        events: args.events,
-        mappings: result.data.mappings,
+      const store = await ctx.db.get("store", args.storeId);
+      if (!store) {
+        return userError({
+          code: "not_found",
+          message: "Store not found.",
+        });
+      }
+
+      let athenaUser;
+      try {
+        const admittedActor = (ctx as OperationMutationCtx).operationAdmission
+          .actor;
+        if (admittedActor.kind === "shared_demo") {
+          const capabilities = new Set<SharedDemoCapability>(
+            args.events.map((event: (typeof args.events)[number]) =>
+              sharedDemoCapabilityForSyncEvent(event.eventType),
+            ),
+          );
+          for (const capability of capabilities) {
+            requireSharedDemoCapability(capability);
+          }
+          athenaUser = await ctx.db.get(
+            "athenaUser",
+            admittedActor.athenaUserId,
+          );
+          if (!athenaUser) throw new Error("Sign in again to continue.");
+        } else {
+          athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+        }
+        await requireOrganizationMemberRoleWithCtx(ctx, {
+          allowedRoles: ["full_admin", "pos_only"],
+          failureMessage: "You do not have access to sync this POS terminal.",
+          organizationId: store.organizationId,
+          userId: athenaUser._id,
+        });
+      } catch {
+        return userError({
+          code: "authorization_failed",
+          message: "You do not have access to sync this POS terminal.",
+        });
+      }
+      const terminal = await ctx.db.get("posTerminal", args.terminalId);
+      const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
+        args.syncSecretHash,
+      );
+      if (
+        !terminal ||
+        terminal.storeId !== args.storeId ||
+        terminal.status !== "active" ||
+        !terminal.syncSecretHash ||
+        terminal.syncSecretHash !== submittedSyncSecretHash
+      ) {
+        return userError({
+          code: "authorization_failed",
+          message: "You do not have access to sync this POS terminal.",
+          metadata: { terminalAuthorizationFailure: true },
+        });
+      }
+
+      const result = await ingestLocalEventsWithCtx(ctx, {
+        ...args,
+        submittedByUserId: athenaUser._id,
+        submittedAt: args.submittedAt ?? Date.now(),
       });
-    }
 
-    return result;
+      if (
+        result.kind === "ok" &&
+        shouldScheduleRegisterCloseoutNotifications()
+      ) {
+        await scheduleRegisterCloseoutNotifications(ctx, {
+          events: args.events,
+          mappings: result.data.mappings,
+        });
+      }
+
+      return result;
     },
   ),
 });
@@ -392,75 +397,78 @@ export const ingestRegisterSessionActivity = mutation({
     activities: v.array(registerSessionActivityUploadValidator),
   },
   returns: registerSessionActivityResultValidator,
-  handler: admitSharedDemoPublicMutation(
+  handler: withOperationMutationAdmission(
     ingestRegisterSessionActivityOperationDefinition,
     async (ctx, args) => {
-    if (args.activities.length > MAX_REGISTER_SESSION_ACTIVITY_PER_REQUEST) {
-      return userError({
-        code: "validation_failed",
-        message: `Activity reports can include at most ${MAX_REGISTER_SESSION_ACTIVITY_PER_REQUEST} events.`,
-      });
-    }
-
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
-
-    let athenaUser;
-    try {
-      const admittedActor = (ctx as OperationMutationCtx).operationAdmission
-        .actor;
-      if (admittedActor.kind === "shared_demo") {
-        athenaUser = await ctx.db.get("athenaUser", admittedActor.athenaUserId);
-        if (!athenaUser) throw new Error("Sign in again to continue.");
-      } else {
-        athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      if (args.activities.length > MAX_REGISTER_SESSION_ACTIVITY_PER_REQUEST) {
+        return userError({
+          code: "validation_failed",
+          message: `Activity reports can include at most ${MAX_REGISTER_SESSION_ACTIVITY_PER_REQUEST} events.`,
+        });
       }
-      await requireOrganizationMemberRoleWithCtx(ctx, {
-        allowedRoles: ["full_admin", "pos_only"],
-        failureMessage: "You do not have access to sync this POS terminal.",
-        organizationId: store.organizationId,
-        userId: athenaUser._id,
-      });
-    } catch {
-      return userError({
-        code: "authorization_failed",
-        message: "You do not have access to sync this POS terminal.",
-      });
-    }
 
-    const terminal = await ctx.db.get("posTerminal", args.terminalId);
-    const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
-      args.syncSecretHash,
-    );
-    if (
-      !terminal ||
-      terminal.storeId !== args.storeId ||
-      terminal.status !== "active" ||
-      !terminal.syncSecretHash ||
-      terminal.syncSecretHash !== submittedSyncSecretHash
-    ) {
-      return userError({
-        code: "authorization_failed",
-        message: "You do not have access to sync this POS terminal.",
-        metadata: { terminalAuthorizationFailure: true },
-      });
-    }
+      const store = await ctx.db.get("store", args.storeId);
+      if (!store) {
+        return userError({
+          code: "not_found",
+          message: "Store not found.",
+        });
+      }
 
-    return ingestRegisterSessionActivityWithCtx(ctx, {
-      storeId: args.storeId,
-      terminalId: args.terminalId,
-      localRegisterSessionId: args.localRegisterSessionId,
-      registerNumber: args.registerNumber,
-      reportedThroughSequence: args.reportedThroughSequence,
-      reportedThroughOccurredAt: args.reportedThroughOccurredAt,
-      submittedAt: args.submittedAt ?? Date.now(),
-      activities: args.activities,
-    });
+      let athenaUser;
+      try {
+        const admittedActor = (ctx as OperationMutationCtx).operationAdmission
+          .actor;
+        if (admittedActor.kind === "shared_demo") {
+          athenaUser = await ctx.db.get(
+            "athenaUser",
+            admittedActor.athenaUserId,
+          );
+          if (!athenaUser) throw new Error("Sign in again to continue.");
+        } else {
+          athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+        }
+        await requireOrganizationMemberRoleWithCtx(ctx, {
+          allowedRoles: ["full_admin", "pos_only"],
+          failureMessage: "You do not have access to sync this POS terminal.",
+          organizationId: store.organizationId,
+          userId: athenaUser._id,
+        });
+      } catch {
+        return userError({
+          code: "authorization_failed",
+          message: "You do not have access to sync this POS terminal.",
+        });
+      }
+
+      const terminal = await ctx.db.get("posTerminal", args.terminalId);
+      const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
+        args.syncSecretHash,
+      );
+      if (
+        !terminal ||
+        terminal.storeId !== args.storeId ||
+        terminal.status !== "active" ||
+        !terminal.syncSecretHash ||
+        terminal.syncSecretHash !== submittedSyncSecretHash
+      ) {
+        return userError({
+          code: "authorization_failed",
+          message: "You do not have access to sync this POS terminal.",
+          metadata: { terminalAuthorizationFailure: true },
+        });
+      }
+
+      return ingestRegisterSessionActivityWithCtx(ctx, {
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+        localRegisterSessionId: args.localRegisterSessionId,
+        registerNumber: args.registerNumber,
+        reportedThroughSequence: args.reportedThroughSequence,
+        reportedThroughOccurredAt: args.reportedThroughOccurredAt,
+        submittedAt: args.submittedAt ?? Date.now(),
+        activities: args.activities,
+      });
     },
   ),
 });

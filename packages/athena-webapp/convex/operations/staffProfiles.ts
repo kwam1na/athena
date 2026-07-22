@@ -10,7 +10,7 @@ import {
 import { ok, userError } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
-import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import { listPosStaffProfilesReadDefinition } from "../operationAdmission/readDefinitions";
 import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
 import { normalizePhoneNumber } from "./helpers/linking";
@@ -536,7 +536,7 @@ export const listStaffProfiles = query({
     status: v.optional(staffProfileStatusValidator),
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listPosStaffProfilesReadDefinition,
     async (
       ctx,

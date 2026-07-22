@@ -18,7 +18,7 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
-import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import { getPosSessionItemsReadDefinition } from "../operationAdmission/readDefinitions";
 import type { OperationQueryCtx } from "../operationAdmission/types";
 
@@ -142,28 +142,28 @@ export const getSessionItems = query({
       updatedAt: v.number(),
     }),
   ),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getPosSessionItemsReadDefinition,
     async (ctx: OperationQueryCtx, args: { sessionId: Id<"posSession"> }) => {
-    const accessError = await requireSessionItemReadAccess(
-      ctx,
-      args.sessionId,
-    );
-    if (accessError) {
-      return [];
-    }
+      const accessError = await requireSessionItemReadAccess(
+        ctx,
+        args.sessionId,
+      );
+      if (accessError) {
+        return [];
+      }
 
-    const items = await collectSessionItemsFromPages((cursor) =>
-      ctx.db
-        .query("posSessionItem")
-        .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
-        .paginate({
-          cursor,
-          numItems: SESSION_ITEMS_PAGE_SIZE,
-        }),
-    );
+      const items = await collectSessionItemsFromPages((cursor) =>
+        ctx.db
+          .query("posSessionItem")
+          .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
+          .paginate({
+            cursor,
+            numItems: SESSION_ITEMS_PAGE_SIZE,
+          }),
+      );
 
-    return items;
+      return items;
     },
   ),
 });

@@ -1,11 +1,16 @@
-import { internalMutation, query, type MutationCtx, type QueryCtx } from "../_generated/server";
+import {
+  internalMutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
-import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import {
   getSkuActivityForProductSkuReadDefinition,
   getUntrustedSkuSaleEvidenceReadDefinition,
@@ -13,12 +18,7 @@ import {
 import type { OperationQueryCtx } from "../operationAdmission/types";
 
 export type SkuActivityStatus =
-  | "active"
-  | "released"
-  | "consumed"
-  | "expired"
-  | "committed"
-  | "inferred";
+  "active" | "released" | "consumed" | "expired" | "committed" | "inferred";
 
 export type RecordSkuActivityEventArgs = {
   storeId: Id<"store">;
@@ -87,12 +87,9 @@ const UNTRUSTED_SKU_TRANSACTION_ADJUSTMENT_LIMIT = 20;
 
 type UntrustedSkuSaleEvidenceReviewStatus = "open" | "reviewed" | "all";
 type UntrustedSkuSaleEvidenceSourceType =
-  | "inventoryImportProvisionalSku"
-  | "posPendingCheckoutItem";
+  "inventoryImportProvisionalSku" | "posPendingCheckoutItem";
 type UntrustedSkuSaleEvidenceSourceFilter =
-  | "all"
-  | "legacy_import"
-  | "pending_checkout";
+  "all" | "legacy_import" | "pending_checkout";
 
 const OPEN_IMPORT_PROVISIONAL_STATUSES: Array<
   Doc<"inventoryImportProvisionalSku">["status"]
@@ -135,13 +132,18 @@ function assertSkuActivityArgs(args: RecordSkuActivityEventArgs) {
   trimRequired(args.activityType, "SKU activity requires an activity type.");
   trimRequired(args.sourceType, "SKU activity requires a source type.");
   trimRequired(args.sourceId, "SKU activity requires a source id.");
-  trimRequired(args.idempotencyKey, "SKU activity requires an idempotency key.");
+  trimRequired(
+    args.idempotencyKey,
+    "SKU activity requires an idempotency key.",
+  );
 
   const impactQuantities = getImpactQuantities(args);
   const hasNonZeroImpact = impactQuantities.some((quantity) => quantity !== 0);
 
   if (!hasNonZeroImpact && !args.status?.trim()) {
-    throw new Error("Zero-impact SKU activity requires explicit status context.");
+    throw new Error(
+      "Zero-impact SKU activity requires explicit status context.",
+    );
   }
 }
 
@@ -172,7 +174,7 @@ function assertIdempotentReplayMatches(
     stockQuantityDelta?: number;
     storeId: Id<"store">;
   },
-  args: RecordSkuActivityEventArgs
+  args: RecordSkuActivityEventArgs,
 ) {
   if (
     existingEvent.storeId !== args.storeId ||
@@ -186,7 +188,7 @@ function assertIdempotentReplayMatches(
     existingEvent.stockQuantityDelta !== args.stockQuantityDelta
   ) {
     throw new Error(
-      "SKU activity idempotency key conflicts with an existing event."
+      "SKU activity idempotency key conflicts with an existing event.",
     );
   }
 }
@@ -196,11 +198,11 @@ async function assertProductSkuBelongsToStore(
   args: {
     productSkuId: Id<"productSku">;
     storeId: Id<"store">;
-  }
+  },
 ) {
   const productSku = (await ctx.db.get(
     "productSku",
-    args.productSkuId
+    args.productSkuId,
   )) as ProductSkuRecord | null;
 
   if (!productSku || productSku.storeId !== args.storeId) {
@@ -212,7 +214,7 @@ async function assertProductSkuBelongsToStore(
 
 export async function recordSkuActivityEventWithCtx(
   ctx: MutationCtx,
-  args: RecordSkuActivityEventArgs
+  args: RecordSkuActivityEventArgs,
 ) {
   const event = buildSkuActivityEvent(args);
 
@@ -224,7 +226,7 @@ export async function recordSkuActivityEventWithCtx(
   const existingEvent = await ctx.db
     .query("skuActivityEvent")
     .withIndex("by_storeId_idempotencyKey", (q) =>
-      q.eq("storeId", event.storeId).eq("idempotencyKey", event.idempotencyKey)
+      q.eq("storeId", event.storeId).eq("idempotencyKey", event.idempotencyKey),
     )
     .first();
 
@@ -274,7 +276,7 @@ export const recordSkuActivityEvent = internalMutation({
 
 export async function recordSkuActivityEventWithDb(
   db: MutationCtx["db"],
-  args: RecordSkuActivityEventArgs
+  args: RecordSkuActivityEventArgs,
 ) {
   return recordSkuActivityEventWithCtx({ db } as MutationCtx, args);
 }
@@ -285,7 +287,7 @@ export async function listSkuActivityEventsForSourceWithCtx(
     storeId: Id<"store">;
     sourceType: string;
     sourceId: string;
-  }
+  },
 ) {
   const events = await ctx.db
     .query("skuActivityEvent")
@@ -293,13 +295,13 @@ export async function listSkuActivityEventsForSourceWithCtx(
       q
         .eq("storeId", args.storeId)
         .eq("sourceType", args.sourceType)
-        .eq("sourceId", args.sourceId)
+        .eq("sourceId", args.sourceId),
     )
     .take(SKU_ACTIVITY_SOURCE_LOOKUP_LIMIT + 1);
 
   if (events.length > SKU_ACTIVITY_SOURCE_LOOKUP_LIMIT) {
     throw new Error(
-      "SKU activity has too many events for one source to summarize."
+      "SKU activity has too many events for one source to summarize.",
     );
   }
 
@@ -312,12 +314,12 @@ async function resolveProductSkuForActivity(
     productSkuId?: Id<"productSku">;
     sku?: string;
     storeId: Id<"store">;
-  }
+  },
 ) {
   if (args.productSkuId) {
     const productSku = (await ctx.db.get(
       "productSku",
-      args.productSkuId
+      args.productSkuId,
     )) as ProductSkuRecord | null;
 
     return productSku?.storeId === args.storeId ? productSku : null;
@@ -331,7 +333,7 @@ async function resolveProductSkuForActivity(
   return (await ctx.db
     .query("productSku")
     .withIndex("by_storeId_sku", (q) =>
-      q.eq("storeId", args.storeId).eq("sku", sku)
+      q.eq("storeId", args.storeId).eq("sku", sku),
     )
     .first()) as ProductSkuRecord | null;
 }
@@ -341,10 +343,7 @@ function getReservationSourceKindFromFields(args: {
   inventoryHoldId?: unknown;
   sourceType: string;
 }) {
-  if (
-    args.checkoutSessionId ||
-    CHECKOUT_SOURCE_TYPES.has(args.sourceType)
-  ) {
+  if (args.checkoutSessionId || CHECKOUT_SOURCE_TYPES.has(args.sourceType)) {
     return "checkout";
   }
 
@@ -384,14 +383,17 @@ function getReservationGroupKey(event: SkuActivityEventRecord) {
   return [
     event.sourceType,
     event.sourceId,
-    event.sourceLineId ?? event.inventoryHoldId ?? event.checkoutSessionId ?? "",
+    event.sourceLineId ??
+      event.inventoryHoldId ??
+      event.checkoutSessionId ??
+      "",
   ].join(":");
 }
 
 async function isLiveReservationStillActive(
   ctx: QueryCtx,
   event: SkuActivityEventRecord,
-  now: number
+  now: number,
 ) {
   if (event.inventoryHoldId) {
     const hold = (await ctx.db.get("inventoryHold", event.inventoryHoldId)) as {
@@ -399,13 +401,17 @@ async function isLiveReservationStillActive(
       expiresAt?: number;
     } | null;
 
-    return !hold || (hold.status === ACTIVE_RESERVATION_STATUS && (hold.expiresAt ?? now + 1) > now);
+    return (
+      !hold ||
+      (hold.status === ACTIVE_RESERVATION_STATUS &&
+        (hold.expiresAt ?? now + 1) > now)
+    );
   }
 
   if (event.checkoutSessionId) {
     const session = (await ctx.db.get(
       "checkoutSession",
-      event.checkoutSessionId
+      event.checkoutSessionId,
     )) as {
       expiresAt?: number;
       hasCompletedCheckoutSession?: boolean;
@@ -413,7 +419,8 @@ async function isLiveReservationStillActive(
 
     return (
       !session ||
-      (!session.hasCompletedCheckoutSession && (session.expiresAt ?? now + 1) > now)
+      (!session.hasCompletedCheckoutSession &&
+        (session.expiresAt ?? now + 1) > now)
     );
   }
 
@@ -423,7 +430,7 @@ async function isLiveReservationStillActive(
 async function buildActiveReservationEntries(
   ctx: QueryCtx,
   events: SkuActivityEventRecord[],
-  now: number
+  now: number,
 ) {
   const latestReservationEvents = new Map<string, SkuActivityEventRecord>();
 
@@ -468,7 +475,12 @@ async function buildActiveReservationEntries(
 }
 
 function summarizeActiveReservations(
-  entries: Array<{ quantity: number; sourceType: string; checkoutSessionId?: unknown; inventoryHoldId?: unknown }>
+  entries: Array<{
+    quantity: number;
+    sourceType: string;
+    checkoutSessionId?: unknown;
+    inventoryHoldId?: unknown;
+  }>,
 ) {
   return entries.reduce(
     (summary, entry) => {
@@ -490,7 +502,7 @@ function summarizeActiveReservations(
       otherQuantity: 0,
       posQuantity: 0,
       totalQuantity: 0,
-    }
+    },
   );
 }
 
@@ -500,7 +512,7 @@ function buildAvailabilityWarnings(args: {
 }) {
   const durableGap = Math.max(
     0,
-    args.productSku.inventoryCount - args.productSku.quantityAvailable
+    args.productSku.inventoryCount - args.productSku.quantityAvailable,
   );
   const unexplainedGap = Math.max(0, durableGap - args.checkoutQuantity);
 
@@ -548,7 +560,7 @@ function buildTimeline(events: SkuActivityEventRecord[]) {
 
 async function requireSkuActivityStoreAccess(
   ctx: QueryCtx,
-  storeId: Id<"store">
+  storeId: Id<"store">,
 ) {
   const store = await ctx.db.get("store", storeId);
   if (!store) {
@@ -565,13 +577,12 @@ async function requireSkuActivityStoreAccess(
     organizationId: store.organizationId,
     userId: athenaUser._id,
   });
-
 }
 
 function boundedNumber(
   value: number | undefined,
   fallback: number,
-  max: number
+  max: number,
 ) {
   if (value === undefined || !Number.isFinite(value)) {
     return fallback;
@@ -581,7 +592,7 @@ function boundedNumber(
 }
 
 function getImportStatusesForReviewStatus(
-  reviewStatus: UntrustedSkuSaleEvidenceReviewStatus
+  reviewStatus: UntrustedSkuSaleEvidenceReviewStatus,
 ) {
   if (reviewStatus === "open") {
     return OPEN_IMPORT_PROVISIONAL_STATUSES;
@@ -601,7 +612,7 @@ function getImportStatusesForReviewStatus(
 }
 
 function getPendingCheckoutStatusesForReviewStatus(
-  reviewStatus: UntrustedSkuSaleEvidenceReviewStatus
+  reviewStatus: UntrustedSkuSaleEvidenceReviewStatus,
 ) {
   if (reviewStatus === "open") {
     return OPEN_PENDING_CHECKOUT_STATUSES;
@@ -619,13 +630,13 @@ function getPendingCheckoutStatusesForReviewStatus(
 
 function getSourceReviewState(
   status: string,
-  openStatuses: readonly string[]
+  openStatuses: readonly string[],
 ): "open" | "reviewed" {
   return openStatuses.includes(status) ? "open" : "reviewed";
 }
 
 function getInventoryImportEvidenceReviewState(
-  row: Doc<"inventoryImportProvisionalSku">
+  row: Doc<"inventoryImportProvisionalSku">,
 ) {
   if (row.finalizedAt !== undefined) {
     return "reviewed" as const;
@@ -635,7 +646,7 @@ function getInventoryImportEvidenceReviewState(
 }
 
 function buildInventoryImportEvidenceSource(
-  row: Doc<"inventoryImportProvisionalSku">
+  row: Doc<"inventoryImportProvisionalSku">,
 ) {
   return {
     id: row._id,
@@ -665,7 +676,7 @@ function buildInventoryImportEvidenceSource(
 async function hasArchivedLinkedProduct(
   ctx: QueryCtx,
   productCache: Map<Id<"product">, Doc<"product"> | null>,
-  row: Doc<"inventoryImportProvisionalSku">
+  row: Doc<"inventoryImportProvisionalSku">,
 ) {
   if (!row.productId) {
     return false;
@@ -678,20 +689,20 @@ async function hasArchivedLinkedProduct(
   const product = productCache.get(row.productId);
   return Boolean(
     product &&
-      product.storeId === row.storeId &&
-      product.availability === "archived"
+    product.storeId === row.storeId &&
+    product.availability === "archived",
   );
 }
 
 function buildPendingCheckoutEvidenceSource(
-  row: Doc<"posPendingCheckoutItem">
+  row: Doc<"posPendingCheckoutItem">,
 ) {
   return {
     id: row._id,
     sourceType: "posPendingCheckoutItem" as const,
     reviewState: getSourceReviewState(
       row.status,
-      OPEN_PENDING_CHECKOUT_STATUSES
+      OPEN_PENDING_CHECKOUT_STATUSES,
     ),
     status: row.status,
     reviewPriority: row.reviewPriority,
@@ -722,7 +733,7 @@ async function listInventoryImportEvidenceSources(
   args: {
     reviewStatus: UntrustedSkuSaleEvidenceReviewStatus;
     storeId: Id<"store">;
-  }
+  },
 ) {
   const rows: Doc<"inventoryImportProvisionalSku">[] = [];
   const productCache = new Map<Id<"product">, Doc<"product"> | null>();
@@ -733,7 +744,7 @@ async function listInventoryImportEvidenceSources(
         q
           .eq("storeId", args.storeId)
           .eq("status", status)
-          .gt("saleEvidence.totalQuantitySold", 0)
+          .gt("saleEvidence.totalQuantitySold", 0),
       )
       .order("desc")
       .take(UNTRUSTED_SKU_EVIDENCE_SOURCE_CANDIDATE_LIMIT);
@@ -762,11 +773,11 @@ async function listPendingCheckoutEvidenceSources(
   args: {
     reviewStatus: UntrustedSkuSaleEvidenceReviewStatus;
     storeId: Id<"store">;
-  }
+  },
 ) {
   const rows: Doc<"posPendingCheckoutItem">[] = [];
   for (const status of getPendingCheckoutStatusesForReviewStatus(
-    args.reviewStatus
+    args.reviewStatus,
   )) {
     const matches = await ctx.db
       .query("posPendingCheckoutItem")
@@ -774,7 +785,7 @@ async function listPendingCheckoutEvidenceSources(
         q
           .eq("storeId", args.storeId)
           .eq("status", status)
-          .gt("evidence.totalQuantitySold", 0)
+          .gt("evidence.totalQuantitySold", 0),
       )
       .order("desc")
       .take(UNTRUSTED_SKU_EVIDENCE_SOURCE_CANDIDATE_LIMIT);
@@ -790,7 +801,7 @@ async function listTransactionItemsForUntrustedSource(
   args: {
     sourceId: string;
     sourceType: UntrustedSkuSaleEvidenceSourceType;
-  }
+  },
 ) {
   const readLimit = UNTRUSTED_SKU_TRANSACTION_HISTORY_SCAN_LIMIT + 1;
 
@@ -800,8 +811,8 @@ async function listTransactionItemsForUntrustedSource(
       .withIndex("by_inventoryImportProvisionalSkuId", (q) =>
         q.eq(
           "inventoryImportProvisionalSkuId",
-          args.sourceId as Id<"inventoryImportProvisionalSku">
-        )
+          args.sourceId as Id<"inventoryImportProvisionalSku">,
+        ),
       )
       .take(readLimit);
   }
@@ -809,25 +820,34 @@ async function listTransactionItemsForUntrustedSource(
   return ctx.db
     .query("posTransactionItem")
     .withIndex("by_pendingCheckoutItemId", (q) =>
-      q.eq("pendingCheckoutItemId", args.sourceId as Id<"posPendingCheckoutItem">)
+      q.eq(
+        "pendingCheckoutItemId",
+        args.sourceId as Id<"posPendingCheckoutItem">,
+      ),
     )
     .take(readLimit);
 }
 
 async function summarizeTransactionItemAdjustments(
   ctx: QueryCtx,
-  item: Doc<"posTransactionItem">
+  item: Doc<"posTransactionItem">,
 ) {
   const lines = await ctx.db
     .query("posTransactionAdjustmentLine")
     .withIndex("by_originalTransactionItemId", (q) =>
-      q.eq("originalTransactionItemId", item._id)
+      q.eq("originalTransactionItemId", item._id),
     )
     .take(UNTRUSTED_SKU_TRANSACTION_ADJUSTMENT_LIMIT + 1);
 
   const adjustments = [];
-  for (const line of lines.slice(0, UNTRUSTED_SKU_TRANSACTION_ADJUSTMENT_LIMIT)) {
-    const adjustment = await ctx.db.get("posTransactionAdjustment", line.adjustmentId);
+  for (const line of lines.slice(
+    0,
+    UNTRUSTED_SKU_TRANSACTION_ADJUSTMENT_LIMIT,
+  )) {
+    const adjustment = await ctx.db.get(
+      "posTransactionAdjustment",
+      line.adjustmentId,
+    );
     if (!adjustment || adjustment.transactionId !== item.transactionId) {
       continue;
     }
@@ -850,14 +870,13 @@ async function summarizeTransactionItemAdjustments(
   });
 
   const latestApplied = adjustments.find(
-    (adjustment) => adjustment.status === "applied"
+    (adjustment) => adjustment.status === "applied",
   );
 
   return {
-    appliedQuantityDelta:
-      adjustments
-        .filter((adjustment) => adjustment.status === "applied")
-        .reduce((total, adjustment) => total + adjustment.quantityDelta, 0),
+    appliedQuantityDelta: adjustments
+      .filter((adjustment) => adjustment.status === "applied")
+      .reduce((total, adjustment) => total + adjustment.quantityDelta, 0),
     count: adjustments.length,
     isTruncated: lines.length > UNTRUSTED_SKU_TRANSACTION_ADJUSTMENT_LIMIT,
     latestAppliedAt: latestApplied?.appliedAt ?? null,
@@ -872,7 +891,7 @@ async function buildUntrustedSourceTransactionHistory(
     sourceType: UntrustedSkuSaleEvidenceSourceType;
     storeId: Id<"store">;
     transactionLimit: number;
-  }
+  },
 ) {
   const items = await listTransactionItemsForUntrustedSource(ctx, args);
   const candidates: Array<{
@@ -904,13 +923,13 @@ async function buildUntrustedSourceTransactionHistory(
   const rows = [];
   for (const { item, transaction } of candidates.slice(
     0,
-    args.transactionLimit
+    args.transactionLimit,
   )) {
     const adjustments = await summarizeTransactionItemAdjustments(ctx, item);
     const refundedQuantity = item.refundedQuantity ?? 0;
     const netQuantity = Math.max(
       0,
-      item.quantity - refundedQuantity + adjustments.appliedQuantityDelta
+      item.quantity - refundedQuantity + adjustments.appliedQuantityDelta,
     );
 
     rows.push({
@@ -953,7 +972,7 @@ async function loadSelectedUntrustedEvidenceSource(
     };
     storeId: Id<"store">;
     transactionLimit: number;
-  }
+  },
 ) {
   if (!args.selectedSource) {
     return null;
@@ -965,16 +984,13 @@ async function loadSelectedUntrustedEvidenceSource(
   if (args.selectedSource.sourceType === "inventoryImportProvisionalSku") {
     const sourceId = ctx.db.normalizeId(
       "inventoryImportProvisionalSku",
-      args.selectedSource.sourceId
+      args.selectedSource.sourceId,
     );
     if (!sourceId) {
       return null;
     }
 
-    const row = await ctx.db.get(
-      "inventoryImportProvisionalSku",
-      sourceId
-    );
+    const row = await ctx.db.get("inventoryImportProvisionalSku", sourceId);
     if (
       !row ||
       row.storeId !== args.storeId ||
@@ -1002,14 +1018,18 @@ async function loadSelectedUntrustedEvidenceSource(
 
   const sourceId = ctx.db.normalizeId(
     "posPendingCheckoutItem",
-    args.selectedSource.sourceId
+    args.selectedSource.sourceId,
   );
   if (!sourceId) {
     return null;
   }
 
   const row = await ctx.db.get("posPendingCheckoutItem", sourceId);
-  if (!row || row.storeId !== args.storeId || row.evidence.totalQuantitySold <= 0) {
+  if (
+    !row ||
+    row.storeId !== args.storeId ||
+    row.evidence.totalQuantitySold <= 0
+  ) {
     return null;
   }
 
@@ -1041,19 +1061,19 @@ export async function getUntrustedSkuSaleEvidenceWithCtx(
     sourceFilter?: UntrustedSkuSaleEvidenceSourceFilter;
     storeId: Id<"store">;
     transactionLimit?: number;
-  }
+  },
 ) {
   const reviewStatus = args.reviewStatus ?? "open";
   const sourceFilter = args.sourceFilter ?? "all";
   const limit = boundedNumber(
     args.limit,
     UNTRUSTED_SKU_EVIDENCE_DEFAULT_LIMIT,
-    UNTRUSTED_SKU_EVIDENCE_MAX_LIMIT
+    UNTRUSTED_SKU_EVIDENCE_MAX_LIMIT,
   );
   const transactionLimit = boundedNumber(
     args.transactionLimit,
     UNTRUSTED_SKU_TRANSACTION_HISTORY_DEFAULT_LIMIT,
-    UNTRUSTED_SKU_TRANSACTION_HISTORY_MAX_LIMIT
+    UNTRUSTED_SKU_TRANSACTION_HISTORY_MAX_LIMIT,
   );
 
   const [inventoryImportSources, pendingCheckoutSources] = await Promise.all([
@@ -1105,7 +1125,7 @@ export async function getSkuActivityForProductSkuWithCtx(
     productSkuId?: Id<"productSku">;
     sku?: string;
     storeId: Id<"store">;
-  }
+  },
 ) {
   const productSku = await resolveProductSkuForActivity(ctx, args);
 
@@ -1116,7 +1136,7 @@ export async function getSkuActivityForProductSkuWithCtx(
   const events = (await ctx.db
     .query("skuActivityEvent")
     .withIndex("by_storeId_productSkuId_occurredAt", (q) =>
-      q.eq("storeId", args.storeId).eq("productSkuId", productSku._id)
+      q.eq("storeId", args.storeId).eq("productSkuId", productSku._id),
     )
     .take(SKU_ACTIVITY_TIMELINE_LIMIT + 1)) as SkuActivityEventRecord[];
 
@@ -1127,9 +1147,11 @@ export async function getSkuActivityForProductSkuWithCtx(
   const activeReservationEntries = await buildActiveReservationEntries(
     ctx,
     events,
-    args.now ?? Date.now()
+    args.now ?? Date.now(),
   );
-  const activeReservations = summarizeActiveReservations(activeReservationEntries);
+  const activeReservations = summarizeActiveReservations(
+    activeReservationEntries,
+  );
 
   return {
     productSku: {
@@ -1158,7 +1180,7 @@ export const getSkuActivityForProductSku = query({
     productSkuId: v.optional(v.id("productSku")),
     sku: v.optional(v.string()),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getSkuActivityForProductSkuReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -1168,8 +1190,8 @@ export const getSkuActivityForProductSku = query({
         storeId: Id<"store">;
       },
     ) => {
-    await requireSkuActivityStoreAccess(ctx, args.storeId);
-    return getSkuActivityForProductSkuWithCtx(ctx, args);
+      await requireSkuActivityStoreAccess(ctx, args.storeId);
+      return getSkuActivityForProductSkuWithCtx(ctx, args);
     },
   ),
 });
@@ -1177,18 +1199,18 @@ export const getSkuActivityForProductSku = query({
 const untrustedSkuSaleEvidenceReviewStatusValidator = v.union(
   v.literal("open"),
   v.literal("reviewed"),
-  v.literal("all")
+  v.literal("all"),
 );
 
 const untrustedSkuSaleEvidenceSourceTypeValidator = v.union(
   v.literal("inventoryImportProvisionalSku"),
-  v.literal("posPendingCheckoutItem")
+  v.literal("posPendingCheckoutItem"),
 );
 
 const untrustedSkuSaleEvidenceSourceFilterValidator = v.union(
   v.literal("all"),
   v.literal("legacy_import"),
-  v.literal("pending_checkout")
+  v.literal("pending_checkout"),
 );
 
 export const getUntrustedSkuSaleEvidence = query({
@@ -1202,10 +1224,10 @@ export const getUntrustedSkuSaleEvidence = query({
       v.object({
         sourceType: untrustedSkuSaleEvidenceSourceTypeValidator,
         sourceId: v.string(),
-      })
+      }),
     ),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getUntrustedSkuSaleEvidenceReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -1214,15 +1236,16 @@ export const getUntrustedSkuSaleEvidence = query({
         reviewStatus?: "open" | "reviewed" | "all";
         selectedSource?: {
           sourceId: string;
-          sourceType: "inventoryImportProvisionalSku" | "posPendingCheckoutItem";
+          sourceType:
+            "inventoryImportProvisionalSku" | "posPendingCheckoutItem";
         };
         sourceFilter?: "all" | "legacy_import" | "pending_checkout";
         storeId: Id<"store">;
         transactionLimit?: number;
       },
     ) => {
-    await requireSkuActivityStoreAccess(ctx, args.storeId);
-    return getUntrustedSkuSaleEvidenceWithCtx(ctx, args);
+      await requireSkuActivityStoreAccess(ctx, args.storeId);
+      return getUntrustedSkuSaleEvidenceWithCtx(ctx, args);
     },
   ),
 });

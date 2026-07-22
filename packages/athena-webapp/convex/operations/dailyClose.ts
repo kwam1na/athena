@@ -53,7 +53,7 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
-import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import {
   getCompletedDailyCloseHistoryDetailReadDefinition,
   getDailyCloseLifecycleGateReadDefinition,
@@ -5210,7 +5210,7 @@ export const getDailyCloseSnapshot = query({
     startAt: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getDailyCloseSnapshotReadDefinition,
     async (
       ctx,
@@ -5243,7 +5243,7 @@ export const getDailyCloseLifecycleGate = query({
     startAt: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getDailyCloseLifecycleGateReadDefinition,
     async (
       ctx,
@@ -5462,7 +5462,7 @@ export const listCompletedDailyCloseHistory = query({
     limit: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listCompletedDailyCloseHistoryReadDefinition,
     async (
       ctx,
@@ -5491,7 +5491,7 @@ export const getCompletedDailyCloseHistoryDetail = query({
     dailyCloseId: v.id("dailyClose"),
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getCompletedDailyCloseHistoryDetailReadDefinition,
     async (
       ctx,

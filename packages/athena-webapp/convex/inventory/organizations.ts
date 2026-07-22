@@ -2,7 +2,7 @@ import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { organizationSchema } from "../schemas/inventory";
 import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
-import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import {
   getOrganizationByIdOrSlugReadDefinition,
   listAthenaUserOrganizationsReadDefinition,
@@ -16,27 +16,27 @@ export const getAll = query({
   args: {
     userId: v.id("athenaUser"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listAthenaUserOrganizationsReadDefinition,
     async (ctx: OperationQueryCtx, args: { userId: Id<"athenaUser"> }) => {
-    const admittedActor = ctx.operationAdmission.actor;
-    if (
-      admittedActor.kind === "shared_demo" &&
-      args.userId !== admittedActor.athenaUserId
-    )
-      return [];
-    const memberOrgs = await ctx.db
-      .query("organizationMember")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
-      .take(100);
+      const admittedActor = ctx.operationAdmission.actor;
+      if (
+        admittedActor.kind === "shared_demo" &&
+        args.userId !== admittedActor.athenaUserId
+      )
+        return [];
+      const memberOrgs = await ctx.db
+        .query("organizationMember")
+        .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+        .take(100);
 
-    const orgs = memberOrgs.map((org) => org.organizationId);
+      const orgs = memberOrgs.map((org) => org.organizationId);
 
-    const organizations = await Promise.all(
-      orgs.map((org) => ctx.db.get("organization", org)),
-    );
+      const organizations = await Promise.all(
+        orgs.map((org) => ctx.db.get("organization", org)),
+      );
 
-    return organizations.filter((o) => !!o);
+      return organizations.filter((o) => !!o);
     },
   ),
 });
@@ -55,33 +55,33 @@ export const getByIdOrSlug = query({
   args: {
     identifier: v.union(v.id(entity), v.string()),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getOrganizationByIdOrSlugReadDefinition,
     async (
       ctx: OperationQueryCtx,
       args: { identifier: Id<"organization"> | string },
     ) => {
-    const organization = await ctx.db
-      .query(entity)
-      .filter((q) =>
-        q.or(
-          q.eq(q.field("slug"), args.identifier),
-          q.eq(q.field("_id"), args.identifier)
+      const organization = await ctx.db
+        .query(entity)
+        .filter((q) =>
+          q.or(
+            q.eq(q.field("slug"), args.identifier),
+            q.eq(q.field("_id"), args.identifier),
+          ),
         )
+        .first();
+
+      if (!organization) {
+        return null;
+      }
+      const admittedActor = ctx.operationAdmission.actor;
+      if (
+        admittedActor.kind === "shared_demo" &&
+        organization._id !== admittedActor.organizationId
       )
-      .first();
+        return null;
 
-    if (!organization) {
-      return null;
-    }
-    const admittedActor = ctx.operationAdmission.actor;
-    if (
-      admittedActor.kind === "shared_demo" &&
-      organization._id !== admittedActor.organizationId
-    )
-      return null;
-
-    return organization;
+      return organization;
     },
   ),
 });

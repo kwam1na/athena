@@ -311,6 +311,7 @@ describe("online order return and exchange planning", () => {
 describe("online order return and exchange mutation wiring", () => {
   it("routes storefront returns and exchanges through shared operational rails", () => {
     const onlineOrderSource = getSource("./onlineOrder.ts");
+    const normalizedSource = onlineOrderSource.replace(/\s+/g, " ");
 
     expect(onlineOrderSource).toContain(
       "export const processReturnExchange = mutation({",
@@ -324,10 +325,8 @@ describe("online order return and exchange mutation wiring", () => {
       "buildOnlineOrderReportedReturns({",
     );
     expect(onlineOrderSource).toContain("disposition: returnDisposition");
-    expect(onlineOrderSource).toContain(
-      'returnDisposition === "sellable"\n' +
-        '                ? "reverse_original_lane"\n' +
-        '                : "none"',
+    expect(normalizedSource).toContain(
+      'returnDisposition === "sellable" ? "reverse_original_lane" : "none"',
     );
     expect(onlineOrderSource).toContain(
       "plan.selectedItems.map((item) => item.productSkuId)",
@@ -336,8 +335,9 @@ describe("online order return and exchange mutation wiring", () => {
 
   it("prices replacement items from the server SKU instead of the client payload", () => {
     const onlineOrderSource = getSource("./onlineOrder.ts");
+    const normalizedSource = onlineOrderSource.replace(/\s+/g, " ");
 
-    expect(onlineOrderSource).toContain('ctx.db.get(\n            "productSku"');
+    expect(normalizedSource).toContain('ctx.db.get( "productSku"');
     expect(onlineOrderSource).toContain("unitPrice: Math.round(productSku.price)");
     expect(onlineOrderSource).not.toContain("unitPrice: replacement.unitPrice");
   });
