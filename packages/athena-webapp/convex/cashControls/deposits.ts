@@ -6,6 +6,14 @@ import {
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import {
+  recordRegisterSessionDepositOperationDefinition,
+  resolveRegisterSessionSyncReviewOperationDefinition,
+} from "../operationAdmission/definitions";
+import {
+  admitSharedDemoPublicMutation,
+  resolveSharedDemoOperationAdmission,
+} from "../operationAdmission/publicMutation";
 import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import { requireSharedDemoRegisterSessionSyncReview } from "../sharedDemo/policy";
 import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
@@ -69,6 +77,16 @@ const RECENT_DEPOSIT_LIMIT = 10;
 const SESSION_LIMIT = 100;
 const STAFF_ROLE_LOOKUP_LIMIT = 20;
 const TIMELINE_LIMIT = 200;
+
+function isDepositAdmissionAuthorizationError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  return (
+    message === "Sign in again to continue." ||
+    message === "You do not have access to this operation." ||
+    message === "You do not have access to cash controls." ||
+    message.includes("shared_demo_action_denied")
+  );
+}
 
 const userErrorValidator = v.object({
   code: v.union(
@@ -1432,10 +1450,31 @@ export const recordRegisterSessionDeposit = mutation({
     submissionKey: v.string(),
   },
   returns: registerSessionDepositResultValidator,
-  handler: async (
-    ctx,
-    args,
-  ): Promise<CommandResult<RecordRegisterSessionDepositResult>> => {
+  handler: async (ctx, args) => {
+    try {
+      await resolveSharedDemoOperationAdmission(
+        ctx,
+        args,
+        recordRegisterSessionDepositOperationDefinition,
+      );
+    } catch (error) {
+      if (!isDepositAdmissionAuthorizationError(error)) {
+        throw error;
+      }
+      return userError({
+        code: "authorization_failed",
+        message: "You do not have access to cash controls.",
+      });
+    }
+
+    return admitSharedDemoPublicMutation(
+        recordRegisterSessionDepositOperationDefinition,
+        async (
+          admittedCtx,
+          admittedArgs,
+        ): Promise<CommandResult<RecordRegisterSessionDepositResult>> => {
+    const ctx = admittedCtx;
+    const args = admittedArgs;
     const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(ctx, "cash.control.write", args.storeId);
     if (demoActor) await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
     let athenaUserId: Id<"athenaUser">;
@@ -1446,7 +1485,15 @@ export const recordRegisterSessionDeposit = mutation({
         { allowSharedDemoCashControl: true },
       );
       athenaUserId = athenaUser._id;
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (
+        message !== "Sign in again to continue." &&
+        message !== "You do not have access to cash controls." &&
+        !message.includes("shared_demo_action_denied")
+      ) {
+        throw error;
+      }
       return userError({
         code: "authorization_failed",
         message: "You do not have access to cash controls.",
@@ -1629,6 +1676,8 @@ export const recordRegisterSessionDeposit = mutation({
       deposit,
       registerSession: updatedRegisterSession,
     });
+        },
+      )(ctx, args);
   },
 });
 
@@ -1643,7 +1692,9 @@ export const resolveRegisterSessionSyncReview = mutation({
     storeId: v.id("store"),
   },
   returns: registerSessionSyncReviewResultValidator,
-  handler: async (
+  handler: admitSharedDemoPublicMutation(
+    resolveRegisterSessionSyncReviewOperationDefinition,
+    async (
     ctx,
     args,
   ): Promise<CommandResult<ResolveRegisterSessionSyncReviewResult>> => {
@@ -1740,7 +1791,7 @@ export const resolveRegisterSessionSyncReview = mutation({
       },
     );
     const allConflicts = conflictsBySessionId.get(args.registerSessionId) ?? [];
-    const requestedConflictIds = new Set(args.reviewConflictIds ?? []);
+    const requestedConflictIds = new Set<string>(args.reviewConflictIds ?? []);
     const conflicts =
       requestedConflictIds.size > 0
         ? allConflicts.filter(
@@ -2475,5 +2526,6 @@ export const resolveRegisterSessionSyncReview = mutation({
       projectedCount: projectedTransactionIds.length,
       resolvedCount: conflicts.length,
     });
-  },
+    },
+  ),
 });

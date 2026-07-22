@@ -25,6 +25,7 @@ const mockedHooks = vi.hoisted(() => ({
   usePaginatedQuery: vi.fn(),
   usePermissions: vi.fn(),
   useQuery: vi.fn(),
+  useSharedDemoContext: vi.fn(),
 }));
 
 const mockedToast = vi.hoisted(() => ({
@@ -101,6 +102,10 @@ vi.mock("@/hooks/useGetAuthedUser", () => ({
 
 vi.mock("@/hooks/usePermissions", () => ({
   usePermissions: mockedHooks.usePermissions,
+}));
+
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: mockedHooks.useSharedDemoContext,
 }));
 
 vi.mock("sonner", () => ({
@@ -290,6 +295,7 @@ describe("OperationsQueueViewContent", () => {
       canAccessOperations: () => true,
       isLoading: false,
     });
+    mockedHooks.useSharedDemoContext.mockReturnValue(null);
     mockedHooks.useMutation.mockReturnValue(vi.fn());
     const queueSnapshot = {
       approvalRequests: [],
@@ -1718,6 +1724,11 @@ describe("OperationsQueueViewContent", () => {
         ? resolveGroup
         : vi.fn(),
     );
+    mockedHooks.useSharedDemoContext.mockReturnValue({
+      kind: "shared_demo",
+      restore: { epoch: 42 },
+      storeId: "store-1",
+    });
 
     const view = render(
       <OperationsQueueView
@@ -1729,6 +1740,9 @@ describe("OperationsQueueViewContent", () => {
     await user.click(screen.getByRole("button", { name: "Mark reviewed" }));
 
     await waitFor(() => expect(resolveGroup).toHaveBeenCalledTimes(1));
+    expect(resolveGroup).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedDemoRestoreEpoch: 42 }),
+    );
 
     const conflictNotice = await screen.findByText(
       "This work changed. Review the refreshed group before marking it reviewed.",

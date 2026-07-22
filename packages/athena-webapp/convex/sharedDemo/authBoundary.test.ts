@@ -6,10 +6,6 @@ vi.mock("./actor", () => ({ getSharedDemoActorWithCtx: vi.fn() }));
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { getAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 import { getSharedDemoActorWithCtx } from "./actor";
-import {
-  SHARED_DEMO_ACTION_DENIED_CODE,
-  SHARED_DEMO_ACTION_DENIED_MESSAGE,
-} from "../../shared/sharedDemoActionError";
 
 describe("shared demo explicit Athena identity adapter", () => {
   beforeEach(() => {
@@ -30,26 +26,35 @@ describe("shared demo explicit Athena identity adapter", () => {
     await expect(getAuthenticatedAthenaUserWithCtx(ctx)).resolves.toBeNull();
   });
 
-  it("maps only when the caller declares an allowed capability", async () => {
+  it("maps only when the caller declares an explicit read capability", async () => {
     const demoUser = { _id: "demo-athena", email: "synthetic@demo.invalid" };
     const ctx = {
       auth: { getUserIdentity: vi.fn() },
-      db: { get: vi.fn().mockResolvedValue(demoUser) },
+      db: {
+        get: vi.fn(async (table: string) =>
+          table === "athenaUser" ? demoUser : null,
+        ),
+        query: vi.fn(() => ({
+          withIndex: vi.fn(() => ({
+            first: vi.fn(async () => null),
+            take: vi.fn(async () => []),
+          })),
+        })),
+      },
     } as never;
+    await expect(
+      getAuthenticatedAthenaUserWithCtx(ctx, {
+        sharedDemoCapability: "reports.read",
+      }),
+    ).resolves.toEqual(demoUser);
+
+    vi.mocked(getSharedDemoActorWithCtx).mockClear();
+
     await expect(
       getAuthenticatedAthenaUserWithCtx(ctx, {
         sharedDemoCapability: "pos.sale.complete",
       }),
-    ).resolves.toEqual(demoUser);
-    await expect(
-      getAuthenticatedAthenaUserWithCtx(ctx, {
-        sharedDemoCapability: "identity.manage",
-      }),
-    ).rejects.toMatchObject({
-      data: {
-        code: SHARED_DEMO_ACTION_DENIED_CODE,
-        message: SHARED_DEMO_ACTION_DENIED_MESSAGE,
-      },
-    });
+    ).resolves.toBeNull();
+    expect(getSharedDemoActorWithCtx).not.toHaveBeenCalled();
   });
 });

@@ -8,10 +8,22 @@ import {
 } from "../_generated/server";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import {
+  createNormalUserOperationAdapter,
+  resolveOperationAdmission,
+} from "../operationAdmission/adapters";
+import { resolveSyncedSaleInventoryReviewGroupOperationDefinition } from "../operationAdmission/definitions";
+import { admitPublicMutation } from "../operationAdmission/publicMutation";
+import type { OperationMutationCtx } from "../operationAdmission/types";
+import { createSharedDemoOperationAdapter } from "../sharedDemo/operationAdapter";
+import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import {
+  isSharedDemoActionDeniedData,
+  SHARED_DEMO_ACTION_DENIED_MESSAGE,
+} from "../../shared/sharedDemoActionError";
 import {
   buildOperationalEvent,
   recordOperationalEventWithCtx,
@@ -190,6 +202,7 @@ type ResolveSyncedSaleInventoryReviewData = {
 };
 
 type ResolveSyncedSaleInventoryReviewGroupArgs = {
+  expectedDemoRestoreEpoch?: number;
   expectedMemberIds: Array<Id<"operationalWorkItem">>;
   groupKey: string;
   outcome: SyncedSaleInventoryReviewOutcome;
@@ -848,9 +861,7 @@ export async function resolveSyncedSaleInventoryReviewGroupWithCtx(
   }
 
   const [athenaUser, store] = await Promise.all([
-    requireAuthenticatedAthenaUserWithCtx(ctx, {
-      sharedDemoCapability: "daily_operations.write",
-    }),
+    getOperationAdmissionAthenaUserOrRequireAuth(ctx),
     ctx.db.get("store", args.storeId),
   ]);
   if (!store) {
@@ -1021,8 +1032,22 @@ export const resolveSyncedSaleInventoryReview = internalMutation({
   handler: resolveSyncedSaleInventoryReviewWithCtx,
 });
 
+const resolveSyncedSaleInventoryReviewGroupAdmittedHandler =
+  admitPublicMutation(
+    resolveSyncedSaleInventoryReviewGroupOperationDefinition,
+    resolveSyncedSaleInventoryReviewGroupWithCtx,
+    {
+      resolveAdmission: (ctx, args, definition) =>
+        resolveOperationAdmission(ctx, args, definition, {
+          normalAdapter: createNormalUserOperationAdapter(),
+          sharedDemoAdapter: createSharedDemoOperationAdapter(),
+        }),
+    },
+  );
+
 export const resolveSyncedSaleInventoryReviewGroup = mutation({
   args: {
+    expectedDemoRestoreEpoch: v.optional(v.number()),
     expectedMemberIds: v.array(v.id("operationalWorkItem")),
     groupKey: v.string(),
     outcome: syncedSaleInventoryReviewOutcomeValidator,
@@ -1030,5 +1055,49 @@ export const resolveSyncedSaleInventoryReviewGroup = mutation({
     storeId: v.id("store"),
   },
   returns: commandResultValidator(v.any()),
-  handler: resolveSyncedSaleInventoryReviewGroupWithCtx,
+  handler: async (ctx, args) => {
+    try {
+      return await resolveSyncedSaleInventoryReviewGroupAdmittedHandler(
+        ctx,
+        args,
+      );
+    } catch (error) {
+      const sharedDemoDenial = sharedDemoActionDeniedCommandResult(error);
+      if (sharedDemoDenial) return sharedDemoDenial;
+      throw error;
+    }
+  },
 });
+
+function sharedDemoActionDeniedCommandResult(
+  error: unknown,
+): CommandResult<never> | null {
+  if (!error || typeof error !== "object" || !("data" in error)) {
+    return null;
+  }
+  if (!isSharedDemoActionDeniedData(error.data)) return null;
+
+  return userError({
+    code: "authorization_failed",
+    title: "Action unavailable",
+    message: SHARED_DEMO_ACTION_DENIED_MESSAGE,
+    retryable: false,
+  });
+}
+
+async function getOperationAdmissionAthenaUserOrRequireAuth(ctx: MutationCtx) {
+  const operationAdmission = (ctx as Partial<OperationMutationCtx>)
+    .operationAdmission;
+  if (operationAdmission?.actor.kind !== "shared_demo") {
+    return requireAuthenticatedAthenaUserWithCtx(ctx);
+  }
+
+  const athenaUser = await ctx.db.get(
+    "athenaUser",
+    operationAdmission.actor.athenaUserId,
+  );
+  if (!athenaUser) {
+    throw new Error("Sign in again to continue.");
+  }
+  return athenaUser;
+}

@@ -550,7 +550,7 @@ function createMissingMappingRepairSeed(
 }
 
 describe("cash control deposits", () => {
-  it("proves public deposit and sync-review exports conform to their return validators", () => {
+  it("proves operation-admitted deposit and sync-review exports conform to their return validators", () => {
     const authorizationError = userError({
       code: "authorization_failed",
       message: "You do not have access to cash controls.",

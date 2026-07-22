@@ -37,6 +37,7 @@ import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import { formatReviewReason } from "@/components/cash-controls/formatReviewReason";
 import {
   StaffAuthenticationDialog,
@@ -3760,6 +3761,7 @@ export function OperationsQueueView({
       }
     ).resolveSyncedSaleInventoryReviewGroup,
   );
+  const sharedDemoContext = useSharedDemoContext();
   const resolveRegisterSessionSyncReview = useMutation(
     api.cashControls.deposits.resolveRegisterSessionSyncReview,
   );
@@ -4141,6 +4143,11 @@ export function OperationsQueueView({
     try {
       const result = await runCommand(() =>
         resolveSyncedSaleInventoryReview({
+          ...(sharedDemoContext?.kind === "shared_demo"
+            ? {
+                expectedDemoRestoreEpoch: sharedDemoContext.restore.epoch,
+              }
+            : {}),
           expectedMemberIds: logicalGroup.memberIds,
           groupKey: logicalGroup.key,
           outcome: "completed",

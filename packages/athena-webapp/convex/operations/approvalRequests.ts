@@ -13,6 +13,15 @@ import {
   requireOrganizationMemberRoleWithCtx,
   requireAuthenticatedAthenaUserWithCtx,
 } from "../lib/athenaUserAuth";
+import {
+  createNormalUserOperationAdapter,
+  resolveOperationAdmission,
+} from "../operationAdmission/adapters";
+import { decideApprovalRequestOperationDefinition } from "../operationAdmission/definitions";
+import { admitPublicMutation } from "../operationAdmission/publicMutation";
+import type {
+  OperationMutationCtx,
+} from "../operationAdmission/types";
 import { buildApprovalRequest } from "./approvalRequestHelpers";
 import {
   approvalRequired,
@@ -23,8 +32,8 @@ import {
 } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { consumeApprovalProofWithCtx } from "./approvalProofs";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
-import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
+import { createSharedDemoOperationAdapter } from "../sharedDemo/operationAdapter";
+import { isSharedDemoActionDeniedData } from "../../shared/sharedDemoActionError";
 
 const APPROVAL_DECISION_ACTION_KEY = "operations.approval_request.decide";
 const ITEM_ADJUSTMENT_REQUEST_TYPE = "pos_item_adjustment";
@@ -375,7 +384,7 @@ export async function decideApprovalRequestWithCtx(
 }
 
 export async function decideApprovalRequestAsAuthenticatedUserWithCtx(
-  ctx: MutationCtx,
+  ctx: MutationCtx | OperationMutationCtx,
   args: PublicDecideApprovalRequestArgs,
 ) {
   const approvalRequest = await ctx.db.get(
@@ -397,9 +406,7 @@ export async function decideApprovalRequestAsAuthenticatedUserWithCtx(
     throw new Error("Approval request has already been decided.");
   }
 
-  const reviewer = await requireAuthenticatedAthenaUserWithCtx(ctx, {
-    sharedDemoCapability: "approvals.manage",
-  });
+  const reviewer = await getApprovalAdmissionAthenaUserOrRequireAuth(ctx);
 
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin"],
@@ -438,6 +445,18 @@ function mapDecideApprovalRequestError(
   error: unknown,
 ): CommandResult<never> | null {
   const message = error instanceof Error ? error.message : "";
+
+  if (
+    error &&
+    typeof error === "object" &&
+    "data" in error &&
+    isSharedDemoActionDeniedData(error.data)
+  ) {
+    return userError({
+      code: "authorization_failed",
+      message: error.data.message,
+    });
+  }
 
   if (message === "Sign in again to continue.") {
     return userError({
@@ -530,7 +549,7 @@ function mapDecideApprovalRequestError(
 }
 
 export async function decideApprovalRequestAsCommandWithCtx(
-  ctx: MutationCtx,
+  ctx: MutationCtx | OperationMutationCtx,
   args: PublicDecideApprovalRequestArgs,
 ): Promise<ApprovalCommandResult<any>> {
   try {
@@ -606,29 +625,40 @@ const decideApprovalRequestInternalArgs = {
   reviewedByStaffProfileId: v.optional(v.id("staffProfile")),
 };
 
+const decideApprovalRequestAdmittedHandler = admitPublicMutation(
+  decideApprovalRequestOperationDefinition,
+  decideApprovalRequestAsCommandWithCtx,
+  {
+    resolveAdmission: (ctx, args, definition) =>
+      resolveOperationAdmission(ctx, args, definition, {
+        normalAdapter: createNormalUserOperationAdapter(),
+        sharedDemoAdapter: createSharedDemoOperationAdapter(),
+      }),
+  },
+);
+
 export const decideApprovalRequest = mutation({
   args: decideApprovalRequestArgs,
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) => {
-    const approvalRequest = await ctx.db.get(
-      "approvalRequest",
-      args.approvalRequestId,
-    );
-    if (approvalRequest) {
-      const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-        ctx,
-        "approvals.manage",
-        approvalRequest.storeId,
-      );
-      if (demoActor) {
-        await requireReadySharedDemoWriteWithCtx(ctx, {
-          storeId: approvalRequest.storeId,
-        });
-      }
-    }
-    return decideApprovalRequestAsCommandWithCtx(ctx, args);
-  },
+  handler: decideApprovalRequestAdmittedHandler,
 });
+
+async function getApprovalAdmissionAthenaUserOrRequireAuth(
+  ctx: MutationCtx | OperationMutationCtx,
+) {
+  const operationAdmission = (ctx as Partial<OperationMutationCtx>)
+    .operationAdmission;
+  if (operationAdmission) {
+    const athenaUser = await ctx.db.get(
+      "athenaUser",
+      operationAdmission.actor.athenaUserId,
+    );
+    if (!athenaUser) throw new Error("Sign in again to continue.");
+    return athenaUser;
+  }
+
+  return requireAuthenticatedAthenaUserWithCtx(ctx);
+}
 
 export const decideApprovalRequestInternal = internalMutation({
   args: {

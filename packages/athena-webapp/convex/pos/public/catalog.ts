@@ -6,6 +6,8 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "../../_generated/server";
+import { quickAddSkuOperationDefinition } from "../../operationAdmission/definitions";
+import { admitSharedDemoPublicMutation } from "../../operationAdmission/publicMutation";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
@@ -795,7 +797,9 @@ export const quickAddSku = mutation({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: catalogResultValidator,
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    quickAddSkuOperationDefinition,
+    async (ctx, args) => {
     await requireSharedDemoStoreCapabilityIfApplicable(
       ctx,
       "catalog.quick_add",
@@ -806,9 +810,7 @@ export const quickAddSku = mutation({
       throw new Error("Store not found.");
     }
 
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx, {
-      sharedDemoCapability: "catalog.quick_add",
-    });
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
     await requireOrganizationMemberRoleWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
       failureMessage: "You cannot quick add products for this store.",
@@ -820,7 +822,8 @@ export const quickAddSku = mutation({
       ...args,
       createdByUserId: athenaUser._id,
     });
-  },
+    },
+  ),
 });
 
 export const createOrReusePendingCheckoutItemForSale = mutation({

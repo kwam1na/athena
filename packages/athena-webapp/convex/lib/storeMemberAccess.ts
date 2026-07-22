@@ -1,5 +1,6 @@
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import type { OperationMutationCtx } from "../operationAdmission/types";
 import {
   requireSharedDemoStoreCapabilityIfApplicable,
   requireSharedDemoStoreReadIfApplicable,
@@ -27,14 +28,18 @@ export async function requireStoreMemberAccessWithCtx(
     storeId: Id<"store">;
   },
 ) {
+  const operationAdmission = (ctx as Partial<OperationMutationCtx>)
+    .operationAdmission;
   const demoActor =
-    args.demoAccess.kind === "read"
-      ? await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId)
-      : await requireSharedDemoStoreCapabilityIfApplicable(
-          ctx,
-          args.demoAccess.capability,
-          args.storeId,
-        );
+    operationAdmission?.actor.kind === "shared_demo"
+      ? operationAdmission.actor
+      : args.demoAccess.kind === "read"
+        ? await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId)
+        : await requireSharedDemoStoreCapabilityIfApplicable(
+            ctx,
+            args.demoAccess.capability,
+            args.storeId,
+          );
 
   const store = await ctx.db.get("store", args.storeId);
   if (!store) {

@@ -6,6 +6,11 @@ import {
   type QueryCtx,
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import {
+  authenticateStaffCredentialForApprovalOperationDefinition,
+  authenticateStaffCredentialOperationDefinition,
+} from "../operationAdmission/definitions";
+import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
 import { operationalRoleValidator, type OperationalRole } from "./staffRoles";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
@@ -1258,14 +1263,9 @@ export const updateStaffCredential = mutation({
   },
 });
 
-export const authenticateStaffCredential = mutation({
-  args: {
-    allowedRoles: v.optional(v.array(operationalRoleValidator)),
-    pinHash: v.string(),
-    storeId: v.id("store"),
-    username: v.string(),
-  },
-  handler: async (ctx, args) => {
+const authenticateStaffCredentialAdmittedHandler = admitSharedDemoPublicMutation(
+  authenticateStaffCredentialOperationDefinition,
+  async (ctx, args) => {
     const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
       ctx,
       "staff.authenticate",
@@ -1281,6 +1281,22 @@ export const authenticateStaffCredential = mutation({
     }
 
     return authenticateStaffCredentialWithCtx(ctx, args);
+  },
+);
+
+export const authenticateStaffCredential = mutation({
+  args: {
+    allowedRoles: v.optional(v.array(operationalRoleValidator)),
+    pinHash: v.string(),
+    storeId: v.id("store"),
+    username: v.string(),
+  },
+  handler: async (ctx, args) => {
+    try {
+      return await authenticateStaffCredentialAdmittedHandler(ctx, args);
+    } catch {
+      return staffStoreAuthorizationFailedResult();
+    }
   },
 });
 
@@ -1470,7 +1486,9 @@ export const authenticateStaffCredentialForApproval = mutation({
       requestedByStaffProfileId: v.optional(v.id("staffProfile")),
     }),
   ),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    authenticateStaffCredentialForApprovalOperationDefinition,
+    async (ctx, args) => {
     const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
       ctx,
       "staff.authenticate",
@@ -1489,5 +1507,6 @@ export const authenticateStaffCredentialForApproval = mutation({
     }
 
     return authenticateStaffCredentialForApprovalWithCtx(ctx, args);
-  },
+    },
+  ),
 });

@@ -68,12 +68,20 @@ describe("shared demo public contract", () => {
     expect(source).toContain("export const requestManualRestore = mutation");
     expect(source).toContain("export const resetBrowserExperience = mutation");
     expect(source).toContain("args: { idempotencyKey: v.string() }");
+    expect(source).toContain("handler: admitPublicMutation(");
+    expect(source).toContain("requestManualRestoreOperationDefinition");
+    expect(source).toContain("resetBrowserExperienceOperationDefinition");
+    expect(source).toContain(
+      "bindRegisterBaselineToTerminalOperationDefinition",
+    );
     expect(source).toContain(
       'args: { expectedEpoch: v.number(), terminalId: v.id("posTerminal") }',
     );
     expect(source).toContain("assertSharedDemoWriteEpoch(");
     expect(source).toContain("beginRestoreLeaseWithCtx(ctx");
-    expect(source).toContain("cleanupTerminalId: terminalCleanupRequested ? args.terminalId : undefined");
+    expect(source).toMatch(
+      /cleanupTerminalId:\s*terminalCleanupRequested\s*\?\s*args\.terminalId\s*:\s*undefined/,
+    );
     expect(source).toContain("terminalDeleted: false");
     expect(source).not.toContain("restoreBaselineImmediatelyWithCtx");
     expect(source).not.toContain("args: { storeId:");

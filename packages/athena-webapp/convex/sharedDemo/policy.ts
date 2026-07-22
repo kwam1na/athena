@@ -8,12 +8,10 @@ import {
   ATHENA_CAPABILITY_CATALOG,
   classifyAthenaPublicWrite,
   isSharedDemoCapabilityAllowed,
-  SHARED_DEMO_ALLOWED_CAPABILITIES,
   type AthenaCapability,
-} from "./capabilityCatalog";
+} from "../platform/capabilityCatalog";
 
-export const SHARED_DEMO_UNAVAILABLE =
-  SHARED_DEMO_ACTION_DENIED_MESSAGE;
+export const SHARED_DEMO_UNAVAILABLE = SHARED_DEMO_ACTION_DENIED_MESSAGE;
 
 export function denySharedDemoAction(): never {
   throw new ConvexError({
@@ -33,8 +31,16 @@ export const SHARED_DEMO_CAPABILITY_CLASSIFICATIONS =
 export type SharedDemoCapability = AthenaCapability;
 
 export const SHARED_DEMO_EFFECT_CLASSIFICATIONS = [
-  { gateway: "customer_message.send", decision: "simulated", label: "No customer message was sent." },
-  { gateway: "order_notification.send", decision: "simulated", label: "No customer notification was sent." },
+  {
+    gateway: "customer_message.send",
+    decision: "simulated",
+    label: "No customer message was sent.",
+  },
+  {
+    gateway: "order_notification.send",
+    decision: "simulated",
+    label: "No customer notification was sent.",
+  },
   { gateway: "payment.collect", decision: "denied" },
   { gateway: "payment.refund", decision: "denied" },
   { gateway: "export.deliver", decision: "denied" },
@@ -42,6 +48,16 @@ export const SHARED_DEMO_EFFECT_CLASSIFICATIONS = [
 ] as const;
 
 export const SHARED_DEMO_POLICY = { defaultDecision: "denied" } as const;
+const SHARED_DEMO_LIFECYCLE_CAPABILITY = "demo.lifecycle";
+
+function isSharedDemoOperationCapabilityAllowed(
+  capability: SharedDemoCapability,
+) {
+  return (
+    capability === SHARED_DEMO_LIFECYCLE_CAPABILITY ||
+    isSharedDemoCapabilityAllowed(capability)
+  );
+}
 
 const SHARED_DEMO_FULFILLMENT_STATUSES = new Set([
   "ready-for-delivery",
@@ -80,35 +96,42 @@ export function requireSharedDemoRegisterSessionSyncReview(args: {
 }
 
 export const SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY = [
-  { functionName: "operations/approvalRequests:decideApprovalRequest", capability: "approvals.manage" },
-  { functionName: "operations/staffCredentials:authenticateStaffCredential", capability: "staff.authenticate" },
-  { functionName: "operations/staffCredentials:authenticateStaffCredentialForApproval", capability: "staff.authenticate" },
-  { functionName: "pos/public/transactions:completeTransaction", capability: "pos.sale.complete" },
-  { functionName: "stockOps/adjustments:submitStockAdjustmentBatch", capability: "inventory.adjust" },
-  { functionName: "cashControls/deposits:recordRegisterSessionDeposit", capability: "cash.control.write" },
-  { functionName: "cashControls/deposits:resolveRegisterSessionSyncReview", capability: "cash.control.write" },
-  { functionName: "cashControls/closeouts:correctRegisterSessionOpeningFloat", capability: "cash.control.write" },
-  { functionName: "cashControls/closeouts:submitRegisterSessionCloseout", capability: "cash.control.write" },
-  { functionName: "cashControls/closeouts:reviewRegisterSessionCloseout", capability: "cash.control.write" },
-  { functionName: "cashControls/closeouts:reopenRegisterSessionCloseout", capability: "cash.control.write" },
-  { functionName: "pos/public/catalog:quickAddSku", capability: "catalog.quick_add" },
-  { functionName: "storeFront/onlineOrder:update", capability: "orders.fulfill" },
-  { functionName: "operations/staffMessages:postStaffMessage", capability: "staff.communication.write" },
-  { functionName: "operations/dailyOpening:startStoreDay", capability: "daily_operations.write" },
-  { functionName: "pos/public/terminals:registerTerminal", capability: "daily_operations.write" },
-  // Expense recording reaches the server only through local-event sync; ingestLocalEvents
-  // enforces expense.manage for expense_recorded events.
-  { functionName: "pos/public/sync:ingestLocalEvents", capability: "expense.manage" },
-  { functionName: "reporting/public:getReportsOverview", capability: "reports.read" },
-  { functionName: "operations/staffCredentials:createStaffCredential", capability: "identity.manage" },
-  { functionName: "operations/staffProfiles:createStaffProfile", capability: "staff.manage" },
-  { functionName: "operations/staffProfiles:updateStaffProfile", capability: "staff.manage" },
-  { functionName: "inventory/inviteCode:create", capability: "permissions.manage" },
-  { functionName: "storeFront/payment:createTransaction", capability: "billing.manage" },
-  { functionName: "inventory/stores:patchConfigV2Command", capability: "integrations.manage" },
-  { functionName: "reporting/export:requestExport", capability: "exports.generate" },
-  { functionName: "storeFront/onlineOrder:processReturnExchange", capability: "payments.refund" },
-  { functionName: "inventory/stores:remove", capability: "administration.destructive" },
+  {
+    functionName: "reporting/public:getReportsOverview",
+    capability: "reports.read",
+  },
+  {
+    functionName: "operations/staffCredentials:createStaffCredential",
+    capability: "identity.manage",
+  },
+  {
+    functionName: "operations/staffProfiles:createStaffProfile",
+    capability: "staff.manage",
+  },
+  {
+    functionName: "operations/staffProfiles:updateStaffProfile",
+    capability: "staff.manage",
+  },
+  {
+    functionName: "inventory/inviteCode:create",
+    capability: "permissions.manage",
+  },
+  {
+    functionName: "storeFront/payment:createTransaction",
+    capability: "billing.manage",
+  },
+  {
+    functionName: "inventory/stores:patchConfigV2Command",
+    capability: "integrations.manage",
+  },
+  {
+    functionName: "reporting/export:requestExport",
+    capability: "exports.generate",
+  },
+  {
+    functionName: "inventory/stores:remove",
+    capability: "administration.destructive",
+  },
 ] as const satisfies ReadonlyArray<{
   functionName: string;
   capability: SharedDemoCapability;
@@ -122,7 +145,9 @@ export function classifySharedDemoPublicFunction(functionName: string) {
   return {
     capability: classification.capability,
     decision: "declared" as const,
-    demoDecision: isSharedDemoCapabilityAllowed(classification.capability)
+    demoDecision: isSharedDemoOperationCapabilityAllowed(
+      classification.capability,
+    )
       ? ("allowed" as const)
       : ("denied" as const),
   };
@@ -130,25 +155,47 @@ export function classifySharedDemoPublicFunction(functionName: string) {
 
 export function classifySharedDemoExternalGateway(gateway: string) {
   return (
-    SHARED_DEMO_EFFECT_CLASSIFICATIONS.find((entry) => entry.gateway === gateway) ??
-    { gateway, decision: "denied" as const }
+    SHARED_DEMO_EFFECT_CLASSIFICATIONS.find(
+      (entry) => entry.gateway === gateway,
+    ) ?? { gateway, decision: "denied" as const }
   );
 }
 
 export const SHARED_DEMO_GATEWAY_ENFORCEMENT_BINDINGS = [
   { moduleName: "storeFront/onlineOrder", binding: "decideSharedDemoEffect" },
-  { moduleName: "storeFront/payment", binding: "enforceSharedDemoActionCapability" },
-  { moduleName: "reporting/export", binding: "requireSharedDemoCapabilityIfApplicable" },
-  { moduleName: "cloudflare/stream", binding: "requireAuthenticatedNonDemoEffect" },
+  {
+    moduleName: "storeFront/payment",
+    binding: "enforceSharedDemoActionCapability",
+  },
+  {
+    moduleName: "reporting/export",
+    binding: "requireSharedDemoCapabilityIfApplicable",
+  },
+  {
+    moduleName: "cloudflare/stream",
+    binding: "requireAuthenticatedNonDemoEffect",
+  },
   { moduleName: "inventory/productSku", binding: "requireNonDemoFoundation" },
-  { moduleName: "inventory/stores", binding: "requireNonDemoFoundationMutation" },
-  { moduleName: "storeFront/payment", binding: "enforceSharedDemoActionCapability" },
-  { moduleName: "storeFront/paystackActions", binding: "requireAuthenticatedNonDemoEffect" },
-  { moduleName: "storeFront/checkoutSession", binding: "requireAuthenticatedNonDemoEffect" },
+  {
+    moduleName: "inventory/stores",
+    binding: "requireNonDemoFoundationMutation",
+  },
+  {
+    moduleName: "storeFront/payment",
+    binding: "enforceSharedDemoActionCapability",
+  },
+  {
+    moduleName: "storeFront/paystackActions",
+    binding: "requireAuthenticatedNonDemoEffect",
+  },
+  {
+    moduleName: "storeFront/checkoutSession",
+    binding: "requireAuthenticatedNonDemoEffect",
+  },
 ] as const;
 
 export function requireSharedDemoCapability(capability: SharedDemoCapability) {
-  if (!isSharedDemoCapabilityAllowed(capability)) {
+  if (!isSharedDemoOperationCapabilityAllowed(capability)) {
     denySharedDemoAction();
   }
   return capability;
@@ -164,7 +211,8 @@ export async function decideSharedDemoEffect(
   const entry = SHARED_DEMO_EFFECT_CLASSIFICATIONS.find(
     (candidate) => candidate.gateway === gateway,
   );
-  if (!entry) return { kind: "denied" as const, reason: "unclassified" as const };
+  if (!entry)
+    return { kind: "denied" as const, reason: "unclassified" as const };
   if (entry.decision === "simulated") {
     return { kind: "simulated" as const, label: entry.label };
   }
@@ -186,14 +234,6 @@ export function validateSharedDemoCoverage() {
       errors.push(`Duplicate demo gateway: ${entry.gateway}`);
     }
     seenGateways.add(entry.gateway);
-  }
-  const enforcedCapabilities = new Set(
-    SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY.map((entry) => entry.capability),
-  );
-  for (const capability of SHARED_DEMO_ALLOWED_CAPABILITIES) {
-    if (!enforcedCapabilities.has(capability)) {
-      errors.push(`No enforced public function represents allowed demo capability: ${capability}`);
-    }
   }
   return errors;
 }

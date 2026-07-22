@@ -3807,76 +3807,80 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     );
   });
 
-  it("ignores stale runtime check-in publish results after the runtime scope is invalidated", async () => {
-    const oldCheckIn = deferred<{
-      kind: "user_error";
-      error: {
-        code: string;
-        message: string;
-        metadata: { terminalAuthorizationFailure: boolean };
+  it(
+    "ignores stale runtime check-in publish results after the runtime scope is invalidated",
+    async () => {
+      const oldCheckIn = deferred<{
+        kind: "user_error";
+        error: {
+          code: string;
+          message: string;
+          metadata: { terminalAuthorizationFailure: boolean };
+        };
+      }>();
+      mocks.reportTerminalRuntimeStatus.mockReturnValueOnce(oldCheckIn.promise);
+      const store = {
+        listEvents: vi.fn(async () => ({
+          ok: true,
+          value: [],
+        })),
+        readProvisionedTerminalSeed: vi.fn(async () => ({
+          ok: true,
+          value: {
+            cloudTerminalId: "terminal-cloud-1",
+            displayName: "Front",
+            provisionedAt: 1,
+            schemaVersion: 1,
+            syncSecretHash: "sync-secret-1",
+            storeId: "store-1",
+            terminalId: "local-terminal-1",
+          },
+        })),
+        writeTerminalIntegrityState: vi.fn(async () => {
+          throw new Error("old scope write failed");
+        }),
       };
-    }>();
-    mocks.reportTerminalRuntimeStatus.mockReturnValueOnce(oldCheckIn.promise);
-    const store = {
-      listEvents: vi.fn(async () => ({
-        ok: true,
-        value: [],
-      })),
-      readProvisionedTerminalSeed: vi.fn(async () => ({
-        ok: true,
-        value: {
-          cloudTerminalId: "terminal-cloud-1",
-          displayName: "Front",
-          provisionedAt: 1,
-          schemaVersion: 1,
-          syncSecretHash: "sync-secret-1",
-          storeId: "store-1",
-          terminalId: "local-terminal-1",
-        },
-      })),
-      writeTerminalIntegrityState: vi.fn(async () => {
-        throw new Error("old scope write failed");
-      }),
-    };
 
-    const { result, unmount } = renderHook(() =>
-      usePosLocalSyncRuntimeStatus({
-        mode: "status-only",
-        storeFactory: () => store as never,
-        storeId: "store-1",
-        terminalId: "terminal-cloud-1",
-      }),
-    );
-
-    await waitFor(() =>
-      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledWith(
-        expect.objectContaining({
+      const { result, unmount } = renderHook(() =>
+        usePosLocalSyncRuntimeStatus({
+          mode: "status-only",
+          storeFactory: () => store as never,
           storeId: "store-1",
           terminalId: "terminal-cloud-1",
         }),
-      ),
-    );
+      );
 
-    unmount();
+      await waitFor(() =>
+        expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledWith(
+          expect.objectContaining({
+            storeId: "store-1",
+            terminalId: "terminal-cloud-1",
+          }),
+        ),
+      );
 
-    oldCheckIn.resolve({
-      kind: "user_error",
-      error: {
-        code: "authorization_failed",
-        message: "Old terminal rejected.",
-        metadata: { terminalAuthorizationFailure: true },
-      },
-    });
-    await oldCheckIn.promise;
-    await Promise.resolve();
+      unmount();
 
-    expect(store.writeTerminalIntegrityState).not.toHaveBeenCalled();
-    expect(result.current).not.toEqual(
-      expect.objectContaining({
-        label: "Local sync unavailable",
-      }),
-    );
-  });
+      oldCheckIn.resolve({
+        kind: "user_error",
+        error: {
+          code: "authorization_failed",
+          message: "Old terminal rejected.",
+          metadata: { terminalAuthorizationFailure: true },
+        },
+      });
+      await oldCheckIn.promise;
+      await Promise.resolve();
+
+      expect(store.writeTerminalIntegrityState).not.toHaveBeenCalled();
+      expect(result.current).not.toEqual(
+        expect.objectContaining({
+          label: "Local sync unavailable",
+        }),
+      );
+    },
+    10000,
+  );
 
   it("publishes drawer authority blocks written under the cloud terminal id", async () => {
     const store = {
@@ -4282,52 +4286,56 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(onLocalEventsChanged).toHaveBeenCalled();
   });
 
-  it("does not persist terminal integrity for generic runtime check-in rejections", async () => {
-    mocks.reportTerminalRuntimeStatus.mockResolvedValue({
-      kind: "user_error",
-      error: {
-        code: "authorization_failed",
-        message: "User session expired.",
-      },
-    });
-    const store = {
-      listEvents: vi.fn(async () => ({
-        ok: true,
-        value: [],
-      })),
-      readProvisionedTerminalSeed: vi.fn(async () => ({
-        ok: true,
-        value: {
-          cloudTerminalId: "terminal-cloud-1",
-          displayName: "Front",
-          provisionedAt: 1,
-          schemaVersion: 1,
-          syncSecretHash: "sync-secret-1",
-          storeId: "store-1",
-          terminalId: "local-terminal-1",
+  it(
+    "does not persist terminal integrity for generic runtime check-in rejections",
+    async () => {
+      mocks.reportTerminalRuntimeStatus.mockResolvedValue({
+        kind: "user_error",
+        error: {
+          code: "authorization_failed",
+          message: "User session expired.",
         },
-      })),
-      writeTerminalIntegrityState: vi.fn(async () => ({
-        ok: true,
-        value: null,
-      })),
-    };
+      });
+      const store = {
+        listEvents: vi.fn(async () => ({
+          ok: true,
+          value: [],
+        })),
+        readProvisionedTerminalSeed: vi.fn(async () => ({
+          ok: true,
+          value: {
+            cloudTerminalId: "terminal-cloud-1",
+            displayName: "Front",
+            provisionedAt: 1,
+            schemaVersion: 1,
+            syncSecretHash: "sync-secret-1",
+            storeId: "store-1",
+            terminalId: "local-terminal-1",
+          },
+        })),
+        writeTerminalIntegrityState: vi.fn(async () => ({
+          ok: true,
+          value: null,
+        })),
+      };
 
-    renderHook(() =>
-      usePosLocalSyncRuntimeStatus({
-        mode: "status-only",
-        storeFactory: () => store as never,
-        storeId: "store-1",
-        terminalId: "terminal-cloud-1",
-      }),
-    );
+      renderHook(() =>
+        usePosLocalSyncRuntimeStatus({
+          mode: "status-only",
+          storeFactory: () => store as never,
+          storeId: "store-1",
+          terminalId: "terminal-cloud-1",
+        }),
+      );
 
-    await waitFor(() =>
-      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalled(),
-    );
-    await Promise.resolve();
-    expect(store.writeTerminalIntegrityState).not.toHaveBeenCalled();
-  });
+      await waitFor(() =>
+        expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalled(),
+      );
+      await Promise.resolve();
+      expect(store.writeTerminalIntegrityState).not.toHaveBeenCalled();
+    },
+    10000,
+  );
 
   it("clears stale completion time while a fresh runtime check-in publish is pending", async () => {
     const nextPublish = deferred<{

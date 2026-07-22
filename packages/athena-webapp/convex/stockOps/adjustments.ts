@@ -8,6 +8,8 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
+import { submitStockAdjustmentBatchOperationDefinition } from "../operationAdmission/definitions";
+import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
 import {
   requireSharedDemoStoreCapabilityIfApplicable,
   requireSharedDemoStoreReadIfApplicable,
@@ -1729,9 +1731,12 @@ export const submitStockAdjustmentBatch = mutation({
     submissionKey: v.string(),
   },
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    submitStockAdjustmentBatchOperationDefinition,
+    async (ctx, args) => {
     const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(ctx, "inventory.adjust", args.storeId);
     if (demoActor) await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
     return submitStockAdjustmentBatchCommandWithCtx(ctx, args);
-  },
+    },
+  ),
 });

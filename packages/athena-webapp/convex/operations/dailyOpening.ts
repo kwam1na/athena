@@ -6,6 +6,8 @@ import {
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import { startStoreDayOperationDefinition } from "../operationAdmission/definitions";
+import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
 import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import { commandResultValidator } from "../lib/commandResultValidators";
@@ -1602,7 +1604,9 @@ export const startStoreDay = mutation({
     storeId: v.id("store"),
   },
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    startStoreDayOperationDefinition,
+    async (ctx, args) => {
     const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
       ctx,
       "daily_operations.write",
@@ -1621,5 +1625,6 @@ export const startStoreDay = mutation({
       ...args,
       ...openingActor.data,
     });
-  },
+    },
+  ),
 });

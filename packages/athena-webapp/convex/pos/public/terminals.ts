@@ -3,6 +3,8 @@ import { v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 import { commandResultValidator } from "../../lib/commandResultValidators";
+import { registerTerminalOperationDefinition } from "../../operationAdmission/definitions";
+import { admitSharedDemoPublicMutation } from "../../operationAdmission/publicMutation";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
@@ -1353,7 +1355,9 @@ export const registerTerminal = mutation({
     browserInfo: browserInfoValidator,
   },
   returns: commandResultValidator(terminalProvisioningReturnValidator),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    registerTerminalOperationDefinition,
+    async (ctx, args) => {
     try {
       const { athenaUser, demoActor } = await requireStoreMemberAccessWithCtx(ctx, {
         allowedRoles: ["full_admin", "pos_only"],
@@ -1385,7 +1389,8 @@ export const registerTerminal = mutation({
         message: "You do not have access to register this POS terminal.",
       });
     }
-  },
+    },
+  ),
 });
 
 export const updateTerminal = mutation({

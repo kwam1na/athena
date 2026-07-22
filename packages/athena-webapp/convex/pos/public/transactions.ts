@@ -6,6 +6,13 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "../../_generated/server";
+import {
+  completeTransactionOperationDefinition,
+  correctTransactionCustomerOperationDefinition,
+  correctTransactionPaymentMethodOperationDefinition,
+  markReceiptPrintedOperationDefinition,
+} from "../../operationAdmission/definitions";
+import { admitSharedDemoPublicMutation } from "../../operationAdmission/publicMutation";
 import type { Id } from "../../_generated/dataModel";
 import { requireSharedDemoStoreCapabilityIfApplicable } from "../../sharedDemo/actor";
 import { requireReadySharedDemoWriteWithCtx } from "../../sharedDemo/restore";
@@ -451,7 +458,9 @@ export const completeTransaction = mutation({
       transactionItems: v.array(v.id("posTransactionItem")),
     }),
   ),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    completeTransactionOperationDefinition,
+    async (ctx, args) => {
     const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
       ctx,
       "pos.sale.complete",
@@ -487,7 +496,8 @@ export const completeTransaction = mutation({
     }
 
     return completeTransactionCommand(ctx, args);
-  },
+    },
+  ),
 });
 
 export const getTransaction = query({
@@ -846,7 +856,9 @@ export const markReceiptPrinted = mutation({
     transactionId: v.id("posTransaction"),
   },
   returns: commandResultValidator(v.null()),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    markReceiptPrintedOperationDefinition,
+    async (ctx, args) => {
     const access = await requirePosTransactionAccess(ctx, {
       transactionId: args.transactionId,
       failureMessage: "You cannot update this transaction.",
@@ -864,7 +876,8 @@ export const markReceiptPrinted = mutation({
     });
 
     return ok(null);
-  },
+    },
+  ),
 });
 
 export const createTransactionFromSession = mutation({
@@ -929,7 +942,9 @@ export const correctTransactionCustomer = mutation({
       operationalEventId: v.optional(v.id("operationalEvent")),
     }),
   ),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    correctTransactionCustomerOperationDefinition,
+    async (ctx, args) => {
     if (!args.actorStaffProfileId) {
       return userError({
         code: "authentication_failed",
@@ -1005,7 +1020,8 @@ export const correctTransactionCustomer = mutation({
       }
       throw error;
     }
-  },
+    },
+  ),
 });
 
 export const correctTransactionPaymentMethod = mutation({
@@ -1020,7 +1036,9 @@ export const correctTransactionPaymentMethod = mutation({
     staffProofToken: v.optional(v.string()),
   },
   returns: correctTransactionPaymentMethodResultValidator,
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    correctTransactionPaymentMethodOperationDefinition,
+    async (ctx, args) => {
     if (!args.reason.trim()) {
       return userError({
         code: "validation_failed",
@@ -1141,7 +1159,8 @@ export const correctTransactionPaymentMethod = mutation({
       }
       throw error;
     }
-  },
+    },
+  ),
 });
 
 export const adjustTransactionItems = mutation({

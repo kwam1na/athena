@@ -9,13 +9,14 @@ import { denySharedDemoAction, requireSharedDemoCapability } from "./policy";
 import { isSharedDemoEnabled } from "./config";
 import { requireReadySharedDemoWriteWithCtx } from "./restore";
 
-type AuthCtx =
-  | Pick<QueryCtx, "auth" | "db">
-  | Pick<MutationCtx, "auth" | "db">;
+type AuthCtx = Pick<QueryCtx, "auth" | "db"> | Pick<MutationCtx, "auth" | "db">;
 
 export async function getSharedDemoActorWithCtx(
   ctx: AuthCtx,
-  options: { environment?: Record<string, string | undefined>; now?: number } = {},
+  options: {
+    environment?: Record<string, string | undefined>;
+    now?: number;
+  } = {},
 ) {
   // Some existing unit-level command contexts intentionally omit auth because
   // their normal authorization dependency is mocked. A real Convex context
@@ -24,10 +25,16 @@ export async function getSharedDemoActorWithCtx(
   const authUserId = await getAuthUserId(ctx);
   if (!authUserId) return null;
 
-  const principal = await ctx.db
-    .query("sharedDemoPrincipal")
-    .withIndex("by_authUserId", (q) => q.eq("authUserId", authUserId))
-    .unique();
+  let principal;
+  try {
+    principal = await ctx.db
+      .query("sharedDemoPrincipal")
+      .withIndex("by_authUserId", (q) => q.eq("authUserId", authUserId))
+      .unique();
+  } catch (error) {
+    if (error instanceof TypeError) return null;
+    throw error;
+  }
   if (!principal) {
     return null;
   }
@@ -49,7 +56,8 @@ export async function getSharedDemoActorWithCtx(
 
 export async function requireSharedDemoActorWithCtx(ctx: AuthCtx) {
   const actor = await getSharedDemoActorWithCtx(ctx);
-  if (!actor) throw new Error("The demo session has expired. Open the demo again.");
+  if (!actor)
+    throw new Error("The demo session has expired. Open the demo again.");
   return actor;
 }
 
@@ -112,15 +120,25 @@ export async function requireSharedDemoStoreReadIfApplicable(
 
 const sharedDemoCapabilityValidator = v.union(
   v.literal("approvals.manage"),
-  v.literal("pos.sale.complete"), v.literal("inventory.adjust"),
-  v.literal("cash.control.write"), v.literal("catalog.quick_add"),
+  v.literal("pos.sale.complete"),
+  v.literal("pos.sync.write"),
+  v.literal("pos.transaction.correct"),
+  v.literal("inventory.adjust"),
+  v.literal("cash.control.write"),
+  v.literal("catalog.quick_add"),
   v.literal("orders.fulfill"),
-  v.literal("staff.communication.write"), v.literal("daily_operations.write"),
-  v.literal("reports.read"), v.literal("staff.authenticate"),
+  v.literal("staff.communication.write"),
+  v.literal("daily_operations.write"),
+  v.literal("reports.read"),
+  v.literal("staff.authenticate"),
   v.literal("identity.manage"),
-  v.literal("permissions.manage"), v.literal("billing.manage"),
-  v.literal("integrations.manage"), v.literal("exports.generate"),
-  v.literal("payments.refund"), v.literal("administration.destructive"),
+  v.literal("permissions.manage"),
+  v.literal("billing.manage"),
+  v.literal("integrations.manage"),
+  v.literal("exports.generate"),
+  v.literal("payments.refund"),
+  v.literal("administration.destructive"),
+  v.literal("demo.lifecycle"),
 );
 
 export const enforceSharedDemoActionCapability = internalQuery({

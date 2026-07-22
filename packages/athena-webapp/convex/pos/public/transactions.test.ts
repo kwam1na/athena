@@ -33,6 +33,7 @@ vi.mock("../../lib/athenaUserAuth", () => ({
   requireOrganizationMemberRoleWithCtx: vi.fn(),
 }));
 vi.mock("../../sharedDemo/actor", () => ({
+  getSharedDemoActorWithCtx: vi.fn(async () => null),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
 }));
 
@@ -755,7 +756,10 @@ describe("POS public transaction read and correction authorization", () => {
     ).resolves.toMatchObject({ kind: "ok" });
 
     expect(correctionCommands.correctTransactionCustomer).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
       expect.objectContaining({
         actorUserId: "user-1",
         customerProfileId: "customer-1",
@@ -792,7 +796,10 @@ describe("POS public transaction read and correction authorization", () => {
     expect(
       correctionCommands.correctTransactionPaymentMethod,
     ).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
       expect.objectContaining({
         actorUserId: "user-1",
         actorStaffProfileId: "staff-1",
@@ -1024,7 +1031,10 @@ describe("legacy POS public checkout mutations", () => {
 
     expect(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
-    ).toHaveBeenCalledWith(ctx, {
+    ).toHaveBeenCalledWith(expect.objectContaining({
+      db: ctx.db,
+      operationAdmission: expect.any(Object),
+    }), {
       allowedRoles: ["full_admin"],
       failureMessage: "You cannot complete this POS sale.",
       organizationId: "org-1",
@@ -1112,7 +1122,10 @@ describe("legacy POS public checkout mutations", () => {
     });
     expect(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
-    ).toHaveBeenCalledWith(ctx, {
+    ).toHaveBeenCalledWith(expect.objectContaining({
+      db: ctx.db,
+      operationAdmission: expect.any(Object),
+    }), {
       allowedRoles: ["full_admin", "pos_only"],
       failureMessage: "You cannot update this transaction.",
       organizationId: "org-1",

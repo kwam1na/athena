@@ -14,7 +14,8 @@ import {
 import {
   ATHENA_CAPABILITY_CATALOG,
   SHARED_DEMO_ALLOWED_CAPABILITIES,
-} from "./capabilityCatalog";
+} from "../platform/capabilityCatalog";
+import { OPERATION_ADMISSION_DEFINITIONS } from "../operationAdmission/definitions";
 
 describe("shared demo policy", () => {
   it("keeps the demo allowlist separate from Athena's complete capability catalog", () => {
@@ -31,21 +32,32 @@ describe("shared demo policy", () => {
       "inventory.adjust",
       "orders.fulfill",
       "pos.sale.complete",
+      "pos.sync.write",
+      "pos.transaction.correct",
       "reports.read",
       "staff.authenticate",
       "staff.communication.write",
     ]);
-    expect(requireSharedDemoCapability("expense.manage")).toBe("expense.manage");
-    expect(requireSharedDemoCapability("pos.sale.complete")).toBe("pos.sale.complete");
-    expect(requireSharedDemoCapability("reports.read")).toBe("reports.read");
-    expect(() => requireSharedDemoCapability("billing.update" as never)).toThrow(
-      "This action isn't allowed in the demo.",
+    expect(requireSharedDemoCapability("expense.manage")).toBe(
+      "expense.manage",
     );
+    expect(requireSharedDemoCapability("pos.sale.complete")).toBe(
+      "pos.sale.complete",
+    );
+    expect(requireSharedDemoCapability("reports.read")).toBe("reports.read");
+    expect(requireSharedDemoCapability("demo.lifecycle")).toBe(
+      "demo.lifecycle",
+    );
+    expect(() =>
+      requireSharedDemoCapability("billing.update" as never),
+    ).toThrow("This action isn't allowed in the demo.");
   });
 
   it("classifies known Athena writes before applying the demo allowlist", () => {
     expect(
-      classifySharedDemoPublicFunction("cashControls/closeouts:correctRegisterSessionOpeningFloat"),
+      classifySharedDemoPublicFunction(
+        "cashControls/closeouts:correctRegisterSessionOpeningFloat",
+      ),
     ).toEqual({
       capability: "cash.control.write",
       decision: "declared",
@@ -83,6 +95,15 @@ describe("shared demo policy", () => {
       decision: "declared",
       demoDecision: "allowed",
     });
+    expect(
+      classifySharedDemoPublicFunction(
+        "sharedDemo/public:requestManualRestore",
+      ),
+    ).toEqual({
+      capability: "demo.lifecycle",
+      decision: "declared",
+      demoDecision: "allowed",
+    });
     expect(classifySharedDemoPublicFunction("unknown/module:write")).toEqual({
       decision: "denied",
       reason: "unclassified",
@@ -91,7 +112,9 @@ describe("shared demo policy", () => {
 
   it("defaults unknown effects to denied and never calls live providers", async () => {
     const live = vi.fn();
-    expect(await decideSharedDemoEffect("customer_message.send", { live })).toEqual({
+    expect(
+      await decideSharedDemoEffect("customer_message.send", { live }),
+    ).toEqual({
       kind: "simulated",
       label: "No customer message was sent.",
     });
@@ -102,11 +125,17 @@ describe("shared demo policy", () => {
     expect(live).not.toHaveBeenCalled();
   });
 
-  it("keeps the classification registry complete and unique", () => {
+  it("keeps the legacy shared-demo classification registry complete and unique until operationAdmission owns structural coverage", () => {
     expect(validateSharedDemoCoverage()).toEqual([]);
   });
 
-  it("maps every classification to an actual exported Convex function", () => {
+  it("maps every legacy representative classification to an actual exported Convex function", () => {
+    const admittedFunctionNames = new Set(
+      OPERATION_ADMISSION_DEFINITIONS.map(
+        (definition) => definition.functionName,
+      ),
+    );
+
     for (const entry of SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY) {
       const [moduleName, exportName] = entry.functionName.split(":");
       const source = readFileSync(
@@ -116,10 +145,14 @@ describe("shared demo policy", () => {
       expect(source, entry.functionName).toMatch(
         new RegExp(`export const ${exportName}\\s*=`),
       );
-      if (entry.capability !== "reports.read") {
-        expect(source, `${entry.functionName} must invoke ${entry.capability}`).toContain(
-          `"${entry.capability}"`,
-        );
+      if (
+        entry.capability !== "reports.read" &&
+        !admittedFunctionNames.has(entry.functionName)
+      ) {
+        expect(
+          source,
+          `${entry.functionName} must invoke ${entry.capability}`,
+        ).toContain(`"${entry.capability}"`);
       }
     }
   });
@@ -152,7 +185,10 @@ describe("shared demo policy", () => {
     ).not.toThrow();
 
     for (const review of [
-      { decision: "approved" as const, reviewKinds: ["duplicate_register_open"] },
+      {
+        decision: "approved" as const,
+        reviewKinds: ["duplicate_register_open"],
+      },
       { decision: "rejected" as const, reviewKinds: [] },
       {
         decision: "rejected" as const,

@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   listTerminalsQuery: vi.fn(),
   previewTerminalRecoveryQuery: vi.fn(),
   registerTerminalCommand: vi.fn(),
+  getSharedDemoActorWithCtx: vi.fn(),
+  requireReadySharedDemoWriteWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
@@ -44,10 +46,15 @@ vi.mock("../../lib/athenaUserAuth", () => ({
 }));
 
 vi.mock("../../sharedDemo/actor", () => ({
+  getSharedDemoActorWithCtx: mocks.getSharedDemoActorWithCtx,
   requireSharedDemoStoreCapabilityIfApplicable:
     mocks.requireSharedDemoStoreCapabilityIfApplicable,
   requireSharedDemoStoreReadIfApplicable:
     mocks.requireSharedDemoStoreReadIfApplicable,
+}));
+
+vi.mock("../../sharedDemo/restore", () => ({
+  requireReadySharedDemoWriteWithCtx: mocks.requireReadySharedDemoWriteWithCtx,
 }));
 
 vi.mock("../application/commands/terminals", () => ({
@@ -379,6 +386,8 @@ function buildRemoteAssistSession(overrides: Record<string, unknown> = {}) {
 describe("POS terminal public mutations", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
+    mocks.requireReadySharedDemoWriteWithCtx.mockResolvedValue(undefined);
     mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "athena-user-1",
     });
@@ -568,7 +577,10 @@ describe("POS terminal public mutations", () => {
     });
 
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
       expect.objectContaining({
         allowedRoles: ["full_admin", "pos_only"],
         organizationId: "org-1",
@@ -576,7 +588,10 @@ describe("POS terminal public mutations", () => {
       }),
     );
     expect(mocks.registerTerminalCommand).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
       expect.objectContaining({
         registeredByUserId: "athena-user-1",
       }),
@@ -584,8 +599,10 @@ describe("POS terminal public mutations", () => {
   });
 
   it("reprovisions the demo terminal through the store-scoped daily operations boundary", async () => {
-    mocks.requireSharedDemoStoreCapabilityIfApplicable.mockResolvedValue({
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue({
       athenaUserId: "athena-user-1",
+      kind: "shared_demo",
+      organizationId: "org-1",
       storeId: "store-1",
     });
     const ctx = buildCtx();
@@ -601,10 +618,15 @@ describe("POS terminal public mutations", () => {
 
     expect(
       mocks.requireSharedDemoStoreCapabilityIfApplicable,
-    ).toHaveBeenCalledWith(ctx, "daily_operations.write", "store-1");
+    ).not.toHaveBeenCalled();
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
     expect(mocks.registerTerminalCommand).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({ kind: "shared_demo" }),
+        }),
+      }),
       expect.objectContaining({
         allowRegisterNumberChange: true,
         registeredByUserId: "athena-user-1",
@@ -1173,7 +1195,10 @@ describe("POS terminal public mutations", () => {
       }),
     });
     expect(mocks.registerTerminalCommand).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
       expect.objectContaining({
         syncSecretHash: SYNC_SECRET_HASH,
       }),

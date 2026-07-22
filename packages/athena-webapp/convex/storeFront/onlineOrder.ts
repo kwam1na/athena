@@ -1,6 +1,11 @@
 /* eslint-disable @convex-dev/no-collect-in-query -- V26-168 converts the primary commerce access paths to indexed or bounded reads first; remaining legacy scans in this large module will be reduced in follow-up passes. */
 import { v } from "convex/values";
 import {
+  processReturnExchangeOperationDefinition,
+  updateOnlineOrderOperationDefinition,
+} from "../operationAdmission/definitions";
+import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
+import {
   getSharedDemoActorWithCtx,
   requireSharedDemoCapabilityIfApplicable,
   requireSharedDemoStoreReadIfApplicable,
@@ -32,6 +37,8 @@ import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordPaymentAllocationWithCtx } from "../operations/paymentAllocations";
 import { markCatalogSummaryNeedsRefresh } from "../inventory/catalogSummary";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { requireOrganizationMemberRoleWithCtx } from "../lib/athenaUserAuth";
+import type { OperationMutationCtx } from "../operationAdmission/types";
 import {
   createOrderFromCheckoutSession,
   findOrderByExternalReference,
@@ -611,6 +618,48 @@ function mapUpdateOrderError(error: unknown): CommandResult<never> | null {
   return null;
 }
 
+async function requireNormalOrderStoreAccessWithCtx(
+  ctx: MutationCtx,
+  order: Doc<"onlineOrder">,
+) {
+  const operationAdmission = (ctx as Partial<OperationMutationCtx>)
+    .operationAdmission;
+  if (operationAdmission?.actor.kind !== "normal_user") {
+    return ok(null);
+  }
+
+  const store = await ctx.db.get("store", order.storeId);
+  if (!store) {
+    return userError({
+      code: "not_found",
+      message: "Store not found.",
+    });
+  }
+
+  try {
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You do not have access to this order.",
+      organizationId: store.organizationId,
+      userId: operationAdmission.actor.athenaUserId,
+    });
+  } catch {
+    return userError({
+      code: "authorization_failed",
+      message: "You do not have access to this order.",
+    });
+  }
+
+  return ok(null);
+}
+
+function isCommandUserError(result: CommandResult<unknown>): result is Extract<
+  CommandResult<unknown>,
+  { kind: "user_error" }
+> {
+  return result.kind === "user_error";
+}
+
 export const create = mutation({
   args: {
     checkoutSessionId: v.id("checkoutSession"),
@@ -1016,7 +1065,9 @@ export const update = mutation({
     ),
   },
   returns: commandResultValidator(v.null()),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    updateOnlineOrderOperationDefinition,
+    async (ctx, args) => {
     try {
       const demoActor = await requireSharedDemoCapabilityIfApplicable(
         ctx,
@@ -1038,6 +1089,11 @@ export const update = mutation({
         if (demoActor && order.storeId !== demoActor.storeId) {
           denySharedDemoAction();
         }
+        const accessResult = await requireNormalOrderStoreAccessWithCtx(
+          ctx,
+          order,
+        );
+        if (isCommandUserError(accessResult)) return accessResult;
 
         await applyOnlineOrderUpdate(ctx, order, {
           ...args,
@@ -1062,6 +1118,11 @@ export const update = mutation({
         if (demoActor && order.storeId !== demoActor.storeId) {
           denySharedDemoAction();
         }
+        const accessResult = await requireNormalOrderStoreAccessWithCtx(
+          ctx,
+          order,
+        );
+        if (isCommandUserError(accessResult)) return accessResult;
 
         const { refund_id, refund_amount, ...rest } = args.update;
 
@@ -1108,7 +1169,8 @@ export const update = mutation({
 
       throw error;
     }
-  },
+    },
+  ),
 });
 
 export const getUnverifiedPaidOrders = internalQuery({
@@ -1601,7 +1663,9 @@ export const processReturnExchange = mutation({
       success: v.boolean(),
     })
   ),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    processReturnExchangeOperationDefinition,
+    async (ctx, args) => {
     try {
       await requireSharedDemoCapabilityIfApplicable(ctx, "payments.refund");
       const order = await ctx.db.get("onlineOrder", args.orderId);
@@ -1612,11 +1676,17 @@ export const processReturnExchange = mutation({
           message: "Order not found.",
         });
       }
+      const accessResult = await requireNormalOrderStoreAccessWithCtx(
+        ctx,
+        order,
+      );
+      if (isCommandUserError(accessResult)) return accessResult;
 
       const store = await ctx.db.get("store", order.storeId);
       const orderItems = await listOrderItems(ctx, order._id);
       const replacementItems = await Promise.all(
-        (args.replacementItems ?? []).map(async (replacement) => {
+        (args.replacementItems ?? []).map(
+          async (replacement: (typeof args.replacementItems)[number]) => {
           const productSku = await ctx.db.get(
             "productSku",
             replacement.productSkuId
@@ -2111,7 +2181,8 @@ export const processReturnExchange = mutation({
 
       throw error;
     }
-  },
+    },
+  ),
 });
 
 async function returnSelectedOnlineOrderItemsToStock(

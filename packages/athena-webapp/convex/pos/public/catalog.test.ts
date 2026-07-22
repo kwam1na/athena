@@ -830,13 +830,25 @@ describe("POS public catalog queries", () => {
 
     expect(
       mocks.requireSharedDemoStoreCapabilityIfApplicable,
-    ).toHaveBeenCalledWith(ctx, "catalog.quick_add", "store-1");
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
+      "catalog.quick_add",
+      "store-1",
+    );
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
-      ctx,
-      { sharedDemoCapability: "catalog.quick_add" },
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
     );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
       {
         allowedRoles: ["full_admin", "pos_only"],
         failureMessage: "You cannot quick add products for this store.",
@@ -845,7 +857,10 @@ describe("POS public catalog queries", () => {
       },
     );
     expect(mocks.quickAddCatalogItem).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
       expect.objectContaining({
         createdByUserId: "athena-user-1",
         storeId: "store-1",

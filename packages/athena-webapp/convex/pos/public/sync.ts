@@ -4,6 +4,11 @@ import { internal } from "../../_generated/api";
 import { mutation } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx } from "../../_generated/server";
+import {
+  ingestLocalEventsOperationDefinition,
+  ingestRegisterSessionActivityOperationDefinition,
+} from "../../operationAdmission/definitions";
+import { admitSharedDemoPublicMutation } from "../../operationAdmission/publicMutation";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
   requireAuthenticatedAthenaUserWithCtx,
@@ -174,7 +179,9 @@ export const ingestLocalEvents = mutation({
     events: v.array(posLocalSyncUploadEventValidator),
   },
   returns: localSyncResultValidator,
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    ingestLocalEventsOperationDefinition,
+    async (ctx, args) => {
     if (args.events.length > MAX_LOCAL_SYNC_EVENTS_PER_REQUEST) {
       return userError({
         code: "validation_failed",
@@ -183,7 +190,8 @@ export const ingestLocalEvents = mutation({
     }
 
     const pendingDefinitionCount = args.events.filter(
-      (event) => event.eventType === "pending_checkout_item_defined",
+      (event: (typeof args.events)[number]) =>
+        event.eventType === "pending_checkout_item_defined",
     ).length;
     if (pendingDefinitionCount > MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST) {
       return userError({
@@ -205,8 +213,8 @@ export const ingestLocalEvents = mutation({
     try {
       demoActor = await getSharedDemoActorWithCtx(ctx);
       if (demoActor) {
-        const capabilities = new Set(
-          args.events.map((event) =>
+        const capabilities = new Set<SharedDemoCapability>(
+          args.events.map((event: (typeof args.events)[number]) =>
             sharedDemoCapabilityForSyncEvent(event.eventType),
           ),
         );
@@ -290,7 +298,8 @@ export const ingestLocalEvents = mutation({
     }
 
     return result;
-  },
+    },
+  ),
 });
 
 function shouldScheduleRegisterCloseoutNotifications() {
@@ -409,7 +418,9 @@ export const ingestRegisterSessionActivity = mutation({
     activities: v.array(registerSessionActivityUploadValidator),
   },
   returns: registerSessionActivityResultValidator,
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    ingestRegisterSessionActivityOperationDefinition,
+    async (ctx, args) => {
     if (args.activities.length > MAX_REGISTER_SESSION_ACTIVITY_PER_REQUEST) {
       return userError({
         code: "validation_failed",
@@ -503,7 +514,8 @@ export const ingestRegisterSessionActivity = mutation({
       submittedAt: args.submittedAt ?? Date.now(),
       activities: args.activities,
     });
-  },
+    },
+  ),
 });
 
 export const resolveLocalSyncReview = mutation({

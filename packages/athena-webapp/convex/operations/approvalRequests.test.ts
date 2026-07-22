@@ -574,12 +574,13 @@ describe("approval request helpers", () => {
       role: "full_admin",
     });
 
-    await expect(
-      decideApprovalRequestAsCommandWithCtx(ctx, {
-        approvalRequestId: "approval-1" as Id<"approvalRequest">,
-        decision: "approved",
-      }),
-    ).resolves.toMatchObject({
+    const result = await decideApprovalRequestAsCommandWithCtx(ctx, {
+      approvalRequestId: "approval-1" as Id<"approvalRequest">,
+      decision: "approved",
+    });
+
+    assertConformsToExportedReturns(decideApprovalRequest, result);
+    expect(result).toMatchObject({
       kind: "user_error",
       error: {
         code: "authentication_failed",
