@@ -158,9 +158,11 @@ function isOperationAdmissionWrapperCall(expression: ts.Expression) {
   return (
     ts.isCallExpression(expression) &&
     ((ts.isIdentifier(expression.expression) &&
-      expression.expression.text === "admitPublicMutation") ||
+      (expression.expression.text === "admitPublicMutation" ||
+        expression.expression.text === "admitSharedDemoPublicMutation")) ||
       (ts.isPropertyAccessExpression(expression.expression) &&
-        expression.expression.name.text === "admitPublicMutation"))
+        (expression.expression.name.text === "admitPublicMutation" ||
+          expression.expression.name.text === "admitSharedDemoPublicMutation")))
   );
 }
 
@@ -222,8 +224,9 @@ function handlerCallsOperationAdmissionWrapper(
     if (found) return;
     if (
       ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      wrapperNames.has(node.expression.text)
+      ((ts.isIdentifier(node.expression) &&
+        wrapperNames.has(node.expression.text)) ||
+        isOperationAdmissionWrapperCall(node))
     ) {
       found = true;
       return;

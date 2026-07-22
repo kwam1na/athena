@@ -10,9 +10,11 @@ const authMocks = vi.hoisted(() => ({
   requireOrganizationMemberRoleWithCtx: vi.fn(),
 }));
 const sharedDemoMocks = vi.hoisted(() => ({
+  getSharedDemoActorWithCtx: vi.fn(),
   requireSharedDemoCapabilityIfApplicable: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
   requireSharedDemoStoreReadIfApplicable: vi.fn(),
+  requireReadySharedDemoWriteWithCtx: vi.fn(),
 }));
 
 vi.mock("../lib/athenaUserAuth", () => ({
@@ -22,12 +24,18 @@ vi.mock("../lib/athenaUserAuth", () => ({
     authMocks.requireOrganizationMemberRoleWithCtx,
 }));
 vi.mock("../sharedDemo/actor", () => ({
+  getSharedDemoActorWithCtx: sharedDemoMocks.getSharedDemoActorWithCtx,
   requireSharedDemoCapabilityIfApplicable:
     sharedDemoMocks.requireSharedDemoCapabilityIfApplicable,
   requireSharedDemoStoreCapabilityIfApplicable:
     sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable,
   requireSharedDemoStoreReadIfApplicable:
     sharedDemoMocks.requireSharedDemoStoreReadIfApplicable,
+}));
+
+vi.mock("../sharedDemo/restore", () => ({
+  requireReadySharedDemoWriteWithCtx:
+    sharedDemoMocks.requireReadySharedDemoWriteWithCtx,
 }));
 
 import {
@@ -304,6 +312,10 @@ async function createRestoredProofValidationCtx(overrides: {
 describe("staff credential operations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
+    sharedDemoMocks.requireReadySharedDemoWriteWithCtx.mockResolvedValue(
+      undefined
+    );
     sharedDemoMocks.requireSharedDemoCapabilityIfApplicable.mockResolvedValue(
       null
     );
@@ -495,9 +507,10 @@ describe("staff credential operations", () => {
         },
       ],
     });
-    sharedDemoMocks.requireSharedDemoStoreReadIfApplicable.mockResolvedValue({
+    sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue({
       athenaUserId: "demo-user",
       kind: "shared_demo",
+      organizationId: "org_1",
       storeId: "store_1",
     });
     authMocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
@@ -518,9 +531,7 @@ describe("staff credential operations", () => {
         staffProfileId: "manager-1",
       },
     });
-    expect(
-      sharedDemoMocks.requireSharedDemoStoreReadIfApplicable,
-    ).toHaveBeenCalledWith(ctx, "store_1");
+    expect(sharedDemoMocks.requireSharedDemoStoreReadIfApplicable).not.toHaveBeenCalled();
     expect(
       authMocks.requireAuthenticatedAthenaUserWithCtx,
     ).not.toHaveBeenCalled();

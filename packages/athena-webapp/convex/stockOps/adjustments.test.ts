@@ -848,7 +848,7 @@ function createSubmissionMutationCtx(args: {
 }
 
 describe("stock ops adjustments", () => {
-  it("accepts representative stock adjustment command return contracts", () => {
+  it("accepts representative operation-admitted stock adjustment return contracts", () => {
     assertConformsToExportedReturns(
       submitStockAdjustmentBatch,
       ok({

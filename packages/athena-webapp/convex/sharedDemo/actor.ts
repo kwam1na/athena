@@ -25,10 +25,16 @@ export async function getSharedDemoActorWithCtx(
   const authUserId = await getAuthUserId(ctx);
   if (!authUserId) return null;
 
-  const principal = await ctx.db
-    .query("sharedDemoPrincipal")
-    .withIndex("by_authUserId", (q) => q.eq("authUserId", authUserId))
-    .unique();
+  let principal;
+  try {
+    principal = await ctx.db
+      .query("sharedDemoPrincipal")
+      .withIndex("by_authUserId", (q) => q.eq("authUserId", authUserId))
+      .unique();
+  } catch (error) {
+    if (error instanceof TypeError) return null;
+    throw error;
+  }
   if (!principal) {
     return null;
   }
@@ -115,6 +121,8 @@ export async function requireSharedDemoStoreReadIfApplicable(
 const sharedDemoCapabilityValidator = v.union(
   v.literal("approvals.manage"),
   v.literal("pos.sale.complete"),
+  v.literal("pos.sync.write"),
+  v.literal("pos.transaction.correct"),
   v.literal("inventory.adjust"),
   v.literal("cash.control.write"),
   v.literal("catalog.quick_add"),

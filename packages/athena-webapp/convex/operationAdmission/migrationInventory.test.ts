@@ -62,39 +62,52 @@ describe("operation admission migration inventory", () => {
     );
   });
 
-  it("keeps demo-reachable follow-up groups inventoried until their handlers migrate", () => {
+  it("removes migrated demo-reachable groups while keeping adjacent follow-ups inventoried", () => {
+    const legacyFunctionNames = new Set(
+      OPERATION_ADMISSION_LEGACY_EXEMPTIONS.map((entry) => entry.functionName),
+    );
+    for (const functionName of [
+      "pos/public/transactions:completeTransaction",
+      "cashControls/deposits:recordRegisterSessionDeposit",
+      "stockOps/adjustments:submitStockAdjustmentBatch",
+      "storeFront/onlineOrder:update",
+      "operations/staffMessages:postStaffMessage",
+    ]) {
+      expect(legacyFunctionNames).not.toContain(functionName);
+    }
+
     expect(OPERATION_ADMISSION_MIGRATION_INVENTORY).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           capability: "pos.sale.complete",
           functions: expect.arrayContaining([
-            "pos/public/transactions:completeTransaction",
+            "pos/public/transactions:createTransactionFromSession",
           ]),
           wave: "pos",
         }),
         expect.objectContaining({
           capability: "cash.control.write",
           functions: expect.arrayContaining([
-            "cashControls/deposits:recordRegisterSessionDeposit",
+            "cashControls/closeouts:finalizeRegisterSessionCloseout",
           ]),
           wave: "cash-controls",
         }),
         expect.objectContaining({
           capability: "inventory.adjust",
           functions: expect.arrayContaining([
-            "stockOps/adjustments:submitStockAdjustmentBatch",
+            "stockOps/adjustments:temporaryDeleteStockAdjustmentScopeSkus",
           ]),
           wave: "catalog",
         }),
         expect.objectContaining({
-          capability: "orders.fulfill",
-          functions: expect.arrayContaining(["storeFront/onlineOrder:update"]),
+          capability: "orders.manage",
+          functions: expect.arrayContaining(["storeFront/onlineOrder:updateOwner"]),
           wave: "storefront",
         }),
         expect.objectContaining({
-          capability: "staff.communication.write",
+          capability: "staff.authenticate",
           functions: expect.arrayContaining([
-            "operations/staffMessages:postStaffMessage",
+            "operations/staffCredentials:authenticateStaffCredentialForTerminal",
           ]),
           wave: "identity-and-staff",
         }),

@@ -7,6 +7,15 @@ import {
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import {
+  discardCycleCountDraftOperationDefinition,
+  ensureCycleCountDraftOperationDefinition,
+  refreshCycleCountDraftLineBaselineOperationDefinition,
+  saveCycleCountDraftLineOperationDefinition,
+  submitActiveCycleCountDraftsOperationDefinition,
+  submitCycleCountDraftOperationDefinition,
+} from "../operationAdmission/definitions";
+import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
+import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
@@ -1059,13 +1068,45 @@ export const getActiveCycleCountDraftSummary = query({
   handler: getActiveCycleCountDraftSummaryWithCtx,
 });
 
+const ensureCycleCountDraftAdmittedHandler = admitSharedDemoPublicMutation(
+  ensureCycleCountDraftOperationDefinition,
+  ensureCycleCountDraftCommandWithCtx,
+);
+
+const saveCycleCountDraftLineAdmittedHandler = admitSharedDemoPublicMutation(
+  saveCycleCountDraftLineOperationDefinition,
+  saveCycleCountDraftLineCommandWithCtx,
+);
+
+const discardCycleCountDraftAdmittedHandler = admitSharedDemoPublicMutation(
+  discardCycleCountDraftOperationDefinition,
+  discardCycleCountDraftCommandWithCtx,
+);
+
+const refreshCycleCountDraftLineBaselineAdmittedHandler =
+  admitSharedDemoPublicMutation(
+    refreshCycleCountDraftLineBaselineOperationDefinition,
+    refreshCycleCountDraftLineBaselineCommandWithCtx,
+  );
+
+const submitCycleCountDraftAdmittedHandler = admitSharedDemoPublicMutation(
+  submitCycleCountDraftOperationDefinition,
+  submitCycleCountDraftCommandWithCtx,
+);
+
+const submitActiveCycleCountDraftsAdmittedHandler =
+  admitSharedDemoPublicMutation(
+    submitActiveCycleCountDraftsOperationDefinition,
+    submitActiveCycleCountDraftsCommandWithCtx,
+  );
+
 export const ensureCycleCountDraft = mutation({
   args: {
     scopeKey: v.string(),
     storeId: v.id("store"),
   },
   returns: commandResultValidator(v.any()),
-  handler: ensureCycleCountDraftCommandWithCtx,
+  handler: ensureCycleCountDraftAdmittedHandler,
 });
 
 export const saveCycleCountDraftLine = mutation({
@@ -1075,7 +1116,7 @@ export const saveCycleCountDraftLine = mutation({
     productSkuId: v.id("productSku"),
   },
   returns: commandResultValidator(v.any()),
-  handler: saveCycleCountDraftLineCommandWithCtx,
+  handler: saveCycleCountDraftLineAdmittedHandler,
 });
 
 export const discardCycleCountDraft = mutation({
@@ -1083,7 +1124,7 @@ export const discardCycleCountDraft = mutation({
     draftId: v.id("cycleCountDraft"),
   },
   returns: commandResultValidator(v.any()),
-  handler: discardCycleCountDraftCommandWithCtx,
+  handler: discardCycleCountDraftAdmittedHandler,
 });
 
 export const refreshCycleCountDraftLineBaseline = mutation({
@@ -1092,7 +1133,7 @@ export const refreshCycleCountDraftLineBaseline = mutation({
     storeId: v.id("store"),
   },
   returns: commandResultValidator(v.any()),
-  handler: refreshCycleCountDraftLineBaselineCommandWithCtx,
+  handler: refreshCycleCountDraftLineBaselineAdmittedHandler,
 });
 
 export const submitCycleCountDraft = mutation({
@@ -1101,7 +1142,7 @@ export const submitCycleCountDraft = mutation({
     notes: v.optional(v.string()),
   },
   returns: commandResultValidator(v.any()),
-  handler: submitCycleCountDraftCommandWithCtx,
+  handler: submitCycleCountDraftAdmittedHandler,
 });
 
 export const submitActiveCycleCountDrafts = mutation({
@@ -1110,5 +1151,5 @@ export const submitActiveCycleCountDrafts = mutation({
     storeId: v.id("store"),
   },
   returns: commandResultValidator(v.any()),
-  handler: submitActiveCycleCountDraftsCommandWithCtx,
+  handler: submitActiveCycleCountDraftsAdmittedHandler,
 });

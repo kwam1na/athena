@@ -112,16 +112,15 @@ describe("shared demo POS sync enforcement", () => {
       db: { get: vi.fn().mockResolvedValue({ organizationId: "org-1" }) },
     };
 
-    const result = await invoke(ctx, {
-      ...baseArgs,
-      events: [{ eventType: "sale_completed" }],
-    });
-
-    expect(result).toMatchObject({
-      error: { code: "precondition_failed", retryable: true },
-      kind: "user_error",
-    });
-    expect(mocks.requireReadySharedDemoWriteWithCtx).toHaveBeenCalledWith(ctx, {
+    await expect(
+      invoke(ctx, {
+        ...baseArgs,
+        events: [{ eventType: "sale_completed" }],
+      }),
+    ).rejects.toThrow("This action isn't allowed in the demo.");
+    expect(mocks.requireReadySharedDemoWriteWithCtx).toHaveBeenCalledWith(expect.objectContaining({
+      db: ctx.db,
+    }), {
       expectedEpoch: 4,
       storeId: "store-1",
     });
@@ -141,21 +140,20 @@ describe("shared demo POS sync enforcement", () => {
       },
     };
 
-    const result = await invokeActivity(ctx, {
-      activities: [],
-      expectedDemoEpoch: 4,
-      localRegisterSessionId: "register-1",
-      reportedThroughSequence: 0,
-      storeId: "store-1",
-      syncSecretHash: "secret",
-      terminalId: "terminal-1",
-    });
-
-    expect(result).toMatchObject({
-      error: { code: "precondition_failed", retryable: true },
-      kind: "user_error",
-    });
-    expect(mocks.requireReadySharedDemoWriteWithCtx).toHaveBeenCalledWith(ctx, {
+    await expect(
+      invokeActivity(ctx, {
+        activities: [],
+        expectedDemoEpoch: 4,
+        localRegisterSessionId: "register-1",
+        reportedThroughSequence: 0,
+        storeId: "store-1",
+        syncSecretHash: "secret",
+        terminalId: "terminal-1",
+      }),
+    ).rejects.toThrow("This action isn't allowed in the demo.");
+    expect(mocks.requireReadySharedDemoWriteWithCtx).toHaveBeenCalledWith(expect.objectContaining({
+      db: ctx.db,
+    }), {
       expectedEpoch: 4,
       storeId: "store-1",
     });

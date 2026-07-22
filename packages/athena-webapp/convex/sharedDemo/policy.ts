@@ -97,73 +97,6 @@ export function requireSharedDemoRegisterSessionSyncReview(args: {
 
 export const SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY = [
   {
-    functionName: "operations/staffCredentials:authenticateStaffCredential",
-    capability: "staff.authenticate",
-  },
-  {
-    functionName:
-      "operations/staffCredentials:authenticateStaffCredentialForApproval",
-    capability: "staff.authenticate",
-  },
-  {
-    functionName: "pos/public/transactions:completeTransaction",
-    capability: "pos.sale.complete",
-  },
-  {
-    functionName: "stockOps/adjustments:submitStockAdjustmentBatch",
-    capability: "inventory.adjust",
-  },
-  {
-    functionName: "cashControls/deposits:recordRegisterSessionDeposit",
-    capability: "cash.control.write",
-  },
-  {
-    functionName: "cashControls/deposits:resolveRegisterSessionSyncReview",
-    capability: "cash.control.write",
-  },
-  {
-    functionName: "cashControls/closeouts:correctRegisterSessionOpeningFloat",
-    capability: "cash.control.write",
-  },
-  {
-    functionName: "cashControls/closeouts:submitRegisterSessionCloseout",
-    capability: "cash.control.write",
-  },
-  {
-    functionName: "cashControls/closeouts:reviewRegisterSessionCloseout",
-    capability: "cash.control.write",
-  },
-  {
-    functionName: "cashControls/closeouts:reopenRegisterSessionCloseout",
-    capability: "cash.control.write",
-  },
-  {
-    functionName: "pos/public/catalog:quickAddSku",
-    capability: "catalog.quick_add",
-  },
-  {
-    functionName: "storeFront/onlineOrder:update",
-    capability: "orders.fulfill",
-  },
-  {
-    functionName: "operations/staffMessages:postStaffMessage",
-    capability: "staff.communication.write",
-  },
-  {
-    functionName: "operations/dailyOpening:startStoreDay",
-    capability: "daily_operations.write",
-  },
-  {
-    functionName: "pos/public/terminals:registerTerminal",
-    capability: "daily_operations.write",
-  },
-  // Expense recording reaches the server only through local-event sync; ingestLocalEvents
-  // enforces expense.manage for expense_recorded events.
-  {
-    functionName: "pos/public/sync:ingestLocalEvents",
-    capability: "expense.manage",
-  },
-  {
     functionName: "reporting/public:getReportsOverview",
     capability: "reports.read",
   },
@@ -194,10 +127,6 @@ export const SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY = [
   {
     functionName: "reporting/export:requestExport",
     capability: "exports.generate",
-  },
-  {
-    functionName: "storeFront/onlineOrder:processReturnExchange",
-    capability: "payments.refund",
   },
   {
     functionName: "inventory/stores:remove",

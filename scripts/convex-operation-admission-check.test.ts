@@ -78,6 +78,29 @@ describe("collectPublicMutationExportsFromSource", () => {
     ]);
   });
 
+  it("detects public mutations routed through the shared-demo admission wrapper", () => {
+    const exports = collectPublicMutationExportsFromSource(
+      "packages/athena-webapp/convex/example/sharedDemoAdmitted.ts",
+      `
+        import { mutation } from "../_generated/server";
+        import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
+        import { definition } from "../operationAdmission/definitions";
+
+        export const admittedWrite = mutation({
+          args: {},
+          handler: admitSharedDemoPublicMutation(definition, async () => null),
+        });
+      `,
+    );
+
+    expect(exports).toEqual([
+      expect.objectContaining({
+        functionName: "example/sharedDemoAdmitted:admittedWrite",
+        hasOperationAdmissionWrapper: true,
+      }),
+    ]);
+  });
+
   it("detects public mutations routed through a named operation admission wrapper", () => {
     const exports = collectPublicMutationExportsFromSource(
       "packages/athena-webapp/convex/example/namedAdmitted.ts",

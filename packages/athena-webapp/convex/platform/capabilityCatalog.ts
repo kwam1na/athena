@@ -69,6 +69,8 @@ export const SHARED_DEMO_ALLOWED_CAPABILITIES = [
   "inventory.adjust",
   "orders.fulfill",
   "pos.sale.complete",
+  "pos.sync.write",
+  "pos.transaction.correct",
   "reports.read",
   "staff.authenticate",
   "staff.communication.write",

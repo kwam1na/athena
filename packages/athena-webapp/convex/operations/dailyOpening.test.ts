@@ -298,7 +298,7 @@ describe("daily opening backend foundation", () => {
     });
   });
 
-  it("keeps daily opening command results aligned with exported return validators", () => {
+  it("keeps operation-admitted daily opening results aligned with exported return validators", () => {
     expect(() =>
       assertConformsToExportedReturns(startStoreDay, {
         kind: "user_error",

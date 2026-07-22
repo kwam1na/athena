@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 
 import { mutation, query } from "../_generated/server";
+import { postStaffMessageOperationDefinition } from "../operationAdmission/definitions";
+import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
@@ -52,7 +54,9 @@ export const postStaffMessage = mutation({
     expectedDemoRestoreEpoch: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    postStaffMessageOperationDefinition,
+    async (ctx, args) => {
     const body = args.body.trim();
     if (!body || body.length > STAFF_MESSAGE_MAX_LENGTH) {
       throw new Error(`Staff messages must be between 1 and ${STAFF_MESSAGE_MAX_LENGTH} characters.`);
@@ -91,5 +95,6 @@ export const postStaffMessage = mutation({
       updatedAt: now,
     });
     return ctx.db.get("staffMessage", id);
-  },
+    },
+  ),
 });

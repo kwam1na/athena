@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import type { OperationMutationCtx } from "../operationAdmission/types";
 import type { AthenaCapability } from "../platform/capabilityCatalog";
 import { getSharedDemoActorWithCtx } from "../sharedDemo/actor";
 
@@ -108,10 +109,20 @@ function isSharedDemoAthenaUserReadCapability(
   return SHARED_DEMO_ATHENA_USER_READ_CAPABILITIES.has(capability);
 }
 
+function getOperationAdmissionActorUserId(ctx: AthenaAuthCtx) {
+  return (ctx as Partial<OperationMutationCtx>).operationAdmission?.actor
+    .athenaUserId;
+}
+
 export async function getAuthenticatedAthenaUserWithCtx(
   ctx: AthenaAuthCtx,
   options?: AthenaUserAuthOptions,
 ) {
+  const admittedUserId = getOperationAdmissionActorUserId(ctx);
+  if (admittedUserId) {
+    return ctx.db.get("athenaUser", admittedUserId);
+  }
+
   if (
     options &&
     isSharedDemoAthenaUserReadCapability(options.sharedDemoCapability)
@@ -147,6 +158,13 @@ export async function requireAuthenticatedAthenaUserIndexedWithCtx(
   ctx: AthenaAuthCtx,
   options?: AthenaUserAuthOptions,
 ) {
+  const admittedUserId = getOperationAdmissionActorUserId(ctx);
+  if (admittedUserId) {
+    const athenaUser = await ctx.db.get("athenaUser", admittedUserId);
+    if (!athenaUser) throw new Error("Sign in again to continue.");
+    return athenaUser;
+  }
+
   if (
     options &&
     isSharedDemoAthenaUserReadCapability(options.sharedDemoCapability)

@@ -72,7 +72,13 @@ describe("staff messages", () => {
     const ctx = context();
     await expect(invoke(postStaffMessage, ctx, { body: "Opening complete", storeId: "store-1" })).rejects.toThrow("Refresh the demo");
     await invoke(postStaffMessage, ctx, { body: "Opening complete", expectedDemoRestoreEpoch: 7, storeId: "store-1" });
-    expect(requireReadySharedDemoWriteWithCtx).toHaveBeenCalledWith(ctx, { expectedEpoch: 7, storeId: "store-1" });
+    expect(requireReadySharedDemoWriteWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
+      { expectedEpoch: 7, storeId: "store-1" },
+    );
   });
 
   it("rejects cross-store membership before reading or writing messages", async () => {

@@ -33,8 +33,43 @@ describe("storefront error foundation", () => {
 
   it("returns a not_found user_error when an order update targets a missing order", async () => {
     const ctx = {
+      auth: {
+        getUserIdentity: vi.fn(async () => ({ subject: "auth-user-1" })),
+      },
       db: {
-        get: vi.fn(async () => null),
+        get: vi.fn(async (table: string) => {
+          if (table === "users") {
+            return { _id: "auth-user-1", email: "operator@example.com" };
+          }
+          if (table === "athenaUser") {
+            return { _id: "athena-user-1", email: "operator@example.com" };
+          }
+          return null;
+        }),
+        query: vi.fn((table: string) => {
+          if (table === "sharedDemoPrincipal") {
+            return {
+              withIndex: vi.fn(() => ({
+                unique: vi.fn(async () => null),
+              })),
+            };
+          }
+          if (table === "athenaUser") {
+            return {
+              withIndex: vi.fn(() => ({
+                first: vi.fn(async () => null),
+                take: vi.fn(async () => [
+                  {
+                    _id: "athena-user-1",
+                    email: "operator@example.com",
+                    normalizedEmail: "operator@example.com",
+                  },
+                ]),
+              })),
+            };
+          }
+          throw new Error(`Unexpected query table: ${table}`);
+        }),
       },
     };
 

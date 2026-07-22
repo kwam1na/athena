@@ -14,21 +14,21 @@ public Convex mutation and action and fails when any function is unclassified.
 The operation-admission migration pairs this platform capability catalog with
 public-write structural coverage in `convex/operationAdmission`. Shared demo
 consumes that platform catalog through its adapter instead of owning
-write-admission proof. The generic Athena-user auth helper no longer admits
-shared-demo write capabilities; it preserves only explicit read allowlists such
-as `reports.read`. Migrated shared-demo writes must now enter through an
-operation definition plus adapter-backed admission context. Remaining legacy
-write groups stay tracked by migration inventory and domain-specific policy
-until they receive operation definitions.
+write-admission proof. Migrated shared-demo writes must now enter through an
+operation definition plus adapter-backed admission context. The generic
+Athena-user auth helper keeps only the explicit shared-demo read bridge; write
+capabilities must enter through operation admission or remain in exact legacy
+exemptions until migrated. Remaining legacy write groups stay tracked by
+migration inventory and domain-specific policy until they receive operation
+definitions.
 
 The demo allowlist is a separate list of capability IDs. Classification does
 not grant access: every newly discovered capability remains denied until it is
 added to `SHARED_DEMO_ALLOWED_CAPABILITIES` and wired through a store-clamped,
 restore-fenced server boundary. `SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY`
-currently records those legacy runtime enforcement bindings; it is not the
-capability catalog. After operationAdmission owns migrated public-write
-coverage, this representative inventory should be retired in favor of
-operation definitions plus explicit migration exemptions.
+records only the residual legacy runtime enforcement bindings; it is not the
+capability catalog. Migrated public-write coverage is owned by operation
+definitions plus explicit migration exemptions.
 
 ## Athena view surfaces
 
@@ -73,9 +73,10 @@ reads, writes, and external effects.
 Existing shared-demo read allowlists are intentionally unchanged by the
 operation-admission cleanup. Public reads/queries, public actions, broad
 provider dispatch migration, and shared-demo seeding/restore redesign remain
-out of scope until separately planned. Write admission should not be added back
-to `convex/lib/athenaUserAuth.ts`; use `convex/operationAdmission` and the
-shared-demo operation adapter for migrated public writes.
+out of scope until separately planned. New or migrated write admission should
+not be added back to `convex/lib/athenaUserAuth.ts`; use
+`convex/operationAdmission` and the shared-demo operation adapter for migrated
+public writes.
 
 ## Athena capability families
 

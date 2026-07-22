@@ -43,7 +43,7 @@ vi.mock("../reporting/operatingPeriods", () => ({
 vi.mock("../sharedDemo/actor", () => sharedDemoMocks);
 
 describe("cycle count public return validators", () => {
-  it("accepts the shared command error contract", () => {
+  it("accepts the operation-admitted shared command error contract", () => {
     const result = {
       error: { code: "validation_failed", message: "Count is invalid." },
       kind: "user_error" as const,

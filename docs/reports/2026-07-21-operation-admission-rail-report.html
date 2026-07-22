@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="ec3655e2f7130d9b34f23dc6cad07d1cfbae060caa28d84626ed94c5cc0f067f" data-athena-report-base="origin/main" data-athena-report-head="5036dcaf">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="f5bcca4e8d3a182ebd09bde297fa6e3f2c3723b8dfedcdc61b289069a03bbb89" data-athena-report-base="origin/main" data-athena-report-head="pending-final-review-fix">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -77,14 +77,14 @@
       <header>
         <h1>Operation Admission Rail Delivery Candidate</h1>
         <p class="lede">PR #689 now includes the proving rail plus V26-1096 and V26-1097: demo-reachable write migrations and retirement of the migrated legacy shared-demo write paths.</p>
-        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">PR #689</span><span class="pill">Linear V26-1096</span><span class="pill">Linear V26-1097</span><span class="pill">Head 5036dcaf</span><span class="pill">Base origin/main 6568ee37</span><span class="pill">No production deploy in scope</span><span class="pill">Root alignment pending</span><span class="pill">Report fingerprint ec3655e2</span></div>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">PR #689</span><span class="pill">Linear V26-1096</span><span class="pill">Linear V26-1097</span><span class="pill">Head pending final review fix</span><span class="pill">Base origin/main 6568ee37</span><span class="pill">No production deploy in scope</span><span class="pill">Root alignment pending</span><span class="pill">Report fingerprint f5bcca4e</span></div>
       </header>
       <section class="panel"><h2>Executive Summary</h2>
-<p>This PR moves the operation admission rail from a single proving mutation to a fuller demo-reachable write slice. The rail now admits approval decisions, synced-sale inventory review resolution, and the shared-demo lifecycle writes for manual restore, browser reset, and terminal baseline binding.</p>
-<p>The important boundary is that shared-demo writes no longer depend on a generic helper option to smuggle write capability through ordinary auth. Migrated public mutations declare their operation definition, resolve the actor through operation admission, and leave the remaining unmigrated public writes as exact legacy exemptions.</p>
+<p>This PR moves the operation admission rail from a single proving mutation to the V26-1096 shared-demo reachable write slice: POS sale/corrections/sync, operations, cash-control, inventory adjustment, staff authentication/messages, storefront fulfillment, return/exchange, and protected-effect declaration writes.</p>
+<p>The important boundary is that migrated shared-demo writes no longer depend on a generic helper option to smuggle write capability through ordinary auth. Migrated public mutations declare their operation definition, resolve the actor through operation admission, and leave only remaining unmigrated public writes as exact legacy exemptions.</p>
 <ul>
 <li>V26-1096 migrates the next demo-reachable writes through operation admission definitions and adapters.</li>
-<li>V26-1097 removes the migrated shared-demo write paths from legacy helper and policy inventories while preserving an explicit reports.read bridge for the one generic read path.</li>
+<li>V26-1097 removes the migrated shared-demo write paths from generic auth helper admission and legacy policy inventories while preserving the explicit read bridge.</li>
 <li>The candidate is not merged, deployed, or root-aligned yet; those states remain pending because this report is included before final PR readiness.</li>
 </ul>
 </section>
@@ -93,7 +93,7 @@
 <p>The operational risk was not that every legacy write was wrong. The risk was that migrated writes could remain partly admitted by old shared-demo paths, leaving reviewers without a crisp answer to which catalog owns a write boundary.</p>
 </section>
 <section class="panel"><h2>Mental Model</h2>
-<p>Think of operation admission as the front desk for public writes. A public mutation does not ask a generic auth helper to infer whether a demo actor may write. It presents a named operation definition, the rail validates that definition against the actor and scope, and the command handler receives the admitted actor context.</p>
+<p>Think of operation admission as the front desk for migrated public writes. A migrated public mutation does not ask a generic auth helper to infer whether a demo actor may write. It presents a named operation definition, the rail validates that definition against the actor and scope, and the command handler receives the admitted actor context.</p>
 <p>The legacy exemption inventory is now a deliberate map of what has not yet moved through the front desk. Every migrated write should leave that inventory, otherwise the system is claiming two owners for the same permission boundary.</p>
 <ul>
 <li>Operation definitions describe the function, capability, readiness, and scope.</li>
@@ -103,8 +103,8 @@
 </ul>
 </section>
 <section class="panel"><h2>Before And After</h2>
-<p>Before: approval decisions and shared-demo lifecycle writes still relied on legacy helper or policy paths. Generic Athena user auth could receive shared-demo write capability options, and the shared-demo public-function inventory still listed writes that were intended to migrate.</p>
-<p>After: approval decisions and shared-demo lifecycle writes have operation definitions. The public handlers route through operation admission, shared-demo denial is normalized into command-style user errors where the command surface expects that shape, and generic auth keeps only the explicit reports.read bridge.</p>
+<p>Before: the proving path covered only a narrow write slice while many shared-demo reachable writes still relied on legacy helper or policy paths. Generic Athena user auth could receive shared-demo write capability options, and the shared-demo public-function inventory still listed writes that were intended to migrate.</p>
+<p>After: the V26-1096 write groups have operation definitions. The public handlers route through operation admission, shared-demo denial is normalized into command-style user errors where the command surface expects that shape, and generic auth keeps only the explicit shared-demo read bridge.</p>
 <pre><code>Before: helper option -&gt; shared-demo write capability -&gt; command
 After: operation definition -&gt; operation admission actor -&gt; command</code></pre>
 </section>
@@ -112,9 +112,9 @@ After: operation definition -&gt; operation admission actor -&gt; command</code>
 <p>The operationAdmission layer declares and validates the authoritative write catalog. The operations layer wraps public mutations with admission before running command logic. The sharedDemo layer supplies actor and policy support for admitted demo operations, but no longer owns the migrated write inventory. The checker layer proves that migrated functions are represented by definitions and that only remaining unmigrated public mutations stay in the legacy exemption list.</p>
 <ul>
 <li>approvalRequests now derives the reviewer from ctx.operationAdmission.actor when admission succeeds, then falls back to ordinary auth without shared-demo write options only for the normal path.</li>
-<li>openWorkInventoryReviews uses a named admitted handler and preserves command-style denial behavior for shared-demo readiness failures.</li>
-<li>sharedDemo/public lifecycle mutations now route through operation admission definitions instead of policy-only legacy inventory entries.</li>
-<li>policy coverage validation was tightened so operationAdmission owns structural proof for migrated shared-demo capabilities.</li>
+<li>POS, cash-control, stock operation, staff, daily-opening, terminal registration, and storefront fulfillment/refund-capable writes now wrap public mutation handlers with shared-demo operation admission.</li>
+<li>sharedDemo/public lifecycle mutations route through operation admission definitions instead of policy-only legacy inventory entries.</li>
+<li>policy and checker coverage were tightened so operationAdmission owns structural proof for migrated shared-demo capabilities.</li>
 </ul>
 </section>
 <section class="panel"><h2>What Intentionally Did Not Change</h2>
@@ -122,8 +122,8 @@ After: operation definition -&gt; operation admission actor -&gt; command</code>
 <p>The protected effect gateway is present in the rail foundation, but this V26-1096/V26-1097 slice does not turn every migrated operation into an effect-gateway consumer. That is a later hardening boundary, not a hidden claim in this candidate.</p>
 </section>
 <section class="panel"><h2>Validation Evidence</h2>
-<p>Focused tests passed across operationAdmission, sharedDemo policy/auth, approvalRequests, openWorkInventoryReviews, and the operation-admission checker. TypeScript passed for the webapp package. The structural checker reported 228 public mutations, 5 operation definitions, and 223 legacy exemptions. Convex changed-file lint, Convex audit, pre-commit generated-artifact repair, graphify rebuild, and diff whitespace checks passed before the candidate commit.</p>
-<p>The broad merge-level gate bun run pr:athena still needs to run after this report refresh is committed. Remote GitHub checks also need to rerun after the branch is pushed because the open PR currently reflects the previous head.</p>
+<p>Focused tests passed across operationAdmission, sharedDemo policy/auth, and the operation-admission checker. TypeScript passed for the webapp package. The structural checker reported 228 public mutations, 32 operation definitions, and 196 legacy exemptions. Convex changed-file lint, Convex audit, pre-commit generated-artifact repair, graphify rebuild, and diff whitespace checks are pending for the final candidate commit.</p>
+<p>The broad merge-level gate bun run pr:athena passed before the final reviewer-loop compatibility fix. After that fix is committed, it must rerun before the PR is treated as mergeable. Remote GitHub checks also need to rerun after the branch is pushed because the open PR currently reflects the previous head.</p>
 <ul>
 <li>Focused webapp suite: 12 files, 124 tests passed.</li>
 <li>Checker unit suite: 11 tests passed.</li>
@@ -131,6 +131,7 @@ After: operation definition -&gt; operation admission actor -&gt; command</code>
 <li>bun run --filter &#x27;@athena/webapp&#x27; audit:convex passed.</li>
 <li>bun run --filter &#x27;@athena/webapp&#x27; lint:convex:changed passed.</li>
 <li>bun run pre-commit:generated-artifacts passed and refreshed graphify artifacts.</li>
+<li>Reviewer-loop fix focused suite passed: 5 files, 58 tests.</li>
 </ul>
 </section>
 <section class="panel"><h2>Reviewer And Subagent Evidence</h2>
@@ -148,12 +149,13 @@ After: operation definition -&gt; operation admission actor -&gt; command</code>
   <h2>Key Files</h2>
   <table>
     <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
-    <tbody><tr><td><code>packages/athena-webapp/convex/operationAdmission/definitions.ts</code></td><td>Adds operation definitions for approval decisions and shared-demo lifecycle writes, and validates demo.lifecycle scope semantics.</td></tr>
+    <tbody><tr><td><code>packages/athena-webapp/convex/operationAdmission/definitions.ts</code></td><td>Adds operation definitions for the proving path, lifecycle writes, and the V26-1096 shared-demo reachable write groups.</td></tr>
 <tr><td><code>packages/athena-webapp/convex/operationAdmission/migrationInventory.ts</code></td><td>Removes migrated writes from legacy exemptions and keeps the remaining public mutation inventory exact.</td></tr>
 <tr><td><code>packages/athena-webapp/convex/operations/approvalRequests.ts</code></td><td>Routes approval decisions through operation admission and removes helper-only shared-demo write auth from the public handler.</td></tr>
 <tr><td><code>packages/athena-webapp/convex/operations/openWorkInventoryReviews.ts</code></td><td>Keeps the original proving mutation admitted while preserving command-style denial shape for shared-demo failures.</td></tr>
 <tr><td><code>packages/athena-webapp/convex/sharedDemo/public.ts</code></td><td>Migrates manual restore, browser reset, and terminal baseline binding onto operation admission.</td></tr>
-<tr><td><code>packages/athena-webapp/convex/sharedDemo/policy.ts</code></td><td>Separates operation-admitted demo lifecycle capability from legacy shared-demo public-function inventory.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/pos/public/*</code>, <code>cashControls/*</code>, <code>stockOps/*</code>, <code>operations/*</code>, <code>storeFront/onlineOrder.ts</code></td><td>Route migrated POS, cash-control, inventory, staff, operations, and storefront write handlers through shared-demo operation admission.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/sharedDemo/policy.ts</code></td><td>Leaves only residual legacy shared-demo public-function inventory entries after migrated writes move to operation admission.</td></tr>
 <tr><td><code>packages/athena-webapp/convex/lib/athenaUserAuth.ts</code></td><td>Retains only the explicit reports.read bridge and stops generic auth from admitting shared-demo write capabilities.</td></tr>
 <tr><td><code>scripts/convex-operation-admission-check.ts</code></td><td>Recognizes admitted wrappers and keeps the public-mutation coverage proof aligned with the migrated handler shapes.</td></tr>
 <tr><td><code>packages/athena-webapp/docs/shared-demo-backend-coverage.md</code></td><td>Documents the new shared-demo coverage boundary after migrated writes leave legacy helper paths.</td></tr>
@@ -201,12 +203,12 @@ After: operation definition -&gt; operation admission actor -&gt; command</code>
 <div class="quiz-question" data-answer="2">
   <fieldset>
     <legend>3. Which shared-demo capability bridge remains in generic Athena user auth after this change?</legend>
-    <label><input type="radio" name="q3" value="0" /> All shared-demo write capabilities</label>
+    <label><input type="radio" name="q3" value="0" /> All shared-demo capabilities, including operation-owned write capabilities</label>
 <label><input type="radio" name="q3" value="1" /> No shared-demo capabilities of any kind</label>
-<label><input type="radio" name="q3" value="2" /> Only the explicit reports.read bridge</label>
-<label><input type="radio" name="q3" value="3" /> Only pos.sale.complete</label>
+<label><input type="radio" name="q3" value="2" /> Explicit shared-demo reads only</label>
+<label><input type="radio" name="q3" value="3" /> Write capabilities for migrated groups</label>
   </fieldset>
-  <div class="answer-detail">The generic helper keeps the deliberate reports.read bridge and stops acting as the admission switch for migrated writes.</div>
+  <div class="answer-detail">The generic helper keeps the deliberate read bridge; migrated write capabilities enter through operation admission.</div>
 </div>
 
 <div class="quiz-question" data-answer="0">
@@ -239,7 +241,7 @@ After: operation definition -&gt; operation admission actor -&gt; command</code>
 <label><input type="radio" name="q6" value="2" /> GitHub Actions will never fail</label>
 <label><input type="radio" name="q6" value="3" /> Production has already been deployed</label>
   </fieldset>
-  <div class="answer-detail">The checker reports 228 public mutations, 5 definitions, and 223 legacy exemptions for the current slice.</div>
+  <div class="answer-detail">The checker reports 228 public mutations, 32 definitions, and 196 legacy exemptions for the current slice.</div>
 </div>
 
 <div class="quiz-question" data-answer="0">

@@ -48,6 +48,14 @@ function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
 
+function admittedCtx(ctx: { db: unknown; scheduler?: unknown }) {
+  return expect.objectContaining({
+    db: ctx.db,
+    operationAdmission: expect.any(Object),
+    scheduler: ctx.scheduler,
+  });
+}
+
 describe("POS local sync public mutation", () => {
   afterEach(() => {
     process.env.STAGE = originalStage;
@@ -125,7 +133,7 @@ describe("POS local sync public mutation", () => {
     });
 
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       expect.objectContaining({
         allowedRoles: ["full_admin", "pos_only"],
         organizationId: "org-1",
@@ -133,7 +141,7 @@ describe("POS local sync public mutation", () => {
       }),
     );
     expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       expect.objectContaining({
         storeId: "store-1",
         terminalId: "terminal-1",
@@ -513,7 +521,7 @@ describe("POS local sync public mutation", () => {
     });
 
     expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       expect.objectContaining({
         events: [
           expect.not.objectContaining({
@@ -708,7 +716,7 @@ describe("POS local sync public mutation", () => {
     });
 
     expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       expect.objectContaining({
         submittedByUserId: "athena-user-1",
       }),
@@ -793,7 +801,7 @@ describe("POS local sync public mutation", () => {
     });
 
     expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       expect.objectContaining({
         events: [buildEvent()],
       }),
@@ -812,7 +820,7 @@ describe("POS local sync public mutation", () => {
     });
 
     expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       expect.objectContaining({
         events: [
           expect.objectContaining({
@@ -864,7 +872,7 @@ describe("POS local sync public mutation", () => {
     });
 
     expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       expect.objectContaining({
         events: [
           expect.objectContaining({
@@ -922,7 +930,7 @@ describe("POS local sync public mutation", () => {
     });
 
     expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       expect.objectContaining({
         events: [
           expect.objectContaining({
@@ -978,7 +986,7 @@ describe("POS local sync public mutation", () => {
     });
 
     expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       expect.objectContaining({
         events: [
           expect.objectContaining({
@@ -1034,7 +1042,7 @@ describe("POS local sync public mutation", () => {
     });
 
     expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       expect.objectContaining({
         events: [
           expect.objectContaining({
@@ -1130,7 +1138,7 @@ describe("POS local sync public mutation", () => {
     });
 
     expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       expect.objectContaining({
         events: [
           expect.objectContaining({
@@ -1223,7 +1231,7 @@ describe("POS local sync public mutation", () => {
       },
     });
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       expect.objectContaining({
         allowedRoles: ["full_admin", "pos_only"],
         organizationId: "org-1",
@@ -1231,7 +1239,7 @@ describe("POS local sync public mutation", () => {
       }),
     );
     expect(mocks.ingestRegisterSessionActivityWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       {
         storeId: "store-1",
         terminalId: "terminal-1",

@@ -32,6 +32,8 @@ describe("shared demo policy", () => {
       "inventory.adjust",
       "orders.fulfill",
       "pos.sale.complete",
+      "pos.sync.write",
+      "pos.transaction.correct",
       "reports.read",
       "staff.authenticate",
       "staff.communication.write",

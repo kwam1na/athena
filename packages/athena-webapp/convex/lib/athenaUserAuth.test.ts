@@ -215,6 +215,38 @@ describe("Athena user auth boundary", () => {
     expect(getAuthUserId).not.toHaveBeenCalled();
   });
 
+  it("resolves the actor from operation admission context", async () => {
+    const demoUser = {
+      _id: "demo-athena",
+      email: "synthetic@demo.invalid",
+      normalizedEmail: "synthetic@demo.invalid",
+    };
+    vi.mocked(getAuthUserId).mockResolvedValue("demo-auth" as never);
+    const ctx = {
+      auth: { getUserIdentity: vi.fn() },
+      db: {
+        get: vi.fn(async (table: string, id: string) =>
+          table === "athenaUser" && id === demoUser._id ? demoUser : null,
+        ),
+        query: vi.fn(),
+      },
+      operationAdmission: {
+        actor: {
+          athenaUserId: demoUser._id,
+          kind: "shared_demo",
+          organizationId: "demo-org",
+          storeId: "demo-store",
+        },
+      },
+    };
+
+    await expect(getAuthenticatedAthenaUserWithCtx(ctx as never)).resolves.toEqual(
+      demoUser,
+    );
+    expect(getAuthUserId).not.toHaveBeenCalled();
+    expect(getSharedDemoActorWithCtx).not.toHaveBeenCalled();
+  });
+
   it("does not admit shared-demo write capabilities through the generic Athena user helper", async () => {
     vi.mocked(getAuthUserId).mockResolvedValue("demo-auth" as never);
     vi.mocked(getSharedDemoActorWithCtx).mockResolvedValue({

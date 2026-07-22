@@ -21,7 +21,7 @@ export function createSharedDemoOperationAdapter(
       try {
         actor = await getSharedDemoActorWithCtx(ctx);
       } catch {
-        return sharedDemoDenied("readiness_denied");
+        return { kind: "not_applicable" };
       }
       if (!actor) return { kind: "not_applicable" };
       if (definition.actors.sharedDemo !== "admit") {

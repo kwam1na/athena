@@ -1,6 +1,11 @@
 /* eslint-disable @convex-dev/no-collect-in-query -- V26-168 converts the primary commerce access paths to indexed or bounded reads first; remaining legacy scans in this large module will be reduced in follow-up passes. */
 import { v } from "convex/values";
 import {
+  processReturnExchangeOperationDefinition,
+  updateOnlineOrderOperationDefinition,
+} from "../operationAdmission/definitions";
+import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
+import {
   getSharedDemoActorWithCtx,
   requireSharedDemoCapabilityIfApplicable,
   requireSharedDemoStoreReadIfApplicable,
@@ -1016,7 +1021,9 @@ export const update = mutation({
     ),
   },
   returns: commandResultValidator(v.null()),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    updateOnlineOrderOperationDefinition,
+    async (ctx, args) => {
     try {
       const demoActor = await requireSharedDemoCapabilityIfApplicable(
         ctx,
@@ -1108,7 +1115,8 @@ export const update = mutation({
 
       throw error;
     }
-  },
+    },
+  ),
 });
 
 export const getUnverifiedPaidOrders = internalQuery({
@@ -1601,7 +1609,9 @@ export const processReturnExchange = mutation({
       success: v.boolean(),
     })
   ),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    processReturnExchangeOperationDefinition,
+    async (ctx, args) => {
     try {
       await requireSharedDemoCapabilityIfApplicable(ctx, "payments.refund");
       const order = await ctx.db.get("onlineOrder", args.orderId);
@@ -1616,7 +1626,8 @@ export const processReturnExchange = mutation({
       const store = await ctx.db.get("store", order.storeId);
       const orderItems = await listOrderItems(ctx, order._id);
       const replacementItems = await Promise.all(
-        (args.replacementItems ?? []).map(async (replacement) => {
+        (args.replacementItems ?? []).map(
+          async (replacement: (typeof args.replacementItems)[number]) => {
           const productSku = await ctx.db.get(
             "productSku",
             replacement.productSkuId
@@ -2111,7 +2122,8 @@ export const processReturnExchange = mutation({
 
       throw error;
     }
-  },
+    },
+  ),
 });
 
 async function returnSelectedOnlineOrderItemsToStock(

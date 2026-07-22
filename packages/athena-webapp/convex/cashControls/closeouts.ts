@@ -2,6 +2,13 @@ import { mutation, MutationCtx, query, QueryCtx } from "../_generated/server";
 import { Doc, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { v } from "convex/values";
+import {
+  correctRegisterSessionOpeningFloatOperationDefinition,
+  reopenRegisterSessionCloseoutOperationDefinition,
+  reviewRegisterSessionCloseoutOperationDefinition,
+  submitRegisterSessionCloseoutOperationDefinition,
+} from "../operationAdmission/definitions";
+import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
 import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
 import {
   APPROVAL_ACTIONS,
@@ -853,7 +860,9 @@ export const submitRegisterSessionCloseout = mutation({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: submitRegisterSessionCloseoutResultValidator,
-  handler: async (
+  handler: admitSharedDemoPublicMutation(
+    submitRegisterSessionCloseoutOperationDefinition,
+    async (
     ctx: MutationCtx,
     args: SubmitRegisterSessionCloseoutArgs
   ): Promise<ApprovalCommandResult<SubmitRegisterSessionCloseoutResult>> => {
@@ -1520,7 +1529,8 @@ export const submitRegisterSessionCloseout = mutation({
       closeoutReview,
       registerSession: closedSession,
     });
-  },
+    },
+  ),
 });
 
 export const finalizeRegisterSessionCloseout = mutation({
@@ -1799,7 +1809,9 @@ export const reopenRegisterSessionCloseout = mutation({
     storeId: v.id("store"),
   },
   returns: reopenRegisterSessionResultValidator,
-  handler: async (
+  handler: admitSharedDemoPublicMutation(
+    reopenRegisterSessionCloseoutOperationDefinition,
+    async (
     ctx: MutationCtx,
     args: ReopenRegisterSessionCloseoutArgs
   ): Promise<CommandResult<ReopenRegisterSessionResult>> => {
@@ -2076,7 +2088,8 @@ export const reopenRegisterSessionCloseout = mutation({
       approvalRequest,
       registerSession: reopenedSession,
     });
-  },
+    },
+  ),
 });
 
 export const correctRegisterSessionOpeningFloat = mutation({
@@ -2092,7 +2105,9 @@ export const correctRegisterSessionOpeningFloat = mutation({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: correctRegisterSessionOpeningFloatResultValidator,
-  handler: async (
+  handler: admitSharedDemoPublicMutation(
+    correctRegisterSessionOpeningFloatOperationDefinition,
+    async (
     ctx: MutationCtx,
     args: CorrectRegisterSessionOpeningFloatArgs
   ): Promise<ApprovalCommandResult<CorrectRegisterSessionOpeningFloatResult>> => {
@@ -2270,7 +2285,8 @@ export const correctRegisterSessionOpeningFloat = mutation({
       previousOpeningFloat,
       registerSession: updatedSession,
     });
-  },
+    },
+  ),
 });
 
 export const reviewRegisterSessionCloseout = mutation({
@@ -2283,7 +2299,9 @@ export const reviewRegisterSessionCloseout = mutation({
     storeId: v.id("store"),
   },
   returns: reviewRegisterSessionCloseoutResultValidator,
-  handler: async (
+  handler: admitSharedDemoPublicMutation(
+    reviewRegisterSessionCloseoutOperationDefinition,
+    async (
     ctx: MutationCtx,
     args: ReviewRegisterSessionCloseoutArgs
   ): Promise<CommandResult<ReviewRegisterSessionCloseoutResult>> => {
@@ -2534,5 +2552,6 @@ export const reviewRegisterSessionCloseout = mutation({
       approvalRequest: reviewedApprovalRequest,
       registerSession: rejectedSession,
     });
-  },
+    },
+  ),
 });

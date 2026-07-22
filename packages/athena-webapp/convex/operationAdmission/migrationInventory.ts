@@ -94,13 +94,7 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     owner: "V26-1094",
     reason: LEGACY_REASON,
     functions: [
-      "cashControls/closeouts:correctRegisterSessionOpeningFloat",
       "cashControls/closeouts:finalizeRegisterSessionCloseout",
-      "cashControls/closeouts:reopenRegisterSessionCloseout",
-      "cashControls/closeouts:reviewRegisterSessionCloseout",
-      "cashControls/closeouts:submitRegisterSessionCloseout",
-      "cashControls/deposits:recordRegisterSessionDeposit",
-      "cashControls/deposits:resolveRegisterSessionSyncReview",
       "pos/public/register:openDrawer",
     ],
   },
@@ -137,26 +131,12 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
   },
   {
     wave: "catalog",
-    capability: "catalog.quick_add",
-    owner: "V26-1094",
-    reason: LEGACY_REASON,
-    functions: ["pos/public/catalog:quickAddSku"],
-  },
-  {
-    wave: "catalog",
     capability: "inventory.adjust",
     owner: "V26-1094",
     reason: LEGACY_REASON,
     functions: [
       "pos/public/transactions:updateInventory",
-      "stockOps/adjustments:submitStockAdjustmentBatch",
       "stockOps/adjustments:temporaryDeleteStockAdjustmentScopeSkus",
-      "stockOps/cycleCountDrafts:discardCycleCountDraft",
-      "stockOps/cycleCountDrafts:ensureCycleCountDraft",
-      "stockOps/cycleCountDrafts:refreshCycleCountDraftLineBaseline",
-      "stockOps/cycleCountDrafts:saveCycleCountDraftLine",
-      "stockOps/cycleCountDrafts:submitActiveCycleCountDrafts",
-      "stockOps/cycleCountDrafts:submitCycleCountDraft",
     ],
   },
   {
@@ -180,8 +160,6 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
       "operations/dailyClose:completeDailyClose",
       "operations/dailyClose:reopenDailyClose",
       "operations/dailyClose:resolveDailyCloseCarryForward",
-      "operations/dailyOpening:startStoreDay",
-      "pos/public/terminals:registerTerminal",
     ],
   },
   {
@@ -239,19 +217,10 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     functions: [
       "operations/managerElevations:endManagerElevation",
       "operations/managerElevations:startManagerElevation",
-      "operations/staffCredentials:authenticateStaffCredential",
-      "operations/staffCredentials:authenticateStaffCredentialForApproval",
       "operations/staffCredentials:authenticateStaffCredentialForTerminal",
       "operations/staffCredentials:refreshTerminalStaffAuthority",
       "operations/staffCredentials:validateRestoredPosLocalStaffProof",
     ],
-  },
-  {
-    wave: "identity-and-staff",
-    capability: "staff.communication.write",
-    owner: "V26-1094",
-    reason: LEGACY_REASON,
-    functions: ["operations/staffMessages:postStaffMessage"],
   },
   {
     wave: "identity-and-staff",
@@ -370,10 +339,7 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     capability: "pos.sale.complete",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "pos/public/transactions:completeTransaction",
-      "pos/public/transactions:createTransactionFromSession",
-    ],
+    functions: ["pos/public/transactions:createTransactionFromSession"],
   },
   {
     wave: "pos",
@@ -403,8 +369,6 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     owner: "V26-1094",
     reason: LEGACY_REASON,
     functions: [
-      "pos/public/sync:ingestLocalEvents",
-      "pos/public/sync:ingestRegisterSessionActivity",
       "pos/public/sync:resolveLocalSyncReview",
       "pos/public/telemetry:recordClientEvents",
     ],
@@ -431,12 +395,7 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     capability: "pos.transaction.correct",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "pos/public/transactions:adjustTransactionItems",
-      "pos/public/transactions:correctTransactionCustomer",
-      "pos/public/transactions:correctTransactionPaymentMethod",
-      "pos/public/transactions:markReceiptPrinted",
-    ],
+    functions: ["pos/public/transactions:adjustTransactionItems"],
   },
   {
     wave: "pos",
@@ -542,13 +501,6 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
   },
   {
     wave: "storefront",
-    capability: "orders.fulfill",
-    owner: "V26-1094",
-    reason: LEGACY_REASON,
-    functions: ["storeFront/onlineOrder:update"],
-  },
-  {
-    wave: "storefront",
     capability: "orders.manage",
     owner: "V26-1094",
     reason: LEGACY_REASON,
@@ -568,13 +520,6 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
       "storeFront/onlineOrder:returnAllItemsToStock",
       "storeFront/onlineOrder:returnItemsToStock",
     ],
-  },
-  {
-    wave: "storefront",
-    capability: "payments.refund",
-    owner: "V26-1094",
-    reason: LEGACY_REASON,
-    functions: ["storeFront/onlineOrder:processReturnExchange"],
   },
   {
     wave: "storefront",

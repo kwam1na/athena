@@ -4,6 +4,7 @@ import {
   resolveOperationAdmission,
 } from "./adapters";
 import { validateOperationDefinition } from "./definitions";
+import { createSharedDemoOperationAdapter } from "../sharedDemo/operationAdapter";
 import type {
   OperationAdmissionContext,
   OperationDefinition,
@@ -52,4 +53,16 @@ export function admitPublicMutation<
       args,
     );
   };
+}
+
+export function admitSharedDemoPublicMutation<
+  Handler extends (ctx: MutationCtx, args: any) => Promise<any>,
+>(definition: OperationDefinition, handler: Handler): Handler {
+  return admitPublicMutation(definition, handler, {
+    resolveAdmission: (ctx, args, resolverDefinition) =>
+      resolveOperationAdmission(ctx, args, resolverDefinition, {
+        normalAdapter: createNormalUserOperationAdapter(),
+        sharedDemoAdapter: createSharedDemoOperationAdapter(),
+      }),
+  }) as Handler;
 }
