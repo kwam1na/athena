@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ok } from "../../shared/commandResult";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
 const mocks = vi.hoisted(() => ({
   processOrderUpdateEmail: vi.fn(),
@@ -26,7 +27,15 @@ vi.mock("../mailersend", async (importOriginal) => {
 
 import { update } from "./onlineOrder";
 import { sendOrderUpdateEmail } from "./onlineOrderUtilFns";
-import { approve, sendFeedbackRequest } from "./reviews";
+import {
+  approve,
+  hasReviewForOrderItem,
+  hasUserReviewForOrderItem,
+  publish,
+  reject,
+  sendFeedbackRequest,
+  unpublish,
+} from "./reviews";
 
 function getSource(relativePath: string) {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
@@ -206,6 +215,19 @@ describe("storefront error foundation", () => {
     expect(result).toEqual(ok(null));
     expect(mocks.sendFeedbackRequestEmail).not.toHaveBeenCalled();
     expect(runMutation).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts representative migrated storefront return contracts", () => {
+    assertConformsToExportedReturns(sendOrderUpdateEmail, ok({
+      message: "Order received email recorded.",
+    }));
+    assertConformsToExportedReturns(hasReviewForOrderItem, true);
+    assertConformsToExportedReturns(hasUserReviewForOrderItem, false);
+    assertConformsToExportedReturns(approve, ok(null));
+    assertConformsToExportedReturns(reject, ok(null));
+    assertConformsToExportedReturns(publish, ok(null));
+    assertConformsToExportedReturns(unpublish, ok(null));
+    assertConformsToExportedReturns(sendFeedbackRequest, ok(null));
   });
 
   it("keeps the migrated storefront command surfaces on the shared command-result foundation", () => {

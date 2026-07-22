@@ -5,7 +5,39 @@ export function getOnlineOrderPlacedAt(order: {
   return order.placedAt ?? order._creationTime;
 }
 
-export const getOrderState = (order: any) => {
+type OrderRefund = {
+  amount: number;
+};
+
+type OrderDiscount = {
+  productSkus?: string[];
+  span?: string;
+  type?: string;
+  value?: number;
+};
+
+type OrderLineItem = {
+  price: number;
+  productSkuId?: string;
+  quantity: number;
+};
+
+type OrderStateInput = {
+  amount?: number;
+  deliveryFee?: number | null;
+  deliveryMethod?: string;
+  discount?: OrderDiscount | null;
+  isPODOrder?: boolean;
+  items?: OrderLineItem[];
+  paymentCollected?: boolean;
+  paymentMethod?: {
+    type?: string;
+  } | null;
+  refunds?: OrderRefund[];
+  status: string;
+};
+
+export const getOrderState = (order: OrderStateInput) => {
   const isOrderOpen = order?.status === "open";
 
   const isOrderCancelled = order?.status === "cancelled";
@@ -29,14 +61,16 @@ export const getOrderState = (order: any) => {
 
   const amountRefunded =
     order?.refunds?.reduce(
-      (acc: number, refund: any) => acc + refund.amount,
+      (acc: number, refund: OrderRefund) => acc + refund.amount,
       0
     ) || 0;
 
-  const isFullyRefunded = amountRefunded === order.amount;
+  const orderAmount = order.amount ?? 0;
+
+  const isFullyRefunded = amountRefunded === orderAmount;
 
   const isPartiallyRefunded =
-    amountRefunded > 0 && amountRefunded < order.amount;
+    amountRefunded > 0 && amountRefunded < orderAmount;
 
   const hasIssuedRefund = order.status === "refunded";
 
@@ -65,7 +99,7 @@ export const getOrderState = (order: any) => {
   };
 };
 
-export const getPickupActionState = (order: any) => {
+export const getPickupActionState = (order: OrderStateInput) => {
   const { isOrderReady, isPickupException } = getOrderState(order);
   const isPickupOrder = order?.deliveryMethod === "pickup";
   const isPODOrder =
@@ -92,46 +126,61 @@ export function shouldShowPickupExceptionAction(input: {
  * @param discount - Discount object with type, value, span, and optional productSkus
  * @returns The total discount amount in the same currency unit as item prices
  */
-export const getDiscountValue = (order: any, isInCents?: boolean): number => {
-  if (!order.discount) return 0;
+export const getDiscountValue = (
+  order: Pick<OrderStateInput, "discount" | "items">,
+  isInCents?: boolean
+): number => {
+  const discount = order.discount;
+  const items = order.items ?? [];
+
+  if (!discount) return 0;
 
   // Handle entire-order discounts
-  if (order.discount.span === "entire-order") {
-    const subtotal = order.items.reduce(
-      (sum: number, item: any) => sum + item.price * item.quantity,
+  if (discount.span === "entire-order") {
+    const subtotal = items.reduce(
+      (sum: number, item: OrderLineItem) => sum + item.price * item.quantity,
       0
     );
 
-    if (order.discount.type === "percentage") {
-      return subtotal * (order.discount.value / 100) * (isInCents ? 100 : 1);
+    const discountValue = discount.value ?? 0;
+
+    if (discount.type === "percentage") {
+      return subtotal * (discountValue / 100) * (isInCents ? 100 : 1);
     }
     // For amount type, apply discount value directly
-    return order.discount.value * (isInCents ? 100 : 1);
+    return discountValue * (isInCents ? 100 : 1);
   }
 
   // Handle selected-products discounts
   if (
-    order.discount.span === "selected-products" &&
-    order.discount.productSkus
+    discount.span === "selected-products" &&
+    discount.productSkus
   ) {
     // Calculate subtotal of only eligible items
-    const eligibleItemsSubtotal = order.items
-      .filter((item: any) =>
-        order.discount.productSkus?.includes(item.productSkuId)
+    const eligibleItemsSubtotal = items
+      .filter((item: OrderLineItem) =>
+        item.productSkuId
+          ? discount.productSkus?.includes(item.productSkuId)
+          : false
       )
-      .reduce((sum: number, item: any) => sum + item.price * item.quantity, 0);
+      .reduce(
+        (sum: number, item: OrderLineItem) => sum + item.price * item.quantity,
+        0
+      );
 
-    if (order.discount.type === "percentage") {
+    const discountValue = discount.value ?? 0;
+
+    if (discount.type === "percentage") {
       return (
         eligibleItemsSubtotal *
-        (order.discount.value / 100) *
+        (discountValue / 100) *
         (isInCents ? 100 : 1)
       );
     }
     // For amount type, apply discount value to eligible items
     // Note: amount discounts are typically applied once, not per item
     return (
-      Math.min(order.discount.value, eligibleItemsSubtotal) *
+      Math.min(discountValue, eligibleItemsSubtotal) *
       (isInCents ? 100 : 1)
     );
   }
@@ -139,12 +188,14 @@ export const getDiscountValue = (order: any, isInCents?: boolean): number => {
   return 0;
 };
 
-export const getAmountPaidForOrder = (order: any) => {
+export const getAmountPaidForOrder = (
+  order: Pick<OrderStateInput, "amount" | "deliveryFee" | "discount" | "items">
+) => {
   const discountValue = getDiscountValue(order, true); // returns pesewas
 
   const discount = discountValue; // getDiscountValue always returns pesewas
 
-  const orderAmount = order.amount + (order.deliveryFee || 0); // both pesewas
+  const orderAmount = (order.amount ?? 0) + (order.deliveryFee || 0); // both pesewas
 
   return orderAmount - discount;
 };

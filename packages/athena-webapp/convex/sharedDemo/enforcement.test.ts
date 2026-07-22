@@ -14,6 +14,14 @@ vi.mock("./restore", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./restore")>();
   return { ...actual, requireReadySharedDemoWriteWithCtx: vi.fn() };
 });
+vi.mock("../operationAdmission/publicMutation", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../operationAdmission/publicMutation")>();
+  return {
+    ...actual,
+    admitSharedDemoPublicMutation:
+      (_definition: unknown, handler: Function) => handler,
+  };
+});
 
 import { getAuthUserId } from "@convex-dev/auth/server";
 import {
@@ -30,6 +38,7 @@ import {
 import { createStaffCredential } from "../operations/staffCredentials";
 import { decideApprovalRequest } from "../operations/approvalRequests";
 import { requestExport } from "../reporting/export";
+import { processReturnExchange } from "../storeFront/onlineOrder";
 import { createTransaction, refundPayment } from "../storeFront/payment";
 import {
   createStaffProfile,
