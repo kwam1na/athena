@@ -127,6 +127,11 @@ export const getDailyOperationsTimelinePreviewSnapshotReadDefinition =
     "operations.dailyOperations.getDailyOperationsTimelinePreviewSnapshot.read",
   );
 
+export const getDailyOpeningSnapshotReadDefinition = defineDailyOperationsRead(
+  "operations/dailyOpening:getDailyOpeningSnapshot",
+  "operations.dailyOpening.getDailyOpeningSnapshot.read",
+);
+
 export const getOpenWorkCountSummaryReadDefinition = defineOperationalWorkRead(
   "operations/operationalWorkItems:getOpenWorkCountSummary",
   "operations.operationalWorkItems.getOpenWorkCountSummary.read",
@@ -255,11 +260,58 @@ export const getPosStoreActiveSessionOperationsReadDefinition = definePosRead(
   "inventory.posSessions.getStoreActiveSessionOperations.read",
 );
 
+export const getPosActiveSessionReadDefinition = definePosRead(
+  "inventory/posSessions:getActiveSession",
+  "inventory.posSessions.getActiveSession.read",
+);
+
+export const getPosStoreSessionsReadDefinition = definePosRead(
+  "inventory/posSessions:getStoreSessions",
+  "inventory.posSessions.getStoreSessions.read",
+);
+
 export const getPosRecentTransactionsWithCustomersReadDefinition =
   definePosRead(
     "pos/public/transactions:getRecentTransactionsWithCustomers",
     "pos.public.transactions.getRecentTransactionsWithCustomers.read",
   );
+
+export const searchPosRegisterCatalogReadDefinition = definePosRead(
+  "pos/public/catalog:search",
+  "pos.public.catalog.search.read",
+);
+
+export const listPosRegisterCatalogSnapshotReadDefinition = definePosRead(
+  "pos/public/catalog:listRegisterCatalogSnapshot",
+  "pos.public.catalog.listRegisterCatalogSnapshot.read",
+);
+
+export const getPosRegisterCatalogRevisionReadDefinition = definePosRead(
+  "pos/public/catalog:getRegisterCatalogRevision",
+  "pos.public.catalog.getRegisterCatalogRevision.read",
+);
+
+export const listPosRegisterCatalogSnapshotWithRevisionReadDefinition =
+  definePosRead(
+    "pos/public/catalog:listRegisterCatalogSnapshotWithRevision",
+    "pos.public.catalog.listRegisterCatalogSnapshotWithRevision.read",
+  );
+
+export const listPosRegisterCatalogAvailabilityReadDefinition = definePosRead(
+  "pos/public/catalog:listRegisterCatalogAvailability",
+  "pos.public.catalog.listRegisterCatalogAvailability.read",
+);
+
+export const listPosRegisterCatalogAvailabilitySnapshotReadDefinition =
+  definePosRead(
+    "pos/public/catalog:listRegisterCatalogAvailabilitySnapshot",
+    "pos.public.catalog.listRegisterCatalogAvailabilitySnapshot.read",
+  );
+
+export const barcodeLookupPosRegisterCatalogReadDefinition = definePosRead(
+  "pos/public/catalog:barcodeLookup",
+  "pos.public.catalog.barcodeLookup.read",
+);
 
 export const listPosClientEventsReadDefinition = definePosRead(
   "pos/public/telemetry:listClientEvents",
@@ -291,6 +343,16 @@ export const getPosTerminalByFingerprintReadDefinition = definePosRead(
   "pos.public.terminals.getTerminalByFingerprint.read",
 );
 
+export const listPosStaffProfilesReadDefinition = definePosRead(
+  "operations/staffProfiles:listStaffProfiles",
+  "operations.staffProfiles.listStaffProfiles.read",
+);
+
+export const listPosServiceCatalogSnapshotReadDefinition = definePosRead(
+  "serviceOps/catalog:listPosServiceCatalogSnapshot",
+  "serviceOps.catalog.listPosServiceCatalogSnapshot.read",
+);
+
 export const OPERATION_READ_ADMISSION_DEFINITIONS = [
   getDailyOperationsSnapshotReadDefinition,
   getDailyOperationsDetailSnapshotReadDefinition,
@@ -302,6 +364,7 @@ export const OPERATION_READ_ADMISSION_DEFINITIONS = [
   getDailyOperationsTodayRefreshSnapshotReadDefinition,
   getDailyOperationsTimelineSnapshotReadDefinition,
   getDailyOperationsTimelinePreviewSnapshotReadDefinition,
+  getDailyOpeningSnapshotReadDefinition,
   getOpenWorkCountSummaryReadDefinition,
   getPendingApprovalCountSummaryReadDefinition,
   getQueueSnapshotReadDefinition,
@@ -320,13 +383,24 @@ export const OPERATION_READ_ADMISSION_DEFINITIONS = [
   getPosTransactionsByStoreReadDefinition,
   getPosTransactionByIdReadDefinition,
   getPosStoreActiveSessionOperationsReadDefinition,
+  getPosActiveSessionReadDefinition,
+  getPosStoreSessionsReadDefinition,
   getPosRecentTransactionsWithCustomersReadDefinition,
+  searchPosRegisterCatalogReadDefinition,
+  listPosRegisterCatalogSnapshotReadDefinition,
+  getPosRegisterCatalogRevisionReadDefinition,
+  listPosRegisterCatalogSnapshotWithRevisionReadDefinition,
+  listPosRegisterCatalogAvailabilityReadDefinition,
+  listPosRegisterCatalogAvailabilitySnapshotReadDefinition,
+  barcodeLookupPosRegisterCatalogReadDefinition,
   listPosClientEventsReadDefinition,
   getPosRegisterStateReadDefinition,
   listPosTerminalsReadDefinition,
   listPosTerminalHealthReadDefinition,
   getPosTerminalHealthReadDefinition,
   getPosTerminalByFingerprintReadDefinition,
+  listPosStaffProfilesReadDefinition,
+  listPosServiceCatalogSnapshotReadDefinition,
 ] as const;
 
 export function validateReadOperationDefinition(

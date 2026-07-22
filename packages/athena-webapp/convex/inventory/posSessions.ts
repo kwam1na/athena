@@ -36,7 +36,11 @@ import {
 } from "../lib/athenaUserAuth";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
 import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
-import { getPosStoreActiveSessionOperationsReadDefinition } from "../operationAdmission/readDefinitions";
+import {
+  getPosActiveSessionReadDefinition,
+  getPosStoreActiveSessionOperationsReadDefinition,
+  getPosStoreSessionsReadDefinition,
+} from "../operationAdmission/readDefinitions";
 import { isPosUsableRegisterSessionStatus } from "../../shared/registerSessionStatus";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
@@ -941,93 +945,112 @@ export const getStoreSessions = query({
     status: v.optional(v.string()), // "active", "held", "completed", "void"
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
-    const { storeId, status, limit = 50 } = args;
-    const boundedLimit = Math.min(limit, SESSION_QUERY_CANDIDATE_LIMIT);
+  handler: admitSharedDemoPublicQuery(
+    getPosStoreSessionsReadDefinition,
+    async (
+      ctx,
+      args: {
+        limit?: number;
+        staffProfileId?: Id<"staffProfile">;
+        status?: string;
+        storeId: Id<"store">;
+        terminalId?: Id<"posTerminal">;
+      },
+    ) => {
+      await requireStoreMemberAccessWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        demoAccess: { kind: "read" },
+        failureMessage: "You cannot view POS sessions for this store.",
+        storeId: args.storeId,
+      });
 
-    let sessionsQuery;
-    let indexedTerminalFilter = false;
-    let indexedStaffFilter = false;
+      const { storeId, status, limit = 50 } = args;
+      const boundedLimit = Math.min(limit, SESSION_QUERY_CANDIDATE_LIMIT);
 
-    if (status && args.terminalId) {
-      indexedTerminalFilter = true;
-      sessionsQuery = ctx.db
-        .query("posSession")
-        .withIndex("by_storeId_status_terminalId", (q) =>
-          q
-            .eq("storeId", storeId)
-            .eq("status", status)
-            .eq("terminalId", args.terminalId!),
-        );
-    } else if (status && args.staffProfileId) {
-      indexedStaffFilter = true;
-      sessionsQuery = ctx.db
-        .query("posSession")
-        .withIndex("by_storeId_status_staffProfileId", (q) =>
-          q
-            .eq("storeId", storeId)
-            .eq("status", status)
-            .eq("staffProfileId", args.staffProfileId!),
-        );
-    } else if (args.terminalId) {
-      indexedTerminalFilter = true;
-      sessionsQuery = ctx.db
-        .query("posSession")
-        .withIndex("by_storeId_terminalId", (q) =>
-          q.eq("storeId", storeId).eq("terminalId", args.terminalId!),
-        );
-    } else if (args.staffProfileId) {
-      indexedStaffFilter = true;
-      sessionsQuery = ctx.db
-        .query("posSession")
-        .withIndex("by_storeId_staffProfileId", (q) =>
-          q.eq("storeId", storeId).eq("staffProfileId", args.staffProfileId!),
-        );
-    } else if (status) {
-      sessionsQuery = ctx.db
-        .query("posSession")
-        .withIndex("by_storeId_and_status", (q) =>
-          q.eq("storeId", storeId).eq("status", status),
-        );
-    } else {
-      sessionsQuery = ctx.db
-        .query("posSession")
-        .withIndex("by_storeId", (q) => q.eq("storeId", storeId));
-    }
+      let sessionsQuery;
+      let indexedTerminalFilter = false;
+      let indexedStaffFilter = false;
 
-    let sessions = await sessionsQuery.order("desc").take(boundedLimit);
+      if (status && args.terminalId) {
+        indexedTerminalFilter = true;
+        sessionsQuery = ctx.db
+          .query("posSession")
+          .withIndex("by_storeId_status_terminalId", (q) =>
+            q
+              .eq("storeId", storeId)
+              .eq("status", status)
+              .eq("terminalId", args.terminalId!),
+          );
+      } else if (status && args.staffProfileId) {
+        indexedStaffFilter = true;
+        sessionsQuery = ctx.db
+          .query("posSession")
+          .withIndex("by_storeId_status_staffProfileId", (q) =>
+            q
+              .eq("storeId", storeId)
+              .eq("status", status)
+              .eq("staffProfileId", args.staffProfileId!),
+          );
+      } else if (args.terminalId) {
+        indexedTerminalFilter = true;
+        sessionsQuery = ctx.db
+          .query("posSession")
+          .withIndex("by_storeId_terminalId", (q) =>
+            q.eq("storeId", storeId).eq("terminalId", args.terminalId!),
+          );
+      } else if (args.staffProfileId) {
+        indexedStaffFilter = true;
+        sessionsQuery = ctx.db
+          .query("posSession")
+          .withIndex("by_storeId_staffProfileId", (q) =>
+            q.eq("storeId", storeId).eq("staffProfileId", args.staffProfileId!),
+          );
+      } else if (status) {
+        sessionsQuery = ctx.db
+          .query("posSession")
+          .withIndex("by_storeId_and_status", (q) =>
+            q.eq("storeId", storeId).eq("status", status),
+          );
+      } else {
+        sessionsQuery = ctx.db
+          .query("posSession")
+          .withIndex("by_storeId", (q) => q.eq("storeId", storeId));
+      }
 
-    if (args.terminalId && !indexedTerminalFilter) {
-      sessions = sessions.filter(
-        (session) => session.terminalId === args.terminalId,
+      let sessions = await sessionsQuery.order("desc").take(boundedLimit);
+
+      if (args.terminalId && !indexedTerminalFilter) {
+        sessions = sessions.filter(
+          (session) => session.terminalId === args.terminalId,
+        );
+      }
+
+      if (args.staffProfileId && !indexedStaffFilter) {
+        sessions = sessions.filter(
+          (session) => session.staffProfileId === args.staffProfileId,
+        );
+      }
+
+      sessions = sessions.slice(0, limit);
+
+      // Enrich with customer info and cart items if available
+      const enrichedSessions = await Promise.all(
+        sessions.map(async (session) => {
+          const customer = await loadSessionCustomer(ctx, session);
+
+          const cartItems = await loadPosSessionItems(ctx, session._id);
+
+          return {
+            ...session,
+            cartItems,
+            customer,
+          };
+        }),
       );
-    }
 
-    if (args.staffProfileId && !indexedStaffFilter) {
-      sessions = sessions.filter(
-        (session) => session.staffProfileId === args.staffProfileId,
-      );
-    }
-
-    sessions = sessions.slice(0, limit);
-
-    // Enrich with customer info and cart items if available
-    const enrichedSessions = await Promise.all(
-      sessions.map(async (session) => {
-        const customer = await loadSessionCustomer(ctx, session);
-
-        const cartItems = await loadPosSessionItems(ctx, session._id);
-
-        return {
-          ...session,
-          cartItems,
-          customer,
-        };
-      }),
-    );
-
-    return enrichedSessions;
-  },
+      return enrichedSessions;
+    },
+  ),
 });
 
 // Get a specific session by ID
@@ -1667,71 +1690,89 @@ export const getActiveSession = query({
     staffProfileId: v.optional(v.id("staffProfile")),
     registerNumber: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    const now = Date.now();
-    const activeSessions = args.staffProfileId
-      ? await ctx.db
-          .query("posSession")
-          .withIndex("by_storeId_status_staffProfileId", (q) =>
-            q
-              .eq("storeId", args.storeId)
-              .eq("status", "active")
-              .eq("staffProfileId", args.staffProfileId!),
-          )
-          .order("desc")
-          .take(ACTIVE_SESSION_CANDIDATE_LIMIT)
-      : await ctx.db
-          .query("posSession")
-          .withIndex("by_storeId_status_terminalId", (q) =>
-            q
-              .eq("storeId", args.storeId)
-              .eq("status", "active")
-              .eq("terminalId", args.terminalId),
-          )
-          .order("desc")
-          .take(ACTIVE_SESSION_CANDIDATE_LIMIT);
+  handler: admitSharedDemoPublicQuery(
+    getPosActiveSessionReadDefinition,
+    async (
+      ctx,
+      args: {
+        registerNumber?: string;
+        staffProfileId?: Id<"staffProfile">;
+        storeId: Id<"store">;
+        terminalId: Id<"posTerminal">;
+      },
+    ) => {
+      await requireStoreMemberAccessWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        demoAccess: { kind: "read" },
+        failureMessage: "You cannot view POS sessions for this store.",
+        storeId: args.storeId,
+      });
 
-    // Filter out expired sessions (even if status is still "active")
-    // This prevents returning sessions that expired but haven't been marked by cron yet
-    const nonExpiredSessions = activeSessions.filter(
-      (session) => !session.expiresAt || session.expiresAt >= now,
-    );
+      const now = Date.now();
+      const activeSessions = args.staffProfileId
+        ? await ctx.db
+            .query("posSession")
+            .withIndex("by_storeId_status_staffProfileId", (q) =>
+              q
+                .eq("storeId", args.storeId)
+                .eq("status", "active")
+                .eq("staffProfileId", args.staffProfileId!),
+            )
+            .order("desc")
+            .take(ACTIVE_SESSION_CANDIDATE_LIMIT)
+        : await ctx.db
+            .query("posSession")
+            .withIndex("by_storeId_status_terminalId", (q) =>
+              q
+                .eq("storeId", args.storeId)
+                .eq("status", "active")
+                .eq("terminalId", args.terminalId),
+            )
+            .order("desc")
+            .take(ACTIVE_SESSION_CANDIDATE_LIMIT);
 
-    // Filter by staff member and/or register if provided
-    let filteredSessions = nonExpiredSessions;
-
-    if (args.staffProfileId) {
-      filteredSessions = filteredSessions.filter(
-        (s) => s.terminalId === args.terminalId,
+      // Filter out expired sessions (even if status is still "active")
+      // This prevents returning sessions that expired but haven't been marked by cron yet
+      const nonExpiredSessions = activeSessions.filter(
+        (session) => !session.expiresAt || session.expiresAt >= now,
       );
-      filteredSessions = filteredSessions.filter(
-        (s) => s.staffProfileId === args.staffProfileId,
-      );
-    }
 
-    if (args.registerNumber) {
-      filteredSessions = filteredSessions.filter(
-        (s) => s.registerNumber === args.registerNumber,
-      );
-    }
+      // Filter by staff member and/or register if provided
+      let filteredSessions = nonExpiredSessions;
 
-    // Return the most recent active session
-    const activeSession = filteredSessions.sort(
-      (a, b) => b.updatedAt - a.updatedAt,
-    )[0];
+      if (args.staffProfileId) {
+        filteredSessions = filteredSessions.filter(
+          (s) => s.terminalId === args.terminalId,
+        );
+        filteredSessions = filteredSessions.filter(
+          (s) => s.staffProfileId === args.staffProfileId,
+        );
+      }
 
-    if (!activeSession) return null;
+      if (args.registerNumber) {
+        filteredSessions = filteredSessions.filter(
+          (s) => s.registerNumber === args.registerNumber,
+        );
+      }
 
-    const customer = await loadSessionCustomer(ctx, activeSession);
+      // Return the most recent active session
+      const activeSession = filteredSessions.sort(
+        (a, b) => b.updatedAt - a.updatedAt,
+      )[0];
 
-    const cartItems = await loadPosSessionItems(ctx, activeSession._id);
+      if (!activeSession) return null;
 
-    return {
-      ...activeSession,
-      cartItems,
-      customer,
-    };
-  },
+      const customer = await loadSessionCustomer(ctx, activeSession);
+
+      const cartItems = await loadPosSessionItems(ctx, activeSession._id);
+
+      return {
+        ...activeSession,
+        cartItems,
+        customer,
+      };
+    },
+  ),
 });
 
 // Release inventory holds from expired sessions (called by cron job)

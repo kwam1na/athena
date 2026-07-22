@@ -1,27 +1,37 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@convex-dev/auth/server", () => ({
+  getAuthUserId: vi.fn(),
+}));
+
 // Shared-demo admission preserves the daily-opening command result contract.
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import {
   buildDailyOpeningSnapshotWithCtx,
+  getDailyOpeningSnapshot,
   resolveSharedDemoOpeningActorWithCtx,
   startStoreDay,
   startStoreDayWithCtx,
 } from "./dailyOpening";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 type TableName =
   | "approvalRequest"
   | "approvalProof"
+  | "athenaUser"
   | "automationRun"
   | "dailyClose"
   | "dailyOpening"
+  | "organizationMember"
   | "operationalEvent"
   | "operationalWorkItem"
   | "registerSession"
+  | "sharedDemoPrincipal"
   | "staffProfile"
-  | "store";
+  | "store"
+  | "users";
 
 type Row = Record<string, unknown> & { _id: string };
 
@@ -264,9 +274,164 @@ function completedDailyClose(overrides: Partial<Row> = {}): Row {
   };
 }
 
+function getHandler(definition: unknown) {
+  return (definition as { _handler: Function })._handler;
+}
+
 describe("daily opening backend foundation", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it("admits same-store shared-demo daily opening reads and redacts manager evidence for POS-only members", async () => {
+    vi.stubEnv("ATHENA_SHARED_DEMO_ENABLED", "true");
+    vi.stubEnv("STAGE", "qa");
+    vi.mocked(getAuthUserId).mockResolvedValue("auth-demo" as never);
+    const { db } = createDb({
+      athenaUser: [
+        {
+          _id: "demo-owner",
+          email: "demo@example.com",
+          normalizedEmail: "demo@example.com",
+        },
+      ],
+      dailyClose: [
+        completedDailyClose({
+          carryForwardWorkItemIds: ["work-1"],
+          managerReviewEvidence: [
+            {
+              category: "Inventory",
+              message: "Manager-only evidence",
+              subject: { id: "work-1", type: "operational_work_item" },
+              title: "Review inventory",
+            },
+          ],
+        }),
+      ],
+      operationalWorkItem: [
+        {
+          _id: "work-1",
+          approvalState: "not_required",
+          createdAt: 1,
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Review inventory",
+          type: "synced_sale_inventory_review",
+        },
+      ],
+      organizationMember: [
+        {
+          _id: "member-1",
+          organizationId: "org-1",
+          role: "pos_only",
+          userId: "demo-owner",
+        },
+      ],
+      sharedDemoPrincipal: [
+        {
+          _id: "principal-1",
+          admissionExpiresAt: Date.now() + 60_000,
+          athenaUserId: "demo-owner",
+          authUserId: "auth-demo",
+          organizationId: "org-1",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await getHandler(getDailyOpeningSnapshot)(
+      { auth: { getUserIdentity: vi.fn() }, db } as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.storeId).toBe("store-1");
+    expect(snapshot.carryForwardItems.length).toBeGreaterThan(0);
+    expect(snapshot.reviewItems).toEqual([]);
+    expect(snapshot.startedOpening).toBeNull();
+  });
+
+  it("denies cross-store shared-demo daily opening reads before snapshot building", async () => {
+    vi.stubEnv("ATHENA_SHARED_DEMO_ENABLED", "true");
+    vi.stubEnv("STAGE", "qa");
+    vi.mocked(getAuthUserId).mockResolvedValue("auth-demo" as never);
+    const { db } = createDb({
+      athenaUser: [
+        {
+          _id: "demo-owner",
+          email: "demo@example.com",
+          normalizedEmail: "demo@example.com",
+        },
+      ],
+      organizationMember: [
+        {
+          _id: "member-1",
+          organizationId: "org-1",
+          role: "full_admin",
+          userId: "demo-owner",
+        },
+      ],
+      sharedDemoPrincipal: [
+        {
+          _id: "principal-1",
+          admissionExpiresAt: Date.now() + 60_000,
+          athenaUserId: "demo-owner",
+          authUserId: "auth-demo",
+          organizationId: "org-1",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+
+    await expect(
+      getHandler(getDailyOpeningSnapshot)(
+        { auth: { getUserIdentity: vi.fn() }, db } as never,
+        {
+          operatingDate: "2026-05-08",
+          storeId: "store-2" as Id<"store">,
+        },
+      ),
+    ).rejects.toThrow("This action isn't allowed in the demo.");
+  });
+
+  it("denies normal authenticated non-members before returning the redacted daily opening snapshot", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("auth-user" as never);
+    const { db } = createDb({
+      athenaUser: [
+        {
+          _id: "athena-user-1",
+          email: "user@example.com",
+          normalizedEmail: "user@example.com",
+        },
+      ],
+      dailyClose: [completedDailyClose()],
+      store: [store],
+      users: [
+        {
+          _id: "auth-user",
+          email: "user@example.com",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(getDailyOpeningSnapshot)(
+        { auth: { getUserIdentity: vi.fn() }, db } as never,
+        {
+          operatingDate: "2026-05-08",
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
+    ).rejects.toThrow(
+      "You cannot view the daily opening snapshot for this store.",
+    );
   });
 
   it("resolves the seeded shared demo owner as the Opening actor", async () => {
@@ -578,9 +743,9 @@ describe("daily opening backend foundation", () => {
         }),
       }),
     ]);
-    expect(snapshot.carryForwardItems[0]?.carryForwardWorkItemIds).not.toContain(
-      "work-later",
-    );
+    expect(
+      snapshot.carryForwardItems[0]?.carryForwardWorkItemIds,
+    ).not.toContain("work-later");
 
     const result = await startStoreDayWithCtx(
       { db } as unknown as MutationCtx,
@@ -607,9 +772,11 @@ describe("daily opening backend foundation", () => {
         },
       },
     });
-    expect(tables.get("dailyOpening")?.values().next().value).not.toMatchObject({
-      carryForwardWorkItemIds: expect.arrayContaining(["work-later"]),
-    });
+    expect(tables.get("dailyOpening")?.values().next().value).not.toMatchObject(
+      {
+        carryForwardWorkItemIds: expect.arrayContaining(["work-later"]),
+      },
+    );
   });
 
   it("redacts missing carry-forward blockers for broad opening snapshot readers", async () => {

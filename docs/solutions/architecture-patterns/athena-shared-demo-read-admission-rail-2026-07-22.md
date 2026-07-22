@@ -11,8 +11,8 @@ applies_when:
   - "A public Convex query needs actor-specific shared-demo admission before building a user-visible read model"
   - "A shared-demo read surface is using ad hoc store checks or write capability bridges"
   - "A migration wave needs exact read inventory coverage while reporting reads stay out of scope"
-tags: [athena, convex, read-admission, shared-demo, authz, operations]
-delivery_diff_fingerprint: 89232f62961769d6e539e8efa47b12cd5138cd3d9e15ddf5153f058807b44090
+tags: [athena, convex, read-admission, shared-demo, authz, operations, pos]
+delivery_diff_fingerprint: 7f522328f02c61beaf4a7019be3abf57caf02713f016c0c0bdddf184232f9764
 ---
 
 # Athena Shared Demo Read Admission Rail
@@ -34,7 +34,9 @@ Use a query counterpart to the operation admission rail:
 
 The proving path is Daily Operations viewing. Its exported snapshot queries now enter through read admission before calling the snapshot builder, and `authorizeDailyOperationsSnapshot` derives the admitted actor from `ctx.operationAdmission` instead of asking the shared demo for `daily_operations.write`.
 
-After that proof held, the same rail onboarded the remaining demo-visible Operations work-item and daily-close reads, cash controls dashboard/register reads, POS transaction/session/register/terminal/telemetry reads, and the Stock Adjustments cycle-count draft reads discovered during browser validation. The cycle-count helper keeps the legacy capability bridge for write and fallback paths, but admitted read actors bypass the old ad hoc demo capability probe.
+After that proof held, the same rail onboarded the remaining demo-visible Operations work-item and daily-close reads, cash controls dashboard/register reads, POS transaction/session/register/terminal/telemetry reads, and the Stock Adjustments cycle-count draft reads discovered during browser validation. A later POS register pass added the behind-the-scenes register catalog reads (`search`, snapshot, revision, availability, availability snapshot, and barcode lookup), active/held POS session reads, the staff roster read, the POS service catalog read, and the daily-opening snapshot used by the register opening guard.
+
+The cycle-count and register-catalog helpers keep the legacy capability bridge for write and fallback paths, but admitted read actors bypass the old ad hoc demo capability probe. Daily opening now requires store membership before building even a redacted snapshot, then derives manager evidence visibility from `membership.role === "full_admin"` so redaction remains a membership decision.
 
 ## Why This Matters
 
@@ -47,6 +49,7 @@ Keeping read intent separate from write capability prevents accidental broadenin
 - Do not use write capabilities to authorize read-only shared-demo views.
 - Do not treat a route gate or component condition as sufficient Convex read authorization.
 - For each migrated read, test the exported query handler so admission executes before the domain helper.
+- Cover same-store non-member denial as well as shared-demo same-store admission and cross-store denial. The rail authenticates actors; domain membership checks still decide whether a normal user may read store data.
 - Keep follow-up migrations inventory-driven: prove one route, sweep linked demo routes, and onboard any remaining read crash by adding a definition, a public query wrapper, and focused shared-demo scope tests.
 - Keep reporting reads separate unless the hidden reporting workspace is explicitly in scope.
 

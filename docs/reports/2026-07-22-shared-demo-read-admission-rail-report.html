@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="89232f62961769d6e539e8efa47b12cd5138cd3d9e15ddf5153f058807b44090">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="7f522328f02c61beaf4a7019be3abf57caf02713f016c0c0bdddf184232f9764">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -241,7 +241,7 @@
           Daily Operations viewing is the proof path. The exported Operations snapshot queries now use read admission with <code>daily_operations.view</code>, and the old shared-demo <code>daily_operations.write</code> bridge was removed from the view authorization helper.
         </p>
         <p>
-          After the proof path held, the same pattern moved Operations work-item and daily-close reads, cash controls register reads, POS transaction/session/register/terminal/telemetry reads, and Stock Adjustments cycle-count draft reads onto explicit read intent. Browser validation also caught and fixed a POS terminal-health return validator drift for runtime health alerts.
+          After the proof path held, the same pattern moved Operations work-item and daily-close reads, cash controls register reads, POS transaction/session/register/terminal/telemetry reads, and Stock Adjustments cycle-count draft reads onto explicit read intent. A final POS register pass added the behind-the-scenes catalog, active/held session, staff roster, service catalog, and opening-guard reads that the register subscribes to before a cashier is fully signed in.
         </p>
       </section>
 
@@ -280,7 +280,7 @@
             </tr>
             <tr>
               <td><code>convex/operationAdmission/readDefinitions.ts</code></td>
-              <td>Catalogs explicit read definitions for Daily Operations, Open Work, daily close, cash controls, POS, telemetry, terminal health, and stock adjustments.</td>
+              <td>Catalogs explicit read definitions for Daily Operations, Open Work, daily close, cash controls, POS catalog/session/staff/service reads, telemetry, terminal health, and stock adjustments.</td>
             </tr>
             <tr>
               <td><code>convex/lib/storeMemberAccess.ts</code></td>
@@ -289,6 +289,10 @@
             <tr>
               <td><code>convex/operations/*</code>, <code>convex/cashControls/*</code>, <code>convex/pos/public/*</code>, <code>convex/stockOps/cycleCountDrafts.ts</code></td>
               <td>Migrates demo-visible public reads onto the read wrapper without granting write authority.</td>
+            </tr>
+            <tr>
+              <td><code>convex/inventory/posSessions.ts</code>, <code>convex/operations/staffProfiles.ts</code>, <code>convex/serviceOps/catalog.ts</code></td>
+              <td>Moves register-mounted active/held session, staff roster, and POS service catalog reads onto the same store-scoped membership gate.</td>
             </tr>
             <tr>
               <td><code>convex/pos/public/terminals.ts</code></td>
@@ -308,6 +312,7 @@
           <li>Shared-demo actors are admitted only for definitions that allow <code>sharedDemo: "admit"</code>.</li>
           <li>Store-scoped reads deny when the requested store does not match the demo actor's server-owned store.</li>
           <li>Normal users still enter through authenticated Athena user admission and store membership checks.</li>
+          <li>Same-store authenticated non-members are denied by the domain membership gate before session, staff, service, catalog, or daily-opening rows return.</li>
           <li>Financial redaction remains membership-role based; shared-demo admission does not itself redact or unredact financial fields.</li>
           <li>Reporting reads are intentionally not migrated in this branch.</li>
         </ul>
@@ -316,10 +321,11 @@
       <section>
         <h2>Validation Evidence</h2>
         <ul>
-          <li><code>bun run test -- convex/operationAdmission/readDefinitions.test.ts convex/operationAdmission/readAdapters.test.ts convex/operations/operationalWorkItems.test.ts convex/operations/dailyClose.test.ts convex/cashControls/deposits.test.ts convex/cashControls/registerSessionActivity.test.ts convex/stockOps/cycleCountDrafts.test.ts convex/pos/public/transactions.test.ts convex/pos/public/register.test.ts convex/pos/public/terminals.test.ts convex/pos/public/telemetry.test.ts convex/inventory/posSessions.trace.test.ts</code>: 432 passing focused tests.</li>
+          <li><code>bun run test -- convex/operationAdmission/readDefinitions.test.ts convex/pos/public/catalog.test.ts convex/operations/dailyOpening.test.ts convex/operations/staffProfiles.test.ts convex/serviceOps/catalogAppointments.test.ts convex/inventory/posSessions.trace.test.ts</code>: 166 passing focused tests for the final POS register read extension.</li>
           <li><code>bun run typecheck</code>: passed.</li>
-          <li>In-app browser affected route sweep: Operations, inventory import, SKU activity, stock adjustments, cash controls, POS, and representative cash/POS detail routes rendered with no fresh auth errors, validator errors, crash text, or overlays.</li>
-          <li><code>bun run graphify:rebuild</code>: rebuilt 10980 nodes, 13329 edges, and 2633 communities.</li>
+          <li>Earlier focused suite for the broader rail covered read adapters, operational work items, daily close, cash controls, stock adjustments, POS transactions, register, terminals, telemetry, and POS session operations.</li>
+          <li>In-app browser affected route sweep: Operations, inventory import, SKU activity, stock adjustments, cash controls, POS, and representative cash/POS detail routes rendered with no fresh auth errors, validator errors, crash text, or overlays. The final POS register extension specifically addressed <code>pos/public/catalog:listRegisterCatalogAvailabilitySnapshot</code> throwing <code>Sign in again to continue.</code>.</li>
+          <li><code>bun run graphify:rebuild</code>: rebuilt 10981 nodes, 13330 edges, and 2633 communities.</li>
           <li><code>bun run pr:athena</code>: initially blocked on stale solution/report fingerprints; this refreshed report and solution note address that gate before rerun.</li>
         </ul>
       </section>
@@ -329,7 +335,8 @@
         <ul>
           <li>Repo research subagents mapped the existing write admission rail, shared-demo helpers, and non-reporting read surfaces.</li>
           <li>Plan reviewer subagents checked coherence, feasibility, scope, security, and adversarial failure modes until alignment.</li>
-          <li>Execution reviewers unanimously approved the final diff after focused checks: correctness had no findings, security had no findings, and testing approved the coverage.</li>
+          <li>POS inventory subagents found the register catalog family plus active register subscriptions for daily opening, staff profiles, POS service catalog, and active/held sessions.</li>
+          <li>Execution reviewers approved after looped fixes: security caught and verified the daily-opening non-member denial fix; testing required and then approved same-store non-member coverage; correctness had no findings.</li>
         </ul>
       </section>
 

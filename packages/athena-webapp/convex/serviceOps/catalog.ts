@@ -5,12 +5,13 @@ import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { listPosServiceCatalogSnapshotReadDefinition } from "../operationAdmission/readDefinitions";
 import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
 type ServiceCatalogPricingModel =
-  | "fixed"
-  | "starting_at"
-  | "quote_after_consultation";
+  "fixed" | "starting_at" | "quote_after_consultation";
 
 type ServiceCatalogDepositType = "none" | "flat" | "percentage";
 
@@ -55,7 +56,7 @@ const posServiceCatalogCheckoutReadinessValidator = v.union(
     requiresExistingCaseOrAmount: v.literal(true),
     status: v.literal("case_or_amount_required"),
     suggestedAmount: v.optional(v.number()),
-  })
+  }),
 );
 
 const posServiceCatalogRowValidator = v.object({
@@ -66,18 +67,18 @@ const posServiceCatalogRowValidator = v.object({
     v.literal("same_day"),
     v.literal("consultation"),
     v.literal("repair"),
-    v.literal("revamp")
+    v.literal("revamp"),
   ),
   pricingModel: v.union(
     v.literal("fixed"),
     v.literal("starting_at"),
-    v.literal("quote_after_consultation")
+    v.literal("quote_after_consultation"),
   ),
   basePrice: v.optional(v.number()),
   depositType: v.union(
     v.literal("none"),
     v.literal("flat"),
-    v.literal("percentage")
+    v.literal("percentage"),
   ),
   depositValue: v.optional(v.number()),
   requiresManagerApproval: v.boolean(),
@@ -103,7 +104,9 @@ export function buildPosServiceCatalogRow(input: PosServiceCatalogRowInput) {
     pricingModel: input.pricingModel,
     ...(input.basePrice !== undefined ? { basePrice: input.basePrice } : {}),
     depositType: input.depositType,
-    ...(input.depositValue !== undefined ? { depositValue: input.depositValue } : {}),
+    ...(input.depositValue !== undefined
+      ? { depositValue: input.depositValue }
+      : {}),
     requiresManagerApproval: input.requiresManagerApproval,
     status: "active" as const,
     updatedAt: input.updatedAt,
@@ -115,7 +118,7 @@ export async function listPosServiceCatalogSnapshotWithCtx(
   ctx: PosServiceCatalogSnapshotCtx,
   args: {
     storeId: Id<"store">;
-  }
+  },
 ) {
   const store = await ctx.db.get("store", args.storeId);
   if (!store) {
@@ -125,7 +128,7 @@ export async function listPosServiceCatalogSnapshotWithCtx(
   const rows = await ctx.db
     .query("serviceCatalog")
     .withIndex("by_storeId_status", (q) =>
-      q.eq("storeId", args.storeId).eq("status", "active")
+      q.eq("storeId", args.storeId).eq("status", "active"),
     )
     .collect();
 
@@ -155,7 +158,9 @@ function buildPosServiceCheckoutReadiness(input: PosServiceCatalogRowInput) {
     return {
       canCheckoutDirectly: false as const,
       message: "Enter the service amount before checkout.",
-      ...(depositAmount !== undefined ? { suggestedAmount: depositAmount } : {}),
+      ...(depositAmount !== undefined
+        ? { suggestedAmount: depositAmount }
+        : {}),
       reason: "starting_at_amount_required" as const,
       status: "amount_required" as const,
     };
@@ -281,7 +286,7 @@ export const listServiceCatalogItems = query({
       return ctx.db
         .query("serviceCatalog")
         .withIndex("by_storeId_status", (q) =>
-          q.eq("storeId", args.storeId).eq("status", args.status!)
+          q.eq("storeId", args.storeId).eq("status", args.status!),
         )
         .collect();
     }
@@ -298,7 +303,19 @@ export const listPosServiceCatalogSnapshot = query({
     storeId: v.id("store"),
   },
   returns: v.array(posServiceCatalogRowValidator),
-  handler: listPosServiceCatalogSnapshotWithCtx,
+  handler: admitSharedDemoPublicQuery(
+    listPosServiceCatalogSnapshotReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      await requireStoreMemberAccessWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        demoAccess: { kind: "read" },
+        failureMessage: "You cannot view POS services for this store.",
+        storeId: args.storeId,
+      });
+
+      return listPosServiceCatalogSnapshotWithCtx(ctx, args);
+    },
+  ),
 });
 
 export const createServiceCatalogItem = mutation({
@@ -307,7 +324,7 @@ export const createServiceCatalogItem = mutation({
     depositType: v.union(
       v.literal("none"),
       v.literal("flat"),
-      v.literal("percentage")
+      v.literal("percentage"),
     ),
     depositValue: v.optional(v.number()),
     description: v.optional(v.string()),
@@ -316,14 +333,14 @@ export const createServiceCatalogItem = mutation({
     pricingModel: v.union(
       v.literal("fixed"),
       v.literal("starting_at"),
-      v.literal("quote_after_consultation")
+      v.literal("quote_after_consultation"),
     ),
     requiresManagerApproval: v.boolean(),
     serviceMode: v.union(
       v.literal("same_day"),
       v.literal("consultation"),
       v.literal("repair"),
-      v.literal("revamp")
+      v.literal("revamp"),
     ),
     storeId: v.id("store"),
   },
@@ -342,7 +359,7 @@ export const createServiceCatalogItem = mutation({
     const existingCatalogItem = await ctx.db
       .query("serviceCatalog")
       .withIndex("by_storeId_slug", (q) =>
-        q.eq("storeId", args.storeId).eq("slug", catalogItem.slug)
+        q.eq("storeId", args.storeId).eq("slug", catalogItem.slug),
       )
       .first();
 
@@ -362,7 +379,7 @@ export const updateServiceCatalogItem = mutation({
   args: {
     basePrice: v.optional(v.union(v.number(), v.null())),
     depositType: v.optional(
-      v.union(v.literal("none"), v.literal("flat"), v.literal("percentage"))
+      v.union(v.literal("none"), v.literal("flat"), v.literal("percentage")),
     ),
     depositValue: v.optional(v.union(v.number(), v.null())),
     description: v.optional(v.union(v.string(), v.null())),
@@ -372,8 +389,8 @@ export const updateServiceCatalogItem = mutation({
       v.union(
         v.literal("fixed"),
         v.literal("starting_at"),
-        v.literal("quote_after_consultation")
-      )
+        v.literal("quote_after_consultation"),
+      ),
     ),
     requiresManagerApproval: v.optional(v.boolean()),
     serviceCatalogId: v.id("serviceCatalog"),
@@ -382,14 +399,14 @@ export const updateServiceCatalogItem = mutation({
         v.literal("same_day"),
         v.literal("consultation"),
         v.literal("repair"),
-        v.literal("revamp")
-      )
+        v.literal("revamp"),
+      ),
     ),
   },
   handler: async (ctx, args) => {
     const existingCatalogItem = await ctx.db.get(
       "serviceCatalog",
-      args.serviceCatalogId
+      args.serviceCatalogId,
     );
 
     if (!existingCatalogItem) {
@@ -435,7 +452,8 @@ export const updateServiceCatalogItem = mutation({
       organizationId: existingCatalogItem.organizationId,
       pricingModel: args.pricingModel ?? existingCatalogItem.pricingModel,
       requiresManagerApproval:
-        args.requiresManagerApproval ?? existingCatalogItem.requiresManagerApproval,
+        args.requiresManagerApproval ??
+        existingCatalogItem.requiresManagerApproval,
       serviceMode: args.serviceMode ?? existingCatalogItem.serviceMode,
       storeId: existingCatalogItem.storeId,
     });
@@ -448,7 +466,9 @@ export const updateServiceCatalogItem = mutation({
     const conflictingCatalogItem = await ctx.db
       .query("serviceCatalog")
       .withIndex("by_storeId_slug", (q) =>
-        q.eq("storeId", existingCatalogItem.storeId).eq("slug", nextCatalogItem.slug)
+        q
+          .eq("storeId", existingCatalogItem.storeId)
+          .eq("slug", nextCatalogItem.slug),
       )
       .first();
 
@@ -479,7 +499,7 @@ export const archiveServiceCatalogItem = mutation({
   handler: async (ctx, args) => {
     const existingCatalogItem = await ctx.db.get(
       "serviceCatalog",
-      args.serviceCatalogId
+      args.serviceCatalogId,
     );
 
     if (!existingCatalogItem) {

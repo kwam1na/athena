@@ -9,6 +9,9 @@ import {
 } from "../_generated/server";
 import { ok, userError } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { listPosStaffProfilesReadDefinition } from "../operationAdmission/readDefinitions";
 import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
 import { normalizePhoneNumber } from "./helpers/linking";
 import {
@@ -32,7 +35,7 @@ const MAX_STAFF_ROLE_RESULTS = MAX_STAFF_PROFILE_RESULTS * 5;
 
 const staffProfileStatusValidator = v.union(
   v.literal("active"),
-  v.literal("inactive")
+  v.literal("inactive"),
 );
 
 type StaffProfileStatus = "active" | "inactive";
@@ -43,7 +46,10 @@ function normalizeOptionalString(value?: string) {
   return trimmed ? trimmed : undefined;
 }
 
-function requireNameSegment(fieldName: "first name" | "last name", value?: string) {
+function requireNameSegment(
+  fieldName: "first name" | "last name",
+  value?: string,
+) {
   const normalizedValue = normalizeOptionalString(value);
 
   if (!normalizedValue) {
@@ -63,7 +69,7 @@ async function ensureLinkedUserAvailable(
     linkedUserId?: Id<"athenaUser">;
     staffProfileId?: Id<"staffProfile">;
     storeId: Id<"store">;
-  }
+  },
 ) {
   if (!args.linkedUserId) {
     return;
@@ -72,12 +78,14 @@ async function ensureLinkedUserAvailable(
   const existingProfile = await ctx.db
     .query("staffProfile")
     .withIndex("by_storeId_linkedUserId", (q) =>
-      q.eq("storeId", args.storeId).eq("linkedUserId", args.linkedUserId)
+      q.eq("storeId", args.storeId).eq("linkedUserId", args.linkedUserId),
     )
     .first();
 
   if (existingProfile && existingProfile._id !== args.staffProfileId) {
-    throw new Error("A staff profile already links this Athena user in the store.");
+    throw new Error(
+      "A staff profile already links this Athena user in the store.",
+    );
   }
 }
 
@@ -125,14 +133,16 @@ async function syncStaffRoleAssignmentsWithCtx(
     requestedRoles: OperationalRole[];
     staffProfileId: Id<"staffProfile">;
     storeId: Id<"store">;
-  }
+  },
 ) {
   assertRoleConfiguration(args);
   const desiredRoles = buildRoleAssignmentDrafts(args);
 
   const existingAssignments = await ctx.db
     .query("staffRoleAssignment")
-    .withIndex("by_staffProfileId", (q) => q.eq("staffProfileId", args.staffProfileId))
+    .withIndex("by_staffProfileId", (q) =>
+      q.eq("staffProfileId", args.staffProfileId),
+    )
     .take(MAX_STAFF_ROLE_ASSIGNMENTS);
 
   for (const assignment of existingAssignments) {
@@ -146,7 +156,7 @@ async function syncStaffRoleAssignmentsWithCtx(
 
   for (const assignment of desiredRoles) {
     const current = existingAssignments.find(
-      (candidate) => candidate.role === assignment.role
+      (candidate) => candidate.role === assignment.role,
     );
 
     if (current) {
@@ -191,7 +201,7 @@ function buildStaffProfileResult(
     primaryRole: OperationalRole | null;
     roles: OperationalRole[];
     username: string | null;
-  }
+  },
 ) {
   return {
     ...staffProfile,
@@ -206,7 +216,7 @@ export async function getStaffProfileByIdWithCtx(
   ctx: StaffProfileReaderCtx,
   args: {
     staffProfileId: Id<"staffProfile">;
-  }
+  },
 ) {
   const staffProfile = await ctx.db.get("staffProfile", args.staffProfileId);
 
@@ -218,14 +228,14 @@ export async function getStaffProfileByIdWithCtx(
     ctx.db
       .query("staffRoleAssignment")
       .withIndex("by_staffProfileId", (q) =>
-        q.eq("staffProfileId", args.staffProfileId)
+        q.eq("staffProfileId", args.staffProfileId),
       )
       .take(MAX_STAFF_ROLE_ASSIGNMENTS),
     getStaffCredentialByStaffProfileIdWithCtx(ctx, args.staffProfileId),
   ]);
 
   const activeRoleAssignments = roleAssignments.filter(
-    (assignment) => assignment.status === "active"
+    (assignment) => assignment.status === "active",
   );
   const roles = activeRoleAssignments.map((assignment) => assignment.role);
   const primaryRole =
@@ -246,14 +256,14 @@ export async function listStaffProfilesWithCtx(
   args: {
     status?: StaffProfileStatus;
     storeId: Id<"store">;
-  }
+  },
 ) {
   const [staffProfiles, roleAssignments, credentials] = await Promise.all([
     args.status
       ? ctx.db
           .query("staffProfile")
           .withIndex("by_storeId_status", (q) =>
-            q.eq("storeId", args.storeId).eq("status", args.status!)
+            q.eq("storeId", args.storeId).eq("status", args.status!),
           )
           .take(MAX_STAFF_PROFILE_RESULTS)
       : ctx.db
@@ -271,17 +281,19 @@ export async function listStaffProfilesWithCtx(
     const activeRoleAssignments = roleAssignments.filter(
       (assignment) =>
         assignment.staffProfileId === staffProfile._id &&
-        assignment.status === "active"
+        assignment.status === "active",
     );
     const roles = activeRoleAssignments.map((assignment) => assignment.role);
     const credential =
-      credentials.find((candidate) => candidate.staffProfileId === staffProfile._id) ??
-      null;
+      credentials.find(
+        (candidate) => candidate.staffProfileId === staffProfile._id,
+      ) ?? null;
 
     return buildStaffProfileResult(staffProfile, {
       credentialStatus: credential?.status ?? null,
       primaryRole:
-        activeRoleAssignments.find((assignment) => assignment.isPrimary)?.role ??
+        activeRoleAssignments.find((assignment) => assignment.isPrimary)
+          ?.role ??
         roles[0] ??
         null,
       roles,
@@ -308,7 +320,7 @@ export async function createStaffProfileWithCtx(
     staffCode?: string;
     storeId: Id<"store">;
     username: string;
-  }
+  },
 ) {
   await ensureLinkedUserAvailable(ctx, {
     linkedUserId: args.linkedUserId,
@@ -316,13 +328,14 @@ export async function createStaffProfileWithCtx(
   });
   assertRoleConfiguration(args);
 
-  const usernameAvailability = await getStaffCredentialUsernameAvailabilityWithCtx(
-    ctx as Pick<QueryCtx, "db">,
-    {
-      storeId: args.storeId,
-      username: args.username,
-    }
-  );
+  const usernameAvailability =
+    await getStaffCredentialUsernameAvailabilityWithCtx(
+      ctx as Pick<QueryCtx, "db">,
+      {
+        storeId: args.storeId,
+        username: args.username,
+      },
+    );
 
   if (!usernameAvailability.available) {
     throw new Error("Username is already in use for this store.");
@@ -385,7 +398,7 @@ export async function updateStaffProfileWithCtx(
     storeId: Id<"store">;
     updatedByUserId?: Id<"athenaUser">;
     username?: string;
-  }
+  },
 ) {
   const existingProfile = await ctx.db.get("staffProfile", args.staffProfileId);
 
@@ -417,11 +430,11 @@ export async function updateStaffProfileWithCtx(
 
   const firstName = requireNameSegment(
     "first name",
-    args.firstName ?? existingProfile.firstName
+    args.firstName ?? existingProfile.firstName,
   );
   const lastName = requireNameSegment(
     "last name",
-    args.lastName ?? existingProfile.lastName
+    args.lastName ?? existingProfile.lastName,
   );
 
   const updates = {
@@ -430,7 +443,9 @@ export async function updateStaffProfileWithCtx(
     fullName: buildStaffFullName(firstName, lastName),
     lastName,
     linkedUserId:
-      args.linkedUserId === undefined ? existingProfile.linkedUserId : args.linkedUserId,
+      args.linkedUserId === undefined
+        ? existingProfile.linkedUserId
+        : args.linkedUserId,
     memberRole: args.memberRole ?? existingProfile.memberRole,
     status: args.status ?? existingProfile.status,
     updatedByUserId: args.updatedByUserId ?? existingProfile.updatedByUserId,
@@ -470,7 +485,7 @@ export async function updateStaffProfileWithCtx(
   if (args.username !== undefined) {
     const existingCredential = await getStaffCredentialByStaffProfileIdWithCtx(
       ctx,
-      args.staffProfileId
+      args.staffProfileId,
     );
 
     if (existingCredential) {
@@ -504,7 +519,7 @@ export const getByUserAndStore = internalQuery({
     ctx.db
       .query("staffProfile")
       .withIndex("by_storeId_linkedUserId", (q) =>
-        q.eq("storeId", args.storeId).eq("linkedUserId", args.userId)
+        q.eq("storeId", args.storeId).eq("linkedUserId", args.userId),
       )
       .first(),
 });
@@ -521,7 +536,22 @@ export const listStaffProfiles = query({
     status: v.optional(staffProfileStatusValidator),
     storeId: v.id("store"),
   },
-  handler: (ctx, args) => listStaffProfilesWithCtx(ctx, args),
+  handler: admitSharedDemoPublicQuery(
+    listPosStaffProfilesReadDefinition,
+    async (
+      ctx,
+      args: { status?: StaffProfileStatus; storeId: Id<"store"> },
+    ) => {
+      await requireStoreMemberAccessWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        demoAccess: { kind: "read" },
+        failureMessage: "You cannot view staff profiles for this store.",
+        storeId: args.storeId,
+      });
+
+      return listStaffProfilesWithCtx(ctx, args);
+    },
+  ),
 });
 
 export const createStaffProfile = mutation({
@@ -533,7 +563,9 @@ export const createStaffProfile = mutation({
     jobTitle: v.optional(v.string()),
     lastName: v.string(),
     linkedUserId: v.optional(v.id("athenaUser")),
-    memberRole: v.optional(v.union(v.literal("full_admin"), v.literal("pos_only"))),
+    memberRole: v.optional(
+      v.union(v.literal("full_admin"), v.literal("pos_only")),
+    ),
     notes: v.optional(v.string()),
     organizationId: v.id("organization"),
     phoneNumber: v.optional(v.string()),
@@ -552,7 +584,8 @@ export const createStaffProfile = mutation({
 
       if (
         message === "Username is already in use for this store." ||
-        message === "A staff profile already links this Athena user in the store."
+        message ===
+          "A staff profile already links this Athena user in the store."
       ) {
         return userError({
           code: "conflict",
@@ -584,7 +617,9 @@ export const updateStaffProfile = mutation({
     jobTitle: v.optional(v.string()),
     lastName: v.optional(v.string()),
     linkedUserId: v.optional(v.id("athenaUser")),
-    memberRole: v.optional(v.union(v.literal("full_admin"), v.literal("pos_only"))),
+    memberRole: v.optional(
+      v.union(v.literal("full_admin"), v.literal("pos_only")),
+    ),
     notes: v.optional(v.string()),
     organizationId: v.id("organization"),
     phoneNumber: v.optional(v.string()),
@@ -617,7 +652,8 @@ export const updateStaffProfile = mutation({
       if (
         message === "Staff profile does not belong to this store." ||
         message === "Username is already in use for this store." ||
-        message === "A staff profile already links this Athena user in the store."
+        message ===
+          "A staff profile already links this Athena user in the store."
       ) {
         return userError({
           code: "conflict",

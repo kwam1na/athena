@@ -126,6 +126,49 @@ describe("operation read admission definitions", () => {
           functionName: "inventory/posSessions:getStoreActiveSessionOperations",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "pos.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "inventory/posSessions:getActiveSession",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "pos.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "inventory/posSessions:getStoreSessions",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "pos.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName:
+            "pos/public/catalog:listRegisterCatalogAvailabilitySnapshot",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "pos.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "pos/public/catalog:getRegisterCatalogRevision",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "pos.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "operations/staffProfiles:listStaffProfiles",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "pos.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "serviceOps/catalog:listPosServiceCatalogSnapshot",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "daily_operations.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "operations/dailyOpening:getDailyOpeningSnapshot",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
       ]),
     );
   });
