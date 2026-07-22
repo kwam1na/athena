@@ -814,7 +814,8 @@ function renderActivitySummary(
   if (row.openingFloat !== null && row.openingFloat !== undefined) {
     return (
       <p className="text-xs leading-5 text-muted-foreground">
-        {row.summary ?? "Opening float recorded"}: {formatCurrency(currency, row.openingFloat)}
+        {row.summary ?? "Opening float recorded"}:{" "}
+        {formatCurrency(currency, row.openingFloat)}
       </p>
     );
   }
@@ -2704,7 +2705,7 @@ function RegisterSessionSyncNotice({
       className={cn(
         "rounded-lg border p-layout-md",
         hasCloseoutReview
-          ? "border-warning-border bg-warning-soft"
+          ? "border-warning-border/40 bg-warning-soft/40"
           : syncStatus.tone === "danger"
             ? "border-danger/25 bg-danger/10"
             : "border-warning/30 bg-warning/10",
@@ -2822,7 +2823,7 @@ function RegisterSessionSyncNotice({
                       className={cn(
                         "rounded-md border bg-background/80 p-layout-md shadow-sm",
                         isCloseoutItem
-                          ? "border-warning-border bg-background/80"
+                          ? "border-warning-border/40 bg-background/80"
                           : "border-danger/15",
                       )}
                       key={item.id ?? `${item.type ?? "review"}-${index}`}
@@ -2961,7 +2962,9 @@ function RegisterSessionSyncNotice({
           <div
             className={cn(
               "flex w-full flex-col gap-layout-sm border-t pt-layout-md sm:flex-row sm:flex-wrap sm:items-center",
-              hasCloseoutReview ? "border-warning-border" : "border-border/70",
+              hasCloseoutReview
+                ? "border-warning-border/40"
+                : "border-border/70",
             )}
           >
             {shouldShowRejectedReviewAction ? (
@@ -4112,7 +4115,7 @@ export function RegisterSessionViewContent({
       (correctionTimeline.length > 0 && !isClosedRegisterSession));
   const pendingVoidApprovalPanel =
     registerSession && hasPendingCashCorrections ? (
-      <section className="space-y-3 rounded-lg border border-warning-border bg-warning-soft p-layout-md">
+      <section className="space-y-3 rounded-lg border border-warning-border/40 bg-warning-soft/40 p-layout-md">
         <div className="space-y-1">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-warning">
             Register corrections pending
@@ -4145,7 +4148,7 @@ export function RegisterSessionViewContent({
     ) : null;
   const pendingCloseoutApprovalPanel =
     registerSession && hasPendingCloseoutApproval ? (
-      <section className="space-y-4 rounded-[calc(var(--radius)*1.2)] border border-warning-border bg-warning-soft p-layout-lg shadow-surface">
+      <section className="space-y-4 rounded-[calc(var(--radius)*1.2)] border border-warning-border/40 bg-warning-soft/40 p-layout-lg shadow-surface">
         <div className="space-y-2">
           <div className="space-y-2">
             <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-warning">
@@ -4164,7 +4167,7 @@ export function RegisterSessionViewContent({
           </div>
         </div>
 
-        <div className="rounded-lg border border-warning-border bg-background/70 p-4">
+        <div className="rounded-lg border border-warning-border/40 bg-background/70 p-4">
           <div
             className={cn(
               "grid gap-4 text-sm",
@@ -4214,11 +4217,11 @@ export function RegisterSessionViewContent({
             </div>
           </div>
           {pendingCashVoidText ? (
-            <p className="mt-4 border-t border-warning-border pt-3 text-xs leading-5 text-muted-foreground">
+            <p className="mt-4 border-t border-warning-border/40 pt-3 text-xs leading-5 text-muted-foreground">
               {pendingCashVoidText}
             </p>
           ) : null}
-          <div className="mt-4 space-y-3 border-t border-warning-border pt-3 text-xs text-muted-foreground">
+          <div className="mt-4 space-y-3 border-t border-warning-border/40 pt-3 text-xs text-muted-foreground">
             <p>
               Requested by{" "}
               {registerSession.pendingApprovalRequest?.requestedByStaffName
@@ -4230,7 +4233,7 @@ export function RegisterSessionViewContent({
                 : "staff not recorded"}
             </p>
             {closeoutRequestNotes ? (
-              <div className="space-y-1 rounded-md bg-warning-soft px-3 py-2 text-muted-foreground">
+              <div className="space-y-1 rounded-md bg-warning-soft/40 px-3 py-2 text-muted-foreground">
                 <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-warning">
                   Request notes
                 </p>
@@ -4818,8 +4821,7 @@ export function RegisterSessionViewContent({
                         ) : registerSession?.status === "closed" ||
                           registerSession?.status === "closeout_rejected" ? (
                           <div className="space-y-4 border-t border-border/70 pt-4">
-                            {registerSession.status ===
-                            "closeout_rejected" ? (
+                            {registerSession.status === "closeout_rejected" ? (
                               <p className="text-sm font-medium text-foreground">
                                 Closeout rejected
                               </p>

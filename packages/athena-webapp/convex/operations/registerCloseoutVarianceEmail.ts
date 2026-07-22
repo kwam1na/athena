@@ -149,10 +149,9 @@ export const getRegisterCloseoutMatchReportPayload = internalQuery({
     if (
       !registerSession ||
       registerSession.status !== "closed" ||
-      typeof registerSession.countedCash !== "number" ||
-      registerSession.countedCash - registerSession.expectedCash !== 0
+      typeof registerSession.countedCash !== "number"
     ) {
-      throw new Error("Exact-match register closeout was not found.");
+      throw new Error("Closed register closeout was not found.");
     }
 
     const [store, submittedBy] = await Promise.all([
@@ -179,6 +178,10 @@ export const getRegisterCloseoutMatchReportPayload = internalQuery({
     ]);
     const currency = store.currency || "GHS";
     const money = currencyFormatter(currency);
+    const variance = amountFromMetadata(
+      registerSession.variance,
+      registerSession.countedCash - registerSession.expectedCash,
+    );
 
     return {
       countedCash: money.format(toDisplayAmount(registerSession.countedCash)),
@@ -203,8 +206,10 @@ export const getRegisterCloseoutMatchReportPayload = internalQuery({
         closeoutScheduleContext,
       ),
       submittedBy: submittedBy?.fullName ?? "POS operator",
-      variance: money.format(0),
-      varianceDirection: "matched",
+      variance: money.format(toDisplayAmount(variance)),
+      varianceDirection:
+        variance === 0 ? "matched" : variance > 0 ? "over" : "short",
+      outcome: "closed",
       notes: registerSession.notes,
     };
   },

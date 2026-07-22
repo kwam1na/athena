@@ -32,6 +32,7 @@ export interface RegisterCloseoutVarianceAlertProps {
   currency?: string;
   variance: string;
   varianceDirection: "matched" | "over" | "short";
+  outcome?: "review_required" | "closed";
   reason?: string;
   notes?: string;
   reviewUrl: string;
@@ -66,14 +67,18 @@ export default function RegisterCloseoutVarianceAlert({
   currency = "GHS",
   variance,
   varianceDirection,
+  outcome = "review_required",
   reason,
   notes,
   reviewUrl,
 }: RegisterCloseoutVarianceAlertProps) {
   const isMatched = varianceDirection === "matched";
+  const isClosedReport = outcome === "closed" || isMatched;
   const previewText = isMatched
     ? `${storeName}: ${registerLabel} closed with an exact cash match.`
-    : `${storeName}: ${registerLabel} closeout submitted with ${variance} variance.`;
+    : isClosedReport
+      ? `${storeName}: ${registerLabel} closed with ${variance} variance.`
+      : `${storeName}: ${registerLabel} closeout submitted with ${variance} variance.`;
   const varianceLabel = isMatched
     ? "Cash matched"
     : varianceDirection === "over"
@@ -123,12 +128,16 @@ export default function RegisterCloseoutVarianceAlert({
                 <Text style={styles.statusTitle}>
                   {isMatched
                     ? "Closed with an exact cash match"
-                    : "Submitted with cash variance"}
+                    : isClosedReport
+                      ? "Closed with cash variance"
+                      : "Submitted with cash variance"}
                 </Text>
                 <Text style={styles.statusSummary}>
                   {isMatched
                     ? "Expected and counted cash match. No review is required."
-                    : "Review the closeout before finalizing this register session."}
+                    : isClosedReport
+                      ? "Register is closed. Review the recorded cash variance in Cash Controls."
+                      : "Review the closeout before finalizing this register session."}
                 </Text>
               </Column>
               <Column style={styles.badgeColumn}>
