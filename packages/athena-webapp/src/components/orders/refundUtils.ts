@@ -117,6 +117,10 @@ export function getAvailableItems(order: OnlineOrder): OrderItemWithId[] {
   return order.items.filter((item) => !item.isRefunded) as OrderItemWithId[];
 }
 
+export function canUsePartialRefund(availableItemCount: number) {
+  return availableItemCount > 1;
+}
+
 /**
  * Calculate the refund amount based on the current mode and selections
  * All amounts are in cents (pesewas)

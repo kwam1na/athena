@@ -24,4 +24,14 @@ describe("RefundsView money display", () => {
     expect(source).not.toContain("formatter.format(item.price)");
     expect(source).not.toContain("formatter.format(order.deliveryFee)");
   });
+
+  it("disables partial refunds when there is no proper item subset", () => {
+    expect(source).toContain(
+      "const partialRefundAvailable = canUsePartialRefund(availableItems.length)",
+    );
+    expect(source).toContain("disabled={!partialRefundAvailable}");
+    expect(source).toContain(
+      'value === "partial" && !partialRefundAvailable',
+    );
+  });
 });

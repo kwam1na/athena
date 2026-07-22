@@ -9,6 +9,7 @@ import {
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { Circle } from "lucide-react";
 import { useMemo } from "react";
+import { getOnlineOrderPlacedAt } from "./utils";
 import { getProductName } from "~/src/lib/productUtils";
 
 // Types
@@ -214,7 +215,7 @@ export function ActivityView() {
 
     const createdAction: CreatedAction = {
       status: "created",
-      date: order?._creationTime ?? 0,
+      date: getOnlineOrderPlacedAt(order),
       type: ActivityType.Transition,
     };
 

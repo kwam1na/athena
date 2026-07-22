@@ -44,7 +44,7 @@ const deniedEffectDefinition = defineOperation({
   capability: "orders.fulfill",
   scope: { kind: "store", storeIdArg: "storeId" },
   readiness: { kind: "store_write" },
-  effects: { mode: "protected", gateways: ["payment.refund"] },
+  effects: { mode: "protected", gateways: ["unknown.gateway"] },
   actors: { normalUser: "admit", sharedDemo: "admit" },
 });
 

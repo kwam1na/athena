@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="0136f8cb858e110b72299f53986cd64a36b4240b573250f73bb51407137c1eb1" data-athena-report-base="origin/main@3e622d80" data-athena-report-head="8332f805">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Shared demo polish delivery report</title>
+    <style>
+      :root {
+        --ink: #172033;
+        --muted: #607086;
+        --line: #dce3ee;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #3346a3;
+        --accent-soft: #e8ebff;
+        --good: #166534;
+        --bad: #b42318;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main { max-width: 1080px; margin: 0 auto; padding: 44px 22px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 26px; padding-bottom: 26px; }
+      h1, h2, h3 { line-height: 1.16; }
+      h1 { font-size: clamp(32px, 5vw, 48px); margin: 0 0 14px; max-width: 900px; }
+      h2 { font-size: 26px; margin: 0 0 14px; }
+      p { margin: 0 0 13px; }
+      a { color: var(--accent); }
+      .lede { color: var(--muted); font-size: 18px; max-width: 850px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 10px 30px rgba(23, 32, 51, 0.04); margin: 18px 0; padding: 22px; }
+      .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 10px; padding: 16px; }
+      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+      .callout { background: var(--accent-soft); border: 1px solid #c7d2fe; border-radius: 12px; padding: 16px; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 10px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; transition: border-color 140ms cubic-bezier(0.23, 1, 0.32, 1), transform 140ms cubic-bezier(0.23, 1, 0.32, 1); }
+      label:active { transform: scale(0.99); }
+      @media (hover: hover) and (pointer: fine) { label:hover { border-color: #a9b8ce; } }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 10px;
+        background: var(--accent);
+        color: #fff;
+        cursor: pointer;
+        font-weight: 700;
+        padding: 11px 16px;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:active { transform: scale(0.97); }
+      button.secondary { background: #475569; }
+      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      #quizResult { font-weight: 700; }
+      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
+      .answer-detail.visible { display: block; }
+      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
+      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
+      @media (prefers-reduced-motion: reduce) { button, label { transition-duration: 0ms; } }
+      @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } main { padding: 30px 16px 56px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Shared demo polish: one safe story across seed data, policy, and UI</h1>
+        <p class="lede">Delivery-candidate report for PR <a href="https://github.com/kwam1na/athena/pull/693">#693</a>. This change tightens the Osu Studio demo so visitors can explore realistic order, refund, expense, and exit flows while external provider effects remain simulated.</p>
+        <div class="meta">
+          <span class="pill">Delivery candidate</span>
+          <span class="pill">Branch codex/demo-experience-delivery-2</span>
+          <span class="pill">Head 8332f805</span>
+          <span class="pill">Base 3e622d80</span>
+          <span class="pill">Production deploy: not applicable</span>
+          <span class="pill">Root alignment: pending merge</span>
+        </div>
+      </header>
+
+      <section class="panel">
+        <h2>Executive summary</h2>
+        <p>The branch turns a set of visible demo comments into one coherent cross-layer update. Demo entry and sign-out now return to the landing route, seeded story data looks like a real customer/order/expense day, and online-order actions are allowed for exploration through the shared demo policy.</p>
+        <p>The safety boundary stays explicit. Demo emails, refunds, and other provider-like effects are recorded as simulated decisions instead of live external calls. Browser validation and production deploys are intentionally outside this delivery.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Mental model</h2>
+        <p>Think of the demo as a real synthetic tenant with a theater rail around it: the operator can touch the realistic controls, but the rails decide whether an action is internal, simulated, or denied.</p>
+        <pre><code>Landing route
+  └─ Try the demo in same tab
+      └─ Shared demo workspace
+          ├─ Story seed data: realistic order, customer, phone, expense, terminal state
+          ├─ UI rules: exit/sign-out to landing, no pickup exception button in demo, single-item partial refund disabled
+          └─ Policy rules: allowlisted online-order actions, simulated provider effects</code></pre>
+      </section>
+
+      <section class="panel">
+        <h2>Before and after</h2>
+        <div class="grid">
+          <div class="callout">
+            <h3>Before</h3>
+            <p>The demo had placeholder customer details, an order that looked freshly created, live-looking provider affordances, and inconsistent exits that could send a visitor into login.</p>
+          </div>
+          <div class="callout">
+            <h3>After</h3>
+            <p>The seeded story has a realistic customer, phone number, four-hour-old order, already-sent order email, restored expense state, disabled demo heartbeats, and landing-route exits.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Key file map</h2>
+        <table>
+          <thead>
+            <tr><th>Area</th><th>Files</th><th>Why it matters</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Demo story and restore</td>
+              <td><code>shared/sharedDemoStory.ts</code>, <code>convex/sharedDemo/provision.ts</code>, <code>convex/sharedDemo/domainRestore.ts</code></td>
+              <td>Owns seeded order timing, email state, realistic customer details, expense reset behavior, and terminal heartbeat defaults.</td>
+            </tr>
+            <tr>
+              <td>Demo capability policy</td>
+              <td><code>convex/sharedDemo/policy.ts</code>, <code>convex/sharedDemo/actor.ts</code>, <code>convex/platform/capabilityCatalog.ts</code></td>
+              <td>Allows online-order workspace actions for exploration while centralizing simulated or denied side effects.</td>
+            </tr>
+            <tr>
+              <td>Order/refund UI</td>
+              <td><code>src/components/orders/OrderView.tsx</code>, <code>RefundsView.tsx</code>, <code>refundUtils.ts</code>, <code>utils.ts</code></td>
+              <td>Removes the demo pickup-exception action and disables partial refund for one-item orders across experiences.</td>
+            </tr>
+            <tr>
+              <td>Demo shell and routing</td>
+              <td><code>SharedDemoStatusBar.tsx</code>, <code>SharedDemoRuntime.tsx</code>, <code>-authed-layout.tsx</code>, <code>-public-layout.tsx</code></td>
+              <td>Keeps demo entry in the same tab and routes demo exit/sign-out back to landing.</td>
+            </tr>
+            <tr>
+              <td>Generated knowledge graph</td>
+              <td><code>graphify-out/GRAPH_REPORT.md</code>, <code>graphify-out/graph.json</code>, <code>graphify-out/wiki/index.md</code></td>
+              <td>Refreshes architecture/navigation artifacts after source changes.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="panel">
+        <h2>What intentionally did not change</h2>
+        <ul>
+          <li>No backend migration was added.</li>
+          <li>No production deployment was performed or required.</li>
+          <li>Normal tenant behavior remains outside the shared-demo policy clamps.</li>
+          <li>Browser validation remains with the requester.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>Validation and delivery status</h2>
+        <ul>
+          <li>Focused tests passed: <code>bun run test -- convex/sharedDemo/policy.test.ts convex/sharedDemo/provision.test.ts convex/storeFront/payment.test.ts convex/storeFront/errorFoundation.test.ts convex/storeFront/onlineOrder.test.ts</code>.</li>
+          <li>Conflict marker scan passed.</li>
+          <li><code>git diff --check</code> passed.</li>
+          <li>Graphify was rebuilt after code changes.</li>
+          <li><code>bun run pr:athena</code> was run after the push-sensor request and identified the missing solution note/report now added by this follow-up commit.</li>
+          <li>Merge status: pending PR checks and merge.</li>
+          <li>Root alignment: pending after merge.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>Subagent Evidence</h2>
+        <p><strong>SubagentUnavailable.</strong> The landed-change-report skill normally requires separate evidence-gathering subagents, but this repo’s AGENTS tool map directs subagent-style work to run sequentially in the main thread. Evidence was gathered from the local diff, PR metadata, repo sensors, Graphify report, focused test output, and the delivery conversation instead.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Quiz: Pass Required</h2>
+        <p>Pass threshold: 4 of 5. These questions check the operational boundaries of the change rather than trivia.</p>
+        <form id="changeQuiz">
+          <div class="quiz-question" data-answer="b">
+            <fieldset>
+              <legend>1. Why should demo emails and refunds be simulated centrally?</legend>
+              <label><input type="radio" name="q1" value="a" /> So the UI can skip testing provider controls.</label>
+              <label><input type="radio" name="q1" value="b" /> So visitors can explore realistic workflows without sending live external effects.</label>
+              <label><input type="radio" name="q1" value="c" /> So normal tenants inherit the same disabled provider behavior.</label>
+            </fieldset>
+            <p class="answer-detail">Correct answer: simulated decisions preserve realistic exploration while preventing live provider calls from a synthetic tenant.</p>
+          </div>
+          <div class="quiz-question" data-answer="a">
+            <fieldset>
+              <legend>2. Where should seeded story facts like customer name, phone, and order timing live?</legend>
+              <label><input type="radio" name="q2" value="a" /> In the shared demo story/provision/restore layer.</label>
+              <label><input type="radio" name="q2" value="b" /> In whichever React component happens to display them first.</label>
+              <label><input type="radio" name="q2" value="c" /> In browser-only local storage.</label>
+            </fieldset>
+            <p class="answer-detail">Correct answer: story facts belong in seed/provision/restore sources so the whole demo remains consistent.</p>
+          </div>
+          <div class="quiz-question" data-answer="c">
+            <fieldset>
+              <legend>3. Why is the single-item partial refund rule shared across experiences?</legend>
+              <label><input type="radio" name="q3" value="a" /> It only affects the shared demo tenant.</label>
+              <label><input type="radio" name="q3" value="b" /> It is a browser-validation shortcut.</label>
+              <label><input type="radio" name="q3" value="c" /> A partial refund has no useful meaning when the order has only one item.</label>
+            </fieldset>
+            <p class="answer-detail">Correct answer: the business rule is experience-agnostic, so it belongs in shared refund logic.</p>
+          </div>
+          <div class="quiz-question" data-answer="b">
+            <fieldset>
+              <legend>4. What does allowlisting online-order actions in the demo policy achieve?</legend>
+              <label><input type="radio" name="q4" value="a" /> It disables all online-order controls.</label>
+              <label><input type="radio" name="q4" value="b" /> It makes internal exploration explicit and auditable.</label>
+              <label><input type="radio" name="q4" value="c" /> It removes the need for public-function coverage.</label>
+            </fieldset>
+            <p class="answer-detail">Correct answer: allowlisted capabilities describe what the demo can do and remain tied to coverage inventory.</p>
+          </div>
+          <div class="quiz-question" data-answer="a">
+            <fieldset>
+              <legend>5. What remains pending in this delivery-candidate report?</legend>
+              <label><input type="radio" name="q5" value="a" /> PR merge and local root alignment.</label>
+              <label><input type="radio" name="q5" value="b" /> Production deployment.</label>
+              <label><input type="radio" name="q5" value="c" /> Adding a backend migration.</label>
+            </fieldset>
+            <p class="answer-detail">Correct answer: production deployment and backend migration are intentionally not part of this delivery; merge and root alignment happen after checks pass.</p>
+          </div>
+          <div class="quiz-actions">
+            <button type="button" id="gradeQuiz">Grade quiz</button>
+            <button type="reset" class="secondary" id="resetQuiz">Reset</button>
+            <span id="quizResult" aria-live="polite"></span>
+          </div>
+        </form>
+      </section>
+    </main>
+    <script>
+      const form = document.getElementById("changeQuiz");
+      const result = document.getElementById("quizResult");
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        let score = 0;
+        questions.forEach((question, index) => {
+          const name = `q${index + 1}`;
+          const expected = question.dataset.answer;
+          const selected = form.querySelector(`input[name="${name}"]:checked`);
+          question.querySelectorAll("label").forEach((label) => {
+            const input = label.querySelector("input");
+            label.classList.remove("correct", "incorrect");
+            if (input.value === expected) label.classList.add("correct");
+            if (selected && input === selected && input.value !== expected) label.classList.add("incorrect");
+          });
+          if (selected && selected.value === expected) score += 1;
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        result.textContent = score >= 4 ? `Passed: ${score}/5` : `Not yet: ${score}/5`;
+        result.style.color = score >= 4 ? "var(--good)" : "var(--bad)";
+      });
+
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        questions.forEach((question) => {
+          question.querySelectorAll("label").forEach((label) => label.classList.remove("correct", "incorrect"));
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+      });
+    </script>
+  </body>
+</html>

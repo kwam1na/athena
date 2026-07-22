@@ -81,6 +81,13 @@ function createUnauthorizedNormalOrderCtx() {
 describe("online order checkout money wiring", () => {
   it("accepts representative admitted public return contracts", () => {
     assertConformsToExportedReturns(update, ok(null));
+    assertConformsToExportedReturns(update, {
+      kind: "user_error",
+      error: {
+        code: "not_found",
+        message: "Order not found.",
+      },
+    });
     assertConformsToExportedReturns(getReturnExchangeOverview, {
       balanceCollectedTotal: 0,
       pendingApprovalCount: 0,
@@ -102,13 +109,6 @@ describe("online order checkout money wiring", () => {
       netRevenue: 0,
       totalDiscounts: 0,
       totalOrders: 0,
-    });
-    assertConformsToExportedReturns(update, {
-      kind: "user_error",
-      error: {
-        code: "not_found",
-        message: "Order not found.",
-      },
     });
   });
 

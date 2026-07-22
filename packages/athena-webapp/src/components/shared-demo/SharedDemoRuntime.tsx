@@ -183,7 +183,7 @@ export function SharedDemoRuntime({
                   fingerprint.fingerprintHash,
                 ),
                 fingerprintHash: fingerprint.fingerprintHash,
-                heartbeatEnabled: true,
+                heartbeatEnabled: false,
                 loginMode: "pos_only",
                 orgUrlSlug,
                 registerNumber,

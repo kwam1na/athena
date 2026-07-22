@@ -6,6 +6,7 @@ vi.mock("./actor", async (importOriginal) => {
   return {
     ...actual,
     requireSharedDemoCapabilityIfApplicable: vi.fn(),
+    requireReadySharedDemoStoreCapabilityIfApplicable: vi.fn(),
     requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
   };
 });
@@ -13,9 +14,18 @@ vi.mock("./restore", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./restore")>();
   return { ...actual, requireReadySharedDemoWriteWithCtx: vi.fn() };
 });
+vi.mock("../operationAdmission/publicMutation", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../operationAdmission/publicMutation")>();
+  return {
+    ...actual,
+    admitSharedDemoPublicMutation:
+      (_definition: unknown, handler: Function) => handler,
+  };
+});
 
 import { getAuthUserId } from "@convex-dev/auth/server";
 import {
+  requireReadySharedDemoStoreCapabilityIfApplicable,
   requireSharedDemoCapabilityIfApplicable,
   requireSharedDemoStoreCapabilityIfApplicable,
 } from "./actor";
@@ -28,6 +38,7 @@ import {
 import { createStaffCredential } from "../operations/staffCredentials";
 import { decideApprovalRequest } from "../operations/approvalRequests";
 import { requestExport } from "../reporting/export";
+import { processReturnExchange } from "../storeFront/onlineOrder";
 import { createTransaction, refundPayment } from "../storeFront/payment";
 import {
   createStaffProfile,
@@ -70,6 +81,29 @@ describe("actual public shared-demo enforcement boundaries", () => {
     expect(ctx.db.delete).not.toHaveBeenCalled();
     expect(ctx.db.insert).not.toHaveBeenCalled();
     expect(ctx.db.patch).not.toHaveBeenCalled();
+  });
+
+  it("routes demo return and exchange writes through the loaded order store clamp", async () => {
+    const sentinel = new Error("boundary reached");
+    vi.mocked(
+      requireReadySharedDemoStoreCapabilityIfApplicable,
+    ).mockRejectedValueOnce(sentinel);
+    const ctx = {
+      db: {
+        get: vi.fn(async () => ({ _id: "order", storeId: "store" })),
+      },
+    };
+
+    await expect(
+      invoke(processReturnExchange, ctx, { orderId: "order" }),
+    ).rejects.toThrow(sentinel.message);
+    expect(
+      requireReadySharedDemoStoreCapabilityIfApplicable,
+    ).toHaveBeenCalledWith(
+      ctx,
+      "payments.refund",
+      "store",
+    );
   });
 
   it.each([

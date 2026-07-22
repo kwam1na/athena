@@ -115,10 +115,25 @@ export function sharedDemoProductBySlug(slug: string) {
 // The seeded ready-for-pickup online order, paid by card.
 export const SHARED_DEMO_PICKUP_ORDER = {
   customerEmail: "customer@osustudio.com",
+  customerFirstName: "Abena",
+  customerLastName: "Owusu",
+  customerPhoneNumber: "024 555 0142",
   orderNumber: "DEMO-ORDER-001",
   quantity: 1,
   sku: sharedDemoProductBySlug("demo-black-soap").sku,
 } as const;
+
+const SHARED_DEMO_PICKUP_ORDER_AGE_MS = 4 * 60 * 60 * 1_000;
+const SHARED_DEMO_ORDER_RECEIVED_EMAIL_DELAY_MS = 60_000;
+
+export function sharedDemoPickupOrderTimeline(now: number) {
+  const placedAt = now - SHARED_DEMO_PICKUP_ORDER_AGE_MS;
+  return {
+    orderReceivedEmailSentAt:
+      placedAt + SHARED_DEMO_ORDER_RECEIVED_EMAIL_DELAY_MS,
+    placedAt,
+  } as const;
+}
 
 export function sharedDemoPickupOrderAmount() {
   return (

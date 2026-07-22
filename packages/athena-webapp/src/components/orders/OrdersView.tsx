@@ -13,7 +13,7 @@ import { OrdersTableToolbarProvider } from "./orders-table/components/data-table
 import { OnlineOrder } from "~/types";
 import { FadeIn } from "../common/FadeIn";
 import OrderMetricsPanel from "./OrderMetricsPanel";
-import { getAmountPaidForOrder } from "./utils";
+import { getAmountPaidForOrder, getOnlineOrderPlacedAt } from "./utils";
 import { ProtectedRoute } from "../ProtectedRoute";
 import {
   PageLevelHeader,
@@ -57,7 +57,7 @@ export default function OrdersView({ status = "all" }: { status?: string }) {
 
   const ordersFormatted = orders
     .filter((o: OnlineOrder) => {
-      if (timeFilter !== undefined && o._creationTime < timeFilter) {
+      if (timeFilter !== undefined && getOnlineOrderPlacedAt(o) < timeFilter) {
         return false;
       }
 

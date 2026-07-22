@@ -27,6 +27,8 @@ export const SHARED_DEMO_MUTABLE_TABLES = [
   { domain: "pos", tableName: "posTransactionItem" },
   { domain: "pos", tableName: "posTransaction" },
   { domain: "inventory", tableName: "inventoryMovement" },
+  { domain: "inventory", tableName: "expenseTransactionItem" },
+  { domain: "inventory", tableName: "expenseTransaction" },
   { domain: "inventory", tableName: "product" },
   { domain: "inventory", tableName: "productSku" },
   { domain: "inventory", tableName: "productSkuSearch" },
@@ -53,6 +55,7 @@ export const SHARED_DEMO_MUTABLE_TABLES = [
   { domain: "operations", tableName: "managerElevation" },
   { domain: "operations", tableName: "operationalWorkItem" },
   { domain: "operations", tableName: "operationalEvent" },
+  { domain: "operations", tableName: "paymentAllocation" },
   { domain: "operations", tableName: "dailyOpening" },
   { domain: "reporting", tableName: "reportingIngress" },
   { domain: "reporting", tableName: "reportingIngressSourceReference" },
@@ -266,6 +269,10 @@ async function listStoreRows(ctx: any, tableName: string, storeId: Id<"store">) 
   if (tableName === "posTransactionItem") {
     const parents = await ctx.db.query("posTransaction").withIndex("by_storeId", (q: any) => q.eq("storeId", storeId)).take(500);
     return requireBoundedBatch((await Promise.all(parents.map((parent: any) => ctx.db.query("posTransactionItem").withIndex("by_transactionId", (q: any) => q.eq("transactionId", parent._id)).take(RESTORE_BATCH_LIMIT + 1)))).flat(), tableName);
+  }
+  if (tableName === "expenseTransactionItem") {
+    const parents = await ctx.db.query("expenseTransaction").withIndex("by_storeId", (q: any) => q.eq("storeId", storeId)).take(500);
+    return requireBoundedBatch((await Promise.all(parents.map((parent: any) => ctx.db.query("expenseTransactionItem").withIndex("by_transactionId", (q: any) => q.eq("transactionId", parent._id)).take(RESTORE_BATCH_LIMIT + 1)))).flat(), tableName);
   }
   if (tableName === "onlineOrderItem") {
     const parents = await ctx.db.query("onlineOrder").withIndex("by_storeId", (q: any) => q.eq("storeId", storeId)).take(500);

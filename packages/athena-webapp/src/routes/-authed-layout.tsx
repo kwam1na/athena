@@ -74,6 +74,11 @@ import {
   SharedDemoRestrictedSurface,
 } from "@/components/shared-demo/SharedDemoRestrictedSurface";
 import { isSharedDemoRestrictedPath } from "@/components/shared-demo/sharedDemoRestrictions";
+import {
+  LOGIN_PATH,
+  PUBLIC_HOME_PATH,
+} from "@/lib/navigation/appEntryRoutes";
+
 const POS_TERMINAL_FULLSCREEN_PATH_PATTERN =
   /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos\/(?:register|expense)\/?$/;
 const POS_HUB_PATH_PATTERN =
@@ -422,6 +427,7 @@ function UserMenu({
 }) {
   const navigate = useNavigate();
   const { signOut } = useAuthActions();
+  const isSharedDemo = Boolean(useSharedDemoContext());
   const { hasFullAdminAccess } = usePermissions();
   const { mode, resolvedTheme, systemTheme } = useAthenaTheme();
   const isMobile = useIsMobile();
@@ -436,7 +442,7 @@ function UserMenu({
     await signOut();
     localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
     localStorage.removeItem(POS_APP_ACCOUNT_ID_KEY);
-    navigate({ to: "/login" });
+    navigate({ to: isSharedDemo ? PUBLIC_HOME_PATH : LOGIN_PATH });
   };
 
   const nextTheme: AthenaThemeMode =

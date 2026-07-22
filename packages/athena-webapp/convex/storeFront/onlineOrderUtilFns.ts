@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { action, internalAction } from "../_generated/server";
+import { internal } from "../_generated/api";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import {
   formatOrderItems,
@@ -10,6 +11,9 @@ import { ok, userError } from "../../shared/commandResult";
 
 export { formatOrderItems };
 
+const enforceSharedDemoActionCapabilityRef =
+  (internal as any).sharedDemo.actor.enforceSharedDemoActionCapability;
+
 export const sendOrderUpdateEmail = action({
   args: orderUpdateEmailArgs,
   returns: commandResultValidator(
@@ -18,7 +22,13 @@ export const sendOrderUpdateEmail = action({
     })
   ),
   handler: async (ctx, args) => {
-    const result = await processOrderUpdateEmail(ctx, args);
+    const isSharedDemo = await ctx.runQuery(
+      enforceSharedDemoActionCapabilityRef,
+      { capability: "customer.messaging.send" },
+    );
+    const result = await processOrderUpdateEmail(ctx, args, {
+      simulateExternalEffects: isSharedDemo,
+    });
 
     if (!result.success) {
       return userError({

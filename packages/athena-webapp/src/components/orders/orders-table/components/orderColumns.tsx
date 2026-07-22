@@ -15,6 +15,7 @@ import { OrderStatus } from "../../OrderStatus";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import type { FormattedOnlineOrder } from "../../Orders";
 import { OrderCustomerCell } from "./OrderCustomerCell";
+import { getOnlineOrderPlacedAt } from "../../utils";
 
 export const orderColumns: ColumnDef<OnlineOrder>[] = [
   {
@@ -221,7 +222,8 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
     },
   },
   {
-    accessorKey: "_creationTime",
+    accessorFn: getOnlineOrderPlacedAt,
+    id: "placedAt",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Placed" />
     ),
@@ -240,7 +242,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
           search={{ orderStatus: s, o: getOrigin() }}
         >
           <p className="text-muted-foreground">
-            {getRelativeTime(row.getValue("_creationTime"))}
+            {getRelativeTime(row.getValue<number>("placedAt"))}
           </p>
         </Link>
       );

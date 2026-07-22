@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { getOrderState, getPickupActionState } from "./utils";
+import {
+  getOnlineOrderPlacedAt,
+  getOrderState,
+  getPickupActionState,
+  shouldShowPickupExceptionAction,
+} from "./utils";
+
+describe("getOnlineOrderPlacedAt", () => {
+  it("prefers an explicit placed timestamp and falls back to Convex creation time", () => {
+    expect(getOnlineOrderPlacedAt({ _creationTime: 10, placedAt: 20 })).toBe(20);
+    expect(getOnlineOrderPlacedAt({ _creationTime: 10 })).toBe(10);
+  });
+});
 
 describe("getOrderState", () => {
   it("treats pickup exceptions as transitioned but not completed orders", () => {
@@ -48,5 +60,25 @@ describe("getPickupActionState", () => {
       canResolvePickupException: true,
       needsPickupPaymentCollection: false,
     });
+  });
+});
+
+describe("shouldShowPickupExceptionAction", () => {
+  it("hides pickup exceptions in the shared demo", () => {
+    expect(
+      shouldShowPickupExceptionAction({
+        canMarkPickupException: true,
+        isSharedDemo: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps pickup exceptions available outside the shared demo", () => {
+    expect(
+      shouldShowPickupExceptionAction({
+        canMarkPickupException: true,
+        isSharedDemo: false,
+      }),
+    ).toBe(true);
   });
 });

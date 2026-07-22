@@ -61,6 +61,7 @@ export const SHARED_DEMO_ALLOWED_CAPABILITIES = [
   "approvals.manage",
   "cash.control.write",
   "catalog.quick_add",
+  "customer.messaging.send",
   "daily_operations.write",
   // Recording expenses is a first-class POS operation the demo exposes (the
   // /pos/expense route). Without this grant, expense event sync is rejected while
@@ -68,10 +69,14 @@ export const SHARED_DEMO_ALLOWED_CAPABILITIES = [
   "expense.manage",
   "inventory.adjust",
   "orders.fulfill",
+  "orders.manage",
+  "orders.return",
+  "payments.refund",
   "pos.sale.complete",
   "pos.sync.write",
   "pos.transaction.correct",
   "reports.read",
+  "reviews.manage",
   "staff.authenticate",
   "staff.communication.write",
 ] as const satisfies readonly AthenaCapability[];

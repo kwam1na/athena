@@ -32,6 +32,7 @@ const mocked = vi.hoisted(() => ({
   SidebarProvider: vi.fn(),
   useSidebar: vi.fn(),
   useRouterState: vi.fn(),
+  useSharedDemoContext: vi.fn(),
   SharedDemoRuntime: vi.fn(
     ({
       children,
@@ -65,6 +66,10 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("@/components/shared-demo/SharedDemoRuntime", () => ({
   SharedDemoRuntime: mocked.SharedDemoRuntime,
+}));
+
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: mocked.useSharedDemoContext,
 }));
 
 vi.mock("../hooks/useAuth", () => ({
@@ -315,6 +320,8 @@ describe("Authed layout", () => {
     mocked.usePermissions.mockReturnValue({
       hasFullAdminAccess: false,
     });
+    mocked.useSharedDemoContext.mockReset();
+    mocked.useSharedDemoContext.mockReturnValue(null);
     mocked.useRouterState.mockImplementation(({ select }) =>
       select({ location: { pathname: "/wigclub/store/wigclub/products" } }),
     );
@@ -1250,6 +1257,23 @@ describe("Authed layout", () => {
       POS_APP_ACCOUNT_ID_KEY,
     );
     expect(mocked.navigate).toHaveBeenCalledWith({ to: "/login" });
+  });
+
+  it("returns shared-demo users to the landing page after sign out", async () => {
+    const user = userEvent.setup();
+
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "demo-user", email: "store@osustudio.com" },
+      isLoading: false,
+    });
+    mocked.useSharedDemoContext.mockReturnValue({ kind: "shared_demo" });
+
+    render(<Layout />);
+
+    await user.click(screen.getByRole("button", { name: /sign out/i }));
+
+    await waitFor(() => expect(mocked.signOut).toHaveBeenCalled());
+    expect(mocked.navigate).toHaveBeenCalledWith({ to: "/landing" });
   });
 
   it("places demo actions next to the account menu and the theme toggle after it", async () => {

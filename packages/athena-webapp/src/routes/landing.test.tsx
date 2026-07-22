@@ -159,6 +159,7 @@ describe("landing route", () => {
     expect(demoLinks).toHaveLength(3);
     for (const link of demoLinks) {
       expect(link).toHaveAttribute("href", "/demo");
+      expect(link).not.toHaveAttribute("target", "_blank");
     }
     expect(
       screen.queryByRole("link", { name: /request a walkthrough/i }),

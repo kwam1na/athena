@@ -13,6 +13,10 @@ import {
   listOnlineOrdersReadDefinition,
 } from "../operationAdmission/readDefinitions";
 import {
+  requireReadySharedDemoStoreCapabilityIfApplicable,
+  requireSharedDemoStoreReadIfApplicable,
+} from "../sharedDemo/actor";
+import {
   decideSharedDemoEffect,
   denySharedDemoAction,
   requireSharedDemoCapability,
@@ -1208,6 +1212,7 @@ export const getUnverifiedPaidOrders = internalQuery({
 
 export const updateInternal = internalMutation({
   args: {
+    demoCapability: v.optional(v.literal("customer.messaging.send")),
     orderId: v.optional(v.id("onlineOrder")),
     externalReference: v.optional(v.string()),
     registerSessionId: v.optional(v.id("registerSession")),
@@ -1224,6 +1229,14 @@ export const updateInternal = internalMutation({
     if (args.orderId) {
       const order = await ctx.db.get("onlineOrder", args.orderId);
       if (!order) return { success: false, message: "Order not found" };
+
+      if (args.demoCapability) {
+        await requireReadySharedDemoStoreCapabilityIfApplicable(
+          ctx,
+          args.demoCapability,
+          order.storeId,
+        );
+      }
 
       await applyOnlineOrderUpdate(ctx, order, args);
       return { success: true, message: "Order updated" };
@@ -1293,6 +1306,12 @@ export const reserveRefundInternal = internalMutation({
         message: "Order not found.",
       };
     }
+
+    await requireReadySharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "payments.refund",
+      order.storeId,
+    );
 
     try {
       const refundAmount = resolveRefundAmount({
@@ -1371,6 +1390,12 @@ export const finalizeRefundInternal = internalMutation({
     if (!order) {
       return false;
     }
+
+    await requireReadySharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "payments.refund",
+      order.storeId,
+    );
 
     const refunds = (order.refunds ?? []).map((refund) =>
       refund.id === args.reservationId
@@ -1696,6 +1721,12 @@ export const processReturnExchange = mutation({
         order,
       );
       if (isCommandUserError(accessResult)) return accessResult;
+
+      await requireReadySharedDemoStoreCapabilityIfApplicable(
+        ctx,
+        "payments.refund",
+        order.storeId,
+      );
 
       const store = await ctx.db.get("store", order.storeId);
       const orderItems = await listOrderItems(ctx, order._id);
@@ -2290,6 +2321,12 @@ export const returnItemsToStock = mutation({
 
       if (!order) return false;
 
+      await requireReadySharedDemoStoreCapabilityIfApplicable(
+        ctx,
+        "orders.return",
+        order.storeId,
+      );
+
       if (args.onlineOrderItemIds?.length) {
         await returnSelectedOnlineOrderItemsToStock(ctx, {
           itemIds: args.onlineOrderItemIds,
@@ -2371,6 +2408,13 @@ export const updateOrderItemsInternal = internalMutation({
 export const returnAllItemsToStock = mutation({
   args: { orderId: v.id("onlineOrder") },
   handler: async (ctx, args) => {
+    const order = await ctx.db.get("onlineOrder", args.orderId);
+    if (!order) return false;
+    await requireReadySharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "orders.return",
+      order.storeId,
+    );
     await returnOrderItemsToStock(ctx, args.orderId);
     return true;
   },

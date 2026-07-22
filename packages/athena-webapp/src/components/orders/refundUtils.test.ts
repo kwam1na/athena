@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateRefundAmount, getNetAmount } from "./refundUtils";
+import {
+  calculateRefundAmount,
+  canUsePartialRefund,
+  getNetAmount,
+} from "./refundUtils";
 import type { OnlineOrder } from "~/types";
 
 const baseOrder = {
@@ -54,5 +58,12 @@ describe("refund money calculations", () => {
         true,
       ),
     ).toBe(3_500);
+  });
+});
+
+describe("partial refund availability", () => {
+  it("requires more than one refundable order line", () => {
+    expect(canUsePartialRefund(1)).toBe(false);
+    expect(canUsePartialRefund(2)).toBe(true);
   });
 });

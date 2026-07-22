@@ -3227,7 +3227,10 @@ describe("POSRegisterView", () => {
       },
       workflowMode: "expense",
       sessionPanel: null,
-      cashierCard: null,
+      cashierCard: {
+        cashierName: "Afua O.",
+        onSignOut: vi.fn(),
+      },
       drawerGate: null,
       authDialog: {
         open: false,
@@ -3260,11 +3263,14 @@ describe("POSRegisterView", () => {
     expect(
       screen.getByText("cart-items-density-comfortable"),
     ).toBeInTheDocument();
+    const summary = screen.getByRole("region", { name: "Expense summary" });
+    expect(within(summary).getByText("Items")).toBeInTheDocument();
+    expect(within(summary).getByText("2")).toBeInTheDocument();
     expect(screen.getByText("Wigclub Scarf")).toBeInTheDocument();
     expect(screen.getByText("expense-completion-panel")).toBeInTheDocument();
-    expect(
-      screen.queryByTestId("register-cashier-control"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("register-cashier-control")).toHaveTextContent(
+      "Cashier Afua O.",
+    );
     expect(
       screen.queryByText("register-checkout-panel"),
     ).not.toBeInTheDocument();
