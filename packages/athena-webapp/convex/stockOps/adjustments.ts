@@ -9,8 +9,8 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { submitStockAdjustmentBatchOperationDefinition } from "../operationAdmission/definitions";
-import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
-import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import {
   getInventoryUnitSummaryReadDefinition,
   listInventorySnapshotForProductSkusReadDefinition,
@@ -1291,13 +1291,13 @@ export const listInventorySnapshot = query({
     limit: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listInventorySnapshotReadDefinition,
     async (
       ctx: OperationQueryCtx,
       args: { limit?: number; storeId: Id<"store"> },
     ) => {
-    return listInventorySnapshotWithCtx(ctx, args);
+      return listInventorySnapshotWithCtx(ctx, args);
     },
   ),
 });
@@ -1307,15 +1307,15 @@ export const listInventorySnapshotForProductSkus = query({
     productSkuIds: v.array(v.id("productSku")),
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listInventorySnapshotForProductSkusReadDefinition,
     async (
       ctx: OperationQueryCtx,
       args: { productSkuIds: Id<"productSku">[]; storeId: Id<"store"> },
     ) => {
-    await requireInventorySnapshotForProductSkusAccess(ctx, args.storeId);
+      await requireInventorySnapshotForProductSkusAccess(ctx, args.storeId);
 
-    return listInventorySnapshotForProductSkusWithCtx(ctx, args);
+      return listInventorySnapshotForProductSkusWithCtx(ctx, args);
     },
   ),
 });
@@ -1324,10 +1324,10 @@ export const getInventoryUnitSummary = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getInventoryUnitSummaryReadDefinition,
     async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
-    return getInventoryUnitSummaryWithCtx(ctx, args);
+      return getInventoryUnitSummaryWithCtx(ctx, args);
     },
   ),
 });
@@ -1337,7 +1337,7 @@ export const listInventorySnapshotPage = query({
     paginationOpts: paginationOptsValidator,
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listInventorySnapshotPageReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -1346,22 +1346,22 @@ export const listInventorySnapshotPage = query({
         storeId: Id<"store">;
       },
     ) => {
-    const productSkuPage = await ctx.db
-      .query("productSku")
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .paginate({
-        ...args.paginationOpts,
-        numItems: Math.min(args.paginationOpts.numItems, 100),
-      });
+      const productSkuPage = await ctx.db
+        .query("productSku")
+        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+        .paginate({
+          ...args.paginationOpts,
+          numItems: Math.min(args.paginationOpts.numItems, 100),
+        });
 
-    return {
-      ...productSkuPage,
-      page: await buildInventorySnapshotRowsForProductSkusWithCtx(ctx, {
-        now: Date.now(),
-        productSkus: productSkuPage.page,
-        storeId: args.storeId,
-      }),
-    };
+      return {
+        ...productSkuPage,
+        page: await buildInventorySnapshotRowsForProductSkusWithCtx(ctx, {
+          now: Date.now(),
+          productSkus: productSkuPage.page,
+          storeId: args.storeId,
+        }),
+      };
     },
   ),
 });
@@ -1479,8 +1479,8 @@ export async function submitStockAdjustmentBatchWithCtx(
     throw new Error("Store not found.");
   }
 
-  const admittedActor = (ctx as Partial<OperationMutationCtx>).operationAdmission
-    ?.actor;
+  const admittedActor = (ctx as Partial<OperationMutationCtx>)
+    .operationAdmission?.actor;
   const createdByUser =
     admittedActor?.kind === "shared_demo"
       ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
@@ -1769,7 +1769,7 @@ export const submitStockAdjustmentBatch = mutation({
     submissionKey: v.string(),
   },
   returns: commandResultValidator(v.any()),
-  handler: admitSharedDemoPublicMutation(
+  handler: withOperationMutationAdmission(
     submitStockAdjustmentBatchOperationDefinition,
     async (ctx: OperationMutationCtx, args) => {
       return submitStockAdjustmentBatchCommandWithCtx(ctx, args);

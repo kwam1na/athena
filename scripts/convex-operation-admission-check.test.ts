@@ -19,7 +19,11 @@ async function createFixtureRoot() {
   return rootDir;
 }
 
-async function writeFixture(rootDir: string, relativePath: string, source: string) {
+async function writeFixture(
+  rootDir: string,
+  relativePath: string,
+  source: string,
+) {
   const filePath = path.join(rootDir, relativePath);
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, source);
@@ -83,12 +87,12 @@ describe("collectPublicMutationExportsFromSource", () => {
       "packages/athena-webapp/convex/example/sharedDemoAdmitted.ts",
       `
         import { mutation } from "../_generated/server";
-        import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
+        import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
         import { definition } from "../operationAdmission/definitions";
 
         export const admittedWrite = mutation({
           args: {},
-          handler: admitSharedDemoPublicMutation(definition, async () => null),
+          handler: withOperationMutationAdmission(definition, async () => null),
         });
       `,
     );

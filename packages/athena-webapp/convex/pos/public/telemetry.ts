@@ -4,7 +4,7 @@ import { mutation, query } from "../../_generated/server";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import type { Doc } from "../../_generated/dataModel";
 import { commandResultValidator } from "../../lib/commandResultValidators";
-import { admitSharedDemoPublicQuery } from "../../operationAdmission/publicQuery";
+import { withOperationReadAdmission } from "../../operationAdmission/publicQuery";
 import { listPosClientEventsReadDefinition } from "../../operationAdmission/readDefinitions";
 import type {
   OperationMutationCtx,
@@ -255,7 +255,7 @@ export const listClientEvents = query({
     limit: v.optional(v.number()),
   },
   returns: v.array(clientEventReturnValidator),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listPosClientEventsReadDefinition,
     async (
       ctx,

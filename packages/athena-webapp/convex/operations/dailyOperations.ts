@@ -18,7 +18,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
-import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import {
   getDailyOperationsAutomationSnapshotReadDefinition,
   getDailyOperationsDetailSnapshotReadDefinition,
@@ -2734,7 +2734,7 @@ async function authorizeDailyOperationsSnapshot(
 
 export const getDailyOperationsSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getDailyOperationsSnapshotReadDefinition,
     async (ctx, args: DailyOperationsSnapshotArgs) => {
       const { includeManagerReviewEvidence } =
@@ -2758,7 +2758,7 @@ export const getDailyOperationsDetailSnapshot = query({
   args: {
     ...dailyOperationsSnapshotArgsValidator,
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getDailyOperationsDetailSnapshotReadDefinition,
     async (ctx, args: DailyOperationsSnapshotArgs) => {
       const { includeManagerReviewEvidence } =
@@ -2783,7 +2783,7 @@ export const getDailyOperationsDetailSnapshot = query({
 
 export const getDailyOperationsWeekAnalyticsSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getDailyOperationsWeekAnalyticsSnapshotReadDefinition,
     async (ctx, args: DailyOperationsSnapshotArgs) => {
       const { includeManagerReviewEvidence } =
@@ -2827,7 +2827,7 @@ export const getDailyOperationsWeekAnalyticsSnapshot = query({
 
 export const getDailyOperationsStorePulseSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getDailyOperationsStorePulseSnapshotReadDefinition,
     async (ctx, args: DailyOperationsSnapshotArgs) => {
       const { includeManagerReviewEvidence } =
@@ -2853,7 +2853,7 @@ export const getDailyOperationsStorePulseSnapshot = query({
 
 export const getDailyOperationsStoreRequestsSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getDailyOperationsStoreRequestsSnapshotReadDefinition,
     async (ctx, args: DailyOperationsSnapshotArgs) => {
       await authorizeDailyOperationsSnapshot(ctx, args);
@@ -2876,7 +2876,7 @@ export const getDailyOperationsStoreRequestsSnapshot = query({
 
 export const getDailyOperationsOpenRegisterSessionsSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getDailyOperationsOpenRegisterSessionsSnapshotReadDefinition,
     async (
       ctx,
@@ -2924,7 +2924,7 @@ export const getDailyOperationsOpenRegisterSessionsSnapshot = query({
 
 export const getDailyOperationsAutomationSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getDailyOperationsAutomationSnapshotReadDefinition,
     async (ctx, args: DailyOperationsSnapshotArgs) => {
       const { includeManagerReviewEvidence } =
@@ -2950,7 +2950,7 @@ export const getDailyOperationsAutomationSnapshot = query({
 
 export const getDailyOperationsTodayRefreshSnapshot = query({
   args: dailyOperationsRefreshArgsValidator,
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getDailyOperationsTodayRefreshSnapshotReadDefinition,
     async (ctx, args: DailyOperationsRefreshArgs) => {
       const { includeManagerReviewEvidence } =
@@ -3007,7 +3007,7 @@ export const getDailyOperationsTodayRefreshSnapshot = query({
 
 export const getDailyOperationsTimelineSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getDailyOperationsTimelineSnapshotReadDefinition,
     async (ctx, args: DailyOperationsSnapshotArgs) => {
       const { includeManagerReviewEvidence } =
@@ -3029,7 +3029,7 @@ export const getDailyOperationsTimelineSnapshot = query({
 
 export const getDailyOperationsTimelinePreviewSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getDailyOperationsTimelinePreviewSnapshotReadDefinition,
     async (ctx, args: DailyOperationsSnapshotArgs) => {
       const { includeManagerReviewEvidence } =

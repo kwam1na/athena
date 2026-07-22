@@ -7,8 +7,8 @@ import {
   type QueryCtx,
 } from "../../_generated/server";
 import { quickAddSkuOperationDefinition } from "../../operationAdmission/definitions";
-import { admitSharedDemoPublicMutation } from "../../operationAdmission/publicMutation";
-import { admitSharedDemoPublicQuery } from "../../operationAdmission/publicQuery";
+import { withOperationMutationAdmission } from "../../operationAdmission/publicMutation";
+import { withOperationReadAdmission } from "../../operationAdmission/publicQuery";
 import {
   barcodeLookupPosRegisterCatalogReadDefinition,
   getPosRegisterCatalogRevisionReadDefinition,
@@ -696,7 +696,7 @@ export const search = query({
     storeId: v.id("store"),
     searchQuery: v.string(),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     searchPosRegisterCatalogReadDefinition,
     async (ctx, args: { searchQuery: string; storeId: Id<"store"> }) => {
       await requireRegisterCatalogStoreAccess(ctx, args);
@@ -710,7 +710,7 @@ export const listRegisterCatalogSnapshot = query({
     storeId: v.id("store"),
   },
   returns: v.array(registerCatalogRowValidator),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listPosRegisterCatalogSnapshotReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireRegisterCatalogStoreAccess(ctx, args);
@@ -728,7 +728,7 @@ export const getRegisterCatalogRevision = query({
     v.object({ status: v.literal("authorization-paused") }),
     v.object({ revision: v.number(), status: v.literal("ready") }),
   ),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getPosRegisterCatalogRevisionReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       try {
@@ -755,7 +755,7 @@ export const listRegisterCatalogSnapshotWithRevision = query({
     revision: v.number(),
     rows: v.array(registerCatalogRowValidator),
   }),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listPosRegisterCatalogSnapshotWithRevisionReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireRegisterCatalogStoreAccess(ctx, args);
@@ -771,7 +771,7 @@ export const listRegisterCatalogAvailability = query({
     productSkuIds: v.array(v.id("productSku")),
   },
   returns: v.array(registerCatalogAvailabilityValidator),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listPosRegisterCatalogAvailabilityReadDefinition,
     async (
       ctx,
@@ -795,7 +795,7 @@ export const listRegisterCatalogAvailabilitySnapshot = query({
     storeId: v.id("store"),
   },
   returns: v.array(registerCatalogAvailabilityValidator),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listPosRegisterCatalogAvailabilitySnapshotReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireRegisterCatalogStoreAccess(ctx, args);
@@ -815,7 +815,7 @@ export const barcodeLookup = query({
     catalogResultValidator,
     v.array(catalogResultValidator),
   ),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     barcodeLookupPosRegisterCatalogReadDefinition,
     async (ctx, args: { barcode: string; storeId: Id<"store"> }) => {
       await requireRegisterCatalogStoreAccess(ctx, args);
@@ -839,7 +839,7 @@ export const quickAddSku = mutation({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: catalogResultValidator,
-  handler: admitSharedDemoPublicMutation(
+  handler: withOperationMutationAdmission(
     quickAddSkuOperationDefinition,
     async (ctx: OperationMutationCtx, args) => {
       const store = await ctx.db.get("store", args.storeId);

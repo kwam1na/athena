@@ -11,10 +11,10 @@ import {
   resolveRegisterSessionSyncReviewOperationDefinition,
 } from "../operationAdmission/definitions";
 import {
-  admitSharedDemoPublicMutation,
+  withOperationMutationAdmission,
   resolveSharedDemoOperationAdmission,
 } from "../operationAdmission/publicMutation";
-import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import {
   getCashControlsDashboardSnapshotReadDefinition,
   getRegisterSessionSnapshotReadDefinition,
@@ -1121,7 +1121,7 @@ export const getDashboardSnapshot = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getCashControlsDashboardSnapshotReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireCashControlsStoreAccess(ctx, args.storeId);
@@ -1215,7 +1215,7 @@ export const getRegisterSessionSnapshot = query({
     registerSessionId: v.id("registerSession"),
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getRegisterSessionSnapshotReadDefinition,
     async (
       ctx,
@@ -1224,10 +1224,7 @@ export const getRegisterSessionSnapshot = query({
         storeId: Id<"store">;
       },
     ) => {
-      const { store } = await requireCashControlsStoreAccess(
-        ctx,
-        args.storeId,
-      );
+      const { store } = await requireCashControlsStoreAccess(ctx, args.storeId);
       const registerSession = await ctx.db.get(
         "registerSession",
         args.registerSessionId,
@@ -1490,7 +1487,7 @@ export const recordRegisterSessionDeposit = mutation({
       });
     }
 
-    return admitSharedDemoPublicMutation(
+    return withOperationMutationAdmission(
       recordRegisterSessionDepositOperationDefinition,
       async (
         admittedCtx,
@@ -1714,7 +1711,7 @@ export const resolveRegisterSessionSyncReview = mutation({
     storeId: v.id("store"),
   },
   returns: registerSessionSyncReviewResultValidator,
-  handler: admitSharedDemoPublicMutation(
+  handler: withOperationMutationAdmission(
     resolveRegisterSessionSyncReviewOperationDefinition,
     async (
       ctx: OperationMutationCtx,

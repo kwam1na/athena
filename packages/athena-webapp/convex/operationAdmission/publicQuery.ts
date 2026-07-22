@@ -40,7 +40,7 @@ export function admitPublicQuery<Args extends QueryArgs, Result>(
   };
 }
 
-export function admitSharedDemoPublicQuery<Args extends QueryArgs, Result>(
+export function withOperationReadAdmission<Args extends QueryArgs, Result>(
   definition: OperationReadDefinition,
   handler: PublicQueryHandler<Args, Result>,
 ) {

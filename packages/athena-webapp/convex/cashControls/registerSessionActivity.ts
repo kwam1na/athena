@@ -7,7 +7,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
-import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import { listRegisterSessionActivityReadDefinition } from "../operationAdmission/readDefinitions";
 import type { OperationQueryCtx } from "../operationAdmission/types";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
@@ -1194,7 +1194,7 @@ export const listRegisterSessionActivity = query({
     registerSessionId: v.id("registerSession"),
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listRegisterSessionActivityReadDefinition,
     async (
       ctx,

@@ -159,10 +159,11 @@ function isOperationAdmissionWrapperCall(expression: ts.Expression) {
     ts.isCallExpression(expression) &&
     ((ts.isIdentifier(expression.expression) &&
       (expression.expression.text === "admitPublicMutation" ||
-        expression.expression.text === "admitSharedDemoPublicMutation")) ||
+        expression.expression.text === "withOperationMutationAdmission")) ||
       (ts.isPropertyAccessExpression(expression.expression) &&
         (expression.expression.name.text === "admitPublicMutation" ||
-          expression.expression.name.text === "admitSharedDemoPublicMutation")))
+          expression.expression.name.text ===
+            "withOperationMutationAdmission")))
   );
 }
 
@@ -245,7 +246,9 @@ function isPublicDbWriteCall(node: ts.Node) {
   if (!ts.isCallExpression(node)) return false;
   const expression = node.expression;
   if (!ts.isPropertyAccessExpression(expression)) return false;
-  if (!["delete", "insert", "patch", "replace"].includes(expression.name.text)) {
+  if (
+    !["delete", "insert", "patch", "replace"].includes(expression.name.text)
+  ) {
     return false;
   }
   const target = expression.expression;
@@ -255,9 +258,9 @@ function isPublicDbWriteCall(node: ts.Node) {
 function hasExportModifier(node: ts.Node) {
   return Boolean(
     ts.canHaveModifiers(node) &&
-      ts.getModifiers(node)?.some(
-        (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
-      ),
+    ts
+      .getModifiers(node)
+      ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword),
   );
 }
 
@@ -292,8 +295,10 @@ export function collectPublicMutationExportsFromSource(
     );
     exports.push({
       functionName: `${moduleName}:${exportName}`,
-      hasOperationAdmissionWrapper:
-        mutationCallHasOperationAdmissionWrapper(mutationCall, wrapperNames),
+      hasOperationAdmissionWrapper: mutationCallHasOperationAdmissionWrapper(
+        mutationCall,
+        wrapperNames,
+      ),
       moduleName,
       exportName,
       filePath: normalizeRepoPath(filePath),
@@ -315,7 +320,11 @@ export function collectPublicMutationExportsFromSource(
             serverNamespaces,
           )
         ) {
-          pushExport(declaration.name.text, declaration, declaration.initializer);
+          pushExport(
+            declaration.name.text,
+            declaration,
+            declaration.initializer,
+          );
         }
       }
       continue;
@@ -343,7 +352,9 @@ async function listConvexSourceFiles(directory: string): Promise<string[]> {
     entries.map(async (entry) => {
       const entryPath = path.join(directory, entry.name);
       if (entry.isDirectory()) {
-        return entry.name === "_generated" ? [] : listConvexSourceFiles(entryPath);
+        return entry.name === "_generated"
+          ? []
+          : listConvexSourceFiles(entryPath);
       }
       return entry.isFile() && !isExcludedConvexSourcePath(entryPath)
         ? [entryPath]
@@ -397,13 +408,14 @@ function validateDefinitionInventory(
       pushFinding(findings, {
         id: "operation-definition-missing-function-name",
         severity: "high",
-        title: "Operation admission definition is missing a public function name",
+        title:
+          "Operation admission definition is missing a public function name",
         filePath:
           "packages/athena-webapp/convex/operationAdmission/definitions.ts",
         rationale:
           "The static checker needs a stable functionName, convexFunction, publicFunction, or operationId value to match public mutation exports.",
         remediation:
-          "Add a stable public mutation reference such as `functionName: \"module/export:mutationName\"` to the operation definition.",
+          'Add a stable public mutation reference such as `functionName: "module/export:mutationName"` to the operation definition.',
       });
       continue;
     }
@@ -454,7 +466,8 @@ function validateLegacyInventory(
       pushFinding(findings, {
         id: "legacy-operation-exemption-missing-function-name",
         severity: "high",
-        title: "Legacy operation admission exemption is missing a function name",
+        title:
+          "Legacy operation admission exemption is missing a function name",
         filePath:
           "packages/athena-webapp/convex/operationAdmission/migrationInventory.ts",
         rationale:
@@ -510,7 +523,8 @@ export async function collectOperationAdmissionCheckResult(
     options.operationDefinitions ?? (await loadOperationDefinitions(repoRoot));
   const legacyExemptions =
     options.legacyExemptions ?? (await loadLegacyExemptions(repoRoot));
-  const discoveredPublicMutations = await discoverPublicMutationExports(repoRoot);
+  const discoveredPublicMutations =
+    await discoverPublicMutationExports(repoRoot);
   const definitionNames = new Set(
     operationDefinitions.map(getDefinitionFunctionName).filter(Boolean),
   );
@@ -575,7 +589,8 @@ export async function collectOperationAdmissionCheckResult(
       pushFinding(findings, {
         id: `stale-operation-admission-entry-${slugifyForFindingId(functionName)}`,
         severity: "medium",
-        title: "Operation admission inventory entry does not match a public mutation",
+        title:
+          "Operation admission inventory entry does not match a public mutation",
         filePath: functionName.includes(":")
           ? "packages/athena-webapp/convex"
           : "packages/athena-webapp/convex/operationAdmission",

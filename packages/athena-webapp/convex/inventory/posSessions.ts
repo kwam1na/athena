@@ -35,7 +35,7 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
-import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import {
   getPosActiveSessionReadDefinition,
   getPosStoreActiveSessionOperationsReadDefinition,
@@ -777,7 +777,7 @@ export const getStoreActiveSessionOperations = query({
     storeId: v.id("store"),
     limit: v.optional(v.number()),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getPosStoreActiveSessionOperationsReadDefinition,
     async (ctx, args: { limit?: number; storeId: Id<"store"> }) => {
       await requireStoreMemberAccessWithCtx(ctx, {
@@ -945,7 +945,7 @@ export const getStoreSessions = query({
     status: v.optional(v.string()), // "active", "held", "completed", "void"
     limit: v.optional(v.number()),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getPosStoreSessionsReadDefinition,
     async (
       ctx,
@@ -1690,7 +1690,7 @@ export const getActiveSession = query({
     staffProfileId: v.optional(v.id("staffProfile")),
     registerNumber: v.optional(v.string()),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getPosActiveSessionReadDefinition,
     async (
       ctx,

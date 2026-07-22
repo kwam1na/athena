@@ -6,7 +6,7 @@ import { v } from "convex/values";
 import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
-import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import { listPosServiceCatalogSnapshotReadDefinition } from "../operationAdmission/readDefinitions";
 import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
@@ -303,7 +303,7 @@ export const listPosServiceCatalogSnapshot = query({
     storeId: v.id("store"),
   },
   returns: v.array(posServiceCatalogRowValidator),
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     listPosServiceCatalogSnapshotReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireStoreMemberAccessWithCtx(ctx, {

@@ -37,7 +37,7 @@ import {
   completeDailyCloseForAutomationWithCtx,
 } from "./dailyClose";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
-import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import {
   getEodAutoCompletePolicyReadDefinition,
   getOpeningAutoStartPolicyReadDefinition,
@@ -130,8 +130,7 @@ export type DailyOperationsAutomationStatus = {
 };
 
 type OpeningAutoStartApiBlockerHandling =
-  | "skip_when_blocked"
-  | "start_with_manager_review";
+  "skip_when_blocked" | "start_with_manager_review";
 
 export type DailyOperationsAutomationStoreDayContext = {
   source: "canonical_schedule";
@@ -2294,7 +2293,7 @@ export const getOpeningAutoStartPolicy = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getOpeningAutoStartPolicyReadDefinition,
     async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) =>
       getOpeningAutoStartPolicyForApi(ctx, args),
@@ -2305,7 +2304,7 @@ export const getEodAutoCompletePolicy = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getEodAutoCompletePolicyReadDefinition,
     async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) =>
       getEodAutoCompletePolicyForApi(ctx, args),
@@ -2429,22 +2428,22 @@ export const getRegisterCloseoutApprovalPolicy = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getRegisterCloseoutApprovalPolicyReadDefinition,
     async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
-    const { store } = await requireAutomationPolicyReadAccess(
-      ctx,
-      args.storeId,
-    );
-    const config = getCashControlsConfig(store);
+      const { store } = await requireAutomationPolicyReadAccess(
+        ctx,
+        args.storeId,
+      );
+      const config = getCashControlsConfig(store);
 
-    return {
-      requireManagerSignoffForAnyVariance:
-        config.requireManagerSignoffForAnyVariance,
-      requireManagerSignoffForOvers: config.requireManagerSignoffForOvers,
-      requireManagerSignoffForShorts: config.requireManagerSignoffForShorts,
-      varianceApprovalThreshold: config.varianceApprovalThreshold,
-    };
+      return {
+        requireManagerSignoffForAnyVariance:
+          config.requireManagerSignoffForAnyVariance,
+        requireManagerSignoffForOvers: config.requireManagerSignoffForOvers,
+        requireManagerSignoffForShorts: config.requireManagerSignoffForShorts,
+        varianceApprovalThreshold: config.varianceApprovalThreshold,
+      };
     },
   ),
 });
@@ -2463,10 +2462,7 @@ export const updateRegisterCloseoutApprovalPolicy = mutation({
       throw new Error("Variance approval threshold must be non-negative.");
     }
 
-    const threshold = Math.max(
-      0,
-      Math.round(args.varianceApprovalThreshold),
-    );
+    const threshold = Math.max(0, Math.round(args.varianceApprovalThreshold));
     const currentConfig = asRecord(store.config);
     const operations = asRecord(currentConfig.operations);
     const cashControls = asRecord(operations.cashControls);

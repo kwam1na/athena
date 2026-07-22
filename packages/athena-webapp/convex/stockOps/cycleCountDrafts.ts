@@ -14,8 +14,8 @@ import {
   submitActiveCycleCountDraftsOperationDefinition,
   submitCycleCountDraftOperationDefinition,
 } from "../operationAdmission/definitions";
-import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
-import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import {
   getActiveCycleCountDraftReadDefinition,
   getActiveCycleCountDraftSummaryReadDefinition,
@@ -81,10 +81,9 @@ async function requireCycleCountDraftAccess(
     throw new Error("Store not found.");
   }
 
-  const actorUser =
-    demoActor
-      ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const actorUser = demoActor
+    ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
+    : await requireAuthenticatedAthenaUserWithCtx(ctx);
 
   if (!actorUser) {
     throw new Error("Sign in again to continue.");
@@ -1071,7 +1070,7 @@ export const getActiveCycleCountDraft = query({
     scopeKey: v.string(),
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getActiveCycleCountDraftReadDefinition,
     getActiveCycleCountDraftWithCtx,
   ),
@@ -1081,40 +1080,40 @@ export const getActiveCycleCountDraftSummary = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: admitSharedDemoPublicQuery(
+  handler: withOperationReadAdmission(
     getActiveCycleCountDraftSummaryReadDefinition,
     getActiveCycleCountDraftSummaryWithCtx,
   ),
 });
 
-const ensureCycleCountDraftAdmittedHandler = admitSharedDemoPublicMutation(
+const ensureCycleCountDraftAdmittedHandler = withOperationMutationAdmission(
   ensureCycleCountDraftOperationDefinition,
   ensureCycleCountDraftCommandWithCtx,
 );
 
-const saveCycleCountDraftLineAdmittedHandler = admitSharedDemoPublicMutation(
+const saveCycleCountDraftLineAdmittedHandler = withOperationMutationAdmission(
   saveCycleCountDraftLineOperationDefinition,
   saveCycleCountDraftLineCommandWithCtx,
 );
 
-const discardCycleCountDraftAdmittedHandler = admitSharedDemoPublicMutation(
+const discardCycleCountDraftAdmittedHandler = withOperationMutationAdmission(
   discardCycleCountDraftOperationDefinition,
   discardCycleCountDraftCommandWithCtx,
 );
 
 const refreshCycleCountDraftLineBaselineAdmittedHandler =
-  admitSharedDemoPublicMutation(
+  withOperationMutationAdmission(
     refreshCycleCountDraftLineBaselineOperationDefinition,
     refreshCycleCountDraftLineBaselineCommandWithCtx,
   );
 
-const submitCycleCountDraftAdmittedHandler = admitSharedDemoPublicMutation(
+const submitCycleCountDraftAdmittedHandler = withOperationMutationAdmission(
   submitCycleCountDraftOperationDefinition,
   submitCycleCountDraftCommandWithCtx,
 );
 
 const submitActiveCycleCountDraftsAdmittedHandler =
-  admitSharedDemoPublicMutation(
+  withOperationMutationAdmission(
     submitActiveCycleCountDraftsOperationDefinition,
     submitActiveCycleCountDraftsCommandWithCtx,
   );
