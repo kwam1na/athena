@@ -246,8 +246,9 @@ describe("recordClientEvents", () => {
 
   it("caps a batch at the max batch size", async () => {
     const { ctx, inserted } = createCtx();
-    const events = Array.from({ length: POS_CLIENT_EVENT_MAX_BATCH + 10 }, (_, i) =>
-      baseEvent({ clientEventId: `client-event-${i}` }),
+    const events = Array.from(
+      { length: POS_CLIENT_EVENT_MAX_BATCH + 10 },
+      (_, i) => baseEvent({ clientEventId: `client-event-${i}` }),
     );
 
     const result = await handler(ctx, { storeId: STORE_ID, events });
@@ -391,15 +392,55 @@ describe("listClientEvents", () => {
     expect(result[0].level).toBe("warn");
   });
 
-  it("returns an empty list for unauthorized callers", async () => {
+  it("requires admission before listing client events", async () => {
     authMocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
       new Error("not signed in"),
     );
     const { ctx } = createCtx({ existingEvents: [storedEvent()] });
 
+    await expect(handler(ctx, { storeId: STORE_ID })).rejects.toThrow(
+      "not signed in",
+    );
+  });
+
+  it("admits shared-demo client event reads through the read rail", async () => {
+    sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      storeId: STORE_ID,
+    });
+    const { ctx } = createCtx({ existingEvents: [storedEvent()] });
+
     const result = await handler(ctx, { storeId: STORE_ID });
 
-    expect(result).toEqual([]);
+    expect(result).toHaveLength(1);
+    expect(sharedDemoMocks.getSharedDemoActorWithCtx).toHaveBeenCalledWith(ctx);
+    expect(
+      authMocks.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(authMocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        allowedRoles: ["full_admin", "pos_only"],
+        userId: "demo-user-1",
+      }),
+    );
+  });
+
+  it("denies shared-demo client event reads outside the admitted store", async () => {
+    sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      storeId: "store-2",
+    });
+    const { ctx } = createCtx({ existingEvents: [storedEvent()] });
+
+    await expect(handler(ctx, { storeId: STORE_ID })).rejects.toThrow(
+      "This action isn't allowed in the demo.",
+    );
+    expect(
+      authMocks.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
   });
 });
 
@@ -457,8 +498,8 @@ describe("sanitizeClientEventMetadata", () => {
   });
 
   it("drops non-finite numbers", () => {
-    expect(
-      sanitizeClientEventMetadata({ bad: Number.NaN, good: 1 }),
-    ).toEqual({ good: 1 });
+    expect(sanitizeClientEventMetadata({ bad: Number.NaN, good: 1 })).toEqual({
+      good: 1,
+    });
   });
 });

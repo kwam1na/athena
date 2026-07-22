@@ -521,24 +521,69 @@ describe("getQueueSnapshot", () => {
       },
     });
   });
-  it("uses the inventory capability for the shared demo queue snapshot", async () => {
-    const ctx = createQueueContext();
-    vi.mocked(
-      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
-    ).mockResolvedValueOnce({ kind: "shared_demo" } as never);
-
-    await getHandler(getQueueSnapshot)(ctx, {
+  it("admits shared-demo actors through the read rail for the queue snapshot", async () => {
+    const ctx = createQueueContext({
+      workItems: [
+        workItem({
+          _id: "work-open" as Id<"operationalWorkItem">,
+          status: "open",
+          type: "service_case",
+        }),
+      ],
+    });
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
+      athenaUserId: "demo-user-1" as Id<"athenaUser">,
+      authUserId: "auth-user-demo" as Id<"users">,
+      kind: "shared_demo",
+      organizationId: "org-1" as Id<"organization">,
       storeId: "store-1" as Id<"store">,
     });
 
+    const result = await getHandler(getQueueSnapshot)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result.workItems.map((item: QueueTestRow) => item._id)).toEqual([
+      "work-open",
+    ]);
     expect(
       sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
-    ).toHaveBeenCalledWith(ctx, "inventory.adjust", "store-1");
+    ).not.toHaveBeenCalled();
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
     ).toHaveBeenCalledWith(ctx, {
-      sharedDemoCapability: "inventory.adjust",
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "Only POS operators can view approval queue.",
+      organizationId: "org-1",
+      userId: "demo-user-1",
     });
+  });
+
+  it("denies shared-demo queue snapshots outside the admitted store without falling back to normal auth", async () => {
+    const ctx = createQueueContext();
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
+      athenaUserId: "demo-user-1" as Id<"athenaUser">,
+      authUserId: "auth-user-demo" as Id<"users">,
+      kind: "shared_demo",
+      organizationId: "org-1" as Id<"organization">,
+      storeId: "other-store" as Id<"store">,
+    });
+
+    await expect(
+      getHandler(getQueueSnapshot)(ctx, {
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).rejects.toThrow(/demo/);
+
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalled();
   });
 
   it("includes current open work items and excludes terminal rows from the queue snapshot", async () => {

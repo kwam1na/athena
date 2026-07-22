@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  getSharedDemoActorWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   requireStoreMemberAccessWithCtx: vi.fn(),
@@ -17,6 +18,10 @@ vi.mock("../../lib/athenaUserAuth", () => ({
 
 vi.mock("../../lib/storeMemberAccess", () => ({
   requireStoreMemberAccessWithCtx: mocks.requireStoreMemberAccessWithCtx,
+}));
+
+vi.mock("../../sharedDemo/actor", () => ({
+  getSharedDemoActorWithCtx: mocks.getSharedDemoActorWithCtx,
 }));
 
 vi.mock("../application/queries/getRegisterState", () => ({
@@ -78,6 +83,7 @@ describe("pos public register.getState authorization", () => {
     mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "athena-user-1",
     });
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
     mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue({
       role: "pos_only",
     });
@@ -146,6 +152,49 @@ describe("pos public register.getState authorization", () => {
     expect(mocks.getRegisterState).not.toHaveBeenCalled();
   });
 
+  it("admits shared-demo register state through the read rail", async () => {
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      storeId: "store-1",
+    });
+    mocks.getRegisterState.mockResolvedValue({ phase: "ready" });
+    const ctx = buildCtx();
+
+    const result = await getHandler(getState)(ctx as never, {
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({ phase: "ready" });
+    expect(mocks.getSharedDemoActorWithCtx).toHaveBeenCalledWith(ctx);
+    expect(mocks.requireStoreMemberAccessWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: "demo-user-1",
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+      expect.objectContaining({ storeId: "store-1" }),
+    );
+  });
+
+  it("denies shared-demo register state outside the admitted store", async () => {
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      storeId: "other-store",
+    });
+    const ctx = buildCtx();
+
+    await expect(
+      getHandler(getState)(ctx as never, { storeId: "store-1" }),
+    ).rejects.toThrow("This action isn't allowed in the demo.");
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    expect(mocks.getRegisterState).not.toHaveBeenCalled();
+  });
+
   it("returns null without leaking state for a non-existent store", async () => {
     const ctx = buildCtx({ store: null });
 
@@ -154,7 +203,10 @@ describe("pos public register.getState authorization", () => {
     });
 
     expect(result).toBeNull();
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(mocks.requireStoreMemberAccessWithCtx).not.toHaveBeenCalled();
     expect(mocks.getRegisterState).not.toHaveBeenCalled();
   });
 });

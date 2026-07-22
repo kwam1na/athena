@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
@@ -7,6 +7,8 @@ import {
   discardCycleCountDraftCommandWithCtx,
   ensureCycleCountDraft,
   ensureCycleCountDraftCommandWithCtx,
+  getActiveCycleCountDraft,
+  getActiveCycleCountDraftSummary,
   getActiveCycleCountDraftSummaryWithCtx,
   refreshCycleCountDraftLineBaseline,
   refreshCycleCountDraftLineBaselineCommandWithCtx,
@@ -42,6 +44,18 @@ vi.mock("../reporting/operatingPeriods", () => ({
 }));
 vi.mock("../sharedDemo/actor", () => sharedDemoMocks);
 
+function getHandler(definition: unknown) {
+  return (definition as { _handler: Function })._handler;
+}
+
+beforeEach(() => {
+  mockedAuthServer.getAuthUserId.mockReset();
+  reportingMocks.applyInventoryEffectWithCtx.mockReset();
+  reportingMocks.resolveReportingOperatingPeriodWithCtx.mockReset();
+  sharedDemoMocks.getSharedDemoActorWithCtx.mockReset();
+  sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable.mockReset();
+});
+
 describe("cycle count public return validators", () => {
   it("accepts the operation-admitted shared command error contract", () => {
     const result = {
@@ -51,10 +65,7 @@ describe("cycle count public return validators", () => {
     assertConformsToExportedReturns(ensureCycleCountDraft, result);
     assertConformsToExportedReturns(saveCycleCountDraftLine, result);
     assertConformsToExportedReturns(discardCycleCountDraft, result);
-    assertConformsToExportedReturns(
-      refreshCycleCountDraftLineBaseline,
-      result,
-    );
+    assertConformsToExportedReturns(refreshCycleCountDraftLineBaseline, result);
     assertConformsToExportedReturns(submitCycleCountDraft, result);
     assertConformsToExportedReturns(submitActiveCycleCountDrafts, result);
   });
@@ -464,6 +475,55 @@ describe("cycle count drafts", () => {
     expect(
       sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable,
     ).toHaveBeenCalledWith(ctx, "inventory.adjust", "other-store");
+  });
+
+  it("loads active cycle-count summaries through the demo read boundary", async () => {
+    const { ctx } = createCycleCountDraftCtx();
+    sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "operator-1",
+      authUserId: "auth-user-1",
+      kind: "shared_demo",
+      organizationId: "org-1",
+      storeId: "store-1",
+    });
+
+    await expect(
+      getHandler(getActiveCycleCountDraftSummary)(ctx as never, {
+        storeId: "store-1",
+      }),
+    ).resolves.toMatchObject({
+      changedLineCount: 0,
+      draftCount: 0,
+    });
+
+    expect(sharedDemoMocks.getSharedDemoActorWithCtx).toHaveBeenCalledWith(ctx);
+    expect(
+      sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable,
+    ).not.toHaveBeenCalled();
+    expect(mockedAuthServer.getAuthUserId).not.toHaveBeenCalled();
+  });
+
+  it("denies active cycle-count reads outside the admitted demo store", async () => {
+    const { ctx } = createCycleCountDraftCtx();
+    sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "operator-1",
+      authUserId: "auth-user-1",
+      kind: "shared_demo",
+      organizationId: "org-1",
+      storeId: "store-1",
+    });
+
+    await expect(
+      getHandler(getActiveCycleCountDraft)(ctx as never, {
+        scopeKey: "Hair",
+        storeId: "other-store",
+      }),
+    ).rejects.toThrow("shared_demo_action_denied");
+
+    expect(
+      sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable,
+    ).not.toHaveBeenCalled();
+    expect(mockedAuthServer.getAuthUserId).not.toHaveBeenCalled();
   });
 
   it("submits changed drafts across scopes for the active store", async () => {

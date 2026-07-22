@@ -12,6 +12,7 @@ const authMocks = vi.hoisted(() => ({
   requireOrganizationMemberRoleWithCtx: vi.fn(),
 }));
 const sharedDemoMocks = vi.hoisted(() => ({
+  getSharedDemoActorWithCtx: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
 }));
 
@@ -139,7 +140,9 @@ describe("buildRegisterSessionActivityPage", () => {
       terminalName: "Front counter",
     });
 
-    expect(page.page[0]?.summary).toBe("Receipt 135507 - Total recorded - 2 sale lines");
+    expect(page.page[0]?.summary).toBe(
+      "Receipt 135507 - Total recorded - 2 sale lines",
+    );
   });
 
   it("includes the opening float for register-opened activity", () => {
@@ -211,22 +214,26 @@ describe("listRegisterSessionActivity", () => {
     authMocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue({
       role: "full_admin",
     });
+    sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
   });
 
-  it("shared-demo-pos-activity uses the store-clamped cash capability", async () => {
-    sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable.mockResolvedValue(
-      {
-        storeId: "store-1",
-      },
-    );
+  it("shared-demo-pos-activity uses the store-clamped read rail", async () => {
+    sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      storeId: "store-1",
+    });
     const handler = getHandler(listRegisterSessionActivity);
     const ctx = {
       db: {
-        get: vi.fn(async (table: string) => {
-          if (table === "store") {
+        get: vi.fn(async (table: string, id: string) => {
+          if (table === "store" && id === "store-1") {
             return { _id: "store-1", organizationId: "org-1" };
           }
-          if (table === "registerSession") {
+          if (table === "athenaUser" && id === "demo-user-1") {
+            return { _id: "demo-user-1" };
+          }
+          if (table === "registerSession" && id === "session-1") {
             return { _id: "session-1", storeId: "store-1" };
           }
           return null;
@@ -240,12 +247,20 @@ describe("listRegisterSessionActivity", () => {
       storeId: "store-1" as Id<"store">,
     })) as RegisterSessionActivityPage;
 
+    expect(sharedDemoMocks.getSharedDemoActorWithCtx).toHaveBeenCalledWith(ctx);
     expect(
       sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable,
-    ).toHaveBeenCalledWith(ctx, "cash.control.write", "store-1");
+    ).not.toHaveBeenCalled();
     expect(
       authMocks.requireAuthenticatedAthenaUserWithCtx,
-    ).toHaveBeenCalledWith(ctx, { sharedDemoCapability: "cash.control.write" });
+    ).not.toHaveBeenCalled();
+    expect(authMocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        allowedRoles: ["full_admin"],
+        userId: "demo-user-1",
+      }),
+    );
     expect(page.registerSession).toEqual({
       _id: "session-1",
       registerNumber: null,

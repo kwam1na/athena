@@ -39,12 +39,129 @@ describe("operation read admission definitions", () => {
         expect.objectContaining({
           access: { kind: "read", intent: "operations.workItems.view" },
           actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "operations/operationalWorkItems:getQueueSnapshot",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "operations.workItems.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
           functionName:
             "operations/operationalWorkItems:getPendingApprovalCountSummary",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
       ]),
     );
+  });
+
+  it("defines demo-visible daily close reads on read intent", () => {
+    expect(OPERATION_READ_ADMISSION_DEFINITIONS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          access: { kind: "read", intent: "daily_close.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "operations/dailyClose:getDailyCloseSnapshot",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "daily_close.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "operations/dailyClose:getDailyCloseLifecycleGate",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "daily_close.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "operations/dailyClose:listCompletedDailyCloseHistory",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "daily_close.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName:
+            "operations/dailyClose:getCompletedDailyCloseHistoryDetail",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+      ]),
+    );
+  });
+
+  it("defines demo-visible cash controls and POS reads on read intent", () => {
+    expect(OPERATION_READ_ADMISSION_DEFINITIONS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          access: { kind: "read", intent: "cash_controls.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "cashControls/deposits:getDashboardSnapshot",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "cash_controls.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName:
+            "cashControls/registerSessionActivity:listRegisterSessionActivity",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "stock_adjustments.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName:
+            "stockOps/cycleCountDrafts:getActiveCycleCountDraftSummary",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "pos.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "pos/public/register:getState",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "pos.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "pos/public/terminals:listTerminals",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "pos.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "inventory/posSessions:getStoreActiveSessionOperations",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+      ]),
+    );
+  });
+
+  it("resolves transaction detail reads through the transaction store", async () => {
+    const definition = OPERATION_READ_ADMISSION_DEFINITIONS.find(
+      (candidate) =>
+        candidate.functionName === "pos/public/transactions:getTransactionById",
+    );
+
+    expect(definition?.scope.kind).toBe("store");
+    if (
+      definition?.scope.kind !== "store" ||
+      !("resolve" in definition.scope) ||
+      !definition.scope.resolve
+    ) {
+      throw new Error("Expected transaction read to declare store resolver.");
+    }
+
+    const db = {
+      get: async (tableName: string, id: string) =>
+        tableName === "posTransaction" && id === "txn-1"
+          ? { storeId: "store-1" }
+          : null,
+    };
+
+    await expect(
+      definition.scope.resolve({ db } as never, {
+        transactionId: "txn-1",
+      }),
+    ).resolves.toEqual({ storeId: "store-1" });
+    await expect(
+      definition.scope.resolve({ db } as never, {
+        transactionId: "missing-txn",
+      }),
+    ).resolves.toEqual({});
   });
 
   it("fails closed for incomplete read metadata", () => {

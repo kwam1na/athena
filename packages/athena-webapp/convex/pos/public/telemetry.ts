@@ -4,6 +4,12 @@ import { mutation, query } from "../../_generated/server";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import type { Doc } from "../../_generated/dataModel";
 import { commandResultValidator } from "../../lib/commandResultValidators";
+import { admitSharedDemoPublicQuery } from "../../operationAdmission/publicQuery";
+import { listPosClientEventsReadDefinition } from "../../operationAdmission/readDefinitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../../operationAdmission/types";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
@@ -93,10 +99,21 @@ async function requirePosTelemetryAccess(
   organizationId: Doc<"store">["organizationId"],
 ): Promise<boolean> {
   try {
-    const demoActor = await getSharedDemoActorWithCtx(ctx);
-    const athenaUser = demoActor
-      ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const admittedActor = (
+      ctx as Partial<OperationMutationCtx | OperationQueryCtx>
+    ).operationAdmission?.actor;
+    const demoActor =
+      admittedActor?.kind === "shared_demo"
+        ? { athenaUserId: admittedActor.athenaUserId }
+        : admittedActor
+          ? null
+          : await getSharedDemoActorWithCtx(ctx);
+    const athenaUser =
+      admittedActor?.kind === "shared_demo"
+        ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
+        : demoActor
+          ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
+          : await requireAuthenticatedAthenaUserWithCtx(ctx);
     if (!athenaUser) {
       return false;
     }
@@ -164,7 +181,9 @@ export const recordClientEvents = mutation({
       (await ctx.db
         .query("posClientEvent")
         .withIndex("by_store_clientEvent", (q) =>
-          q.eq("storeId", args.storeId).eq("clientEventId", event.clientEventId),
+          q
+            .eq("storeId", args.storeId)
+            .eq("clientEventId", event.clientEventId),
         )
         .unique()) !== null;
     const replayedBatch =
@@ -245,29 +264,39 @@ export const listClientEvents = query({
     limit: v.optional(v.number()),
   },
   returns: v.array(clientEventReturnValidator),
-  handler: async (ctx, args) => {
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      return [];
-    }
-    if (!(await requirePosTelemetryAccess(ctx, store.organizationId))) {
-      return [];
-    }
-    const limit = Math.min(Math.max(args.limit ?? 100, 1), 200);
-    if (args.level) {
-      const level = args.level;
+  handler: admitSharedDemoPublicQuery(
+    listPosClientEventsReadDefinition,
+    async (
+      ctx,
+      args: {
+        level?: Doc<"posClientEvent">["level"];
+        limit?: number;
+        storeId: Doc<"store">["_id"];
+      },
+    ) => {
+      const store = await ctx.db.get("store", args.storeId);
+      if (!store) {
+        return [];
+      }
+      if (!(await requirePosTelemetryAccess(ctx, store.organizationId))) {
+        return [];
+      }
+      const limit = Math.min(Math.max(args.limit ?? 100, 1), 200);
+      if (args.level) {
+        const level = args.level;
+        return await ctx.db
+          .query("posClientEvent")
+          .withIndex("by_store_level_received", (q) =>
+            q.eq("storeId", args.storeId).eq("level", level),
+          )
+          .order("desc")
+          .take(limit);
+      }
       return await ctx.db
         .query("posClientEvent")
-        .withIndex("by_store_level_received", (q) =>
-          q.eq("storeId", args.storeId).eq("level", level),
-        )
+        .withIndex("by_store_received", (q) => q.eq("storeId", args.storeId))
         .order("desc")
         .take(limit);
-    }
-    return await ctx.db
-      .query("posClientEvent")
-      .withIndex("by_store_received", (q) => q.eq("storeId", args.storeId))
-      .order("desc")
-      .take(limit);
-  },
+    },
+  ),
 });

@@ -15,9 +15,9 @@ import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
 import {
   getOpenWorkCountSummaryReadDefinition,
   getPendingApprovalCountSummaryReadDefinition,
+  getQueueSnapshotReadDefinition,
 } from "../operationAdmission/readDefinitions";
 import type { OperationQueryCtx } from "../operationAdmission/types";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import { listOpenLocalSyncConflictsByRegisterSession } from "../cashControls/deposits";
 import { listOpenLocalSyncConflictsByRegisterSessionWithCompleteness } from "../pos/application/sync/registerSessionSyncReview";
 import {
@@ -608,522 +608,527 @@ export const getQueueSnapshot = query({
     storeId: v.id("store"),
     workType: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+  handler: admitSharedDemoPublicQuery(
+    getQueueSnapshotReadDefinition,
+    async (
       ctx,
-      "inventory.adjust",
-      args.storeId,
-    );
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      throw new Error("Store not found.");
-    }
+      args: {
+        refreshNonce?: number;
+        storeId: Id<"store">;
+        workType?: string;
+      },
+    ) => {
+      await authorizeOperationalWorkSummaryRead(
+        ctx,
+        args,
+        "Only POS operators can view approval queue.",
+      );
 
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
-      ctx,
-      demoActor ? { sharedDemoCapability: "inventory.adjust" } : undefined,
-    );
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "Only POS operators can view approval queue.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
+      const [
+        rawWorkItemLanes,
+        approvalRequestLanes,
+        syncConflictsBySessionId,
+        activeOversizedRepairs,
+      ] = await Promise.all([
+        Promise.all(
+          OPEN_WORK_ITEM_STATUSES.flatMap((status) =>
+            QUEUE_WORK_ITEM_TYPES.map(async (type) => {
+              const items = await ctx.db
+                .query("operationalWorkItem")
+                .withIndex("by_storeId_type_status", (q) =>
+                  q
+                    .eq("storeId", args.storeId)
+                    .eq("type", type)
+                    .eq("status", status),
+                )
+                .take(QUEUE_LANE_PROBE_LIMIT + 1);
 
-    const [
-      rawWorkItemLanes,
-      approvalRequestLanes,
-      syncConflictsBySessionId,
-      activeOversizedRepairs,
-    ] = await Promise.all([
-      Promise.all(
-        OPEN_WORK_ITEM_STATUSES.flatMap((status) =>
-          QUEUE_WORK_ITEM_TYPES.map(async (type) => {
-            const items = await ctx.db
-              .query("operationalWorkItem")
-              .withIndex("by_storeId_type_status", (q) =>
+              return {
+                items: items.slice(0, QUEUE_LANE_PROBE_LIMIT),
+                incomplete: items.length > QUEUE_LANE_PROBE_LIMIT,
+                overflow: items.length > MAX_QUEUE_ITEMS,
+                status,
+                type,
+              };
+            }),
+          ),
+        ),
+        Promise.all(
+          QUEUE_APPROVAL_REQUEST_TYPES.map(async (requestType) => {
+            const requests = await ctx.db
+              .query("approvalRequest")
+              .withIndex("by_storeId_status_requestType", (q) =>
                 q
                   .eq("storeId", args.storeId)
-                  .eq("type", type)
-                  .eq("status", status),
+                  .eq("status", "pending")
+                  .eq("requestType", requestType),
               )
-              .take(QUEUE_LANE_PROBE_LIMIT + 1);
+              .take(APPROVAL_REQUEST_PROBE_LIMIT);
 
             return {
-              items: items.slice(0, QUEUE_LANE_PROBE_LIMIT),
-              incomplete: items.length > QUEUE_LANE_PROBE_LIMIT,
-              overflow: items.length > MAX_QUEUE_ITEMS,
-              status,
-              type,
+              items: requests.slice(0, MAX_QUEUE_ITEMS),
+              overflow: requests.length > MAX_QUEUE_ITEMS,
+              requestType,
             };
           }),
         ),
-      ),
-      Promise.all(
-        QUEUE_APPROVAL_REQUEST_TYPES.map(async (requestType) => {
-          const requests = await ctx.db
-            .query("approvalRequest")
-            .withIndex("by_storeId_status_requestType", (q) =>
-              q
-                .eq("storeId", args.storeId)
-                .eq("status", "pending")
-                .eq("requestType", requestType),
-            )
-            .take(APPROVAL_REQUEST_PROBE_LIMIT);
+        listOpenLocalSyncConflictsByRegisterSession(ctx, args.storeId),
+        Promise.all(
+          (["pending", "running", "paused"] as const).map((status) =>
+            ctx.db
+              .query("oversizedOperationalWorkRepair")
+              .withIndex("by_storeId_status", (q) =>
+                q.eq("storeId", args.storeId).eq("status", status),
+              )
+              .take(ACTIVE_REPAIR_PROBE_LIMIT + 1),
+          ),
+        ),
+      ]);
+      const workItemLanes = await Promise.all(
+        rawWorkItemLanes.map(async (lane) => {
+          const items = await filterArchivedPendingCheckoutWorkItems(
+            ctx,
+            lane.items,
+          );
 
           return {
-            items: requests.slice(0, MAX_QUEUE_ITEMS),
-            overflow: requests.length > MAX_QUEUE_ITEMS,
-            requestType,
+            ...lane,
+            items,
+            overflow: items.length > MAX_QUEUE_ITEMS,
           };
         }),
-      ),
-      listOpenLocalSyncConflictsByRegisterSession(ctx, args.storeId),
-      Promise.all(
-        (["pending", "running", "paused"] as const).map((status) =>
-          ctx.db
-            .query("oversizedOperationalWorkRepair")
-            .withIndex("by_storeId_status", (q) =>
-              q.eq("storeId", args.storeId).eq("status", status),
-            )
-            .take(ACTIVE_REPAIR_PROBE_LIMIT + 1),
-        ),
-      ),
-    ]);
-    const workItemLanes = await Promise.all(
-      rawWorkItemLanes.map(async (lane) => {
-        const items = await filterArchivedPendingCheckoutWorkItems(
-          ctx,
-          lane.items,
-        );
-
-        return {
-          ...lane,
-          items,
-          overflow: items.length > MAX_QUEUE_ITEMS,
-        };
-      }),
-    );
-
-    const activeRepairReadIncomplete = activeOversizedRepairs.some(
-      (page) => page.length > ACTIVE_REPAIR_PROBE_LIMIT,
-    );
-    const completeActiveOversizedRepairs = activeOversizedRepairs.flatMap(
-      (page) => page.slice(0, ACTIVE_REPAIR_PROBE_LIMIT),
-    );
-    const incompleteTypes = new Set(
-      workItemLanes.filter((lane) => lane.incomplete).map((lane) => lane.type),
-    );
-    if (activeRepairReadIncomplete) {
-      incompleteTypes.add("synced_sale_inventory_review");
-    }
-    const logicalWork = projectLogicalOperationalWork({
-      incompleteTypes,
-      items: workItemLanes.flatMap((lane) => lane.items),
-      remediationSourceIdentitiesByGroupKey: new Map(
-        completeActiveOversizedRepairs.map((repair) => [
-          repair.groupKey,
-          new Set(repair.sourceIdentities),
-        ]),
-      ),
-      sourceCompleteness: incompleteTypes.size > 0 ? "incomplete" : "complete",
-    });
-    const selectedOpenWorkGroups = args.workType
-      ? logicalWork.groups.filter(
-          (group) => group.representative.type === args.workType,
-        )
-      : logicalWork.groups;
-    const openWorkGroups = selectedOpenWorkGroups.slice(0, MAX_QUEUE_ITEMS);
-    const openWorkItems = openWorkGroups.flatMap((group) => group.items);
-    const approvalRequests = approvalRequestLanes
-      .flatMap((lane) => lane.items)
-      .sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0))
-      .slice(0, MAX_QUEUE_ITEMS);
-    const hiddenWorkGroups = selectedOpenWorkGroups.slice(MAX_QUEUE_ITEMS);
-    const workItemSummaryByType = QUEUE_WORK_ITEM_TYPES.map((type) => {
-      const groups = logicalWork.groups.filter(
-        (group) => group.representative.type === type,
       );
-      return {
-        completeness: incompleteTypes.has(type) ? "incomplete" : "complete",
-        count: groups.length,
-        overflow: groups.length > MAX_QUEUE_ITEMS,
-        type,
-      };
-    });
-    const workItemOverflow = {
-      inProgress:
-        workItemLanes.some(
-          (lane) => lane.status === "in_progress" && lane.overflow,
-        ) ||
-        hiddenWorkGroups.some((group) =>
-          group.items.some((item) => item.status === "in_progress"),
+
+      const activeRepairReadIncomplete = activeOversizedRepairs.some(
+        (page) => page.length > ACTIVE_REPAIR_PROBE_LIMIT,
+      );
+      const completeActiveOversizedRepairs = activeOversizedRepairs.flatMap(
+        (page) => page.slice(0, ACTIVE_REPAIR_PROBE_LIMIT),
+      );
+      const incompleteTypes = new Set(
+        workItemLanes
+          .filter((lane) => lane.incomplete)
+          .map((lane) => lane.type),
+      );
+      if (activeRepairReadIncomplete) {
+        incompleteTypes.add("synced_sale_inventory_review");
+      }
+      const logicalWork = projectLogicalOperationalWork({
+        incompleteTypes,
+        items: workItemLanes.flatMap((lane) => lane.items),
+        remediationSourceIdentitiesByGroupKey: new Map(
+          completeActiveOversizedRepairs.map((repair) => [
+            repair.groupKey,
+            new Set(repair.sourceIdentities),
+          ]),
         ),
-      open:
-        workItemLanes.some((lane) => lane.status === "open" && lane.overflow) ||
-        hiddenWorkGroups.some((group) =>
-          group.items.some((item) => item.status === "open"),
+        sourceCompleteness:
+          incompleteTypes.size > 0 ? "incomplete" : "complete",
+      });
+      const selectedOpenWorkGroups = args.workType
+        ? logicalWork.groups.filter(
+            (group) => group.representative.type === args.workType,
+          )
+        : logicalWork.groups;
+      const openWorkGroups = selectedOpenWorkGroups.slice(0, MAX_QUEUE_ITEMS);
+      const openWorkItems = openWorkGroups.flatMap((group) => group.items);
+      const approvalRequests = approvalRequestLanes
+        .flatMap((lane) => lane.items)
+        .sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0))
+        .slice(0, MAX_QUEUE_ITEMS);
+      const hiddenWorkGroups = selectedOpenWorkGroups.slice(MAX_QUEUE_ITEMS);
+      const workItemSummaryByType = QUEUE_WORK_ITEM_TYPES.map((type) => {
+        const groups = logicalWork.groups.filter(
+          (group) => group.representative.type === type,
+        );
+        return {
+          completeness: incompleteTypes.has(type) ? "incomplete" : "complete",
+          count: groups.length,
+          overflow: groups.length > MAX_QUEUE_ITEMS,
+          type,
+        };
+      });
+      const workItemOverflow = {
+        inProgress:
+          workItemLanes.some(
+            (lane) => lane.status === "in_progress" && lane.overflow,
+          ) ||
+          hiddenWorkGroups.some((group) =>
+            group.items.some((item) => item.status === "in_progress"),
+          ),
+        open:
+          workItemLanes.some(
+            (lane) => lane.status === "open" && lane.overflow,
+          ) ||
+          hiddenWorkGroups.some((group) =>
+            group.items.some((item) => item.status === "open"),
+          ),
+      };
+
+      const customerIds = new Set<string>();
+      const posTransactionIds = new Set<string>();
+      const registerSessionIds = new Set<string>();
+      const staffIds = new Set<string>();
+      const terminalIds = new Set<string>();
+      const workItemIds = new Set<string>();
+
+      for (const item of openWorkItems) {
+        if (item.customerProfileId) {
+          customerIds.add(item.customerProfileId);
+        }
+
+        if (item.assignedToStaffProfileId) {
+          staffIds.add(item.assignedToStaffProfileId);
+        }
+
+        if (item.createdByStaffProfileId) {
+          staffIds.add(item.createdByStaffProfileId);
+        }
+      }
+
+      for (const request of approvalRequests) {
+        if (request.requestedByStaffProfileId) {
+          staffIds.add(request.requestedByStaffProfileId);
+        }
+
+        if (request.reviewedByStaffProfileId) {
+          staffIds.add(request.reviewedByStaffProfileId);
+        }
+
+        if (request.workItemId) {
+          workItemIds.add(request.workItemId);
+        }
+
+        const transactionId = approvalRequestTransactionId(request);
+        if (transactionId) {
+          posTransactionIds.add(transactionId);
+        }
+
+        if (request.registerSessionId) {
+          registerSessionIds.add(request.registerSessionId);
+        } else if (
+          request.requestType === "variance_review" &&
+          request.subjectType === "register_session"
+        ) {
+          registerSessionIds.add(request.subjectId);
+        }
+      }
+
+      for (const registerSessionId of syncConflictsBySessionId.keys()) {
+        registerSessionIds.add(registerSessionId);
+      }
+
+      const [
+        customers,
+        staffProfiles,
+        relatedWorkItems,
+        posTransactions,
+        registerSessions,
+      ] = await Promise.all([
+        Promise.all(
+          Array.from(customerIds).map(async (customerId) => {
+            const customer = await ctx.db.get(
+              "customerProfile",
+              customerId as Id<"customerProfile">,
+            );
+            return customer ? [customer._id, customer] : null;
+          }),
         ),
-    };
+        Promise.all(
+          Array.from(staffIds).map(async (staffId) => {
+            const staffProfile = await ctx.db.get(
+              "staffProfile",
+              staffId as Id<"staffProfile">,
+            );
+            return staffProfile ? [staffProfile._id, staffProfile] : null;
+          }),
+        ),
+        Promise.all(
+          Array.from(workItemIds).map(async (workItemId) => {
+            const workItem = await ctx.db.get(
+              "operationalWorkItem",
+              workItemId as Id<"operationalWorkItem">,
+            );
+            return workItem ? [workItem._id, workItem] : null;
+          }),
+        ),
+        Promise.all(
+          Array.from(posTransactionIds).map(async (transactionId) => {
+            const transaction = await ctx.db.get(
+              "posTransaction",
+              transactionId as Id<"posTransaction">,
+            );
+            return transaction ? [transaction._id, transaction] : null;
+          }),
+        ),
+        Promise.all(
+          Array.from(registerSessionIds).map(async (registerSessionId) => {
+            const registerSession = await ctx.db.get(
+              "registerSession",
+              registerSessionId as Id<"registerSession">,
+            );
+            return registerSession
+              ? [registerSession._id, registerSession]
+              : null;
+          }),
+        ),
+      ]);
 
-    const customerIds = new Set<string>();
-    const posTransactionIds = new Set<string>();
-    const registerSessionIds = new Set<string>();
-    const staffIds = new Set<string>();
-    const terminalIds = new Set<string>();
-    const workItemIds = new Set<string>();
-
-    for (const item of openWorkItems) {
-      if (item.customerProfileId) {
-        customerIds.add(item.customerProfileId);
-      }
-
-      if (item.assignedToStaffProfileId) {
-        staffIds.add(item.assignedToStaffProfileId);
-      }
-
-      if (item.createdByStaffProfileId) {
-        staffIds.add(item.createdByStaffProfileId);
-      }
-    }
-
-    for (const request of approvalRequests) {
-      if (request.requestedByStaffProfileId) {
-        staffIds.add(request.requestedByStaffProfileId);
-      }
-
-      if (request.reviewedByStaffProfileId) {
-        staffIds.add(request.reviewedByStaffProfileId);
-      }
-
-      if (request.workItemId) {
-        workItemIds.add(request.workItemId);
-      }
-
-      const transactionId = approvalRequestTransactionId(request);
-      if (transactionId) {
-        posTransactionIds.add(transactionId);
-      }
-
-      if (request.registerSessionId) {
-        registerSessionIds.add(request.registerSessionId);
-      } else if (
-        request.requestType === "variance_review" &&
-        request.subjectType === "register_session"
-      ) {
-        registerSessionIds.add(request.subjectId);
-      }
-    }
-
-    for (const registerSessionId of syncConflictsBySessionId.keys()) {
-      registerSessionIds.add(registerSessionId);
-    }
-
-    const [
-      customers,
-      staffProfiles,
-      relatedWorkItems,
-      posTransactions,
-      registerSessions,
-    ] = await Promise.all([
-      Promise.all(
-        Array.from(customerIds).map(async (customerId) => {
-          const customer = await ctx.db.get(
-            "customerProfile",
-            customerId as Id<"customerProfile">,
+      const customerMap = new Map<
+        Id<"customerProfile">,
+        Doc<"customerProfile">
+      >(
+        customers.filter(Boolean) as Array<
+          [Id<"customerProfile">, Doc<"customerProfile">]
+        >,
+      );
+      const staffMap = new Map<Id<"staffProfile">, Doc<"staffProfile">>(
+        staffProfiles.filter(Boolean) as Array<
+          [Id<"staffProfile">, Doc<"staffProfile">]
+        >,
+      );
+      const workItemMap = new Map<
+        Id<"operationalWorkItem">,
+        Doc<"operationalWorkItem">
+      >(
+        relatedWorkItems.filter(Boolean) as Array<
+          [Id<"operationalWorkItem">, Doc<"operationalWorkItem">]
+        >,
+      );
+      const posTransactionMap = new Map<
+        Id<"posTransaction">,
+        Doc<"posTransaction">
+      >(
+        posTransactions.filter(Boolean) as Array<
+          [Id<"posTransaction">, Doc<"posTransaction">]
+        >,
+      );
+      const transactionRegisterSessionIds = new Set<Id<"registerSession">>();
+      for (const request of approvalRequests) {
+        const linkedTransactionId = approvalRequestTransactionId(request);
+        const linkedTransaction = linkedTransactionId
+          ? posTransactionMap.get(linkedTransactionId)
+          : null;
+        if (
+          linkedTransaction?.registerSessionId &&
+          !registerSessionIds.has(linkedTransaction.registerSessionId)
+        ) {
+          transactionRegisterSessionIds.add(
+            linkedTransaction.registerSessionId,
           );
-          return customer ? [customer._id, customer] : null;
+        }
+      }
+      const transactionRegisterSessions = await Promise.all(
+        Array.from(transactionRegisterSessionIds).map(
+          async (registerSessionId) => {
+            const registerSession = await ctx.db.get(
+              "registerSession",
+              registerSessionId,
+            );
+            return registerSession
+              ? [registerSession._id, registerSession]
+              : null;
+          },
+        ),
+      );
+      const registerSessionMap = new Map<
+        Id<"registerSession">,
+        Doc<"registerSession">
+      >(
+        [...registerSessions, ...transactionRegisterSessions].filter(
+          Boolean,
+        ) as Array<[Id<"registerSession">, Doc<"registerSession">]>,
+      );
+      for (const registerSession of registerSessionMap.values()) {
+        if (registerSession.terminalId) {
+          terminalIds.add(registerSession.terminalId);
+        }
+      }
+
+      const terminals = await Promise.all(
+        Array.from(terminalIds).map(async (terminalId) => {
+          const terminal = await ctx.db.get(
+            "posTerminal",
+            terminalId as Id<"posTerminal">,
+          );
+          return terminal ? [terminal._id, terminal] : null;
         }),
-      ),
-      Promise.all(
-        Array.from(staffIds).map(async (staffId) => {
-          const staffProfile = await ctx.db.get(
-            "staffProfile",
-            staffId as Id<"staffProfile">,
+      );
+      const terminalMap = new Map<Id<"posTerminal">, Doc<"posTerminal">>(
+        terminals.filter(Boolean) as Array<
+          [Id<"posTerminal">, Doc<"posTerminal">]
+        >,
+      );
+
+      const mappedApprovalRequests = approvalRequests.map((request) => {
+        const linkedTransactionId = approvalRequestTransactionId(request);
+        const linkedTransaction = linkedTransactionId
+          ? posTransactionMap.get(linkedTransactionId)
+          : null;
+        let linkedRegisterSession: Doc<"registerSession"> | null | undefined =
+          null;
+        if (request.registerSessionId) {
+          linkedRegisterSession = registerSessionMap.get(
+            request.registerSessionId,
           );
-          return staffProfile ? [staffProfile._id, staffProfile] : null;
-        }),
-      ),
-      Promise.all(
-        Array.from(workItemIds).map(async (workItemId) => {
-          const workItem = await ctx.db.get(
-            "operationalWorkItem",
-            workItemId as Id<"operationalWorkItem">,
+        } else if (linkedTransaction?.registerSessionId) {
+          linkedRegisterSession = registerSessionMap.get(
+            linkedTransaction.registerSessionId,
           );
-          return workItem ? [workItem._id, workItem] : null;
-        }),
-      ),
-      Promise.all(
-        Array.from(posTransactionIds).map(async (transactionId) => {
-          const transaction = await ctx.db.get(
-            "posTransaction",
-            transactionId as Id<"posTransaction">,
+        } else if (
+          request.requestType === "variance_review" &&
+          request.subjectType === "register_session"
+        ) {
+          linkedRegisterSession = registerSessionMap.get(
+            request.subjectId as Id<"registerSession">,
           );
-          return transaction ? [transaction._id, transaction] : null;
-        }),
-      ),
-      Promise.all(
-        Array.from(registerSessionIds).map(async (registerSessionId) => {
-          const registerSession = await ctx.db.get(
-            "registerSession",
-            registerSessionId as Id<"registerSession">,
-          );
-          return registerSession
-            ? [registerSession._id, registerSession]
-            : null;
-        }),
-      ),
-    ]);
-
-    const customerMap = new Map<Id<"customerProfile">, Doc<"customerProfile">>(
-      customers.filter(Boolean) as Array<
-        [Id<"customerProfile">, Doc<"customerProfile">]
-      >,
-    );
-    const staffMap = new Map<Id<"staffProfile">, Doc<"staffProfile">>(
-      staffProfiles.filter(Boolean) as Array<
-        [Id<"staffProfile">, Doc<"staffProfile">]
-      >,
-    );
-    const workItemMap = new Map<
-      Id<"operationalWorkItem">,
-      Doc<"operationalWorkItem">
-    >(
-      relatedWorkItems.filter(Boolean) as Array<
-        [Id<"operationalWorkItem">, Doc<"operationalWorkItem">]
-      >,
-    );
-    const posTransactionMap = new Map<
-      Id<"posTransaction">,
-      Doc<"posTransaction">
-    >(
-      posTransactions.filter(Boolean) as Array<
-        [Id<"posTransaction">, Doc<"posTransaction">]
-      >,
-    );
-    const transactionRegisterSessionIds = new Set<Id<"registerSession">>();
-    for (const request of approvalRequests) {
-      const linkedTransactionId = approvalRequestTransactionId(request);
-      const linkedTransaction = linkedTransactionId
-        ? posTransactionMap.get(linkedTransactionId)
-        : null;
-      if (
-        linkedTransaction?.registerSessionId &&
-        !registerSessionIds.has(linkedTransaction.registerSessionId)
-      ) {
-        transactionRegisterSessionIds.add(linkedTransaction.registerSessionId);
-      }
-    }
-    const transactionRegisterSessions = await Promise.all(
-      Array.from(transactionRegisterSessionIds).map(
-        async (registerSessionId) => {
-          const registerSession = await ctx.db.get(
-            "registerSession",
-            registerSessionId,
-          );
-          return registerSession
-            ? [registerSession._id, registerSession]
-            : null;
-        },
-      ),
-    );
-    const registerSessionMap = new Map<
-      Id<"registerSession">,
-      Doc<"registerSession">
-    >(
-      [...registerSessions, ...transactionRegisterSessions].filter(
-        Boolean,
-      ) as Array<[Id<"registerSession">, Doc<"registerSession">]>,
-    );
-    for (const registerSession of registerSessionMap.values()) {
-      if (registerSession.terminalId) {
-        terminalIds.add(registerSession.terminalId);
-      }
-    }
-
-    const terminals = await Promise.all(
-      Array.from(terminalIds).map(async (terminalId) => {
-        const terminal = await ctx.db.get(
-          "posTerminal",
-          terminalId as Id<"posTerminal">,
-        );
-        return terminal ? [terminal._id, terminal] : null;
-      }),
-    );
-    const terminalMap = new Map<Id<"posTerminal">, Doc<"posTerminal">>(
-      terminals.filter(Boolean) as Array<
-        [Id<"posTerminal">, Doc<"posTerminal">]
-      >,
-    );
-
-    const mappedApprovalRequests = approvalRequests.map((request) => {
-      const linkedTransactionId = approvalRequestTransactionId(request);
-      const linkedTransaction = linkedTransactionId
-        ? posTransactionMap.get(linkedTransactionId)
-        : null;
-      let linkedRegisterSession: Doc<"registerSession"> | null | undefined =
-        null;
-      if (request.registerSessionId) {
-        linkedRegisterSession = registerSessionMap.get(
-          request.registerSessionId,
-        );
-      } else if (linkedTransaction?.registerSessionId) {
-        linkedRegisterSession = registerSessionMap.get(
-          linkedTransaction.registerSessionId,
-        );
-      } else if (
-        request.requestType === "variance_review" &&
-        request.subjectType === "register_session"
-      ) {
-        linkedRegisterSession = registerSessionMap.get(
-          request.subjectId as Id<"registerSession">,
-        );
-      }
-
-      return {
-        _id: request._id,
-        createdAt: request.createdAt,
-        metadata: sanitizeApprovalRequestMetadata(request.metadata),
-        notes: request.notes,
-        reason: request.reason,
-        requestType: request.requestType,
-        status: request.status,
-        storeId: request.storeId,
-        subjectId: request.subjectId,
-        subjectType: request.subjectType,
-        requestedByStaffName: request.requestedByStaffProfileId
-          ? staffMap.get(request.requestedByStaffProfileId)?.fullName
-          : null,
-        transactionSummary: linkedTransaction
-          ? {
-              completedAt: linkedTransaction.completedAt,
-              paymentMethod: linkedTransaction.paymentMethod ?? null,
-              total: linkedTransaction.total,
-              totalPaid: linkedTransaction.totalPaid,
-              transactionId: linkedTransaction._id,
-              transactionNumber: linkedTransaction.transactionNumber,
-            }
-          : null,
-        registerSessionSummary: linkedRegisterSession
-          ? {
-              countedCash: linkedRegisterSession.countedCash ?? null,
-              expectedCash: linkedRegisterSession.expectedCash,
-              registerNumber: linkedRegisterSession.registerNumber ?? null,
-              registerSessionId: linkedRegisterSession._id,
-              status: linkedRegisterSession.status,
-              terminalName: linkedRegisterSession.terminalId
-                ? (terminalMap
-                    .get(linkedRegisterSession.terminalId)
-                    ?.displayName?.trim() ?? null)
-                : null,
-              variance: linkedRegisterSession.variance ?? null,
-            }
-          : null,
-        workItemTitle: request.workItemId
-          ? workItemMap.get(request.workItemId)?.title
-          : null,
-      };
-    });
-    const mappedSyncReviewRequests = Array.from(
-      syncConflictsBySessionId.entries(),
-    ).map(([registerSessionId, conflicts]) => {
-      const linkedRegisterSession = registerSessionMap.get(registerSessionId);
-      const firstConflict = conflicts[0];
-
-      return {
-        _id: `register-sync-review:${registerSessionId}`,
-        createdAt: firstConflict?.createdAt,
-        metadata: {
-          conflictCount: conflicts.length,
-          reviewItems: conflicts.map((conflict) => ({
-            id: conflict._id,
-            localEventId: conflict.localEventId,
-            sequence: conflict.sequence,
-            summary: conflict.summary,
-            type: conflict.conflictType,
-          })),
-        },
-        notes: null,
-        reason:
-          firstConflict?.summary ??
-          "Synced register activity needs manager review.",
-        registerSessionSummary: linkedRegisterSession
-          ? {
-              countedCash: linkedRegisterSession.countedCash ?? null,
-              expectedCash: linkedRegisterSession.expectedCash,
-              registerNumber: linkedRegisterSession.registerNumber ?? null,
-              registerSessionId: linkedRegisterSession._id,
-              status: linkedRegisterSession.status,
-              terminalName: linkedRegisterSession.terminalId
-                ? (terminalMap
-                    .get(linkedRegisterSession.terminalId)
-                    ?.displayName?.trim() ?? null)
-                : null,
-              variance: linkedRegisterSession.variance ?? null,
-            }
-          : null,
-        requestedByStaffName: null,
-        requestType: REGISTER_SYNC_REVIEW_REQUEST_TYPE,
-        status: "pending",
-        storeId: args.storeId,
-        subjectId: registerSessionId,
-        subjectType: REGISTER_SYNC_REVIEW_SUBJECT_TYPE,
-        transactionSummary: null,
-        workItemTitle: formatRegisterSyncReviewTitle(conflicts.length),
-      };
-    });
-
-    const combinedApprovalRequests = [
-      ...mappedApprovalRequests,
-      ...mappedSyncReviewRequests,
-    ].sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0));
-
-    return {
-      approvalRequests: combinedApprovalRequests.slice(0, MAX_QUEUE_ITEMS),
-      overflow: {
-        approvalRequests:
-          approvalRequestLanes.some((lane) => lane.overflow) ||
-          combinedApprovalRequests.length > MAX_QUEUE_ITEMS,
-        workItems: workItemOverflow,
-      },
-      workItemSummary: {
-        byType: workItemSummaryByType,
-        completeness: logicalWork.completeness,
-        count: logicalWork.observedCount,
-      },
-      workItems: openWorkGroups.map((group) => {
-        const projectedRepresentative = projectOperationalWorkItemForQueue({
-          customerMap,
-          item: group.representative,
-          staffMap,
-        });
-        const hasAuthoritativeMembership = group.completeness === "complete";
-        const members = hasAuthoritativeMembership
-          ? group.representatives.map((item) =>
-              projectOperationalWorkItemForQueue({
-                customerMap,
-                item,
-                staffMap,
-              }),
-            )
-          : [];
+        }
 
         return {
-          ...projectedRepresentative,
-          priority: group.priority,
-          status: group.status,
-          logicalGroup: {
-            completeness: group.completeness,
-            key: group.key,
-            memberIds: hasAuthoritativeMembership
-              ? group.items.map((item) => item._id)
-              : [],
-            members,
-            oldestActionableAt: group.oldestActionableAt,
-            resolutionAvailability: group.resolutionAvailability,
-          },
+          _id: request._id,
+          createdAt: request.createdAt,
+          metadata: sanitizeApprovalRequestMetadata(request.metadata),
+          notes: request.notes,
+          reason: request.reason,
+          requestType: request.requestType,
+          status: request.status,
+          storeId: request.storeId,
+          subjectId: request.subjectId,
+          subjectType: request.subjectType,
+          requestedByStaffName: request.requestedByStaffProfileId
+            ? staffMap.get(request.requestedByStaffProfileId)?.fullName
+            : null,
+          transactionSummary: linkedTransaction
+            ? {
+                completedAt: linkedTransaction.completedAt,
+                paymentMethod: linkedTransaction.paymentMethod ?? null,
+                total: linkedTransaction.total,
+                totalPaid: linkedTransaction.totalPaid,
+                transactionId: linkedTransaction._id,
+                transactionNumber: linkedTransaction.transactionNumber,
+              }
+            : null,
+          registerSessionSummary: linkedRegisterSession
+            ? {
+                countedCash: linkedRegisterSession.countedCash ?? null,
+                expectedCash: linkedRegisterSession.expectedCash,
+                registerNumber: linkedRegisterSession.registerNumber ?? null,
+                registerSessionId: linkedRegisterSession._id,
+                status: linkedRegisterSession.status,
+                terminalName: linkedRegisterSession.terminalId
+                  ? (terminalMap
+                      .get(linkedRegisterSession.terminalId)
+                      ?.displayName?.trim() ?? null)
+                  : null,
+                variance: linkedRegisterSession.variance ?? null,
+              }
+            : null,
+          workItemTitle: request.workItemId
+            ? workItemMap.get(request.workItemId)?.title
+            : null,
         };
-      }),
-    };
-  },
+      });
+      const mappedSyncReviewRequests = Array.from(
+        syncConflictsBySessionId.entries(),
+      ).map(([registerSessionId, conflicts]) => {
+        const linkedRegisterSession = registerSessionMap.get(registerSessionId);
+        const firstConflict = conflicts[0];
+
+        return {
+          _id: `register-sync-review:${registerSessionId}`,
+          createdAt: firstConflict?.createdAt,
+          metadata: {
+            conflictCount: conflicts.length,
+            reviewItems: conflicts.map((conflict) => ({
+              id: conflict._id,
+              localEventId: conflict.localEventId,
+              sequence: conflict.sequence,
+              summary: conflict.summary,
+              type: conflict.conflictType,
+            })),
+          },
+          notes: null,
+          reason:
+            firstConflict?.summary ??
+            "Synced register activity needs manager review.",
+          registerSessionSummary: linkedRegisterSession
+            ? {
+                countedCash: linkedRegisterSession.countedCash ?? null,
+                expectedCash: linkedRegisterSession.expectedCash,
+                registerNumber: linkedRegisterSession.registerNumber ?? null,
+                registerSessionId: linkedRegisterSession._id,
+                status: linkedRegisterSession.status,
+                terminalName: linkedRegisterSession.terminalId
+                  ? (terminalMap
+                      .get(linkedRegisterSession.terminalId)
+                      ?.displayName?.trim() ?? null)
+                  : null,
+                variance: linkedRegisterSession.variance ?? null,
+              }
+            : null,
+          requestedByStaffName: null,
+          requestType: REGISTER_SYNC_REVIEW_REQUEST_TYPE,
+          status: "pending",
+          storeId: args.storeId,
+          subjectId: registerSessionId,
+          subjectType: REGISTER_SYNC_REVIEW_SUBJECT_TYPE,
+          transactionSummary: null,
+          workItemTitle: formatRegisterSyncReviewTitle(conflicts.length),
+        };
+      });
+
+      const combinedApprovalRequests = [
+        ...mappedApprovalRequests,
+        ...mappedSyncReviewRequests,
+      ].sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0));
+
+      return {
+        approvalRequests: combinedApprovalRequests.slice(0, MAX_QUEUE_ITEMS),
+        overflow: {
+          approvalRequests:
+            approvalRequestLanes.some((lane) => lane.overflow) ||
+            combinedApprovalRequests.length > MAX_QUEUE_ITEMS,
+          workItems: workItemOverflow,
+        },
+        workItemSummary: {
+          byType: workItemSummaryByType,
+          completeness: logicalWork.completeness,
+          count: logicalWork.observedCount,
+        },
+        workItems: openWorkGroups.map((group) => {
+          const projectedRepresentative = projectOperationalWorkItemForQueue({
+            customerMap,
+            item: group.representative,
+            staffMap,
+          });
+          const hasAuthoritativeMembership = group.completeness === "complete";
+          const members = hasAuthoritativeMembership
+            ? group.representatives.map((item) =>
+                projectOperationalWorkItemForQueue({
+                  customerMap,
+                  item,
+                  staffMap,
+                }),
+              )
+            : [];
+
+          return {
+            ...projectedRepresentative,
+            priority: group.priority,
+            status: group.status,
+            logicalGroup: {
+              completeness: group.completeness,
+              key: group.key,
+              memberIds: hasAuthoritativeMembership
+                ? group.items.map((item) => item._id)
+                : [],
+              members,
+              oldestActionableAt: group.oldestActionableAt,
+              resolutionAvailability: group.resolutionAvailability,
+            },
+          };
+        }),
+      };
+    },
+  ),
 });

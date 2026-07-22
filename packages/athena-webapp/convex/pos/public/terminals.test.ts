@@ -181,7 +181,8 @@ function buildTerminalHealthSummaryResult() {
     ],
     operationalExplanation: {
       blockingDomain: "terminal_runtime",
-      detail: "The terminal needs a local repair command before support can continue.",
+      detail:
+        "The terminal needs a local repair command before support can continue.",
       evidenceReferences: [
         {
           count: 1,
@@ -1035,14 +1036,19 @@ describe("POS terminal public mutations", () => {
     const candidates = [{ localRegisterSessionId: "local-register-1" }];
 
     await expect(
-      getHandler(getRegisterLifecycleAuthorityShadow)(invalidProofCtx as never, {
-        candidates,
-        storeId: "store-1",
-        syncSecretHash: "invalid",
-        terminalId: "terminal-1",
-      }),
+      getHandler(getRegisterLifecycleAuthorityShadow)(
+        invalidProofCtx as never,
+        {
+          candidates,
+          storeId: "store-1",
+          syncSecretHash: "invalid",
+          terminalId: "terminal-1",
+        },
+      ),
     ).resolves.toBeNull();
-    expect(mocks.getRegisterLifecycleAuthorityShadowQuery).not.toHaveBeenCalled();
+    expect(
+      mocks.getRegisterLifecycleAuthorityShadowQuery,
+    ).not.toHaveBeenCalled();
     await expect(
       getHandler(getRegisterLifecycleAuthority)(invalidProofCtx as never, {
         candidates,
@@ -1065,7 +1071,9 @@ describe("POS terminal public mutations", () => {
       }),
     ).resolves.toBeNull();
     expect(oversizedCtx.db.get).not.toHaveBeenCalled();
-    expect(mocks.getRegisterLifecycleAuthorityShadowQuery).not.toHaveBeenCalled();
+    expect(
+      mocks.getRegisterLifecycleAuthorityShadowQuery,
+    ).not.toHaveBeenCalled();
     await expect(
       getHandler(getRegisterLifecycleAuthority)(oversizedCtx as never, {
         candidates: Array.from({ length: 17 }, (_, index) => ({
@@ -1160,8 +1168,9 @@ describe("POS terminal public mutations", () => {
 
   it("looks up the demo terminal by fingerprint through the demo read boundary", async () => {
     const ctx = buildCtx();
-    mocks.requireSharedDemoStoreReadIfApplicable.mockResolvedValue({
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue({
       athenaUserId: "athena-user-1",
+      kind: "shared_demo",
       storeId: "store-1",
     });
 
@@ -1170,9 +1179,8 @@ describe("POS terminal public mutations", () => {
       fingerprintHash: "fingerprint-1",
     });
 
-    expect(
-      mocks.requireSharedDemoStoreReadIfApplicable,
-    ).toHaveBeenCalledWith(ctx, "store-1");
+    expect(mocks.getSharedDemoActorWithCtx).toHaveBeenCalledWith(ctx);
+    expect(mocks.requireSharedDemoStoreReadIfApplicable).not.toHaveBeenCalled();
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
   });
 
@@ -1522,11 +1530,14 @@ describe("POS terminal public mutations", () => {
       },
     });
 
-    const result = await getHandler(getRuntimeRemoteAssistSession)(ctx as never, {
-      storeId: "store-1",
-      syncSecretHash: "sync-secret-1",
-      terminalId: "terminal-1",
-    });
+    const result = await getHandler(getRuntimeRemoteAssistSession)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        syncSecretHash: "sync-secret-1",
+        terminalId: "terminal-1",
+      },
+    );
 
     expect(result).toEqual({
       _id: "remote-session-1",
@@ -1551,11 +1562,14 @@ describe("POS terminal public mutations", () => {
       },
     });
 
-    const result = await getHandler(getRuntimeRemoteAssistSession)(ctx as never, {
-      storeId: "store-1",
-      syncSecretHash: "wrong-secret",
-      terminalId: "terminal-1",
-    });
+    const result = await getHandler(getRuntimeRemoteAssistSession)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        syncSecretHash: "wrong-secret",
+        terminalId: "terminal-1",
+      },
+    );
 
     expect(result).toBeNull();
     expect(mocks.remoteAssistGetCurrentSessionForClient).not.toHaveBeenCalled();
@@ -1577,12 +1591,15 @@ describe("POS terminal public mutations", () => {
       },
     });
 
-    const result = await getHandler(disconnectRemoteAssistSession)(ctx as never, {
-      storeId: "store-1",
-      syncSecretHash: "sync-secret-1",
-      terminalId: "terminal-1",
-      sessionId: "remote-session-1",
-    });
+    const result = await getHandler(disconnectRemoteAssistSession)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        syncSecretHash: "sync-secret-1",
+        terminalId: "terminal-1",
+        sessionId: "remote-session-1",
+      },
+    );
 
     expect(result).toBeNull();
     expect(mocks.remoteAssistPatchSession).toHaveBeenCalledWith(
@@ -1890,8 +1907,9 @@ describe("POS terminal public mutations", () => {
 
   it("loads terminal health through the demo read boundary", async () => {
     const ctx = buildCtx();
-    mocks.requireSharedDemoStoreReadIfApplicable.mockResolvedValue({
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue({
       athenaUserId: "athena-user-1",
+      kind: "shared_demo",
       storeId: "store-1",
     });
 
@@ -1903,12 +1921,8 @@ describe("POS terminal public mutations", () => {
       terminalId: "terminal-1",
     });
 
-    expect(
-      mocks.requireSharedDemoStoreReadIfApplicable,
-    ).toHaveBeenNthCalledWith(1, ctx, "store-1");
-    expect(
-      mocks.requireSharedDemoStoreReadIfApplicable,
-    ).toHaveBeenNthCalledWith(2, ctx, "store-1");
+    expect(mocks.getSharedDemoActorWithCtx).toHaveBeenCalledTimes(2);
+    expect(mocks.requireSharedDemoStoreReadIfApplicable).not.toHaveBeenCalled();
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
   });
 
@@ -1957,7 +1971,15 @@ describe("POS terminal public mutations", () => {
   });
 
   it("validates representative terminal health public results against exported return validators", () => {
-    const summary = buildTerminalHealthSummaryResult();
+    const summary = {
+      ...buildTerminalHealthSummaryResult(),
+      runtimeStatus: {
+        ...buildRuntimeStatus(),
+        receivedAt: 150,
+        recoveryVerificationCursor: "cursor-1",
+        healthAlerts: { sync_stuck: 1784527331954 },
+      },
+    };
 
     assertConformsToExportedReturns(listTerminalHealthSummaries as never, [
       summary,
@@ -1994,7 +2016,10 @@ describe("POS terminal public mutations", () => {
 
     assertConformsToExportedReturns(listTerminals as never, [terminal]);
     expect(terminal.storeId).toBe("store-1");
-    assertConformsToExportedReturns(getTerminalByFingerprint as never, terminal);
+    assertConformsToExportedReturns(
+      getTerminalByFingerprint as never,
+      terminal,
+    );
     assertConformsToExportedReturns(
       previewTerminalRecovery as never,
       buildTerminalHealthSummaryResult().recoveryPreview,
@@ -2038,7 +2063,10 @@ describe("POS terminal public mutations", () => {
         receivedAt: 200,
       },
     });
-    assertConformsToExportedReturns(getRuntimeRemoteAssistSession as never, null);
+    assertConformsToExportedReturns(
+      getRuntimeRemoteAssistSession as never,
+      null,
+    );
     assertConformsToExportedReturns(getTerminalRuntimeConfig as never, {
       heartbeatEnabled: true,
     });
@@ -2075,7 +2103,10 @@ describe("POS terminal public mutations", () => {
         },
       ],
     });
-    assertConformsToExportedReturns(disconnectRemoteAssistSession as never, null);
+    assertConformsToExportedReturns(
+      disconnectRemoteAssistSession as never,
+      null,
+    );
     assertConformsToExportedReturns(registerTerminal as never, {
       kind: "ok",
       data: provisionedTerminal,
@@ -2090,12 +2121,18 @@ describe("POS terminal public mutations", () => {
         skippedConflictIds: [],
       },
     });
-    assertConformsToExportedReturns(issueTerminalRecoveryCommand as never, commandResult);
+    assertConformsToExportedReturns(
+      issueTerminalRecoveryCommand as never,
+      commandResult,
+    );
     assertConformsToExportedReturns(listTerminalRecoveryCommands as never, {
       kind: "ok",
       data: [recoveryCommand],
     });
-    assertConformsToExportedReturns(claimTerminalRecoveryCommand as never, commandResult);
+    assertConformsToExportedReturns(
+      claimTerminalRecoveryCommand as never,
+      commandResult,
+    );
     assertConformsToExportedReturns(
       acknowledgeTerminalRecoveryCommand as never,
       commandResult,
@@ -2213,18 +2250,21 @@ describe("POS terminal public mutations", () => {
       manualReview: [],
     });
 
-    const result = await getHandler(issueTerminalRecoveryCommand)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      commandType: "repair_terminal_seed",
-      commandContext: {
-        expectedBlockerType: "terminal_seed",
-        reason: "Terminal setup data needs repair.",
+    const result = await getHandler(issueTerminalRecoveryCommand)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        commandType: "repair_terminal_seed",
+        commandContext: {
+          expectedBlockerType: "terminal_seed",
+          reason: "Terminal setup data needs repair.",
+        },
+        expectedEvidence: {
+          terminalIntegrityStatus: "healthy",
+        },
       },
-      expectedEvidence: {
-        terminalIntegrityStatus: "healthy",
-      },
-    });
+    );
 
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       ctx,
@@ -2253,7 +2293,8 @@ describe("POS terminal public mutations", () => {
       commandContext: {
         expectedBlockerType: "local_review",
         localReviewEventIds: ["event-review-1"],
-        reason: "Uploaded local review items can be cleared from this terminal.",
+        reason:
+          "Uploaded local review items can be cleared from this terminal.",
       },
       expectedEvidence: {
         localReviewClearedEventIds: ["event-review-1"],
@@ -2282,13 +2323,16 @@ describe("POS terminal public mutations", () => {
       manualReview: [],
     });
 
-    const result = await getHandler(issueTerminalRecoveryCommand)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      commandType: "clear_local_review_items",
-      commandContext: clearAction.commandContext,
-      expectedEvidence: clearAction.expectedEvidence,
-    });
+    const result = await getHandler(issueTerminalRecoveryCommand)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        commandType: "clear_local_review_items",
+        commandContext: clearAction.commandContext,
+        expectedEvidence: clearAction.expectedEvidence,
+      },
+    );
 
     expect(mocks.issueTerminalRecoveryCommandService).toHaveBeenCalledWith(
       { repository: "write" },
@@ -2343,13 +2387,16 @@ describe("POS terminal public mutations", () => {
       manualReview: [],
     });
 
-    const result = await getHandler(issueTerminalRecoveryCommand)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      commandType: "clear_local_review_items",
-      commandContext: clearAllAction.commandContext,
-      expectedEvidence: clearAllAction.expectedEvidence,
-    });
+    const result = await getHandler(issueTerminalRecoveryCommand)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        commandType: "clear_local_review_items",
+        commandContext: clearAllAction.commandContext,
+        expectedEvidence: clearAllAction.expectedEvidence,
+      },
+    );
 
     expect(mocks.issueTerminalRecoveryCommandService).toHaveBeenCalledWith(
       { repository: "write" },
@@ -2390,31 +2437,36 @@ describe("POS terminal public mutations", () => {
           commandContext: {
             expectedBlockerType: "local_review",
             localReviewEventIds: ["event-review-1"],
-            reason: "Uploaded local review items can be cleared from this terminal.",
+            reason:
+              "Uploaded local review items can be cleared from this terminal.",
           },
           expectedEvidence: {
             localReviewClearedEventIds: ["event-review-1"],
             localReviewEventCount: 0,
           },
-          reason: "Uploaded local review items can be cleared from this terminal.",
+          reason:
+            "Uploaded local review items can be cleared from this terminal.",
         },
       ],
       manualReview: [],
     });
 
-    const result = await getHandler(issueTerminalRecoveryCommand)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      commandType: "clear_local_review_items",
-      commandContext: {
-        expectedBlockerType: "local_review",
-        localReviewClearAll: true,
-        reason: "Clear everything.",
+    const result = await getHandler(issueTerminalRecoveryCommand)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        commandType: "clear_local_review_items",
+        commandContext: {
+          expectedBlockerType: "local_review",
+          localReviewClearAll: true,
+          reason: "Clear everything.",
+        },
+        expectedEvidence: {
+          localReviewEventCount: 0,
+        },
       },
-      expectedEvidence: {
-        localReviewEventCount: 0,
-      },
-    });
+    );
 
     expect(result).toMatchObject({
       error: {
@@ -2507,18 +2559,25 @@ describe("POS terminal public mutations", () => {
       },
     });
 
-    const result = await getHandler(listTerminalRecoveryCommands)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      syncSecretHash: "sync-secret-1",
-    });
+    const result = await getHandler(listTerminalRecoveryCommands)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        syncSecretHash: "sync-secret-1",
+      },
+    );
 
     expect(result).toMatchObject({
       kind: "ok",
       data: [expect.objectContaining({ _id: "command-repair" })],
     });
-    expect(mocks.createTerminalRecoveryCommandReadRepository).toHaveBeenCalledWith(ctx);
-    expect(mocks.createTerminalRecoveryCommandRepository).not.toHaveBeenCalled();
+    expect(
+      mocks.createTerminalRecoveryCommandReadRepository,
+    ).toHaveBeenCalledWith(ctx);
+    expect(
+      mocks.createTerminalRecoveryCommandRepository,
+    ).not.toHaveBeenCalled();
     expect(mocks.listClaimableTerminalRecoveryCommands).toHaveBeenCalledWith(
       { repository: "read" },
       expect.objectContaining({
@@ -2553,11 +2612,14 @@ describe("POS terminal public mutations", () => {
       },
     });
 
-    const result = await getHandler(listTerminalRecoveryCommands)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      syncSecretHash: "sync-secret-1",
-    });
+    const result = await getHandler(listTerminalRecoveryCommands)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        syncSecretHash: "sync-secret-1",
+      },
+    );
 
     expect(result).toMatchObject({
       kind: "ok",
@@ -2592,7 +2654,9 @@ describe("POS terminal public mutations", () => {
       },
     );
 
-    expect(mocks.acknowledgeTerminalRecoveryCommandService).toHaveBeenCalledWith(
+    expect(
+      mocks.acknowledgeTerminalRecoveryCommandService,
+    ).toHaveBeenCalledWith(
       { repository: "write" },
       expect.objectContaining({
         commandId: "command-1",
@@ -2646,7 +2710,9 @@ describe("POS terminal public mutations", () => {
       },
     );
 
-    expect(mocks.acknowledgeTerminalRecoveryCommandService).toHaveBeenCalledWith(
+    expect(
+      mocks.acknowledgeTerminalRecoveryCommandService,
+    ).toHaveBeenCalledWith(
       { repository: "write" },
       expect.objectContaining({
         clearedLocalReviewEventIds: ["event-review-1"],
@@ -2667,18 +2733,21 @@ describe("POS terminal public mutations", () => {
     );
     const ctx = buildCtx();
 
-    const result = await getHandler(issueTerminalRecoveryCommand)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      commandType: "repair_terminal_seed",
-      commandContext: {
-        expectedBlockerType: "terminal_seed",
-        reason: "Terminal setup data needs repair.",
+    const result = await getHandler(issueTerminalRecoveryCommand)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        commandType: "repair_terminal_seed",
+        commandContext: {
+          expectedBlockerType: "terminal_seed",
+          reason: "Terminal setup data needs repair.",
+        },
+        expectedEvidence: {
+          terminalIntegrityStatus: "healthy",
+        },
       },
-      expectedEvidence: {
-        terminalIntegrityStatus: "healthy",
-      },
-    });
+    );
 
     expect(result).toEqual({
       kind: "user_error",
@@ -2702,17 +2771,21 @@ describe("POS terminal public mutations", () => {
       },
     });
 
-    const result = await getHandler(listTerminalRecoveryCommands)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      syncSecretHash: "wrong-secret",
-    });
+    const result = await getHandler(listTerminalRecoveryCommands)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        syncSecretHash: "wrong-secret",
+      },
+    );
 
     expect(result).toEqual({
       kind: "user_error",
       error: {
         code: "authorization_failed",
-        message: "You do not have access to list POS terminal recovery commands.",
+        message:
+          "You do not have access to list POS terminal recovery commands.",
         metadata: { terminalAuthorizationFailure: true },
       },
     });
@@ -2903,7 +2976,8 @@ function buildRuntimeStatus(extra: Record<string, unknown> = {}) {
 
 function buildCtx(
   overrides: {
-    store?: Record<string, unknown> | null | Array<Record<string, unknown> | null>;
+    store?:
+      Record<string, unknown> | null | Array<Record<string, unknown> | null>;
     terminal?: Record<string, unknown> | null;
   } = {},
 ) {
@@ -2921,9 +2995,9 @@ function buildCtx(
           return Object.prototype.hasOwnProperty.call(overrides, "store")
             ? overrides.store
             : {
-            _id: "store-1",
-            organizationId: "org-1",
-          };
+                _id: "store-1",
+                organizationId: "org-1",
+              };
         }
 
         if (tableName === "athenaUser" && id === "athena-user-1") {
@@ -2934,12 +3008,12 @@ function buildCtx(
           return Object.prototype.hasOwnProperty.call(overrides, "terminal")
             ? overrides.terminal
             : {
-            _id: "terminal-1",
-            storeId: "store-1",
-            status: "active",
-            registeredByUserId: "athena-user-1",
-            syncSecretHash: SYNC_SECRET_HASH,
-          };
+                _id: "terminal-1",
+                storeId: "store-1",
+                status: "active",
+                registeredByUserId: "athena-user-1",
+                syncSecretHash: SYNC_SECRET_HASH,
+              };
         }
 
         return null;

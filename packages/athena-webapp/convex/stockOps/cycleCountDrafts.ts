@@ -15,6 +15,15 @@ import {
   submitCycleCountDraftOperationDefinition,
 } from "../operationAdmission/definitions";
 import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import {
+  getActiveCycleCountDraftReadDefinition,
+  getActiveCycleCountDraftSummaryReadDefinition,
+} from "../operationAdmission/readDefinitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
@@ -61,21 +70,36 @@ async function requireCycleCountDraftAccess(
   ctx: CycleCountDraftAccessCtx,
   storeId: Id<"store">,
 ) {
-  const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-    ctx,
-    "inventory.adjust",
-    storeId,
-  );
+  const operationAdmission = (
+    ctx as Partial<OperationMutationCtx | OperationQueryCtx>
+  ).operationAdmission;
+  const admittedActor = operationAdmission?.actor;
+  const demoActor =
+    admittedActor?.kind === "shared_demo"
+      ? admittedActor
+      : admittedActor
+        ? null
+        : await requireSharedDemoStoreCapabilityIfApplicable(
+            ctx,
+            "inventory.adjust",
+            storeId,
+          );
   const store = await ctx.db.get("store", storeId);
 
   if (!store) {
     throw new Error("Store not found.");
   }
 
-  const actorUser = await requireAuthenticatedAthenaUserWithCtx(
-    ctx,
-    demoActor ? { sharedDemoCapability: "inventory.adjust" } : undefined,
-  );
+  const actorUser =
+    admittedActor?.kind === "shared_demo"
+      ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
+      : demoActor
+        ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
+        : await requireAuthenticatedAthenaUserWithCtx(ctx);
+
+  if (!actorUser) {
+    throw new Error("Sign in again to continue.");
+  }
 
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
@@ -1058,14 +1082,20 @@ export const getActiveCycleCountDraft = query({
     scopeKey: v.string(),
     storeId: v.id("store"),
   },
-  handler: getActiveCycleCountDraftWithCtx,
+  handler: admitSharedDemoPublicQuery(
+    getActiveCycleCountDraftReadDefinition,
+    getActiveCycleCountDraftWithCtx,
+  ),
 });
 
 export const getActiveCycleCountDraftSummary = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: getActiveCycleCountDraftSummaryWithCtx,
+  handler: admitSharedDemoPublicQuery(
+    getActiveCycleCountDraftSummaryReadDefinition,
+    getActiveCycleCountDraftSummaryWithCtx,
+  ),
 });
 
 const ensureCycleCountDraftAdmittedHandler = admitSharedDemoPublicMutation(

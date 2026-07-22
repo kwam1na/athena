@@ -17,11 +17,13 @@ import {
   completeDailyClose,
   completeDailyCloseForAutomationWithCtx,
   completeDailyCloseWithCtx,
+  getCompletedDailyCloseHistoryDetail,
   getCompletedDailyCloseHistoryDetailWithCtx,
+  getDailyCloseLifecycleGate,
   getDailyCloseSnapshot,
   getDailyCloseOpeningContext,
   getDailyCloseOpeningContextWithCtx,
-  getDailyCloseLifecycleGate,
+  listCompletedDailyCloseHistory,
   listCompletedDailyCloseHistoryWithCtx,
   resolveDailyCloseCarryForward,
   resolveDailyCloseCarryForwardWithCtx,
@@ -35,6 +37,7 @@ vi.mock("../lib/athenaUserAuth", () => ({
   requireOrganizationMemberRoleWithCtx: vi.fn(),
 }));
 vi.mock("../sharedDemo/actor", () => ({
+  getSharedDemoActorWithCtx: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
   requireSharedDemoStoreReadIfApplicable: vi.fn(),
 }));
@@ -488,6 +491,15 @@ function mockDailyCloseSnapshotAccess(role: "full_admin" | "pos_only") {
 
 describe("end-of-day review backend foundation", () => {
   beforeEach(() => {
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue(
+      null,
+    );
+    vi.mocked(
+      sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
+    ).mockResolvedValue(null);
+    vi.mocked(
+      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
+    ).mockResolvedValue(null);
     reportingIngressMocks.appendReportingIngressWithCtx.mockResolvedValue({
       ingressId: "reporting-ingress-1",
       kind: "appended",
@@ -597,11 +609,11 @@ describe("end-of-day review backend foundation", () => {
 
   it("loads the lifecycle gate through the demo daily-operations boundary", async () => {
     mockDailyCloseSnapshotAccess("full_admin");
-    vi.mocked(
-      sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
-    ).mockResolvedValueOnce({
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValueOnce({
+      authUserId: "auth-user-demo",
       athenaUserId: "user-1",
       kind: "shared_demo",
+      organizationId: "org-1",
       storeId: "store-1",
     } as never);
     const { db } = createDb({
@@ -615,9 +627,10 @@ describe("end-of-day review backend foundation", () => {
       storeId: "store-1" as Id<"store">,
     });
 
+    expect(sharedDemoActor.getSharedDemoActorWithCtx).toHaveBeenCalledWith(ctx);
     expect(
       sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
-    ).toHaveBeenCalledWith(ctx, "store-1");
+    ).not.toHaveBeenCalled();
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
     ).not.toHaveBeenCalled();
@@ -640,7 +653,8 @@ describe("end-of-day review backend foundation", () => {
         kind: "user_error",
         error: {
           code: "precondition_failed",
-          message: "Resolve the carry-forward item before completing EOD Review.",
+          message:
+            "Resolve the carry-forward item before completing EOD Review.",
           metadata: { workItemId: "work-item-1" },
         },
       }),
@@ -1959,11 +1973,11 @@ describe("end-of-day review backend foundation", () => {
 
   it("loads the EOD snapshot through the demo read boundary", async () => {
     mockDailyCloseSnapshotAccess("full_admin");
-    vi.mocked(
-      sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
-    ).mockResolvedValueOnce({
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValueOnce({
+      authUserId: "auth-user-demo",
       athenaUserId: "user-1",
       kind: "shared_demo",
+      organizationId: "org-1",
       storeId: "store-1",
     } as never);
     const { db } = createDb({
@@ -1977,9 +1991,10 @@ describe("end-of-day review backend foundation", () => {
       storeId: "store-1" as Id<"store">,
     });
 
+    expect(sharedDemoActor.getSharedDemoActorWithCtx).toHaveBeenCalledWith(ctx);
     expect(
       sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
-    ).toHaveBeenCalledWith(ctx, "store-1");
+    ).not.toHaveBeenCalled();
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
     ).not.toHaveBeenCalled();
@@ -2114,6 +2129,7 @@ describe("end-of-day review backend foundation", () => {
       ],
     });
     const { db } = createDb({
+      athenaUser: [{ _id: "user-1", email: "demo@athena.invalid" }],
       dailyClose: [
         completedDailyCloseRow({
           actorType: "automation",
@@ -2170,6 +2186,52 @@ describe("end-of-day review backend foundation", () => {
       }),
     ]);
     expect(snapshot.sourceSubjects).toEqual([]);
+
+    vi.clearAllMocks();
+    mockDailyCloseSnapshotAccess("full_admin");
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
+      authUserId: "auth-user-demo",
+      athenaUserId: "user-1" as Id<"athenaUser">,
+      kind: "shared_demo",
+      organizationId: "org-1" as Id<"organization">,
+      storeId: "store-1" as Id<"store">,
+    } as never);
+
+    const demoSnapshot = await handler({ db } as unknown as QueryCtx, {
+      operatingDate: "2026-05-07",
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(demoSnapshot.completedClose).toMatchObject({
+      actorType: "automation",
+      policyReviewedItemKeys: ["pos_transaction:txn-void:void"],
+    });
+    expect(demoSnapshot.completedClose).not.toHaveProperty(
+      "restrictedDetailsRedacted",
+    );
+    expect(demoSnapshot.reviewItems).toEqual([
+      expect.objectContaining({
+        key: "pos_transaction:txn-void:void",
+        metadata: expect.objectContaining({
+          total: 500,
+          voidedAt: Date.UTC(2026, 4, 7, 15),
+        }),
+        subject: expect.objectContaining({ id: "txn-void" }),
+      }),
+    ]);
+    expect(demoSnapshot.sourceSubjects).toEqual([
+      {
+        id: "txn-void",
+        label: "TXN-VOID",
+        type: "pos_transaction",
+      },
+    ]);
+    expect(
+      sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
+    ).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
   });
 
   it("surfaces review-only closeouts as blockers without active or closed totals", async () => {
@@ -4994,8 +5056,7 @@ describe("end-of-day review backend foundation", () => {
     expect(snapshot.sourceCompleteness.entries).toContainEqual(
       expect.objectContaining({
         complete: true,
-        readMode:
-          "by_storeId_allocationType_direction_status_recordedAt",
+        readMode: "by_storeId_allocationType_direction_status_recordedAt",
         recordCount: 1,
         source: "payment_allocation",
       }),
@@ -5036,8 +5097,7 @@ describe("end-of-day review backend foundation", () => {
     expect(snapshot.sourceCompleteness.entries).toContainEqual(
       expect.objectContaining({
         complete: true,
-        readMode:
-          "by_storeId_allocationType_direction_status_recordedAt",
+        readMode: "by_storeId_allocationType_direction_status_recordedAt",
         recordCount: 0,
         source: "payment_allocation",
       }),
@@ -5071,8 +5131,7 @@ describe("end-of-day review backend foundation", () => {
     expect(snapshot.sourceCompleteness.entries).toContainEqual(
       expect.objectContaining({
         complete: false,
-        readMode:
-          "by_storeId_allocationType_direction_status_recordedAt",
+        readMode: "by_storeId_allocationType_direction_status_recordedAt",
         reason: "payment_allocation_source_cap_reached",
         recordCount: 200,
         source: "payment_allocation",
@@ -6569,6 +6628,98 @@ describe("end-of-day review backend foundation", () => {
         },
       ),
     ).resolves.toBeNull();
+  });
+
+  it("admits shared-demo actors through the read rail for completed daily close history", async () => {
+    mockDailyCloseSnapshotAccess("full_admin");
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
+      authUserId: "auth-user-demo",
+      athenaUserId: "user-1" as Id<"athenaUser">,
+      kind: "shared_demo",
+      organizationId: "org-1" as Id<"organization">,
+      storeId: "store-1" as Id<"store">,
+    } as never);
+    const completedSnapshot = completedDailyCloseSnapshot({
+      closeMetadata: {
+        completedAt: Date.UTC(2026, 4, 8, 22),
+        operatingDate: "2026-05-08",
+        organizationId: "org-1",
+        storeId: "store-1",
+      },
+    });
+    const { db } = createDb({
+      athenaUser: [{ _id: "user-1", email: "demo@athena.invalid" }],
+      dailyClose: [
+        completedDailyCloseRow({
+          _id: "daily-close-new",
+          operatingDate: "2026-05-08",
+          reportSnapshot: completedSnapshot,
+        }),
+      ],
+      store: [store],
+    });
+    const ctx = { db } as unknown as QueryCtx;
+
+    const history = await getHandler<
+      { storeId: Id<"store"> },
+      Promise<Array<{ dailyCloseId: Id<"dailyClose"> }>>
+    >(listCompletedDailyCloseHistory)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+    const detail = await getHandler<
+      { dailyCloseId: Id<"dailyClose">; storeId: Id<"store"> },
+      Promise<{ dailyCloseId: Id<"dailyClose"> } | null>
+    >(getCompletedDailyCloseHistoryDetail)(ctx, {
+      dailyCloseId: "daily-close-new" as Id<"dailyClose">,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(history.map((record) => record.dailyCloseId)).toEqual([
+      "daily-close-new",
+    ]);
+    expect(detail?.dailyCloseId).toBe("daily-close-new");
+    expect(
+      sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
+    ).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot view Daily Close history for this store.",
+      organizationId: "org-1",
+      userId: "user-1",
+    });
+  });
+
+  it("denies shared-demo daily close history outside the admitted store without normal auth fallback", async () => {
+    mockDailyCloseSnapshotAccess("pos_only");
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
+      authUserId: "auth-user-demo",
+      athenaUserId: "user-1" as Id<"athenaUser">,
+      kind: "shared_demo",
+      organizationId: "org-1" as Id<"organization">,
+      storeId: "other-store" as Id<"store">,
+    } as never);
+    const { db } = createDb({ store: [store] });
+    const ctx = { db } as unknown as QueryCtx;
+
+    await expect(
+      getHandler<{ storeId: Id<"store"> }, Promise<unknown>>(
+        listCompletedDailyCloseHistory,
+      )(ctx, {
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).rejects.toThrow(/demo/);
+
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalled();
   });
 
   it("exposes Athena completion attribution while redacting restricted history detail for broad readers", async () => {

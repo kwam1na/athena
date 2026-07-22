@@ -12,7 +12,7 @@ applies_when:
   - "A shared-demo read surface is using ad hoc store checks or write capability bridges"
   - "A migration wave needs exact read inventory coverage while reporting reads stay out of scope"
 tags: [athena, convex, read-admission, shared-demo, authz, operations]
-delivery_diff_fingerprint: cc7244ac74ea3499ce19243b2e75fb41decf1675c82271d10c279a71c4be0f20
+delivery_diff_fingerprint: 89232f62961769d6e539e8efa47b12cd5138cd3d9e15ddf5153f058807b44090
 ---
 
 # Athena Shared Demo Read Admission Rail
@@ -34,6 +34,8 @@ Use a query counterpart to the operation admission rail:
 
 The proving path is Daily Operations viewing. Its exported snapshot queries now enter through read admission before calling the snapshot builder, and `authorizeDailyOperationsSnapshot` derives the admitted actor from `ctx.operationAdmission` instead of asking the shared demo for `daily_operations.write`.
 
+After that proof held, the same rail onboarded the remaining demo-visible Operations work-item and daily-close reads, cash controls dashboard/register reads, POS transaction/session/register/terminal/telemetry reads, and the Stock Adjustments cycle-count draft reads discovered during browser validation. The cycle-count helper keeps the legacy capability bridge for write and fallback paths, but admitted read actors bypass the old ad hoc demo capability probe.
+
 ## Why This Matters
 
 Read admission is a boundary decision, not a UI convenience. A shared-demo actor should be able to view only the server-owned demo tenant scope, and that viewing authority should not imply that the same actor can write operational state.
@@ -45,7 +47,7 @@ Keeping read intent separate from write capability prevents accidental broadenin
 - Do not use write capabilities to authorize read-only shared-demo views.
 - Do not treat a route gate or component condition as sufficient Convex read authorization.
 - For each migrated read, test the exported query handler so admission executes before the domain helper.
-- Keep follow-up migrations inventory-driven: Open Work first, then catalog/stock/workflow evidence, POS/cash/staff, and storefront/POS telemetry.
+- Keep follow-up migrations inventory-driven: prove one route, sweep linked demo routes, and onboard any remaining read crash by adding a definition, a public query wrapper, and focused shared-demo scope tests.
 - Keep reporting reads separate unless the hidden reporting workspace is explicitly in scope.
 
 ## Examples

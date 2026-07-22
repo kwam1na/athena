@@ -8,10 +8,16 @@ import { ok, userError } from "../../shared/commandResult";
 const mockedAuthServer = vi.hoisted(() => ({
   getAuthUserId: vi.fn(),
 }));
+const sharedDemoMocks = vi.hoisted(() => ({
+  getSharedDemoActorWithCtx: vi.fn(),
+  requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
+}));
 
 vi.mock("@convex-dev/auth/server", () => ({
   getAuthUserId: mockedAuthServer.getAuthUserId,
 }));
+
+vi.mock("../sharedDemo/actor", () => sharedDemoMocks);
 
 import {
   buildCashControlsDashboardSnapshot,
@@ -568,6 +574,10 @@ describe("cash control deposits", () => {
 
   beforeEach(() => {
     mockedAuthServer.getAuthUserId.mockResolvedValue("auth_user_1");
+    sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
+    sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable.mockResolvedValue(
+      null,
+    );
   });
 
   it("classifies register-session sync reviews with action policy at the source", () => {
@@ -6641,6 +6651,64 @@ describe("cash control deposits", () => {
     ).rejects.toThrow("You do not have access to cash controls.");
   });
 
+  it("admits shared-demo dashboard snapshots through the read rail", async () => {
+    sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo_athena_user_1",
+      kind: "shared_demo",
+      storeId: "store_1",
+    });
+    const ctx = createQueryCtx({
+      athenaUser: [{ _id: "demo_athena_user_1", email: "demo@example.com" }],
+      organizationMember: [
+        {
+          _id: "member_demo",
+          organizationId: "org_1",
+          role: "full_admin",
+          userId: "demo_athena_user_1",
+        },
+      ],
+      store: [{ _id: "store_1", organizationId: "org_1" }],
+    });
+
+    await expect(
+      getHandler(getDashboardSnapshot)(ctx as never, {
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toEqual(expect.objectContaining({ openSessions: [] }));
+    expect(sharedDemoMocks.getSharedDemoActorWithCtx).toHaveBeenCalledWith(ctx);
+    expect(
+      sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable,
+    ).not.toHaveBeenCalled();
+    expect(mockedAuthServer.getAuthUserId).not.toHaveBeenCalled();
+  });
+
+  it("denies shared-demo dashboard snapshots outside the admitted store without normal auth fallback", async () => {
+    sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo_athena_user_1",
+      kind: "shared_demo",
+      storeId: "other_store",
+    });
+    const ctx = createQueryCtx({
+      athenaUser: [{ _id: "demo_athena_user_1", email: "demo@example.com" }],
+      organizationMember: [
+        {
+          _id: "member_demo",
+          organizationId: "org_1",
+          role: "full_admin",
+          userId: "demo_athena_user_1",
+        },
+      ],
+      store: [{ _id: "store_1", organizationId: "org_1" }],
+    });
+
+    await expect(
+      getHandler(getDashboardSnapshot)(ctx as never, {
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).rejects.toThrow("This action isn't allowed in the demo.");
+    expect(mockedAuthServer.getAuthUserId).not.toHaveBeenCalled();
+  });
+
   it("rejects register-session snapshots when the caller is unauthenticated", async () => {
     mockedAuthServer.getAuthUserId.mockResolvedValue(null);
     const ctx = createQueryCtx({
@@ -6683,6 +6751,40 @@ describe("cash control deposits", () => {
         storeId: "store_1" as Id<"store">,
       }),
     ).rejects.toThrow("You do not have access to cash controls.");
+  });
+
+  it("admits shared-demo register-session snapshots through the read rail", async () => {
+    sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo_athena_user_1",
+      kind: "shared_demo",
+      storeId: "store_1",
+    });
+    const ctx = createQueryCtx({
+      athenaUser: [{ _id: "demo_athena_user_1", email: "demo@example.com" }],
+      organizationMember: [
+        {
+          _id: "member_demo",
+          organizationId: "org_1",
+          role: "full_admin",
+          userId: "demo_athena_user_1",
+        },
+      ],
+      registerSession: [{ _id: "session_open", storeId: "store_1" }],
+      store: [{ _id: "store_1", organizationId: "org_1" }],
+    });
+
+    await expect(
+      getHandler(getRegisterSessionSnapshot)(ctx as never, {
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({ registerSession: expect.any(Object) }),
+    );
+    expect(
+      sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable,
+    ).not.toHaveBeenCalled();
+    expect(mockedAuthServer.getAuthUserId).not.toHaveBeenCalled();
   });
 
   it("exposes the deterministic register trace when the session link is missing", async () => {

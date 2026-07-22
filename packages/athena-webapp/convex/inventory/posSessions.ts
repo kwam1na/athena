@@ -34,6 +34,9 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { getPosStoreActiveSessionOperationsReadDefinition } from "../operationAdmission/readDefinitions";
 import { isPosUsableRegisterSessionStatus } from "../../shared/registerSessionStatus";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
@@ -770,55 +773,65 @@ export const getStoreActiveSessionOperations = query({
     storeId: v.id("store"),
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
-    const now = Date.now();
-    const boundedLimit = Math.max(
-      1,
-      Math.min(
-        args.limit ?? SESSION_OPERATIONS_CANDIDATE_LIMIT,
-        SESSION_OPERATIONS_CANDIDATE_LIMIT,
-      ),
-    );
-    const sessions = [];
-
-    for (const status of SESSION_OPERATIONS_STATUS_VALUES) {
-      const statusSessions = await listStoreSessionsForOperationsStatus(ctx, {
+  handler: admitSharedDemoPublicQuery(
+    getPosStoreActiveSessionOperationsReadDefinition,
+    async (ctx, args: { limit?: number; storeId: Id<"store"> }) => {
+      await requireStoreMemberAccessWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        demoAccess: { kind: "read" },
+        failureMessage: "You cannot view POS sessions for this store.",
         storeId: args.storeId,
-        status,
-        boundedLimit,
       });
-      sessions.push(...statusSessions);
-    }
 
-    const sortedSessions = sessions
-      .sort((a, b) => {
-        if (b.updatedAt !== a.updatedAt) {
-          return b.updatedAt - a.updatedAt;
-        }
-
-        return b.sessionNumber.localeCompare(a.sessionNumber);
-      })
-      .slice(0, boundedLimit);
-    const rows = await Promise.all(
-      sortedSessions.map((session) =>
-        buildSessionOperationsRow(ctx, session, now),
-      ),
-    );
-
-    return {
-      generatedAt: now,
-      rows,
-      summary: {
-        activeCount: rows.filter((row) => row.status === "active").length,
-        heldCount: rows.filter((row) => row.status === "held").length,
-        expiredCount: rows.filter((row) => row.isExpired).length,
-        activeHoldQuantity: rows.reduce(
-          (sum, row) => sum + row.activeHolds.totalQuantity,
-          0,
+      const now = Date.now();
+      const boundedLimit = Math.max(
+        1,
+        Math.min(
+          args.limit ?? SESSION_OPERATIONS_CANDIDATE_LIMIT,
+          SESSION_OPERATIONS_CANDIDATE_LIMIT,
         ),
-      },
-    };
-  },
+      );
+      const sessions = [];
+
+      for (const status of SESSION_OPERATIONS_STATUS_VALUES) {
+        const statusSessions = await listStoreSessionsForOperationsStatus(ctx, {
+          storeId: args.storeId,
+          status,
+          boundedLimit,
+        });
+        sessions.push(...statusSessions);
+      }
+
+      const sortedSessions = sessions
+        .sort((a, b) => {
+          if (b.updatedAt !== a.updatedAt) {
+            return b.updatedAt - a.updatedAt;
+          }
+
+          return b.sessionNumber.localeCompare(a.sessionNumber);
+        })
+        .slice(0, boundedLimit);
+      const rows = await Promise.all(
+        sortedSessions.map((session) =>
+          buildSessionOperationsRow(ctx, session, now),
+        ),
+      );
+
+      return {
+        generatedAt: now,
+        rows,
+        summary: {
+          activeCount: rows.filter((row) => row.status === "active").length,
+          heldCount: rows.filter((row) => row.status === "held").length,
+          expiredCount: rows.filter((row) => row.isExpired).length,
+          activeHoldQuantity: rows.reduce(
+            (sum, row) => sum + row.activeHolds.totalQuantity,
+            0,
+          ),
+        },
+      };
+    },
+  ),
 });
 
 export const expireSessionFromOperations = mutation({
