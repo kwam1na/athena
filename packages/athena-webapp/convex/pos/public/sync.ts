@@ -373,7 +373,6 @@ async function scheduleRegisterCloseoutNotifications(
       !registerSession ||
       registerSession.status !== "closed" ||
       typeof registerSession.countedCash !== "number" ||
-      registerSession.countedCash - registerSession.expectedCash !== 0 ||
       registerSession.closeoutNotificationLocalEventId === mapping.localEventId
     ) {
       continue;
