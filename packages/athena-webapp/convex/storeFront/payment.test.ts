@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // Shared-demo payment denial preserves the existing public result envelopes.
 
 const paystackMock = vi.hoisted(() => ({
+  initiateRefund: vi.fn(),
   verifyTransaction: vi.fn(),
 }));
 const emailMock = vi.hoisted(() => ({
@@ -11,7 +12,7 @@ const emailMock = vi.hoisted(() => ({
 
 vi.mock("../services/paystackService", () => ({
   initializeTransaction: vi.fn(),
-  initiateRefund: vi.fn(),
+  initiateRefund: paystackMock.initiateRefund,
   verifyTransaction: paystackMock.verifyTransaction,
 }));
 vi.mock("../services/orderEmailService", () => ({
@@ -39,6 +40,31 @@ function getHandler(definition: unknown) {
 }
 
 describe("storefront refund money contract", () => {
+  it("simulates provider refunds for demo actors while preserving order writes", async () => {
+    const runMutation = vi
+      .fn()
+      .mockResolvedValueOnce({
+        refundAmount: 2_500,
+        reservationId: "reservation-1",
+        success: true,
+      })
+      .mockResolvedValue(true);
+    const result = await getHandler(refundPayment)(
+      {
+        runMutation,
+        runQuery: vi.fn(async () => true),
+      } as never,
+      {
+        externalTransactionId: "demo-transaction",
+        returnItemsToStock: false,
+      } as never,
+    );
+
+    expect(result).toEqual(ok({ message: "Refund simulated in the demo." }));
+    expect(paystackMock.initiateRefund).not.toHaveBeenCalled();
+    expect(runMutation).toHaveBeenCalledTimes(2);
+  });
+
   it("accepts representative changed payment action return contracts", () => {
     assertConformsToExportedReturns(createTransaction, {
       success: false,

@@ -11,6 +11,7 @@ import {
   applyCommerceInventoryEffectWithCtx,
   outboundBasisFromEffect,
 } from "../reporting/inventory/commerceEffects";
+import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
 const entity = "onlineOrderItem";
 
@@ -48,6 +49,14 @@ const updateOnlineOrderItem = async (
 ) => {
   const existingOrderItem = await ctx.db.get("onlineOrderItem", args.id);
   if (!existingOrderItem) return;
+
+  const order = await ctx.db.get("onlineOrder", existingOrderItem.orderId);
+  if (!order) return;
+  await requireReadySharedDemoStoreCapabilityIfApplicable(
+    ctx,
+    "orders.manage",
+    order.storeId,
+  );
 
   await ctx.db.patch("onlineOrderItem", args.id, args.updates);
 

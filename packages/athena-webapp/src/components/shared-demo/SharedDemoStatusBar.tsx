@@ -1,8 +1,9 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Home } from "lucide-react";
+import { ArrowLeftFromLine, Home } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
+import { PUBLIC_HOME_PATH } from "@/lib/navigation/appEntryRoutes";
 
 function normalizePathname(pathname: string) {
   return pathname.replace(/\/+$/, "") || "/";
@@ -45,6 +46,12 @@ export function SharedDemoStatusBar({
         <Link to={homeHref} aria-label="Owner home">
           <Home aria-hidden="true" />
           <span className="hidden lg:inline">Owner home</span>
+        </Link>
+      </Button>
+      <Button asChild variant="utility" size="sm">
+        <Link to={PUBLIC_HOME_PATH}>
+          <ArrowLeftFromLine aria-hidden="true" />
+          <span>Exit demo</span>
         </Link>
       </Button>
     </div>

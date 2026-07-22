@@ -27,14 +27,19 @@ describe("shared demo policy", () => {
       "approvals.manage",
       "cash.control.write",
       "catalog.quick_add",
+      "customer.messaging.send",
       "daily_operations.write",
       "expense.manage",
       "inventory.adjust",
       "orders.fulfill",
+      "orders.manage",
+      "orders.return",
+      "payments.refund",
       "pos.sale.complete",
       "pos.sync.write",
       "pos.transaction.correct",
       "reports.read",
+      "reviews.manage",
       "staff.authenticate",
       "staff.communication.write",
     ]);
@@ -118,6 +123,10 @@ describe("shared demo policy", () => {
       kind: "simulated",
       label: "No customer message was sent.",
     });
+    expect(await decideSharedDemoEffect("payment.refund", { live })).toEqual({
+      kind: "simulated",
+      label: "No live payment refund was issued.",
+    });
     expect(await decideSharedDemoEffect("unknown.gateway", { live })).toEqual({
       kind: "denied",
       reason: "unclassified",
@@ -164,8 +173,16 @@ describe("shared demo policy", () => {
     expect(() =>
       requireSharedDemoOrderFulfillmentUpdate({ status: "picked-up" }),
     ).not.toThrow();
+    expect(() =>
+      requireSharedDemoOrderFulfillmentUpdate({ status: "cancelled" }),
+    ).not.toThrow();
+    expect(() =>
+      requireSharedDemoOrderFulfillmentUpdate({
+        paymentCollected: true,
+        paymentCollectedAt: 123,
+      }),
+    ).not.toThrow();
     for (const update of [
-      { status: "cancelled" },
       { status: "refunded" },
       { paymentCollected: true },
       { status: "delivered", paymentCollected: true },

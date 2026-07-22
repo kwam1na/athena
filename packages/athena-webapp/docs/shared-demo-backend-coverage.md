@@ -101,6 +101,10 @@ public writes.
 | Cash control | Real operational write; no money movement |
 | Operational approvals | Real manager decisions within the shared store |
 | Order fulfillment | Real status write; notification suppressed |
+| Order management and returns | Real shared-store line-item, cancellation, restock, return, and exchange writes |
+| Refunds | Real shared-store refund state with the payment-provider refund simulated |
+| Customer messaging | Real sent-status write with order and feedback emails simulated |
+| Reviews | Real feedback-request status write; no customer email sent |
 | Staff communication | Real bounded shared message; no identity management |
 | Daily Operations | Real store-day start write |
 | Reports | Read-only existing projections |
@@ -114,9 +118,10 @@ adapted by `convex/sharedDemo/operationAdapter.ts`.
 
 ## External effects
 
-Customer and order notifications return labeled simulated outcomes. Payment,
-refund, export, and integration gateways are denied. A shared-demo caller never
-receives a live-effect permit and provider secrets are not loaded.
+Customer messages, order notifications, and payment refunds return labeled
+simulated outcomes. Payment collection, export, and integration gateways are
+denied. A shared-demo caller never receives a live-effect permit and provider
+secrets are not loaded.
 
 ## Restore contract
 

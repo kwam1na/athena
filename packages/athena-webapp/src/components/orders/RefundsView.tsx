@@ -18,6 +18,7 @@ import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import {
   refundReducer,
   calculateRefundAmount,
+  canUsePartialRefund,
   validateRefund,
   getAmountRefunded,
   getNetAmount,
@@ -72,6 +73,7 @@ export function RefundsView() {
     state.includeDeliveryFee,
   );
   const availableItems = getAvailableItems(order);
+  const partialRefundAvailable = canUsePartialRefund(availableItems.length);
 
   const canRefund = netAmount > 0;
 
@@ -279,9 +281,10 @@ export function RefundsView() {
           <RadioGroup
             className="space-y-layout-sm"
             value={state.mode || ""}
-            onValueChange={(value: string) =>
-              dispatch({ type: "SET_MODE", mode: value as RefundMode })
-            }
+            onValueChange={(value: string) => {
+              if (value === "partial" && !partialRefundAvailable) return;
+              dispatch({ type: "SET_MODE", mode: value as RefundMode });
+            }}
           >
             <div className="flex items-start gap-layout-sm rounded-lg border border-border p-layout-sm transition-colors hover:bg-muted/50 active:bg-muted">
               <RadioGroupItem
@@ -303,15 +306,26 @@ export function RefundsView() {
               </Label>
             </div>
 
-            <div className="flex items-start gap-layout-sm rounded-lg border border-border p-layout-sm transition-colors hover:bg-muted/50 active:bg-muted">
+            <div
+              className={`flex items-start gap-layout-sm rounded-lg border border-border p-layout-sm transition-colors ${
+                partialRefundAvailable
+                  ? "hover:bg-muted/50 active:bg-muted"
+                  : "cursor-not-allowed bg-muted/30 opacity-60"
+              }`}
+            >
               <RadioGroupItem
                 className="mt-0.5 shrink-0"
+                disabled={!partialRefundAvailable}
                 value="partial"
                 id="partial"
               />
               <Label
                 htmlFor="partial"
-                className="min-w-0 flex-1 cursor-pointer space-y-1 leading-none"
+                className={`min-w-0 flex-1 space-y-1 leading-none ${
+                  partialRefundAvailable
+                    ? "cursor-pointer"
+                    : "cursor-not-allowed"
+                }`}
               >
                 <span className="block text-sm font-medium text-foreground">
                   Partial refund

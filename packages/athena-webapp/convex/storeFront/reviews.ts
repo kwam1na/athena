@@ -15,6 +15,8 @@ import { ok, userError } from "../../shared/commandResult";
 
 const entity = "review" as const;
 const MAX_REVIEWS = 500;
+const enforceSharedDemoActionCapabilityRef =
+  (internal as any).sharedDemo.actor.enforceSharedDemoActionCapability;
 
 async function getStoreFrontActorById(
   ctx: MutationCtx | QueryCtx,
@@ -618,6 +620,11 @@ export const sendFeedbackRequest = action({
   },
   returns: commandResultValidator(v.null()),
   handler: async (ctx, args) => {
+    const isSharedDemo = await ctx.runQuery(
+      enforceSharedDemoActionCapabilityRef,
+      { capability: "reviews.manage" },
+    );
+
     // Get the order item
     const orderItem = await ctx.runQuery(internal.storeFront.onlineOrderItem.get, {
       id: args.orderItemId,
@@ -637,6 +644,27 @@ export const sendFeedbackRequest = action({
       });
     }
 
+    if (orderItem.orderId !== args.orderId) {
+      return userError({
+        code: "validation_failed",
+        message: "Order item does not belong to this order.",
+      });
+    }
+
+    if (isSharedDemo) {
+      const order = await ctx.runQuery(
+        internal.storeFront.onlineOrder.getInternal,
+        { identifier: args.orderId },
+      );
+      if (!order) {
+        return userError({ code: "not_found", message: "Order not found." });
+      }
+      await ctx.runQuery(enforceSharedDemoActionCapabilityRef, {
+        capability: "reviews.manage",
+        storeId: order.storeId,
+      });
+    }
+
     // Get product SKU details
     const productSku = await ctx.runQuery(internal.inventory.productSku.retrieve, {
       id: args.productSkuId,
@@ -652,13 +680,15 @@ export const sendFeedbackRequest = action({
     const review_url = `${process.env.STORE_URL}/shop/orders/${args.orderId}/${args.orderItemId}/review`;
 
     // Send feedback request email
-    const response = await sendFeedbackRequestEmail({
-      customerEmail: args.customerEmail,
-      customer_name: args.customerName,
-      product_name: getProductName(productSku) || "Product",
-      product_image_url: productSku.images?.[0] || "",
-      review_url,
-    });
+    const response = isSharedDemo
+      ? { ok: true }
+      : await sendFeedbackRequestEmail({
+          customerEmail: args.customerEmail,
+          customer_name: args.customerName,
+          product_name: getProductName(productSku) || "Product",
+          product_image_url: productSku.images?.[0] || "",
+          review_url,
+        });
 
     if (!response.ok) {
       return userError({

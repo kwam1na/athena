@@ -118,10 +118,12 @@ export const formatOrderItems = (
 async function handleOrderStatusUpdate({
   order,
   newStatus,
+  simulateExternalEffects = false,
   store,
 }: {
   order: OnlineOrder;
   newStatus: string;
+  simulateExternalEffects?: boolean;
   store: Store;
 }): Promise<EmailResult | undefined> {
   console.info(
@@ -137,6 +139,8 @@ async function handleOrderStatusUpdate({
     pickupDetails,
   }: EmailConfig): Promise<boolean> {
     console.info(`sending ${type} email for order #${order.orderNumber}`);
+
+    if (simulateExternalEffects) return true;
 
     const items = formatOrderItems(
       order.items || [],
@@ -293,6 +297,7 @@ async function handleOrderStatusUpdate({
 export async function processOrderUpdateEmail(
   ctx: ActionCtx,
   args: { orderId: string; newStatus: string },
+  options: { simulateExternalEffects?: boolean } = {},
 ): Promise<UpdateEmailResult> {
   const order = await ctx.runQuery(
     internal.storeFront.onlineOrder.getInternal,
@@ -307,6 +312,16 @@ export async function processOrderUpdateEmail(
       success: false,
       message: "Order not found",
     };
+  }
+
+  if (options.simulateExternalEffects) {
+    await ctx.runQuery(
+      (internal as any).sharedDemo.actor.enforceSharedDemoActionCapability,
+      {
+        capability: "customer.messaging.send",
+        storeId: order.storeId,
+      },
+    );
   }
 
   const store = await ctx.runQuery(internal.inventory.stores.findById, {
@@ -328,6 +343,7 @@ export async function processOrderUpdateEmail(
   const emailResult = await handleOrderStatusUpdate({
     order,
     newStatus: args.newStatus,
+    simulateExternalEffects: options.simulateExternalEffects,
     store,
   });
 
@@ -347,6 +363,9 @@ export async function processOrderUpdateEmail(
 
   if (didSendConfirmationEmail) {
     await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
+      demoCapability: options.simulateExternalEffects
+        ? "customer.messaging.send"
+        : undefined,
       orderId: order._id,
       update: {
         didSendConfirmationEmail,
@@ -358,6 +377,9 @@ export async function processOrderUpdateEmail(
 
   if (didSendReadyEmail) {
     await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
+      demoCapability: options.simulateExternalEffects
+        ? "customer.messaging.send"
+        : undefined,
       orderId: order._id,
       update: {
         didSendReadyEmail,
@@ -369,6 +391,9 @@ export async function processOrderUpdateEmail(
 
   if (didSendCompletedEmail) {
     await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
+      demoCapability: options.simulateExternalEffects
+        ? "customer.messaging.send"
+        : undefined,
       orderId: order._id,
       update: {
         didSendCompletedEmail,
@@ -380,6 +405,9 @@ export async function processOrderUpdateEmail(
 
   if (didSendCancelledEmail) {
     await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
+      demoCapability: options.simulateExternalEffects
+        ? "customer.messaging.send"
+        : undefined,
       orderId: order._id,
       update: {
         didSendCancelledEmail,

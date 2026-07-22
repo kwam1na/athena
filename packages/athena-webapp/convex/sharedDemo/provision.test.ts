@@ -10,6 +10,7 @@ import {
   SHARED_DEMO_STORE_IDENTITY,
   sharedDemoProductImageUrl,
   sharedDemoPickupOrderAmount,
+  sharedDemoPickupOrderTimeline,
 } from "../../shared/sharedDemoStory";
 import {
   calculateSharedDemoExpectedCash,
@@ -174,11 +175,27 @@ describe("shared demo provisioning", () => {
     expect(SHARED_DEMO_PICKUP_ORDER.customerEmail).toBe(
       "customer@osustudio.com",
     );
+    expect(SHARED_DEMO_PICKUP_ORDER.customerFirstName).toBe("Abena");
+    expect(SHARED_DEMO_PICKUP_ORDER.customerLastName).toBe("Owusu");
+    expect(SHARED_DEMO_PICKUP_ORDER.customerPhoneNumber).toBe("024 555 0142");
+    expect(sharedDemoPickupOrderTimeline(10 * 60 * 60 * 1_000)).toEqual({
+      orderReceivedEmailSentAt: 6 * 60 * 60 * 1_000 + 60_000,
+      placedAt: 6 * 60 * 60 * 1_000,
+    });
     expect(SHARED_DEMO_STAFF_STORY.cashier.fullName).toBe("Afua Okyere");
     expect(SHARED_DEMO_STAFF_STORY.manager.fullName).toBe("Kwabena Agyei");
     expect(SHARED_DEMO_OPENING_MESSAGE.startsWith("Afua:")).toBe(true);
     expect(SHARED_DEMO_REGISTER_NUMBER).toBe("01");
     expect(SHARED_DEMO_BASELINE_VERSION).toBe(19);
+  });
+
+  it("seeds the pickup order timeline and received-email state", () => {
+    const source = readFileSync("convex/sharedDemo/provision.ts", "utf8");
+    expect(source.match(/placedAt: pickupOrderTimeline\.placedAt/g)).toHaveLength(1);
+    expect(
+      source.match(/pickupOrderTimeline\.orderReceivedEmailSentAt/g),
+    ).toHaveLength(1);
+    expect(source.match(/didSendConfirmationEmail: true/g)).toHaveLength(1);
   });
 
   it("refuses to capture a missing-state baseline when marker rows have drifted", () => {

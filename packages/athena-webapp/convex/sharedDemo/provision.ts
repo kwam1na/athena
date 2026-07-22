@@ -13,6 +13,7 @@ import {
   SHARED_DEMO_SUBCATEGORIES,
   SHARED_DEMO_TERMINAL_DISPLAY_NAME,
   sharedDemoPickupOrderAmount,
+  sharedDemoPickupOrderTimeline,
   sharedDemoProductBySku,
   sharedDemoProductImageUrl,
   type SharedDemoProductStory,
@@ -776,9 +777,9 @@ async function migrateSharedDemoStoryWithCtx(
     amount: orderAmount,
     customerDetails: {
       email: SHARED_DEMO_PICKUP_ORDER.customerEmail,
-      firstName: pickupOrder.customerDetails?.firstName ?? "Demo",
-      lastName: pickupOrder.customerDetails?.lastName ?? "Customer",
-      phoneNumber: pickupOrder.customerDetails?.phoneNumber ?? "0000000000",
+      firstName: SHARED_DEMO_PICKUP_ORDER.customerFirstName,
+      lastName: SHARED_DEMO_PICKUP_ORDER.customerLastName,
+      phoneNumber: SHARED_DEMO_PICKUP_ORDER.customerPhoneNumber,
     },
     paymentDue: orderAmount,
   });
@@ -1528,6 +1529,7 @@ export const provisionSharedDemo = internalMutation({
     if (!orderIdentity)
       throw new Error("Demo pickup order product is missing.");
     const orderAmount = sharedDemoPickupOrderAmount();
+    const pickupOrderTimeline = sharedDemoPickupOrderTimeline(now);
     const terminalId = await ctx.db.insert("posTerminal", {
       browserInfo: { platform: "shared_demo", userAgent: "Athena Demo" },
       displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME,
@@ -1611,20 +1613,23 @@ export const provisionSharedDemo = internalMutation({
       checkoutSessionId,
       customerDetails: {
         email: SHARED_DEMO_PICKUP_ORDER.customerEmail,
-        firstName: "Demo",
-        lastName: "Customer",
-        phoneNumber: "0000000000",
+        firstName: SHARED_DEMO_PICKUP_ORDER.customerFirstName,
+        lastName: SHARED_DEMO_PICKUP_ORDER.customerLastName,
+        phoneNumber: SHARED_DEMO_PICKUP_ORDER.customerPhoneNumber,
       },
       deliveryDetails: null,
       deliveryFee: 0,
       deliveryInstructions: null,
       deliveryMethod: "pickup",
       deliveryOption: null,
+      didSendConfirmationEmail: true,
       discount: null,
       externalTransactionId: "shared-demo-card-payment-001",
       hasVerifiedPayment: true,
       isPODOrder: false,
       orderNumber: SHARED_DEMO_PICKUP_ORDER.orderNumber,
+      orderReceivedEmailSentAt:
+        pickupOrderTimeline.orderReceivedEmailSentAt,
       paymentDue: orderAmount,
       paymentMethod: {
         bank: "Demo Bank",
@@ -1634,6 +1639,7 @@ export const provisionSharedDemo = internalMutation({
         type: "online_payment",
       },
       pickupLocation: "Demo counter",
+      placedAt: pickupOrderTimeline.placedAt,
       readyAt: now - 1_800_000,
       status: "ready",
       storeFrontUserId: guestId,

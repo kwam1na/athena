@@ -707,7 +707,7 @@ export const refundPayment = action({
     let refundReservation: RefundReservationResult | undefined;
     let refundFinalized = false;
 
-    await ctx.runQuery(enforceSharedDemoActionCapabilityRef, {
+    const isSharedDemo = await ctx.runQuery(enforceSharedDemoActionCapabilityRef, {
       capability: "payments.refund",
     });
     try {
@@ -739,10 +739,19 @@ export const refundPayment = action({
       const refundAmount = reservation.refundAmount;
 
       // Initiate refund with Paystack
-      const refundResponse = await initiateRefund({
-        transactionReference: args.externalTransactionId,
-        amount: refundAmount,
-      });
+      const refundResponse = isSharedDemo
+        ? {
+            data: {
+              transaction: {
+                reference: `shared-demo-refund-${reservation.reservationId}`,
+              },
+            },
+            message: "Refund simulated in the demo.",
+          }
+        : await initiateRefund({
+            transactionReference: args.externalTransactionId,
+            amount: refundAmount,
+          });
       const refundId =
         refundResponse.data?.transaction?.reference ?? `refund-${Date.now()}`;
 

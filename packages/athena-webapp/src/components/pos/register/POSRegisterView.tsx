@@ -2124,6 +2124,12 @@ function ResolvedPOSRegisterViewContent({
   const workspaceSidebarServiceItems = isPosRegisterLocked
     ? []
     : (viewModel.cart?.serviceItems ?? []);
+  const workspaceSidebarItemCount =
+    workspaceSidebarCartItems.reduce((sum, item) => sum + item.quantity, 0) +
+    workspaceSidebarServiceItems.reduce(
+      (sum, item) => sum + item.quantity,
+      0,
+    );
   const workspaceSidebarCheckout = isPosRegisterLocked
     ? {
         ...viewModel.checkout,
@@ -2715,7 +2721,7 @@ function ResolvedPOSRegisterViewContent({
                   {!isPosWorkflow && isStaffSignedIn ? (
                     <ExpenseSummaryStrip
                       currency={workspaceSidebarCheckout.currency}
-                      itemCount={cartItemCount}
+                      itemCount={workspaceSidebarItemCount}
                       total={
                         shouldPreviewCompletedExpenseItems
                           ? (viewModel.checkout.completedTransactionData

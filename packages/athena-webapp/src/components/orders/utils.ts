@@ -1,3 +1,10 @@
+export function getOnlineOrderPlacedAt(order: {
+  _creationTime: number;
+  placedAt?: number;
+}) {
+  return order.placedAt ?? order._creationTime;
+}
+
 export const getOrderState = (order: any) => {
   const isOrderOpen = order?.status === "open";
 
@@ -71,6 +78,13 @@ export const getPickupActionState = (order: any) => {
       isPickupOrder && isOrderReady && isPODOrder && !order?.paymentCollected,
   };
 };
+
+export function shouldShowPickupExceptionAction(input: {
+  canMarkPickupException: boolean;
+  isSharedDemo: boolean;
+}) {
+  return input.canMarkPickupException && !input.isSharedDemo;
+}
 
 /**
  * Calculate the discount value based on discount type and span

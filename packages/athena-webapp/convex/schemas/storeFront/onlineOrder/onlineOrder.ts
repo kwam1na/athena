@@ -83,6 +83,7 @@ export const onlineOrderSchema = v.object({
   orderCancelledEmailSentAt: v.optional(v.number()),
   orderCompletedEmailSentAt: v.optional(v.number()),
   paymentMethod: v.optional(paymentMethodSchema),
+  placedAt: v.optional(v.number()),
   pickupLocation: v.union(v.string(), v.null()),
   readyAt: v.optional(v.number()),
   refunds: v.optional(

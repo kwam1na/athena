@@ -93,6 +93,10 @@ describe("SharedDemoStatusBar", () => {
       "data-router-link",
       "true",
     );
+    expect(screen.getByRole("link", { name: "Exit demo" })).toHaveAttribute(
+      "href",
+      "/landing",
+    );
     expect(
       screen.queryByRole("button", { name: "Open demo guide" }),
     ).not.toBeInTheDocument();

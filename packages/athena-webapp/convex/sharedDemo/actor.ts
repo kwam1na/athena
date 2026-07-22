@@ -120,6 +120,8 @@ export async function requireSharedDemoStoreReadIfApplicable(
 
 const sharedDemoCapabilityValidator = v.union(
   v.literal("approvals.manage"),
+  v.literal("customer.messaging.send"),
+  v.literal("expense.manage"),
   v.literal("pos.sale.complete"),
   v.literal("pos.sync.write"),
   v.literal("pos.transaction.correct"),
@@ -127,6 +129,9 @@ const sharedDemoCapabilityValidator = v.union(
   v.literal("cash.control.write"),
   v.literal("catalog.quick_add"),
   v.literal("orders.fulfill"),
+  v.literal("orders.manage"),
+  v.literal("orders.return"),
+  v.literal("reviews.manage"),
   v.literal("staff.communication.write"),
   v.literal("daily_operations.write"),
   v.literal("reports.read"),
@@ -142,11 +147,20 @@ const sharedDemoCapabilityValidator = v.union(
 );
 
 export const enforceSharedDemoActionCapability = internalQuery({
-  args: { capability: sharedDemoCapabilityValidator },
-  returns: v.null(),
+  args: {
+    capability: sharedDemoCapabilityValidator,
+    storeId: v.optional(v.id("store")),
+  },
+  returns: v.boolean(),
   handler: async (ctx, args) => {
-    await requireSharedDemoCapabilityIfApplicable(ctx, args.capability);
-    return null;
+    const actor = args.storeId
+      ? await requireSharedDemoStoreCapabilityIfApplicable(
+          ctx,
+          args.capability,
+          args.storeId,
+        )
+      : await requireSharedDemoCapabilityIfApplicable(ctx, args.capability);
+    return Boolean(actor);
   },
 });
 

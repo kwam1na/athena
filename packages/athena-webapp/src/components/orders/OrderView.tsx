@@ -39,7 +39,12 @@ import { Switch } from "../ui/switch";
 import { Label } from "../ui/label";
 import { RefundsView } from "./RefundsView";
 import { ActivityView } from "./ActivityView";
-import { getOrderState, getPickupActionState } from "./utils";
+import {
+  getOrderState,
+  getOnlineOrderPlacedAt,
+  getPickupActionState,
+  shouldShowPickupExceptionAction,
+} from "./utils";
 import { OrderStatus } from "./OrderStatus";
 import { EmailStatusView } from "./EmailStatusView";
 import { NavigateBackButton } from "../common/PageHeader";
@@ -303,12 +308,17 @@ const Header = () => {
   const isPODPickupOrder =
     isPickup &&
     (order.isPODOrder || order.paymentMethod?.type === "payment_on_delivery");
+  const showPickupExceptionAction = shouldShowPickupExceptionAction({
+    canMarkPickupException,
+    isSharedDemo: Boolean(sharedDemo),
+  });
 
   const canPerformInitialTransition =
     (order.items?.some((item) => !item.isRefunded) && hasIssuedRefund) ||
     isOrderOpen;
 
-  const orderDate = new Date(order._creationTime);
+  const orderPlacedAt = getOnlineOrderPlacedAt(order);
+  const orderDate = new Date(orderPlacedAt);
 
   return (
     <>
@@ -373,7 +383,7 @@ const Header = () => {
                 hour: "numeric",
                 minute: "2-digit",
               })}{" "}
-              · {getRelativeTime(order._creationTime)}
+              · {getRelativeTime(orderPlacedAt)}
             </p>
           </div>
         </div>
@@ -446,7 +456,7 @@ const Header = () => {
             </LoadingButton>
           )}
 
-          {canMarkPickupException && (
+          {showPickupExceptionAction && (
             <LoadingButton
               isLoading={isUpdatingOrder}
               disabled={!isReady}

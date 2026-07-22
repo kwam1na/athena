@@ -8,6 +8,7 @@ import {
   ATHENA_CAPABILITY_CATALOG,
   classifyAthenaPublicWrite,
   isSharedDemoCapabilityAllowed,
+  SHARED_DEMO_ALLOWED_CAPABILITIES,
   type AthenaCapability,
 } from "../platform/capabilityCatalog";
 
@@ -42,7 +43,7 @@ export const SHARED_DEMO_EFFECT_CLASSIFICATIONS = [
     label: "No customer notification was sent.",
   },
   { gateway: "payment.collect", decision: "denied" },
-  { gateway: "payment.refund", decision: "denied" },
+  { gateway: "payment.refund", decision: "simulated", label: "No live payment refund was issued." },
   { gateway: "export.deliver", decision: "denied" },
   { gateway: "integration.dispatch", decision: "denied" },
 ] as const;
@@ -60,6 +61,9 @@ function isSharedDemoOperationCapabilityAllowed(
 }
 
 const SHARED_DEMO_FULFILLMENT_STATUSES = new Set([
+  "cancelled",
+  "out-for-delivery",
+  "pickup-exception",
   "ready-for-delivery",
   "ready-for-pickup",
   "picked-up",
@@ -70,12 +74,18 @@ export function requireSharedDemoOrderFulfillmentUpdate(
   update: Record<string, unknown>,
 ) {
   const keys = Object.keys(update);
-  if (
-    keys.length !== 1 ||
-    keys[0] !== "status" ||
-    typeof update.status !== "string" ||
-    !SHARED_DEMO_FULFILLMENT_STATUSES.has(update.status)
-  ) {
+  const isFulfillmentStatusUpdate =
+    keys.length === 1 &&
+    keys[0] === "status" &&
+    typeof update.status === "string" &&
+    SHARED_DEMO_FULFILLMENT_STATUSES.has(update.status);
+  const isPaymentCollectionUpdate =
+    keys.length === 2 &&
+    keys.includes("paymentCollected") &&
+    keys.includes("paymentCollectedAt") &&
+    update.paymentCollected === true &&
+    typeof update.paymentCollectedAt === "number";
+  if (!isFulfillmentStatusUpdate && !isPaymentCollectionUpdate) {
     denySharedDemoAction();
   }
 }
@@ -96,6 +106,30 @@ export function requireSharedDemoRegisterSessionSyncReview(args: {
 }
 
 export const SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY = [
+  { functionName: "operations/approvalRequests:decideApprovalRequest", capability: "approvals.manage" },
+  { functionName: "operations/staffCredentials:authenticateStaffCredential", capability: "staff.authenticate" },
+  { functionName: "operations/staffCredentials:authenticateStaffCredentialForApproval", capability: "staff.authenticate" },
+  { functionName: "pos/public/transactions:completeTransaction", capability: "pos.sale.complete" },
+  { functionName: "pos/public/transactions:markReceiptPrinted", capability: "pos.transaction.correct" },
+  { functionName: "stockOps/adjustments:submitStockAdjustmentBatch", capability: "inventory.adjust" },
+  { functionName: "cashControls/deposits:recordRegisterSessionDeposit", capability: "cash.control.write" },
+  { functionName: "cashControls/deposits:resolveRegisterSessionSyncReview", capability: "cash.control.write" },
+  { functionName: "cashControls/closeouts:correctRegisterSessionOpeningFloat", capability: "cash.control.write" },
+  { functionName: "cashControls/closeouts:submitRegisterSessionCloseout", capability: "cash.control.write" },
+  { functionName: "cashControls/closeouts:reviewRegisterSessionCloseout", capability: "cash.control.write" },
+  { functionName: "cashControls/closeouts:reopenRegisterSessionCloseout", capability: "cash.control.write" },
+  { functionName: "pos/public/catalog:quickAddSku", capability: "catalog.quick_add" },
+  { functionName: "storeFront/onlineOrder:update", capability: "orders.fulfill" },
+  { functionName: "storeFront/onlineOrderItem:update", capability: "orders.manage" },
+  { functionName: "storeFront/onlineOrder:returnItemsToStock", capability: "orders.return" },
+  { functionName: "storeFront/onlineOrder:returnAllItemsToStock", capability: "orders.return" },
+  { functionName: "storeFront/onlineOrderUtilFns:sendOrderUpdateEmail", capability: "customer.messaging.send" },
+  { functionName: "storeFront/reviews:sendFeedbackRequest", capability: "reviews.manage" },
+  { functionName: "operations/staffMessages:postStaffMessage", capability: "staff.communication.write" },
+  { functionName: "operations/dailyOpening:startStoreDay", capability: "daily_operations.write" },
+  { functionName: "pos/public/terminals:registerTerminal", capability: "daily_operations.write" },
+  { functionName: "pos/public/sync:ingestLocalEvents", capability: "pos.sync.write" },
+  { functionName: "pos/public/sync:ingestLocalEvents", capability: "expense.manage" },
   {
     functionName: "reporting/public:getReportsOverview",
     capability: "reports.read",
@@ -127,6 +161,10 @@ export const SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY = [
   {
     functionName: "reporting/export:requestExport",
     capability: "exports.generate",
+  },
+  {
+    functionName: "storeFront/onlineOrder:processReturnExchange",
+    capability: "payments.refund",
   },
   {
     functionName: "inventory/stores:remove",
@@ -234,6 +272,16 @@ export function validateSharedDemoCoverage() {
       errors.push(`Duplicate demo gateway: ${entry.gateway}`);
     }
     seenGateways.add(entry.gateway);
+  }
+  const enforcedCapabilities = new Set(
+    SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY.map((entry) => entry.capability),
+  );
+  for (const capability of SHARED_DEMO_ALLOWED_CAPABILITIES) {
+    if (!enforcedCapabilities.has(capability)) {
+      errors.push(
+        `No enforced public function represents allowed demo capability: ${capability}`,
+      );
+    }
   }
   return errors;
 }

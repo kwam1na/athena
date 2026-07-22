@@ -66,6 +66,8 @@ describe("shared demo domain restore registry", () => {
         "posSession",
         "posSessionItem",
         "posTransactionItem",
+        "expenseTransaction",
+        "expenseTransactionItem",
         "productSkuSearch",
         "reportingInventoryPosition",
         "reportingInventoryPositionRevision",
@@ -87,6 +89,7 @@ describe("shared demo domain restore registry", () => {
         "approvalRequesterChallenge",
         "managerElevation",
         "operationalWorkItem",
+        "paymentAllocation",
         "reportingIngress",
         "reportingIngressSourceReference",
         "reportingIngressLine",
@@ -222,9 +225,12 @@ describe("shared demo domain restore registry", () => {
       "approvalRequesterChallenge",
       "managerElevation",
       "operationalWorkItem",
+      "paymentAllocation",
       "stockAdjustmentBatch",
       "cycleCountDraft",
       "cycleCountDraftLine",
+      "expenseTransaction",
+      "expenseTransactionItem",
       "staffCredential",
       "posPendingCheckoutItem",
       "reportingInventoryPositionRevision",
@@ -272,6 +278,9 @@ describe("shared demo domain restore registry", () => {
     const source = readFileSync("convex/sharedDemo/domainRestore.ts", "utf8");
     expect(source).toContain('tableName === "cycleCountDraftLine"');
     expect(source).toContain('withIndex("by_draftId"');
+    expect(source).toContain('tableName === "expenseTransactionItem"');
+    expect(source).toContain('ctx.db.query("expenseTransaction")');
+    expect(source).toContain('ctx.db.query("expenseTransactionItem").withIndex("by_transactionId"');
     expect(source).toContain('tableName === "reportingInventoryDeficitLedger"');
     expect(source).toContain('"by_positionId_status"');
     expect(source).toContain('tableName === "reportingInventoryDeficitLot"');

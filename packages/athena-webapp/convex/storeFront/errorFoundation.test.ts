@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ok } from "../../shared/commandResult";
 
 const mocks = vi.hoisted(() => ({
   processOrderUpdateEmail: vi.fn(),
+  sendFeedbackRequestEmail: vi.fn(),
 }));
 
 vi.mock("./helpers/orderUpdateEmails", async (importOriginal) => {
@@ -11,6 +13,14 @@ vi.mock("./helpers/orderUpdateEmails", async (importOriginal) => {
   return {
     ...actual,
     processOrderUpdateEmail: mocks.processOrderUpdateEmail,
+  };
+});
+
+vi.mock("../mailersend", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../mailersend")>();
+  return {
+    ...actual,
+    sendFeedbackRequestEmail: mocks.sendFeedbackRequestEmail,
   };
 });
 
@@ -29,6 +39,7 @@ function getHandler(definition: unknown) {
 describe("storefront error foundation", () => {
   beforeEach(() => {
     mocks.processOrderUpdateEmail.mockReset();
+    mocks.sendFeedbackRequestEmail.mockReset();
   });
 
   it("returns a not_found user_error when an order update targets a missing order", async () => {
@@ -110,10 +121,13 @@ describe("storefront error foundation", () => {
 
   it("returns a precondition_failed user_error when feedback has already been requested", async () => {
     const ctx = {
-      runQuery: vi.fn(async () => ({
-        _id: "order-item-1",
-        feedbackRequested: true,
-      })),
+      runQuery: vi
+        .fn()
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce({
+          _id: "order-item-1",
+          feedbackRequested: true,
+        }),
     };
 
     const result = await getHandler(sendFeedbackRequest)(ctx as never, {
@@ -139,7 +153,9 @@ describe("storefront error foundation", () => {
       message: "No email sent for this status",
     });
 
-    const result = await getHandler(sendOrderUpdateEmail)({} as never, {
+    const result = await getHandler(sendOrderUpdateEmail)({
+      runQuery: vi.fn(async () => false),
+    } as never, {
       newStatus: "completed",
       orderId: "order-1",
     } as never);
@@ -151,6 +167,45 @@ describe("storefront error foundation", () => {
         message: "No email sent for this status",
       },
     });
+    expect(mocks.processOrderUpdateEmail).toHaveBeenCalledWith(
+      expect.anything(),
+      { newStatus: "completed", orderId: "order-1" },
+      { simulateExternalEffects: false },
+    );
+  });
+
+  it("records demo feedback requests without sending a customer email", async () => {
+    const runMutation = vi.fn(async () => null);
+    const ctx = {
+      runMutation,
+      runQuery: vi
+        .fn()
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce({
+          _id: "order-item-1",
+          feedbackRequested: false,
+          orderId: "order-1",
+        })
+        .mockResolvedValueOnce({ _id: "order-1", storeId: "store-1" })
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce({
+          _id: "sku-1",
+          images: [],
+          productName: "Black soap",
+        }),
+    };
+
+    const result = await getHandler(sendFeedbackRequest)(ctx as never, {
+      customerEmail: "customer@example.com",
+      customerName: "Abena Owusu",
+      orderId: "order-1",
+      orderItemId: "order-item-1",
+      productSkuId: "sku-1",
+    } as never);
+
+    expect(result).toEqual(ok(null));
+    expect(mocks.sendFeedbackRequestEmail).not.toHaveBeenCalled();
+    expect(runMutation).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the migrated storefront command surfaces on the shared command-result foundation", () => {

@@ -39,6 +39,11 @@ describe("SharedDemoRuntime architecture", () => {
     expect(source).not.toContain("store.markEventsNeedsReview");
   });
 
+  it("provisions browser terminals with heartbeat disabled", () => {
+    expect(source).toContain("heartbeatEnabled: false");
+    expect(source).not.toContain("heartbeatEnabled: true");
+  });
+
   it("fences restore-sensitive binding and local writes to the active epoch", () => {
     expect(source).toContain("expectedEpoch: restoreEpoch");
     expect(source).toContain("async (assertCurrentEpoch) =>");
