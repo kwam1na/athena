@@ -221,12 +221,12 @@ describe("getSharedDemoRegisterNumber", () => {
 });
 
 describe("getSharedDemoTerminalName", () => {
-  it("selects a stable playful name from the browser fingerprint", () => {
-    expect(getSharedDemoTerminalName("7d5339abcdef")).toBe("Barcode Bandit");
+  it("selects a stable studio station name from the browser fingerprint", () => {
+    expect(getSharedDemoTerminalName("7d5339abcdef")).toBe("Storefront Till");
     expect(getSharedDemoTerminalName("7d5339abcdef")).toBe(
       getSharedDemoTerminalName("7d5339abcdef"),
     );
-    expect(getSharedDemoTerminalName("abcdef123456")).toBe("Counter Culture");
+    expect(getSharedDemoTerminalName("abcdef123456")).toBe("Terrace Counter");
   });
 });
 

@@ -13,9 +13,19 @@ applies_when:
   - Rendering authenticated workspace components on a public, unauthenticated page
   - Keeping demo/marketing copy in sync with the store the demo actually opens
   - Making one exhibit on an otherwise-inert marketing page genuinely interactive
-tags: [landing-page, demo-store, marketing, exhibits, animation, design-pattern, pos]
-related_components: [athena-webapp, landing, sharedDemo, cash-controls, daily-operations, pos]
-delivery_diff_fingerprint: 7a06ee03911d066800400c200f57df751b3d3f04a196de648b38ea8bdd4cd9a4
+tags:
+  [
+    landing-page,
+    demo-store,
+    marketing,
+    exhibits,
+    animation,
+    design-pattern,
+    pos,
+  ]
+related_components:
+  [athena-webapp, landing, sharedDemo, cash-controls, daily-operations, pos]
+delivery_diff_fingerprint: 41343ae6aca681b46aa261558dfef621d9d4024739885b7e1bbb186374ae13c1
 ---
 
 # Landing Story Told With Real Product Components As Exhibits
@@ -27,7 +37,7 @@ the real product: the mock says one thing, the app another, and every product
 change silently ages the marketing page. For Athena we wanted the public
 landing page to walk a store owner through one operational day — opening
 handoff, daily operations, a POS sale, the sync bridge, cash controls, and the
-end-of-day close — and to show the *actual* workspace surfaces the owner would
+end-of-day close — and to show the _actual_ workspace surfaces the owner would
 use, not redrawn facsimiles. Two failure modes had to be avoided:
 
 1. **Divergence.** Hand-built marketing mockups duplicate product layout and

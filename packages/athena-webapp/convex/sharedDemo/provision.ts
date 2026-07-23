@@ -1410,13 +1410,14 @@ export const provisionSharedDemo = internalMutation({
     });
     const storeId = await ctx.db.insert("store", {
       config: {
-        // Osu Studio's cash policy: any drawer variance — even a few cedis —
-        // waits for a manager's signoff. This is what gates the story's GH₵5
-        // shortage into "manager approval pending" (see the register session
-        // scene on the landing page); without it the closeout gate would clear
-        // a sub-threshold variance on its own.
+        // Osu Studio's cash policy: closeouts within a GH₵1 variance settle on
+        // their own, so a cashier isn't dead-ended waiting on a manager over a
+        // rounding-level miscount. Anything past GH₵1 — like the story's GH₵5
+        // shortage — still waits for the owner's signoff ("manager approval
+        // pending" in the landing register session scene). Stored in minor
+        // units: 100 = GH₵1.
         operations: {
-          cashControls: { requireManagerSignoffForAnyVariance: true },
+          cashControls: { varianceApprovalThreshold: 100 },
         },
         sharedDemo: true,
         timeZone: SHARED_DEMO_SEED.timeZone,

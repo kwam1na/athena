@@ -1,11 +1,11 @@
 import {
   Outlet,
-  ScrollRestoration,
   createRootRouteWithContext,
   useRouterState,
 } from "@tanstack/react-router";
 
 import { QueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { DefaultCatchBoundary } from "@/components/auth/DefaultCatchBoundary";
 import { NotFoundView } from "@/components/states/not-found/NotFoundView";
@@ -70,11 +70,38 @@ function RootComponent() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+
+  useEffect(() => {
+    document.title = getAthenaDocumentTitle(pathname);
+  }, [pathname]);
+
   return (
     <div>
       <Toaster expand />
       {children}
-      <ScrollRestoration />
     </div>
   );
+}
+
+export function getAthenaDocumentTitle(pathname: string) {
+  if (pathname === "/landing") {
+    return "Athena | Product overview";
+  }
+
+  if (pathname === "/walkthrough") {
+    return "Request an Athena walkthrough";
+  }
+
+  if (pathname === "/privacy") {
+    return "Athena walkthrough privacy details";
+  }
+
+  if (pathname.includes("/demo")) {
+    return "Athena | Demo";
+  }
+
+  return "Athena";
 }

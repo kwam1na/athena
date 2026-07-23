@@ -23,7 +23,10 @@ export function RegisterSessionIdentity({
   const terminalName = registerSession?.terminalName?.trim();
 
   return (
-    <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+    <div
+      className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-1.5 sm:gap-y-0.5"
+      data-testid="register-session-identity"
+    >
       <h1 className="min-w-0 truncate text-base font-semibold leading-5 text-foreground sm:text-sm">
         {registerSession
           ? formatRegisterHeaderName(registerSession.registerNumber)
@@ -37,7 +40,8 @@ export function RegisterSessionIdentity({
           key={`terminal-${registerSession?._id}-${terminalName}`}
           transition={IDENTITY_TRANSITION}
         >
-          / {terminalName}
+          <span className="hidden sm:inline">/ </span>
+          {terminalName}
         </motion.span>
       ) : null}
     </div>

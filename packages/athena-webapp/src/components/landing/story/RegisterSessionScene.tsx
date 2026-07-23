@@ -39,7 +39,10 @@ export function RegisterSessionScene() {
     <div
       ref={rootRef}
       aria-label="Register 01's session detail mid-closeout: opened on the GH₵500 float at 9:41 AM, GH₵6,700 through the till, counted GH₵2,395 against GH₵2,400 expected, the GH₵5 shortage in review, and the counted cash still in the drawer."
-      className="w-full"
+      // The session detail is a tall exhibit whose lower rows thin out; fade its
+      // bottom into the page so it reads as a glimpse into the register rather
+      // than a hard-edged card parked on the canvas.
+      className="w-full [mask-image:linear-gradient(to_bottom,black_72%,transparent)]"
     >
       <WorkspaceExhibit>
         <div data-register-embed>

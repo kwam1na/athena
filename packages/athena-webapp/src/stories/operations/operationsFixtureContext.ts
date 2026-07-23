@@ -50,7 +50,7 @@ export const DEMO_STAFF = {
  * `formatTerminalRegisterLinkLabel` in convex/operations/dailyOperations.ts. Values are
  * the shared demo store's terminal name and register number.
  */
-export const REGISTER_DISPLAY_LABEL = "Studio Front Register / Register 01";
+export const REGISTER_DISPLAY_LABEL = "Studio Front Counter / Register 01";
 
 /**
  * The carry-forward work item threaded through the Daily Operations stock nudge, the EOD

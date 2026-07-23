@@ -243,7 +243,7 @@ export const bridgeActivity: RegisterSessionActivityFixture = {
       // The product's read-model summary shape for a completed sale:
       // "Receipt {n} - {k} sale lines - {p} payment - {method}".
       summary: `Receipt ${tracedSale.receiptNumber} - ${tracedSale.items.length} sale lines - 1 payment - Cash`,
-      terminalName: "Studio Front Register",
+      terminalName: "Studio Front Counter",
     },
     {
       _id: "story-activity-payment",
@@ -259,7 +259,7 @@ export const bridgeActivity: RegisterSessionActivityFixture = {
       source: "activity_read_model",
       status: terminalReportedStatus,
       summary: "1 payment - Cash",
-      terminalName: "Studio Front Register",
+      terminalName: "Studio Front Counter",
     },
     {
       _id: "story-activity-cart-soap",
@@ -281,7 +281,7 @@ export const bridgeActivity: RegisterSessionActivityFixture = {
       source: "activity_read_model",
       status: terminalReportedStatus,
       summary: null,
-      terminalName: "Studio Front Register",
+      terminalName: "Studio Front Counter",
     },
     {
       _id: "story-activity-cart-kente",
@@ -302,7 +302,7 @@ export const bridgeActivity: RegisterSessionActivityFixture = {
       source: "activity_read_model",
       status: terminalReportedStatus,
       summary: null,
-      terminalName: "Studio Front Register",
+      terminalName: "Studio Front Counter",
     },
     {
       _id: "story-activity-session",
@@ -320,7 +320,7 @@ export const bridgeActivity: RegisterSessionActivityFixture = {
       source: "activity_read_model",
       status: terminalReportedStatus,
       summary: null,
-      terminalName: "Studio Front Register",
+      terminalName: "Studio Front Counter",
     },
     {
       _id: "story-activity-open",
@@ -339,13 +339,13 @@ export const bridgeActivity: RegisterSessionActivityFixture = {
       source: "activity_read_model",
       status: { kind: "projected", label: projectedStatusLabel, tone: "success" },
       summary: "Opening float recorded",
-      terminalName: "Studio Front Register",
+      terminalName: "Studio Front Counter",
     },
   ],
   registerSession: {
     _id: STORY_SESSION_ID,
     registerNumber: demoStore.registerNumber,
-    terminalName: "Studio Front Register",
+    terminalName: "Studio Front Counter",
   },
   summary: {
     attentionCounts: { ...emptyAttentionCounts },
@@ -379,19 +379,19 @@ const closingSession = {
   openedAt: storyMoments.opening,
   openedByStaffName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.cashier),
   openingFloat: drawer.openingFloat,
-  // The submitted count is GH₵5 short; store policy requires manager signoff
-  // for any variance, so the session waits in "manager approval pending" —
-  // the judgment the EOD Review act then settles. The raw reason is the
-  // backend's stored shape; the view formats the amount to currency.
+  // The submitted count is GH₵5 short — past the store's GH₵1 variance
+  // threshold — so the session waits in "manager approval pending", the
+  // judgment the EOD Review act then settles. The raw reason is the backend's
+  // stored shape; the view formats the amount to currency.
   pendingApprovalRequest: {
     _id: "story-approval-variance",
-    reason: `Manager signoff is required for any register variance (${drawer.variance}).`,
+    reason: `Variance of ${drawer.variance} exceeded the closeout approval threshold.`,
     requestedByStaffName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.cashier),
     status: "pending",
   },
   registerNumber: demoStore.registerNumber,
   status: "closing",
-  terminalName: "Studio Front Register",
+  terminalName: "Studio Front Counter",
   totalDeposited: drawer.depositAmount,
   totalSales: dayTotals.netSales,
   variance: drawer.variance,
@@ -418,7 +418,7 @@ export const cashDashboardSnapshot: CashControlsDashboardSnapshot = {
       openingFloat: drawer.openingFloat,
       registerNumber: demoStore.registerNumber,
       status: "closed",
-      terminalName: "Studio Front Register",
+      terminalName: "Studio Front Counter",
       // No deposit recorded; the counted cash carried straight into the close.
       totalDeposited: 0,
       totalSales: 560_000,

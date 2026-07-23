@@ -227,7 +227,7 @@ const timeline: NonNullable<
     createdAt: at(9, 52),
     id: "evt-drawer-open",
     message:
-      "Afua O. opened Studio Front Register / Register 01 with a GH₵500 float.",
+      "Afua O. opened Studio Front Counter / Register 01 with a GH₵500 float.",
     registerLink: {
       label: REGISTER_DISPLAY_LABEL,
       params: linkParams,
@@ -746,7 +746,7 @@ const wednesdayTimeline: NonNullable<
     createdAt: wedAt(9, 41),
     id: "evt-drawer-open",
     message:
-      "Afua O. opened Studio Front Register / Register 01 with a GH₵500 float.",
+      "Afua O. opened Studio Front Counter / Register 01 with a GH₵500 float.",
     registerLink: {
       label: REGISTER_DISPLAY_LABEL,
       params: linkParams,

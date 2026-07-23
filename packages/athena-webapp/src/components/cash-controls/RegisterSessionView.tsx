@@ -988,6 +988,7 @@ export function RegisterSessionActivitySection({
               {paginatedRows.map((row, index) => (
                 <TableRow
                   className="border-b border-border/70"
+                  data-activity-category={row.category}
                   key={getActivityRowKey(row, index)}
                 >
                   <TableCell>
@@ -1050,16 +1051,20 @@ export function RegisterSessionActivityViewContent({
     <View
       header={
         <ComposedPageHeader
-          className="h-auto min-h-16 items-start gap-3 border-b border-border px-4 py-3 sm:items-center sm:border-0 sm:py-4"
+          className="h-auto min-h-16 flex-col items-stretch gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:border-0 sm:py-4"
           leadingContent={
-            <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+            <div
+              className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-1.5 sm:gap-y-0.5"
+              data-testid="register-session-activity-header-identity"
+            >
               <RegisterSessionIdentity
                 fallbackTitle="POS activity"
                 registerSession={activity?.registerSession}
               />
               {activity?.registerSession ? (
-                <span className="whitespace-nowrap text-xs text-muted-foreground sm:text-sm">
-                  / POS activity
+                <span className="min-w-0 truncate text-xs text-muted-foreground sm:whitespace-nowrap sm:text-sm">
+                  <span className="hidden sm:inline">/ </span>
+                  POS activity
                 </span>
               ) : null}
             </div>
@@ -1325,8 +1330,11 @@ function RegisterSessionHeaderIdentity({
   );
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-row sm:items-baseline sm:gap-4">
-      <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-0.5">
+    <div
+      className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-baseline sm:gap-4"
+      data-testid="register-session-header-identity"
+    >
+      <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-4 sm:gap-y-0.5">
         <RegisterSessionIdentity
           fallbackTitle={fallbackTitle}
           registerSession={registerSession}
@@ -1335,7 +1343,7 @@ function RegisterSessionHeaderIdentity({
           <motion.span
             animate={{ opacity: 1, y: 0 }}
             className={cn(
-              "inline-flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs font-medium leading-5 sm:text-sm",
+              "inline-flex min-w-0 items-baseline gap-1.5 text-xs font-medium leading-5 sm:whitespace-nowrap sm:text-sm",
               getSyncStatusTextClass(syncStatus.tone),
             )}
             initial={{ opacity: 0, y: 2 }}
@@ -1350,7 +1358,7 @@ function RegisterSessionHeaderIdentity({
                 isLive && "motion-safe:animate-pulse",
               )}
             />
-            <span className="truncate">
+            <span className="min-w-0 truncate">
               {formatHeaderSyncStatus(syncStatus)}
             </span>
             <span aria-hidden="true" className="text-muted-foreground/50">
@@ -4287,7 +4295,7 @@ export function RegisterSessionViewContent({
     <View
       header={
         <ComposedPageHeader
-          className="h-auto min-h-16 items-start gap-3 border-b border-border px-4 py-3 sm:items-center sm:border-0 sm:py-4"
+          className="h-auto min-h-16 flex-col items-stretch gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:border-0 sm:py-4"
           onNavigateBack={onNavigateBack}
           leadingContent={
             <RegisterSessionHeaderIdentity

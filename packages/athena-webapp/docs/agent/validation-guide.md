@@ -370,7 +370,27 @@ Run these when bootstrap, generated router state, or package build configuration
 
 ## Storybook and frontend tooling edits
 
-Touched surfaces: `.storybook`, `index.html`, `src/stories`, `src/index.css`, `src/design-system-build-config.test.ts`, `tailwind.config.js`, `postcss.config.js`, `package.json`, `README.md`, `eslint.config.js`, `scripts/frontend-lint-changed.sh`, `scripts/capture-operations-shot.mjs`, `.gitignore`
+Touched surfaces: `.storybook`, `index.html`, `src/stories`, `src/index.css`, `src/design-system-build-config.test.ts`, `tailwind.config.js`, `postcss.config.js`, `package.json`, `README.md`, `eslint.config.js`, `scripts/frontend-lint-changed.sh`, `scripts/capture-operations-shot.mjs`, `scripts/capture-hero-shot.mjs`, `scripts/capture-register-shot.mjs`, `.gitignore`
+
+### Landing shot capture scripts
+
+The landing PNGs in `src/assets/landing/` are captured from the live shared demo (dev server on `http://localhost:5173`). Re-run the matching script whenever the underlying UI or fixture copy changes so the baked-in pixels stay current:
+
+- **Hero** (`daily-operations-hero{,-dark}.png`) — `scripts/capture-hero-shot.mjs`:
+  ```
+  node scripts/capture-hero-shot.mjs --out src/assets/landing/daily-operations-hero.png
+  node scripts/capture-hero-shot.mjs --theme dark --out src/assets/landing/daily-operations-hero-dark.png
+  ```
+- **POS register** (`pos-register-{ready,cart}{,-dark}.png`) — `scripts/capture-register-shot.mjs` (ready uses `--dsf 1.35` to match the pending/synced border weight):
+  ```
+  node scripts/capture-register-shot.mjs --state ready --dsf 1.35 --out src/assets/landing/pos-register-ready.png
+  node scripts/capture-register-shot.mjs --state ready --theme dark --dsf 1.35 --out src/assets/landing/pos-register-ready-dark.png
+  node scripts/capture-register-shot.mjs --state cart --out src/assets/landing/pos-register-cart.png
+  node scripts/capture-register-shot.mjs --state cart --theme dark --out src/assets/landing/pos-register-cart-dark.png
+  ```
+- **Operations workspaces** (metrics, opening handoff, EOD review) — `scripts/capture-operations-shot.mjs` (see its usage header for `--path`/`--wait`/`--out`).
+
+After re-capturing, update the `width`/`height` props on the matching `LandingWorkspaceShot` in `src/routes/-index-route-view.tsx` if the output dimensions changed.
 
 Run:
 

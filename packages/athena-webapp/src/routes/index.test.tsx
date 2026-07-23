@@ -15,8 +15,18 @@ vi.mock("./-app-entry-route", () => ({
 
 import { Route } from "./index";
 
+type RouteWithHead = {
+  head: () => { meta: Array<{ title: string }> };
+};
+
 describe("index route", () => {
   it("uses the authenticated app entry at the root path", () => {
     expect(Route).toMatchObject({ component: mocked.AppEntryRoute });
+  });
+
+  it("sets the app title at the authenticated-aware root path", () => {
+    expect((Route as unknown as RouteWithHead).head()).toEqual({
+      meta: [{ title: "Athena" }],
+    });
   });
 });

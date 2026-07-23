@@ -13,6 +13,8 @@ import openingHandoffShot from "@/assets/landing/opening-handoff.png";
 import openingHandoffShotDark from "@/assets/landing/opening-handoff-dark.png";
 import posPendingShot from "@/assets/landing/pos-pending.png";
 import posPendingShotDark from "@/assets/landing/pos-pending-dark.png";
+import posRegisterReadyShot from "@/assets/landing/pos-register-ready.png";
+import posRegisterReadyShotDark from "@/assets/landing/pos-register-ready-dark.png";
 import posSyncedShot from "@/assets/landing/pos-synced.png";
 import posSyncedShotDark from "@/assets/landing/pos-synced-dark.png";
 import { AutomationRevealScene } from "@/components/landing/story/AutomationRevealScene";
@@ -233,10 +235,10 @@ function HeroSection() {
             }}
           >
             <LandingWorkspaceShot
-              alt="Athena's Daily Operations workspace mid-week: a pending approval, the open register, today's net sales, cash, card and mobile money, and the week at a glance."
+              alt="Athena's Daily Operations workspace mid-week: a pending approval, the open register, today's net sales, cash, card and mobile money tiles, and the week at a glance with Wednesday selected."
               className="max-w-7xl"
               eager
-              height={2356}
+              height={2350}
               src={dailyOperationsShot}
               srcDark={dailyOperationsShotDark}
               width={3840}
@@ -351,8 +353,8 @@ function ControlLoopSection() {
             specific day at one specific store — and sets up the closing CTA's
             "walk this exact day yourself." */}
         <p className="mt-layout-2xl max-w-2xl text-lg leading-8 text-muted-foreground">
-          What follows is one day under Athena, from open to close: Wednesday,
-          July 15, at Osu Studio, a fictional artisanal store in Accra.
+          What follows is one day under Athena, from open to close at Osu
+          Studio, a fictional artisanal store in Accra.
         </p>
       </div>
     </section>
@@ -472,7 +474,7 @@ export function Index() {
           workspace="Opening Handoff"
           title="Today opens where yesterday closed."
           copy="Yesterday doesn't leak into today unresolved. Your staff open the store; anything left unfinished at last night's close arrives as their checklist, the opening cash is confirmed, and the day starts from a known state, visible to you before you've walked in, or without walking in at all."
-          automation="Athena starts the opening and flags anything that needs a manager's eyes."
+          automation="Under your rules, Athena completes the opening itself and flags only what needs a manager's eyes."
         >
           <LandingWorkspaceShot
             alt="Athena's Opening Handoff workspace on a Wednesday morning: the prior day's close cleared, a carried-forward inventory review, and the store day started automatically by Athena."
@@ -530,15 +532,38 @@ export function Index() {
           stackedGap="space-y-layout-3xl"
           workspace="Device-first"
           title="The network drops. Sales don't."
-          copy="Every sale lands on the device first, instantly. Lose the connection and the counter keeps moving: the sale is held safe, then syncs itself the moment the network returns."
+          copy="A sale starts at the counter and lands on the device first, instantly. Lose the connection and the counter keeps moving: the sale is held safe, then syncs itself the moment the network returns."
           automation="No manual sync, no re-entry, nothing to remember."
         >
-          <div className="w-full space-y-layout-xl">
+          <div className="w-full space-y-layout-3xl">
+            {/* Establishing beat: the full register, clear and waiting, one
+                minute before the traced 3:14 PM sale the next two beats follow. */}
+            <div>
+              <LandingWorkspaceShot
+                alt="The POS register ready for the next sale: an empty cart, a fresh sale started, and the product lookup entry in focus."
+                bordered={false}
+                className="max-w-none"
+                height={1318}
+                src={posRegisterReadyShot}
+                srcDark={posRegisterReadyShotDark}
+                width={2506}
+              />
+              <p className="mt-layout-sm flex items-start gap-layout-sm text-sm leading-6 text-muted-foreground">
+                <span
+                  aria-hidden="true"
+                  className="mt-[8px] h-2 w-2 shrink-0 rounded-full bg-primary"
+                />
+                3:13 PM — the counter is clear and the lookup is in focus. The
+                next customer is already walking up.
+              </p>
+            </div>
             <div className="max-w-5xl">
               <LandingWorkspaceShot
                 alt="The register's POS status reading 'pending sync': a sale just recorded on the device, held safely before it uploads."
+                bordered={false}
                 className="max-w-5xl"
                 cropHeightFraction={0.52}
+                fadeBottom
                 height={853}
                 src={posPendingShot}
                 srcDark={posPendingShotDark}
@@ -556,8 +581,10 @@ export function Index() {
             <div className="ml-auto max-w-5xl">
               <LandingWorkspaceShot
                 alt="The register's POS status reading 'synced': the sale uploaded on its own once the connection returned."
+                bordered={false}
                 className="max-w-5xl"
                 cropHeightFraction={0.52}
+                fadeBottom
                 height={853}
                 src={posSyncedShot}
                 srcDark={posSyncedShotDark}
@@ -588,9 +615,9 @@ export function Index() {
                 The books keep themselves.
               </h2>
               <p className="mt-layout-md text-lg leading-8 text-muted-foreground">
-                Each sale posts to the register session as it happens. It
-                counts toward the day, and the drawer expects the cash.
-                Nothing to re-enter, nothing to chase at close.
+                Each sale posts to the register session as it happens. It counts
+                toward the day, and the drawer expects the cash. Nothing to
+                re-enter, nothing to chase at close.
               </p>
             </div>
             <div className="mt-layout-2xl">
@@ -611,7 +638,7 @@ export function Index() {
           workspace="Cash Controls"
           title="Know what's in every drawer."
           copy="Expected cash builds from the morning's opening cash and every synced sale, and only you see that number. Staff count the drawer without knowing what it should hold, so the count is honest; any difference is surfaced in the moment, not discovered weeks later."
-          automation="Athena reconciles synced register activity before closeout is settled."
+          automation="Athena reconciles synced register activity. A count within your variance threshold closes out on its own; outside it, the call is yours."
         >
           <>
             <div className="pt-8">
@@ -620,19 +647,18 @@ export function Index() {
             {/* Drill from the dashboard into the session it holds in review. */}
             <div className="max-w-2xl pt-[12rem]">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
-                The thread of the day
+                One register session
               </p>
               <h3 className="mt-layout-sm font-display text-3xl font-light leading-[1.05] text-foreground sm:text-4xl">
-                One drawer, the whole day on record.
+                The whole day on record.
               </h3>
               <p className="mt-layout-md text-lg leading-8 text-muted-foreground">
-                A register session isn't a loose till; it's the thread that ties
-                the day together. It opens on the morning&apos;s counted cash,
-                every synced sale lands on it in the moment, and its expected
-                total builds itself. At close, the count meets that record, any
-                difference is surfaced for judgment instead of buried, and the
-                settled session flows straight into the day's reconciliation and
-                the bank deposit.
+                A register session is the day&apos;s record. It opens on the
+                morning&apos;s counted cash, every synced sale lands on it in
+                the moment, and its expected total builds itself. At close, the
+                count meets the record, any difference is surfaced instead of
+                buried — and the settled session flows straight into the books
+                and the deposit.
               </p>
             </div>
             {/* Breathing room between the blurb and the session it introduces. */}
@@ -648,8 +674,8 @@ export function Index() {
           stackedGap="space-y-layout-3xl"
           workspace="EOD Review"
           title="Today closes where tomorrow begins."
-          copy="The end-of-day review runs under the rules you set: totals settled, the drawer accounted for, and the one thing that needs judgment flagged for you, reviewable from the back office or from home. Anything unfinished carries forward; tomorrow's opening is already prepared, and no one waited on you to lock up."
-          automation="Athena prepared the close; you settle what needs judgment."
+          copy="The end-of-day review runs under the rules you set: totals settled, the drawer accounted for, and anything that needs judgment flagged for you, reviewable from the back office or from home. Anything unfinished carries forward; tomorrow's opening is already prepared, and no one waited on you to lock up."
+          automation="Under your rules, Athena completes the close. Anything needing an approval waits for you."
         >
           <LandingWorkspaceShot
             alt="Athena's EOD Review workspace on Wednesday evening: the day's net sales, cash, card and mobile money, a small approved cash variance, and the Kente inventory review carried into tomorrow's opening."

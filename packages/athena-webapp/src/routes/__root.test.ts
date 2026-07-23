@@ -1,6 +1,31 @@
 import { describe, expect, it } from "vitest";
 
+import { getAthenaDocumentTitle } from "./__root";
 import { rootPageSchema } from "./-root-page-search";
+
+describe("Athena document title", () => {
+  it("keeps public route titles specific after JavaScript starts", () => {
+    expect(getAthenaDocumentTitle("/landing")).toBe(
+      "Athena | Product overview",
+    );
+    expect(getAthenaDocumentTitle("/walkthrough")).toBe(
+      "Request an Athena walkthrough",
+    );
+    expect(getAthenaDocumentTitle("/privacy")).toBe(
+      "Athena walkthrough privacy details",
+    );
+    expect(getAthenaDocumentTitle("/demo")).toBe("Athena | Demo");
+  });
+
+  it("uses the app title for authenticated and app-entry routes", () => {
+    expect(getAthenaDocumentTitle("/")).toBe("Athena");
+    expect(getAthenaDocumentTitle("/app")).toBe("Athena");
+    expect(getAthenaDocumentTitle("/acme/store/main/home")).toBe("Athena");
+    expect(
+      getAthenaDocumentTitle("/acme/store/main/operations/daily-close"),
+    ).toBe("Athena");
+  });
+});
 
 describe("root search compatibility", () => {
   it("preserves representative operational search parameters", () => {
