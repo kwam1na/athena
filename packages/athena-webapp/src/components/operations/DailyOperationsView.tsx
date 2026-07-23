@@ -1132,15 +1132,20 @@ function getPriorComparisonMetric(
 
   if (!previousOperatingDate) return undefined;
 
-  if (snapshot.priorDayMetric?.operatingDate === previousOperatingDate) {
-    return snapshot.priorDayMetric;
-  }
-
   if (cachedPriorWeekBoundaryMetric?.operatingDate === previousOperatingDate) {
     return cachedPriorWeekBoundaryMetric;
   }
 
-  return (cachedWeekMetrics ?? snapshot.weekMetrics).find(
+  const cachedWeekMetric = cachedWeekMetrics?.find(
+    (metric) => metric.operatingDate === previousOperatingDate,
+  );
+  if (cachedWeekMetric) return cachedWeekMetric;
+
+  if (snapshot.priorDayMetric?.operatingDate === previousOperatingDate) {
+    return snapshot.priorDayMetric;
+  }
+
+  return snapshot.weekMetrics.find(
     (metric) => metric.operatingDate === previousOperatingDate,
   );
 }
@@ -2794,6 +2799,7 @@ function DailyOperationsStorePulsePreview({
               variant="canvas"
               snapshot={detailSnapshot}
               title={topItemsTitle}
+              totalItemsSold={selectedCachedStorePulse?.totalItemsSold}
             />
           ) : (
             <DailyOperationsStorePulsePreviewList
@@ -2812,6 +2818,7 @@ function DailyOperationsStorePulsePreview({
               emptyStateTimeContext={emptyStateTimeContext}
               variant="canvas"
               snapshot={detailSnapshot}
+              totalTransactions={selectedCachedStorePulse?.totalTransactions}
             />
           ) : (
             <DailyOperationsStorePulsePreviewList
@@ -4066,6 +4073,7 @@ function DailyOperationsApiPendingView() {
 
 function DailyOperationsConnectedView({
   clientWeekAnalytics,
+  refreshClientWeekAnalyticsOnMount = false,
   getDailyOperationsAutomationSnapshot,
   getDailyOperationsDetailSnapshot,
   getDailyOperationsOpenRegisterSessionsSnapshot,
@@ -4078,6 +4086,7 @@ function DailyOperationsConnectedView({
   getDailyOperationsWeekAnalyticsSnapshot,
 }: {
   clientWeekAnalytics?: ClientWeekAnalytics;
+  refreshClientWeekAnalyticsOnMount?: boolean;
   getDailyOperationsAutomationSnapshot?: unknown;
   getDailyOperationsDetailSnapshot?: unknown;
   getDailyOperationsOpenRegisterSessionsSnapshot?: unknown;
@@ -4323,19 +4332,18 @@ function DailyOperationsConnectedView({
           snapshotArgs.operatingDate,
         )
       : cachedWeekAnalytics && snapshotArgs !== "skip"
-      ? selectWeekMetricsForOperatingDate(
-          cachedWeekAnalytics.metrics,
-          snapshotArgs.operatingDate,
-        )
-      : undefined;
+        ? selectWeekMetricsForOperatingDate(
+            cachedWeekAnalytics.metrics,
+            snapshotArgs.operatingDate,
+          )
+        : undefined;
   const cachedWeekMetrics =
     snapshotArgs !== "skip"
       ? replaceWeekMetricForOperatingDate(
           rawCachedWeekMetrics,
           cachedTodayRefreshSnapshot?.weekMetric ??
             snapshot?.weekMetrics.find(
-              (metric) =>
-                metric.operatingDate === snapshotArgs.operatingDate,
+              (metric) => metric.operatingDate === snapshotArgs.operatingDate,
             ),
           snapshotArgs.operatingDate,
         )
@@ -4348,18 +4356,18 @@ function DailyOperationsConnectedView({
           weekMetrics: cachedWeekMetrics,
         })
       : cachedTodayRefreshSnapshot?.storePulse && snapshot
-      ? buildCachedWeekStorePulseSummary({
-          ...snapshot,
-          storePulse: cachedTodayRefreshSnapshot.storePulse,
-          weekMetrics: cachedWeekMetrics ?? snapshot.weekMetrics,
-        })
-      : (cachedWeekAnalytics?.storePulse ??
-        (snapshot && cachedWeekMetrics
-          ? buildWeekMetricStorePulseSummary({
-              ...snapshot,
-              weekMetrics: cachedWeekMetrics,
-            })
-          : undefined));
+        ? buildCachedWeekStorePulseSummary({
+            ...snapshot,
+            storePulse: cachedTodayRefreshSnapshot.storePulse,
+            weekMetrics: cachedWeekMetrics ?? snapshot.weekMetrics,
+          })
+        : (cachedWeekAnalytics?.storePulse ??
+          (snapshot && cachedWeekMetrics
+            ? buildWeekMetricStorePulseSummary({
+                ...snapshot,
+                weekMetrics: cachedWeekMetrics,
+              })
+            : undefined));
 
   useEffect(() => {
     if (weekAnalyticsCacheKey === "skip" || !queriedWeekAnalyticsSnapshot) {
@@ -4541,6 +4549,25 @@ function DailyOperationsConnectedView({
     cachedTodayRefreshSnapshot?.refreshedAt ??
     clientWeekAnalytics?.fetchedAt ??
     cachedWeekAnalytics?.fetchedAt;
+
+  useEffect(() => {
+    if (
+      !refreshClientWeekAnalyticsOnMount ||
+      !canRefreshToday ||
+      isTodayRefreshRequested ||
+      cachedTodayRefreshSnapshot
+    ) {
+      return;
+    }
+
+    requestTodayRefresh();
+  }, [
+    cachedTodayRefreshSnapshot,
+    canRefreshToday,
+    isTodayRefreshRequested,
+    refreshClientWeekAnalyticsOnMount,
+    requestTodayRefresh,
+  ]);
 
   useEffect(() => {
     if (
@@ -4763,14 +4790,17 @@ function SharedDemoCurrentDailyOperationsView({
         metrics: fixture.cachedWeekMetrics ?? [],
         storePulse: fixture.cachedWeekStorePulse,
       }}
+      refreshClientWeekAnalyticsOnMount
     />
   );
 }
 
 function DailyOperationsConnectedRuntimeView({
   clientWeekAnalytics,
+  refreshClientWeekAnalyticsOnMount,
 }: {
   clientWeekAnalytics?: ClientWeekAnalytics;
+  refreshClientWeekAnalyticsOnMount?: boolean;
 } = {}) {
   const dailyOperationsApi = getDailyOperationsApi();
   if (!dailyOperationsApi.getDailyOperationsSnapshot) {
@@ -4780,6 +4810,7 @@ function DailyOperationsConnectedRuntimeView({
   return (
     <DailyOperationsConnectedView
       clientWeekAnalytics={clientWeekAnalytics}
+      refreshClientWeekAnalyticsOnMount={refreshClientWeekAnalyticsOnMount}
       getDailyOperationsAutomationSnapshot={
         dailyOperationsApi.getDailyOperationsAutomationSnapshot
       }

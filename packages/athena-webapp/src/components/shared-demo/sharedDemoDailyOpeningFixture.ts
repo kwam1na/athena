@@ -40,11 +40,13 @@ export function createSharedDemoDailyOpeningFixture({
   storeId: Id<"store">;
   storeUrlSlug: string;
 }): DailyOpeningViewContentProps | undefined {
+  const today = getLocalOperatingDate();
   const day = getSharedDemoHistoricalDayFixture(operatingDate);
-  if (!day) return undefined;
 
   const priorOperatingDate = shiftOperatingDate(operatingDate, -1);
   const priorDay = getSharedDemoHistoricalDayFixture(priorOperatingDate);
+  if (!day && !(operatingDate === today && priorDay)) return undefined;
+
   const priorCloseCompletedAt = getOperatingDateTimestamp(
     priorOperatingDate,
     20,

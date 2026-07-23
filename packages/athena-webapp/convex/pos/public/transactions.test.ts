@@ -28,6 +28,10 @@ import * as completeTransactionCommands from "../application/commands/completeTr
 import * as transactionQueries from "../application/queries/getTransactions";
 import { hashPosLocalStaffProofToken } from "../application/sync/staffProof";
 
+const sharedDemoRestoreMocks = vi.hoisted(() => ({
+  requireReadySharedDemoWriteWithCtx: vi.fn(),
+}));
+
 vi.mock("../../lib/athenaUserAuth", () => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
@@ -35,6 +39,10 @@ vi.mock("../../lib/athenaUserAuth", () => ({
 vi.mock("../../sharedDemo/actor", () => ({
   getSharedDemoActorWithCtx: vi.fn(async () => null),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
+}));
+vi.mock("../../sharedDemo/restore", () => ({
+  requireReadySharedDemoWriteWithCtx:
+    sharedDemoRestoreMocks.requireReadySharedDemoWriteWithCtx,
 }));
 
 vi.mock("../application/queries/getTransactions", () => ({
@@ -83,12 +91,44 @@ function parseValidator(validator: unknown): SerializedValidator {
   return JSON.parse(String(validator)) as SerializedValidator;
 }
 
+const FALLBACK_AUTH_USER_ID = "user-1";
+
+// Mirrors the real helper in lib/athenaUserAuth.ts: identity resolution
+// short-circuits on the admitted actor, so an admitted demo actor resolves to
+// its own athenaUser rather than falling through to normal-user auth. Where a
+// fixture has not seeded the admitted row, fall back to the canned normal-user
+// identity so unrelated tests are unaffected.
+function mockAdmissionAwareAuth() {
+  vi.mocked(
+    athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+  ).mockImplementation(async (ctx: unknown) => {
+    const admittedUserId = (
+      ctx as { operationAdmission?: { actor?: { athenaUserId?: string } } }
+    )?.operationAdmission?.actor?.athenaUserId;
+    if (admittedUserId) {
+      const admitted = await (
+        ctx as { db: { get: (table: string, id: string) => Promise<unknown> } }
+      ).db.get("athenaUser", admittedUserId);
+      if (admitted) {
+        return admitted as never;
+      }
+    }
+
+    return { _id: FALLBACK_AUTH_USER_ID } as never;
+  });
+}
+
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue(null);
+  vi.mocked(
+    sharedDemoRestoreMocks.requireReadySharedDemoWriteWithCtx,
+  ).mockResolvedValue(undefined);
+  mockAdmissionAwareAuth();
 });
 
 describe("POS public transaction query validators", () => {
@@ -390,11 +430,7 @@ describe("POS public transaction query validators", () => {
 
 describe("POS public transaction read and correction authorization", () => {
   beforeEach(() => {
-    vi.mocked(
-      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).mockResolvedValue({
-      _id: "user-1",
-    } as never);
+    mockAdmissionAwareAuth();
   });
 
   function createTransactionAuthCtx(options?: {
@@ -417,6 +453,9 @@ describe("POS public transaction read and correction authorization", () => {
     return {
       db: {
         get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "athenaUser") {
+            return { _id: id };
+          }
           if (tableName === "store" && id === "store-1") {
             return { _id: "store-1", organizationId: "org-1" };
           }
@@ -681,6 +720,11 @@ describe("POS public transaction read and correction authorization", () => {
     vi.mocked(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
     ).mockResolvedValue(createMembership("full_admin"));
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValueOnce({
+      _id: "demo-user-1",
+    } as never);
     vi.mocked(transactionQueries.getTodaySummary).mockResolvedValue(summary);
     const ctx = createTransactionAuthCtx();
 
@@ -694,7 +738,16 @@ describe("POS public transaction read and correction authorization", () => {
     ).not.toHaveBeenCalled();
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: "demo-user-1",
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
     expect(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
     ).toHaveBeenCalledWith(
@@ -989,17 +1042,16 @@ describe("POS public transaction read and correction authorization", () => {
 
 describe("legacy POS public checkout mutations", () => {
   beforeEach(() => {
-    vi.mocked(
-      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).mockResolvedValue({
-      _id: "user-1",
-    } as never);
+    mockAdmissionAwareAuth();
   });
 
   function createCtx() {
     return {
       db: {
         get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "athenaUser") {
+            return { _id: id };
+          }
           if (tableName === "store" && id === "store-1") {
             return { _id: "store-1", organizationId: "org-1" };
           }
@@ -1321,15 +1373,14 @@ describe("voidTransaction public mutation", () => {
       storeId: "store-1",
       terminalId: "terminal-1",
     } as never);
-    vi.mocked(
-      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).mockResolvedValue({
-      _id: "user-1",
-    } as never);
+    mockAdmissionAwareAuth();
 
     return {
       db: {
         get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "athenaUser") {
+            return { _id: id };
+          }
           if (tableName === "store" && id === "store-1") {
             return { _id: "store-1", organizationId: "org-1" };
           }
@@ -1355,8 +1406,9 @@ describe("voidTransaction public mutation", () => {
 
   it("requires a signed-in staff actor before voiding a completed transaction", async () => {
     await expect(
-      getHandler(voidTransaction)({} as never, {
+      getHandler(voidTransaction)(createAuthorizedVoidCtx() as never, {
         reason: "Duplicate sale",
+        staffProofToken: "proof-token-1",
         transactionId: "txn-1" as Id<"posTransaction">,
       }),
     ).resolves.toMatchObject({
@@ -1367,6 +1419,62 @@ describe("voidTransaction public mutation", () => {
     });
 
     expect(completeTransactionCommands.voidTransaction).not.toHaveBeenCalled();
+  });
+
+  it("admits shared-demo completed-sale voids through operation admission", async () => {
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      organizationId: "org-1",
+      storeId: "store-1",
+    } as never);
+    vi.mocked(completeTransactionCommands.voidTransaction).mockResolvedValue({
+      kind: "ok",
+      transactionId: "txn-1",
+      transactionNumber: "T-001",
+      status: "voided",
+    } as never);
+
+    await expect(
+      getHandler(voidTransaction)(createAuthorizedVoidCtx() as never, {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        reason: "Duplicate sale",
+        staffProofToken: "proof-token-1",
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).resolves.toMatchObject({ kind: "ok" });
+
+    expect(sharedDemoActor.getSharedDemoActorWithCtx).toHaveBeenCalled();
+    expect(
+      sharedDemoRestoreMocks.requireReadySharedDemoWriteWithCtx,
+    ).toHaveBeenCalledWith(expect.any(Object), {
+      expectedEpoch: undefined,
+      storeId: "store-1",
+    });
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor and resolves that actor's identity, never the normal-user
+    // fallback.
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: "demo-user-1",
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
+    expect(completeTransactionCommands.voidTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ operationAdmission: expect.any(Object) }),
+      expect.objectContaining({
+        actorStaffProfileId: "staff-1",
+        actorUserId: "demo-user-1",
+        transactionId: "txn-1",
+      }),
+    );
   });
 
   it("wraps command approval requirements on the shared command-result rail", async () => {
@@ -1697,6 +1805,9 @@ describe("adjustTransactionItems public mutation", () => {
     const ctx = {
       db: {
         get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "athenaUser") {
+            return { _id: id };
+          }
           if (tableName === "store" && id === "store-1") {
             return { _id: "store-1", organizationId: "org-1" };
           }
@@ -1721,11 +1832,7 @@ describe("adjustTransactionItems public mutation", () => {
       _id: "txn-1",
       storeId: "store-1",
     } as never);
-    vi.mocked(
-      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).mockResolvedValue({
-      _id: "user-1",
-    } as never);
+    mockAdmissionAwareAuth();
 
     return ctx;
   }
@@ -1791,6 +1898,66 @@ describe("adjustTransactionItems public mutation", () => {
     );
   });
 
+  it("admits shared-demo item adjustments through operation admission", async () => {
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      organizationId: "org-1",
+      storeId: "store-1",
+    } as never);
+    vi.mocked(itemAdjustmentCommands.adjustTransactionItems).mockResolvedValue({
+      payloadFingerprint: "fingerprint",
+      settlementAmount: 400,
+      settlementDirection: "refund",
+      transactionId: "txn-1",
+    } as never);
+
+    await expect(
+      getHandler(adjustTransactionItems)(
+        createAuthorizedItemAdjustmentCtx() as never,
+        {
+          actorStaffProfileId: "staff-1",
+          payload,
+          reason: "Customer was charged for two instead of one",
+          staffProofToken: "proof-token-1",
+          transactionId: "txn-1",
+        },
+      ),
+    ).resolves.toMatchObject({ kind: "ok" });
+
+    expect(sharedDemoActor.getSharedDemoActorWithCtx).toHaveBeenCalled();
+    expect(
+      sharedDemoRestoreMocks.requireReadySharedDemoWriteWithCtx,
+    ).toHaveBeenCalledWith(expect.any(Object), {
+      expectedEpoch: undefined,
+      storeId: "store-1",
+    });
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor and resolves that actor's identity, never the normal-user
+    // fallback.
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: "demo-user-1",
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
+    expect(itemAdjustmentCommands.adjustTransactionItems).toHaveBeenCalledWith(
+      expect.objectContaining({ operationAdmission: expect.any(Object) }),
+      expect.objectContaining({
+        actorStaffProfileId: "staff-1",
+        actorUserId: "demo-user-1",
+        transactionId: "txn-1",
+      }),
+    );
+  });
+
   it("surfaces register-session expected cash failures as item adjustment user errors", async () => {
     vi.mocked(itemAdjustmentCommands.adjustTransactionItems).mockRejectedValue(
       new Error("Register session expected cash cannot be negative."),
@@ -1818,12 +1985,15 @@ describe("adjustTransactionItems public mutation", () => {
 
   it("requires a signed-in staff actor before adjusting items", async () => {
     await expect(
-      getHandler(adjustTransactionItems)({} as never, {
-        payload,
-        reason: "Customer was charged for two instead of one",
-        staffProofToken: "proof-token-1",
-        transactionId: "txn-1",
-      }),
+      getHandler(adjustTransactionItems)(
+        createAuthorizedItemAdjustmentCtx() as never,
+        {
+          payload,
+          reason: "Customer was charged for two instead of one",
+          staffProofToken: "proof-token-1",
+          transactionId: "txn-1",
+        },
+      ),
     ).resolves.toMatchObject({
       kind: "user_error",
       error: {
@@ -1920,9 +2090,34 @@ describe("getTransactionById public query authorization", () => {
     expect(
       sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
     ).not.toHaveBeenCalled();
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor and resolves that actor's identity, never the normal-user
+    // fallback.
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: "demo-user-1",
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: "demo-user-1" }),
+    );
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: FALLBACK_AUTH_USER_ID }),
+    );
   });
 
   it("requires a same-organization POS role before returning receipt delivery metadata", async () => {

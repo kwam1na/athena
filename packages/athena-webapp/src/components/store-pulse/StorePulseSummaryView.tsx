@@ -89,10 +89,7 @@ export type StorePulseSummary = {
 };
 
 export type StorePulseWindow =
-  | "today"
-  | "this_week"
-  | "this_month"
-  | "all_time";
+  "today" | "this_week" | "this_month" | "all_time";
 
 export type StorePulseEmptyStateTimeContext = "current" | "historical";
 
@@ -569,8 +566,7 @@ export function ItemsBreakdown({
   const visibleTopItems = paginate
     ? items.slice(pageStartIndex, pageStartIndex + pageSize)
     : items;
-  const panelClassName =
-    variant === "canvas" ? "" : detailCardClassName;
+  const panelClassName = variant === "canvas" ? "" : detailCardClassName;
   const rowClassName =
     variant === "canvas" ? canvasDetailRowClassName : detailRowClassName;
 
@@ -669,6 +665,7 @@ export function TopItemsPanel({
   emptyStateTimeContext = "current",
   snapshot,
   title = "Top items",
+  totalItemsSold,
   variant = "card",
 }: {
   canViewFinancialDetails: boolean;
@@ -676,8 +673,13 @@ export function TopItemsPanel({
   emptyStateTimeContext?: StorePulseEmptyStateTimeContext;
   snapshot: StorePulseOperatorSnapshot;
   title?: string;
+  totalItemsSold?: number;
   variant?: StorePulseDetailVariant;
 }) {
+  const selectedWindowItemsSold =
+    totalItemsSold ?? snapshot.comparison.currentItemsSold;
+  const items = selectedWindowItemsSold > 0 ? snapshot.topItems : [];
+
   return (
     <ItemsBreakdown
       canViewFinancialDetails={canViewFinancialDetails}
@@ -693,9 +695,9 @@ export function TopItemsPanel({
           ? "No item history"
           : "No item history yet"
       }
-      items={snapshot.topItems}
+      items={items}
       title={title}
-      totalItemsSold={snapshot.comparison.currentItemsSold}
+      totalItemsSold={selectedWindowItemsSold}
       variant={variant}
     />
   );
@@ -704,13 +706,18 @@ export function TopItemsPanel({
 export function PaymentMethodsPanel({
   emptyStateTimeContext = "current",
   snapshot,
+  totalTransactions,
   variant = "card",
 }: {
   emptyStateTimeContext?: StorePulseEmptyStateTimeContext;
   snapshot: StorePulseOperatorSnapshot;
+  totalTransactions?: number;
   variant?: StorePulseDetailVariant;
 }) {
-  const totalPaymentTransactions = snapshot.paymentMix.reduce(
+  const selectedWindowTransactions =
+    totalTransactions ?? snapshot.comparison.currentTransactions;
+  const paymentMix = selectedWindowTransactions > 0 ? snapshot.paymentMix : [];
+  const totalPaymentTransactions = paymentMix.reduce(
     (total, payment) => total + payment.count,
     0,
   );
@@ -729,8 +736,8 @@ export function PaymentMethodsPanel({
       </div>
       <div className={variant === "canvas" ? "" : detailCardClassName}>
         <div className="divide-y divide-border/70">
-          {snapshot.paymentMix.length ? (
-            snapshot.paymentMix.map((payment) => {
+          {paymentMix.length ? (
+            paymentMix.map((payment) => {
               const PaymentIcon = getPaymentMethodIcon(payment);
               const paymentShare =
                 totalPaymentTransactions > 0
@@ -790,10 +797,12 @@ function StorePulseRail({
   detailVariant,
   emptyStateTimeContext,
   snapshot,
+  totalTransactions,
 }: {
   detailVariant?: StorePulseDetailVariant;
   emptyStateTimeContext?: StorePulseEmptyStateTimeContext;
   snapshot: StorePulseOperatorSnapshot;
+  totalTransactions?: number;
 }) {
   return (
     <PageWorkspaceRail>
@@ -801,6 +810,7 @@ function StorePulseRail({
         variant={detailVariant}
         emptyStateTimeContext={emptyStateTimeContext}
         snapshot={snapshot}
+        totalTransactions={totalTransactions}
       />
     </PageWorkspaceRail>
   );
@@ -1163,6 +1173,7 @@ export function StorePulseSummaryView({
                   emptyStateTimeContext={emptyStateTimeContext}
                   snapshot={snapshot}
                   title={topItemsTitle}
+                  totalItemsSold={totalItemsSold}
                 />
               </PageWorkspaceMain>
 
@@ -1170,6 +1181,7 @@ export function StorePulseSummaryView({
                 detailVariant={detailVariant}
                 emptyStateTimeContext={emptyStateTimeContext}
                 snapshot={snapshot}
+                totalTransactions={totalTransactions}
               />
             </PageWorkspaceGrid>
           ) : null}

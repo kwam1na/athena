@@ -209,7 +209,7 @@ export const ingestLocalEvents = mutation({
         });
       }
 
-      let athenaUser;
+      let athenaUser: Doc<"athenaUser">;
       try {
         const admittedActor = (ctx as OperationMutationCtx).operationAdmission
           .actor;
@@ -222,14 +222,11 @@ export const ingestLocalEvents = mutation({
           for (const capability of capabilities) {
             requireSharedDemoCapability(capability);
           }
-          athenaUser = await ctx.db.get(
-            "athenaUser",
-            admittedActor.athenaUserId,
-          );
-          if (!athenaUser) throw new Error("Sign in again to continue.");
-        } else {
-          athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
         }
+        const resolvedAthenaUser =
+          await requireAuthenticatedAthenaUserWithCtx(ctx);
+        if (!resolvedAthenaUser) throw new Error("Sign in again to continue.");
+        athenaUser = resolvedAthenaUser;
         await requireOrganizationMemberRoleWithCtx(ctx, {
           allowedRoles: ["full_admin", "pos_only"],
           failureMessage: "You do not have access to sync this POS terminal.",
@@ -415,19 +412,9 @@ export const ingestRegisterSessionActivity = mutation({
         });
       }
 
-      let athenaUser;
       try {
-        const admittedActor = (ctx as OperationMutationCtx).operationAdmission
-          .actor;
-        if (admittedActor.kind === "shared_demo") {
-          athenaUser = await ctx.db.get(
-            "athenaUser",
-            admittedActor.athenaUserId,
-          );
-          if (!athenaUser) throw new Error("Sign in again to continue.");
-        } else {
-          athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-        }
+        const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+        if (!athenaUser) throw new Error("Sign in again to continue.");
         await requireOrganizationMemberRoleWithCtx(ctx, {
           allowedRoles: ["full_admin", "pos_only"],
           failureMessage: "You do not have access to sync this POS terminal.",

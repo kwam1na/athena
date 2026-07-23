@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createSharedDemoDailyOperationsFixture } from "./sharedDemoOperationsFixture";
+import {
+  createSharedDemoDailyOperationsFixture,
+  createSharedDemoPointOfSaleStorePulseSummary,
+  overlaySharedDemoPointOfSaleTodayWithFixtureYesterday,
+} from "./sharedDemoOperationsFixture";
 import { createSharedDemoDailyCloseFixture } from "./sharedDemoDailyCloseFixture";
 import { createSharedDemoDailyOpeningFixture } from "./sharedDemoDailyOpeningFixture";
 import { getSharedDemoTransactionFixture } from "./sharedDemoTransactionsFixture";
@@ -53,7 +57,7 @@ describe("createSharedDemoDailyOperationsFixture", () => {
     vi.useRealTimers();
   });
 
-  it("keeps current-day Opening Handoff on the connected workflow", () => {
+  it("renders current-day Opening Handoff from the prior fixture close", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 6, 21, 12));
 
@@ -64,7 +68,18 @@ describe("createSharedDemoDailyOperationsFixture", () => {
         storeId: "store-1" as never,
         storeUrlSlug: "central",
       }),
-    ).toBeUndefined();
+    ).toMatchObject({
+      snapshot: {
+        operatingDate: "2026-07-21",
+        priorClose: { operatingDate: "2026-07-20" },
+        readyItems: [
+          expect.objectContaining({
+            title: "Prior EOD Review completed",
+          }),
+        ],
+        status: "started",
+      },
+    });
 
     vi.useRealTimers();
   });
@@ -233,6 +248,107 @@ describe("createSharedDemoDailyOperationsFixture", () => {
     vi.useRealTimers();
   });
 
+  it("aligns shared-demo POS pulse chart windows to live period behavior", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 23, 12));
+
+    const todayPulse = createSharedDemoPointOfSaleStorePulseSummary("today");
+    const weekPulse = createSharedDemoPointOfSaleStorePulseSummary("this_week");
+    const monthPulse =
+      createSharedDemoPointOfSaleStorePulseSummary("this_month");
+    const allTimePulse =
+      createSharedDemoPointOfSaleStorePulseSummary("all_time");
+
+    expect(todayPulse.operatorSnapshot?.trend.map((day) => day.date)).toEqual([
+      "2026-07-22",
+      "2026-07-23",
+    ]);
+    expect(
+      todayPulse.operatorSnapshot?.comparison.yesterdaySales,
+    ).toBeGreaterThan(0);
+    expect(weekPulse.operatorSnapshot?.trend.map((day) => day.date)).toEqual([
+      "2026-07-20",
+      "2026-07-21",
+      "2026-07-22",
+      "2026-07-23",
+    ]);
+    expect(monthPulse.operatorSnapshot?.trend.at(0)?.date).toBe("2026-07-10");
+    expect(monthPulse.operatorSnapshot?.trend.at(-1)?.date).toBe("2026-07-23");
+    expect(allTimePulse.operatorSnapshot?.trend).toHaveLength(14);
+
+    vi.useRealTimers();
+  });
+
+  it("keeps shared-demo POS current day at zero while comparing against yesterday", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 23, 12));
+
+    const todayPulse = createSharedDemoPointOfSaleStorePulseSummary("today");
+
+    expect(todayPulse.totalSales).toBe(0);
+    expect(todayPulse.totalTransactions).toBe(0);
+    expect(todayPulse.operatorSnapshot?.comparison.currentSales).toBe(0);
+    expect(
+      todayPulse.operatorSnapshot?.comparison.yesterdayTransactions,
+    ).toBeGreaterThan(0);
+
+    vi.useRealTimers();
+  });
+
+  it("overlays fixture yesterday onto live shared-demo POS today", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 23, 12));
+
+    const liveToday = createSharedDemoPointOfSaleStorePulseSummary("today");
+    const liveOperatorSnapshot = liveToday.operatorSnapshot!;
+    liveToday.totalSales = 38_000;
+    liveToday.totalTransactions = 1;
+    liveToday.totalItemsSold = 4;
+    liveToday.operatorSnapshot = {
+      ...liveOperatorSnapshot,
+      comparison: {
+        ...liveOperatorSnapshot.comparison,
+        currentSales: 38_000,
+        currentTransactions: 1,
+        currentItemsSold: 4,
+        yesterdayAverageTransaction: 0,
+        yesterdayItemsSold: 0,
+        yesterdaySales: 0,
+        yesterdayTransactions: 0,
+      },
+      trend: [
+        {
+          averageTransaction: 38_000,
+          date: "2026-07-23",
+          label: "Today",
+          totalItemsSold: 4,
+          totalSales: 38_000,
+          transactionCount: 1,
+        },
+      ],
+    };
+
+    const overlaid =
+      overlaySharedDemoPointOfSaleTodayWithFixtureYesterday(liveToday);
+
+    expect(overlaid?.totalSales).toBe(38_000);
+    expect(overlaid?.totalTransactions).toBe(1);
+    expect(overlaid?.operatorSnapshot?.comparison.currentSales).toBe(38_000);
+    expect(
+      overlaid?.operatorSnapshot?.comparison.yesterdaySales,
+    ).toBeGreaterThan(0);
+    expect(overlaid?.operatorSnapshot?.trend.map((day) => day.date)).toEqual([
+      "2026-07-22",
+      "2026-07-23",
+    ]);
+    expect(overlaid?.operatorSnapshot?.trend.at(0)?.totalSales).toBeGreaterThan(
+      0,
+    );
+    expect(overlaid?.operatorSnapshot?.trend.at(1)?.totalSales).toBe(38_000);
+
+    vi.useRealTimers();
+  });
+
   it("keeps fixture history available through the selected operating date", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 6, 21, 12));
@@ -391,6 +507,57 @@ describe("createSharedDemoDailyOperationsFixture", () => {
 
     expect(paymentAmounts).not.toHaveLength(0);
     expect(paymentAmounts.every((amount) => amount % 500 === 0)).toBe(true);
+  });
+
+  it("ties shared-demo daily operations pulse detail to the selected operating date", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 21, 12));
+
+    const sundayFixture = createSharedDemoDailyOperationsFixture({
+      operatingDate: "2026-07-19",
+      orgUrlSlug: "demo",
+      storeId: "store-1" as never,
+      storeUrlSlug: "central",
+      weekEndOperatingDate: "2026-07-25",
+    });
+    const sundayPulse = sundayFixture.snapshot?.storePulse;
+
+    expect(sundayFixture.snapshot?.closeSummary.transactionCount).toBe(0);
+    expect(sundayPulse?.totalTransactions).toBe(0);
+    expect(sundayPulse?.totalItemsSold).toBe(0);
+    expect(sundayPulse?.operatorSnapshot?.topItems).toEqual([]);
+    expect(sundayPulse?.operatorSnapshot?.paymentMix).toEqual([]);
+    expect(
+      sundayPulse?.operatorSnapshot?.trend.some(
+        (day) => day.transactionCount > 0,
+      ),
+    ).toBe(true);
+
+    const mondayFixture = createSharedDemoDailyOperationsFixture({
+      operatingDate: "2026-07-20",
+      orgUrlSlug: "demo",
+      storeId: "store-1" as never,
+      storeUrlSlug: "central",
+      weekEndOperatingDate: "2026-07-25",
+    });
+    const mondayPulse = mondayFixture.snapshot?.storePulse;
+
+    expect(
+      mondayFixture.snapshot?.closeSummary.transactionCount,
+    ).toBeGreaterThan(0);
+    expect(mondayPulse?.totalTransactions).toBe(
+      mondayFixture.snapshot?.closeSummary.transactionCount,
+    );
+    expect(mondayPulse?.operatorSnapshot?.topItems.length).toBeGreaterThan(0);
+    expect(
+      mondayPulse?.operatorSnapshot?.paymentMix.map(({ method }) => method),
+    ).toEqual(
+      mondayFixture.snapshot?.closeSummary.paymentTotals?.map(
+        ({ method }) => method,
+      ),
+    );
+
+    vi.useRealTimers();
   });
 
   it("varies historic metrics independently across operating days", () => {

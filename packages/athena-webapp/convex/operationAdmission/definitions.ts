@@ -139,7 +139,10 @@ function transactionStoreWriteOperation(args: {
       resolve: async (ctx, operationArgs) => {
         const transactionId = operationArgs.transactionId;
         if (typeof transactionId !== "string") return {};
-        const transaction = await ctx.db.get("posTransaction", transactionId as never);
+        const transaction = await ctx.db.get(
+          "posTransaction",
+          transactionId as never,
+        );
         return transaction ? { storeId: transaction.storeId } : {};
       },
     },
@@ -151,7 +154,8 @@ function transactionStoreWriteOperation(args: {
 
 function orderStoreWriteOperation(args: {
   capability: AthenaCapability;
-  effects?: { mode: "protected"; gateways: readonly string[] } | { mode: "none" };
+  effects?:
+    { mode: "protected"; gateways: readonly string[] } | { mode: "none" };
   functionName: string;
   operationId: string;
 }) {
@@ -213,10 +217,30 @@ export const correctTransactionPaymentMethodOperationDefinition =
     capability: "pos.transaction.correct",
   });
 
+export const adjustTransactionItemsOperationDefinition =
+  transactionStoreWriteOperation({
+    functionName: "pos/public/transactions:adjustTransactionItems",
+    operationId: "pos/public/transactions.adjustTransactionItems",
+    capability: "pos.transaction.correct",
+  });
+
+export const voidTransactionOperationDefinition =
+  transactionStoreWriteOperation({
+    functionName: "pos/public/transactions:voidTransaction",
+    operationId: "pos/public/transactions.voidTransaction",
+    capability: "pos.transaction.void",
+  });
+
 export const quickAddSkuOperationDefinition = storeWriteOperation({
   functionName: "pos/public/catalog:quickAddSku",
   operationId: "pos/public/catalog.quickAddSku",
   capability: "catalog.quick_add",
+});
+
+export const repairCatalogSummaryOperationDefinition = storeWriteOperation({
+  functionName: "inventory/products:repairCatalogSummary",
+  operationId: "inventory/products.repairCatalogSummary",
+  capability: "catalog.maintain",
 });
 
 export const ingestLocalEventsOperationDefinition = storeWriteOperation({
@@ -390,7 +414,8 @@ export const discardCycleCountDraftOperationDefinition =
 
 export const refreshCycleCountDraftLineBaselineOperationDefinition =
   cycleCountDraftStoreWriteOperation({
-    functionName: "stockOps/cycleCountDrafts:refreshCycleCountDraftLineBaseline",
+    functionName:
+      "stockOps/cycleCountDrafts:refreshCycleCountDraftLineBaseline",
     operationId: "stockOps/cycleCountDrafts.refreshCycleCountDraftLineBaseline",
     storeIdArg: "storeId",
   });
@@ -415,12 +440,13 @@ export const updateOnlineOrderOperationDefinition = orderStoreWriteOperation({
   effects: { mode: "protected", gateways: ["order_notification.send"] },
 });
 
-export const processReturnExchangeOperationDefinition = orderStoreWriteOperation({
-  functionName: "storeFront/onlineOrder:processReturnExchange",
-  operationId: "storeFront/onlineOrder.processReturnExchange",
-  capability: "payments.refund",
-  effects: { mode: "protected", gateways: ["payment.refund"] },
-});
+export const processReturnExchangeOperationDefinition =
+  orderStoreWriteOperation({
+    functionName: "storeFront/onlineOrder:processReturnExchange",
+    operationId: "storeFront/onlineOrder.processReturnExchange",
+    capability: "payments.refund",
+    effects: { mode: "protected", gateways: ["payment.refund"] },
+  });
 
 export const OPERATION_ADMISSION_DEFINITIONS = [
   resolveSyncedSaleInventoryReviewGroupOperationDefinition,
@@ -432,7 +458,10 @@ export const OPERATION_ADMISSION_DEFINITIONS = [
   markReceiptPrintedOperationDefinition,
   correctTransactionCustomerOperationDefinition,
   correctTransactionPaymentMethodOperationDefinition,
+  adjustTransactionItemsOperationDefinition,
+  voidTransactionOperationDefinition,
   quickAddSkuOperationDefinition,
+  repairCatalogSummaryOperationDefinition,
   ingestLocalEventsOperationDefinition,
   ingestRegisterSessionActivityOperationDefinition,
   registerTerminalOperationDefinition,

@@ -10,6 +10,7 @@ const useLocalPosEntryContextMock = vi.fn();
 const usePermissionsMock = vi.fn();
 const usePrewarmRegisterCatalogOfflineSnapshotsMock = vi.fn();
 const useQueryMock = vi.fn();
+const useSharedDemoContextMock = vi.fn();
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -108,6 +109,10 @@ vi.mock("~/src/hooks/usePermissions", () => ({
   usePermissions: () => usePermissionsMock(),
 }));
 
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: () => useSharedDemoContextMock(),
+}));
+
 vi.mock("../View", () => ({
   default: ({
     children,
@@ -148,6 +153,7 @@ describe("PointOfSaleView", () => {
       hasFinancialDetailsAccess: true,
       hasFullAdminAccess: true,
     });
+    useSharedDemoContextMock.mockReturnValue(null);
     useLocalPosEntryContextMock.mockReturnValue({
       status: "ready",
       orgUrlSlug: "acme",
@@ -344,6 +350,45 @@ describe("PointOfSaleView", () => {
     expect(
       screen.queryByRole("tab", { name: "This month" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("uses live POS pulse data for shared-demo today", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 23, 12));
+    useSharedDemoContextMock.mockReturnValue({
+      kind: "shared_demo",
+      storeId: "store-1",
+    });
+
+    try {
+      render(<PointOfSaleView />);
+
+      expect(useQueryMock).toHaveBeenCalledWith("getTodaySummary", {
+        pulseWindow: "today",
+        storeId: "store-1",
+      });
+      expect(screen.getByText("Braiding Hair")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("uses shared-demo fixture history for POS non-today windows", async () => {
+    const user = userEvent.setup();
+    useSharedDemoContextMock.mockReturnValue({
+      kind: "shared_demo",
+      storeId: "store-1",
+    });
+
+    render(<PointOfSaleView />);
+    useQueryMock.mockClear();
+
+    await user.click(screen.getByRole("tab", { name: "This week" }));
+
+    expect(useQueryMock).toHaveBeenCalledWith("getTodaySummary", "skip");
+    expect(screen.queryAllByText("No sales yesterday")).toHaveLength(0);
+    expect(screen.getAllByText(/last week/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Raw Shea Butter 250g")).toBeInTheDocument();
   });
 
   it("keeps POS entry points available while store pulse metrics load", () => {

@@ -57,13 +57,19 @@ import { useGetActiveOrganization } from "../hooks/useGetOrganizations";
 import { useNewOrderNotification } from "../hooks/useNewOrderNotification";
 import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
-// import { useProductWithNoImagesNotification } from "../hooks/useProductWithNoImagesNotification";
 import { useGetCategories } from "../hooks/useGetCategories";
 import { PermissionGate } from "./PermissionGate";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSharedDemoContext } from "../hooks/useSharedDemoContext";
+import {
+  SHARED_DEMO_SESSION_ORDER_CHANGED_EVENT,
+  applySharedDemoSessionOrderPatches,
+  readSharedDemoSessionOrderPatches,
+  type OnlineOrderWithItems,
+} from "../contexts/onlineOrderSessionOverlay";
 
 type SidebarOrderSummary = {
+  _id: string;
   status: string;
 };
 
@@ -179,8 +185,6 @@ export function AppSidebar({
 
   useNewOrderNotification();
 
-  // useProductWithNoImagesNotification();
-
   const categories = useGetCategories();
 
   const catalogSummary = useQuery(
@@ -200,26 +204,62 @@ export function AppSidebar({
   ) as SidebarOrderSummary[] | undefined;
   const sharedDemoContext = useSharedDemoContext();
   const isSharedDemo = sharedDemoContext?.kind === "shared_demo";
+  const [orderOverlayVersion, setOrderOverlayVersion] = useState(0);
+  useEffect(() => {
+    const handleSessionOrderChange = () => {
+      setOrderOverlayVersion((current) => current + 1);
+    };
+    window.addEventListener(
+      SHARED_DEMO_SESSION_ORDER_CHANGED_EVENT,
+      handleSessionOrderChange,
+    );
+    return () => {
+      window.removeEventListener(
+        SHARED_DEMO_SESSION_ORDER_CHANGED_EVENT,
+        handleSessionOrderChange,
+      );
+    };
+  }, []);
+  const effectiveOrders = useMemo(() => {
+    if (!orders) return orders;
+    if (sharedDemoContext?.kind !== "shared_demo") return orders;
 
-  const openOrders = orders?.filter((order) => order.status === "open")?.length;
+    // The session-order overlay is keyed by the demo restore epoch; without it
+    // there is no stable key, so fall back to the unpatched server orders.
+    const restoreEpoch = (sharedDemoContext as { restore?: { epoch?: number } })
+      .restore?.epoch;
+    if (typeof restoreEpoch !== "number") return orders;
 
-  const readyOrders = orders?.filter((order) =>
+    return applySharedDemoSessionOrderPatches(
+      orders as OnlineOrderWithItems[],
+      readSharedDemoSessionOrderPatches({
+        restoreEpoch,
+        storeId: String(sharedDemoContext.storeId),
+      }),
+    ) as SidebarOrderSummary[];
+  }, [orders, orderOverlayVersion, sharedDemoContext]);
+
+  const openOrders = effectiveOrders?.filter(
+    (order) => order.status === "open",
+  )?.length;
+
+  const readyOrders = effectiveOrders?.filter((order) =>
     order.status.includes("ready"),
   )?.length;
 
-  const outForDeliveryOrders = orders?.filter(
+  const outForDeliveryOrders = effectiveOrders?.filter(
     (order) => order.status === "out-for-delivery",
   )?.length;
 
-  const completedOrders = orders?.filter((order) =>
+  const completedOrders = effectiveOrders?.filter((order) =>
     ["delivered", "picked-up"].includes(order.status),
   )?.length;
 
-  const refundedOrders = orders?.filter(
+  const refundedOrders = effectiveOrders?.filter(
     (order) => order.status === "refunded",
   )?.length;
 
-  const cancelledOrders = orders?.filter(
+  const cancelledOrders = effectiveOrders?.filter(
     (order) => order.status === "cancelled",
   )?.length;
 

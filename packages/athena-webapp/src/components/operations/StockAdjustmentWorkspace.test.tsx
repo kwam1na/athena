@@ -1,6 +1,10 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState, type AnchorHTMLAttributes, type ComponentProps } from "react";
+import {
+  useState,
+  type AnchorHTMLAttributes,
+  type ComponentProps,
+} from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "~/convex/_generated/dataModel";
 import { ok, userError } from "~/shared/commandResult";
@@ -324,6 +328,99 @@ describe("StockAdjustmentWorkspaceContent", () => {
         "Operator count submitted. Inventory movements have been written.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("presents high-variance manual adjustments as immediate applies", async () => {
+    const user = userEvent.setup();
+
+    renderStockAdjustmentWorkspace();
+
+    await user.click(screen.getByRole("tab", { name: /manual adjustment/i }));
+    await user.clear(
+      screen.getByLabelText(/adjustment delta for .*closure wig/i),
+    );
+    await user.type(
+      screen.getByLabelText(/adjustment delta for .*closure wig/i),
+      "-6",
+    );
+
+    expect(
+      screen.getByText(
+        "Submitting this adjustment will apply inventory movements immediately",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Adjustments apply immediately when submitted."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/approval request/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/go to review/i)).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /submit adjustment/i }),
+    );
+
+    await waitFor(() =>
+      expect(baseProps.onSubmitBatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          adjustmentType: "manual",
+          lineItems: [
+            {
+              productSkuId: "sku-1",
+              quantityDelta: -6,
+            },
+          ],
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(mockedToast.success).toHaveBeenCalledWith(
+        "Stock adjustment applied",
+      ),
+    );
+  });
+
+  it("presents high-variance cycle counts as immediate applies", async () => {
+    const user = userEvent.setup();
+
+    renderStockAdjustmentWorkspace();
+
+    await user.clear(
+      screen.getByLabelText(/counted quantity for body wave bundle/i),
+    );
+    await user.type(
+      screen.getByLabelText(/counted quantity for body wave bundle/i),
+      "10",
+    );
+
+    expect(
+      screen.getByText(
+        "Submitting this count will apply inventory movements immediately",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Counts apply immediately when submitted."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/flag/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/go to review/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Variances of 5\+ units/i),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /submit count/i }));
+
+    await waitFor(() =>
+      expect(baseProps.onSubmitBatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          adjustmentType: "cycle_count",
+          lineItems: [
+            {
+              countedQuantity: 10,
+              productSkuId: "sku-2",
+            },
+          ],
+        }),
+      ),
+    );
   });
 
   it("quick adds products from the stock adjustment search workflow", async () => {
@@ -1225,7 +1322,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
     const table = screen.getByRole("table");
 
-    expect(screen.getByText("Checking remaining inventory")).toBeInTheDocument();
+    expect(
+      screen.getByText("Checking remaining inventory"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         "Loading more SKUs before showing final search results.",
@@ -1398,9 +1497,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
     const table = screen.getByRole("table");
 
-    expect(
-      screen.getByText("Showing 1 of 1 SKU."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Showing 1 of 1 SKU.")).toBeInTheDocument();
     expect(within(table).getByText("Current Catalog Name")).toBeInTheDocument();
     expect(within(table).queryByText("No results.")).not.toBeInTheDocument();
   });
@@ -2403,7 +2500,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
     });
 
     const table = screen.getByRole("table");
-    const selectedRow = within(table).getByText("Inventory Item 11").closest("tr");
+    const selectedRow = within(table)
+      .getByText("Inventory Item 11")
+      .closest("tr");
 
     expect(
       within(table).queryByText("Inventory Item 1"),
@@ -2544,7 +2643,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
       "Restoring saved stock view",
     );
     expect(
-      screen.getByText("Loading more SKUs to recover the selected row and page."),
+      screen.getByText(
+        "Loading more SKUs to recover the selected row and page.",
+      ),
     ).toBeInTheDocument();
   });
 

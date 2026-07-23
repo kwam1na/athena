@@ -9,6 +9,9 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import { searchProductSkusReadDefinition } from "../operationAdmission/readDefinitions";
+import type { OperationQueryCtx } from "../operationAdmission/types";
 import { advanceRegisterCatalogRevision } from "../pos/application/sync/registerCatalogRevision";
 import {
   isProjectionProductPosCatalogVisible,
@@ -25,14 +28,14 @@ const ATTRIBUTE_VALUE_MAX_LENGTH = 120;
 const productAvailabilityValidator = v.union(
   v.literal("archived"),
   v.literal("draft"),
-  v.literal("live")
+  v.literal("live"),
 );
 
 const scalarAttributeValidator = v.union(
   v.string(),
   v.number(),
   v.boolean(),
-  v.null()
+  v.null(),
 );
 
 const nullableStringValidator = v.union(v.string(), v.null());
@@ -212,7 +215,10 @@ function normalizeLookup(value: string | undefined): string | undefined {
   return normalized ? normalized : undefined;
 }
 
-function capped(value: string | undefined, maxLength = ATTRIBUTE_VALUE_MAX_LENGTH) {
+function capped(
+  value: string | undefined,
+  maxLength = ATTRIBUTE_VALUE_MAX_LENGTH,
+) {
   if (!value) return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
@@ -429,8 +435,7 @@ function registerCatalogProjectionsEqual(
     productIsVisible: projection.productIsVisible,
     productName: projection.productName,
     productPosVisible: projection.productPosVisible,
-    productProcessingFeesAbsorbed:
-      projection.productProcessingFeesAbsorbed,
+    productProcessingFeesAbsorbed: projection.productProcessingFeesAbsorbed,
     size: projection.size,
     sku: projection.sku,
     subcategoryName: projection.subcategoryName,
@@ -538,9 +543,7 @@ export async function removeProductSkuSearchProjection(
   await Promise.all(
     rows.map((row) => ctx.db.delete("productSkuSearch", row._id)),
   );
-  const registerCatalogChanged = rows.some(
-    isRegisterCatalogProjectionIncluded,
-  );
+  const registerCatalogChanged = rows.some(isRegisterCatalogProjectionIncluded);
   if (options?.advanceRevision !== false && rows[0]) {
     await advanceRegisterCatalogRevision(ctx, {
       didChange: registerCatalogChanged,
@@ -638,9 +641,7 @@ export async function refreshProductSkuSearchForCategory(
     .collect();
 
   const results = await Promise.all(
-    products.map((product) =>
-      syncProductSkuSearchForProduct(ctx, product._id),
-    ),
+    products.map((product) => syncProductSkuSearchForProduct(ctx, product._id)),
   );
   const flattened = results.flat();
   const category = await ctx.db.get("category", categoryId);
@@ -660,15 +661,11 @@ export async function refreshProductSkuSearchForSubcategory(
 ) {
   const products = await ctx.db
     .query("product")
-    .withIndex("by_subcategoryId", (q) =>
-      q.eq("subcategoryId", subcategoryId),
-    )
+    .withIndex("by_subcategoryId", (q) => q.eq("subcategoryId", subcategoryId))
     .collect();
 
   const results = await Promise.all(
-    products.map((product) =>
-      syncProductSkuSearchForProduct(ctx, product._id),
-    ),
+    products.map((product) => syncProductSkuSearchForProduct(ctx, product._id)),
   );
   const flattened = results.flat();
   const subcategory = await ctx.db.get("subcategory", subcategoryId);
@@ -782,16 +779,17 @@ function mapProjectionToResult(
     skuIsVisible: projection.isVisible ?? null,
     skuPosVisible: projection.posVisible ?? null,
     storeId: projection.storeId,
-    subcategory: projection.subcategoryId && projection.categoryId
-      ? {
-          categoryId: projection.categoryId,
-          description: projection.subcategoryDescription ?? null,
-          id: projection.subcategoryId,
-          name: projection.subcategoryName ?? "",
-          subcategoryId: projection.subcategoryId,
-          slug: projection.subcategorySlug ?? null,
-        }
-      : null,
+    subcategory:
+      projection.subcategoryId && projection.categoryId
+        ? {
+            categoryId: projection.categoryId,
+            description: projection.subcategoryDescription ?? null,
+            id: projection.subcategoryId,
+            name: projection.subcategoryName ?? "",
+            subcategoryId: projection.subcategoryId,
+            slug: projection.subcategorySlug ?? null,
+          }
+        : null,
     subcategoryId: projection.subcategoryId ?? null,
     subcategoryName: projection.subcategoryName ?? null,
     subcategorySlug: projection.subcategorySlug ?? null,
@@ -825,188 +823,202 @@ export const searchProductSkus = query({
     storeId: v.id("store"),
   },
   returns: productSkuSearchResponseValidator,
-  handler: async (ctx, args) => {
-    await requireProductSkuSearchReadAccess(
-      ctx,
-      args.storeId,
-      "You do not have access to search product SKUs.",
-    );
+  handler: withOperationReadAdmission(
+    searchProductSkusReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: {
+        limit?: number;
+        query: string;
+        storeId: Id<"store">;
+      },
+    ) => {
+      await requireProductSkuSearchReadAccess(
+        ctx,
+        args.storeId,
+        "You do not have access to search product SKUs.",
+      );
 
-    const queryText = args.query.trim();
-    const normalizedQuery = normalizeLookup(queryText);
-    const limit = Math.min(Math.max(1, args.limit ?? DEFAULT_LIMIT), MAX_LIMIT);
+      const queryText = args.query.trim();
+      const normalizedQuery = normalizeLookup(queryText);
+      const limit = Math.min(
+        Math.max(1, args.limit ?? DEFAULT_LIMIT),
+        MAX_LIMIT,
+      );
 
-    if (!normalizedQuery) {
-      return {
-        candidateOverflow: false,
-        limit,
-        results: [],
-        truncated: false,
-      };
-    }
+      if (!normalizedQuery) {
+        return {
+          candidateOverflow: false,
+          limit,
+          results: [],
+          truncated: false,
+        };
+      }
 
-    const canonicalSkuLookupValues = [
-      queryText,
-      queryText.toUpperCase(),
-      queryText.toLowerCase(),
-    ].filter((value, index, values) => values.indexOf(value) === index);
+      const canonicalSkuLookupValues = [
+        queryText,
+        queryText.toUpperCase(),
+        queryText.toLowerCase(),
+      ].filter((value, index, values) => values.indexOf(value) === index);
 
-    const exactCandidates = await Promise.all([
-      (async () => {
-        const productSkuId = ctx.db.normalizeId("productSku", queryText);
-        if (!productSkuId) return [];
+      const exactCandidates = await Promise.all([
+        (async () => {
+          const productSkuId = ctx.db.normalizeId("productSku", queryText);
+          if (!productSkuId) return [];
 
-        const sku = await ctx.db.get("productSku", productSkuId);
-        if (!sku || sku.storeId !== args.storeId) return [];
+          const sku = await ctx.db.get("productSku", productSkuId);
+          if (!sku || sku.storeId !== args.storeId) return [];
 
-        return [
-          {
-            _creationTime: sku._creationTime,
-            productSkuId: sku._id,
-            storeId: sku.storeId,
+          return [
+            {
+              _creationTime: sku._creationTime,
+              productSkuId: sku._id,
+              storeId: sku.storeId,
+            },
+          ];
+        })(),
+        (async () => {
+          const matches = await Promise.all(
+            canonicalSkuLookupValues.map((lookupValue) =>
+              ctx.db
+                .query("productSku")
+                .withIndex("by_storeId_sku", (q) =>
+                  q.eq("storeId", args.storeId).eq("sku", lookupValue),
+                )
+                .take(EXACT_READ_LIMIT),
+            ),
+          );
+
+          return matches.flat();
+        })(),
+        ctx.db
+          .query("productSku")
+          .withIndex("by_storeId_barcode", (q) =>
+            q.eq("storeId", args.storeId).eq("barcode", queryText),
+          )
+          .take(EXACT_READ_LIMIT),
+        ctx.db
+          .query("productSkuSearch")
+          .withIndex("by_storeId_productSkuId", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("productSkuId", queryText as Id<"productSku">),
+          )
+          .take(EXACT_READ_LIMIT),
+        ctx.db
+          .query("productSkuSearch")
+          .withIndex("by_storeId_sku", (q) =>
+            q.eq("storeId", args.storeId).eq("normalizedSku", normalizedQuery),
+          )
+          .take(EXACT_READ_LIMIT),
+        ctx.db
+          .query("productSkuSearch")
+          .withIndex("by_storeId_barcode", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("normalizedBarcode", normalizedQuery),
+          )
+          .take(EXACT_READ_LIMIT),
+      ]);
+
+      const textCandidates = await ctx.db
+        .query("productSkuSearch")
+        .withSearchIndex("searchText", (q) =>
+          q.search("searchText", queryText).eq("storeId", args.storeId),
+        )
+        .take(TEXT_CANDIDATE_READ_LIMIT);
+
+      const candidateRows = [
+        ...exactCandidates[0].map((row) => ({
+          row,
+          match: {
+            kind: "productSkuId" as const,
+            matchedValue: String(row.productSkuId),
+            rank: 0,
           },
-        ];
-      })(),
-      (async () => {
-        const matches = await Promise.all(
-          canonicalSkuLookupValues.map((lookupValue) =>
-            ctx.db
-              .query("productSku")
-              .withIndex("by_storeId_sku", (q) =>
-                q.eq("storeId", args.storeId).eq("sku", lookupValue),
-              )
-              .take(EXACT_READ_LIMIT),
-          ),
-        );
+        })),
+        ...exactCandidates[1].map((row) => ({
+          row: {
+            productSkuId: row._id,
+            storeId: row.storeId,
+          },
+          match: {
+            kind: "sku" as const,
+            matchedValue: row.sku ?? null,
+            rank: 1,
+          },
+        })),
+        ...exactCandidates[2].map((row) => ({
+          row: {
+            productSkuId: row._id,
+            storeId: row.storeId,
+          },
+          match: {
+            kind: "barcode" as const,
+            matchedValue: row.barcode ?? null,
+            rank: 2,
+          },
+        })),
+        ...exactCandidates[3].map((row) => ({
+          row,
+          match: {
+            kind: "productSkuId" as const,
+            matchedValue: String(row.productSkuId),
+            rank: 0,
+          },
+        })),
+        ...exactCandidates[4].map((row) => ({
+          row,
+          match: {
+            kind: "sku" as const,
+            matchedValue: row.sku ?? null,
+            rank: 1,
+          },
+        })),
+        ...exactCandidates[5].map((row) => ({
+          row,
+          match: {
+            kind: "barcode" as const,
+            matchedValue: row.barcode ?? null,
+            rank: 2,
+          },
+        })),
+        ...textCandidates.map((row, index) => ({
+          row,
+          match: {
+            kind: "text" as const,
+            matchedValue: queryText,
+            rank: 3 + index,
+          },
+        })),
+      ];
+      const results: Array<ReturnType<typeof mapProjectionToResult>> = [];
+      const seenSkuIds = new Set<string>();
 
-        return matches.flat();
-      })(),
-      ctx.db
-        .query("productSku")
-        .withIndex("by_storeId_barcode", (q) =>
-          q.eq("storeId", args.storeId).eq("barcode", queryText),
-        )
-        .take(EXACT_READ_LIMIT),
-      ctx.db
-        .query("productSkuSearch")
-        .withIndex("by_storeId_productSkuId", (q) =>
-          q
-            .eq("storeId", args.storeId)
-            .eq("productSkuId", queryText as Id<"productSku">),
-        )
-        .take(EXACT_READ_LIMIT),
-      ctx.db
-        .query("productSkuSearch")
-        .withIndex("by_storeId_sku", (q) =>
-          q.eq("storeId", args.storeId).eq("normalizedSku", normalizedQuery),
-        )
-        .take(EXACT_READ_LIMIT),
-      ctx.db
-        .query("productSkuSearch")
-        .withIndex("by_storeId_barcode", (q) =>
-          q
-            .eq("storeId", args.storeId)
-            .eq("normalizedBarcode", normalizedQuery),
-        )
-        .take(EXACT_READ_LIMIT),
-    ]);
+      for (const candidate of candidateRows) {
+        const row = candidate.row;
+        const key = String(row.productSkuId);
+        if (seenSkuIds.has(key)) continue;
 
-    const textCandidates = await ctx.db
-      .query("productSkuSearch")
-      .withSearchIndex("searchText", (q) =>
-        q.search("searchText", queryText).eq("storeId", args.storeId),
-      )
-      .take(TEXT_CANDIDATE_READ_LIMIT);
+        const projection = await hydrateCanonicalProjection(ctx, row);
+        if (!projection) continue;
 
-    const candidateRows = [
-      ...exactCandidates[0].map((row) => ({
-        row,
-        match: {
-          kind: "productSkuId" as const,
-          matchedValue: String(row.productSkuId),
-          rank: 0,
-        },
-      })),
-      ...exactCandidates[1].map((row) => ({
-        row: {
-          productSkuId: row._id,
-          storeId: row.storeId,
-        },
-        match: {
-          kind: "sku" as const,
-          matchedValue: row.sku ?? null,
-          rank: 1,
-        },
-      })),
-      ...exactCandidates[2].map((row) => ({
-        row: {
-          productSkuId: row._id,
-          storeId: row.storeId,
-        },
-        match: {
-          kind: "barcode" as const,
-          matchedValue: row.barcode ?? null,
-          rank: 2,
-        },
-      })),
-      ...exactCandidates[3].map((row) => ({
-        row,
-        match: {
-          kind: "productSkuId" as const,
-          matchedValue: String(row.productSkuId),
-          rank: 0,
-        },
-      })),
-      ...exactCandidates[4].map((row) => ({
-        row,
-        match: {
-          kind: "sku" as const,
-          matchedValue: row.sku ?? null,
-          rank: 1,
-        },
-      })),
-      ...exactCandidates[5].map((row) => ({
-        row,
-        match: {
-          kind: "barcode" as const,
-          matchedValue: row.barcode ?? null,
-          rank: 2,
-        },
-      })),
-      ...textCandidates.map((row, index) => ({
-        row,
-        match: {
-          kind: "text" as const,
-          matchedValue: queryText,
-          rank: 3 + index,
-        },
-      })),
-    ];
-    const results: Array<ReturnType<typeof mapProjectionToResult>> = [];
-    const seenSkuIds = new Set<string>();
+        seenSkuIds.add(key);
+        results.push(mapProjectionToResult(projection, candidate.match));
+      }
 
-    for (const candidate of candidateRows) {
-      const row = candidate.row;
-      const key = String(row.productSkuId);
-      if (seenSkuIds.has(key)) continue;
+      const truncated = results.length > limit;
+      const candidateOverflow =
+        textCandidates.length >= TEXT_CANDIDATE_READ_LIMIT;
 
-      const projection = await hydrateCanonicalProjection(ctx, row);
-      if (!projection) continue;
-
-      seenSkuIds.add(key);
-      results.push(mapProjectionToResult(projection, candidate.match));
-    }
-
-    const truncated = results.length > limit;
-    const candidateOverflow = textCandidates.length >= TEXT_CANDIDATE_READ_LIMIT;
-
-    return {
-      candidateOverflow,
-      limit,
-      results: results.slice(0, limit),
-      truncated,
-    };
-  },
+      return {
+        candidateOverflow,
+        limit,
+        results: results.slice(0, limit),
+        truncated,
+      };
+    },
+  ),
 });
 
 export const repairProductSkuSearchPage = mutation({
@@ -1116,8 +1128,8 @@ export const removeStaleProductSkuSearchPage = mutation({
           q.eq("productSkuId", row.productSkuId),
         )
         .collect();
-      const [canonicalRow, ...duplicateRows] = duplicates.sort((left, right) =>
-        left._creationTime - right._creationTime,
+      const [canonicalRow, ...duplicateRows] = duplicates.sort(
+        (left, right) => left._creationTime - right._creationTime,
       );
 
       if (canonicalRow && canonicalRow._id !== row._id) {
@@ -1134,7 +1146,6 @@ export const removeStaleProductSkuSearchPage = mutation({
       stats.staleOrphansRemoved += duplicateRows.length;
       stats.unchanged += 1;
     }
-
 
     await advanceRegisterCatalogRevision(ctx, {
       didChange: registerCatalogChanged,

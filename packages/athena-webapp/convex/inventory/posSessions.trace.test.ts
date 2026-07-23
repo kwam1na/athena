@@ -315,8 +315,8 @@ function createMutationCtx(seed?: {
         };
       }
 
-      if (tableName === "athenaUser" && id === "demo-user-1") {
-        return { _id: "demo-user-1" };
+      if (tableName === "athenaUser") {
+        return { _id: id };
       }
 
       if (tableName === "customerProfile") {
@@ -627,6 +627,13 @@ function buildSession(overrides: Partial<SessionRecord>): SessionRecord {
   };
 }
 
+const FALLBACK_AUTH_USER_ID = "user-1";
+
+type AdmissionAwareAuthCtx = {
+  db: { get: (table: string, id: string) => Promise<unknown> };
+  operationAdmission?: { actor?: { athenaUserId?: string } };
+};
+
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
@@ -640,9 +647,19 @@ describe("pos session lifecycle trace handlers", () => {
     mocks.requireStoreFullAdminAccess.mockRejectedValue(
       new Error("Authentication required."),
     );
-    mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
-      _id: "user-1",
-    });
+    // Mirrors the real helper in lib/athenaUserAuth.ts: identity resolution
+    // short-circuits on the admitted actor, so an admitted demo actor resolves
+    // to its own athenaUser rather than falling through to normal-user auth.
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockImplementation(
+      async (ctx: AdmissionAwareAuthCtx) => {
+        const admittedUserId = ctx?.operationAdmission?.actor?.athenaUserId;
+        if (admittedUserId) {
+          return ctx.db.get("athenaUser", admittedUserId);
+        }
+
+        return { _id: FALLBACK_AUTH_USER_ID };
+      },
+    );
     mocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
     mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
     mocks.releaseActiveInventoryHoldsForSession.mockResolvedValue({
@@ -872,13 +889,32 @@ describe("pos session lifecycle trace handlers", () => {
 
     expect(result.rows).toHaveLength(1);
     expect(mocks.getSharedDemoActorWithCtx).toHaveBeenCalledWith(ctx);
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor, resolves that actor's identity, and never silently falls
+    // through to the normal-user auth identity.
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: "demo-user-1",
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         allowedRoles: ["full_admin", "pos_only"],
         userId: "demo-user-1",
       }),
+    );
+    expect(
+      mocks.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: FALLBACK_AUTH_USER_ID }),
     );
   });
 
@@ -935,13 +971,32 @@ describe("pos session lifecycle trace handlers", () => {
         sessionNumber: "SES-100",
       }),
     ]);
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor, resolves that actor's identity, and never silently falls
+    // through to the normal-user auth identity.
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: "demo-user-1",
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         allowedRoles: ["full_admin", "pos_only"],
         userId: "demo-user-1",
       }),
+    );
+    expect(
+      mocks.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: FALLBACK_AUTH_USER_ID }),
     );
   });
 
@@ -973,13 +1028,32 @@ describe("pos session lifecycle trace handlers", () => {
         sessionNumber: "SES-100",
       }),
     );
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor, resolves that actor's identity, and never silently falls
+    // through to the normal-user auth identity.
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: "demo-user-1",
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         allowedRoles: ["full_admin", "pos_only"],
         userId: "demo-user-1",
       }),
+    );
+    expect(
+      mocks.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: FALLBACK_AUTH_USER_ID }),
     );
   });
 

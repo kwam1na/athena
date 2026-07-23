@@ -82,9 +82,7 @@ const asArray = <T>(
     return [];
   }
 
-  return value
-    .map(mapper)
-    .filter((item): item is T => item !== undefined);
+  return value.map(mapper).filter((item): item is T => item !== undefined);
 };
 
 const asOptionalArray = <T>(
@@ -98,7 +96,9 @@ const asOptionalArray = <T>(
   return asArray(value, mapper);
 };
 
-const firstDefined = <T>(...values: Array<T | undefined | null>): T | undefined => {
+const firstDefined = <T>(
+  ...values: Array<T | undefined | null>
+): T | undefined => {
   for (const value of values) {
     if (value !== undefined && value !== null) {
       return value;
@@ -180,11 +180,11 @@ const hasMtnMomoReceivingAccountDetails = (
 ): boolean => {
   return Boolean(
     account.label ||
-      account.walletNumber ||
-      account.businessName ||
-      account.market ||
-      account.businessContact ||
-      account.statusNote,
+    account.walletNumber ||
+    account.businessName ||
+    account.market ||
+    account.businessContact ||
+    account.statusNote,
   );
 };
 
@@ -248,6 +248,7 @@ export const toV2Config = (config: unknown): StoreConfigV2 => {
 
   const promotions = asRecord(root.promotions);
   const contact = asRecord(root.contact);
+  const receipt = asRecord(root.receipt);
   const payments = asRecord(root.payments);
   const paymentsMtnMomo = asRecord(payments.mtnMomo);
 
@@ -367,13 +368,22 @@ export const toV2Config = (config: unknown): StoreConfigV2 => {
         }),
       }),
       tax: cleanUndefined({
-        enabled: firstDefined(asBoolean(commerceTax.enabled), asBoolean(legacyTax.enabled)),
+        enabled: firstDefined(
+          asBoolean(commerceTax.enabled),
+          asBoolean(legacyTax.enabled),
+        ),
         includedInPrice: firstDefined(
           asBoolean(commerceTax.includedInPrice),
           asBoolean(legacyTax.includedInPrice),
         ),
-        name: firstDefined(asString(commerceTax.name), asString(legacyTax.name)),
-        rate: firstDefined(asNumber(commerceTax.rate), asNumber(legacyTax.rate)),
+        name: firstDefined(
+          asString(commerceTax.name),
+          asString(legacyTax.name),
+        ),
+        rate: firstDefined(
+          asNumber(commerceTax.rate),
+          asNumber(legacyTax.rate),
+        ),
       }),
     },
     media: {
@@ -417,14 +427,16 @@ export const toV2Config = (config: unknown): StoreConfigV2 => {
           asString(mediaReels.landingPageVersion),
           asString(root.landingPageReelVersion),
         ),
-        versions: firstDefined(
-          asOptionalArray(mediaReels.versions, (value) => asString(value)),
-          asOptionalArray(root.reelVersions, (value) => asString(value)),
-        ) || [],
-        streamReels: firstDefined(
-          asOptionalArray(mediaReels.streamReels, mapStreamReel),
-          asOptionalArray(root.streamReels, mapStreamReel),
-        ) || [],
+        versions:
+          firstDefined(
+            asOptionalArray(mediaReels.versions, (value) => asString(value)),
+            asOptionalArray(root.reelVersions, (value) => asString(value)),
+          ) || [],
+        streamReels:
+          firstDefined(
+            asOptionalArray(mediaReels.streamReels, mapStreamReel),
+            asOptionalArray(root.streamReels, mapStreamReel),
+          ) || [],
       },
       images: cleanUndefined({
         fallbackImageUrl: firstDefined(
@@ -452,6 +464,7 @@ export const toV2Config = (config: unknown): StoreConfigV2 => {
       ),
     }),
     contact: cleanUndefined({
+      email: asString(contact.email),
       location: firstDefined(
         asString(contact.location),
         asString(legacyContactInfo.location),
@@ -460,6 +473,11 @@ export const toV2Config = (config: unknown): StoreConfigV2 => {
         asString(contact.phoneNumber),
         asString(legacyContactInfo.phoneNumber),
       ),
+    }),
+    receipt: cleanUndefined({
+      policyLines: asOptionalArray(receipt.policyLines, (value) =>
+        asString(value),
+      )?.filter((line) => line.length > 0),
     }),
     payments: {
       mtnMomo: {
@@ -530,6 +548,7 @@ export const mirrorLegacyKeys = (
     media: v2Config.media,
     promotions: v2Config.promotions,
     contact: v2Config.contact,
+    receipt: v2Config.receipt,
     payments: v2Config.payments,
   };
 
@@ -549,12 +568,24 @@ export const mirrorLegacyKeys = (
 
   nextConfig.homeHero = v2Config.media.homeHero;
   nextConfig.heroDisplayType = v2Config.media.homeHero.displayType;
-  assignOrDelete(nextConfig, "heroHeaderImage", v2Config.media.homeHero.headerImage);
+  assignOrDelete(
+    nextConfig,
+    "heroHeaderImage",
+    v2Config.media.homeHero.headerImage,
+  );
   nextConfig.heroShowOverlay = v2Config.media.homeHero.showOverlay;
   nextConfig.heroShowText = v2Config.media.homeHero.showText;
 
-  assignOrDelete(nextConfig, "activeStreamReel", v2Config.media.reels.activeVersion);
-  assignOrDelete(nextConfig, "activeStreamReelHlsUrl", v2Config.media.reels.activeHlsUrl);
+  assignOrDelete(
+    nextConfig,
+    "activeStreamReel",
+    v2Config.media.reels.activeVersion,
+  );
+  assignOrDelete(
+    nextConfig,
+    "activeStreamReelHlsUrl",
+    v2Config.media.reels.activeHlsUrl,
+  );
   assignOrDelete(
     nextConfig,
     "landingPageReelVersion",
@@ -563,11 +594,23 @@ export const mirrorLegacyKeys = (
   nextConfig.reelVersions = v2Config.media.reels.versions;
   nextConfig.streamReels = v2Config.media.reels.streamReels;
 
-  assignOrDelete(nextConfig, "shopTheLookImage", v2Config.media.images.shopTheLookImage);
-  assignOrDelete(nextConfig, "showroomImage", v2Config.media.images.showroomImage);
+  assignOrDelete(
+    nextConfig,
+    "shopTheLookImage",
+    v2Config.media.images.shopTheLookImage,
+  );
+  assignOrDelete(
+    nextConfig,
+    "showroomImage",
+    v2Config.media.images.showroomImage,
+  );
 
   const ui = asRecord(existing.ui);
-  assignOrDelete(ui, "fallbackImageUrl", v2Config.media.images.fallbackImageUrl);
+  assignOrDelete(
+    ui,
+    "fallbackImageUrl",
+    v2Config.media.images.fallbackImageUrl,
+  );
   if (Object.keys(ui).length > 0) {
     nextConfig.ui = ui;
   } else {
@@ -591,7 +634,9 @@ export const mirrorLegacyKeys = (
 export const getUnknownStoreConfigRootKeys = (config: unknown): string[] => {
   const root = asRecord(config);
 
-  return Object.keys(root).filter((key) => !KNOWN_STORE_CONFIG_ROOT_KEYS.has(key));
+  return Object.keys(root).filter(
+    (key) => !KNOWN_STORE_CONFIG_ROOT_KEYS.has(key),
+  );
 };
 
 export const isStoreCheckoutDisabled = (config: unknown): boolean => {

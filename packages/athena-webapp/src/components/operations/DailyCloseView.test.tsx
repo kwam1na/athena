@@ -13,8 +13,7 @@ import { ok, userError } from "~/shared/commandResult";
 
 const mockedHooks = vi.hoisted(() => ({
   sharedDemoContext: undefined as
-    | { kind: "shared_demo"; storeId: string }
-    | undefined,
+    { kind: "shared_demo"; storeId: string } | undefined,
   useMutation: vi.fn(),
   useProtectedAdminPageState: vi.fn(),
   useQuery: vi.fn(),
@@ -1167,9 +1166,7 @@ describe("DailyCloseViewContent", () => {
       within(readySection).getByRole("button", { name: /go to next page/i }),
     );
     const searchUpdater = mockedRouter.navigate.mock.calls.at(-1)?.[0]
-      ?.search as (
-      current: Record<string, unknown>,
-    ) => Record<string, unknown>;
+      ?.search as (current: Record<string, unknown>) => Record<string, unknown>;
     expect(searchUpdater({ tab: "ready" })).toEqual({
       page: 2,
       tab: "ready",
@@ -1480,9 +1477,7 @@ describe("DailyCloseViewContent", () => {
     const identifiers = screen.getAllByText("#584065");
     expect(identifiers).toHaveLength(2);
     identifiers.forEach((identifier) => {
-      expect(
-        identifier.closest("[aria-disabled='true']"),
-      ).toBeInTheDocument();
+      expect(identifier.closest("[aria-disabled='true']")).toBeInTheDocument();
     });
     expect(
       screen.queryByRole("link", { name: "#584065" }),

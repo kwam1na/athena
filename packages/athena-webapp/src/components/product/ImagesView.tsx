@@ -1,8 +1,4 @@
-import {
-  AlertOctagon,
-  EyeIcon,
-  PenIcon,
-} from "lucide-react";
+import { AlertOctagon, EyeIcon, PenIcon } from "lucide-react";
 import View from "../View";
 import { useProduct } from "~/src/contexts/ProductContext";
 import { Button } from "../ui/button";
@@ -48,12 +44,7 @@ export function ImagesView() {
         });
       }
 
-      if (
-        event.key === "v" &&
-        !isSharedDemo &&
-        activeProduct &&
-        !isArchived
-      ) {
+      if (event.key === "v" && !isSharedDemo && activeProduct && !isArchived) {
         window.open(
           `${config.storeFrontUrl}/shop/product/${activeProduct._id}?variant=${activeProductVariant?.sku}`,
           "_blank",
@@ -89,7 +80,7 @@ export function ImagesView() {
         <div className="grid grid-cols-2 gap-2 py-2 sm:py-4">
           {activeProductVariant.images.map((image, i) => {
             return (
-              <div className="relative">
+              <div className="relative" key={`${image.preview}-${i}`}>
                 {i == 0 && (
                   <div className="absolute left-0 top-0 z-10 m-2 text-xs font-medium">
                     <ProductStatus
@@ -100,7 +91,6 @@ export function ImagesView() {
                   </div>
                 )}
                 <img
-                  key={i}
                   alt="Uploaded image"
                   className={`aspect-square w-full rounded-md object-cover transition-opacity duration-300`}
                   height="200"
@@ -119,45 +109,57 @@ export function ImagesView() {
           )}
         </div>
 
-        {!isSharedDemo && hasFullAdminAccess && activeProduct && !isArchived && (
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-            <Link
-              to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
-              params={(prev) => ({
-                ...prev,
-                orgUrlSlug: prev.orgUrlSlug!,
-                storeUrlSlug: prev.storeUrlSlug!,
-                productSlug: activeProduct._id,
-              })}
-              search={{
-                o: getOrigin(),
-                variant: activeProductVariant?.sku,
-              }}
-            >
+        {isSharedDemo ? (
+          <p
+            aria-label="Demo product edit guidance"
+            className="-mt-3 text-xs leading-5 text-muted-foreground"
+          >
+            Product edits are not available in the demo.
+          </p>
+        ) : null}
+
+        {!isSharedDemo &&
+          hasFullAdminAccess &&
+          activeProduct &&
+          !isArchived && (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+              <Link
+                to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
+                params={(prev) => ({
+                  ...prev,
+                  orgUrlSlug: prev.orgUrlSlug!,
+                  storeUrlSlug: prev.storeUrlSlug!,
+                  productSlug: activeProduct._id,
+                })}
+                search={{
+                  o: getOrigin(),
+                  variant: activeProductVariant?.sku,
+                }}
+              >
+                <Button
+                  variant="outline"
+                  className="flex w-full items-center gap-2 sm:w-auto"
+                >
+                  Edit product
+                  <PenIcon className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+
               <Button
-                variant="outline"
+                variant={"outline"}
+                onClick={() => {
+                  window.open(
+                    `${config.storeFrontUrl}/shop/product/${activeProduct?._id}?variant=${activeProductVariant?.sku}`,
+                    "_blank",
+                  );
+                }}
                 className="flex w-full items-center gap-2 sm:w-auto"
               >
-                Edit product
-                <PenIcon className="h-3.5 w-3.5" />
+                View on store
+                <EyeIcon className="h-3.5 w-3.5" />
               </Button>
-            </Link>
-
-            <Button
-              variant={"outline"}
-              onClick={() => {
-                window.open(
-                  `${config.storeFrontUrl}/shop/product/${activeProduct?._id}?variant=${activeProductVariant?.sku}`,
-                  "_blank",
-                );
-              }}
-              className="flex w-full items-center gap-2 sm:w-auto"
-            >
-              View on store
-              <EyeIcon className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
+            </div>
+          )}
       </FadeIn>
     </View>
   );

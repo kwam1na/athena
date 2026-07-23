@@ -69,21 +69,13 @@ async function requireCycleCountDraftAccess(
   ctx: CycleCountDraftAccessCtx,
   storeId: Id<"store">,
 ) {
-  const operationAdmission = (
-    ctx as Partial<OperationMutationCtx | OperationQueryCtx>
-  ).operationAdmission;
-  const admittedActor = operationAdmission?.actor;
-  const demoActor =
-    admittedActor?.kind === "shared_demo" ? admittedActor : null;
   const store = await ctx.db.get("store", storeId);
 
   if (!store) {
     throw new Error("Store not found.");
   }
 
-  const actorUser = demoActor
-    ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
-    : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const actorUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
 
   if (!actorUser) {
     throw new Error("Sign in again to continue.");

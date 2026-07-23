@@ -7,6 +7,7 @@ vi.mock("@convex-dev/auth/server", () => ({
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 import { getAll as getProducts } from "../inventory/products";
+import { getAll as getOrganizations } from "../inventory/organizations";
 import { getSessionItems } from "../inventory/posSessionItems";
 import {
   getInventoryUnitSummary,
@@ -30,8 +31,9 @@ import {
 } from "../pos/public/customers";
 
 const invoke = (fn: unknown, ctx: unknown, args: unknown) =>
-  (fn as { _handler: (ctx: unknown, args: unknown) => Promise<unknown> })
-    ._handler(ctx, args);
+  (
+    fn as { _handler: (ctx: unknown, args: unknown) => Promise<unknown> }
+  )._handler(ctx, args);
 
 describe("shared demo read store boundary", () => {
   beforeEach(() => {
@@ -125,9 +127,10 @@ describe("shared demo read store boundary", () => {
     };
     const ctx = demoReadCtx({
       documents: new Map([[`onlineOrder:${order._id}`, order]]),
-      normalizeId: (tableName, id) =>
-        tableName === "onlineOrder" ? null : id,
-      onlineOrdersByExternalReference: new Map([[order.externalReference, order]]),
+      normalizeId: (tableName, id) => (tableName === "onlineOrder" ? null : id),
+      onlineOrdersByExternalReference: new Map([
+        [order.externalReference, order],
+      ]),
     });
 
     await expect(
@@ -156,6 +159,23 @@ describe("shared demo read store boundary", () => {
     ).rejects.toThrow("This action isn't allowed in the demo.");
     expect(ctx.domainQueryTables).toEqual(["onlineOrder", "onlineOrder"]);
   });
+
+  it("admits organization bootstrap reads for the demo owner only", async () => {
+    const organization = { _id: "org-1", name: "Demo Org", slug: "demo" };
+    const ctx = demoReadCtx({
+      documents: new Map([[`organization:${organization._id}`, organization]]),
+      organizationMembersByUserId: new Map([
+        ["athena-user", [{ organizationId: "org-1" }]],
+      ]),
+    });
+
+    await expect(
+      invoke(getOrganizations, ctx, { userId: "athena-user" }),
+    ).resolves.toEqual([organization]);
+    await expect(
+      invoke(getOrganizations, ctx, { userId: "other-user" }),
+    ).resolves.toEqual([]);
+  });
 });
 
 function demoReadCtx(
@@ -164,6 +184,10 @@ function demoReadCtx(
     normalizeId?: (tableName: string, id: string) => string | null;
     onlineOrdersByCheckoutSessionId?: Map<string, Record<string, unknown>>;
     onlineOrdersByExternalReference?: Map<string, Record<string, unknown>>;
+    organizationMembersByUserId?: Map<
+      string,
+      Array<{ organizationId: string }>
+    >;
   } = {},
 ) {
   const domainQueryTables: string[] = [];
@@ -174,7 +198,8 @@ function demoReadCtx(
     organizationId: "org-1",
     storeId: "store-1",
   };
-  const documents = args.documents ?? new Map<string, Record<string, unknown>>();
+  const documents =
+    args.documents ?? new Map<string, Record<string, unknown>>();
   const db = {
     get: vi.fn(async (tableName: string, id: string) => {
       return documents.get(`${tableName}:${id}`) ?? null;
@@ -196,10 +221,10 @@ function demoReadCtx(
         withIndex: vi.fn((_name, apply) => {
           const eq = vi.fn().mockReturnThis();
           apply({ eq });
+          const lookupValue = eq.mock.calls[0]?.[1];
           return {
             collect: vi.fn(),
             first: vi.fn(() => {
-              const lookupValue = eq.mock.calls[0]?.[1];
               if (
                 tableName === "onlineOrder" &&
                 _name === "by_externalReference" &&
@@ -224,7 +249,18 @@ function demoReadCtx(
             }),
             order: vi.fn().mockReturnThis(),
             paginate: vi.fn(),
-            take: vi.fn(),
+            take: vi.fn(() => {
+              if (
+                tableName === "organizationMember" &&
+                _name === "by_userId" &&
+                typeof lookupValue === "string"
+              ) {
+                return Promise.resolve(
+                  args.organizationMembersByUserId?.get(lookupValue) ?? [],
+                );
+              }
+              return Promise.resolve([]);
+            }),
             unique: vi.fn(),
           };
         }),

@@ -35,7 +35,8 @@ import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import type { Id } from "~/convex/_generated/dataModel";
 
 export function RefundsView() {
-  const { order } = useOnlineOrder();
+  const { isSharedDemoSessionOrder, order, updateSessionOrder } =
+    useOnlineOrder();
   const { activeStore } = useGetActiveStore();
   const [state, dispatch] = useReducer<Reducer<RefundState, RefundAction>>(
     refundReducer,
@@ -107,6 +108,40 @@ export function RefundsView() {
         state.includeDeliveryFee && !order.didRefundDeliveryFee
           ? ["delivery-fee"]
           : [];
+
+      if (isSharedDemoSessionOrder) {
+        const itemIdSet = new Set(itemIds.map(String));
+        const now = Date.now();
+        updateSessionOrder({
+          didRefundDeliveryFee:
+            order.didRefundDeliveryFee || refundItems.includes("delivery-fee"),
+          items: order.items?.map((item) =>
+            itemIdSet.has(String(item._id))
+              ? {
+                  ...item,
+                  isRefunded: true,
+                  ...(state.returnToStock ? { isRestocked: true } : {}),
+                }
+              : item,
+          ),
+          refunds: [
+            ...(order.refunds ?? []),
+            {
+              amount: refundAmount,
+              date: now,
+              id: `shared-demo-session-refund-${now}`,
+            },
+          ],
+          status: "refunded",
+          updatedAt: now,
+        });
+        toast("Refund successful", {
+          icon: <CheckCircledIcon className="w-4 h-4" />,
+          description: "Demo refund recorded for this browser session.",
+        });
+        dispatch({ type: "RESET" });
+        return;
+      }
 
       const result = await runCommand(() =>
         refundOrder({

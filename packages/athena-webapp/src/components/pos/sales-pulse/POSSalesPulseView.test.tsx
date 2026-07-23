@@ -175,11 +175,18 @@ describe("POSStorePulseSection", () => {
     expect(screen.getByText("Braiding Hair")).toBeInTheDocument();
     expect(
       screen.getByText("Braiding Hair").closest(".divide-y")?.parentElement,
-    ).toHaveClass("rounded-lg", "border", "bg-surface-raised", "shadow-surface");
+    ).toHaveClass(
+      "rounded-lg",
+      "border",
+      "bg-surface-raised",
+      "shadow-surface",
+    );
     expect(screen.getByText("Braiding Hair").closest(".grid")).toHaveClass(
       "px-layout-md",
     );
-    expect(screen.getByText("Cash").closest(".divide-y")?.parentElement).toHaveClass(
+    expect(
+      screen.getByText("Cash").closest(".divide-y")?.parentElement,
+    ).toHaveClass(
       "rounded-lg",
       "border",
       "bg-surface-raised",
@@ -193,7 +200,12 @@ describe("POSStorePulseSection", () => {
     expect(screen.getByTestId("store-pulse-chart")).toBeInTheDocument();
     expect(
       screen.getByTestId("store-pulse-chart-container").parentElement,
-    ).toHaveClass("rounded-lg", "border", "bg-surface-raised", "shadow-surface");
+    ).toHaveClass(
+      "rounded-lg",
+      "border",
+      "bg-surface-raised",
+      "shadow-surface",
+    );
     expect(screen.getByTestId("store-pulse-area")).toBeInTheDocument();
     expect(screen.queryByText("Transaction review")).not.toBeInTheDocument();
   });
@@ -325,6 +337,36 @@ describe("POSStorePulseSection", () => {
         "Payment method shares will appear after completed sales sync.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("uses empty detail states when the selected period has no sales", () => {
+    const todaySummary = buildTodaySummary();
+    todaySummary.totalItemsSold = 0;
+    todaySummary.totalTransactions = 0;
+    todaySummary.operatorSnapshot.comparison.currentItemsSold = 0;
+    todaySummary.operatorSnapshot.comparison.currentTransactions = 0;
+
+    renderStorePulse({ todaySummary });
+
+    expect(screen.getByLabelText("Total items sold: 0")).toBeInTheDocument();
+    expect(screen.getByText("No item history yet")).toBeInTheDocument();
+    expect(screen.queryByText("Braiding Hair")).not.toBeInTheDocument();
+    expect(screen.getByText("No payment mix yet")).toBeInTheDocument();
+    expect(screen.queryByText("Cash")).not.toBeInTheDocument();
+  });
+
+  it("uses selected-window totals for detail panels", () => {
+    const todaySummary = buildTodaySummary();
+    todaySummary.operatorSnapshot.comparison.currentItemsSold = 0;
+    todaySummary.operatorSnapshot.comparison.currentTransactions = 0;
+
+    renderStorePulse({ pulseWindow: "this_week", todaySummary });
+
+    expect(screen.getByLabelText("Total items sold: 3")).toBeInTheDocument();
+    expect(screen.getByText("Braiding Hair")).toBeInTheDocument();
+    expect(screen.getByText("Cash")).toBeInTheDocument();
+    expect(screen.queryByText("No item history yet")).not.toBeInTheDocument();
+    expect(screen.queryByText("No payment mix yet")).not.toBeInTheDocument();
   });
 
   it("hides manager-only sales cards when full admin access is not active", () => {

@@ -98,13 +98,7 @@ async function requirePosTelemetryAccess(
   organizationId: Doc<"store">["organizationId"],
 ): Promise<boolean> {
   try {
-    const admittedActor = (
-      ctx as Partial<OperationMutationCtx | OperationQueryCtx>
-    ).operationAdmission?.actor;
-    const athenaUser =
-      admittedActor?.kind === "shared_demo"
-        ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
-        : await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
     if (!athenaUser) {
       return false;
     }

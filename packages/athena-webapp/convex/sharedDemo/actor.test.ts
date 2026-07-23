@@ -4,7 +4,6 @@ import {
   getSharedDemoActorWithCtx,
   requireSharedDemoCapabilityIfApplicable,
   requireSharedDemoStoreCapabilityIfApplicable,
-  requireSharedDemoStoreReadIfApplicable,
 } from "./actor";
 
 vi.mock("@convex-dev/auth/server", () => ({
@@ -39,7 +38,9 @@ describe("shared demo actor resolution", () => {
       },
     } as never;
 
-    await expect(getSharedDemoActorWithCtx(ctx, { now: 10_000 })).resolves.toEqual({
+    await expect(
+      getSharedDemoActorWithCtx(ctx, { now: 10_000 }),
+    ).resolves.toEqual({
       kind: "shared_demo",
       athenaUserId: "athena-user",
       authUserId: "auth-user",
@@ -60,18 +61,26 @@ describe("shared demo actor resolution", () => {
         })),
       },
     } as never;
-    await expect(getSharedDemoActorWithCtx(ctx, { now: 10_000 })).rejects.toThrow(
-      "demo session has expired",
-    );
+    await expect(
+      getSharedDemoActorWithCtx(ctx, { now: 10_000 }),
+    ).rejects.toThrow("demo session has expired");
   });
 
   it("revokes an active principal immediately when the runtime gate is disabled", async () => {
     vi.mocked(getAuthUserId).mockResolvedValue("auth-user" as never);
     const ctx = {
       auth: { getUserIdentity: vi.fn() },
-      db: { query: vi.fn(() => ({ withIndex: vi.fn(() => ({ unique: vi.fn().mockResolvedValue({ admissionExpiresAt: 20_000 }) })) })) },
+      db: {
+        query: vi.fn(() => ({
+          withIndex: vi.fn(() => ({
+            unique: vi.fn().mockResolvedValue({ admissionExpiresAt: 20_000 }),
+          })),
+        })),
+      },
     } as never;
-    await expect(getSharedDemoActorWithCtx(ctx, { environment: {}, now: 10_000 })).rejects.toThrow("unavailable in this environment");
+    await expect(
+      getSharedDemoActorWithCtx(ctx, { environment: {}, now: 10_000 }),
+    ).rejects.toThrow("unavailable in this environment");
   });
 
   it("keeps admission expiry isolated between per-admission auth users", async () => {
@@ -171,32 +180,6 @@ describe("shared demo actor resolution", () => {
       requireSharedDemoStoreCapabilityIfApplicable(
         demoCtx,
         "pos.sale.complete",
-        "other-store" as never,
-      ),
-    ).rejects.toThrow("isn't allowed in the demo");
-  });
-
-  it("clamps demo reads without requiring a write capability", async () => {
-    vi.mocked(getAuthUserId).mockResolvedValue("demo-auth" as never);
-    const demoCtx = {
-      auth: { getUserIdentity: vi.fn() },
-      db: {
-        query: vi.fn(() => ({
-          withIndex: vi.fn(() => ({
-            unique: vi.fn().mockResolvedValue({
-              admissionExpiresAt: Date.now() + 60_000,
-              athenaUserId: "athena-user",
-              organizationId: "organization",
-              storeId: "demo-store",
-            }),
-          })),
-        })),
-      },
-    } as never;
-
-    await expect(
-      requireSharedDemoStoreReadIfApplicable(
-        demoCtx,
         "other-store" as never,
       ),
     ).rejects.toThrow("isn't allowed in the demo");

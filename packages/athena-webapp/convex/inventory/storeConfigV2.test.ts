@@ -61,7 +61,8 @@ const legacyConfigSample = {
   streamReels: [
     {
       createdAt: 1774422243082,
-      hlsUrl: "https://customer.cloudflarestream.com/d88e985/manifest/video.m3u8",
+      hlsUrl:
+        "https://customer.cloudflarestream.com/d88e985/manifest/video.m3u8",
       source: "stream",
       streamUid: "d88e985",
       thumbnailUrl: "https://customer.cloudflarestream.com/d88e985/thumb.jpg",
@@ -69,7 +70,8 @@ const legacyConfigSample = {
     },
     {
       createdAt: 1774757837641,
-      hlsUrl: "https://customer.cloudflarestream.com/70d86c67/manifest/video.m3u8",
+      hlsUrl:
+        "https://customer.cloudflarestream.com/70d86c67/manifest/video.m3u8",
       source: "stream",
       streamUid: "70d86c67",
       thumbnailUrl: "https://customer.cloudflarestream.com/70d86c67/thumb.jpg",
@@ -162,7 +164,8 @@ describe("storeConfigV2 helpers", () => {
                 "https://customer.cloudflarestream.com/d88e985/manifest/video.m3u8",
               source: "stream",
               streamUid: "d88e985",
-              thumbnailUrl: "https://customer.cloudflarestream.com/d88e985/thumb.jpg",
+              thumbnailUrl:
+                "https://customer.cloudflarestream.com/d88e985/thumb.jpg",
               version: 1,
             },
             {
@@ -171,7 +174,8 @@ describe("storeConfigV2 helpers", () => {
                 "https://customer.cloudflarestream.com/70d86c67/manifest/video.m3u8",
               source: "stream",
               streamUid: "70d86c67",
-              thumbnailUrl: "https://customer.cloudflarestream.com/70d86c67/thumb.jpg",
+              thumbnailUrl:
+                "https://customer.cloudflarestream.com/70d86c67/thumb.jpg",
               version: 2,
             },
           ],
@@ -194,6 +198,7 @@ describe("storeConfigV2 helpers", () => {
         location: "2 Jungle Avenue, East Legon, Accra, Ghana",
         phoneNumber: "+233249771887",
       },
+      receipt: {},
       payments: {
         mtnMomo: {
           receivingAccounts: [],
@@ -214,6 +219,7 @@ describe("storeConfigV2 helpers", () => {
     expect(mirrored.media).toEqual(v2Config.media);
     expect(mirrored.promotions).toEqual(v2Config.promotions);
     expect(mirrored.contact).toEqual(v2Config.contact);
+    expect(mirrored.receipt).toEqual(v2Config.receipt);
     expect(mirrored.payments).toEqual(v2Config.payments);
 
     expect(mirrored.activeStreamReel).toBe(2);
@@ -264,34 +270,37 @@ describe("storeConfigV2 helpers", () => {
   });
 
   it("normalizes MTN MoMo receiving accounts during grouped config patches", () => {
-    const patched = patchV2Config({}, {
-      payments: {
-        mtnMomo: {
-          receivingAccounts: [
-            {
-              label: "Main account",
-              walletNumber: "233000111222",
-              businessName: "Flagship Retail",
-              market: "Ghana",
-              businessContact: "ops@flagship.example",
-              isPrimary: true,
-              status: "submitted",
-            },
-            {
-              label: "Backup account",
-              walletNumber: "256000333444",
-              businessName: "Flagship Retail Uganda",
-              market: "Uganda",
-              businessContact: "finance@flagship.example",
-              isPrimary: true,
-              status: "invalid-status",
-              statusNote: "Waiting on review",
-            },
-            {},
-          ],
+    const patched = patchV2Config(
+      {},
+      {
+        payments: {
+          mtnMomo: {
+            receivingAccounts: [
+              {
+                label: "Main account",
+                walletNumber: "233000111222",
+                businessName: "Flagship Retail",
+                market: "Ghana",
+                businessContact: "ops@flagship.example",
+                isPrimary: true,
+                status: "submitted",
+              },
+              {
+                label: "Backup account",
+                walletNumber: "256000333444",
+                businessName: "Flagship Retail Uganda",
+                market: "Uganda",
+                businessContact: "finance@flagship.example",
+                isPrimary: true,
+                status: "invalid-status",
+                statusNote: "Waiting on review",
+              },
+              {},
+            ],
+          },
         },
       },
-    });
+    );
 
     expect(patched.payments.mtnMomo.receivingAccounts).toEqual([
       {

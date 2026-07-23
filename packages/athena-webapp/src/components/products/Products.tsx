@@ -53,6 +53,17 @@ function getProductSearchPageIndex(page: number | string | undefined) {
   return Math.floor(pageNumber) - 1;
 }
 
+function DemoNotice() {
+  return <aside
+    aria-label="Demo guidance"
+    className="w-fit max-w-full rounded-md border border-border bg-muted/40 px-layout-md py-layout-sm"
+  >
+    <p className="text-sm leading-6 text-muted-foreground">
+      Full catalog onboarding is not available in the demo
+    </p>
+  </aside>
+}
+
 export default function Products() {
   const categories = useGetCategories();
   const isSharedDemo = Boolean(useSharedDemoContext());
@@ -86,10 +97,10 @@ export default function Products() {
       : "skip",
   ) as
     | {
-        candidateOverflow: boolean;
-        results: ProductSkuSearchResultLike[];
-        truncated: boolean;
-      }
+      candidateOverflow: boolean;
+      results: ProductSkuSearchResultLike[];
+      truncated: boolean;
+    }
     | undefined;
 
   const searchProducts = useMemo(
@@ -289,6 +300,7 @@ export default function Products() {
       <PageWorkspaceGrid className="xl:grid-cols-[minmax(0,1fr)_300px] 2xl:grid-cols-[minmax(0,1fr)_280px]">
         <PageWorkspaceMain>
           <section className="min-w-0 space-y-layout-lg">
+            {isSharedDemo && <DemoNotice />}
             <SkuSearchFilterBar
               action={
                 hasFullAdminAccess ? (

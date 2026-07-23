@@ -43,7 +43,11 @@ export const SHARED_DEMO_EFFECT_CLASSIFICATIONS = [
     label: "No customer notification was sent.",
   },
   { gateway: "payment.collect", decision: "denied" },
-  { gateway: "payment.refund", decision: "simulated", label: "No live payment refund was issued." },
+  {
+    gateway: "payment.refund",
+    decision: "simulated",
+    label: "No live payment refund was issued.",
+  },
   { gateway: "export.deliver", decision: "denied" },
   { gateway: "integration.dispatch", decision: "denied" },
 ] as const;
@@ -106,30 +110,111 @@ export function requireSharedDemoRegisterSessionSyncReview(args: {
 }
 
 export const SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY = [
-  { functionName: "operations/approvalRequests:decideApprovalRequest", capability: "approvals.manage" },
-  { functionName: "operations/staffCredentials:authenticateStaffCredential", capability: "staff.authenticate" },
-  { functionName: "operations/staffCredentials:authenticateStaffCredentialForApproval", capability: "staff.authenticate" },
-  { functionName: "pos/public/transactions:completeTransaction", capability: "pos.sale.complete" },
-  { functionName: "pos/public/transactions:markReceiptPrinted", capability: "pos.transaction.correct" },
-  { functionName: "stockOps/adjustments:submitStockAdjustmentBatch", capability: "inventory.adjust" },
-  { functionName: "cashControls/deposits:recordRegisterSessionDeposit", capability: "cash.control.write" },
-  { functionName: "cashControls/deposits:resolveRegisterSessionSyncReview", capability: "cash.control.write" },
-  { functionName: "cashControls/closeouts:correctRegisterSessionOpeningFloat", capability: "cash.control.write" },
-  { functionName: "cashControls/closeouts:submitRegisterSessionCloseout", capability: "cash.control.write" },
-  { functionName: "cashControls/closeouts:reviewRegisterSessionCloseout", capability: "cash.control.write" },
-  { functionName: "cashControls/closeouts:reopenRegisterSessionCloseout", capability: "cash.control.write" },
-  { functionName: "pos/public/catalog:quickAddSku", capability: "catalog.quick_add" },
-  { functionName: "storeFront/onlineOrder:update", capability: "orders.fulfill" },
-  { functionName: "storeFront/onlineOrderItem:update", capability: "orders.manage" },
-  { functionName: "storeFront/onlineOrder:returnItemsToStock", capability: "orders.return" },
-  { functionName: "storeFront/onlineOrder:returnAllItemsToStock", capability: "orders.return" },
-  { functionName: "storeFront/onlineOrderUtilFns:sendOrderUpdateEmail", capability: "customer.messaging.send" },
-  { functionName: "storeFront/reviews:sendFeedbackRequest", capability: "reviews.manage" },
-  { functionName: "operations/staffMessages:postStaffMessage", capability: "staff.communication.write" },
-  { functionName: "operations/dailyOpening:startStoreDay", capability: "daily_operations.write" },
-  { functionName: "pos/public/terminals:registerTerminal", capability: "daily_operations.write" },
-  { functionName: "pos/public/sync:ingestLocalEvents", capability: "pos.sync.write" },
-  { functionName: "pos/public/sync:ingestLocalEvents", capability: "expense.manage" },
+  {
+    functionName: "operations/approvalRequests:decideApprovalRequest",
+    capability: "approvals.manage",
+  },
+  {
+    functionName: "operations/staffCredentials:authenticateStaffCredential",
+    capability: "staff.authenticate",
+  },
+  {
+    functionName:
+      "operations/staffCredentials:authenticateStaffCredentialForApproval",
+    capability: "staff.authenticate",
+  },
+  {
+    functionName: "pos/public/transactions:completeTransaction",
+    capability: "pos.sale.complete",
+  },
+  {
+    functionName: "pos/public/transactions:markReceiptPrinted",
+    capability: "pos.transaction.correct",
+  },
+  {
+    functionName: "pos/public/transactions:voidTransaction",
+    capability: "pos.transaction.void",
+  },
+  {
+    functionName: "stockOps/adjustments:submitStockAdjustmentBatch",
+    capability: "inventory.adjust",
+  },
+  {
+    functionName: "cashControls/deposits:recordRegisterSessionDeposit",
+    capability: "cash.control.write",
+  },
+  {
+    functionName: "cashControls/deposits:resolveRegisterSessionSyncReview",
+    capability: "cash.control.write",
+  },
+  {
+    functionName: "cashControls/closeouts:correctRegisterSessionOpeningFloat",
+    capability: "cash.control.write",
+  },
+  {
+    functionName: "cashControls/closeouts:submitRegisterSessionCloseout",
+    capability: "cash.control.write",
+  },
+  {
+    functionName: "cashControls/closeouts:reviewRegisterSessionCloseout",
+    capability: "cash.control.write",
+  },
+  {
+    functionName: "cashControls/closeouts:reopenRegisterSessionCloseout",
+    capability: "cash.control.write",
+  },
+  {
+    functionName: "pos/public/catalog:quickAddSku",
+    capability: "catalog.quick_add",
+  },
+  {
+    functionName: "inventory/products:repairCatalogSummary",
+    capability: "catalog.maintain",
+  },
+  {
+    functionName: "storeFront/onlineOrder:update",
+    capability: "orders.fulfill",
+  },
+  {
+    functionName: "storeFront/onlineOrderItem:update",
+    capability: "orders.manage",
+  },
+  {
+    functionName: "storeFront/onlineOrder:returnItemsToStock",
+    capability: "orders.return",
+  },
+  {
+    functionName: "storeFront/onlineOrder:returnAllItemsToStock",
+    capability: "orders.return",
+  },
+  {
+    functionName: "storeFront/onlineOrderUtilFns:sendOrderUpdateEmail",
+    capability: "customer.messaging.send",
+  },
+  {
+    functionName: "storeFront/reviews:sendFeedbackRequest",
+    capability: "reviews.manage",
+  },
+  {
+    functionName: "operations/staffMessages:postStaffMessage",
+    capability: "staff.communication.write",
+  },
+  {
+    functionName: "operations/dailyOpening:startStoreDay",
+    capability: "daily_operations.write",
+  },
+  {
+    functionName: "pos/public/terminals:registerTerminal",
+    capability: "daily_operations.write",
+  },
+  {
+    functionName: "pos/public/sync:ingestLocalEvents",
+    capability: "pos.sync.write",
+  },
+  {
+    functionName: "pos/public/sync:ingestLocalEvents",
+    capability: "expense.manage",
+  },
   {
     functionName: "reporting/public:getReportsOverview",
     capability: "reports.read",

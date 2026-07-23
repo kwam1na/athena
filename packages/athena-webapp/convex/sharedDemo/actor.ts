@@ -105,19 +105,6 @@ export async function requireReadySharedDemoStoreCapabilityIfApplicable(
   return actor;
 }
 
-/** Reads remain available to normal actors, while demo principals may only
- * address the store assigned by the server-owned admission record. */
-export async function requireSharedDemoStoreReadIfApplicable(
-  ctx: AuthCtx,
-  storeId: Id<"store">,
-) {
-  const actor = await getSharedDemoActorWithCtx(ctx);
-  if (actor && actor.storeId !== storeId) {
-    denySharedDemoAction();
-  }
-  return actor;
-}
-
 const sharedDemoCapabilityValidator = v.union(
   v.literal("approvals.manage"),
   v.literal("customer.messaging.send"),
@@ -127,6 +114,7 @@ const sharedDemoCapabilityValidator = v.union(
   v.literal("pos.transaction.correct"),
   v.literal("inventory.adjust"),
   v.literal("cash.control.write"),
+  v.literal("catalog.maintain"),
   v.literal("catalog.quick_add"),
   v.literal("orders.fulfill"),
   v.literal("orders.manage"),

@@ -6,10 +6,6 @@ const authMock = vi.hoisted(() => ({
 const managerElevationMock = vi.hoisted(() => ({
   getActiveManagerElevationWithCtx: vi.fn(),
 }));
-const sharedDemoActorMock = vi.hoisted(() => ({
-  requireSharedDemoStoreReadIfApplicable: vi.fn(),
-}));
-
 vi.mock("@convex-dev/auth/server", () => ({
   getAuthUserId: authMock.getAuthUserId,
 }));
@@ -17,11 +13,6 @@ vi.mock("@convex-dev/auth/server", () => ({
 vi.mock("../operations/managerElevations", () => ({
   getActiveManagerElevationWithCtx:
     managerElevationMock.getActiveManagerElevationWithCtx,
-}));
-
-vi.mock("../sharedDemo/actor", () => ({
-  requireSharedDemoStoreReadIfApplicable:
-    sharedDemoActorMock.requireSharedDemoStoreReadIfApplicable,
 }));
 
 import type { Id } from "../_generated/dataModel";
@@ -367,10 +358,6 @@ function createAdminTraceReadCtx(
 describe("workflow trace core and public helpers", () => {
   beforeEach(() => {
     managerElevationMock.getActiveManagerElevationWithCtx.mockReset();
-    sharedDemoActorMock.requireSharedDemoStoreReadIfApplicable.mockReset();
-    sharedDemoActorMock.requireSharedDemoStoreReadIfApplicable.mockResolvedValue(
-      null,
-    );
   });
 
   it("updates existing traces instead of duplicating the same store-scoped trace id", async () => {
@@ -999,14 +986,6 @@ describe("workflow trace core and public helpers", () => {
   it("allows the demo actor to view register-session and online-order traces only", async () => {
     const storeId = "store-a" as Id<"store">;
     const ctx = createTestCtx();
-    sharedDemoActorMock.requireSharedDemoStoreReadIfApplicable.mockResolvedValue(
-      {
-        athenaUserId: "athena-user-demo",
-        kind: "shared_demo",
-        organizationId: "org-1",
-        storeId,
-      },
-    );
     Object.assign(ctx, {
       operationAdmission: {
         actor: {

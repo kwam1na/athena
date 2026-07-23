@@ -18,7 +18,6 @@ import {
   PackageCheck,
   PackageSearch,
   ReceiptText,
-  RefreshCw,
   Scissors,
   ShoppingCart,
   type LucideIcon,
@@ -37,7 +36,6 @@ import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
-import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import { formatReviewReason } from "@/components/cash-controls/formatReviewReason";
 import {
   StaffAuthenticationDialog,
@@ -163,20 +161,6 @@ type QueueWorkItem = {
   type: string;
 };
 
-const LOGICAL_GROUP_CHANGED_MESSAGE =
-  "This work changed. Review the refreshed group before marking it reviewed.";
-
-function logicalGroupObservationFingerprint(
-  group: NonNullable<QueueWorkItem["logicalGroup"]>,
-) {
-  return [
-    group.key,
-    group.completeness,
-    group.resolutionAvailability,
-    [...group.memberIds].map(String).sort().join(","),
-  ].join("|");
-}
-
 type QueueWorkItemMixEntry = {
   completeness: "complete" | "incomplete";
   count: number;
@@ -194,11 +178,6 @@ type QueueWorkItemSummary = {
   }>;
   completeness: "complete" | "incomplete";
   count: number;
-};
-
-type LogicalGroupConflictObservation = {
-  fingerprint: string;
-  refreshNonce: number;
 };
 
 type QueueOverflow = {
@@ -499,17 +478,12 @@ function CappedQueueNotice({
   );
 }
 
-function hasSyncedSaleInventoryResolverDetails(item: QueueWorkItem) {
-  return Boolean(getQueueWorkItemStringDetail(item, "primaryProductSkuId"));
-}
-
 function getQueueWorkItemContextPresentation(type: string) {
   if (type === "pos_pending_checkout_item_review") {
     return {
       cardClassName: "bg-surface-raised hover:border-border",
       Icon: ShoppingCart,
-      iconClassName:
-        "border-primary-border bg-primary-soft text-primary",
+      iconClassName: "border-primary-border bg-primary-soft text-primary",
       contextLabelClassName: "text-primary",
     };
   }
@@ -518,8 +492,7 @@ function getQueueWorkItemContextPresentation(type: string) {
     return {
       cardClassName: "bg-surface-raised hover:border-border",
       Icon: PackageSearch,
-      iconClassName:
-        "border-primary-border bg-primary-soft text-primary",
+      iconClassName: "border-primary-border bg-primary-soft text-primary",
       contextLabelClassName: "text-primary",
     };
   }
@@ -550,8 +523,7 @@ function getQueueWorkItemContextPresentation(type: string) {
     return {
       cardClassName: "bg-surface-raised hover:border-border",
       Icon: PackageCheck,
-      iconClassName:
-        "border-primary-border bg-primary-soft text-primary",
+      iconClassName: "border-primary-border bg-primary-soft text-primary",
       contextLabelClassName: "text-primary",
     };
   }
@@ -568,8 +540,7 @@ function getQueueWorkItemContextPresentation(type: string) {
   return {
     cardClassName: "bg-surface-raised hover:border-border",
     Icon: ClipboardCheck,
-    iconClassName:
-      "border-primary-border bg-primary-soft text-primary",
+    iconClassName: "border-primary-border bg-primary-soft text-primary",
     contextLabelClassName: "text-primary",
   };
 }
@@ -1031,17 +1002,11 @@ function OpenWorkTypeFilter({
 }
 
 function QueueWorkItemCard({
-  isSyncedSaleInventoryReviewResolutionDisabled,
-  isResolvingSyncedSaleInventoryReview,
   item,
-  onResolveSyncedSaleInventoryReview,
   orgUrlSlug,
   storeUrlSlug,
 }: {
-  isSyncedSaleInventoryReviewResolutionDisabled?: boolean;
-  isResolvingSyncedSaleInventoryReview?: boolean;
   item: QueueWorkItem;
-  onResolveSyncedSaleInventoryReview?: (item: QueueWorkItem) => void;
   orgUrlSlug?: string;
   storeUrlSlug?: string;
 }) {
@@ -1330,23 +1295,6 @@ function QueueWorkItemCard({
       contextLabel={getQueueWorkItemTypeLabel(item.type)}
       contextLabelClassName={contextPresentation.contextLabelClassName}
       description={null}
-      headerActionSlot={
-        item.type === "synced_sale_inventory_review" &&
-        onResolveSyncedSaleInventoryReview &&
-        hasSyncedSaleInventoryResolverDetails(item) ? (
-          <LoadingButton
-            className="h-8 px-3 text-xs"
-            disabled={Boolean(isSyncedSaleInventoryReviewResolutionDisabled)}
-            isLoading={Boolean(isResolvingSyncedSaleInventoryReview)}
-            onClick={() => onResolveSyncedSaleInventoryReview(item)}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            Mark reviewed
-          </LoadingButton>
-        ) : null
-      }
       itemId={item._id}
       metadataEntries={metadataEntries}
       title={
@@ -1372,21 +1320,11 @@ function QueueWorkItemCard({
 }
 
 function SyncedSaleInventoryReviewGroupCard({
-  conflictMessage,
-  isResolutionDisabled,
-  isResolving,
   items,
-  onRefresh,
-  onResolve,
   orgUrlSlug,
   storeUrlSlug,
 }: {
-  conflictMessage?: string;
-  isResolutionDisabled?: boolean;
-  isResolving?: boolean;
   items: QueueWorkItem[];
-  onRefresh?: () => void;
-  onResolve?: (items: QueueWorkItem[]) => void;
   orgUrlSlug?: string;
   storeUrlSlug?: string;
 }) {
@@ -1418,9 +1356,8 @@ function SyncedSaleInventoryReviewGroupCard({
   const highestPriority = items.some((item) => item.priority === "high")
     ? "High"
     : "Normal";
-  const resolutionNotice = conflictMessage
-    ? conflictMessage
-    : representative.logicalGroup?.resolutionAvailability === "budget_exceeded"
+  const resolutionNotice =
+    representative.logicalGroup?.resolutionAvailability === "budget_exceeded"
       ? "This inventory review group needs support to complete safely."
       : representative.logicalGroup?.resolutionAvailability ===
           "remediation_in_progress"
@@ -1442,17 +1379,6 @@ function SyncedSaleInventoryReviewGroupCard({
       }
       badgeSlot={
         <>
-          {conflictMessage && onRefresh ? (
-            <Button
-              onClick={onRefresh}
-              size="sm"
-              type="button"
-              variant="utility"
-            >
-              <RefreshCw aria-hidden="true" />
-              Refresh
-            </Button>
-          ) : null}
           <Badge
             className="border-border bg-surface text-muted-foreground shadow-sm"
             variant="outline"
@@ -1512,25 +1438,7 @@ function SyncedSaleInventoryReviewGroupCard({
           </ul>
         </div>
       }
-      headerActionSlot={
-        onResolve && productSkuId ? (
-          <LoadingButton
-            className="h-8 px-3 text-xs"
-            disabled={Boolean(isResolutionDisabled)}
-            isLoading={Boolean(isResolving)}
-            onClick={() => onResolve(items)}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            {items.length === 1
-              ? "Mark reviewed"
-              : `Mark ${items.length.toLocaleString()} reviewed`}
-          </LoadingButton>
-        ) : null
-      }
       itemId={`synced-sale-inventory-${productSkuId ?? representative._id}`}
-      stackDescription={Boolean(conflictMessage)}
       title={
         <>
           Review inventory for{" "}
@@ -1941,7 +1849,6 @@ type OperationsQueueViewContentProps = {
   approvalDecisionUnlocked?: boolean;
   approvalRequests: QueueApprovalRequest[];
   canLoadMoreInventoryItems?: boolean;
-  conflictedLogicalGroupKeys?: ReadonlySet<string>;
   cycleCountDraft?: CycleCountDraftState | null;
   cycleCountDraftSummary?: CycleCountDraftSummary | null;
   hasFullAdminAccess: boolean;
@@ -1954,7 +1861,6 @@ type OperationsQueueViewContentProps = {
   isLoadingPermissions: boolean;
   isLoadingQueue: boolean;
   isLoadingStock?: boolean;
-  isResolvingSyncedSaleInventoryReviewSkuId?: Id<"productSku"> | null;
   isSubmittingStockBatch: boolean;
   onDecideApprovalRequest: (args: {
     approvalRequestId: string;
@@ -1966,8 +1872,6 @@ type OperationsQueueViewContentProps = {
   onLoadMoreInventoryItems?: () => void;
   onRequestApprovalDecisionUnlock?: () => void;
   onOpenWorkSearchChange?: (patch: OpenWorkSearchPatch) => void;
-  onRefreshOpenWork?: () => void;
-  onResolveSyncedSaleInventoryReview?: (items: QueueWorkItem[]) => void;
   onDiscardCycleCountDraft?: () => Promise<NormalizedCommandResult<unknown>>;
   onRefreshCycleCountDraftLineBaseline?: (args: {
     productSkuId: Id<"productSku">;
@@ -2065,7 +1969,6 @@ export function OperationsQueueViewContent({
   approvalDecisionUnlocked = true,
   approvalRequests,
   canLoadMoreInventoryItems = false,
-  conflictedLogicalGroupKeys,
   cycleCountDraft,
   cycleCountDraftSummary,
   hasFullAdminAccess,
@@ -2078,16 +1981,13 @@ export function OperationsQueueViewContent({
   isLoadingPermissions,
   isLoadingQueue,
   isLoadingStock = isLoadingQueue,
-  isResolvingSyncedSaleInventoryReviewSkuId,
   isSubmittingStockBatch,
   onDecideApprovalRequest,
   onDiscardCycleCountDraft,
   onLockApprovalDecisions,
   onLoadMoreInventoryItems,
   onOpenWorkSearchChange,
-  onRefreshOpenWork,
   onRequestApprovalDecisionUnlock,
-  onResolveSyncedSaleInventoryReview,
   onRefreshCycleCountDraftLineBaseline,
   onSaveCycleCountDraftLine,
   onSubmitStockBatch,
@@ -2385,35 +2285,12 @@ export function OperationsQueueViewContent({
                         const representative = group.items[0];
                         const productSkuId =
                           getQueueWorkItemStockAdjustmentSkuId(representative);
-                        const logicalGroupConflict =
-                          representative.logicalGroup !== undefined &&
-                          conflictedLogicalGroupKeys?.has(
-                            representative.logicalGroup.key,
-                          );
 
                         return representative.type ===
                           "synced_sale_inventory_review" && productSkuId ? (
                           <SyncedSaleInventoryReviewGroupCard
-                            conflictMessage={
-                              logicalGroupConflict
-                                ? LOGICAL_GROUP_CHANGED_MESSAGE
-                                : undefined
-                            }
-                            isResolutionDisabled={Boolean(
-                              isResolvingSyncedSaleInventoryReviewSkuId ||
-                              logicalGroupConflict ||
-                              (representative.logicalGroup !== undefined &&
-                                representative.logicalGroup
-                                  .resolutionAvailability !== "available"),
-                            )}
-                            isResolving={
-                              isResolvingSyncedSaleInventoryReviewSkuId ===
-                              productSkuId
-                            }
                             items={group.items}
                             key={group.key}
-                            onRefresh={onRefreshOpenWork}
-                            onResolve={onResolveSyncedSaleInventoryReview}
                             orgUrlSlug={orgUrlSlug}
                             storeUrlSlug={storeUrlSlug}
                           />
@@ -3562,17 +3439,9 @@ export function OperationsQueueView({
   const [isSavingCycleCountDraft, setIsSavingCycleCountDraft] = useState(false);
   const [decisioningApprovalRequestId, setDecisioningApprovalRequestId] =
     useState<string | null>(null);
-  const [
-    resolvingSyncedSaleInventoryReviewSkuId,
-    setResolvingSyncedSaleInventoryReviewSkuId,
-  ] = useState<Id<"productSku"> | null>(null);
   const [isApprovalUnlockOpen, setIsApprovalUnlockOpen] = useState(false);
   const [approvalDecisionUnlock, setApprovalDecisionUnlock] =
     useState<ApprovalDecisionUnlock | null>(null);
-  const [conflictedLogicalGroups, setConflictedLogicalGroups] = useState<
-    Map<string, LogicalGroupConflictObservation>
-  >(() => new Map());
-  const [openWorkRefreshNonce, setOpenWorkRefreshNonce] = useState(0);
 
   const queue = useQuery(
     operationsApi.operationalWorkItems.getQueueSnapshot,
@@ -3581,9 +3450,6 @@ export function OperationsQueueView({
           storeId: activeStore!._id,
           ...(openWorkSearch?.workType
             ? { workType: openWorkSearch.workType }
-            : {}),
-          ...(openWorkRefreshNonce > 0
-            ? { refreshNonce: openWorkRefreshNonce }
             : {}),
         }
       : "skip",
@@ -3595,39 +3461,6 @@ export function OperationsQueueView({
         workItems: QueueWorkItem[];
       }
     | undefined;
-  const conflictedLogicalGroupKeys = useMemo(
-    () => new Set(conflictedLogicalGroups.keys()),
-    [conflictedLogicalGroups],
-  );
-  const latestQueueWorkItemsRef = useRef(queue?.workItems ?? []);
-  latestQueueWorkItemsRef.current = queue?.workItems ?? [];
-
-  useEffect(() => {
-    if (!queue) return;
-
-    setConflictedLogicalGroups((current) => {
-      const next = new Map(current);
-      let changed = false;
-
-      for (const [groupKey, observation] of current) {
-        const refreshedGroup = queue.workItems.find(
-          (item) => item.logicalGroup?.key === groupKey,
-        )?.logicalGroup;
-
-        if (
-          refreshedGroup?.completeness === "complete" &&
-          (logicalGroupObservationFingerprint(refreshedGroup) !==
-            observation.fingerprint ||
-            openWorkRefreshNonce > observation.refreshNonce)
-        ) {
-          next.delete(groupKey);
-          changed = true;
-        }
-      }
-
-      return changed ? next : current;
-    });
-  }, [openWorkRefreshNonce, queue]);
   const shouldLoadStockWorkspace =
     canQueryProtectedData &&
     Boolean(activeStore?._id) &&
@@ -3752,16 +3585,6 @@ export function OperationsQueueView({
   const decideApprovalRequest = useMutation(
     operationsApi.approvalRequests.decideApprovalRequest,
   );
-  const resolveSyncedSaleInventoryReview = useMutation(
-    (
-      operationsApi.openWorkInventoryReviews as unknown as {
-        resolveSyncedSaleInventoryReviewGroup: Parameters<
-          typeof useMutation
-        >[0];
-      }
-    ).resolveSyncedSaleInventoryReviewGroup,
-  );
-  const sharedDemoContext = useSharedDemoContext();
   const resolveRegisterSessionSyncReview = useMutation(
     api.cashControls.deposits.resolveRegisterSessionSyncReview,
   );
@@ -4111,91 +3934,6 @@ export function OperationsQueueView({
     }
   };
 
-  const handleResolveSyncedSaleInventoryReview = async (
-    items: QueueWorkItem[],
-  ) => {
-    if (resolvingSyncedSaleInventoryReviewSkuId) return;
-
-    if (!activeStore?._id) {
-      presentCommandToast({
-        kind: "user_error",
-        error: {
-          code: "authentication_failed",
-          message: "Select a store before resolving inventory review work.",
-        },
-      });
-      return;
-    }
-
-    const productSkuId = getQueueWorkItemStockAdjustmentSkuId(items[0]);
-    const logicalGroup = items[0].logicalGroup;
-    if (
-      !productSkuId ||
-      !logicalGroup ||
-      logicalGroup.completeness !== "complete" ||
-      logicalGroup.resolutionAvailability !== "available"
-    ) {
-      return;
-    }
-
-    setResolvingSyncedSaleInventoryReviewSkuId(productSkuId);
-
-    try {
-      const result = await runCommand(() =>
-        resolveSyncedSaleInventoryReview({
-          ...(sharedDemoContext?.kind === "shared_demo"
-            ? {
-                expectedDemoRestoreEpoch: sharedDemoContext.restore.epoch,
-              }
-            : {}),
-          expectedMemberIds: logicalGroup.memberIds,
-          groupKey: logicalGroup.key,
-          outcome: "completed",
-          reason: "Inventory review handled from Open Work.",
-          storeId: activeStore._id,
-        }),
-      );
-
-      if (result.kind !== "ok") {
-        if (
-          result.kind === "user_error" &&
-          result.error.code === "conflict" &&
-          result.error.message === LOGICAL_GROUP_CHANGED_MESSAGE
-        ) {
-          setConflictedLogicalGroups((current) => {
-            const refreshedGroup = latestQueueWorkItemsRef.current.find(
-              (item) => item.logicalGroup?.key === logicalGroup.key,
-            )?.logicalGroup;
-            if (
-              refreshedGroup?.completeness === "complete" &&
-              logicalGroupObservationFingerprint(refreshedGroup) !==
-                logicalGroupObservationFingerprint(logicalGroup)
-            ) {
-              return current;
-            }
-
-            const next = new Map(current);
-            next.set(logicalGroup.key, {
-              fingerprint: logicalGroupObservationFingerprint(logicalGroup),
-              refreshNonce: openWorkRefreshNonce,
-            });
-            return next;
-          });
-        }
-        presentCommandToast(result);
-        return;
-      }
-
-      toast.success(
-        items.length === 1
-          ? "Inventory review marked complete"
-          : `${items.length.toLocaleString()} inventory reviews marked complete`,
-      );
-    } finally {
-      setResolvingSyncedSaleInventoryReviewSkuId(null);
-    }
-  };
-
   const handleAuthenticateApprovalUnlock = async (args: {
     pinHash: string;
     username: string;
@@ -4256,7 +3994,6 @@ export function OperationsQueueView({
         approvalDecisionUnlocked={Boolean(activeApprovalDecisionUnlock)}
         approvalRequests={queue?.approvalRequests ?? []}
         canLoadMoreInventoryItems={canLoadMoreInventoryItems}
-        conflictedLogicalGroupKeys={conflictedLogicalGroupKeys}
         cycleCountDraft={cycleCountDraft}
         cycleCountDraftSummary={activeCycleCountDraftSummary ?? null}
         hasFullAdminAccess={canAccessSurface}
@@ -4270,24 +4007,15 @@ export function OperationsQueueView({
           queue === undefined || isInventorySnapshotLoadingFirstPage
         }
         isLoadingStock={isInventorySnapshotLoadingFirstPage}
-        isResolvingSyncedSaleInventoryReviewSkuId={
-          resolvingSyncedSaleInventoryReviewSkuId
-        }
         onDiscardCycleCountDraft={handleDiscardCycleCountDraft}
         onDecideApprovalRequest={handleDecideApprovalRequest}
         onLoadMoreInventoryItems={() => inventorySnapshotPage.loadMore(100)}
         onLockApprovalDecisions={() => setApprovalDecisionUnlock(null)}
         onOpenWorkSearchChange={onOpenWorkSearchChange}
-        onRefreshOpenWork={() =>
-          setOpenWorkRefreshNonce((current) => current + 1)
-        }
         onRefreshCycleCountDraftLineBaseline={
           handleRefreshCycleCountDraftLineBaseline
         }
         onRequestApprovalDecisionUnlock={() => setIsApprovalUnlockOpen(true)}
-        onResolveSyncedSaleInventoryReview={
-          handleResolveSyncedSaleInventoryReview
-        }
         onSaveCycleCountDraftLine={handleSaveCycleCountDraftLine}
         isSubmittingStockBatch={isSubmittingStockBatch}
         onSubmitStockBatch={handleSubmitStockBatch}

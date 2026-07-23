@@ -2655,7 +2655,6 @@ describe("product catalog visibility", () => {
     });
     expect(getTestScheduler(ctx).runAfter).not.toHaveBeenCalled();
 
-    mocks.requireProductSkuSearchReadAccess.mockResolvedValue({});
     const repairedSummary = await getHandler(repairCatalogSummary)(ctx, {
       storeId: "storezzzz" as Id<"store">,
     });
@@ -2667,11 +2666,10 @@ describe("product catalog visibility", () => {
       outOfStockProductCount: 2,
       productCount: 4,
     });
-    expect(mocks.requireProductSkuSearchReadAccess).toHaveBeenCalledWith(
-      ctx,
-      "storezzzz",
-      "You do not have access to repair catalog summaries.",
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      expect.any(Object),
     );
+    expect(mocks.requireProductSkuSearchReadAccess).not.toHaveBeenCalled();
     await expect(
       getHandler(getCatalogSummary)(ctx, {
         storeId: "storezzzz" as Id<"store">,

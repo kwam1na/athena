@@ -12,10 +12,7 @@ import {
   getOnlineOrderReadDefinition,
   listOnlineOrdersReadDefinition,
 } from "../operationAdmission/readDefinitions";
-import {
-  requireReadySharedDemoStoreCapabilityIfApplicable,
-  requireSharedDemoStoreReadIfApplicable,
-} from "../sharedDemo/actor";
+import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import {
   decideSharedDemoEffect,
   denySharedDemoAction,
@@ -1715,18 +1712,17 @@ export const processReturnExchange = mutation({
             message: "Order not found.",
           });
         }
+        const accessResult = await requireNormalOrderStoreAccessWithCtx(
+          ctx,
+          order,
+        );
+        if (isCommandUserError(accessResult)) return accessResult;
 
         await requireReadySharedDemoStoreCapabilityIfApplicable(
           ctx,
           "payments.refund",
           order.storeId,
         );
-
-        const accessResult = await requireNormalOrderStoreAccessWithCtx(
-          ctx,
-          order,
-        );
-        if (isCommandUserError(accessResult)) return accessResult;
 
         const store = await ctx.db.get("store", order.storeId);
         const orderItems = await listOrderItems(ctx, order._id);

@@ -615,7 +615,7 @@ describe("OrderSummary completed transaction summary", () => {
 
     expect(screen.getByText("Product lines")).toBeInTheDocument();
     expect(screen.getByText("Edge Brush")).toBeInTheDocument();
-    expect(screen.getByText("1 x GH₵70 • CAP-1")).toBeInTheDocument();
+    expect(screen.getByText("1 x GH₵70")).toBeInTheDocument();
     expect(screen.getByText("GH₵70")).toBeInTheDocument();
     expect(screen.getByText("Service lines")).toBeInTheDocument();
     expect(screen.getByText("Tokin")).toBeInTheDocument();
@@ -715,8 +715,15 @@ describe("OrderSummary completed transaction summary", () => {
       name: "Wig Club",
       config: {
         contact: {
+          email: "hello@wigclub.test",
           phoneNumber: "+233 55 555 5555",
           location: "2 Jungle Avenue, East Legon, Accra, Ghana",
+        },
+        receipt: {
+          policyLines: [
+            "Exchange unused handmade goods within 7 days with this receipt.",
+            "Opened bath and body goods are final sale.",
+          ],
         },
       },
     };
@@ -756,9 +763,11 @@ describe("OrderSummary completed transaction summary", () => {
           state?: string;
           zipCode?: string;
           country?: string;
+          email?: string;
           phone?: string;
           website?: string;
         };
+        storePolicyLines?: string[];
       };
     };
 
@@ -767,10 +776,15 @@ describe("OrderSummary completed transaction summary", () => {
       city: "East Legon",
       state: "Accra",
       country: "Ghana",
+      email: "hello@wigclub.test",
       phone: "+233 55 555 5555",
       website: "localhost:5174",
     });
     expect(receiptElement.props.storeContact.zipCode).toBeUndefined();
+    expect(receiptElement.props.storePolicyLines).toEqual([
+      "Exchange unused handmade goods within 7 days with this receipt.",
+      "Opened bath and body goods are final sale.",
+    ]);
   });
 
   it("marks printed receipts for voided completed sales", async () => {

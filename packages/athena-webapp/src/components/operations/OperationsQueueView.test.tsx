@@ -1387,17 +1387,15 @@ describe("OperationsQueueViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("links synced sale inventory work items to manual stock adjustments and resolution", async () => {
+  it("links synced sale inventory work items to manual stock adjustments", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
-    const onResolveSyncedSaleInventoryReview = vi.fn();
 
     render(
       <OperationsQueueViewContent
         {...baseProps}
         activeWorkflow="queue"
         orgUrlSlug="wigclub"
-        onResolveSyncedSaleInventoryReview={onResolveSyncedSaleInventoryReview}
         storeUrlSlug="wigclub"
         workItems={[
           {
@@ -1479,31 +1477,14 @@ describe("OperationsQueueViewContent", () => {
     );
     expect(stockAdjustmentsHref.searchParams.get("mode")).toBe("manual");
     expect(stockAdjustmentsHref.searchParams.get("sku")).toBe("product-sku-1");
-
-    await user.click(screen.getByRole("button", { name: "Mark reviewed" }));
-
-    expect(onResolveSyncedSaleInventoryReview).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({
-          _id: "work-item-1",
-          details: expect.objectContaining({
-            localRegisterSessionId: "local-register-session-1",
-            localTransactionId: "local-transaction-1",
-            receiptNumber: "939540",
-            registerSessionId: "register-session-1",
-            sourceId: "transaction-1",
-            terminalId: "terminal-1",
-          }),
-          type: "synced_sale_inventory_review",
-        }),
-      ]),
-    );
+    expect(
+      screen.queryByRole("button", { name: "Mark reviewed" }),
+    ).not.toBeInTheDocument();
   });
 
   it("groups synced sale inventory reviews for the same affected SKU", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
-    const onResolveSyncedSaleInventoryReview = vi.fn();
     const sharedDetails = {
       primaryProductSkuId: "product-sku-1" as Id<"productSku">,
     };
@@ -1512,7 +1493,6 @@ describe("OperationsQueueViewContent", () => {
       <OperationsQueueViewContent
         {...baseProps}
         activeWorkflow="queue"
-        onResolveSyncedSaleInventoryReview={onResolveSyncedSaleInventoryReview}
         openWorkSearch={{ workType: "synced_sale_inventory_review" }}
         workItems={[
           {
@@ -1586,21 +1566,16 @@ describe("OperationsQueueViewContent", () => {
     expect(screen.getByText("2 total")).toBeInTheDocument();
     expect(screen.getByText("#100001")).toBeInTheDocument();
     expect(screen.getByText("#100002")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Mark 2 reviewed" }));
-
-    expect(onResolveSyncedSaleInventoryReview).toHaveBeenCalledWith([
-      expect.objectContaining({ _id: "work-item-1" }),
-      expect.objectContaining({ _id: "work-item-2" }),
-    ]);
+    expect(
+      screen.queryByRole("button", { name: /Mark .*reviewed/ }),
+    ).not.toBeInTheDocument();
   });
 
-  it("shows an observed lower bound and disables resolution when source membership is incomplete", () => {
+  it("shows an observed lower bound when source membership is incomplete", () => {
     render(
       <OperationsQueueViewContent
         {...baseProps}
         activeWorkflow="queue"
-        onResolveSyncedSaleInventoryReview={vi.fn()}
         openWorkSearch={{ workType: "synced_sale_inventory_review" }}
         workItemSummary={{
           byType: [
@@ -1651,294 +1626,16 @@ describe("OperationsQueueViewContent", () => {
       screen.queryByText(/Resolve visible work to continue/),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Mark reviewed" }),
-    ).toBeDisabled();
-  });
-
-  it("clears a conflict after changed membership or a complete explicit-refresh response", async () => {
-    const { default: userEvent } = await import("@testing-library/user-event");
-    const user = userEvent.setup();
-    const groupKey = "synced_sale_inventory_review:store-1:product-sku-1";
-    const makeWorkItem = (id: string) => ({
-      _id: id as Id<"operationalWorkItem">,
-      approvalState: "not_required",
-      createdAt: Date.now(),
-      details: { primaryProductSkuId: "product-sku-1" },
-      priority: "high",
-      status: "open",
-      title: "Review inventory for ADORE DYE",
-      type: "synced_sale_inventory_review",
-    });
-    const makeQueueSnapshot = (memberIds: string[]) => {
-      const representative = makeWorkItem(memberIds[0]);
-
-      return {
-        approvalRequests: [],
-        workItemSummary: {
-          byType: [
-            {
-              completeness: "complete" as const,
-              count: 1,
-              overflow: false,
-              type: "synced_sale_inventory_review",
-            },
-          ],
-          completeness: "complete" as const,
-          count: 1,
-        },
-        workItems: [
-          {
-            ...representative,
-            logicalGroup: {
-              completeness: "complete" as const,
-              key: groupKey,
-              memberIds: memberIds as Id<"operationalWorkItem">[],
-              members: memberIds.map(makeWorkItem),
-              resolutionAvailability: "available" as const,
-            },
-          },
-        ],
-      };
-    };
-    let currentQueue = makeQueueSnapshot(["work-item-1"]);
-    const resolveGroup = vi.fn().mockResolvedValue({
-      error: {
-        code: "conflict",
-        message:
-          "This work changed. Review the refreshed group before marking it reviewed.",
-      },
-      kind: "user_error",
-    });
-
-    mockedHooks.useQuery.mockReset();
-    mockedHooks.useQuery.mockImplementation((functionReference) =>
-      getFunctionName(functionReference as never) ===
-      "operations/operationalWorkItems:getQueueSnapshot"
-        ? currentQueue
-        : undefined,
-    );
-    mockedHooks.useMutation.mockReset();
-    mockedHooks.useMutation.mockImplementation((functionReference) =>
-      getFunctionName(functionReference as never) ===
-      "operations/openWorkInventoryReviews:resolveSyncedSaleInventoryReviewGroup"
-        ? resolveGroup
-        : vi.fn(),
-    );
-    mockedHooks.useSharedDemoContext.mockReturnValue({
-      kind: "shared_demo",
-      restore: { epoch: 42 },
-      storeId: "store-1",
-    });
-
-    const view = render(
-      <OperationsQueueView
-        activeWorkflow="queue"
-        openWorkSearch={{ workType: "synced_sale_inventory_review" }}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: "Mark reviewed" }));
-
-    await waitFor(() => expect(resolveGroup).toHaveBeenCalledTimes(1));
-    expect(resolveGroup).toHaveBeenCalledWith(
-      expect.objectContaining({ expectedDemoRestoreEpoch: 42 }),
-    );
-
-    const conflictNotice = await screen.findByText(
-      "This work changed. Review the refreshed group before marking it reviewed.",
-    );
-    const inventoryReviewTitle = screen.getByRole("link", {
-      name: "Adore Dye",
-    }).parentElement;
-
-    expect(conflictNotice).toBeInTheDocument();
-    expect(conflictNotice.parentElement).toBe(
-      inventoryReviewTitle?.parentElement,
-    );
-    expect(conflictNotice.parentElement).toHaveClass("flex-col");
-    expect(
-      screen.getByRole("button", { name: "Mark reviewed" }),
-    ).toBeDisabled();
-
-    const refreshButton = screen.getByRole("button", { name: "Refresh" });
-    const urgencyBadge = screen.getByText("High");
-
-    expect(refreshButton.parentElement).toBe(urgencyBadge.parentElement);
-    expect(
-      refreshButton.querySelector("svg.lucide-refresh-cw"),
-    ).toBeInTheDocument();
-    expect(
-      refreshButton.compareDocumentPosition(urgencyBadge) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-
-    currentQueue = makeQueueSnapshot(["work-item-1", "work-item-2"]);
-    view.rerender(
-      <OperationsQueueView
-        activeWorkflow="queue"
-        openWorkSearch={{ workType: "synced_sale_inventory_review" }}
-      />,
-    );
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Mark 2 reviewed" }),
-      ).toBeEnabled(),
-    );
-    expect(
-      screen.queryByText(
-        "This work changed. Review the refreshed group before marking it reviewed.",
-      ),
-    ).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Mark 2 reviewed" }));
-    await waitFor(() => expect(resolveGroup).toHaveBeenCalledTimes(2));
-    expect(
-      await screen.findByText(
-        "This work changed. Review the refreshed group before marking it reviewed.",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Mark 2 reviewed" }),
-    ).toBeDisabled();
-
-    await user.click(screen.getByRole("button", { name: "Refresh" }));
-    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ refreshNonce: 1 }),
-    );
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Mark 2 reviewed" }),
-      ).toBeEnabled(),
-    );
-    expect(
-      screen.queryByText(
-        "This work changed. Review the refreshed group before marking it reviewed.",
-      ),
+      screen.queryByRole("button", { name: "Mark reviewed" }),
     ).not.toBeInTheDocument();
   });
 
-  it("does not disable a group when changed complete membership arrives before the conflict response", async () => {
-    const { default: userEvent } = await import("@testing-library/user-event");
-    const user = userEvent.setup();
-    const groupKey = "synced_sale_inventory_review:store-1:product-sku-1";
-    const makeWorkItem = (id: string) => ({
-      _id: id as Id<"operationalWorkItem">,
-      approvalState: "not_required",
-      createdAt: Date.now(),
-      details: { primaryProductSkuId: "product-sku-1" },
-      priority: "high",
-      status: "open",
-      title: "Review inventory for ADORE DYE",
-      type: "synced_sale_inventory_review",
-    });
-    const makeQueueSnapshot = (memberIds: string[]) => {
-      const representative = makeWorkItem(memberIds[0]);
-
-      return {
-        approvalRequests: [],
-        workItemSummary: {
-          byType: [
-            {
-              completeness: "complete" as const,
-              count: 1,
-              overflow: false,
-              type: "synced_sale_inventory_review",
-            },
-          ],
-          completeness: "complete" as const,
-          count: 1,
-        },
-        workItems: [
-          {
-            ...representative,
-            logicalGroup: {
-              completeness: "complete" as const,
-              key: groupKey,
-              memberIds: memberIds as Id<"operationalWorkItem">[],
-              members: memberIds.map(makeWorkItem),
-              oldestActionableAt: representative.createdAt,
-              resolutionAvailability: "available" as const,
-            },
-          },
-        ],
-      };
-    };
-    let currentQueue = makeQueueSnapshot(["work-item-1"]);
-    let releaseConflict: ((value: unknown) => void) | undefined;
-    const resolveGroup = vi.fn(
-      () =>
-        new Promise((resolve) => {
-          releaseConflict = resolve;
-        }),
-    );
-
-    mockedHooks.useQuery.mockReset();
-    mockedHooks.useQuery.mockImplementation((functionReference) =>
-      getFunctionName(functionReference as never) ===
-      "operations/operationalWorkItems:getQueueSnapshot"
-        ? currentQueue
-        : undefined,
-    );
-    mockedHooks.useMutation.mockReset();
-    mockedHooks.useMutation.mockImplementation((functionReference) =>
-      getFunctionName(functionReference as never) ===
-      "operations/openWorkInventoryReviews:resolveSyncedSaleInventoryReviewGroup"
-        ? resolveGroup
-        : vi.fn(),
-    );
-
-    const view = render(
-      <OperationsQueueView
-        activeWorkflow="queue"
-        openWorkSearch={{ workType: "synced_sale_inventory_review" }}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: "Mark reviewed" }));
-    await waitFor(() => expect(resolveGroup).toHaveBeenCalledTimes(1));
-
-    currentQueue = makeQueueSnapshot(["work-item-1", "work-item-2"]);
-    view.rerender(
-      <OperationsQueueView
-        activeWorkflow="queue"
-        openWorkSearch={{ workType: "synced_sale_inventory_review" }}
-      />,
-    );
-    releaseConflict?.({
-      error: {
-        code: "conflict",
-        message:
-          "This work changed. Review the refreshed group before marking it reviewed.",
-      },
-      kind: "user_error",
-    });
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Mark 2 reviewed" }),
-      ).toBeEnabled(),
-    );
-    expect(
-      screen.queryByText(
-        "This work changed. Review the refreshed group before marking it reviewed.",
-      ),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Refresh" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("renders synced sale resolution when the affected SKU is available", () => {
-    const onResolveSyncedSaleInventoryReview = vi.fn();
-
+  it("renders the stock adjustment action when the affected SKU is available", () => {
     render(
       <OperationsQueueViewContent
         {...baseProps}
         activeWorkflow="queue"
         orgUrlSlug="wigclub"
-        onResolveSyncedSaleInventoryReview={onResolveSyncedSaleInventoryReview}
         storeUrlSlug="wigclub"
         workItems={[
           {
@@ -1961,22 +1658,19 @@ describe("OperationsQueueViewContent", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Mark reviewed" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Mark reviewed" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Open stock adjustments" }),
     ).toBeInTheDocument();
   });
 
   it("does not render synced sale resolution without an affected SKU", () => {
-    const onResolveSyncedSaleInventoryReview = vi.fn();
-
     render(
       <OperationsQueueViewContent
         {...baseProps}
         activeWorkflow="queue"
         orgUrlSlug="wigclub"
-        onResolveSyncedSaleInventoryReview={onResolveSyncedSaleInventoryReview}
         storeUrlSlug="wigclub"
         workItems={[
           {
@@ -2003,68 +1697,6 @@ describe("OperationsQueueViewContent", () => {
     expect(
       screen.queryByRole("link", { name: "Open stock adjustments" }),
     ).not.toBeInTheDocument();
-  });
-
-  it("disables peer synced sale review buttons while one review is resolving", () => {
-    render(
-      <OperationsQueueViewContent
-        {...baseProps}
-        activeWorkflow="queue"
-        isResolvingSyncedSaleInventoryReviewSkuId={
-          "product-sku-active" as Id<"productSku">
-        }
-        orgUrlSlug="wigclub"
-        onResolveSyncedSaleInventoryReview={vi.fn()}
-        storeUrlSlug="wigclub"
-        workItems={[
-          {
-            _id: "work-item-1" as Id<"operationalWorkItem">,
-            approvalState: "not_required",
-            createdAt: Date.now() - 5 * 60 * 1000,
-            details: {
-              inventoryReviewLineCount: 1,
-              localRegisterSessionId: "local-register-session-1",
-              localTransactionId: "local-transaction-1",
-              primaryProductSkuId: "product-sku-1" as Id<"productSku">,
-              receiptNumber: "939540",
-              registerSessionId: "register-session-1" as Id<"registerSession">,
-              sourceId: "transaction-1",
-              terminalId: "terminal-1" as Id<"posTerminal">,
-            },
-            priority: "high",
-            status: "open",
-            title: "Review inventory for ADORE DYE",
-            type: "synced_sale_inventory_review",
-          },
-          {
-            _id: "work-item-2" as Id<"operationalWorkItem">,
-            approvalState: "not_required",
-            createdAt: Date.now() - 4 * 60 * 1000,
-            details: {
-              inventoryReviewLineCount: 1,
-              localRegisterSessionId: "local-register-session-2",
-              localTransactionId: "local-transaction-2",
-              primaryProductSkuId: "product-sku-2" as Id<"productSku">,
-              receiptNumber: "939541",
-              registerSessionId: "register-session-1" as Id<"registerSession">,
-              sourceId: "transaction-2",
-              terminalId: "terminal-1" as Id<"posTerminal">,
-            },
-            priority: "normal",
-            status: "open",
-            title: "Review inventory for Lace tint",
-            type: "synced_sale_inventory_review",
-          },
-        ]}
-      />,
-    );
-
-    const reviewButtons = screen.getAllByRole("button", {
-      name: "Mark reviewed",
-    });
-    expect(reviewButtons).toHaveLength(2);
-    expect(reviewButtons[0]).toBeDisabled();
-    expect(reviewButtons[1]).toBeDisabled();
   });
 
   it("hydrates open work page and sort state from controlled search", () => {
@@ -3106,7 +2738,6 @@ describe("OperationsQueueViewContent", () => {
       .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())
-      .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(ensureCycleCountDraft)
       .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())
@@ -3163,7 +2794,6 @@ describe("OperationsQueueViewContent", () => {
     mockedHooks.useQuery.mockReset();
     mockedHooks.useMutation.mockReturnValue(vi.fn());
     mockedHooks.useMutation
-      .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())

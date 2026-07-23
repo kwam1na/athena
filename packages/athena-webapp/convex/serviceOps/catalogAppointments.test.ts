@@ -27,7 +27,6 @@ vi.mock("../sharedDemo/actor", () => ({
   getSharedDemoActorWithCtx: vi.fn(),
   requireReadySharedDemoStoreCapabilityIfApplicable: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
-  requireSharedDemoStoreReadIfApplicable: vi.fn(),
 }));
 
 function getHandler(definition: unknown) {
@@ -40,11 +39,28 @@ beforeEach(() => {
   vi.mocked(
     sharedDemoActor.requireReadySharedDemoStoreCapabilityIfApplicable,
   ).mockResolvedValue(null);
+  // Mirrors the real helper in lib/athenaUserAuth.ts: identity resolution
+  // short-circuits on the admitted actor, so an admitted demo actor resolves to
+  // its own athenaUser rather than falling through to normal-user auth. Where a
+  // fixture has not seeded the admitted row, fall back to the canned
+  // normal-user identity so unrelated tests are unaffected.
   vi.mocked(
     athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-  ).mockResolvedValue({
-    _id: "user-admin" as Id<"athenaUser">,
-  } as never);
+  ).mockImplementation(async (ctx: unknown) => {
+    const admittedUserId = (
+      ctx as { operationAdmission?: { actor?: { athenaUserId?: string } } }
+    )?.operationAdmission?.actor?.athenaUserId;
+    if (admittedUserId) {
+      const admitted = await (
+        ctx as { db: { get: (table: string, id: string) => Promise<unknown> } }
+      ).db.get("athenaUser", admittedUserId);
+      if (admitted) {
+        return admitted as never;
+      }
+    }
+
+    return { _id: "user-admin" as Id<"athenaUser"> } as never;
+  });
   vi.mocked(
     athenaUserAuth.requireOrganizationMemberRoleWithCtx,
   ).mockResolvedValue({
@@ -185,9 +201,22 @@ describe("service catalog and appointment helpers", () => {
         serviceCatalogId: "catalog-fixed",
       }),
     ]);
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor and resolves that actor's identity, never the normal-user
+    // fallback.
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: "demo-owner",
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
     expect(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
     ).toHaveBeenCalledWith(

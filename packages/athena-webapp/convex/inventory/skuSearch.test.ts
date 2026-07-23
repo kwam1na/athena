@@ -21,9 +21,16 @@ const mockedCatalogRevision = vi.hoisted(() => ({
     args.didChange ? 1 : 0,
   ),
 }));
+const mockedSharedDemoActor = vi.hoisted(() => ({
+  getSharedDemoActorWithCtx: vi.fn(),
+}));
 
 vi.mock("@convex-dev/auth/server", () => ({
   getAuthUserId: mockedAuthServer.getAuthUserId,
+}));
+
+vi.mock("../sharedDemo/actor", () => ({
+  getSharedDemoActorWithCtx: mockedSharedDemoActor.getSharedDemoActorWithCtx,
 }));
 
 vi.mock("../pos/application/sync/registerCatalogRevision", () => ({
@@ -66,9 +73,7 @@ function createCtx(seed: Partial<Record<TableName, Row[]>>) {
       (seed.productSkuSearch ?? []).map((row) => [row._id, row]),
     ),
     store: new Map((seed.store ?? []).map((row) => [row._id, row])),
-    subcategory: new Map(
-      (seed.subcategory ?? []).map((row) => [row._id, row]),
-    ),
+    subcategory: new Map((seed.subcategory ?? []).map((row) => [row._id, row])),
     users: new Map((seed.users ?? []).map((row) => [row._id, row])),
   };
   const counters: Record<TableName, number> = {
@@ -93,7 +98,13 @@ function createCtx(seed: Partial<Record<TableName, Row[]>>) {
       collect: async () => rows,
       first: async () => rows[0] ?? null,
       take: async (count: number) => rows.slice(0, count),
-      paginate: async ({ cursor, numItems }: { cursor: string | null; numItems: number }) => {
+      paginate: async ({
+        cursor,
+        numItems,
+      }: {
+        cursor: string | null;
+        numItems: number;
+      }) => {
         const start = cursor ? Number(cursor) : 0;
         const page = rows.slice(start, start + numItems);
         const next = start + page.length;
@@ -107,8 +118,10 @@ function createCtx(seed: Partial<Record<TableName, Row[]>>) {
       filter(applyFilter?: (queryBuilder: unknown) => (row: Row) => boolean) {
         if (!applyFilter) return createQuery(table, rows);
         const predicate = applyFilter({
-          and: (...predicates: Array<(row: Row) => boolean>) => (row: Row) =>
-            predicates.every((predicate) => predicate(row)),
+          and:
+            (...predicates: Array<(row: Row) => boolean>) =>
+            (row: Row) =>
+              predicates.every((predicate) => predicate(row)),
           field: (field: string) => field,
           eq: (field: string, value: unknown) => (row: Row) =>
             row[field] === value,
@@ -146,8 +159,14 @@ function createCtx(seed: Partial<Record<TableName, Row[]>>) {
       });
       return id;
     },
-    async patch(tableOrId: TableName | string, idOrPatch: string | Record<string, unknown>, maybePatch?: Record<string, unknown>) {
-      const table = maybePatch ? (tableOrId as TableName) : findTableForId(String(tableOrId));
+    async patch(
+      tableOrId: TableName | string,
+      idOrPatch: string | Record<string, unknown>,
+      maybePatch?: Record<string, unknown>,
+    ) {
+      const table = maybePatch
+        ? (tableOrId as TableName)
+        : findTableForId(String(tableOrId));
       const id = maybePatch ? String(idOrPatch) : String(tableOrId);
       const patch = maybePatch ?? (idOrPatch as Record<string, unknown>);
       const existing = tables[table].get(id);
@@ -249,6 +268,8 @@ const athenaUserId = "athena-user-1" as Id<"athenaUser">;
 beforeEach(() => {
   mockedAuthServer.getAuthUserId.mockResolvedValue(authUserId);
   mockedCatalogRevision.advance.mockClear();
+  mockedSharedDemoActor.getSharedDemoActorWithCtx.mockReset();
+  mockedSharedDemoActor.getSharedDemoActorWithCtx.mockResolvedValue(null);
 });
 
 function baseSeed() {
@@ -428,7 +449,11 @@ describe("SKU search foundation", () => {
 
     mockedCatalogRevision.advance.mockClear();
     const sku = tables.productSku.get(skuId)!;
-    tables.productSku.set(skuId, { ...sku, inventoryCount: 12, quantityAvailable: 10 });
+    tables.productSku.set(skuId, {
+      ...sku,
+      inventoryCount: 12,
+      quantityAvailable: 10,
+    });
     await upsertProductSkuSearchProjection(ctx, skuId);
 
     expect(mockedCatalogRevision.advance).toHaveBeenLastCalledWith(ctx, {
@@ -500,9 +525,34 @@ describe("SKU search foundation", () => {
     ).rejects.toThrow("Sign in again to continue.");
   });
 
+  it("allows the shared demo actor to search its assigned store SKUs", async () => {
+    const { ctx } = createCtx(baseSeed());
+    mockedAuthServer.getAuthUserId.mockResolvedValue(null);
+    mockedSharedDemoActor.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId,
+      authUserId: authUserId as Id<"users">,
+      kind: "shared_demo",
+      organizationId,
+      storeId,
+    });
+    await upsertProductSkuSearchProjection(ctx, skuId);
+
+    const result = await getHandler(searchProductSkus)(ctx, {
+      query: "ABC-123",
+      storeId,
+    });
+
+    expect(
+      mockedSharedDemoActor.getSharedDemoActorWithCtx,
+    ).toHaveBeenCalledWith(ctx);
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].productSkuId).toBe(skuId);
+  });
+
   it("rejects SKU search for authenticated users outside the store organization", async () => {
     const seed = baseSeed();
-    seed.organizationMember[0].organizationId = "other-org" as Id<"organization">;
+    seed.organizationMember[0].organizationId =
+      "other-org" as Id<"organization">;
     const { ctx } = createCtx(seed);
 
     await expect(
@@ -703,9 +753,9 @@ describe("SKU search foundation", () => {
       storeId,
     });
 
-    expect(result.results.map((row: { productSkuId: string }) => row.productSkuId)).toEqual([
-      skuId,
-    ]);
+    expect(
+      result.results.map((row: { productSkuId: string }) => row.productSkuId),
+    ).toEqual([skuId]);
     expect(result.truncated).toBe(true);
   });
 
@@ -888,7 +938,10 @@ describe("SKU search foundation", () => {
       sku: "BW-18",
       storeId: otherStoreId,
     });
-    await upsertProductSkuSearchProjection(ctx, "other-sku" as Id<"productSku">);
+    await upsertProductSkuSearchProjection(
+      ctx,
+      "other-sku" as Id<"productSku">,
+    );
 
     const staleResult = await getHandler(searchProductSkus)(ctx, {
       query: "missing",
@@ -900,9 +953,9 @@ describe("SKU search foundation", () => {
     });
 
     expect(staleResult.results).toEqual([]);
-    expect(storeResult.results.map((row: { storeId: string }) => row.storeId)).toEqual([
-      storeId,
-    ]);
+    expect(
+      storeResult.results.map((row: { storeId: string }) => row.storeId),
+    ).toEqual([storeId]);
   });
 
   it("suppresses cross-store joined taxonomy and color labels", async () => {
@@ -1105,7 +1158,10 @@ describe("SKU search foundation", () => {
 
   it("defines and uses the store-filtered Convex search index", () => {
     const schemaSource = readFileSync("convex/schema.ts", "utf8");
-    const skuSearchSource = readFileSync("convex/inventory/skuSearch.ts", "utf8");
+    const skuSearchSource = readFileSync(
+      "convex/inventory/skuSearch.ts",
+      "utf8",
+    );
 
     expect(schemaSource).toContain('.searchIndex("searchText"');
     expect(schemaSource).toContain('filterFields: ["storeId"]');

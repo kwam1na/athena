@@ -303,7 +303,8 @@ vi.mock("../../operations/CommandApprovalDialog", () => ({
               if (result.kind === "ok" && result.data) {
                 onApproved({
                   approvalProofId: result.data.approvalProofId,
-                  approvedByStaffProfileId: result.data.approvedByStaffProfileId,
+                  approvedByStaffProfileId:
+                    result.data.approvedByStaffProfileId,
                   expiresAt: result.data.expiresAt,
                 });
               }
@@ -437,10 +438,7 @@ vi.mock("../../ui/button", () => ({
       <>{children}</>
     ) : (
       <button
-        className={[
-          className,
-          variant === "default" ? "bg-primary" : undefined,
-        ]
+        className={[className, variant === "default" ? "bg-primary" : undefined]
           .filter(Boolean)
           .join(" ")}
         type="button"
@@ -743,7 +741,9 @@ describe("TransactionView", () => {
 
     expect(screen.getByText("Customer")).toBeInTheDocument();
     expect(screen.getByText("Ama Mensah")).toBeInTheDocument();
-    expect(screen.getByText("ama@example.com • 0240000000")).toBeInTheDocument();
+    expect(
+      screen.getByText("ama@example.com • 0240000000"),
+    ).toBeInTheDocument();
   });
 
   it("renders service lines in the main transaction items list", () => {
@@ -1119,10 +1119,10 @@ describe("TransactionView", () => {
 
     render(<TransactionView />);
 
+    expect(screen.queryByText("Void approval pending")).not.toBeInTheDocument();
     expect(
-      screen.queryByText("Void approval pending"),
+      screen.queryByRole("link", { name: /Review/ }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Review/ })).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Void requested" }),
     ).toBeDisabled();
@@ -1214,7 +1214,9 @@ describe("TransactionView", () => {
     await user.click(screen.getByRole("button", { name: "Submit void" }));
     await user.click(screen.getByRole("button", { name: "Confirm" }));
 
-    expect(screen.queryByText("Manager approval required")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Manager approval required"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Void reason")).not.toBeInTheDocument();
   });
 
@@ -1327,7 +1329,9 @@ describe("TransactionView", () => {
       expect(screen.getByText("Sale voided")).toBeInTheDocument();
     });
     expect(screen.getByText("Duplicate sale recorded.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Void sale" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Void sale" }),
+    ).not.toBeInTheDocument();
     expect(voidMutation).toHaveBeenLastCalledWith({
       actorStaffProfileId: "staff_1",
       approvalProofId: "proof-void-1",
@@ -1494,8 +1498,12 @@ describe("TransactionView", () => {
 
     render(<TransactionView />);
 
-    expect(screen.queryByRole("button", { name: "Void sale" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Submit void" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Void sale" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Submit void" }),
+    ).not.toBeInTheDocument();
   });
 
   it("hides the void submission path for already voided transactions", () => {
@@ -1511,8 +1519,12 @@ describe("TransactionView", () => {
 
     expect(screen.getAllByText("Voided").length).toBeGreaterThan(0);
     expect(screen.getByText("Sale voided")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Void sale" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Submit void" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Void sale" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Submit void" }),
+    ).not.toBeInTheDocument();
   });
 
   it("disables unavailable amount and discount correction routes", async () => {
@@ -1633,8 +1645,12 @@ describe("TransactionView", () => {
     expect(
       screen.getByText("Choose the updated payment method"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Add a reason for this update")).not.toBeInTheDocument();
-    expect(screen.getByText("Same-amount payment method update")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Add a reason for this update"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Same-amount payment method update"),
+    ).toBeInTheDocument();
   });
 
   it("disables payment method correction when the transaction is not same-amount eligible", async () => {
@@ -1656,9 +1672,7 @@ describe("TransactionView", () => {
       screen.getByRole("button", { name: "Payment method" }),
     ).toBeDisabled();
     expect(
-      screen.getByText(
-        "Only same-amount payment method updates are supported",
-      ),
+      screen.getByText("Only same-amount payment method updates are supported"),
     ).toBeInTheDocument();
     expect(
       screen.queryByLabelText("Payment method update reason"),
@@ -1695,9 +1709,7 @@ describe("TransactionView", () => {
       screen.getByRole("button", { name: "Payment method" }),
     ).toBeDisabled();
     expect(
-      screen.getByText(
-        "Only same-amount payment method updates are supported",
-      ),
+      screen.getByText("Only same-amount payment method updates are supported"),
     ).toBeInTheDocument();
   });
 
@@ -1718,10 +1730,33 @@ describe("TransactionView", () => {
       screen.getByRole("button", { name: "Payment method" }),
     ).toBeDisabled();
     expect(
-      screen.getByText(
-        "Reopen Register 3 to update payment details",
-      ),
+      screen.getByText("Reopen Register 3 to update payment details"),
     ).toBeInTheDocument();
+  });
+
+  it("disables sale voiding while the register session is closing", async () => {
+    const user = userEvent.setup();
+    useParamsMock.mockReturnValue({ transactionId: "txn_23" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      registerNumber: "3",
+      registerSessionStatus: "closing",
+    });
+
+    render(<TransactionView />);
+
+    const voidButton = screen.getByRole("button", { name: "Void sale" });
+
+    expect(voidButton).toBeDisabled();
+    expect(
+      screen.getByText("Reopen Register 3 to void this sale"),
+    ).toBeInTheDocument();
+
+    await user.click(voidButton);
+
+    expect(
+      screen.queryByRole("button", { name: "Submit void" }),
+    ).not.toBeInTheDocument();
   });
 
   it("uses a generic reopen message when a closing register has no number", async () => {
@@ -1757,9 +1792,7 @@ describe("TransactionView", () => {
     await user.click(screen.getByRole("button", { name: "Update" }));
     await user.click(screen.getByRole("button", { name: "Payment method" }));
 
-    const paymentMethodSelect = screen.getByLabelText(
-      "Updated payment method",
-    );
+    const paymentMethodSelect = screen.getByLabelText("Updated payment method");
     expect(paymentMethodSelect.tagName).toBe("SELECT");
 
     await user.selectOptions(paymentMethodSelect, "card");
@@ -1787,14 +1820,16 @@ describe("TransactionView", () => {
       screen.getByLabelText("Payment method update reason"),
       "Wrong tender selected.",
     );
-    await user.click(screen.getByRole("button", { name: "Cancel payment update" }));
+    await user.click(
+      screen.getByRole("button", { name: "Cancel payment update" }),
+    );
 
     expect(
       screen.queryByText("Same-amount payment method update"),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Payment method" })).not.toHaveClass(
-      "bg-primary",
-    );
+    expect(
+      screen.getByRole("button", { name: "Payment method" }),
+    ).not.toHaveClass("bg-primary");
   });
 
   it("filters the current payment method from correction options", async () => {
@@ -1811,9 +1846,7 @@ describe("TransactionView", () => {
     await user.click(screen.getByRole("button", { name: "Update" }));
     await user.click(screen.getByRole("button", { name: "Payment method" }));
 
-    const paymentMethodSelect = screen.getByLabelText(
-      "Updated payment method",
-    );
+    const paymentMethodSelect = screen.getByLabelText("Updated payment method");
     expect(paymentMethodSelect).not.toHaveTextContent("Card");
     expect(paymentMethodSelect).toHaveTextContent("Cash");
     expect(paymentMethodSelect).toHaveTextContent("Mobile Money");
@@ -2031,35 +2064,33 @@ describe("TransactionView", () => {
       },
     });
     const customerMutation = vi.fn();
-    const paymentMutation = vi
-      .fn()
-      .mockResolvedValueOnce({
-        kind: "approval_required",
-        approval: {
-          action: { key: "pos.transaction.correct_payment_method" },
-          copy: {
-            title: "Manager approval required",
-            message:
-              "A manager needs to review this completed transaction payment method update before it is applied.",
-            primaryActionLabel: "Request approval",
-          },
-          reason:
-            "Manager approval is required to correct a completed transaction payment method.",
-          requiredRole: "manager",
-          resolutionModes: [
-            {
-              kind: "async_request",
-              requestType: "payment_method_correction",
-              approvalRequestId: "approval-1",
-            },
-          ],
-          subject: {
-            id: "txn_11",
-            label: "Transaction #754489",
-            type: "pos_transaction",
-          },
+    const paymentMutation = vi.fn().mockResolvedValueOnce({
+      kind: "approval_required",
+      approval: {
+        action: { key: "pos.transaction.correct_payment_method" },
+        copy: {
+          title: "Manager approval required",
+          message:
+            "A manager needs to review this completed transaction payment method update before it is applied.",
+          primaryActionLabel: "Request approval",
         },
-      });
+        reason:
+          "Manager approval is required to correct a completed transaction payment method.",
+        requiredRole: "manager",
+        resolutionModes: [
+          {
+            kind: "async_request",
+            requestType: "payment_method_correction",
+            approvalRequestId: "approval-1",
+          },
+        ],
+        subject: {
+          id: "txn_11",
+          label: "Transaction #754489",
+          type: "pos_transaction",
+        },
+      },
+    });
     mockTransactionMutations(
       authMutation,
       customerMutation,
@@ -2095,10 +2126,10 @@ describe("TransactionView", () => {
         transactionId: "txn_11",
       });
     });
+    expect(screen.queryByText("Transaction updates")).not.toBeInTheDocument();
     expect(
-      screen.queryByText("Transaction updates"),
+      screen.queryByText("Manager approval required"),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText("Manager approval required")).not.toBeInTheDocument();
   });
 
   it("renders correction history when operational events are present", () => {
@@ -2242,6 +2273,39 @@ describe("TransactionView", () => {
     expect(screen.getByText(/by Kwamina M\./)).toBeInTheDocument();
   });
 
+  it("uses transaction numbers for payment correction rejection history", () => {
+    useParamsMock.mockReturnValue({ transactionId: "txn_13" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      transactionNumber: "8582097",
+      correctionHistory: [
+        {
+          _id: "event-1",
+          actorStaffName: "Kyeena Arku",
+          createdAt: Date.now() - 60_000,
+          eventType: "pos_transaction_payment_method_approval_rejected",
+          message:
+            "Payment method correction rejected for Transaction rd797da5kwceqmtwa1nz1tg0v58b1qdn.",
+          metadata: {
+            decision: "rejected",
+          },
+          reason: "changing",
+        },
+      ],
+    });
+
+    render(<TransactionView />);
+
+    expect(
+      screen.getByText(
+        "Payment method correction rejected for Transaction #8582097",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/rd797da5kwceqmtwa1nz1tg0v58b1qdn/),
+    ).not.toBeInTheDocument();
+  });
+
   it("omits correction history when no events are present", () => {
     useParamsMock.mockReturnValue({ transactionId: "txn_9" });
     useQueryMock.mockReturnValue(baseTransaction);
@@ -2352,7 +2416,9 @@ describe("TransactionView", () => {
     expect(screen.getByText("Pending sale total")).toBeInTheDocument();
     expect(screen.getByText("Original sale total")).toBeInTheDocument();
     expect(screen.getByText("Item adjustment")).toBeInTheDocument();
-    expect(screen.getByText("Item adjustment pending approval")).toBeInTheDocument();
+    expect(
+      screen.getByText("Item adjustment pending approval"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Item adjustment applied")).toBeInTheDocument();
     expect(screen.getByText("Closure Wig")).toBeInTheDocument();
     expect(screen.getByText(/2 original to 1 adjusted/)).toBeInTheDocument();
@@ -2520,9 +2586,13 @@ describe("TransactionView", () => {
       screen.getByLabelText("Item adjustment reason"),
       "Customer received one unit.",
     );
-    await user.click(screen.getByRole("button", { name: "Cancel item adjustment" }));
+    await user.click(
+      screen.getByRole("button", { name: "Cancel item adjustment" }),
+    );
 
-    expect(screen.queryByText("Review item adjustment")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Review item adjustment"),
+    ).not.toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", { name: "Items or quantities" }),
@@ -2626,9 +2696,14 @@ describe("TransactionView", () => {
     await user.click(
       screen.getByRole("button", { name: "Items or quantities" }),
     );
-    await user.click(screen.getByRole("button", { name: /increase closure wig/i }));
+    await user.click(
+      screen.getByRole("button", { name: /increase closure wig/i }),
+    );
     expect(screen.getByText("Balance due")).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText("Settlement method"), "cash");
+    await user.selectOptions(
+      screen.getByLabelText("Settlement method"),
+      "cash",
+    );
     await user.type(
       screen.getByLabelText("Item adjustment reason"),
       "One unit was missed at checkout.",
@@ -2779,8 +2854,13 @@ describe("TransactionView", () => {
     await user.click(
       screen.getByRole("button", { name: "Items or quantities" }),
     );
-    await user.click(screen.getByRole("button", { name: /increase closure wig/i }));
-    await user.selectOptions(screen.getByLabelText("Settlement method"), "cash");
+    await user.click(
+      screen.getByRole("button", { name: /increase closure wig/i }),
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Settlement method"),
+      "cash",
+    );
     await user.type(
       screen.getByLabelText("Item adjustment reason"),
       "One unit was missed at checkout.",
@@ -2805,7 +2885,9 @@ describe("TransactionView", () => {
       },
     });
 
-    await waitFor(() => expect(itemAdjustmentMutation).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(itemAdjustmentMutation).toHaveBeenCalledTimes(2),
+    );
   });
 
   it("allows equal-total item adjustments without a settlement method", async () => {
@@ -2866,10 +2948,18 @@ describe("TransactionView", () => {
     await user.click(
       screen.getByRole("button", { name: "Items or quantities" }),
     );
-    await user.click(screen.getByRole("button", { name: /increase closure wig/i }));
-    await user.click(screen.getByRole("button", { name: /decrease lace tint/i }));
-    expect(screen.getAllByText("No payment movement").length).toBeGreaterThan(0);
-    expect(screen.queryByLabelText("Settlement method")).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /increase closure wig/i }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /decrease lace tint/i }),
+    );
+    expect(screen.getAllByText("No payment movement").length).toBeGreaterThan(
+      0,
+    );
+    expect(
+      screen.queryByLabelText("Settlement method"),
+    ).not.toBeInTheDocument();
     await user.type(
       screen.getByLabelText("Item adjustment reason"),
       "Swapped one equal-price item.",
@@ -2983,8 +3073,13 @@ describe("TransactionView", () => {
     await user.click(
       screen.getByRole("button", { name: "Items or quantities" }),
     );
-    await user.click(screen.getByRole("button", { name: /decrease closure wig/i }));
-    await user.selectOptions(screen.getByLabelText("Settlement method"), "cash");
+    await user.click(
+      screen.getByRole("button", { name: /decrease closure wig/i }),
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Settlement method"),
+      "cash",
+    );
     await user.type(
       screen.getByLabelText("Item adjustment reason"),
       "Customer was charged for two instead of one.",
@@ -3002,8 +3097,12 @@ describe("TransactionView", () => {
         "Correct the register session opening float so expected cash can cover the cash refund, then submit the item adjustment again.",
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Register session expected cash cannot be negative.")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /review register session/i })).toHaveAttribute(
+    expect(
+      screen.queryByText("Register session expected cash cannot be negative."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /review register session/i }),
+    ).toHaveAttribute(
       "href",
       "/wigclub/store/osu/cash-controls/registers/session_1",
     );

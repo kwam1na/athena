@@ -19,7 +19,6 @@ import {
   refreshProductSkuSearchForProduct,
   removeProductSkuSearchProjection,
   removeProductSkuSearchProjections,
-  requireProductSkuSearchReadAccess,
   upsertProductSkuSearchProjection,
   upsertProductSkuSearchProjections,
 } from "./skuSearch";
@@ -30,8 +29,13 @@ import {
 import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import { repairCatalogSummaryOperationDefinition } from "../operationAdmission/definitions";
+import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
 import { listInventoryProductsReadDefinition } from "../operationAdmission/readDefinitions";
-import type { OperationQueryCtx } from "../operationAdmission/types";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 import {
   ensurePendingCheckoutReviewWorkForUnarchivedProduct,
   retirePendingCheckoutReviewWorkForArchivedProduct,
@@ -521,18 +525,15 @@ export const repairCatalogSummary = mutation({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    await requireProductSkuSearchReadAccess(
-      ctx,
-      args.storeId,
-      "You do not have access to repair catalog summaries.",
-    );
+  handler: withOperationMutationAdmission(
+    repairCatalogSummaryOperationDefinition,
+    async (ctx: OperationMutationCtx, args: { storeId: Id<"store"> }) => {
+      const id = await refreshCatalogSummaryWithCtx(ctx, args.storeId);
+      const summary = await ctx.db.get("catalogSummary", id);
 
-    const id = await refreshCatalogSummaryWithCtx(ctx, args.storeId);
-    const summary = await ctx.db.get("catalogSummary", id);
-
-    return summary ?? EMPTY_CATALOG_SUMMARY;
-  },
+      return summary ?? EMPTY_CATALOG_SUMMARY;
+    },
+  ),
 });
 
 export const getById = query({

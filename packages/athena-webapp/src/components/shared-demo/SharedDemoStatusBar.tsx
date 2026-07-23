@@ -43,9 +43,9 @@ export function SharedDemoStatusBar({
         ) : null}
       </AnimatePresence>
       <Button asChild variant="utility" size="sm">
-        <Link to={homeHref} aria-label="Owner home">
+        <Link to={homeHref} aria-label="Demo guide">
           <Home aria-hidden="true" />
-          <span className="hidden lg:inline">Owner home</span>
+          <span className="hidden lg:inline">Demo guide</span>
         </Link>
       </Button>
       <Button asChild variant="utility" size="sm">

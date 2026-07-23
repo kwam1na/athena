@@ -512,9 +512,7 @@ describe("RegisterSessionViewContent", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/^0 sales$/)).not.toBeInTheDocument();
     expect(
-      within(screen.getByText("Completed sales").parentElement!).getByText(
-        "-",
-      ),
+      within(screen.getByText("Completed sales").parentElement!).getByText("-"),
     ).toBeInTheDocument();
     expect(
       within(screen.getByText("Average sale").parentElement!).getByText("-"),
@@ -867,11 +865,9 @@ describe("RegisterSessionViewContent", () => {
     const activityHeaderIdentity = screen.getByTestId(
       "register-session-activity-header-identity",
     );
-    expect(within(activityHeaderIdentity).getByText("POS activity")).toHaveClass(
-      "text-xs",
-      "text-muted-foreground",
-      "sm:text-sm",
-    );
+    expect(
+      within(activityHeaderIdentity).getByText("POS activity"),
+    ).toHaveClass("text-xs", "text-muted-foreground", "sm:text-sm");
     expect(
       within(activityHeaderIdentity).getByText("POS activity"),
     ).not.toHaveClass("font-medium");
@@ -924,11 +920,21 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByRole("button", { name: "Cart" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Payment" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cash" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Closeout" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Register" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Service" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Expense" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Sync/review" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Closeout" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Register" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Service" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Expense" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Sync/review" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Projected")).toHaveClass(
       "inline-flex",
       "items-center",
@@ -3932,8 +3938,17 @@ describe("RegisterSessionViewContent", () => {
       screen.getByRole("button", { name: "Correct opening float" }),
     ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
-    await user.clear(screen.getByLabelText("Corrected opening float"));
-    await user.type(screen.getByLabelText("Corrected opening float"), "60");
+    const correctedOpeningFloatInput = screen.getByLabelText(
+      "Corrected opening float",
+    );
+    expect(correctedOpeningFloatInput).toHaveAttribute("type", "text");
+    expect(correctedOpeningFloatInput).toHaveAttribute("inputmode", "decimal");
+    expect(correctedOpeningFloatInput).toHaveAttribute(
+      "pattern",
+      "[0-9]*[.]?[0-9]*",
+    );
+    await user.clear(correctedOpeningFloatInput);
+    await user.type(correctedOpeningFloatInput, "60");
     await user.type(
       screen.getByLabelText("Opening float correction reason"),
       "Opening cash was recounted.",
@@ -4535,7 +4550,9 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("6 sales")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Items breakdown • 6 sales" }),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("#TXN-0001").length).toBeGreaterThan(0);
     expect(screen.getAllByText("#TXN-0005").length).toBeGreaterThan(0);
     expect(screen.queryByText("#TXN-0006")).not.toBeInTheDocument();
@@ -4600,7 +4617,7 @@ describe("RegisterSessionViewContent", () => {
     );
 
     const itemsBreakdownButton = screen.getByRole("button", {
-      name: "Items breakdown",
+      name: /^Items breakdown •/,
     });
     expect(itemsBreakdownButton).toHaveClass("hover:bg-accent");
     await user.click(itemsBreakdownButton);

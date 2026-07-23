@@ -417,7 +417,17 @@ describe("POS public catalog queries", () => {
         quantityAvailable: 3,
       }),
     ]);
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: "athena-user-1",
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
     expect(
       mocks.requireAuthenticatedAthenaUserIndexedWithCtx,
     ).not.toHaveBeenCalled();

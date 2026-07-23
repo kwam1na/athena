@@ -861,12 +861,7 @@ async function requireFullAdminRegisterSessionAccess(
     throw new Error("Store not found.");
   }
 
-  const admittedActor = (ctx as Partial<OperationQueryCtx>).operationAdmission
-    ?.actor;
-  const athenaUser =
-    admittedActor?.kind === "shared_demo"
-      ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
   if (!athenaUser) {
     throw new Error("Sign in again to continue.");
   }

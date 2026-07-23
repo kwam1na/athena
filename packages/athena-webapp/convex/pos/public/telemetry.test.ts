@@ -115,12 +115,31 @@ function baseEvent(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+const FALLBACK_AUTH_USER_ID = "user-1";
+
+type AdmissionAwareAuthCtx = {
+  db: { get: (table: string, id: string) => Promise<unknown> };
+  operationAdmission?: { actor?: { athenaUserId?: string } };
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
-  authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
-    _id: "user-1",
-  });
+  // Mirrors the real helper in lib/athenaUserAuth.ts: identity resolution
+  // short-circuits on the admitted actor, so an admitted demo actor resolves to
+  // its own athenaUser rather than falling through to normal-user auth. A flat
+  // canned value here would hide the short-circuit the production code relies
+  // on and make these tests assert call shape instead of behaviour.
+  authMocks.requireAuthenticatedAthenaUserWithCtx.mockImplementation(
+    async (ctx: AdmissionAwareAuthCtx) => {
+      const admittedUserId = ctx?.operationAdmission?.actor?.athenaUserId;
+      if (admittedUserId) {
+        return ctx.db.get("athenaUser", admittedUserId);
+      }
+
+      return { _id: FALLBACK_AUTH_USER_ID };
+    },
+  );
   authMocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
 });
 
@@ -415,15 +434,34 @@ describe("listClientEvents", () => {
 
     expect(result).toHaveLength(1);
     expect(sharedDemoMocks.getSharedDemoActorWithCtx).toHaveBeenCalledWith(ctx);
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor and resolves that actor's identity...
     expect(
       authMocks.requireAuthenticatedAthenaUserWithCtx,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: "demo-user-1",
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
     expect(authMocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         allowedRoles: ["full_admin", "pos_only"],
         userId: "demo-user-1",
       }),
+    );
+    // ...and never silently falls through to the normal-user auth identity.
+    expect(
+      authMocks.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: FALLBACK_AUTH_USER_ID }),
     );
   });
 

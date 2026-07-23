@@ -2,17 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../sharedDemo/actor", () => ({
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
-  requireSharedDemoStoreReadIfApplicable: vi.fn(),
 }));
 vi.mock("./athenaUserAuth", () => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
 }));
 
-import {
-  requireSharedDemoStoreCapabilityIfApplicable,
-  requireSharedDemoStoreReadIfApplicable,
-} from "../sharedDemo/actor";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
@@ -57,9 +53,8 @@ describe("store member access", () => {
       }),
     ).resolves.toMatchObject({ athenaUser: { _id: "athena-user-1" }, store });
 
-    expect(requireSharedDemoStoreReadIfApplicable).not.toHaveBeenCalled();
     expect(requireSharedDemoStoreCapabilityIfApplicable).not.toHaveBeenCalled();
-    expect(requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    expect(requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(ctx);
     expect(requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
       failureMessage: "Access denied.",
@@ -90,7 +85,6 @@ describe("store member access", () => {
     });
 
     expect(requireSharedDemoStoreCapabilityIfApplicable).not.toHaveBeenCalled();
-    expect(requireSharedDemoStoreReadIfApplicable).not.toHaveBeenCalled();
     expect(requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(ctx);
   });
 
@@ -118,7 +112,6 @@ describe("store member access", () => {
     });
 
     expect(requireSharedDemoStoreCapabilityIfApplicable).not.toHaveBeenCalled();
-    expect(requireSharedDemoStoreReadIfApplicable).not.toHaveBeenCalled();
     expect(requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
       expect.objectContaining({
         operationAdmission: expect.objectContaining({

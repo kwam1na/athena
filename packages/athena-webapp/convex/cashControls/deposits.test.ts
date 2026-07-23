@@ -24,6 +24,7 @@ import {
   buildRegisterSessionDepositTargetId,
   getDashboardSnapshot,
   getRegisterSessionSnapshot,
+  listRegisterSessionsForDashboard,
   listOpenLocalSyncConflictsByRegisterSession,
   recordRegisterSessionDeposit,
   resolveRegisterSessionSyncReview,
@@ -1069,6 +1070,69 @@ describe("cash control deposits", () => {
         reference: "BANK-001",
         registerNumber: "A1",
       }),
+    ]);
+  });
+
+  it("caps closed dashboard sessions while preserving live and closeout work", async () => {
+    const closedSessions = Array.from({ length: 8 }, (_, index) => ({
+      _id: `session_closed_${index}`,
+      storeId: "store_1",
+      registerNumber: `${index}`,
+      status: "closed",
+      openedAt: index,
+      expectedCash: 0,
+    }));
+    const ctx = createQueryCtx({
+      registerSession: [
+        ...closedSessions,
+        {
+          _id: "session_active",
+          storeId: "store_1",
+          registerNumber: "active",
+          status: "active",
+          openedAt: 20,
+          expectedCash: 0,
+        },
+        {
+          _id: "session_closing",
+          storeId: "store_1",
+          registerNumber: "closing",
+          status: "closing",
+          openedAt: 21,
+          expectedCash: 0,
+        },
+        {
+          _id: "session_rejected",
+          storeId: "store_1",
+          registerNumber: "rejected",
+          status: "closeout_rejected",
+          openedAt: 22,
+          expectedCash: 0,
+        },
+      ],
+    });
+
+    const sessions = await listRegisterSessionsForDashboard(
+      ctx as never,
+      "store_1" as Id<"store">,
+    );
+
+    expect(sessions.map((session) => session._id)).toEqual([
+      "session_active",
+      "session_closing",
+      "session_rejected",
+      "session_closed_0",
+      "session_closed_1",
+      "session_closed_2",
+      "session_closed_3",
+      "session_closed_4",
+    ]);
+    expect(ctx.indexReads).toEqual([
+      { indexName: "by_storeId_status", tableName: "registerSession" },
+      { indexName: "by_storeId_status", tableName: "registerSession" },
+      { indexName: "by_storeId_status", tableName: "registerSession" },
+      { indexName: "by_storeId_status", tableName: "registerSession" },
+      { indexName: "by_storeId_status", tableName: "registerSession" },
     ]);
   });
 

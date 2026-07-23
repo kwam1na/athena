@@ -32,10 +32,15 @@ export function assertStockAdjustmentReasonCode(
       reasonCode as (typeof MANUAL_STOCK_ADJUSTMENT_REASON_CODES)[number],
     )
   ) {
-    throw new Error("Manual stock adjustments require a supported reason code.");
+    throw new Error(
+      "Manual stock adjustments require a supported reason code.",
+    );
   }
 
-  if (adjustmentType === "cycle_count" && reasonCode !== CYCLE_COUNT_REASON_CODE) {
+  if (
+    adjustmentType === "cycle_count" &&
+    reasonCode !== CYCLE_COUNT_REASON_CODE
+  ) {
     throw new Error(
       "Cycle counts must reconcile with the cycle-count reason code.",
     );
@@ -64,7 +69,10 @@ export function resolveStockAdjustmentQuantityDelta(args: {
     });
   }
 
-  if (args.quantityDelta === undefined || !Number.isInteger(args.quantityDelta)) {
+  if (
+    args.quantityDelta === undefined ||
+    !Number.isInteger(args.quantityDelta)
+  ) {
     throw new Error(
       "Manual stock adjustments require a whole-unit delta for every selected SKU.",
     );
@@ -99,11 +107,18 @@ export function hasHighStockAdjustmentVariance(args: {
   return args.largestAbsoluteDelta >= STOCK_ADJUSTMENT_APPROVAL_THRESHOLD;
 }
 
-export function requiresStockAdjustmentApproval(args: {
-  adjustmentType: StockAdjustmentType;
-  largestAbsoluteDelta: number;
-}) {
-  return (
-    args.adjustmentType === "manual" && hasHighStockAdjustmentVariance(args)
-  );
+/**
+ * Manager approval for stock adjustments is intentionally disabled: every
+ * batch — manual or cycle count, whatever the variance — posts straight to
+ * inventory. High variance is still measured and surfaced via
+ * `hasHighStockAdjustmentVariance` and reported on the batch, but it no longer
+ * gates the write.
+ *
+ * This deliberately takes no arguments so no caller can be misled into thinking
+ * adjustment type or variance size influences the outcome. To reinstate gating,
+ * restore the inputs here and at the call site in
+ * `convex/stockOps/adjustments.ts`.
+ */
+export function requiresStockAdjustmentApproval() {
+  return false;
 }

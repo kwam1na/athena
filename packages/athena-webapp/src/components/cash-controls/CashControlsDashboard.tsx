@@ -507,32 +507,6 @@ function getSessionActionTone(session: CashControlsDashboardSession) {
   return "text-primary";
 }
 
-function WorkflowSummaryItem({
-  label,
-  tone,
-  value,
-}: {
-  label: string;
-  tone?: string;
-  value: ReactNode;
-}) {
-  return (
-    <div className="rounded-lg border border-border bg-background/70 px-layout-sm py-layout-xs">
-      <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-        {label}
-      </p>
-      <p
-        className={cn(
-          "mt-1 font-numeric tabular-nums text-base text-foreground",
-          tone,
-        )}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-
 function DrawerSessionCard({
   currency,
   hasFinancialDetailsAccess,
@@ -579,9 +553,9 @@ function DrawerSessionCard({
   const pendingCashVoidText =
     pendingCashVoidContext && hasFinancialDetailsAccess
       ? formatPendingCashVoidNotice({
-          context: pendingCashVoidContext,
-          formatAmount: (amount) => formatCurrency(currency, amount),
-        })
+        context: pendingCashVoidContext,
+        formatAmount: (amount) => formatCurrency(currency, amount),
+      })
       : null;
   const pendingCashVoidApprovedExpectedCash =
     hasFinancialDetailsAccess && pendingCashVoidContext
@@ -785,8 +759,8 @@ function DrawerSessionCard({
         </p>
       ) : null}
       {syncStatus.status === "needs_review" &&
-      firstReconciliationItem &&
-      !isCloseoutSyncReview ? (
+        firstReconciliationItem &&
+        !isCloseoutSyncReview ? (
         <p className="mt-layout-xs text-xs leading-5 text-danger">
           {formatPosReconciliationType(
             firstReconciliationItem.type,
@@ -1072,11 +1046,10 @@ function ClosedSessionsSummary({
                   </TableCell>
                   <TableCell className="p-0 text-xs text-muted-foreground">
                     <Link
-                      aria-label={`Open ${formatRegisterName(session.registerNumber)} closed ${
-                        session.closedAt
-                          ? formatTimestamp(session.closedAt)
-                          : "not recorded"
-                      }`}
+                      aria-label={`Open ${formatRegisterName(session.registerNumber)} closed ${session.closedAt
+                        ? formatTimestamp(session.closedAt)
+                        : "not recorded"
+                        }`}
                       className="block h-full w-full px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                       params={{
                         orgUrlSlug,
@@ -1163,60 +1136,15 @@ function ClosedSessionsSnapshot({
   sessions: CashControlsDashboardSession[];
   storeUrlSlug: string;
 }) {
-  const closedCount = sessions.length;
-  const expectedTotal = sessions.reduce(
-    (total, session) => total + session.expectedCash,
-    0,
-  );
-  const countedTotal = sessions.reduce(
-    (total, session) => total + (session.countedCash ?? 0),
-    0,
-  );
-  const depositedTotal = sessions.reduce(
-    (total, session) => total + session.totalDeposited,
-    0,
-  );
-  const netVariance = sessions.reduce(
-    (total, session) => total + (session.variance ?? 0),
-    0,
-  );
-  const shortSessions = sessions.filter(
-    (session) => (session.variance ?? 0) < 0,
-  );
-  const overSessions = sessions.filter(
-    (session) => (session.variance ?? 0) > 0,
-  );
-  const balancedSessions = sessions.filter(
-    (session) => (session.variance ?? 0) === 0,
-  );
-  const shortTotal = shortSessions.reduce(
-    (total, session) => total + Math.abs(session.variance ?? 0),
-    0,
-  );
-  const overTotal = overSessions.reduce(
-    (total, session) => total + (session.variance ?? 0),
-    0,
-  );
-  const lastClosedAt = sessions.reduce<number | undefined>(
-    (latest, session) =>
-      session.closedAt && (!latest || session.closedAt > latest)
-        ? session.closedAt
-        : latest,
-    undefined,
-  );
+  const recentSessions = sessions.slice(0, CLOSED_SESSION_PREVIEW_LIMIT);
 
   return (
-    <aside className="space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-lg shadow-surface">
+    <aside className="space-y-layout-md">
       <div className="flex flex-wrap items-start justify-between gap-layout-md">
         <div className="space-y-1">
-          <h3 className="font-display text-lg font-semibold text-foreground">
-            Closed session history
+          <h3 className="font-display font-medium text-lg text-foreground">
+            No open drawers
           </h3>
-          <p className="text-sm text-muted-foreground">
-            Recent closed drawer sessions from the store ledger. Use this
-            snapshot to review closeout patterns before opening the session
-            ledger.
-          </p>
         </div>
         <Button asChild size="sm" variant="outline">
           <Link
@@ -1224,111 +1152,93 @@ function ClosedSessionsSnapshot({
             search={{ o: getOrigin() }}
             to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers"
           >
-            View all register sessions
+            Session history
             <ArrowUpRight className="h-3.5 w-3.5" />
           </Link>
         </Button>
       </div>
 
-      <dl className="grid gap-layout-sm md:grid-cols-2 2xl:grid-cols-4">
-        <WorkflowSummaryItem label="Closed sessions" value={`${closedCount}`} />
-        <WorkflowSummaryItem
-          label="Expected cash"
-          value={
-            <CashControlsFinancialValue
-              amount={expectedTotal}
-              canView={hasFinancialDetailsAccess}
-              currency={currency}
-              label="Expected cash"
-            />
-          }
-        />
-        <WorkflowSummaryItem
-          label="Counted cash"
-          value={
-            <CashControlsFinancialValue
-              amount={countedTotal}
-              canView={hasFinancialDetailsAccess}
-              currency={currency}
-              label="Counted cash"
-            />
-          }
-        />
-        <WorkflowSummaryItem
-          label="Net variance"
-          tone={getVarianceTone(netVariance)}
-          value={
-            <CashControlsFinancialValue
-              amount={netVariance}
-              canView={hasFinancialDetailsAccess}
-              currency={currency}
-              label="Net variance"
-            />
-          }
-        />
-      </dl>
+      <p className="border-y border-border/70 py-layout-sm text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+        Latest closeouts, newest first
+      </p>
 
-      <div className="grid gap-layout-sm border-t border-border/70 pt-layout-md md:grid-cols-2 2xl:grid-cols-4">
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Balanced drawers
-          </p>
-          <p className="text-sm text-foreground">
-            {balancedSessions.length} of {closedCount}
-          </p>
-        </div>
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Short drawers
-          </p>
-          <p className="font-numeric tabular-nums text-sm text-danger">
-            {shortSessions.length} /{" "}
-            <CashControlsFinancialValue
-              amount={shortTotal}
-              canView={hasFinancialDetailsAccess}
-              currency={currency}
-              label="Short drawers total"
-            />
-          </p>
-        </div>
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Over drawers
-          </p>
-          <p className="font-numeric tabular-nums text-sm text-success">
-            {overSessions.length} /{" "}
-            <CashControlsFinancialValue
-              amount={overTotal}
-              canView={hasFinancialDetailsAccess}
-              currency={currency}
-              label="Over drawers total"
-            />
-          </p>
-        </div>
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Last closeout
-          </p>
-          <p className="text-sm text-foreground">
-            {lastClosedAt ? formatTimestamp(lastClosedAt) : "Not recorded"}
-          </p>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-border/70 bg-background/70 px-layout-md py-layout-sm">
-        <div className="flex flex-wrap items-center justify-between gap-layout-sm text-sm">
-          <span className="text-muted-foreground">
-            Deposited across closed sessions
-          </span>
-          <span className="font-numeric tabular-nums text-foreground">
-            <CashControlsFinancialValue
-              amount={depositedTotal}
-              canView={hasFinancialDetailsAccess}
-              currency={currency}
-              label="Deposited across closed sessions"
-            />
-          </span>
-        </div>
+      <div className="divide-y divide-border/70 border-b border-border/70">
+        {recentSessions.map((session) => (
+          <Link
+            className="grid gap-layout-sm py-layout-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:grid-cols-[minmax(0,1fr)_auto]"
+            key={session._id}
+            params={{
+              orgUrlSlug,
+              sessionId: session._id,
+              storeUrlSlug,
+            }}
+            search={{ o: getOrigin() }}
+            to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
+          >
+            <div className="min-w-0 space-y-1">
+              <p className="font-medium text-foreground">
+                {formatRegisterName(session.registerNumber)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Closed{" "}
+                {session.closedAt
+                  ? formatTimestamp(session.closedAt)
+                  : "not recorded"}
+                {session.closedByStaffName
+                  ? ` by ${formatStaffDisplayName({
+                    fullName: session.closedByStaffName,
+                  })}`
+                  : ""}
+              </p>
+            </div>
+            <dl className="grid grid-cols-3 gap-layout-md text-xs md:min-w-[24rem]">
+              <div className="space-y-1">
+                <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                  Expected
+                </dt>
+                <dd className="font-numeric tabular-nums text-foreground">
+                  <CashControlsFinancialValue
+                    amount={session.expectedCash}
+                    canView={hasFinancialDetailsAccess}
+                    currency={currency}
+                    label="Expected cash"
+                  />
+                </dd>
+              </div>
+              <div className="space-y-1">
+                <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                  Counted
+                </dt>
+                <dd className="font-numeric tabular-nums text-foreground">
+                  <CashControlsFinancialValue
+                    amount={session.countedCash ?? null}
+                    canView={hasFinancialDetailsAccess}
+                    currency={currency}
+                    label="Counted cash"
+                  />
+                </dd>
+              </div>
+              <div className="space-y-1">
+                <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                  Variance
+                </dt>
+                <dd
+                  className={cn(
+                    "font-numeric tabular-nums",
+                    getVarianceTone(session.variance),
+                  )}
+                >
+                  <CashControlsFinancialValue
+                    amount={session.variance ?? 0}
+                    canView={hasFinancialDetailsAccess}
+                    currency={currency}
+                    label="Variance"
+                  />
+                </dd>
+              </div>
+            </dl>
+          </Link>
+        ))}
       </div>
     </aside>
   );
@@ -1376,16 +1286,16 @@ function CashroomWorkflow({
   const hasLiveDrawers = liveDrawers.length > 0;
   const primaryLane = hasNeedsAttention
     ? {
-        emptyDescription: "No drawer needs closeout or variance review",
-        sessions: needsAttention,
-        title: "Needs action",
-      }
+      emptyDescription: "No drawer needs closeout or variance review",
+      sessions: needsAttention,
+      title: "Needs action",
+    }
     : hasLiveDrawers
       ? {
-          emptyDescription: "No live drawers are open right now",
-          sessions: liveDrawers,
-          title: "Live drawers",
-        }
+        emptyDescription: "No live drawers are open right now",
+        sessions: liveDrawers,
+        title: "Live drawers",
+      }
       : undefined;
 
   return (
@@ -1530,9 +1440,9 @@ export function CashControlsDashboard() {
   const canAccessSurface = canAccessProtectedSurface ?? hasFullAdminAccess;
   const params = useParams({ strict: false }) as
     | {
-        orgUrlSlug?: string;
-        storeUrlSlug?: string;
-      }
+      orgUrlSlug?: string;
+      storeUrlSlug?: string;
+    }
     | undefined;
 
   const dashboardSnapshotArgs = canQueryProtectedData

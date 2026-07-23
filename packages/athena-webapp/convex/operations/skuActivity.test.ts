@@ -10,7 +10,6 @@ vi.mock("../lib/athenaUserAuth", () => ({
 }));
 vi.mock("../sharedDemo/actor", () => ({
   getSharedDemoActorWithCtx: vi.fn(),
-  requireSharedDemoStoreReadIfApplicable: vi.fn(),
 }));
 
 import {
@@ -43,12 +42,17 @@ function getHandler<TArgs, TResult>(definition: unknown) {
 describe("SKU activity public read access", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
       _id: "user-1",
     } as never);
-    vi.mocked(athenaUserAuth.requireOrganizationMemberRoleWithCtx).mockResolvedValue({} as never);
-    vi.mocked(sharedDemoActor.requireSharedDemoStoreReadIfApplicable).mockResolvedValue(null);
-    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue(null);
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue({} as never);
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue(
+      null,
+    );
   });
 
   it("allows the shared demo to read untrusted SKU sale evidence without normal-user auth", async () => {
@@ -66,7 +70,10 @@ describe("SKU activity public read access", () => {
         get: async (tableOrId: string, id?: string) =>
           tableOrId === "store" && id === "store-1"
             ? { _id: "store-1", organizationId: "org-1" }
-            : (db.get as (tableOrId: string, id?: string) => unknown)(tableOrId, id),
+            : (db.get as (tableOrId: string, id?: string) => unknown)(
+                tableOrId,
+                id,
+              ),
       },
     } as unknown as QueryCtx;
 
@@ -74,12 +81,9 @@ describe("SKU activity public read access", () => {
       storeId: "store-1" as Id<"store">,
     });
 
-    expect(
-      sharedDemoActor.getSharedDemoActorWithCtx,
-    ).toHaveBeenCalledWith(demoCtx);
-    expect(
-      sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
-    ).not.toHaveBeenCalled();
+    expect(sharedDemoActor.getSharedDemoActorWithCtx).toHaveBeenCalledWith(
+      demoCtx,
+    );
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
     ).not.toHaveBeenCalled();
@@ -121,16 +125,17 @@ function createIndexedDb(seed: Partial<Tables>) {
   function filteredRecords(
     table: TableName,
     filters: Record<string, unknown>,
-    ranges: Array<{ field: string; op: "gt"; value: number }>
+    ranges: Array<{ field: string; op: "gt"; value: number }>,
   ) {
-    return Array.from(tables[table].values()).filter((record) =>
-      Object.entries(filters).every(
-        ([field, value]) => fieldValue(record, field) === value
-      ) &&
-      ranges.every((range) => {
-        const value = fieldValue(record, range.field);
-        return typeof value === "number" && value > range.value;
-      })
+    return Array.from(tables[table].values()).filter(
+      (record) =>
+        Object.entries(filters).every(
+          ([field, value]) => fieldValue(record, field) === value,
+        ) &&
+        ranges.every((range) => {
+          const value = fieldValue(record, range.field);
+          return typeof value === "number" && value > range.value;
+        }),
     );
   }
 
@@ -164,7 +169,7 @@ function createIndexedDb(seed: Partial<Tables>) {
         apply: (builder: {
           eq: (field: string, value: unknown) => unknown;
           gt: (field: string, value: number) => unknown;
-        }) => void
+        }) => void,
       ) {
         const filters: Record<string, unknown> = {};
         const ranges: Array<{ field: string; op: "gt"; value: number }> = [];
@@ -235,7 +240,7 @@ describe("SKU activity ledger helpers", () => {
         sourceType: "posSession",
         status: "released",
         storeId: "store-1" as Id<"store">,
-      })
+      }),
     ).toThrow("SKU activity requires a product SKU.");
 
     expect(() =>
@@ -248,7 +253,7 @@ describe("SKU activity ledger helpers", () => {
         sourceId: "pos-session-1",
         sourceType: "posSession",
         storeId: "store-1" as Id<"store">,
-      })
+      }),
     ).toThrow("Zero-impact SKU activity requires explicit status context.");
   });
 
@@ -427,7 +432,7 @@ describe("SKU activity ledger helpers", () => {
         sourceType: "posSession",
         status: "active",
         storeId: "store-1" as Id<"store">,
-      })
+      }),
     ).rejects.toThrow("Selected SKU could not be found for this store.");
   });
 });
@@ -651,7 +656,7 @@ describe("SKU activity read model", () => {
       getSkuActivityForProductSkuWithCtx(ctx, {
         productSkuId: "sku-1" as Id<"productSku">,
         storeId: "store-1" as Id<"store">,
-      })
+      }),
     ).resolves.toBeNull();
   });
 });
@@ -1431,9 +1436,9 @@ describe("untrusted SKU sale evidence read model", () => {
       "pending-approved",
       "provisional-finalized",
     ]);
-    expect(result.sources.every((source) => source.reviewState === "reviewed")).toBe(
-      true
-    );
+    expect(
+      result.sources.every((source) => source.reviewState === "reviewed"),
+    ).toBe(true);
     expect(result.selected).toBeNull();
   });
 });

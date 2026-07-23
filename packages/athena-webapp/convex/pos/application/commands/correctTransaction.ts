@@ -39,6 +39,29 @@ function transactionLabel(transaction: { transactionNumber: string }) {
   return `Transaction #${transaction.transactionNumber}`;
 }
 
+function transactionLabelFromApprovalRequest(
+  approvalRequest: {
+    metadata?: Record<string, unknown>;
+    subjectLabel?: string;
+  },
+  transactionId: Id<"posTransaction">,
+) {
+  const transactionNumber = getStringMetadata(
+    approvalRequest.metadata,
+    "transactionNumber",
+  );
+
+  if (transactionNumber) {
+    return `Transaction #${transactionNumber}`;
+  }
+
+  if (approvalRequest.subjectLabel) {
+    return approvalRequest.subjectLabel;
+  }
+
+  return `Transaction ${transactionId}`;
+}
+
 function buildPaymentMethodCorrectionApprovalRequirement(args: {
   approvalRequestId?: Id<"approvalRequest">;
   amount: number;
@@ -438,9 +461,7 @@ async function applyPaymentMethodCorrection(
         String(payment.amount),
       ].join(":"),
       correctedSettlementMethod: args.paymentMethod,
-      ...(currencyCode
-        ? { currencyCode, currencyMinorUnitScale: 2 }
-        : {}),
+      ...(currencyCode ? { currencyCode, currencyMinorUnitScale: 2 } : {}),
       materialFields: ["amountMinor", "occurrenceAt", "storeId"],
       occurredAt: event.createdAt,
       organizationId: store.organizationId,
@@ -781,22 +802,33 @@ export async function resolvePaymentMethodCorrectionApprovalDecisionWithCtx(
   const transactionId = approvalRequest.subjectId as Id<"posTransaction">;
 
   if (args.decision !== "approved") {
+    const transaction = await getPosTransactionById(ctx, transactionId);
+    const displayTransactionLabel = transaction
+      ? transactionLabel(transaction)
+      : transactionLabelFromApprovalRequest(approvalRequest, transactionId);
+
     await recordOperationalEventWithCtx(ctx, {
       actorStaffProfileId: args.reviewedByStaffProfileId,
       actorUserId: args.reviewedByUserId,
       approvalRequestId: args.approvalRequestId,
       eventType: "pos_transaction_payment_method_approval_rejected",
-      message: `Payment method correction ${args.decision} for Transaction ${transactionId}.`,
+      message: `Payment method correction ${args.decision} for ${displayTransactionLabel}.`,
       metadata: {
         actionKey: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
         approvalRequestId: args.approvalRequestId,
         decisionApprovalProofId: args.decisionApprovalProofId,
         decisionApprovedByStaffProfileId: args.decisionApprovedByStaffProfileId,
         decision: args.decision,
+        ...(transaction
+          ? { transactionNumber: transaction.transactionNumber }
+          : {}),
       },
       reason: args.decisionNotes,
+      registerSessionId:
+        transaction?.registerSessionId ?? approvalRequest.registerSessionId,
       storeId: approvalRequest.storeId,
       subjectId: transactionId,
+      subjectLabel: displayTransactionLabel,
       subjectType: "pos_transaction",
       posTransactionId: transactionId,
     });

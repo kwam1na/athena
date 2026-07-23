@@ -31,6 +31,11 @@ import { PageLevelHeader, PageWorkspace } from "../common/PageLevelHeader";
 import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
 import { usePrewarmRegisterCatalogOfflineSnapshots } from "@/lib/pos/infrastructure/convex/catalogGateway";
 import type { Id } from "~/convex/_generated/dataModel";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
+import {
+  createSharedDemoPointOfSaleStorePulseSummary,
+  overlaySharedDemoPointOfSaleTodayWithFixtureYesterday,
+} from "@/components/shared-demo/sharedDemoOperationsFixture";
 import {
   POSStorePulseSection,
   type POSStorePulseSummary,
@@ -123,7 +128,9 @@ function formatStoreLocalDateLabel(localDate: string) {
   }).format(date);
 }
 
-function formatNextOpeningLabel(nextWindow?: StoreScheduleWindowSummary | null) {
+function formatNextOpeningLabel(
+  nextWindow?: StoreScheduleWindowSummary | null,
+) {
   if (!nextWindow?.localStartLabel) {
     return null;
   }
@@ -317,6 +324,7 @@ export function buildPosFeatures({
 function PointOfSaleViewLive() {
   const { activeStore } = useGetActiveStore();
   const { activeOrganization } = useGetActiveOrganization();
+  const sharedDemoContext = useSharedDemoContext();
   const [storePulseWindow, setStorePulseWindow] =
     useState<POSStorePulseWindow>("today");
   const routeParams = useParams({ strict: false }) as
@@ -344,12 +352,20 @@ function PointOfSaleViewLive() {
   const visibleStorePulseWindow = hasFullAdminAccess
     ? storePulseWindow
     : "today";
-  const todaySummary = useQuery(
+  const shouldUseSharedDemoStorePulseFixture =
+    sharedDemoContext?.kind === "shared_demo" &&
+    visibleStorePulseWindow !== "today";
+  const liveTodaySummary = useQuery(
     api.inventory.pos.getTodaySummary,
-    snapshotStoreId
+    snapshotStoreId && !shouldUseSharedDemoStorePulseFixture
       ? { pulseWindow: visibleStorePulseWindow, storeId: snapshotStoreId }
       : "skip",
   );
+  const todaySummary = shouldUseSharedDemoStorePulseFixture
+    ? createSharedDemoPointOfSaleStorePulseSummary(visibleStorePulseWindow)
+    : sharedDemoContext?.kind === "shared_demo"
+      ? overlaySharedDemoPointOfSaleTodayWithFixtureYesterday(liveTodaySummary)
+      : liveTodaySummary;
   const storeScheduleSummary = useQuery(
     api.inventory.storeSchedule.getStoreScheduleSummary,
     snapshotStoreId ? { storeId: snapshotStoreId } : "skip",
@@ -438,112 +454,112 @@ export function PosHubBody({
 }: PointOfSaleViewContentProps) {
   return (
     <>
-        <PageWorkspace>
-          <PageLevelHeader
-            title="Point of Sale"
-            description={
-              <StoreLocalTime
-                nowOverride={nowOverride}
-                scheduleSummary={scheduleSummary}
-              />
-            }
-          />
+      <PageWorkspace>
+        <PageLevelHeader
+          title="Point of Sale"
+          description={
+            <StoreLocalTime
+              nowOverride={nowOverride}
+              scheduleSummary={scheduleSummary}
+            />
+          }
+        />
 
-          {/* POS Features Grid */}
-          <div>
-            {/* <h2 className="text-2xl font-semibold mb-6">POS Features</h2> */}
-            <div
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-              data-testid="athena-pos-hub-ready"
-            >
-              {posFeatures
-                .filter((f) => f.available)
-                .map((feature) => {
-                  const Icon = feature.icon;
+        {/* POS Features Grid */}
+        <div>
+          {/* <h2 className="text-2xl font-semibold mb-6">POS Features</h2> */}
+          <div
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+            data-testid="athena-pos-hub-ready"
+          >
+            {posFeatures
+              .filter((f) => f.available)
+              .map((feature) => {
+                const Icon = feature.icon;
 
-                  if (
-                    !feature.available ||
-                    !feature.href ||
-                    !feature.params ||
-                    feature.enabled === false
-                  ) {
-                    return (
-                      <div
-                        key={feature.title}
-                        className="border rounded-lg opacity-50 cursor-not-allowed"
-                      >
-                        <CardHeader className="pb-3">
-                          <div className="flex items-center space-x-3">
-                            <div className={`p-2 rounded-lg ${feature.color}`}>
-                              <Icon className="h-5 w-5 text-white" />
-                            </div>
-                            <CardTitle className="text-lg flex items-center gap-2">
-                              {feature.title}
-                              <Badge variant="outline">
-                                {feature.badge ?? "Unavailable"}
-                              </Badge>
-                            </CardTitle>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <CardDescription className="text-sm">
-                            {feature.description}
-                          </CardDescription>
-                        </CardContent>
-                      </div>
-                    );
-                  }
-
+                if (
+                  !feature.available ||
+                  !feature.href ||
+                  !feature.params ||
+                  feature.enabled === false
+                ) {
                   return (
                     <div
                       key={feature.title}
-                      className="border rounded-lg cursor-pointer"
+                      className="border rounded-lg opacity-50 cursor-not-allowed"
                     >
-                      <FeatureLink
-                        to={feature.href}
-                        params={feature.params}
-                        search={{
-                          o: getOrigin(),
-                        }}
-                        className="block h-full"
-                        data-remote-assist-control="pos-workspace-feature"
-                        data-remote-assist-control-id={`pos-workspace-${feature.title
-                          .toLowerCase()
-                          .replace(/[^a-z0-9]+/g, "-")
-                          .replace(/(^-|-$)/g, "")}`}
-                        data-remote-assist-control-label={feature.title}
-                        data-remote-assist-control-role="link"
-                      >
-                        <CardHeader className="pb-3">
-                          <div className="flex items-center space-x-3">
-                            <div className={`p-2 rounded-lg ${feature.color}`}>
-                              <Icon className="h-5 w-5 text-white" />
-                            </div>
-                            <CardTitle className="text-lg">
-                              {feature.title}
-                            </CardTitle>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center space-x-3">
+                          <div className={`p-2 rounded-lg ${feature.color}`}>
+                            <Icon className="h-5 w-5 text-white" />
                           </div>
-                        </CardHeader>
-                        <CardContent>
-                          <CardDescription className="text-sm">
-                            {feature.description}
-                          </CardDescription>
-                        </CardContent>
-                      </FeatureLink>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            {feature.title}
+                            <Badge variant="outline">
+                              {feature.badge ?? "Unavailable"}
+                            </Badge>
+                          </CardTitle>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <CardDescription className="text-sm">
+                          {feature.description}
+                        </CardDescription>
+                      </CardContent>
                     </div>
                   );
-                })}
-            </div>
-          </div>
+                }
 
-          <POSStorePulseSection
-            currencyFormatter={currencyFormatter}
-            hasFullAdminAccess={hasFullAdminAccess}
-            onPulseWindowChange={onPulseWindowChange}
-            pulseWindow={pulseWindow}
-            todaySummary={todaySummary}
-          />
-        </PageWorkspace>
+                return (
+                  <div
+                    key={feature.title}
+                    className="border rounded-lg cursor-pointer"
+                  >
+                    <FeatureLink
+                      to={feature.href}
+                      params={feature.params}
+                      search={{
+                        o: getOrigin(),
+                      }}
+                      className="block h-full"
+                      data-remote-assist-control="pos-workspace-feature"
+                      data-remote-assist-control-id={`pos-workspace-${feature.title
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, "-")
+                        .replace(/(^-|-$)/g, "")}`}
+                      data-remote-assist-control-label={feature.title}
+                      data-remote-assist-control-role="link"
+                    >
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center space-x-3">
+                          <div className={`p-2 rounded-lg ${feature.color}`}>
+                            <Icon className="h-5 w-5 text-white" />
+                          </div>
+                          <CardTitle className="text-lg">
+                            {feature.title}
+                          </CardTitle>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <CardDescription className="text-sm">
+                          {feature.description}
+                        </CardDescription>
+                      </CardContent>
+                    </FeatureLink>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+
+        <POSStorePulseSection
+          currencyFormatter={currencyFormatter}
+          hasFullAdminAccess={hasFullAdminAccess}
+          onPulseWindowChange={onPulseWindowChange}
+          pulseWindow={pulseWindow}
+          todaySummary={todaySummary}
+        />
+      </PageWorkspace>
     </>
   );
 }

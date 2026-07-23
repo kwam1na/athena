@@ -5318,13 +5318,13 @@ export function RegisterSessionViewContent({
                             <Input
                               aria-label="Corrected opening float"
                               className="border-input bg-background"
-                              min={0}
+                              inputMode="decimal"
                               onChange={(event) => {
                                 setCorrectedOpeningFloat(event.target.value);
                                 setOpeningFloatCorrectionInfo("");
                               }}
-                              step="0.01"
-                              type="number"
+                              pattern="[0-9]*[.]?[0-9]*"
+                              type="text"
                               value={correctedOpeningFloat}
                             />
                           </label>
@@ -5528,17 +5528,9 @@ export function RegisterSessionViewContent({
                           type="button"
                           variant="ghost"
                         >
-                          Items breakdown
-                        </Button>
-                      ) : null}
-                      {transactions.length > 0 ? (
-                        <Badge
-                          className="border-border bg-muted text-muted-foreground"
-                          variant="outline"
-                        >
-                          {transactions.length}{" "}
+                          Items breakdown • {transactions.length}{" "}
                           {transactions.length === 1 ? "sale" : "sales"}
-                        </Badge>
+                        </Button>
                       ) : null}
                     </div>
                   </div>

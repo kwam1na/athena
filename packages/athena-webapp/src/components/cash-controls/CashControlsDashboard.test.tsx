@@ -202,7 +202,9 @@ describe("CashControlsDashboardContent", () => {
     expect(
       screen.queryByText("Loading cash controls..."),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText("Current control snapshot")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Current control snapshot"),
+    ).not.toBeInTheDocument();
   });
 
   it("visually groups drawers linked to this browser's terminal", () => {
@@ -251,12 +253,18 @@ describe("CashControlsDashboardContent", () => {
     expect(
       within(browserDrawers).getByText("Register 100001"),
     ).toBeInTheDocument();
-    expect(within(browserDrawers).getByText("This browser")).toBeInTheDocument();
+    expect(
+      within(browserDrawers).getByText("This browser"),
+    ).toBeInTheDocument();
     const activeStatus = within(browserDrawers).getByTestId(
       "drawer-session-status-active",
     );
     expect(activeStatus).toHaveClass("inline-flex", "text-success");
-    expect(activeStatus).not.toHaveClass("rounded-md", "border", "bg-success/10");
+    expect(activeStatus).not.toHaveClass(
+      "rounded-md",
+      "border",
+      "bg-success/10",
+    );
     expect(activeStatus.querySelector('[aria-hidden="true"]')).toHaveClass(
       "size-1.5",
       "rounded-full",
@@ -472,12 +480,15 @@ describe("CashControlsDashboardContent", () => {
     expect(
       screen.getByText("Live and review drawers minus deposits"),
     ).toBeInTheDocument();
-    const varianceSummary = screen.getByText("Variance to review").parentElement;
+    const varianceSummary =
+      screen.getByText("Variance to review").parentElement;
     expect(varianceSummary).toBeInTheDocument();
     expect(varianceSummary?.querySelector("dd")).toHaveClass("text-danger");
     expect(screen.getAllByText("-$5").length).toBeGreaterThan(0);
     expect(screen.queryByText("Recent deposits")).not.toBeInTheDocument();
-    expect(screen.queryByText("No deposits recorded yet")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("No deposits recorded yet"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Review closeouts")).not.toBeInTheDocument();
     expect(screen.getByText("Needs action")).toBeInTheDocument();
     expect(screen.getByText("Live drawers")).toBeInTheDocument();
@@ -502,7 +513,9 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getByText("N-OPEN")).toBeInTheDocument();
     expect(screen.getByText("Back counter / LOSING")).toBeInTheDocument();
     expect(screen.getAllByText("Needs review").length).toBeGreaterThan(0);
-    const attentionStatus = screen.getAllByTestId("drawer-session-attention")[0];
+    const attentionStatus = screen.getAllByTestId(
+      "drawer-session-attention",
+    )[0];
     expect(attentionStatus).toHaveClass("inline-flex", "text-danger");
     expect(attentionStatus).not.toHaveClass(
       "rounded-md",
@@ -516,7 +529,11 @@ describe("CashControlsDashboardContent", () => {
     );
     const closingStatus = screen.getByTestId("drawer-session-status-closing");
     expect(closingStatus).toHaveClass("inline-flex", "text-warning");
-    expect(closingStatus).not.toHaveClass("rounded-md", "border", "bg-warning/15");
+    expect(closingStatus).not.toHaveClass(
+      "rounded-md",
+      "border",
+      "bg-warning/15",
+    );
     expect(closingStatus.querySelector('[aria-hidden="true"]')).toHaveClass(
       "size-1.5",
       "rounded-full",
@@ -600,7 +617,8 @@ describe("CashControlsDashboardContent", () => {
       />,
     );
 
-    const varianceSummary = screen.getByText("Variance to review").parentElement;
+    const varianceSummary =
+      screen.getByText("Variance to review").parentElement;
     expect(varianceSummary?.querySelector("dd")).toHaveClass("text-success");
   });
 
@@ -658,7 +676,16 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getAllByText("Register 1")).not.toHaveLength(0);
   });
 
-  it("replaces the closed-session preview table with a store history snapshot when all drawers are closed", () => {
+  it("replaces the closed-session preview table with a recent closeout snapshot when all drawers are closed", () => {
+    const latestClosedAt = new Date("2026-04-21T15:15:00.000Z").getTime();
+    const latestClosedAtLabel = new Date(latestClosedAt).toLocaleString(
+      "en-US",
+      {
+        dateStyle: "medium",
+        timeStyle: "short",
+      },
+    );
+
     render(
       <CashControlsDashboardContent
         currency="USD"
@@ -669,6 +696,7 @@ describe("CashControlsDashboardContent", () => {
               _id: "closed-short",
               closedAt: new Date("2026-04-21T09:30:00.000Z").getTime(),
               countedCash: 9500,
+              closedByStaffName: "Kojo Mensimah",
               expectedCash: 10000,
               openedAt: new Date("2026-04-21T07:30:00.000Z").getTime(),
               openingFloat: 5000,
@@ -681,6 +709,7 @@ describe("CashControlsDashboardContent", () => {
               _id: "closed-over",
               closedAt: new Date("2026-04-21T12:00:00.000Z").getTime(),
               countedCash: 22000,
+              closedByStaffName: "Kweku Mensah",
               expectedCash: 20000,
               openedAt: new Date("2026-04-21T09:45:00.000Z").getTime(),
               openingFloat: 5000,
@@ -691,8 +720,9 @@ describe("CashControlsDashboardContent", () => {
             },
             {
               _id: "closed-balanced",
-              closedAt: new Date("2026-04-21T15:15:00.000Z").getTime(),
+              closedAt: latestClosedAt,
               countedCash: 5000,
+              closedByStaffName: "Ama Mensah",
               expectedCash: 5000,
               openedAt: new Date("2026-04-21T13:00:00.000Z").getTime(),
               openingFloat: 5000,
@@ -709,27 +739,35 @@ describe("CashControlsDashboardContent", () => {
       />,
     );
 
-    expect(screen.getByText("Closed session history")).toBeInTheDocument();
-    expect(screen.getByText("Closed sessions")).toBeInTheDocument();
-    expect(screen.getByText("Expected cash")).toBeInTheDocument();
-    expect(screen.getByText("$350")).toBeInTheDocument();
-    expect(screen.getByText("Counted cash")).toBeInTheDocument();
-    expect(screen.getByText("$365")).toBeInTheDocument();
-    expect(screen.getByText("Net variance")).toBeInTheDocument();
-    expect(screen.getByText("$15")).toBeInTheDocument();
-    expect(screen.getByText("Balanced drawers")).toBeInTheDocument();
-    expect(screen.getByText("1 of 3")).toBeInTheDocument();
-    expect(screen.getByText("Short drawers")).toBeInTheDocument();
-    expect(screen.getByText("1 / $5")).toBeInTheDocument();
-    expect(screen.getByText("Over drawers")).toBeInTheDocument();
-    expect(screen.getByText("1 / $20")).toBeInTheDocument();
+    expect(screen.getByText("No open drawers")).toBeInTheDocument();
     expect(
-      screen.getByText("Deposited across closed sessions"),
+      screen.queryByText(
+        "The store is between cash shifts. Latest closeouts are shown newest first.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Latest closeouts, newest first"),
     ).toBeInTheDocument();
-    expect(screen.getByText("$10")).toBeInTheDocument();
-    expect(screen.queryByText("Showing latest 3 of")).not.toBeInTheDocument();
+    expect(screen.queryByText("Last drawer closed")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /View all register sessions/i }),
+      screen.getByText(`Closed ${latestClosedAtLabel} by Ama M.`),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Register 3/i })).not.toHaveClass(
+      "hover:bg-muted/40",
+    );
+    expect(screen.queryByText("Latest drawers")).not.toBeInTheDocument();
+    expect(screen.queryByText("Cash variance")).not.toBeInTheDocument();
+    expect(screen.queryByText("2 to review")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Expected")).toHaveLength(3);
+    expect(screen.getAllByText("Counted")).toHaveLength(3);
+    expect(screen.getAllByText("Variance")).toHaveLength(3);
+    expect(
+      screen.queryByText("Deposited across closed sessions"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Expected cash")).not.toBeInTheDocument();
+    expect(screen.queryByText("Net variance")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Session history/i }),
     ).toHaveAttribute(
       "href",
       "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers?o=%252F",
@@ -775,7 +813,9 @@ describe("CashControlsDashboardContent", () => {
       />,
     );
 
-    expect(screen.queryByTestId("closed-sessions-table")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("closed-sessions-table"),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Opened")).toBeInTheDocument();
     expect(screen.getByText("Closed")).toBeInTheDocument();
     expect(screen.getByText("-$5")).toHaveClass("text-danger");
@@ -1045,7 +1085,7 @@ describe("CashControlsDashboardContent", () => {
     expect(
       screen.queryByText("No drawer needs closeout or variance review"),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Closed session history")).toBeInTheDocument();
+    expect(screen.getByText("No open drawers")).toBeInTheDocument();
   });
 
   it("keeps rejected closeouts in the cashroom attention lane", () => {
@@ -1077,7 +1117,9 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getByText("Register 2")).toBeInTheDocument();
     expect(screen.getByText("Needs action")).toBeInTheDocument();
     expect(screen.queryByText("Live drawers")).not.toBeInTheDocument();
-    expect(screen.queryByText("Closed session history")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Closed session history"),
+    ).not.toBeInTheDocument();
   });
 
   it("separates pending sync from reconciliation issues", () => {
@@ -1176,20 +1218,22 @@ describe("CashControlsDashboardContent", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getAllByText("Needs review").length).toBeGreaterThan(0);
-    const pendingSyncStatus = screen.getByTestId(
-      "drawer-session-sync-status",
-    );
+    const pendingSyncStatus = screen.getByTestId("drawer-session-sync-status");
     expect(pendingSyncStatus).toHaveClass("inline-flex", "text-warning");
     expect(pendingSyncStatus).not.toHaveClass(
       "rounded-md",
       "border",
       "bg-warning/15",
     );
+    expect(pendingSyncStatus.querySelector('[aria-hidden="true"]')).toHaveClass(
+      "size-1.5",
+      "rounded-full",
+      "bg-warning",
+    );
     expect(
-      pendingSyncStatus.querySelector('[aria-hidden="true"]'),
-    ).toHaveClass("size-1.5", "rounded-full", "bg-warning");
-    expect(
-      screen.getByText(/Payment review: Mobile money payment record needs review./i),
+      screen.getByText(
+        /Payment review: Mobile money payment record needs review./i,
+      ),
     ).toBeInTheDocument();
 
     const pendingSyncCard = screen
@@ -1275,7 +1319,9 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getByText("Needs action")).toBeInTheDocument();
     expect(screen.queryByText("Live drawers")).not.toBeInTheDocument();
     expect(screen.getAllByText("Register 4")).toHaveLength(1);
-    expect(screen.getAllByText("Closeout review pending").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("Closeout review pending").length,
+    ).toBeGreaterThan(0);
     expect(screen.queryByText("Closeout review")).not.toBeInTheDocument();
     expect(screen.getAllByText("Review closeout").length).toBeGreaterThan(0);
     expect(screen.getByText("Counted")).toBeInTheDocument();
