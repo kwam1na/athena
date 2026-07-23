@@ -7,10 +7,12 @@ import {
   type QueryCtx,
 } from "../../_generated/server";
 import {
+  adjustTransactionItemsOperationDefinition,
   completeTransactionOperationDefinition,
   correctTransactionCustomerOperationDefinition,
   correctTransactionPaymentMethodOperationDefinition,
   markReceiptPrintedOperationDefinition,
+  voidTransactionOperationDefinition,
 } from "../../operationAdmission/definitions";
 import {
   getPosCompletedTransactionsReadDefinition,
@@ -66,9 +68,6 @@ async function requirePosTransactionStoreAccess(
     failureMessage: string;
   },
 ) {
-  const admittedActor = (
-    ctx as Partial<OperationMutationCtx | OperationQueryCtx>
-  ).operationAdmission?.actor;
   const store = await ctx.db.get("store", args.storeId);
   if (!store) {
     return userError({
@@ -77,10 +76,7 @@ async function requirePosTransactionStoreAccess(
     });
   }
 
-  const athenaUser =
-    admittedActor?.kind === "shared_demo"
-      ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
   if (!athenaUser) {
     throw new Error("Sign in again to continue.");
   }
@@ -481,11 +477,7 @@ export const completeTransaction = mutation({
         });
       }
 
-      const admittedActor = ctx.operationAdmission.actor;
-      const athenaUser =
-        admittedActor.kind === "shared_demo"
-          ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
-          : await requireAuthenticatedAthenaUserWithCtx(ctx);
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
       if (!athenaUser) throw new Error("Sign in again to continue.");
       await requireOrganizationMemberRoleWithCtx(ctx, {
         allowedRoles: ["full_admin"],
@@ -767,121 +759,118 @@ export const voidTransaction = mutation({
     staffProofToken: v.string(),
   },
   returns: voidTransactionResultValidator,
-  handler: async (ctx, args) => {
-    const actorStaffProfileId = args.actorStaffProfileId ?? args.staffProfileId;
-    const reason = args.reason?.trim();
+  handler: withOperationMutationAdmission(
+    voidTransactionOperationDefinition,
+    async (ctx: OperationMutationCtx, args) => {
+      const actorStaffProfileId =
+        args.actorStaffProfileId ?? args.staffProfileId;
+      const reason = args.reason?.trim();
 
-    if (!actorStaffProfileId) {
-      return userError({
-        code: "authentication_failed",
-        message: "Staff sign-in is required before voiding a completed sale.",
+      if (!actorStaffProfileId) {
+        return userError({
+          code: "authentication_failed",
+          message: "Staff sign-in is required before voiding a completed sale.",
+        });
+      }
+
+      if (!reason) {
+        return userError({
+          code: "validation_failed",
+          message: "Reason is required before voiding a completed sale.",
+        });
+      }
+
+      const access = await requirePosTransactionAccess(ctx, {
+        transactionId: args.transactionId,
+        failureMessage: "You cannot void this transaction.",
       });
-    }
+      if ("kind" in access) {
+        return access;
+      }
 
-    if (!reason) {
-      return userError({
-        code: "validation_failed",
-        message: "Reason is required before voiding a completed sale.",
+      const staffProfile = await ctx.db.get(
+        "staffProfile",
+        actorStaffProfileId,
+      );
+      if (
+        !staffProfile ||
+        staffProfile.status !== "active" ||
+        staffProfile.storeId !== access.transaction.storeId
+      ) {
+        return userError({
+          code: "authentication_failed",
+          message: "Void staff profile is not active for this store.",
+        });
+      }
+
+      const staffProofTokenHash = await hashPosLocalStaffProofToken(
+        args.staffProofToken,
+      );
+      const proof = await ctx.db
+        .query("posLocalStaffProof")
+        .withIndex("by_tokenHash", (q) =>
+          q.eq("tokenHash", staffProofTokenHash),
+        )
+        .unique();
+      if (
+        !proof ||
+        proof.status !== "active" ||
+        proof.staffProfileId !== actorStaffProfileId ||
+        proof.storeId !== access.transaction.storeId ||
+        proof.expiresAt <= Date.now()
+      ) {
+        return userError({
+          code: "authentication_failed",
+          message: "Void staff proof is invalid or expired.",
+        });
+      }
+
+      if (
+        access.transaction.terminalId &&
+        proof.terminalId !== access.transaction.terminalId
+      ) {
+        return userError({
+          code: "authentication_failed",
+          message: "Void staff proof is invalid for this terminal.",
+        });
+      }
+
+      const credential = await ctx.db.get(
+        "staffCredential",
+        proof.credentialId,
+      );
+      if (
+        !credential ||
+        credential.status !== "active" ||
+        credential.staffProfileId !== actorStaffProfileId ||
+        credential.storeId !== access.transaction.storeId ||
+        credential.localVerifierVersion !== proof.credentialVersion
+      ) {
+        return userError({
+          code: "authentication_failed",
+          message: "Void staff proof is invalid or expired.",
+        });
+      }
+
+      await ctx.db.patch("posLocalStaffProof", proof._id, {
+        lastUsedAt: Date.now(),
       });
-    }
 
-    const transaction = await getTransactionQuery(ctx, {
-      transactionId: args.transactionId,
-    });
-    if (!transaction) {
-      return userError({
-        code: "not_found",
-        message: "Transaction not found.",
+      const { staffProofToken: _staffProofToken, ...commandArgs } = args;
+      const result = await voidTransactionCommand(ctx, {
+        ...commandArgs,
+        actorStaffProfileId,
+        actorUserId: access.athenaUser._id,
+        reason,
       });
-    }
 
-    const store = await ctx.db.get("store", transaction.storeId);
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
+      if (result.kind === "approval_required") {
+        return result;
+      }
 
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot void this transaction.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
-
-    const staffProfile = await ctx.db.get("staffProfile", actorStaffProfileId);
-    if (
-      !staffProfile ||
-      staffProfile.status !== "active" ||
-      staffProfile.storeId !== transaction.storeId
-    ) {
-      return userError({
-        code: "authentication_failed",
-        message: "Void staff profile is not active for this store.",
-      });
-    }
-
-    const staffProofTokenHash = await hashPosLocalStaffProofToken(
-      args.staffProofToken,
-    );
-    const proof = await ctx.db
-      .query("posLocalStaffProof")
-      .withIndex("by_tokenHash", (q) => q.eq("tokenHash", staffProofTokenHash))
-      .unique();
-    if (
-      !proof ||
-      proof.status !== "active" ||
-      proof.staffProfileId !== actorStaffProfileId ||
-      proof.storeId !== transaction.storeId ||
-      proof.expiresAt <= Date.now()
-    ) {
-      return userError({
-        code: "authentication_failed",
-        message: "Void staff proof is invalid or expired.",
-      });
-    }
-
-    if (transaction.terminalId && proof.terminalId !== transaction.terminalId) {
-      return userError({
-        code: "authentication_failed",
-        message: "Void staff proof is invalid for this terminal.",
-      });
-    }
-
-    const credential = await ctx.db.get("staffCredential", proof.credentialId);
-    if (
-      !credential ||
-      credential.status !== "active" ||
-      credential.staffProfileId !== actorStaffProfileId ||
-      credential.storeId !== transaction.storeId ||
-      credential.localVerifierVersion !== proof.credentialVersion
-    ) {
-      return userError({
-        code: "authentication_failed",
-        message: "Void staff proof is invalid or expired.",
-      });
-    }
-
-    await ctx.db.patch("posLocalStaffProof", proof._id, {
-      lastUsedAt: Date.now(),
-    });
-
-    const { staffProofToken: _staffProofToken, ...commandArgs } = args;
-    const result = await voidTransactionCommand(ctx, {
-      ...commandArgs,
-      actorStaffProfileId,
-      actorUserId: athenaUser._id,
-      reason,
-    });
-
-    if (result.kind === "approval_required") {
       return result;
-    }
-
-    return result;
-  },
+    },
+  ),
 });
 
 export const markReceiptPrinted = mutation({
@@ -1207,127 +1196,112 @@ export const adjustTransactionItems = mutation({
     staffProofToken: v.string(),
   },
   returns: adjustTransactionItemsResultValidator,
-  handler: async (ctx, args) => {
-    if (!args.actorStaffProfileId) {
-      return userError({
-        code: "authentication_failed",
-        message:
-          "Staff sign-in is required before adjusting transaction items.",
-      });
-    }
-
-    if (!args.reason.trim()) {
-      return userError({
-        code: "validation_failed",
-        message: "Reason is required to adjust transaction items.",
-      });
-    }
-
-    try {
-      const transaction = await getTransactionQuery(ctx, {
-        transactionId: args.transactionId,
-      });
-      if (!transaction) {
-        return userError({
-          code: "not_found",
-          message: "Transaction not found.",
-        });
-      }
-
-      const store = await ctx.db.get("store", transaction.storeId);
-      if (!store) {
-        return userError({
-          code: "not_found",
-          message: "Store not found.",
-        });
-      }
-
-      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-      await requireOrganizationMemberRoleWithCtx(ctx, {
-        allowedRoles: ["full_admin", "pos_only"],
-        failureMessage: "You cannot adjust transaction items.",
-        organizationId: store.organizationId,
-        userId: athenaUser._id,
-      });
-
-      const staffProfile = await ctx.db.get(
-        "staffProfile",
-        args.actorStaffProfileId,
-      );
-      if (
-        !staffProfile ||
-        staffProfile.status !== "active" ||
-        staffProfile.storeId !== transaction.storeId
-      ) {
+  handler: withOperationMutationAdmission(
+    adjustTransactionItemsOperationDefinition,
+    async (ctx: OperationMutationCtx, args) => {
+      if (!args.actorStaffProfileId) {
         return userError({
           code: "authentication_failed",
           message:
-            "Item adjustment staff profile is not active for this store.",
+            "Staff sign-in is required before adjusting transaction items.",
         });
       }
 
-      const staffProofTokenHash = await hashPosLocalStaffProofToken(
-        args.staffProofToken,
-      );
-      const proof = await ctx.db
-        .query("posLocalStaffProof")
-        .withIndex("by_tokenHash", (q) =>
-          q.eq("tokenHash", staffProofTokenHash),
-        )
-        .unique();
-      if (
-        !proof ||
-        proof.status !== "active" ||
-        proof.staffProfileId !== args.actorStaffProfileId ||
-        proof.storeId !== transaction.storeId ||
-        proof.expiresAt <= Date.now()
-      ) {
+      if (!args.reason.trim()) {
         return userError({
-          code: "authentication_failed",
-          message: "Item adjustment staff proof is invalid or expired.",
+          code: "validation_failed",
+          message: "Reason is required to adjust transaction items.",
         });
       }
 
-      const credential = await ctx.db.get(
-        "staffCredential",
-        proof.credentialId,
-      );
-      if (
-        !credential ||
-        credential.status !== "active" ||
-        credential.staffProfileId !== args.actorStaffProfileId ||
-        credential.storeId !== transaction.storeId ||
-        credential.localVerifierVersion !== proof.credentialVersion
-      ) {
-        return userError({
-          code: "authentication_failed",
-          message: "Item adjustment staff proof is invalid or expired.",
+      try {
+        const access = await requirePosTransactionAccess(ctx, {
+          transactionId: args.transactionId,
+          failureMessage: "You cannot adjust transaction items.",
         });
+        if ("kind" in access) {
+          return access;
+        }
+
+        const staffProfile = await ctx.db.get(
+          "staffProfile",
+          args.actorStaffProfileId,
+        );
+        if (
+          !staffProfile ||
+          staffProfile.status !== "active" ||
+          staffProfile.storeId !== access.transaction.storeId
+        ) {
+          return userError({
+            code: "authentication_failed",
+            message:
+              "Item adjustment staff profile is not active for this store.",
+          });
+        }
+
+        const staffProofTokenHash = await hashPosLocalStaffProofToken(
+          args.staffProofToken,
+        );
+        const proof = await ctx.db
+          .query("posLocalStaffProof")
+          .withIndex("by_tokenHash", (q) =>
+            q.eq("tokenHash", staffProofTokenHash),
+          )
+          .unique();
+        if (
+          !proof ||
+          proof.status !== "active" ||
+          proof.staffProfileId !== args.actorStaffProfileId ||
+          proof.storeId !== access.transaction.storeId ||
+          proof.expiresAt <= Date.now()
+        ) {
+          return userError({
+            code: "authentication_failed",
+            message: "Item adjustment staff proof is invalid or expired.",
+          });
+        }
+
+        const credential = await ctx.db.get(
+          "staffCredential",
+          proof.credentialId,
+        );
+        if (
+          !credential ||
+          credential.status !== "active" ||
+          credential.staffProfileId !== args.actorStaffProfileId ||
+          credential.storeId !== access.transaction.storeId ||
+          credential.localVerifierVersion !== proof.credentialVersion
+        ) {
+          return userError({
+            code: "authentication_failed",
+            message: "Item adjustment staff proof is invalid or expired.",
+          });
+        }
+
+        await ctx.db.patch("posLocalStaffProof", proof._id, {
+          lastUsedAt: Date.now(),
+        });
+
+        const { staffProofToken: _staffProofToken, ...commandArgs } = args;
+        const result = await adjustTransactionItemsCommand(ctx, {
+          ...commandArgs,
+          actorUserId: access.athenaUser._id,
+        });
+
+        if ("action" in result && result.action === "approval_required") {
+          return approvalRequired(result.approval);
+        }
+
+        return ok(result);
+      } catch (error) {
+        const mappedError = mapCorrectionError(error);
+        if (mappedError) {
+          return mappedError;
+        }
+        throw error;
       }
-
-      await ctx.db.patch("posLocalStaffProof", proof._id, {
-        lastUsedAt: Date.now(),
-      });
-
-      const { staffProofToken: _staffProofToken, ...commandArgs } = args;
-      const result = await adjustTransactionItemsCommand(ctx, {
-        ...commandArgs,
-        actorUserId: athenaUser._id,
-      });
-
-      if ("action" in result && result.action === "approval_required") {
-        return approvalRequired(result.approval);
-      }
-
-      return ok(result);
-    } catch (error) {
-      const mappedError = mapCorrectionError(error);
-      if (mappedError) {
-        return mappedError;
-      }
-      throw error;
-    }
-  },
+    },
+  ),
 });
 
 export const getRecentTransactionsWithCustomers = query({

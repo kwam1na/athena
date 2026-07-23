@@ -85,11 +85,11 @@ describe("SharedDemoStatusBar", () => {
       />,
     );
 
-    expect(screen.getByRole("link", { name: "Owner home" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Demo guide" })).toHaveAttribute(
       "aria-label",
-      "Owner home",
+      "Demo guide",
     );
-    expect(screen.getByRole("link", { name: "Owner home" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Demo guide" })).toHaveAttribute(
       "data-router-link",
       "true",
     );

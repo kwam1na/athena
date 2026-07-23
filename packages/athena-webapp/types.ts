@@ -67,11 +67,7 @@ export type ApprovalRequest = Doc<"approvalRequest">;
 export type Role = "full_admin" | "pos_only";
 export type Permission = "access_admin" | "access_pos";
 export type OperationalRole =
-  | "manager"
-  | "front_desk"
-  | "stylist"
-  | "technician"
-  | "cashier";
+  "manager" | "front_desk" | "stylist" | "technician" | "cashier";
 
 export type CheckoutSessionItem = Doc<"checkoutSessionItem">;
 
@@ -216,7 +212,7 @@ export type StorePromotionConfig = {
   displayText?: string;
   promoCodeId?: string;
   value?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 export type StorePromotionsConfig = {
@@ -225,8 +221,13 @@ export type StorePromotionsConfig = {
 };
 
 export type StoreContactConfig = {
+  email?: string;
   location?: string;
   phoneNumber?: string;
+};
+
+export type StoreReceiptConfig = {
+  policyLines?: string[];
 };
 
 export const STORE_MTN_MOMO_SETUP_STATUSES = [
@@ -263,6 +264,7 @@ export type StoreConfigV2 = {
   media: StoreMediaConfig;
   promotions: StorePromotionsConfig;
   contact: StoreContactConfig;
+  receipt: StoreReceiptConfig;
   payments: StorePaymentsConfig;
 };
 

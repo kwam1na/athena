@@ -39,7 +39,6 @@ vi.mock("../lib/athenaUserAuth", () => ({
 vi.mock("../sharedDemo/actor", () => ({
   getSharedDemoActorWithCtx: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
-  requireSharedDemoStoreReadIfApplicable: vi.fn(),
 }));
 
 type TableName =
@@ -104,7 +103,24 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
     return tables.get(table)!;
   };
 
-  Object.entries(seed).forEach(([tableName, rows]) => {
+  // Identity resolution goes through the shared auth helper, which loads the
+  // admitted actor's athenaUser row from the db. Seed the fallback normal-user
+  // row by default so non-demo fixtures resolve an identity; demo fixtures seed
+  // their own distinct row alongside it.
+  const seededAthenaUsers = seed.athenaUser ?? [];
+  const effectiveSeed: Partial<Record<TableName, Row[]>> = {
+    ...seed,
+    athenaUser: seededAthenaUsers.some(
+      (row) => row._id === FALLBACK_AUTH_USER_ID,
+    )
+      ? seededAthenaUsers
+      : [
+          ...seededAthenaUsers,
+          { _id: FALLBACK_AUTH_USER_ID, email: "pos@wigclub.store" } as Row,
+        ],
+  };
+
+  Object.entries(effectiveSeed).forEach(([tableName, rows]) => {
     const table = tableFor(tableName as TableName);
     rows?.forEach((row) => table.set(row._id, { ...row }));
   });
@@ -470,13 +486,35 @@ function completedDailyCloseRow(overrides: Partial<Row> = {}): Row {
   };
 }
 
+const FALLBACK_AUTH_USER_ID = "user-1";
+const DEMO_ACTOR_USER_ID = "demo-user-1";
+
+type AdmissionAwareAuthCtx = {
+  db: { get: (table: string, id: string) => Promise<unknown> };
+  operationAdmission?: { actor?: { athenaUserId?: string } };
+};
+
 function mockDailyCloseSnapshotAccess(role: "full_admin" | "pos_only") {
+  // Mirrors the real helper in lib/athenaUserAuth.ts: identity resolution
+  // short-circuits on the admitted actor, so an admitted demo actor resolves to
+  // its own athenaUser rather than falling through to normal-user auth.
   vi.mocked(
     athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-  ).mockResolvedValue({
-    _creationTime: 0,
-    _id: "user-1" as Id<"athenaUser">,
-    email: "pos@wigclub.store",
+  ).mockImplementation(async (ctx: unknown) => {
+    const admittedUserId = (ctx as AdmissionAwareAuthCtx)?.operationAdmission
+      ?.actor?.athenaUserId;
+    if (admittedUserId) {
+      return (await (ctx as AdmissionAwareAuthCtx).db.get(
+        "athenaUser",
+        admittedUserId,
+      )) as never;
+    }
+
+    return {
+      _creationTime: 0,
+      _id: FALLBACK_AUTH_USER_ID as Id<"athenaUser">,
+      email: "pos@wigclub.store",
+    } as never;
   });
   vi.mocked(
     athenaUserAuth.requireOrganizationMemberRoleWithCtx,
@@ -494,9 +532,6 @@ describe("end-of-day review backend foundation", () => {
     vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue(
       null,
     );
-    vi.mocked(
-      sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
-    ).mockResolvedValue(null);
     vi.mocked(
       sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
     ).mockResolvedValue(null);
@@ -611,13 +646,13 @@ describe("end-of-day review backend foundation", () => {
     mockDailyCloseSnapshotAccess("full_admin");
     vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValueOnce({
       authUserId: "auth-user-demo",
-      athenaUserId: "user-1",
+      athenaUserId: DEMO_ACTOR_USER_ID,
       kind: "shared_demo",
       organizationId: "org-1",
       storeId: "store-1",
     } as never);
     const { db } = createDb({
-      athenaUser: [{ _id: "user-1", email: "demo@athena.invalid" }],
+      athenaUser: [{ _id: DEMO_ACTOR_USER_ID, email: "demo@athena.invalid" }],
       store: [store],
     });
     const ctx = { db } as unknown as QueryCtx;
@@ -628,12 +663,33 @@ describe("end-of-day review backend foundation", () => {
     });
 
     expect(sharedDemoActor.getSharedDemoActorWithCtx).toHaveBeenCalledWith(ctx);
-    expect(
-      sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
-    ).not.toHaveBeenCalled();
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor and resolves that actor's identity.
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: DEMO_ACTOR_USER_ID,
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: DEMO_ACTOR_USER_ID }),
+    );
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: FALLBACK_AUTH_USER_ID }),
+    );
   });
 
   it("keeps daily close completion and carry-forward results aligned with exported return validators", () => {
@@ -1975,13 +2031,13 @@ describe("end-of-day review backend foundation", () => {
     mockDailyCloseSnapshotAccess("full_admin");
     vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValueOnce({
       authUserId: "auth-user-demo",
-      athenaUserId: "user-1",
+      athenaUserId: DEMO_ACTOR_USER_ID,
       kind: "shared_demo",
       organizationId: "org-1",
       storeId: "store-1",
     } as never);
     const { db } = createDb({
-      athenaUser: [{ _id: "user-1", email: "demo@athena.invalid" }],
+      athenaUser: [{ _id: DEMO_ACTOR_USER_ID, email: "demo@athena.invalid" }],
       store: [store],
     });
     const ctx = { db } as unknown as QueryCtx;
@@ -1992,12 +2048,33 @@ describe("end-of-day review backend foundation", () => {
     });
 
     expect(sharedDemoActor.getSharedDemoActorWithCtx).toHaveBeenCalledWith(ctx);
-    expect(
-      sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
-    ).not.toHaveBeenCalled();
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor and resolves that actor's identity.
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: DEMO_ACTOR_USER_ID,
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: DEMO_ACTOR_USER_ID }),
+    );
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: FALLBACK_AUTH_USER_ID }),
+    );
   });
 
   it("returns financial metric amounts on the exported snapshot query for full admins", async () => {
@@ -2129,7 +2206,7 @@ describe("end-of-day review backend foundation", () => {
       ],
     });
     const { db } = createDb({
-      athenaUser: [{ _id: "user-1", email: "demo@athena.invalid" }],
+      athenaUser: [{ _id: DEMO_ACTOR_USER_ID, email: "demo@athena.invalid" }],
       dailyClose: [
         completedDailyCloseRow({
           actorType: "automation",
@@ -2191,7 +2268,7 @@ describe("end-of-day review backend foundation", () => {
     mockDailyCloseSnapshotAccess("full_admin");
     vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
       authUserId: "auth-user-demo",
-      athenaUserId: "user-1" as Id<"athenaUser">,
+      athenaUserId: DEMO_ACTOR_USER_ID as Id<"athenaUser">,
       kind: "shared_demo",
       organizationId: "org-1" as Id<"organization">,
       storeId: "store-1" as Id<"store">,
@@ -2226,12 +2303,33 @@ describe("end-of-day review backend foundation", () => {
         type: "pos_transaction",
       },
     ]);
-    expect(
-      sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
-    ).not.toHaveBeenCalled();
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor and resolves that actor's identity.
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: DEMO_ACTOR_USER_ID,
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: DEMO_ACTOR_USER_ID }),
+    );
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: FALLBACK_AUTH_USER_ID }),
+    );
   });
 
   it("surfaces review-only closeouts as blockers without active or closed totals", async () => {
@@ -6634,7 +6732,7 @@ describe("end-of-day review backend foundation", () => {
     mockDailyCloseSnapshotAccess("full_admin");
     vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
       authUserId: "auth-user-demo",
-      athenaUserId: "user-1" as Id<"athenaUser">,
+      athenaUserId: DEMO_ACTOR_USER_ID as Id<"athenaUser">,
       kind: "shared_demo",
       organizationId: "org-1" as Id<"organization">,
       storeId: "store-1" as Id<"store">,
@@ -6648,7 +6746,7 @@ describe("end-of-day review backend foundation", () => {
       },
     });
     const { db } = createDb({
-      athenaUser: [{ _id: "user-1", email: "demo@athena.invalid" }],
+      athenaUser: [{ _id: DEMO_ACTOR_USER_ID, email: "demo@athena.invalid" }],
       dailyClose: [
         completedDailyCloseRow({
           _id: "daily-close-new",
@@ -6678,19 +6776,28 @@ describe("end-of-day review backend foundation", () => {
       "daily-close-new",
     ]);
     expect(detail?.dailyCloseId).toBe("daily-close-new");
-    expect(
-      sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
-    ).not.toHaveBeenCalled();
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor and resolves that actor's identity.
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: DEMO_ACTOR_USER_ID,
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
     expect(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
     ).toHaveBeenCalledWith(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
       failureMessage: "You cannot view Daily Close history for this store.",
       organizationId: "org-1",
-      userId: "user-1",
+      userId: DEMO_ACTOR_USER_ID,
     });
   });
 

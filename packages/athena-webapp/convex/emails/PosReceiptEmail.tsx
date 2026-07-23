@@ -51,7 +51,13 @@ export interface PosReceiptEmailProps {
   amountPaid?: string;
   changeGiven?: string;
   statusLabel?: string;
+  storePolicyLines?: string[];
 }
+
+const DEFAULT_STORE_POLICY_LINES = [
+  "In-store purchases may be returned or exchanged within 7 days when items are unused and in original condition.",
+  "Used wigs or worn products are not eligible for return or exchange.",
+];
 
 const sectionBorder = {
   borderBottom: "1px dashed #111111",
@@ -111,7 +117,13 @@ export default function PosReceiptEmail({
   amountPaid,
   changeGiven,
   statusLabel,
+  storePolicyLines,
 }: PosReceiptEmailProps) {
+  const effectiveStorePolicyLines =
+    storePolicyLines && storePolicyLines.length > 0
+      ? storePolicyLines
+      : DEFAULT_STORE_POLICY_LINES;
+
   return (
     <Html>
       <Head />
@@ -218,7 +230,9 @@ export default function PosReceiptEmail({
                     {item.quantityLabel}
                   </Text>
                   {item.skuOrBarcode && (
-                    <Text style={{ ...styles.baseTextStyle, ...styles.itemMeta }}>
+                    <Text
+                      style={{ ...styles.baseTextStyle, ...styles.itemMeta }}
+                    >
                       {item.skuOrBarcode}
                     </Text>
                   )}
@@ -295,19 +309,23 @@ export default function PosReceiptEmail({
 
           <Spacer height={16} />
 
-          <Section>
-            <SectionLabel>Store policy</SectionLabel>
-            <Text style={{ ...styles.baseTextStyle, ...styles.policyLine }}>
-              In-store purchases may be returned or exchanged within 7 days when
-              items are unused and in original condition.
-            </Text>
-            <Text style={{ ...styles.baseTextStyle, ...styles.policyLine }}>
-              Used wigs or worn products are not eligible for return or
-              exchange.
-            </Text>
-          </Section>
+          {effectiveStorePolicyLines.length > 0 && (
+            <>
+              <Section>
+                <SectionLabel>Store policy</SectionLabel>
+                {effectiveStorePolicyLines.map((line) => (
+                  <Text
+                    key={line}
+                    style={{ ...styles.baseTextStyle, ...styles.policyLine }}
+                  >
+                    {line}
+                  </Text>
+                ))}
+              </Section>
 
-          <Spacer height={16} />
+              <Spacer height={16} />
+            </>
+          )}
 
           <Section>
             <Text style={{ ...styles.baseTextStyle, ...styles.footerLine }}>

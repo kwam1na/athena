@@ -13,7 +13,6 @@ const sharedDemoMocks = vi.hoisted(() => ({
   getSharedDemoActorWithCtx: vi.fn(),
   requireSharedDemoCapabilityIfApplicable: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
-  requireSharedDemoStoreReadIfApplicable: vi.fn(),
   requireReadySharedDemoWriteWithCtx: vi.fn(),
 }));
 
@@ -29,8 +28,6 @@ vi.mock("../sharedDemo/actor", () => ({
     sharedDemoMocks.requireSharedDemoCapabilityIfApplicable,
   requireSharedDemoStoreCapabilityIfApplicable:
     sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable,
-  requireSharedDemoStoreReadIfApplicable:
-    sharedDemoMocks.requireSharedDemoStoreReadIfApplicable,
 }));
 
 vi.mock("../sharedDemo/restore", () => ({
@@ -97,19 +94,25 @@ function createStaffCredentialsMutationCtx(seed?: {
 }) {
   const tables: Record<TableName, Map<string, Row>> = {
     approvalProof: new Map(
-      (seed?.approvalProofs ?? []).map((row) => [row._id, row])
+      (seed?.approvalProofs ?? []).map((row) => [row._id, row]),
     ),
     approvalRequesterChallenge: new Map(
-      (seed?.approvalRequesterChallenges ?? []).map((row) => [row._id, row])
+      (seed?.approvalRequesterChallenges ?? []).map((row) => [row._id, row]),
     ),
+    // Identity resolution goes through the shared auth helper, which loads the
+    // admitted actor's athenaUser row from the db. Seed the fallback
+    // normal-user row by default so non-demo fixtures resolve an identity.
     athenaUser: new Map(
-      (seed?.athenaUsers ?? []).map((row) => [row._id, row])
+      [
+        { _id: FALLBACK_AUTH_USER_ID } as Row,
+        ...(seed?.athenaUsers ?? []),
+      ].map((row) => [row._id, row]),
     ),
     expenseSession: new Map(
-      (seed?.expenseSessions ?? []).map((row) => [row._id, row])
+      (seed?.expenseSessions ?? []).map((row) => [row._id, row]),
     ),
     operationalEvent: new Map(
-      (seed?.operationalEvents ?? []).map((row) => [row._id, row])
+      (seed?.operationalEvents ?? []).map((row) => [row._id, row]),
     ),
     posTerminal: new Map(
       (
@@ -129,10 +132,10 @@ function createStaffCredentialsMutationCtx(seed?: {
             registeredByUserId: "athena-user-1",
           },
         ]
-      ).map((row) => [row._id, row])
+      ).map((row) => [row._id, row]),
     ),
     posLocalStaffProof: new Map(
-      (seed?.posLocalStaffProofs ?? []).map((row) => [row._id, row])
+      (seed?.posLocalStaffProofs ?? []).map((row) => [row._id, row]),
     ),
     posSession: new Map((seed?.posSessions ?? []).map((row) => [row._id, row])),
     store: new Map(
@@ -143,14 +146,14 @@ function createStaffCredentialsMutationCtx(seed?: {
             organizationId: "org_1",
           },
         ]
-      ).map((row) => [row._id, row])
+      ).map((row) => [row._id, row]),
     ),
     staffCredential: new Map(
-      (seed?.credentials ?? []).map((row) => [row._id, row])
+      (seed?.credentials ?? []).map((row) => [row._id, row]),
     ),
     staffProfile: new Map((seed?.profiles ?? []).map((row) => [row._id, row])),
     staffRoleAssignment: new Map(
-      (seed?.roles ?? []).map((row) => [row._id, row])
+      (seed?.roles ?? []).map((row) => [row._id, row]),
     ),
   };
   const insertCounters: Record<TableName, number> = {
@@ -168,9 +171,12 @@ function createStaffCredentialsMutationCtx(seed?: {
     staffRoleAssignment: 0,
   };
 
-  function createIndexedQuery(table: TableName, filters: Array<[string, unknown]>) {
+  function createIndexedQuery(
+    table: TableName,
+    filters: Array<[string, unknown]>,
+  ) {
     const matches = Array.from(tables[table].values()).filter((row) =>
-      filters.every(([field, value]) => row[field] === value)
+      filters.every(([field, value]) => row[field] === value),
     );
 
     return {
@@ -198,7 +204,11 @@ function createStaffCredentialsMutationCtx(seed?: {
         tables[table].set(id, { _id: id, ...value });
         return id;
       },
-      async patch(table: TableName, id: string, value: Record<string, unknown>) {
+      async patch(
+        table: TableName,
+        id: string,
+        value: Record<string, unknown>,
+      ) {
         const existing = tables[table].get(id);
         if (!existing) {
           throw new Error(`Missing ${table} record: ${id}`);
@@ -208,7 +218,12 @@ function createStaffCredentialsMutationCtx(seed?: {
       },
       query(table: TableName) {
         return {
-          withIndex(_index: string, applyIndex: (queryBuilder: { eq: (field: string, value: unknown) => unknown }) => unknown) {
+          withIndex(
+            _index: string,
+            applyIndex: (queryBuilder: {
+              eq: (field: string, value: unknown) => unknown;
+            }) => unknown,
+          ) {
             const filters: Array<[string, unknown]> = [];
             const queryBuilder = {
               eq(field: string, value: unknown) {
@@ -228,17 +243,40 @@ function createStaffCredentialsMutationCtx(seed?: {
   return { ctx, tables };
 }
 
+const FALLBACK_AUTH_USER_ID = "athena-user-1";
+
+type AdmissionAwareAuthCtx = {
+  db: { get: (table: string, id: string) => Promise<unknown> };
+  operationAdmission?: { actor?: { athenaUserId?: string } };
+};
+
+// Mirrors the real helper in lib/athenaUserAuth.ts: identity resolution
+// short-circuits on the admitted actor, so an admitted demo actor resolves to
+// its own athenaUser rather than falling through to normal-user auth.
+function admissionAwareAuth(onNoAdmittedActor: () => unknown) {
+  return async (ctx: AdmissionAwareAuthCtx) => {
+    const admittedUserId = ctx?.operationAdmission?.actor?.athenaUserId;
+    if (admittedUserId) {
+      return ctx.db.get("athenaUser", admittedUserId);
+    }
+
+    return onNoAdmittedActor();
+  };
+}
+
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
 
-async function createRestoredProofValidationCtx(overrides: {
-  credential?: Partial<Row> | null;
-  proof?: Partial<Row> | null;
-  profile?: Partial<Row> | null;
-  role?: Partial<Row> | null;
-  token?: string;
-} = {}) {
+async function createRestoredProofValidationCtx(
+  overrides: {
+    credential?: Partial<Row> | null;
+    proof?: Partial<Row> | null;
+    profile?: Partial<Row> | null;
+    role?: Partial<Row> | null;
+    token?: string;
+  } = {},
+) {
   const token = overrides.token ?? "proof-token-1";
   const tokenHash = await hashPosLocalStaffProofToken(token);
 
@@ -314,20 +352,17 @@ describe("staff credential operations", () => {
     vi.clearAllMocks();
     sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
     sharedDemoMocks.requireReadySharedDemoWriteWithCtx.mockResolvedValue(
-      undefined
+      undefined,
     );
     sharedDemoMocks.requireSharedDemoCapabilityIfApplicable.mockResolvedValue(
-      null
+      null,
     );
     sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable.mockResolvedValue(
-      null
+      null,
     );
-    sharedDemoMocks.requireSharedDemoStoreReadIfApplicable.mockResolvedValue(
-      null
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockImplementation(
+      admissionAwareAuth(() => ({ _id: FALLBACK_AUTH_USER_ID })),
     );
-    authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
-      _id: "athena-user-1",
-    });
     authMocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
   });
 
@@ -393,7 +428,7 @@ describe("staff credential operations", () => {
       getStaffCredentialUsernameAvailabilityWithCtx(ctx, {
         storeId: "store_1" as Id<"store">,
         username: " frontdesk ",
-      })
+      }),
     ).resolves.toEqual({
       available: false,
       normalizedUsername: "frontdesk",
@@ -403,7 +438,7 @@ describe("staff credential operations", () => {
       getStaffCredentialUsernameAvailabilityWithCtx(ctx, {
         storeId: "store_1" as Id<"store">,
         username: "new-user",
-      })
+      }),
     ).resolves.toEqual({
       available: true,
       normalizedUsername: "new-user",
@@ -513,8 +548,13 @@ describe("staff credential operations", () => {
       organizationId: "org_1",
       storeId: "store_1",
     });
-    authMocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
-      new Error("Sign in again to continue."),
+    // Normal-user auth is deliberately unavailable here: only the
+    // non-admitted path fails, so a demo actor that still succeeds proves the
+    // admitted identity never depends on normal-user auth.
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockImplementation(
+      admissionAwareAuth(() => {
+        throw new Error("Sign in again to continue.");
+      }),
     );
 
     await expect(
@@ -531,10 +571,22 @@ describe("staff credential operations", () => {
         staffProfileId: "manager-1",
       },
     });
-    expect(sharedDemoMocks.requireSharedDemoStoreReadIfApplicable).not.toHaveBeenCalled();
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor and resolves that actor's identity - the successful result
+    // above already proves it never fell back to normal-user auth.
     expect(
       authMocks.requireAuthenticatedAthenaUserWithCtx,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: "demo-user",
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
   });
 
   it("requires store access before public manager approval authentication can mint proofs", async () => {
@@ -833,7 +885,7 @@ describe("staff credential operations", () => {
         storeId: "store_1" as Id<"store">,
         username: "frontdesk",
         pinHash: "hash-1",
-      })
+      }),
     ).resolves.toEqual({
       kind: "user_error",
       error: {
@@ -848,7 +900,7 @@ describe("staff credential operations", () => {
         storeId: "store_1" as Id<"store">,
         username: "frontdesk",
         pinHash: "hash-1",
-      })
+      }),
     ).resolves.toEqual({
       kind: "user_error",
       error: {
@@ -881,7 +933,7 @@ describe("staff credential operations", () => {
         storeId: "store_1" as Id<"store">,
         username: "frontdesk",
         pinHash: "hash-1",
-      })
+      }),
     ).resolves.toEqual({
       kind: "ok",
       data: expect.objectContaining({
@@ -1004,7 +1056,7 @@ describe("staff credential operations", () => {
         storeId: "store_1" as Id<"store">,
         username: " FrontDesk ",
         pinHash: "hash-2",
-      })
+      }),
     ).rejects.toThrow("Username is already in use for this store.");
   });
 
@@ -1051,8 +1103,10 @@ describe("staff credential operations", () => {
         storeId: "store_1" as Id<"store">,
         username: "desk-2",
         pinHash: "hash-2",
-      })
-    ).rejects.toThrow("Staff credential already exists for this staff profile.");
+      }),
+    ).rejects.toThrow(
+      "Staff credential already exists for this staff profile.",
+    );
   });
 
   it("rotates the username and PIN hash or suspends the credential", async () => {
@@ -1125,7 +1179,9 @@ describe("staff credential operations", () => {
     expect(suspended).toMatchObject({
       status: "suspended",
     });
-    expect(tables.staffCredential.get("credential-1")?.status).toBe("suspended");
+    expect(tables.staffCredential.get("credential-1")?.status).toBe(
+      "suspended",
+    );
   });
 
   it("increments the local verifier version when a credential PIN is reset", async () => {
@@ -1308,9 +1364,9 @@ describe("staff credential operations", () => {
         activeRoles: ["cashier"],
       },
     });
-    expect(tables.staffCredential.get("credential-1")?.lastAuthenticatedAt).toEqual(
-      expect.any(Number)
-    );
+    expect(
+      tables.staffCredential.get("credential-1")?.lastAuthenticatedAt,
+    ).toEqual(expect.any(Number));
   });
 
   it("locks staff authentication after repeated failed PIN attempts and resets on PIN reset", async () => {
@@ -1655,7 +1711,7 @@ describe("staff credential operations", () => {
         storeId: "store_1" as Id<"store">,
         terminalId: "terminal-1" as Id<"posTerminal">,
         username: "frontdesk",
-      })
+      }),
     ).resolves.toEqual({
       kind: "ok",
       data: expect.objectContaining({
@@ -1665,15 +1721,23 @@ describe("staff credential operations", () => {
   });
 
   it("authenticates demo managers through the terminal's store-scoped read boundary", async () => {
+    // Normal-user auth is deliberately unavailable here: only the non-admitted
+    // path fails, so a demo actor that still succeeds proves the admitted
+    // identity never depends on normal-user auth.
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockImplementation(
+      admissionAwareAuth(() => {
+        throw new Error("Sign in again to continue.");
+      }),
+    );
     sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue({
       authUserId: "auth-user-1",
-      athenaUserId: "athena-user-1",
+      athenaUserId: "demo-athena-user-1",
       kind: "shared_demo",
       organizationId: "org_1",
       storeId: "store_1",
     });
     const { ctx } = createStaffCredentialsMutationCtx({
-      athenaUsers: [{ _id: "athena-user-1" }],
+      athenaUsers: [{ _id: "demo-athena-user-1" }],
       credentials: [
         {
           _id: "credential-1",
@@ -1723,10 +1787,22 @@ describe("staff credential operations", () => {
         staffProfileId: "staff_profile_1",
       }),
     });
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor and resolves that actor's identity - the successful result
+    // above already proves it never fell back to normal-user auth.
     expect(
-      sharedDemoMocks.requireSharedDemoStoreReadIfApplicable,
-    ).not.toHaveBeenCalled();
-    expect(authMocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+      authMocks.requireAuthenticatedAthenaUserWithCtx,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: "demo-athena-user-1",
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
   });
 
   it("requires the signed-in user to have POS access before public terminal authentication", async () => {
@@ -2190,8 +2266,12 @@ describe("staff credential operations", () => {
       },
     });
 
-    expect(tables.posLocalStaffProof.get("proof-1")?.lastUsedAt).toBeUndefined();
-    expect(tables.posLocalStaffProof.get("proof-2")?.lastUsedAt).toBeUndefined();
+    expect(
+      tables.posLocalStaffProof.get("proof-1")?.lastUsedAt,
+    ).toBeUndefined();
+    expect(
+      tables.posLocalStaffProof.get("proof-2")?.lastUsedAt,
+    ).toBeUndefined();
   });
 
   it("returns staff profile failure reasons without touching proof usage", async () => {
@@ -2476,7 +2556,7 @@ describe("staff credential operations", () => {
         storeId: "store_1" as Id<"store">,
         terminalId: "terminal-1" as Id<"posTerminal">,
         username: "frontdesk",
-      })
+      }),
     ).resolves.toEqual({
       kind: "user_error",
       error: {
@@ -2492,7 +2572,7 @@ describe("staff credential operations", () => {
         storeId: "store_1" as Id<"store">,
         terminalId: "terminal-1" as Id<"posTerminal">,
         username: "frontdesk",
-      })
+      }),
     ).resolves.toEqual({
       kind: "user_error",
       error: {
@@ -2509,7 +2589,7 @@ describe("staff credential operations", () => {
         storeId: "store_1" as Id<"store">,
         terminalId: "terminal-1" as Id<"posTerminal">,
         username: "frontdesk",
-      })
+      }),
     ).resolves.toEqual({
       kind: "ok",
       data: expect.objectContaining({
@@ -2530,7 +2610,7 @@ describe("staff credential operations", () => {
         storeId: "store_1" as Id<"store">,
         terminalId: "terminal-2" as Id<"posTerminal">,
         username: "frontdesk",
-      })
+      }),
     ).resolves.toEqual({
       kind: "ok",
       data: expect.objectContaining({
@@ -2593,7 +2673,7 @@ describe("staff credential operations", () => {
         storeId: "store_1" as Id<"store">,
         terminalId: "terminal-1" as Id<"posTerminal">,
         username: "frontdesk",
-      })
+      }),
     ).resolves.toEqual({
       kind: "user_error",
       error: {
@@ -2645,7 +2725,7 @@ describe("staff credential operations", () => {
         storeId: "store_1" as Id<"store">,
         username: "frontdesk",
         pinHash: "hash-1",
-      })
+      }),
     ).resolves.toEqual({
       kind: "user_error",
       error: {
@@ -2697,7 +2777,7 @@ describe("staff credential operations", () => {
         storeId: "store_1" as Id<"store">,
         username: "frontdesk",
         pinHash: "hash-1",
-      })
+      }),
     ).resolves.toEqual({
       kind: "user_error",
       error: {
@@ -2773,10 +2853,13 @@ describe("staff credential operations", () => {
         approvedByStaffProfileId: "manager-1",
       }),
     });
-    assertConformsToExportedReturns(authenticateStaffCredentialForApproval, result);
-    expect(tables.staffCredential.get("credential-1")?.lastAuthenticatedAt).toEqual(
-      expect.any(Number)
+    assertConformsToExportedReturns(
+      authenticateStaffCredentialForApproval,
+      result,
     );
+    expect(
+      tables.staffCredential.get("credential-1")?.lastAuthenticatedAt,
+    ).toEqual(expect.any(Number));
     expect(tables.approvalProof.get("approvalProof-1")).toMatchObject({
       actionKey: "pos.transaction.payment_method.correct",
       approvedByCredentialId: "credential-1",
@@ -2883,16 +2966,20 @@ describe("staff credential operations", () => {
         requestedByStaffProfileId: "cashier-1",
       }),
     });
-    assertConformsToExportedReturns(authenticateStaffCredentialForApproval, result);
-    expect(tables.approvalRequesterChallenge.get("approvalRequesterChallenge-1"))
-      .toMatchObject({
-        actionKey: "pos.transaction.payment_method.correct",
-        consumedAt: expect.any(Number),
-        requestedByStaffProfileId: "cashier-1",
-        storeId: "store_1",
-        subjectId: "transaction-1",
-        subjectType: "pos_transaction",
-      });
+    assertConformsToExportedReturns(
+      authenticateStaffCredentialForApproval,
+      result,
+    );
+    expect(
+      tables.approvalRequesterChallenge.get("approvalRequesterChallenge-1"),
+    ).toMatchObject({
+      actionKey: "pos.transaction.payment_method.correct",
+      consumedAt: expect.any(Number),
+      requestedByStaffProfileId: "cashier-1",
+      storeId: "store_1",
+      subjectId: "transaction-1",
+      subjectType: "pos_transaction",
+    });
     expect(tables.approvalProof.get("approvalProof-1")).toMatchObject({
       actionKey: "pos.transaction.payment_method.correct",
       approvedByStaffProfileId: "manager-1",
@@ -3059,9 +3146,9 @@ describe("staff credential operations", () => {
         message: "Requested staff profile is not valid for this approval.",
       },
     });
-    expect(tables.approvalRequesterChallenge.get("challenge-1")).not.toHaveProperty(
-      "consumedAt",
-    );
+    expect(
+      tables.approvalRequesterChallenge.get("challenge-1"),
+    ).not.toHaveProperty("consumedAt");
     expect(tables.approvalProof.size).toBe(0);
   });
 
@@ -3299,7 +3386,8 @@ describe("staff credential operations", () => {
           "Approval requester must use either a direct staff profile or a requester binding.",
       },
     });
-    const storedChallenge = tables.approvalRequesterChallenge.get("challenge-1");
+    const storedChallenge =
+      tables.approvalRequesterChallenge.get("challenge-1");
     if (storedChallenge) {
       expect(storedChallenge).not.toHaveProperty("consumedAt");
     }
@@ -3356,11 +3444,11 @@ describe("staff credential operations", () => {
       challenge: { expiresAt: Date.now() - 1 },
       message: "Approval requester challenge has expired.",
     },
-  ])("rejects forged operational requester binding evidence: $name", async (scenario) => {
-    const { ctx, tables } = createStaffCredentialsMutationCtx({
-      approvalRequesterChallenges:
-        scenario.challenges ??
-        [
+  ])(
+    "rejects forged operational requester binding evidence: $name",
+    async (scenario) => {
+      const { ctx, tables } = createStaffCredentialsMutationCtx({
+        approvalRequesterChallenges: scenario.challenges ?? [
           {
             _id: "challenge-1",
             actionKey: "pos.transaction.payment_method.correct",
@@ -3374,96 +3462,97 @@ describe("staff credential operations", () => {
             ...scenario.challenge,
           },
         ],
-      credentials: [
-        {
-          _id: "credential-1",
-          staffProfileId: "manager-1",
-          organizationId: "org_1",
-          storeId: "store_1",
-          username: "manager",
-          pinHash: "hash-1",
-          status: "active",
-        },
-      ],
-      profiles: [
-        {
-          _id: "manager-1",
-          storeId: "store_1",
-          organizationId: "org_1",
-          status: "active",
-          fullName: "Ari Mensah",
-        },
-        {
-          _id: "cashier-1",
-          storeId: "store_1",
-          organizationId: "org_1",
-          status: "active",
-          fullName: "Cashier One",
-        },
-        {
-          _id: "cashier-2",
-          storeId: "store_1",
-          organizationId: "org_1",
-          status: "active",
-          fullName: "Cashier Two",
-        },
-      ],
-      roles: [
-        {
-          _id: "role_1",
-          staffProfileId: "manager-1",
-          organizationId: "org_1",
-          storeId: "store_1",
-          role: "manager",
-          isPrimary: true,
-          status: "active",
-          assignedAt: 1,
-        },
-        {
-          _id: "role_2",
-          staffProfileId: "manager-1",
-          organizationId: "org_1",
-          storeId: "store_1",
-          role: "cashier",
-          isPrimary: false,
-          status: "active",
-          assignedAt: 1,
-        },
-      ],
-    });
+        credentials: [
+          {
+            _id: "credential-1",
+            staffProfileId: "manager-1",
+            organizationId: "org_1",
+            storeId: "store_1",
+            username: "manager",
+            pinHash: "hash-1",
+            status: "active",
+          },
+        ],
+        profiles: [
+          {
+            _id: "manager-1",
+            storeId: "store_1",
+            organizationId: "org_1",
+            status: "active",
+            fullName: "Ari Mensah",
+          },
+          {
+            _id: "cashier-1",
+            storeId: "store_1",
+            organizationId: "org_1",
+            status: "active",
+            fullName: "Cashier One",
+          },
+          {
+            _id: "cashier-2",
+            storeId: "store_1",
+            organizationId: "org_1",
+            status: "active",
+            fullName: "Cashier Two",
+          },
+        ],
+        roles: [
+          {
+            _id: "role_1",
+            staffProfileId: "manager-1",
+            organizationId: "org_1",
+            storeId: "store_1",
+            role: "manager",
+            isPrimary: true,
+            status: "active",
+            assignedAt: 1,
+          },
+          {
+            _id: "role_2",
+            staffProfileId: "manager-1",
+            organizationId: "org_1",
+            storeId: "store_1",
+            role: "cashier",
+            isPrimary: false,
+            status: "active",
+            assignedAt: 1,
+          },
+        ],
+      });
 
-    const result = await authenticateStaffCredentialForApprovalWithCtx(ctx, {
-      actionKey: "pos.transaction.payment_method.correct",
-      pinHash: "hash-1",
-      requiredRole: "manager",
-      requesterBinding:
-        scenario.binding ?? {
+      const result = await authenticateStaffCredentialForApprovalWithCtx(ctx, {
+        actionKey: "pos.transaction.payment_method.correct",
+        pinHash: "hash-1",
+        requiredRole: "manager",
+        requesterBinding: scenario.binding ?? {
           challengeId: "challenge-1" as Id<"approvalRequesterChallenge">,
           kind: "operational_staff_challenge",
           requestedByStaffProfileId: "cashier-1" as Id<"staffProfile">,
         },
-      storeId: "store_1" as Id<"store">,
-      subject: {
-        type: "pos_transaction",
-        id: "transaction-1",
-      },
-      username: "manager",
-      ...scenario.args,
-    });
+        storeId: "store_1" as Id<"store">,
+        subject: {
+          type: "pos_transaction",
+          id: "transaction-1",
+        },
+        username: "manager",
+        ...scenario.args,
+      });
 
-    expect(result).toEqual({
-      kind: "user_error",
-      error: {
-        code: "precondition_failed",
-        message: scenario.message,
-      },
-    });
-    const storedChallenge = tables.approvalRequesterChallenge.get("challenge-1");
-    if (storedChallenge) {
-      expect(storedChallenge).not.toHaveProperty("consumedAt");
-    }
-    expect(tables.approvalProof.size).toBe(0);
-  });
+      expect(result).toEqual({
+        kind: "user_error",
+        error: {
+          code: "precondition_failed",
+          message: scenario.message,
+        },
+      });
+      const storedChallenge =
+        tables.approvalRequesterChallenge.get("challenge-1");
+      if (storedChallenge) {
+        expect(storedChallenge).not.toHaveProperty("consumedAt");
+      }
+      expect(tables.approvalProof.size).toBe(0);
+    },
+  );
 
   it("rejects approval proof requester attribution for another linked Athena user", async () => {
     const { ctx, tables } = createStaffCredentialsMutationCtx({
@@ -3581,7 +3670,7 @@ describe("staff credential operations", () => {
           id: "transaction-1",
         },
         username: "cashier",
-      })
+      }),
     ).resolves.toEqual({
       kind: "user_error",
       error: {
@@ -3660,7 +3749,7 @@ describe("staff credential operations", () => {
         storeId: "store_1" as Id<"store">,
         username: "frontdesk",
         pinHash: "hash-1",
-      })
+      }),
     ).rejects.toThrow("Multiple staff credentials match this username.");
   });
 });

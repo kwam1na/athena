@@ -463,9 +463,10 @@ describe("DailyOpeningViewContent", () => {
       "min-h-10",
       "text-success",
     );
-    expect(
-      screen.getByTestId("daily-opening-status-icon"),
-    ).toHaveClass("size-5", "text-success");
+    expect(screen.getByTestId("daily-opening-status-icon")).toHaveClass(
+      "size-5",
+      "text-success",
+    );
     expect(screen.getByText("No hard blockers")).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /blocked/i })).toBeNull();
     expect(
@@ -758,7 +759,9 @@ describe("DailyOpeningViewContent", () => {
     // Operator-facing metadata still renders (Opening humanizes oldestActionableAt to
     // "Oldest Actionable At"; the "Open since" label is EOD Review's rewrite).
     expect(screen.getAllByText("Priority").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Oldest Actionable At").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Oldest Actionable At").length).toBeGreaterThan(
+      0,
+    );
   });
 
   it("paginates opening tab content in five-item pages", async () => {
@@ -1434,7 +1437,9 @@ describe("DailyOpeningView", () => {
       mockedApi.getDailyOpeningSnapshot,
       expect.anything(),
     );
-    expect(screen.getByText("Athena started Opening Handoff.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Athena started Opening Handoff."),
+    ).toBeInTheDocument();
     expect(screen.getByText("Store day started")).toBeInTheDocument();
     expect(screen.getByText("Athena")).toBeInTheDocument();
     expect(
@@ -1442,10 +1447,34 @@ describe("DailyOpeningView", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("renders current shared-demo Opening Handoff with the prior fixture close", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 23, 12));
+    mockedRouter.search = {};
+    mockedHooks.useQuery.mockImplementation((query) =>
+      query === mockedApi.getSharedDemoContext
+        ? { kind: "shared_demo", storeId: "store-1" }
+        : readySnapshot,
+    );
+
+    render(<DailyOpeningView />);
+
+    expect(mockedHooks.useQuery).not.toHaveBeenCalledWith(
+      mockedApi.getDailyOpeningSnapshot,
+      expect.anything(),
+    );
+    expect(screen.getByText("Prior EOD Review completed")).toBeInTheDocument();
+    expect(screen.getAllByText("Jul 22, 2026")).not.toHaveLength(0);
+    expect(
+      screen.queryByText("Prior EOD Review not found"),
+    ).not.toBeInTheDocument();
+  });
+
   it("starts the shared demo day without exposing staff credentials", async () => {
     const startStoreDayMutation = vi.fn(async () =>
       ok({ openingId: "opening-1" }),
     );
+    mockedRouter.search = { operatingDate: "2026-05-08" };
     mockedHooks.useMutation.mockImplementation((mutation) =>
       mutation === mockedApi.startStoreDay
         ? startStoreDayMutation
@@ -1453,7 +1482,7 @@ describe("DailyOpeningView", () => {
     );
     mockedHooks.useQuery.mockImplementation((query) =>
       query === mockedApi.getSharedDemoContext
-        ? { kind: "shared_demo" }
+        ? { kind: "shared_demo", storeId: "store-1" }
         : readySnapshot,
     );
 

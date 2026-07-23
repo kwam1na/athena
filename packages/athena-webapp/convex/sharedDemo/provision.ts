@@ -75,6 +75,7 @@ export const SHARED_DEMO_MANAGER_USERNAME =
   SHARED_DEMO_STAFF_STORY.manager.username;
 export const SHARED_DEMO_STAFF_PIN_HASH =
   "4e98d5fe6eb03fb40d229e19013fc8b1505fdbacebcb225b409d75f656acc82b";
+const LEGACY_SHARED_DEMO_PICKUP_ORDER_NUMBER = "DEMO-ORDER-001";
 
 export function sharedDemoMigrationSkipTables(baselineVersion: number) {
   if (baselineVersion < 3) {
@@ -93,12 +94,22 @@ export function planSharedDemoMigration(baselineVersion: number) {
     16: "preserve_operational_continuity",
     17: "preserve_operational_continuity",
     18: "preserve_operational_continuity",
+    19: "preserve_operational_continuity",
+    20: "preserve_operational_continuity",
+    21: "preserve_operational_continuity",
+    22: "preserve_operational_continuity",
+    23: "preserve_operational_continuity",
+    24: "preserve_operational_continuity",
+    25: "preserve_operational_continuity",
+    26: "preserve_operational_continuity",
+    27: "preserve_operational_continuity",
+    28: "preserve_operational_continuity",
   } as const;
   const mode =
     migrationClassifications[
       baselineVersion as keyof typeof migrationClassifications
     ];
-  if (!mode || SHARED_DEMO_BASELINE_VERSION !== 19) {
+  if (!mode || SHARED_DEMO_BASELINE_VERSION !== 29) {
     throw new Error(
       `Shared demo baseline migration ${baselineVersion}->${SHARED_DEMO_BASELINE_VERSION} is not registered.`,
     );
@@ -163,10 +174,7 @@ export function transformSharedDemoCatalogImageBaselineDocument(row: {
   document: Record<string, unknown>;
   tableName: string;
 }) {
-  if (
-    row.tableName !== "productSku" &&
-    row.tableName !== "productSkuSearch"
-  ) {
+  if (row.tableName !== "productSku" && row.tableName !== "productSkuSearch") {
     return row.document;
   }
   const product = SHARED_DEMO_PRODUCTS.find(
@@ -184,6 +192,39 @@ export function transformSharedDemoCatalogImageBaselineDocument(row: {
       )
     : row.document.images;
   return { ...row.document, images };
+}
+
+export function transformSharedDemoPickupOrderBaselineDocument(row: {
+  document: Record<string, unknown>;
+  tableName: string;
+  timeline?: ReturnType<typeof sharedDemoPickupOrderTimeline>;
+}) {
+  if (
+    row.tableName !== "onlineOrder" ||
+    (row.document.orderNumber !== SHARED_DEMO_PICKUP_ORDER.orderNumber &&
+      row.document.orderNumber !== LEGACY_SHARED_DEMO_PICKUP_ORDER_NUMBER)
+  ) {
+    return row.document;
+  }
+  return {
+    ...row.document,
+    customerDetails: {
+      email: SHARED_DEMO_PICKUP_ORDER.customerEmail,
+      firstName: SHARED_DEMO_PICKUP_ORDER.customerFirstName,
+      lastName: SHARED_DEMO_PICKUP_ORDER.customerLastName,
+      phoneNumber: SHARED_DEMO_PICKUP_ORDER.customerPhoneNumber,
+    },
+    orderNumber: SHARED_DEMO_PICKUP_ORDER.orderNumber,
+    ...(row.timeline
+      ? {
+          didSendConfirmationEmail: true,
+          orderReceivedEmailSentAt: row.timeline.orderReceivedEmailSentAt,
+          placedAt: row.timeline.placedAt,
+          readyAt: row.timeline.placedAt + 2_200_000,
+          updatedAt: row.timeline.placedAt + 2_200_000,
+        }
+      : {}),
+  };
 }
 
 export function validateSharedDemoSeed(seed: typeof SHARED_DEMO_SEED) {
@@ -791,6 +832,7 @@ async function migrateSharedDemoStoryWithCtx(
     await ctx.db.patch("onlineOrderItem", orderItem._id, {
       price: orderProduct.price,
       productId: orderIdentity.productId,
+      productImage: sharedDemoProductImages(orderProduct, args.storeId)[0],
       productName: orderProduct.name,
       productSku: orderProduct.sku,
       productSkuId: orderIdentity.productSkuId,
@@ -923,7 +965,9 @@ export const provisionSharedDemo = internalMutation({
             .take(500),
         ]);
         const demoOrder = orders.find(
-          (order) => order.orderNumber === "DEMO-ORDER-001",
+          (order) =>
+            order.orderNumber === SHARED_DEMO_PICKUP_ORDER.orderNumber ||
+            order.orderNumber === LEGACY_SHARED_DEMO_PICKUP_ORDER_NUMBER,
         );
         const orderItems = demoOrder
           ? await ctx.db
@@ -1028,11 +1072,36 @@ export const provisionSharedDemo = internalMutation({
               body: SHARED_DEMO_OPENING_MESSAGE,
             });
           }
-          await reconcileSharedDemoCatalogWithCtx(ctx, {
+          const identityBySku = await reconcileSharedDemoCatalogWithCtx(ctx, {
             organizationId: existingOrganization._id,
             ownerUserId: owner._id,
             storeId: existingStore._id,
           });
+          const orderProduct = sharedDemoProductBySku(
+            SHARED_DEMO_PICKUP_ORDER.sku,
+          );
+          const orderIdentity = identityBySku.get(SHARED_DEMO_PICKUP_ORDER.sku);
+          if (!orderIdentity) {
+            throw new Error("Demo pickup order product is missing.");
+          }
+          await ctx.db.patch("store", existingStore._id, {
+            config: {
+              ...(existingStore.config ?? {}),
+              contact: {
+                ...((existingStore.config?.contact as
+                  Record<string, unknown> | undefined) ?? {}),
+                email: SHARED_DEMO_STORE_IDENTITY.contactEmail,
+                location: SHARED_DEMO_STORE_IDENTITY.contactLocation,
+                phoneNumber: SHARED_DEMO_STORE_IDENTITY.contactPhoneNumber,
+              },
+              receipt: {
+                ...((existingStore.config?.receipt as
+                  Record<string, unknown> | undefined) ?? {}),
+                policyLines: [...SHARED_DEMO_STORE_IDENTITY.receiptPolicyLines],
+              },
+            },
+          });
+          const pickupOrderTimeline = sharedDemoPickupOrderTimeline(now);
           const promotedStaffStoryRows = new Set<string>();
           const promoted = await promoteBaselineDocumentsWithCtx(ctx, {
             fromVersion: state.baselineVersion,
@@ -1059,9 +1128,13 @@ export const provisionSharedDemo = internalMutation({
               }
               return transformSharedDemoCatalogImageBaselineDocument({
                 ...row,
-                document: transformSharedDemoStaffStoryBaselineDocument(row, {
-                  cashier: cashier._id,
-                  manager: manager._id,
+                document: transformSharedDemoPickupOrderBaselineDocument({
+                  ...row,
+                  document: transformSharedDemoStaffStoryBaselineDocument(row, {
+                    cashier: cashier._id,
+                    manager: manager._id,
+                  }),
+                  timeline: pickupOrderTimeline,
                 }),
               });
             },
@@ -1069,11 +1142,43 @@ export const provisionSharedDemo = internalMutation({
           if (promoted.promoted === 0 || promotedStaffStoryRows.size !== 5) {
             throw new Error("Demo staff story baseline could not be promoted.");
           }
+          const liveOrders = await ctx.db
+            .query("onlineOrder")
+            .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
+            .take(20);
+          const liveDemoOrder = liveOrders.find(
+            (order) =>
+              order.orderNumber === SHARED_DEMO_PICKUP_ORDER.orderNumber ||
+              order.orderNumber === LEGACY_SHARED_DEMO_PICKUP_ORDER_NUMBER,
+          );
+          if (liveDemoOrder) {
+            await ctx.db.patch("onlineOrder", liveDemoOrder._id, {
+              orderNumber: SHARED_DEMO_PICKUP_ORDER.orderNumber,
+            });
+            const liveOrderItems = await ctx.db
+              .query("onlineOrderItem")
+              .withIndex("by_orderId", (q) =>
+                q.eq("orderId", liveDemoOrder._id),
+              )
+              .take(20);
+            for (const liveOrderItem of liveOrderItems) {
+              await ctx.db.patch("onlineOrderItem", liveOrderItem._id, {
+                price: orderProduct.price,
+                productId: orderIdentity.productId,
+                productImage: sharedDemoProductImages(
+                  orderProduct,
+                  existingStore._id,
+                )[0],
+                productName: orderProduct.name,
+                productSku: orderProduct.sku,
+                productSkuId: orderIdentity.productSkuId,
+                quantity: SHARED_DEMO_PICKUP_ORDER.quantity,
+              });
+            }
+          }
           const baselineRows = await ctx.db
             .query("sharedDemoBaselineRow")
-            .withIndex("by_storeId", (q) =>
-              q.eq("storeId", existingStore._id),
-            )
+            .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
             .take(20);
           for (const baselineRow of baselineRows) {
             await ctx.db.patch("sharedDemoBaselineRow", baselineRow._id, {
@@ -1104,7 +1209,9 @@ export const provisionSharedDemo = internalMutation({
           .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
           .take(20);
         const demoOrder = orders.find(
-          (order) => order.orderNumber === "DEMO-ORDER-001",
+          (order) =>
+            order.orderNumber === SHARED_DEMO_PICKUP_ORDER.orderNumber ||
+            order.orderNumber === LEGACY_SHARED_DEMO_PICKUP_ORDER_NUMBER,
         );
         if (!demoOrder) throw new Error("Demo order is missing.");
         const demoCardPaymentMethod = {
@@ -1118,6 +1225,7 @@ export const provisionSharedDemo = internalMutation({
           externalTransactionId: "shared-demo-card-payment-001",
           hasVerifiedPayment: true,
           isPODOrder: false,
+          orderNumber: SHARED_DEMO_PICKUP_ORDER.orderNumber,
           paymentCollected: undefined,
           paymentCollectedAt: undefined,
           paymentDue: sharedDemoPickupOrderAmount(),
@@ -1410,6 +1518,14 @@ export const provisionSharedDemo = internalMutation({
     });
     const storeId = await ctx.db.insert("store", {
       config: {
+        contact: {
+          email: SHARED_DEMO_STORE_IDENTITY.contactEmail,
+          location: SHARED_DEMO_STORE_IDENTITY.contactLocation,
+          phoneNumber: SHARED_DEMO_STORE_IDENTITY.contactPhoneNumber,
+        },
+        receipt: {
+          policyLines: [...SHARED_DEMO_STORE_IDENTITY.receiptPolicyLines],
+        },
         // Osu Studio's cash policy: closeouts within a GH₵1 variance settle on
         // their own, so a cashier isn't dead-ended waiting on a manager over a
         // rounding-level miscount. Anything past GH₵1 — like the story's GH₵5
@@ -1629,8 +1745,7 @@ export const provisionSharedDemo = internalMutation({
       hasVerifiedPayment: true,
       isPODOrder: false,
       orderNumber: SHARED_DEMO_PICKUP_ORDER.orderNumber,
-      orderReceivedEmailSentAt:
-        pickupOrderTimeline.orderReceivedEmailSentAt,
+      orderReceivedEmailSentAt: pickupOrderTimeline.orderReceivedEmailSentAt,
       paymentDue: orderAmount,
       paymentMethod: {
         bank: "Demo Bank",
@@ -1655,6 +1770,7 @@ export const provisionSharedDemo = internalMutation({
       orderId,
       price: orderProduct.price,
       productId: orderIdentity.productId,
+      productImage: sharedDemoProductImages(orderProduct, storeId)[0],
       productName: orderProduct.name,
       productSku: orderProduct.sku,
       productSkuId: orderIdentity.productSkuId,

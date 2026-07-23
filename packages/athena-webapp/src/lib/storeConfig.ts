@@ -15,18 +15,14 @@ import {
 } from "~/types";
 
 type StoreConfigInput =
-  | Store
-  | { config?: unknown }
-  | Record<string, any>
-  | null
-  | undefined;
+  Store | { config?: unknown } | Record<string, unknown> | null | undefined;
 
-const asRecord = (value: unknown): Record<string, any> => {
+const asRecord = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
 
-  return value as Record<string, any>;
+  return value as Record<string, unknown>;
 };
 
 const asString = (value: unknown): string | undefined =>
@@ -50,12 +46,12 @@ const asOptionalArray = <T>(
     return undefined;
   }
 
-  return value
-    .map(map)
-    .filter((item): item is T => item !== undefined);
+  return value.map(map).filter((item): item is T => item !== undefined);
 };
 
-const firstDefined = <T>(...values: Array<T | undefined | null>): T | undefined => {
+const firstDefined = <T>(
+  ...values: Array<T | undefined | null>
+): T | undefined => {
   for (const value of values) {
     if (value !== undefined && value !== null) {
       return value;
@@ -65,7 +61,7 @@ const firstDefined = <T>(...values: Array<T | undefined | null>): T | undefined 
   return undefined;
 };
 
-const cleanUndefined = <T extends Record<string, any>>(value: T): T => {
+const cleanUndefined = <T extends object>(value: T): T => {
   const next = { ...value };
 
   for (const [key, fieldValue] of Object.entries(next)) {
@@ -95,11 +91,11 @@ const hasMtnMomoReceivingAccountDetails = (
 ): boolean => {
   return Boolean(
     account.label ||
-      account.walletNumber ||
-      account.businessName ||
-      account.market ||
-      account.businessContact ||
-      account.statusNote,
+    account.walletNumber ||
+    account.businessName ||
+    account.market ||
+    account.businessContact ||
+    account.statusNote,
   );
 };
 
@@ -140,12 +136,12 @@ const normalizeMtnMomoReceivingAccounts = (
   });
 };
 
-const getRawConfig = (input: StoreConfigInput): Record<string, any> => {
+const getRawConfig = (input: StoreConfigInput): Record<string, unknown> => {
   if (!input) {
     return {};
   }
 
-  if ("config" in (input as Record<string, any>)) {
+  if ("config" in (input as object)) {
     return asRecord((input as { config?: unknown }).config);
   }
 
@@ -171,7 +167,19 @@ const mapStreamReel = (value: unknown): StoreStreamReelConfig | undefined => {
 
 const mapPromotion = (value: unknown): StorePromotionConfig | undefined => {
   const promotion = asRecord(value);
-  return Object.keys(promotion).length > 0 ? promotion : undefined;
+  if (Object.keys(promotion).length === 0) {
+    return undefined;
+  }
+
+  // Unknown keys pass through untouched; the documented fields are narrowed so
+  // consumers get real types instead of an escape hatch.
+  return cleanUndefined({
+    ...promotion,
+    discountType: asString(promotion.discountType),
+    displayText: asString(promotion.displayText),
+    promoCodeId: asString(promotion.promoCodeId),
+    value: asNumber(promotion.value),
+  });
 };
 
 const normalizeWaiveDeliveryFees = (
@@ -199,6 +207,7 @@ export const getStoreConfigV2 = (input: StoreConfigInput): StoreConfigV2 => {
   const media = asRecord(config.media);
   const promotions = asRecord(config.promotions);
   const contact = asRecord(config.contact);
+  const receipt = asRecord(config.receipt);
   const payments = asRecord(config.payments);
   const mtnMomo = asRecord(payments.mtnMomo);
 
@@ -281,37 +290,53 @@ export const getStoreConfigV2 = (input: StoreConfigInput): StoreConfigV2 => {
     ),
     pickupRestriction: cleanUndefined({
       isActive: firstDefined(
-        asBoolean(asRecord(asRecord(commerce.fulfillment).pickupRestriction).isActive),
+        asBoolean(
+          asRecord(asRecord(commerce.fulfillment).pickupRestriction).isActive,
+        ),
         asBoolean(asRecord(legacyFulfillment.pickupRestriction).isActive),
       ),
       reason: firstDefined(
-        asString(asRecord(asRecord(commerce.fulfillment).pickupRestriction).reason),
+        asString(
+          asRecord(asRecord(commerce.fulfillment).pickupRestriction).reason,
+        ),
         asString(asRecord(legacyFulfillment.pickupRestriction).reason),
       ),
       message: firstDefined(
-        asString(asRecord(asRecord(commerce.fulfillment).pickupRestriction).message),
+        asString(
+          asRecord(asRecord(commerce.fulfillment).pickupRestriction).message,
+        ),
         asString(asRecord(legacyFulfillment.pickupRestriction).message),
       ),
       endTime: firstDefined(
-        asNumber(asRecord(asRecord(commerce.fulfillment).pickupRestriction).endTime),
+        asNumber(
+          asRecord(asRecord(commerce.fulfillment).pickupRestriction).endTime,
+        ),
         asNumber(asRecord(legacyFulfillment.pickupRestriction).endTime),
       ),
     }),
     deliveryRestriction: cleanUndefined({
       isActive: firstDefined(
-        asBoolean(asRecord(asRecord(commerce.fulfillment).deliveryRestriction).isActive),
+        asBoolean(
+          asRecord(asRecord(commerce.fulfillment).deliveryRestriction).isActive,
+        ),
         asBoolean(asRecord(legacyFulfillment.deliveryRestriction).isActive),
       ),
       reason: firstDefined(
-        asString(asRecord(asRecord(commerce.fulfillment).deliveryRestriction).reason),
+        asString(
+          asRecord(asRecord(commerce.fulfillment).deliveryRestriction).reason,
+        ),
         asString(asRecord(legacyFulfillment.deliveryRestriction).reason),
       ),
       message: firstDefined(
-        asString(asRecord(asRecord(commerce.fulfillment).deliveryRestriction).message),
+        asString(
+          asRecord(asRecord(commerce.fulfillment).deliveryRestriction).message,
+        ),
         asString(asRecord(legacyFulfillment.deliveryRestriction).message),
       ),
       endTime: firstDefined(
-        asNumber(asRecord(asRecord(commerce.fulfillment).deliveryRestriction).endTime),
+        asNumber(
+          asRecord(asRecord(commerce.fulfillment).deliveryRestriction).endTime,
+        ),
         asNumber(asRecord(legacyFulfillment.deliveryRestriction).endTime),
       ),
     }),
@@ -326,8 +351,14 @@ export const getStoreConfigV2 = (input: StoreConfigInput): StoreConfigV2 => {
       asBoolean(asRecord(commerce.tax).includedInPrice),
       asBoolean(legacyTax.includedInPrice),
     ),
-    name: firstDefined(asString(asRecord(commerce.tax).name), asString(legacyTax.name)),
-    rate: firstDefined(asNumber(asRecord(commerce.tax).rate), asNumber(legacyTax.rate)),
+    name: firstDefined(
+      asString(asRecord(commerce.tax).name),
+      asString(legacyTax.name),
+    ),
+    rate: firstDefined(
+      asNumber(asRecord(commerce.tax).rate),
+      asNumber(legacyTax.rate),
+    ),
   });
 
   const homeHeroConfig: StoreHomeHeroConfig = {
@@ -420,6 +451,7 @@ export const getStoreConfigV2 = (input: StoreConfigInput): StoreConfigV2 => {
       ),
     }),
     contact: cleanUndefined({
+      email: asString(contact.email),
       phoneNumber: firstDefined(
         asString(contact.phoneNumber),
         asString(legacyContactInfo.phoneNumber),
@@ -429,6 +461,11 @@ export const getStoreConfigV2 = (input: StoreConfigInput): StoreConfigV2 => {
         asString(legacyContactInfo.location),
       ),
     }) as StoreContactConfig,
+    receipt: cleanUndefined({
+      policyLines: asOptionalArray(receipt.policyLines, (value) =>
+        asString(value),
+      )?.filter((line) => line.length > 0),
+    }),
     payments: {
       mtnMomo: {
         receivingAccounts: normalizeMtnMomoReceivingAccounts(

@@ -59,6 +59,55 @@ import { useAuth } from "~/src/hooks/useAuth";
 import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
 import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { runCommand } from "~/src/lib/errors/runCommand";
+import type { OnlineOrder } from "~/types";
+
+type SharedDemoSessionOrderTransitionUser = NonNullable<
+  OnlineOrder["transitions"]
+>[number]["signedInAthenaUser"];
+
+export function buildSharedDemoSessionOrderUpdate({
+  currentTransitions,
+  now,
+  update,
+  user,
+}: {
+  currentTransitions?: OnlineOrder["transitions"];
+  now: number;
+  update: Record<string, unknown>;
+  user: SharedDemoSessionOrderTransitionUser;
+}) {
+  const status = typeof update.status === "string" ? update.status : undefined;
+  const completedEmailUpdate =
+    status === "picked-up" || status === "delivered"
+      ? {
+          didSendCompletedEmail: true,
+          orderCompletedEmailSentAt: now,
+        }
+      : {};
+
+  return {
+    ...update,
+    ...completedEmailUpdate,
+    ...(status
+      ? {
+          transitions: [
+            ...(currentTransitions ?? []),
+            {
+              date: now,
+              signedInAthenaUser: user
+                ? {
+                    email: user.email,
+                    id: user.id,
+                  }
+                : undefined,
+              status,
+            },
+          ],
+        }
+      : {}),
+    updatedAt: now,
+  };
+}
 
 export function RefundOptions() {
   const { order } = useOnlineOrder();
@@ -190,7 +239,8 @@ export function RefundOptions() {
 }
 
 const Header = () => {
-  const { order } = useOnlineOrder();
+  const { isSharedDemoSessionOrder, order, updateSessionOrder } =
+    useOnlineOrder();
   const sharedDemo = useSharedDemoContext();
 
   const { user } = useAuth();
@@ -224,6 +274,32 @@ const Header = () => {
         update.paymentCollected === true
           ? { status: "picked-up" }
           : update;
+      if (isSharedDemoSessionOrder) {
+        const now = Date.now();
+        updateSessionOrder({
+          ...buildSharedDemoSessionOrderUpdate({
+            currentTransitions: order?.transitions,
+            now,
+            update: effectiveUpdate,
+            user: user
+              ? {
+                  email: user.email,
+                  id: user._id,
+                }
+              : undefined,
+          }),
+        });
+        toast(
+          options?.successMessage ??
+            (typeof effectiveUpdate.status === "string"
+              ? `Order marked as ${slugToWords(effectiveUpdate.status)}`
+              : "Order updated"),
+          {
+            icon: <CheckCircledIcon className="w-4 h-4" />,
+          },
+        );
+        return;
+      }
       const result = await runCommand(() =>
         updateOrder({
           orderId: order?._id,
@@ -259,6 +335,30 @@ const Header = () => {
   const handleCancelOrder = async () => {
     try {
       setIsUpdatingOrder(true);
+      if (isSharedDemoSessionOrder) {
+        const now = Date.now();
+        updateSessionOrder({
+          status: "cancelled",
+          transitions: [
+            ...(order?.transitions ?? []),
+            {
+              date: now,
+              signedInAthenaUser: user
+                ? {
+                    email: user.email,
+                    id: user._id,
+                  }
+                : undefined,
+              status: "cancelled",
+            },
+          ],
+          updatedAt: now,
+        });
+        toast("Order cancelled", {
+          icon: <CheckCircledIcon className="w-4 h-4" />,
+        });
+        return;
+      }
       const result = await runCommand(() =>
         updateOrder({
           orderId: order?._id,
@@ -545,6 +645,8 @@ const OrderWorkspace = () => {
 
   if (!order) return null;
 
+  const shouldShowRefundActions = order.status !== "refunded";
+
   return (
     <FadeIn className="h-full">
       <View hideBorder scrollMode="page">
@@ -576,9 +678,11 @@ const OrderWorkspace = () => {
                   <EmailStatusView />
                 </section>
 
-                <section className="rounded-lg border border-border bg-surface-raised p-layout-lg shadow-surface [&>section]:bg-transparent">
-                  <RefundsView />
-                </section>
+                {shouldShowRefundActions && (
+                  <section className="rounded-lg border border-border bg-surface-raised p-layout-lg shadow-surface [&>section]:bg-transparent">
+                    <RefundsView />
+                  </section>
+                )}
               </PageWorkspaceRail>
             </PageWorkspaceGrid>
           </PageWorkspace>

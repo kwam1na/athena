@@ -481,24 +481,14 @@ async function requireRegisterCatalogStoreAccess(
     indexedIdentityOnly?: boolean;
   },
 ) {
-  const operationAdmission = (ctx as Partial<OperationQueryCtx>)
-    .operationAdmission;
-  const admittedActor = operationAdmission?.actor;
-  const sharedDemoActor =
-    admittedActor?.kind === "shared_demo" ? admittedActor : null;
-
   const store = await ctx.db.get("store", args.storeId);
   if (!store) {
     throw new Error("Store not found.");
   }
 
   const athenaUser = options?.indexedIdentityOnly
-    ? sharedDemoActor
-      ? await ctx.db.get("athenaUser", sharedDemoActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserIndexedWithCtx(ctx)
-    : sharedDemoActor
-      ? await ctx.db.get("athenaUser", sharedDemoActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+    ? await requireAuthenticatedAthenaUserIndexedWithCtx(ctx)
+    : await requireAuthenticatedAthenaUserWithCtx(ctx);
   if (!athenaUser) {
     throw new Error("Sign in again to continue.");
   }
@@ -847,11 +837,7 @@ export const quickAddSku = mutation({
         throw new Error("Store not found.");
       }
 
-      const admittedActor = ctx.operationAdmission.actor;
-      const athenaUser =
-        admittedActor.kind === "shared_demo"
-          ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
-          : await requireAuthenticatedAthenaUserWithCtx(ctx);
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
       if (!athenaUser) {
         throw new Error("Sign in again to continue.");
       }

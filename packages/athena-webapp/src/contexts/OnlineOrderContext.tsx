@@ -1,24 +1,37 @@
-import { useParams } from "@tanstack/react-router";
-import { createContext, useContext } from "react";
-import { OnlineOrder, OnlineOrderItem } from "~/types";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
+
+import type { OnlineOrderItem } from "~/types";
 import useGetActiveOnlineOrder from "../components/orders/hooks/useGetActiveOnlineOrder";
+import {
+  getSharedDemoSessionOrderStorageKey,
+  readSharedDemoSessionOrderPatch,
+  writeSharedDemoSessionOrderPatch,
+  type OnlineOrderWithItems,
+  type SessionOnlineOrderItem,
+  type SharedDemoSessionOrderPatch,
+} from "./onlineOrderSessionOverlay";
 
 interface OnlineOrderContextType {
-  // state
-  order?: OnlineOrder | null;
-  // isLoading: boolean;
-
-  // actions
-  // updateOrder: (newOrder: Partial<OnlineOrder>) => void;
-  // updateOrderItem: (
-  // itemId: string,
-  // attributes: Partial<OnlineOrderItem>
-  // ) => void;
-  // removeOrderItem: (itemId: string) => void;
+  order?: OnlineOrderWithItems | null;
+  isSharedDemoSessionOrder: boolean;
+  updateSessionOrder: (update: Partial<OnlineOrderWithItems>) => void;
+  updateSessionOrderItem: (
+    itemId: string,
+    update: Partial<SessionOnlineOrderItem>,
+  ) => void;
 }
 
 const OnlineOrderContext = createContext<OnlineOrderContextType | undefined>(
-  undefined
+  undefined,
 );
 
 export function OnlineOrderProvider({
@@ -26,10 +39,73 @@ export function OnlineOrderProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const order: OnlineOrder | null | undefined = useGetActiveOnlineOrder();
+  const order: OnlineOrderWithItems | null | undefined =
+    useGetActiveOnlineOrder();
+  const sharedDemo = useSharedDemoContext();
+  const isSharedDemoSessionOrder = sharedDemo?.kind === "shared_demo";
+  const storageKey =
+    isSharedDemoSessionOrder && order?._id
+      ? getSharedDemoSessionOrderStorageKey({
+          orderId: String(order._id),
+          restoreEpoch: sharedDemo.restore.epoch,
+          storeId: String(sharedDemo.storeId),
+        })
+      : null;
+  const [sessionOrderPatch, setSessionOrderPatch] =
+    useState<SharedDemoSessionOrderPatch>(() =>
+      readSharedDemoSessionOrderPatch(storageKey),
+    );
+
+  useEffect(() => {
+    setSessionOrderPatch(readSharedDemoSessionOrderPatch(storageKey));
+  }, [storageKey]);
+
+  const updateSessionOrder = useCallback(
+    (update: Partial<OnlineOrderWithItems>) => {
+      if (!isSharedDemoSessionOrder) return;
+
+      setSessionOrderPatch((current) => {
+        const next = { ...current, ...update };
+        writeSharedDemoSessionOrderPatch(storageKey, next);
+        return next;
+      });
+    },
+    [isSharedDemoSessionOrder, storageKey],
+  );
+
+  const updateSessionOrderItem = useCallback(
+    (itemId: string, update: Partial<OnlineOrderItem>) => {
+      if (!isSharedDemoSessionOrder || !order?.items) return;
+
+      setSessionOrderPatch((current) => {
+        const sourceItems = current.items ?? order.items ?? [];
+        const next = {
+          ...current,
+          items: sourceItems.map((item) =>
+            String(item._id) === itemId ? { ...item, ...update } : item,
+          ),
+        };
+        writeSharedDemoSessionOrderPatch(storageKey, next);
+        return next;
+      });
+    },
+    [isSharedDemoSessionOrder, order?.items, storageKey],
+  );
+
+  const effectiveOrder = useMemo(() => {
+    if (!order || !isSharedDemoSessionOrder) return order;
+    return { ...order, ...sessionOrderPatch };
+  }, [isSharedDemoSessionOrder, order, sessionOrderPatch]);
 
   return (
-    <OnlineOrderContext.Provider value={{ order }}>
+    <OnlineOrderContext.Provider
+      value={{
+        isSharedDemoSessionOrder,
+        order: effectiveOrder,
+        updateSessionOrder,
+        updateSessionOrderItem,
+      }}
+    >
       {children}
     </OnlineOrderContext.Provider>
   );

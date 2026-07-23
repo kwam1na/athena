@@ -120,7 +120,6 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
       "inventory/products:createSku",
       "inventory/products:generateUniqueBarcode",
       "inventory/products:removeSku",
-      "inventory/products:repairCatalogSummary",
       "inventory/products:unarchive",
       "inventory/products:update",
       "inventory/products:updateSku",
@@ -389,20 +388,6 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
       "pos/public/terminals:submitTerminalRuntimeStatus",
       "pos/public/terminals:updateTerminal",
     ],
-  },
-  {
-    wave: "pos",
-    capability: "pos.transaction.correct",
-    owner: "V26-1094",
-    reason: LEGACY_REASON,
-    functions: ["pos/public/transactions:adjustTransactionItems"],
-  },
-  {
-    wave: "pos",
-    capability: "pos.transaction.void",
-    owner: "V26-1094",
-    reason: LEGACY_REASON,
-    functions: ["pos/public/transactions:voidTransaction"],
   },
   {
     wave: "procurement",

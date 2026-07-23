@@ -1269,12 +1269,7 @@ async function requireInventorySnapshotForProductSkusAccess(
     throw new Error("Store not found.");
   }
 
-  const admittedActor = (ctx as Partial<OperationQueryCtx>).operationAdmission
-    ?.actor;
-  const athenaUser =
-    admittedActor?.kind === "shared_demo"
-      ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
   if (!athenaUser) {
     throw new Error("Sign in again to continue.");
   }
@@ -1479,12 +1474,7 @@ export async function submitStockAdjustmentBatchWithCtx(
     throw new Error("Store not found.");
   }
 
-  const admittedActor = (ctx as Partial<OperationMutationCtx>)
-    .operationAdmission?.actor;
-  const createdByUser =
-    admittedActor?.kind === "shared_demo"
-      ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const createdByUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
   if (!createdByUser) {
     throw new Error("Sign in again to continue.");
   }
@@ -1538,10 +1528,10 @@ export async function submitStockAdjustmentBatchWithCtx(
 
   const summary = summarizeStockAdjustmentLineItems(normalizedLineItems);
   const highVarianceFlag = hasHighStockAdjustmentVariance(summary);
-  const approvalRequired = requiresStockAdjustmentApproval({
-    adjustmentType: args.adjustmentType,
-    largestAbsoluteDelta: summary.largestAbsoluteDelta,
-  });
+  // Always false today: approval gating is intentionally off (see
+  // requiresStockAdjustmentApproval). highVarianceFlag still records the
+  // variance on the batch for reporting.
+  const approvalRequired = requiresStockAdjustmentApproval();
   const now = Date.now();
   const notes = trimOptional(args.notes);
 

@@ -254,6 +254,122 @@ function buildPaymentMix(
   });
 }
 
+function buildSelectedMetricPaymentMix(
+  metric: SharedDemoHistoricalMetric,
+): SharedDemoStorePulseOperatorSnapshot["paymentMix"] {
+  const labels = {
+    card: "Card",
+    cash: "Cash",
+    mobile_money: "Mobile money",
+  } as const;
+
+  return metric.paymentTotals.map((payment) => ({
+    count: payment.transactionCount,
+    label: labels[payment.method as keyof typeof labels] ?? payment.method,
+    method: payment.method,
+    share:
+      metric.salesTotal > 0
+        ? Math.round((payment.amount / metric.salesTotal) * 100)
+        : 0,
+    total: payment.amount,
+  }));
+}
+
+function buildSelectedMetricTopItems(
+  metric: SharedDemoHistoricalMetric,
+): SharedDemoStorePulseOperatorSnapshot["topItems"] {
+  if (metric.totalItemsSold <= 0 || metric.salesTotal <= 0) return [];
+
+  const primaryQuantity = Math.max(1, Math.round(metric.totalItemsSold * 0.32));
+  const secondaryQuantity = Math.max(
+    1,
+    Math.round(metric.totalItemsSold * 0.25),
+  );
+  const tertiaryQuantity = Math.max(
+    1,
+    Math.round(metric.totalItemsSold * 0.16),
+  );
+  const remainingQuantity = Math.max(
+    1,
+    metric.totalItemsSold -
+      primaryQuantity -
+      secondaryQuantity -
+      tertiaryQuantity,
+  );
+  const quantities = [
+    primaryQuantity,
+    secondaryQuantity,
+    tertiaryQuantity,
+    remainingQuantity,
+  ];
+  const products = [
+    SHARED_DEMO_PRODUCTS[0],
+    SHARED_DEMO_PRODUCTS[1],
+    SHARED_DEMO_PRODUCTS[6],
+    SHARED_DEMO_PRODUCTS[4],
+  ];
+  const totalQuantity = quantities.reduce((sum, quantity) => sum + quantity, 0);
+
+  return products.map((product, index) => {
+    const quantity = quantities[index]!;
+    const totalSales =
+      index === products.length - 1
+        ? metric.salesTotal -
+          quantities
+            .slice(0, -1)
+            .reduce(
+              (sum, itemQuantity) =>
+                sum +
+                toWholeCurrencyAmount(
+                  metric.salesTotal * (itemQuantity / totalQuantity),
+                ),
+              0,
+            )
+        : toWholeCurrencyAmount(metric.salesTotal * (quantity / totalQuantity));
+
+    return {
+      name: product.name,
+      productSku: product.sku,
+      quantity,
+      totalSales,
+    };
+  });
+}
+
+function selectStorePulseDetailForMetric(
+  summary: StorePulseSummary,
+  metric: SharedDemoHistoricalMetric,
+): StorePulseSummary {
+  const operatorSnapshot = summary.operatorSnapshot;
+  if (!operatorSnapshot) return summary;
+
+  const selectedAverageTransaction = averageTransaction(
+    metric.salesTotal,
+    metric.transactionCount,
+  );
+
+  return {
+    ...summary,
+    averageTransaction: selectedAverageTransaction,
+    date: metric.operatingDate,
+    operatorSnapshot: {
+      ...operatorSnapshot,
+      comparison: {
+        ...operatorSnapshot.comparison,
+        currentAverageTransaction: selectedAverageTransaction,
+        currentItemsSold: metric.totalItemsSold,
+        currentSales: metric.salesTotal,
+        currentTransactions: metric.transactionCount,
+      },
+      paymentMix: buildSelectedMetricPaymentMix(metric),
+      topItems: buildSelectedMetricTopItems(metric),
+    },
+    totalItemsSold: metric.totalItemsSold,
+    totalSales: metric.salesTotal,
+    totalTransactions: metric.transactionCount,
+  };
+}
+
 function buildStorePulseSummary(
   history: ReturnType<typeof buildHistoricalMetrics>,
 ): StorePulseSummary {
@@ -360,6 +476,230 @@ function buildStorePulseSummary(
     totalSales,
     totalTransactions,
   };
+}
+
+export function createSharedDemoPointOfSaleStorePulseSummary(
+  pulseWindow: "today" | "this_week" | "this_month" | "all_time" = "today",
+  today = getLocalOperatingDate(),
+): StorePulseSummary {
+  const currentDay = createEmptyMetric(today);
+  const yesterday = buildFixtureHistoricalMetric(
+    shiftOperatingDate(today, -1),
+    today,
+  );
+  const recentHistory = [
+    ...buildHistoricalMetrics(today).slice(-13),
+    currentDay,
+  ];
+  const windowHistory = getSharedDemoPointOfSaleWindowHistory({
+    currentDay,
+    pulseWindow,
+    recentHistory,
+    today,
+    yesterday,
+  });
+  const summary = buildStorePulseSummary(windowHistory);
+
+  if (pulseWindow !== "today") return summary;
+  const operatorSnapshot = summary.operatorSnapshot;
+  if (!operatorSnapshot) return summary;
+
+  const yesterdayAverageTransaction = averageTransaction(
+    yesterday.salesTotal,
+    yesterday.transactionCount,
+  );
+  const currentAverageTransaction = averageTransaction(
+    currentDay.salesTotal,
+    currentDay.transactionCount,
+  );
+
+  return {
+    ...summary,
+    averageTransaction: currentAverageTransaction,
+    date: today,
+    operatorSnapshot: {
+      ...operatorSnapshot,
+      comparison: {
+        averageTransactionDeltaPercent: percentageChange(
+          currentAverageTransaction,
+          yesterdayAverageTransaction,
+        ),
+        currentAverageTransaction,
+        currentItemsSold: currentDay.totalItemsSold,
+        currentSales: currentDay.salesTotal,
+        currentTransactions: currentDay.transactionCount,
+        itemsSoldDeltaPercent: percentageChange(
+          currentDay.totalItemsSold,
+          yesterday.totalItemsSold,
+        ),
+        salesDeltaPercent: percentageChange(
+          currentDay.salesTotal,
+          yesterday.salesTotal,
+        ),
+        transactionDeltaPercent: percentageChange(
+          currentDay.transactionCount,
+          yesterday.transactionCount,
+        ),
+        yesterdayAverageTransaction,
+        yesterdayItemsSold: yesterday.totalItemsSold,
+        yesterdaySales: yesterday.salesTotal,
+        yesterdayTransactions: yesterday.transactionCount,
+      },
+      trend: [
+        {
+          averageTransaction: yesterdayAverageTransaction,
+          date: yesterday.operatingDate,
+          label: formatDayLabel(yesterday.operatingDate),
+          totalItemsSold: yesterday.totalItemsSold,
+          totalSales: yesterday.salesTotal,
+          transactionCount: yesterday.transactionCount,
+        },
+        {
+          averageTransaction: currentAverageTransaction,
+          date: currentDay.operatingDate,
+          label: "Today",
+          totalItemsSold: currentDay.totalItemsSold,
+          totalSales: currentDay.salesTotal,
+          transactionCount: currentDay.transactionCount,
+        },
+      ],
+      usableHistoryDays: 2,
+    },
+    totalItemsSold: currentDay.totalItemsSold,
+    totalSales: currentDay.salesTotal,
+    totalTransactions: currentDay.transactionCount,
+  };
+}
+
+export function overlaySharedDemoPointOfSaleTodayWithFixtureYesterday(
+  liveTodaySummary: StorePulseSummary | undefined,
+  today = getLocalOperatingDate(),
+): StorePulseSummary | undefined {
+  if (!liveTodaySummary) return liveTodaySummary;
+
+  const fixtureTodaySummary = createSharedDemoPointOfSaleStorePulseSummary(
+    "today",
+    today,
+  );
+  const fixtureOperatorSnapshot = fixtureTodaySummary.operatorSnapshot;
+  const liveOperatorSnapshot = liveTodaySummary.operatorSnapshot;
+  const fixtureYesterdayTrend = fixtureOperatorSnapshot?.trend[0];
+
+  if (
+    !fixtureOperatorSnapshot ||
+    !liveOperatorSnapshot ||
+    !fixtureYesterdayTrend
+  ) {
+    return liveTodaySummary;
+  }
+
+  const currentSales = liveTodaySummary.totalSales ?? 0;
+  const currentTransactions = liveTodaySummary.totalTransactions ?? 0;
+  const currentItemsSold = liveTodaySummary.totalItemsSold ?? 0;
+  const currentAverageTransaction = averageTransaction(
+    currentSales,
+    currentTransactions,
+  );
+  const yesterdaySales =
+    fixtureOperatorSnapshot.comparison.yesterdaySales ??
+    fixtureYesterdayTrend.totalSales;
+  const yesterdayTransactions =
+    fixtureOperatorSnapshot.comparison.yesterdayTransactions ??
+    fixtureYesterdayTrend.transactionCount;
+  const yesterdayItemsSold =
+    fixtureOperatorSnapshot.comparison.yesterdayItemsSold ??
+    fixtureYesterdayTrend.totalItemsSold;
+  const yesterdayAverageTransaction = averageTransaction(
+    yesterdaySales,
+    yesterdayTransactions,
+  );
+
+  return {
+    ...liveTodaySummary,
+    averageTransaction: currentAverageTransaction,
+    date: liveTodaySummary.date ?? today,
+    operatorSnapshot: {
+      ...liveOperatorSnapshot,
+      comparison: {
+        ...liveOperatorSnapshot.comparison,
+        averageTransactionDeltaPercent: percentageChange(
+          currentAverageTransaction,
+          yesterdayAverageTransaction,
+        ),
+        currentAverageTransaction,
+        currentItemsSold,
+        currentSales,
+        currentTransactions,
+        itemsSoldDeltaPercent: percentageChange(
+          currentItemsSold,
+          yesterdayItemsSold,
+        ),
+        salesDeltaPercent: percentageChange(currentSales, yesterdaySales),
+        transactionDeltaPercent: percentageChange(
+          currentTransactions,
+          yesterdayTransactions,
+        ),
+        yesterdayAverageTransaction,
+        yesterdayItemsSold,
+        yesterdaySales,
+        yesterdayTransactions,
+      },
+      historyDays: Math.max(liveOperatorSnapshot.historyDays, 2),
+      trend: [
+        {
+          ...fixtureYesterdayTrend,
+          label: formatDayLabel(fixtureYesterdayTrend.date),
+        },
+        {
+          averageTransaction: currentAverageTransaction,
+          date: liveTodaySummary.date ?? today,
+          label: "Today",
+          totalItemsSold: currentItemsSold,
+          totalSales: currentSales,
+          transactionCount: currentTransactions,
+        },
+      ],
+      usableHistoryDays:
+        (yesterdayTransactions > 0 ? 1 : 0) + (currentTransactions > 0 ? 1 : 0),
+    },
+    totalItemsSold: currentItemsSold,
+    totalSales: currentSales,
+    totalTransactions: currentTransactions,
+  };
+}
+
+function getSharedDemoPointOfSaleWindowHistory({
+  currentDay,
+  pulseWindow,
+  recentHistory,
+  today,
+  yesterday,
+}: {
+  currentDay: SharedDemoHistoricalMetric;
+  pulseWindow: "today" | "this_week" | "this_month" | "all_time";
+  recentHistory: SharedDemoHistoricalMetric[];
+  today: string;
+  yesterday: SharedDemoHistoricalMetric;
+}) {
+  if (pulseWindow === "today") return [yesterday, currentDay];
+  if (pulseWindow === "all_time") return recentHistory;
+
+  const todayDate = getLocalDateFromOperatingDate(today);
+  if (!todayDate) return recentHistory;
+
+  const windowStart = new Date(todayDate);
+  if (pulseWindow === "this_week") {
+    const daysSinceMonday = (windowStart.getDay() + 6) % 7;
+    windowStart.setDate(windowStart.getDate() - daysSinceMonday);
+  } else {
+    windowStart.setDate(1);
+  }
+
+  const windowStartOperatingDate = formatOperatingDate(windowStart);
+
+  return recentHistory.filter(
+    (day) => day.operatingDate >= windowStartOperatingDate,
+  );
 }
 
 function createEmptyMetric(operatingDate: string) {
@@ -473,7 +813,10 @@ export function createSharedDemoDailyOperationsFixture({
         shiftOperatingDate(selectedMetric.operatingDate, 1),
       )
     : [...buildHistoricalMetrics(today).slice(-13), createEmptyMetric(today)];
-  const storePulse = buildStorePulseSummary(history);
+  const storePulse = selectStorePulseDetailForMetric(
+    buildStorePulseSummary(history),
+    selectedMetric,
+  );
   const snapshot: DailyOperationsSnapshot = {
     attentionItems: [],
     closeSummary: {

@@ -13,6 +13,11 @@ interface OrderMetricsPanelProps {
   storeId: Id<"store">;
   currency: string;
   onTimeRangeChange: (timeRange: TimeRange) => void;
+  metricsOverride?: {
+    grossSales: number;
+    netRevenue: number;
+    totalOrders: number;
+  };
 }
 
 export default function OrderMetricsPanel({
@@ -20,14 +25,16 @@ export default function OrderMetricsPanel({
   storeId,
   currency,
   onTimeRangeChange,
+  metricsOverride,
 }: OrderMetricsPanelProps) {
   const [selectedTimeRange, setSelectedTimeRange] =
     useState<TimeRange>(initialTimeRange);
 
-  const metrics = useQuery(api.storeFront.onlineOrder.getOrderMetrics, {
-    storeId,
-    timeRange: selectedTimeRange,
-  });
+  const metrics = useQuery(
+    api.storeFront.onlineOrder.getOrderMetrics,
+    metricsOverride ? "skip" : { storeId, timeRange: selectedTimeRange },
+  );
+  const effectiveMetrics = metricsOverride ?? metrics;
 
   const formatter = currencyFormatter(currency);
 
@@ -37,7 +44,7 @@ export default function OrderMetricsPanel({
     onTimeRangeChange(newTimeRange);
   };
 
-  const isLoading = metrics === undefined;
+  const isLoading = !metricsOverride && metrics === undefined;
 
   return (
     <section className="space-y-layout-md">
@@ -64,17 +71,17 @@ export default function OrderMetricsPanel({
           <OperationsSummaryMetric
             helper="Subtotal before discounts"
             label="Gross sales"
-            value={formatter.format((metrics?.grossSales || 0) / 100)}
+            value={formatter.format((effectiveMetrics?.grossSales || 0) / 100)}
           />
           <OperationsSummaryMetric
             helper="Subtotal plus fees after discounts"
             label="Net revenue"
-            value={formatter.format((metrics?.netRevenue || 0) / 100)}
+            value={formatter.format((effectiveMetrics?.netRevenue || 0) / 100)}
           />
           <OperationsSummaryMetric
             helper="Open and fulfilled orders"
             label="Orders"
-            value={metrics?.totalOrders || 0}
+            value={effectiveMetrics?.totalOrders || 0}
           />
         </div>
       )}

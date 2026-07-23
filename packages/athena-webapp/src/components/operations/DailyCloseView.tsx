@@ -4770,8 +4770,7 @@ function SharedDemoDailyCloseView({
   storeId: Id<"store">;
 }) {
   const params = useParams({ strict: false }) as
-    | { orgUrlSlug?: string; storeUrlSlug?: string }
-    | undefined;
+    { orgUrlSlug?: string; storeUrlSlug?: string } | undefined;
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { operatingDate?: unknown };
   const operatingDate = getLocalOperatingDateRangeFromSearch(

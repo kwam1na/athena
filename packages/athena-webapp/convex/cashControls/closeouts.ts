@@ -608,12 +608,7 @@ async function requireCashControlsStoreAccess(
     throw new Error("Store not found.");
   }
 
-  const admittedActor = (ctx as Partial<OperationMutationCtx>)
-    .operationAdmission?.actor;
-  const athenaUser =
-    admittedActor?.kind === "shared_demo"
-      ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
   if (!athenaUser) {
     throw new Error("Sign in again to continue.");
   }

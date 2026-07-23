@@ -40,7 +40,8 @@ const VerifiedBadge = ({
 };
 
 export function OrderDetailsView() {
-  const { order } = useOnlineOrder();
+  const { isSharedDemoSessionOrder, order, updateSessionOrder } =
+    useOnlineOrder();
   const { activeStore } = useGetActiveStore();
   const { user } = useAuth();
 
@@ -54,6 +55,29 @@ export function OrderDetailsView() {
   );
 
   const handleMarkPaymentCollected = async () => {
+    if (isSharedDemoSessionOrder) {
+      const now = Date.now();
+      updateSessionOrder({
+        paymentCollected: true,
+        paymentCollectedAt: now,
+        transitions: [
+          ...(order?.transitions ?? []),
+          {
+            date: now,
+            signedInAthenaUser: user
+              ? {
+                  email: user.email,
+                  id: user._id,
+                }
+              : undefined,
+            status: "payment_collected",
+          },
+        ],
+      });
+      toast.success("Payment marked as collected");
+      return;
+    }
+
     const result = await runCommand(() =>
       updateOrder({
         orderId: order?._id,

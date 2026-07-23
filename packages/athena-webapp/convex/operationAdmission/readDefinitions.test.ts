@@ -173,6 +173,31 @@ describe("operation read admission definitions", () => {
     );
   });
 
+  it("defines demo-visible organization bootstrap reads", () => {
+    expect(OPERATION_READ_ADMISSION_DEFINITIONS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          access: { kind: "read", intent: "organization.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "inventory/organizations:getAll",
+          scope: { kind: "none" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "organization.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "inventory/organizations:getByIdOrSlug",
+          scope: { kind: "none" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "organization.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          functionName: "inventory/stores:getAll",
+          scope: { kind: "organization", organizationIdArg: "organizationId" },
+        }),
+      ]),
+    );
+  });
+
   it("resolves transaction detail reads through the transaction store", async () => {
     const definition = OPERATION_READ_ADMISSION_DEFINITIONS.find(
       (candidate) =>

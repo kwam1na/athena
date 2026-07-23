@@ -54,6 +54,21 @@ describe("operation admission definitions", () => {
     expect(validateOperationDefinition(definition)).toEqual([]);
   });
 
+  it("defines catalog summary repair as a demo-visible store write", () => {
+    expect(OPERATION_ADMISSION_DEFINITIONS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          capability: "catalog.maintain",
+          functionName: "inventory/products:repairCatalogSummary",
+          operationId: "inventory/products.repairCatalogSummary",
+          readiness: { kind: "store_write", expectedEpochArg: undefined },
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+      ]),
+    );
+  });
+
   it("fails closed for unknown capabilities and incomplete scope declarations", () => {
     expect(
       validateOperationDefinition({

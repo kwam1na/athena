@@ -28,9 +28,6 @@ import { toast } from "sonner";
 import {
   CYCLE_COUNT_REASON_CODE,
   MANUAL_STOCK_ADJUSTMENT_REASON_CODES,
-  STOCK_ADJUSTMENT_APPROVAL_THRESHOLD,
-  hasHighStockAdjustmentVariance,
-  requiresStockAdjustmentApproval,
   summarizeStockAdjustmentLineItems,
 } from "~/shared/stockAdjustment";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -111,9 +108,7 @@ export type InventorySnapshotItem = {
   sku?: string | null;
   stockAdjustmentBlockedMessage?: string | null;
   stockAdjustmentBlockedReason?:
-    | "pos_pending_checkout"
-    | "provisional_import"
-    | null;
+    "pos_pending_checkout" | "provisional_import" | null;
 };
 
 export type InventoryUnitSummary = {
@@ -149,10 +144,7 @@ export type SubmitStockAdjustmentArgs = {
 
 export type StockAdjustmentType = "manual" | "cycle_count";
 export type StockAdjustmentAvailabilityFilter =
-  | "all"
-  | "all_available"
-  | "changed"
-  | "unavailable";
+  "all" | "all_available" | "changed" | "unavailable";
 
 export type StockAdjustmentSearchState = {
   availability?: StockAdjustmentAvailabilityFilter;
@@ -2180,16 +2172,6 @@ export function StockAdjustmentWorkspaceContent({
           netQuantityDelta: cycleCountDraftSummary.netQuantityDelta,
         }
       : summary;
-  const highVarianceFlag =
-    overallSummary.lineItemCount > 0 &&
-    hasHighStockAdjustmentVariance(overallSummary);
-  const approvalRequired =
-    adjustmentType === "manual" &&
-    changedRows.length > 0 &&
-    requiresStockAdjustmentApproval({
-      adjustmentType,
-      largestAbsoluteDelta: summary.largestAbsoluteDelta,
-    });
   const displayedReasonCode =
     adjustmentType === "manual" ? reasonCode : CYCLE_COUNT_REASON_CODE;
   const activeInventoryItem =
@@ -2234,7 +2216,8 @@ export function StockAdjustmentWorkspaceContent({
   const stockAdjustmentAutoLoadStatus = isTableAwaitingMoreInventoryRows
     ? isRestoredItemMissing || isRequestedPageMissing
       ? {
-          description: "Loading more SKUs to recover the selected row and page.",
+          description:
+            "Loading more SKUs to recover the selected row and page.",
           label: "Restoring saved stock view",
         }
       : isReservedFilterMissingLoadedRows
@@ -2242,17 +2225,15 @@ export function StockAdjustmentWorkspaceContent({
             description: "Checking remaining inventory for reserved units.",
             label: "Loading reserved SKUs",
           }
-      : {
-          description:
-            "Loading more SKUs before showing final search results.",
-          label: "Checking remaining inventory",
-        }
+        : {
+            description:
+              "Loading more SKUs before showing final search results.",
+            label: "Checking remaining inventory",
+          }
     : null;
   const stockAdjustmentTableEmptyState = isTableAwaitingMoreInventoryRows ? (
     <div className="mx-auto flex max-w-sm flex-col items-center gap-1 py-layout-xs">
-      <p className="text-sm font-medium text-foreground">
-        Searching more SKUs
-      </p>
+      <p className="text-sm font-medium text-foreground">Searching more SKUs</p>
       <p className="text-xs leading-5 text-muted-foreground">
         Checking the remaining inventory before showing final results.
       </p>
@@ -3106,16 +3087,12 @@ export function StockAdjustmentWorkspaceContent({
     }
 
     toast.success(
-      approvalRequired
-        ? "Stock batch submitted for review"
-        : adjustmentType === "manual"
-          ? "Stock adjustment applied"
-          : "Count applied",
+      adjustmentType === "manual"
+        ? "Stock adjustment applied"
+        : "Count applied",
     );
     if (adjustmentType === "cycle_count") {
-      setCycleCountSubmissionOutcome(
-        approvalRequired ? "review_required" : "applied",
-      );
+      setCycleCountSubmissionOutcome("applied");
       setStaleDraftLines([]);
     }
     setNotes("");
@@ -3569,22 +3546,10 @@ export function StockAdjustmentWorkspaceContent({
                       />
                     </div>
                   )}
-                  <div
-                    className={`rounded-md border px-layout-md py-layout-sm text-sm leading-6 ${
-                      approvalRequired
-                        ? "border-warning/30 bg-warning/10 text-foreground"
-                        : adjustmentType === "cycle_count" && highVarianceFlag
-                          ? "border-warning/30 bg-warning/10 text-foreground"
-                          : "border-success/30 bg-success/10 text-foreground"
-                    }`}
-                  >
-                    {approvalRequired
-                      ? "This batch will open an approval request before inventory changes are applied"
-                      : adjustmentType === "cycle_count" && highVarianceFlag
-                        ? "Submitting this count will apply inventory movements immediately and flag the high variance"
-                        : adjustmentType === "cycle_count"
-                          ? "Submitting this count will apply inventory movements immediately"
-                          : "This batch can apply immediately and will still write inventory movements"}
+                  <div className="rounded-md border border-success/30 bg-success/10 px-layout-md py-layout-sm text-sm leading-6 text-foreground">
+                    {adjustmentType === "cycle_count"
+                      ? "Submitting this count will apply inventory movements immediately"
+                      : "Submitting this adjustment will apply inventory movements immediately"}
                   </div>
                 </div>
               </section>
@@ -3634,10 +3599,9 @@ export function StockAdjustmentWorkspaceContent({
 
                 <div className="space-y-layout-sm text-sm text-muted-foreground">
                   <p>
-                    Variances of {STOCK_ADJUSTMENT_APPROVAL_THRESHOLD}+ units{" "}
                     {adjustmentType === "cycle_count"
-                      ? "are flagged after submission."
-                      : "go to review."}
+                      ? "Counts apply immediately when submitted."
+                      : "Adjustments apply immediately when submitted."}
                   </p>
                 </div>
 

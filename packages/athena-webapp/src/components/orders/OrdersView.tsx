@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
@@ -20,19 +20,57 @@ import {
   PageWorkspace,
   PageWorkspaceMain,
 } from "../common/PageLevelHeader";
+import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
+import {
+  SHARED_DEMO_SESSION_ORDER_CHANGED_EVENT,
+  applySharedDemoSessionOrderPatches,
+  readSharedDemoSessionOrderPatches,
+  type OnlineOrderWithItems,
+} from "~/src/contexts/onlineOrderSessionOverlay";
 
 type TimeRange = "day" | "week" | "month" | "all";
 
 export default function OrdersView({ status = "all" }: { status?: string }) {
   const { activeStore } = useGetActiveStore();
+  const sharedDemo = useSharedDemoContext();
   const initialTimeRange: TimeRange = "all";
   const [selectedTimeRange, setSelectedTimeRange] =
     useState<TimeRange>(initialTimeRange);
+  const [overlayVersion, setOverlayVersion] = useState(0);
 
   const orders = useQuery(
     api.storeFront.onlineOrder.getAllOnlineOrders,
     activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
+
+  useEffect(() => {
+    const handleSessionOrderChange = () => {
+      setOverlayVersion((current) => current + 1);
+    };
+    window.addEventListener(
+      SHARED_DEMO_SESSION_ORDER_CHANGED_EVENT,
+      handleSessionOrderChange,
+    );
+    return () => {
+      window.removeEventListener(
+        SHARED_DEMO_SESSION_ORDER_CHANGED_EVENT,
+        handleSessionOrderChange,
+      );
+    };
+  }, []);
+
+  const effectiveOrders = useMemo(() => {
+    if (!orders) return [];
+    if (sharedDemo?.kind !== "shared_demo") return orders;
+
+    return applySharedDemoSessionOrderPatches(
+      orders as OnlineOrderWithItems[],
+      readSharedDemoSessionOrderPatches({
+        restoreEpoch: sharedDemo.restore.epoch,
+        storeId: String(sharedDemo.storeId),
+      }),
+    );
+  }, [orders, overlayVersion, sharedDemo]);
 
   if (!activeStore || !orders) return null;
 
@@ -55,7 +93,42 @@ export default function OrdersView({ status = "all" }: { status?: string }) {
 
   const timeFilter = getTimeFilter(selectedTimeRange);
 
-  const ordersFormatted = orders
+  const metricEligibleStatuses = new Set([
+    "delivered",
+    "open",
+    "out-for-delivery",
+    "picked-up",
+    "ready",
+    "ready-for-delivery",
+    "ready-for-pickup",
+  ]);
+
+  const metricOrders = effectiveOrders.filter((order: OnlineOrder) => {
+    if (
+      timeFilter !== undefined &&
+      getOnlineOrderPlacedAt(order) < timeFilter
+    ) {
+      return false;
+    }
+    return metricEligibleStatuses.has(order.status);
+  });
+
+  const metricsOverride =
+    sharedDemo?.kind === "shared_demo"
+      ? {
+          grossSales: metricOrders.reduce(
+            (total, order) => total + (order.amount ?? 0),
+            0,
+          ),
+          netRevenue: metricOrders.reduce(
+            (total, order) => total + getAmountPaidForOrder(order),
+            0,
+          ),
+          totalOrders: metricOrders.length,
+        }
+      : undefined;
+
+  const ordersFormatted = effectiveOrders
     .filter((o: OnlineOrder) => {
       if (timeFilter !== undefined && getOnlineOrderPlacedAt(o) < timeFilter) {
         return false;
@@ -111,6 +184,7 @@ export default function OrdersView({ status = "all" }: { status?: string }) {
                 storeId={activeStore._id}
                 currency={activeStore.currency}
                 onTimeRangeChange={handleTimeRangeChange}
+                metricsOverride={metricsOverride}
               />
 
               <OrdersTableToolbarProvider>

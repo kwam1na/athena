@@ -4,8 +4,15 @@
 // marketing narrative shows.
 
 export const SHARED_DEMO_STORE_IDENTITY = {
+  contactEmail: "hello@osustudio.com",
+  contactLocation: "14 Nii Nortei Nyanchi Street, Osu, Accra, Ghana",
+  contactPhoneNumber: "+233 24 555 0142",
   currency: "GHS",
   organizationName: "Osu Studio",
+  receiptPolicyLines: [
+    "Exchange unused handmade goods within 7 days with this receipt.",
+    "Opened bath and body goods are final sale.",
+  ],
   storeName: "Osu Studio — Atelier",
 } as const;
 
@@ -74,14 +81,86 @@ export const SHARED_DEMO_PRODUCT_IMAGE_VERSION = "v2";
 
 // Prices and unit costs are minor units (pesewas); GH₵25.00 === 2500.
 export const SHARED_DEMO_PRODUCTS: readonly SharedDemoProductStory[] = [
-  { imageFilename: "demo-shea-250.webp", inventoryCount: 18, name: "Raw Shea Butter 250g", price: 6000, sku: "FM5W-7K2-3Q9", slug: "demo-shea-butter", subcategoryKey: "bath-body", unitCost: 3900 },
-  { imageFilename: "demo-soap-bar.webp", inventoryCount: 30, name: "Black Soap Bar", price: 3500, sku: "FM5W-4HT-8N6", slug: "demo-black-soap", subcategoryKey: "bath-body", unitCost: 2100 },
-  { imageFilename: "demo-clay-mug.webp", inventoryCount: 12, name: "Hand-Thrown Clay Mug", price: 9500, sku: "FM5W-9C3-2RD", slug: "demo-clay-mug", subcategoryKey: "home-living", unitCost: 6200 },
-  { imageFilename: "demo-bolga-basket.webp", inventoryCount: 8, name: "Bolga Woven Basket", price: 22000, sku: "FM5W-6BX-5W1", slug: "demo-bolga-basket", subcategoryKey: "home-living", unitCost: 14500 },
-  { imageFilename: "demo-soy-candle.webp", inventoryCount: 16, name: "Hibiscus Soy Candle", price: 12000, sku: "FM5W-2MP-7F4", slug: "demo-soy-candle", subcategoryKey: "home-living", unitCost: 7800 },
-  { imageFilename: "demo-kente-scarf.webp", inventoryCount: 6, name: "Kente Scarf", price: 35000, sku: "FM5W-8QJ-4K7", slug: "demo-kente-scarf", subcategoryKey: "textiles", unitCost: 23000 },
-  { imageFilename: "demo-batik-tote.webp", inventoryCount: 10, name: "Batik Tote Bag", price: 18000, sku: "FM5W-5K4-9T2", slug: "demo-batik-tote", subcategoryKey: "textiles", unitCost: 11700 },
-  { imageFilename: "demo-bead-bracelet.webp", inventoryCount: 24, name: "Beaded Bracelet", price: 5500, sku: "FM5W-3VN-6H8", slug: "demo-beaded-bracelet", subcategoryKey: "textiles", unitCost: 3300 },
+  {
+    imageFilename: "demo-shea-250.webp",
+    inventoryCount: 18,
+    name: "Raw Shea Butter 250g",
+    price: 6000,
+    sku: "FM5W-7K2-3Q9",
+    slug: "demo-shea-butter",
+    subcategoryKey: "bath-body",
+    unitCost: 3900,
+  },
+  {
+    imageFilename: "demo-soap-bar.webp",
+    inventoryCount: 30,
+    name: "Black Soap Bar",
+    price: 3500,
+    sku: "FM5W-4HT-8N6",
+    slug: "demo-black-soap",
+    subcategoryKey: "bath-body",
+    unitCost: 2100,
+  },
+  {
+    imageFilename: "demo-clay-mug.webp",
+    inventoryCount: 12,
+    name: "Hand-Thrown Clay Mug",
+    price: 9500,
+    sku: "FM5W-9C3-2RD",
+    slug: "demo-clay-mug",
+    subcategoryKey: "home-living",
+    unitCost: 6200,
+  },
+  {
+    imageFilename: "demo-bolga-basket.webp",
+    inventoryCount: 8,
+    name: "Bolga Woven Basket",
+    price: 22000,
+    sku: "FM5W-6BX-5W1",
+    slug: "demo-bolga-basket",
+    subcategoryKey: "home-living",
+    unitCost: 14500,
+  },
+  {
+    imageFilename: "demo-soy-candle.webp",
+    inventoryCount: 16,
+    name: "Hibiscus Soy Candle",
+    price: 12000,
+    sku: "FM5W-2MP-7F4",
+    slug: "demo-soy-candle",
+    subcategoryKey: "home-living",
+    unitCost: 7800,
+  },
+  {
+    imageFilename: "demo-kente-scarf.webp",
+    inventoryCount: 6,
+    name: "Kente Scarf",
+    price: 35000,
+    sku: "FM5W-8QJ-4K7",
+    slug: "demo-kente-scarf",
+    subcategoryKey: "textiles",
+    unitCost: 23000,
+  },
+  {
+    imageFilename: "demo-batik-tote.webp",
+    inventoryCount: 10,
+    name: "Batik Tote Bag",
+    price: 18000,
+    sku: "FM5W-5K4-9T2",
+    slug: "demo-batik-tote",
+    subcategoryKey: "textiles",
+    unitCost: 11700,
+  },
+  {
+    imageFilename: "demo-bead-bracelet.webp",
+    inventoryCount: 24,
+    name: "Beaded Bracelet",
+    price: 5500,
+    sku: "FM5W-3VN-6H8",
+    slug: "demo-beaded-bracelet",
+    subcategoryKey: "textiles",
+    unitCost: 3300,
+  },
 ] as const;
 
 export function sharedDemoProductImageUrl({
@@ -118,19 +197,16 @@ export const SHARED_DEMO_PICKUP_ORDER = {
   customerFirstName: "Abena",
   customerLastName: "Owusu",
   customerPhoneNumber: "024 555 0142",
-  orderNumber: "DEMO-ORDER-001",
+  orderNumber: "10427",
   quantity: 1,
   sku: sharedDemoProductBySlug("demo-black-soap").sku,
 } as const;
 
 const SHARED_DEMO_PICKUP_ORDER_AGE_MS = 4 * 60 * 60 * 1_000;
-const SHARED_DEMO_ORDER_RECEIVED_EMAIL_DELAY_MS = 60_000;
-
 export function sharedDemoPickupOrderTimeline(now: number) {
   const placedAt = now - SHARED_DEMO_PICKUP_ORDER_AGE_MS;
   return {
-    orderReceivedEmailSentAt:
-      placedAt + SHARED_DEMO_ORDER_RECEIVED_EMAIL_DELAY_MS,
+    orderReceivedEmailSentAt: placedAt,
     placedAt,
   } as const;
 }

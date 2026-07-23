@@ -26,6 +26,7 @@ describe("shared demo policy", () => {
     expect(SHARED_DEMO_ALLOWED_CAPABILITIES).toEqual([
       "approvals.manage",
       "cash.control.write",
+      "catalog.maintain",
       "catalog.quick_add",
       "customer.messaging.send",
       "daily_operations.write",
@@ -38,6 +39,7 @@ describe("shared demo policy", () => {
       "pos.sale.complete",
       "pos.sync.write",
       "pos.transaction.correct",
+      "pos.transaction.void",
       "reports.read",
       "reviews.manage",
       "staff.authenticate",
@@ -50,6 +52,9 @@ describe("shared demo policy", () => {
       "pos.sale.complete",
     );
     expect(requireSharedDemoCapability("reports.read")).toBe("reports.read");
+    expect(requireSharedDemoCapability("catalog.maintain")).toBe(
+      "catalog.maintain",
+    );
     expect(requireSharedDemoCapability("demo.lifecycle")).toBe(
       "demo.lifecycle",
     );

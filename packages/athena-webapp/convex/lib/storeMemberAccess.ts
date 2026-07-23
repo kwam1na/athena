@@ -34,10 +34,7 @@ export async function requireStoreMemberAccessWithCtx(
     throw new Error("Store not found.");
   }
 
-  const athenaUser =
-    demoActor !== null
-      ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
   if (!athenaUser) {
     throw new Error("Sign in again to continue.");
   }

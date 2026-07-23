@@ -6,6 +6,7 @@ export const ATHENA_CAPABILITY_CATALOG = [
   { id: "billing.manage", label: "Payment collection and billing" },
   { id: "cash.control.write", label: "Cash controls" },
   { id: "catalog.quick_add", label: "Quick product creation" },
+  { id: "catalog.maintain", label: "Catalog maintenance" },
   { id: "catalog.manage", label: "Catalog management" },
   { id: "customer.messaging.send", label: "Customer messaging" },
   { id: "daily_operations.write", label: "Daily operations" },
@@ -54,12 +55,12 @@ export const ATHENA_CAPABILITY_CATALOG = [
   { id: "storefront.session.manage", label: "Storefront sessions" },
 ] as const;
 
-export type AthenaCapability =
-  (typeof ATHENA_CAPABILITY_CATALOG)[number]["id"];
+export type AthenaCapability = (typeof ATHENA_CAPABILITY_CATALOG)[number]["id"];
 
 export const SHARED_DEMO_ALLOWED_CAPABILITIES = [
   "approvals.manage",
   "cash.control.write",
+  "catalog.maintain",
   "catalog.quick_add",
   "customer.messaging.send",
   "daily_operations.write",
@@ -75,6 +76,7 @@ export const SHARED_DEMO_ALLOWED_CAPABILITIES = [
   "pos.sale.complete",
   "pos.sync.write",
   "pos.transaction.correct",
+  "pos.transaction.void",
   "reports.read",
   "reviews.manage",
   "staff.authenticate",
@@ -107,7 +109,8 @@ const EXACT_PUBLIC_WRITE_CAPABILITIES = {
   "storeFront/onlineOrder:returnAllItemsToStock": "orders.return",
   "storeFront/onlineOrder:returnItemsToStock": "orders.return",
   "storeFront/onlineOrder:update": "orders.fulfill",
-  "storeFront/onlineOrderUtilFns:sendOrderUpdateEmail": "customer.messaging.send",
+  "storeFront/onlineOrderUtilFns:sendOrderUpdateEmail":
+    "customer.messaging.send",
   "storeFront/payment:createTransaction": "billing.manage",
   "storeFront/payment:refundPayment": "payments.refund",
 } as const satisfies Record<string, AthenaCapability>;
@@ -200,7 +203,9 @@ const PUBLIC_WRITE_MODULE_CAPABILITIES = {
   "storeFront/supportTicket": "customer.messaging.send",
 } as const satisfies Record<string, AthenaCapability>;
 
-export function classifyAthenaPublicWrite(functionName: string):
+export function classifyAthenaPublicWrite(
+  functionName: string,
+):
   | { capability: AthenaCapability; decision: "classified" }
   | { decision: "unclassified" } {
   const exact = (
@@ -209,7 +214,8 @@ export function classifyAthenaPublicWrite(functionName: string):
   if (exact) return { capability: exact, decision: "classified" };
 
   const separator = functionName.lastIndexOf(":");
-  const moduleName = separator < 0 ? functionName : functionName.slice(0, separator);
+  const moduleName =
+    separator < 0 ? functionName : functionName.slice(0, separator);
   const capability = (
     PUBLIC_WRITE_MODULE_CAPABILITIES as Record<string, AthenaCapability>
   )[moduleName];
@@ -219,7 +225,7 @@ export function classifyAthenaPublicWrite(functionName: string):
 }
 
 export function isSharedDemoCapabilityAllowed(capability: AthenaCapability) {
-  return (SHARED_DEMO_ALLOWED_CAPABILITIES as readonly AthenaCapability[]).includes(
-    capability,
-  );
+  return (
+    SHARED_DEMO_ALLOWED_CAPABILITIES as readonly AthenaCapability[]
+  ).includes(capability);
 }

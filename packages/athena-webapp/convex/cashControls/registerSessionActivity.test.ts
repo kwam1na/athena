@@ -205,12 +205,33 @@ describe("buildRegisterSessionActivityPage", () => {
   });
 });
 
+const FALLBACK_AUTH_USER_ID = "user-1";
+
+type AdmissionAwareAuthCtx = {
+  db: { get: (table: string, id: string) => Promise<unknown> };
+  operationAdmission?: { actor?: { athenaUserId?: string } };
+};
+
+// Mirrors the real helper in lib/athenaUserAuth.ts: identity resolution
+// short-circuits on the admitted actor, so an admitted demo actor resolves to
+// its own athenaUser rather than falling through to normal-user auth.
+function admissionAwareAuthImplementation() {
+  return async (ctx: AdmissionAwareAuthCtx) => {
+    const admittedUserId = ctx?.operationAdmission?.actor?.athenaUserId;
+    if (admittedUserId) {
+      return ctx.db.get("athenaUser", admittedUserId);
+    }
+
+    return { _id: FALLBACK_AUTH_USER_ID };
+  };
+}
+
 describe("listRegisterSessionActivity", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
-      _id: "user-1",
-    });
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockImplementation(
+      admissionAwareAuthImplementation(),
+    );
     authMocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue({
       role: "full_admin",
     });
@@ -251,15 +272,34 @@ describe("listRegisterSessionActivity", () => {
     expect(
       sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable,
     ).not.toHaveBeenCalled();
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor and resolves that actor's identity...
     expect(
       authMocks.requireAuthenticatedAthenaUserWithCtx,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: "demo-user-1",
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
     expect(authMocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         allowedRoles: ["full_admin"],
         userId: "demo-user-1",
       }),
+    );
+    // ...and never silently falls through to the normal-user auth identity.
+    expect(
+      authMocks.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: FALLBACK_AUTH_USER_ID }),
     );
     expect(page.registerSession).toEqual({
       _id: "session-1",
@@ -272,7 +312,10 @@ describe("listRegisterSessionActivity", () => {
     const handler = getHandler(listRegisterSessionActivity);
     const ctx = {
       db: {
-        get: vi.fn(async (table: string) => {
+        get: vi.fn(async (table: string, id: string) => {
+          if (table === "athenaUser") {
+            return { _id: id };
+          }
           if (table === "store") {
             return {
               _id: "store-1",
@@ -316,7 +359,10 @@ describe("listRegisterSessionActivity", () => {
     const handler = getHandler(listRegisterSessionActivity);
     const ctx = {
       db: {
-        get: vi.fn(async (table: string) => {
+        get: vi.fn(async (table: string, id: string) => {
+          if (table === "athenaUser") {
+            return { _id: id };
+          }
           if (table === "store") {
             return {
               _id: "store-1",
@@ -402,6 +448,9 @@ describe("listRegisterSessionActivity", () => {
     const ctx = {
       db: {
         get: vi.fn(async (table: string, id: string) => {
+          if (table === "athenaUser") {
+            return { _id: id };
+          }
           if (table === "store") {
             return { _id: "store-1", organizationId: "org-1" };
           }
@@ -502,6 +551,9 @@ describe("listRegisterSessionActivity", () => {
     const ctx = {
       db: {
         get: vi.fn(async (table: string, id: string) => {
+          if (table === "athenaUser") {
+            return { _id: id };
+          }
           if (table === "store") {
             return { _id: "store-1", organizationId: "org-1" };
           }

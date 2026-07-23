@@ -80,6 +80,7 @@ const CASH_DEPOSIT_ALLOCATION_TYPE = "cash_deposit";
 const CASH_DEPOSIT_SUBJECT_TYPE = "register_cash_deposit";
 const REGISTER_SESSION_SYNC_REVIEW_APPROVAL_ACTION_KEY =
   "cash_controls.register_session.resolve_sync_review";
+const CLOSED_SESSION_DASHBOARD_LIMIT = 5;
 const RECENT_DEPOSIT_LIMIT = 10;
 const SESSION_LIMIT = 100;
 const STAFF_ROLE_LOOKUP_LIMIT = 20;
@@ -248,14 +249,7 @@ async function requireCashControlsStoreAccess(
     throw new Error("Store not found.");
   }
 
-  const operationAdmission = (
-    ctx as Partial<OperationMutationCtx | OperationQueryCtx>
-  ).operationAdmission;
-  const admittedActor = operationAdmission?.actor;
-  const athenaUser =
-    admittedActor?.kind === "shared_demo"
-      ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
   if (!athenaUser) {
     throw new Error("Sign in again to continue.");
   }
@@ -828,15 +822,31 @@ export function buildCashControlsDashboardSnapshot(args: {
   };
 }
 
-async function listRegisterSessionsForDashboard(
+export async function listRegisterSessionsForDashboard(
   ctx: Pick<QueryCtx, "db">,
   storeId: Id<"store">,
 ) {
-  return ctx.db
+  const statusQueries = await Promise.all(
+    (["active", "open", "closing", "closeout_rejected"] as const).map(
+      (status) =>
+        ctx.db
+          .query("registerSession")
+          .withIndex("by_storeId_status", (q) =>
+            q.eq("storeId", storeId).eq("status", status),
+          )
+          .order("desc")
+          .take(SESSION_LIMIT),
+    ),
+  );
+  const recentClosedSessions = await ctx.db
     .query("registerSession")
-    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+    .withIndex("by_storeId_status", (q) =>
+      q.eq("storeId", storeId).eq("status", "closed"),
+    )
     .order("desc")
-    .take(SESSION_LIMIT);
+    .take(CLOSED_SESSION_DASHBOARD_LIMIT);
+
+  return [...statusQueries.flat(), ...recentClosedSessions];
 }
 
 async function appendRegisterSessionsForSyncConflicts(

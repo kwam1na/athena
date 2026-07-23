@@ -72,6 +72,7 @@ type ActivityOrder = {
     email: string;
   };
   items?: ActivityOrderItem[];
+  placedAt?: number;
   refunds?: ActivityOrderRefund[];
   transitions?: ActivityOrderTransition[];
   workflowTraceId?: string;

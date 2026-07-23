@@ -202,10 +202,36 @@ export function formatCorrectionEventType(eventType: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export function formatCorrectionHistoryTitle(event: CorrectionEvent) {
+function formatCorrectionHistoryTransactionLabel(
+  event: CorrectionEvent,
+  transactionNumber?: string,
+) {
+  const metadataTransactionNumber = event.metadata?.transactionNumber;
+  const displayTransactionNumber =
+    typeof metadataTransactionNumber === "string" &&
+    metadataTransactionNumber.trim()
+      ? metadataTransactionNumber
+      : transactionNumber;
+
+  return displayTransactionNumber
+    ? `Transaction #${displayTransactionNumber}`
+    : "Transaction";
+}
+
+function formatCorrectionHistoryDecision(event: CorrectionEvent) {
+  const decision = event.metadata?.decision;
+  return decision === "cancelled" ? "cancelled" : "rejected";
+}
+
+export function formatCorrectionHistoryTitle(
+  event: CorrectionEvent,
+  transactionNumber?: string,
+) {
   switch (event.eventType) {
     case "pos_transaction_payment_method_corrected":
       return "Payment method updated";
+    case "pos_transaction_payment_method_approval_rejected":
+      return `Payment method correction ${formatCorrectionHistoryDecision(event)} for ${formatCorrectionHistoryTransactionLabel(event, transactionNumber)}`;
     case "transaction_customer_corrected":
     case "pos_transaction_customer_corrected":
       return "Customer attribution updated";
@@ -353,6 +379,26 @@ function normalizeVoidCommandError(message: string) {
   return "Sale could not be voided. Check the transaction state and try again.";
 }
 
+function formatRegisterReopenActionMessage({
+  action,
+  registerNumber,
+}: {
+  action: "update payment details" | "void this sale";
+  registerNumber?: string | null;
+}) {
+  return `Reopen ${
+    registerNumber
+      ? `Register ${registerNumber}`
+      : "this transaction's register"
+  } to ${action}`;
+}
+
+function ActionUnavailableNotice({ children }: { children: string }) {
+  return (
+    <p className="px-1 text-xs leading-5 text-muted-foreground">{children}</p>
+  );
+}
+
 export function TransactionView() {
   const params = useParams({
     strict: false,
@@ -397,9 +443,7 @@ export function TransactionView() {
   >(null);
   const [correctionHistoryExpanded, setCorrectionHistoryExpanded] =
     useState(false);
-  const [voidPanelOpen, setVoidPanelOpen] = useState(
-    search?.intent === "void",
-  );
+  const [voidPanelOpen, setVoidPanelOpen] = useState(search?.intent === "void");
   const [voidReason, setVoidReason] = useState("");
   const [voidError, setVoidError] = useState<string | null>(null);
   const [voidSubmitting, setVoidSubmitting] = useState(false);
@@ -589,9 +633,10 @@ export function TransactionView() {
     );
   }, [transaction]);
   const latestAppliedAdjustment = appliedAdjustments[0] ?? null;
-  const latestPendingAdjustment = [...pendingAdjustments].sort(
-    (first, second) => second.createdAt - first.createdAt,
-  )[0] ?? null;
+  const latestPendingAdjustment =
+    [...pendingAdjustments].sort(
+      (first, second) => second.createdAt - first.createdAt,
+    )[0] ?? null;
   const hasAppliedItemAdjustment = appliedAdjustments.length > 0;
   const pendingSaleTotal =
     typeof latestPendingAdjustment?.adjustedTotal === "number"
@@ -750,20 +795,22 @@ export function TransactionView() {
       return null;
     }
 
-    const lines = transaction.items.map((item: (typeof transaction.items)[number]) => {
-      const correctedQuantity =
-        correctedQuantities[item._id] ?? item.quantity;
-      const adjustedLineTotal = correctedQuantity * item.unitPrice;
+    const lines = transaction.items.map(
+      (item: (typeof transaction.items)[number]) => {
+        const correctedQuantity =
+          correctedQuantities[item._id] ?? item.quantity;
+        const adjustedLineTotal = correctedQuantity * item.unitPrice;
 
-      return {
-        adjustedLineTotal,
-        correctedQuantity,
-        item,
-        originalLineTotal: item.totalPrice,
-        quantityDelta: correctedQuantity - item.quantity,
-        totalDelta: adjustedLineTotal - item.totalPrice,
-      };
-    });
+        return {
+          adjustedLineTotal,
+          correctedQuantity,
+          item,
+          originalLineTotal: item.totalPrice,
+          quantityDelta: correctedQuantity - item.quantity,
+          totalDelta: adjustedLineTotal - item.totalPrice,
+        };
+      },
+    );
     const adjustedTotal = lines.reduce(
       (sum, line) => sum + line.adjustedLineTotal,
       transaction.tax ?? 0,
@@ -850,11 +897,10 @@ export function TransactionView() {
     (transaction.changeGiven ?? 0) <= 0 &&
     !registerSessionIsClosing;
   const paymentMethodCorrectionUnavailableMessage = registerSessionIsClosing
-    ? `Reopen ${
-        transaction.registerNumber
-          ? `Register ${transaction.registerNumber}`
-          : "this transaction's register"
-      } to update payment details`
+    ? formatRegisterReopenActionMessage({
+        action: "update payment details",
+        registerNumber: transaction.registerNumber,
+      })
     : "Only same-amount payment method updates are supported";
   const currentPaymentMethod = (transaction.payments?.[0]?.method ??
     transaction.paymentMethod ??
@@ -904,10 +950,18 @@ export function TransactionView() {
   const readModelAllowsVoid =
     transactionRecord.canVoid !== false &&
     transactionRecord.voidEligibility?.eligible !== false;
+  const registerAllowsVoid = !registerSessionIsClosing;
+  const voidUnavailableMessage = registerSessionIsClosing
+    ? formatRegisterReopenActionMessage({
+        action: "void this sale",
+        registerNumber: transaction.registerNumber,
+      })
+    : null;
+  const transactionCanRequestVoid =
+    isCompletedTransaction && !isVoidedTransaction && readModelAllowsVoid;
   const canVoidTransaction =
-    isCompletedTransaction &&
-    !isVoidedTransaction &&
-    readModelAllowsVoid &&
+    transactionCanRequestVoid &&
+    registerAllowsVoid &&
     !hasPendingVoidApprovalRequest;
   const transactionStatusLabel = isVoidedTransaction ? "Voided" : "Completed";
   const transactionStatusTime = getRelativeTime(
@@ -1299,27 +1353,26 @@ export function TransactionView() {
       await voidApprovalRunner.run({
         requestedByStaffProfileId: staffProfileId,
         execute: async (approvalArgs) =>
-          runCommand(
-            () =>
-              (
-                voidTransaction as unknown as (payload: {
-                  actorStaffProfileId: Id<"staffProfile">;
-                  approvalProofId?: Id<"approvalProof">;
-                  approvalRequestId?: Id<"approvalRequest">;
-                  reason?: string;
-                  staffProofToken: string;
-                  transactionId: Id<"posTransaction">;
-                }) => Promise<ApprovalCommandResult<TransactionVoidResultData>>
-              )({
-                actorStaffProfileId: staffProfileId,
-                approvalProofId:
-                  approvalArgs.approvalProofId ?? args.approvalProofId,
-                approvalRequestId:
-                  approvalArgs.approvalRequestId ?? args.approvalRequestId,
-                ...(reason ? { reason } : {}),
-                staffProofToken,
-                transactionId: transactionId as Id<"posTransaction">,
-              }),
+          runCommand(() =>
+            (
+              voidTransaction as unknown as (payload: {
+                actorStaffProfileId: Id<"staffProfile">;
+                approvalProofId?: Id<"approvalProof">;
+                approvalRequestId?: Id<"approvalRequest">;
+                reason?: string;
+                staffProofToken: string;
+                transactionId: Id<"posTransaction">;
+              }) => Promise<ApprovalCommandResult<TransactionVoidResultData>>
+            )({
+              actorStaffProfileId: staffProfileId,
+              approvalProofId:
+                approvalArgs.approvalProofId ?? args.approvalProofId,
+              approvalRequestId:
+                approvalArgs.approvalRequestId ?? args.approvalRequestId,
+              ...(reason ? { reason } : {}),
+              staffProofToken,
+              transactionId: transactionId as Id<"posTransaction">,
+            }),
           ),
         sameSubmissionApproval:
           args.sameSubmissionApproval && args.staff
@@ -1617,12 +1670,19 @@ export function TransactionView() {
                             Update
                           </Button>
                         ) : null}
-                        {canVoidTransaction || hasPendingVoidApprovalRequest ? (
+                        {transactionCanRequestVoid ||
+                        hasPendingVoidApprovalRequest ? (
                           <Button
                             className="w-full"
-                            disabled={hasPendingVoidApprovalRequest}
+                            disabled={
+                              hasPendingVoidApprovalRequest ||
+                              !registerAllowsVoid
+                            }
                             onClick={() => {
-                              if (hasPendingVoidApprovalRequest) {
+                              if (
+                                hasPendingVoidApprovalRequest ||
+                                !registerAllowsVoid
+                              ) {
                                 return;
                               }
 
@@ -1636,14 +1696,17 @@ export function TransactionView() {
                               setVoidError(null);
                             }}
                             type="button"
-                            variant={
-                              voidPanelOpen ? "destructive" : "outline"
-                            }
+                            variant={voidPanelOpen ? "destructive" : "outline"}
                           >
                             {hasPendingVoidApprovalRequest
                               ? "Void requested"
                               : "Void sale"}
                           </Button>
+                        ) : null}
+                        {voidUnavailableMessage ? (
+                          <ActionUnavailableNotice>
+                            {voidUnavailableMessage}
+                          </ActionUnavailableNotice>
                         ) : null}
                         {voidApprovalLinkParams ? (
                           <div className="rounded-[calc(var(--radius)*0.85)] border border-border bg-background p-3">
@@ -1902,9 +1965,9 @@ export function TransactionView() {
                           </span>
                         </Button>
                         {!supportsPaymentMethodCorrection ? (
-                          <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4 text-sm text-muted-foreground">
+                          <ActionUnavailableNotice>
                             {paymentMethodCorrectionUnavailableMessage}
-                          </div>
+                          </ActionUnavailableNotice>
                         ) : null}
                         {showPaymentMethodDirectFlow ? (
                           <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
@@ -2454,7 +2517,10 @@ export function TransactionView() {
                         >
                           <div className="space-y-1">
                             <p className="text-sm font-medium leading-5 text-foreground">
-                              {formatCorrectionHistoryTitle(event)}
+                              {formatCorrectionHistoryTitle(
+                                event,
+                                transaction.transactionNumber,
+                              )}
                             </p>
                             <p className="text-xs leading-4 text-muted-foreground">
                               {formatCorrectionHistoryMeta(event)}

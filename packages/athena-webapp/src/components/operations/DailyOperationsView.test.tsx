@@ -3649,6 +3649,51 @@ describe("DailyOperationsView", () => {
     );
   });
 
+  it("ties hydrated store pulse detail to the selected operating date totals", async () => {
+    const selectedDayPulse = buildStorePulseSummary({
+      date: "2026-05-08",
+      itemName: "Selected date item",
+      paymentLabel: "Mobile Money",
+      paymentMethod: "mobile_money",
+    });
+    selectedDayPulse.operatorSnapshot!.comparison.currentItemsSold = 0;
+    selectedDayPulse.operatorSnapshot!.comparison.currentTransactions = 0;
+
+    mockedHooks.useQuery.mockImplementation((query, args) => {
+      if (args === "skip") return undefined;
+      if (query === mockedApi.getDailyOperationsDetailSnapshot) {
+        return {
+          ...operatingSnapshot,
+          weekSnapshots: buildWeekSnapshots(),
+        };
+      }
+      if (query === mockedApi.getDailyOperationsStorePulseSnapshot) {
+        return {
+          operatingDate: "2026-05-08",
+          storePulse: selectedDayPulse,
+        };
+      }
+      return operatingSnapshot;
+    });
+    mockedHooks.useSearch.mockReturnValue({
+      operatingDate: "2026-05-08",
+      weekEndOperatingDate: "2026-05-09",
+    });
+
+    render(<DailyOperationsView />);
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Load analytics for Top items",
+      }),
+    );
+
+    expect(await screen.findByText("Selected Date Item")).toBeInTheDocument();
+    expect(screen.getByLabelText("Total items sold: 3")).toBeInTheDocument();
+    expect(screen.getAllByText("Mobile Money").length).toBeGreaterThan(0);
+    expect(screen.queryByText("No item history")).not.toBeInTheDocument();
+    expect(screen.queryByText("No payment mix")).not.toBeInTheDocument();
+  });
+
   it("refreshes current-day operations facts without loading timeline detail", () => {
     vi.useFakeTimers();
     const refreshNow = new Date(2026, 4, 8, 12).getTime();
@@ -4349,7 +4394,7 @@ describe("DailyOperationsView", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("keeps the current shared-demo day on the live daily operations query", () => {
+  it("keeps shared-demo week fixture data while refreshing only the current day", async () => {
     vi.setSystemTime(new Date(2026, 6, 21, 12));
     mockedHooks.useSharedDemoContext.mockReturnValue({
       kind: "shared_demo",
@@ -4359,6 +4404,7 @@ describe("DailyOperationsView", () => {
       operatingDate: "2026-07-21",
       weekEndOperatingDate: "2026-07-25",
     });
+    const refreshedAt = Date.now();
     const liveWeekMetrics = Array.from({ length: 7 }, (_, index) => ({
       ...operatingSnapshot.weekMetrics[0],
       isClosed: index < 2,
@@ -4376,6 +4422,51 @@ describe("DailyOperationsView", () => {
           operatingDate: "2026-07-21",
           timeline: [],
           weekMetrics: liveWeekMetrics,
+        };
+      }
+      if (query === mockedApi.getDailyOperationsTodayRefreshSnapshot) {
+        const refreshArgs = args as { refreshRequestedAt?: unknown };
+
+        return {
+          attentionItems: [],
+          closeSummary: {
+            ...operatingSnapshot.closeSummary,
+            currentDayCashTotal: 210000,
+            currentDayCashTransactionCount: 1,
+            expenseTotal: 0,
+            expenseTransactionCount: 0,
+            paymentTotals: [
+              { amount: 210000, method: "cash", transactionCount: 1 },
+            ],
+            salesTotal: 210000,
+            transactionCount: 1,
+          },
+          completedClose: undefined,
+          currency: "GHS",
+          endAt: Date.UTC(2026, 6, 22),
+          lanes: operatingSnapshot.lanes,
+          lifecycle: operatingSnapshot.lifecycle,
+          operatingDate: "2026-07-21",
+          primaryAction: operatingSnapshot.primaryAction,
+          priorDayMetric: null,
+          refreshedAt,
+          refreshRequestedAt: refreshArgs.refreshRequestedAt
+            ? Number(refreshArgs.refreshRequestedAt)
+            : refreshedAt,
+          startAt: Date.UTC(2026, 6, 21),
+          storeId: "store-1",
+          storePulse: null,
+          weekMetric: {
+            ...liveWeekMetrics[2],
+            currentDayCashTotal: 210000,
+            currentDayCashTransactionCount: 1,
+            isSelected: true,
+            paymentTotals: [
+              { amount: 210000, method: "cash", transactionCount: 1 },
+            ],
+            salesTotal: 210000,
+            transactionCount: 1,
+          },
         };
       }
       if (query === mockedApi.getDailyOperationsTimelinePreviewSnapshot) {
@@ -4397,6 +4488,10 @@ describe("DailyOperationsView", () => {
 
     render(<DailyOperationsView />);
 
+    await act(async () => {
+      await Promise.resolve();
+    });
+
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
       mockedApi.getDailyOperationsSnapshot,
       expect.objectContaining({
@@ -4408,16 +4503,27 @@ describe("DailyOperationsView", () => {
       screen.queryByText("The demo session starts at zero."),
     ).not.toBeInTheDocument();
     expect(
-      screen.getAllByText((_, node) => node?.textContent === "GH₵5,310")
-        .length,
+      screen.getAllByText((_, node) => node?.textContent === "GH₵5,310").length,
     ).toBeGreaterThan(0);
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
       mockedApi.getDailyOperationsWeekAnalyticsSnapshot,
       "skip",
     );
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsTodayRefreshSnapshot,
+      expect.objectContaining({
+        operatingDate: "2026-07-21",
+        storeId: "store-1",
+        storePulseWindow: "today",
+      }),
+    );
+    expect(screen.getAllByText("GH₵2,100").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("1 transaction").length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("No activity yesterday")).toHaveLength(0);
+    expect(screen.getAllByText(/vs yesterday/).length).toBeGreaterThan(0);
     expect(screen.getByTestId("store-pulse-chart")).toHaveAttribute(
       "data-total-sales",
-      "0|531000|0",
+      "0|531000|210000",
     );
   });
 

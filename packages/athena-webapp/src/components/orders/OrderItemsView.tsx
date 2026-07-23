@@ -32,9 +32,9 @@ import type { OnlineOrder, OnlineOrderItem } from "~/types";
 
 type DisplayOrderItem = NonNullable<OnlineOrder["items"]>[number] &
   Pick<OnlineOrderItem, "_id"> & {
-  currentInventoryCount?: number;
-  isLowStock?: boolean;
-  isOutOfStock?: boolean;
+    currentInventoryCount?: number;
+    isLowStock?: boolean;
+    isOutOfStock?: boolean;
   };
 
 type FormattedOrderItem = Omit<DisplayOrderItem, "price"> & {
@@ -51,6 +51,7 @@ function OrderItem({
   const [isUpdatingOrderItem, setIsUpdatingOrderItem] = useState(false);
   const [isRequestingFeedback, setIsRequestingFeedback] = useState(false);
   const { user } = useAuth();
+  const { isSharedDemoSessionOrder, updateSessionOrderItem } = useOnlineOrder();
 
   const updateOrderItem = useMutation(api.storeFront.onlineOrderItem.update);
   const returnItemToStock = useMutation(
@@ -61,6 +62,10 @@ function OrderItem({
   const handleUpdateOrderItem = async (isReady: boolean) => {
     try {
       setIsUpdatingOrderItem(true);
+      if (isSharedDemoSessionOrder) {
+        updateSessionOrderItem(String(item._id), { isReady });
+        return;
+      }
       const result = await runCommand(async () => {
         await updateOrderItem({
           id: item._id,
@@ -84,6 +89,10 @@ function OrderItem({
 
     try {
       setIsUpdatingOrderItem(true);
+      if (isSharedDemoSessionOrder) {
+        updateSessionOrderItem(String(item._id), { isRestocked: true });
+        return;
+      }
       const result = await runCommand(async () => {
         await returnItemToStock({
           externalTransactionId,
@@ -107,6 +116,20 @@ function OrderItem({
 
     try {
       setIsRequestingFeedback(true);
+      if (isSharedDemoSessionOrder) {
+        updateSessionOrderItem(String(item._id), {
+          feedbackRequested: true,
+          feedbackRequestedAt: Date.now(),
+          feedbackRequestedBy: user
+            ? {
+                email: user.email,
+                id: user._id,
+              }
+            : undefined,
+        });
+        toast.success("Feedback request sent");
+        return;
+      }
       const result = await runCommand(() =>
         requestFeedback({
           productSkuId: item.productSkuId,
@@ -312,7 +335,8 @@ function OrderItem({
 }
 
 export function OrderItemsView() {
-  const { order } = useOnlineOrder();
+  const { isSharedDemoSessionOrder, order, updateSessionOrder } =
+    useOnlineOrder();
 
   const { activeStore } = useGetActiveStore();
 
@@ -327,6 +351,12 @@ export function OrderItemsView() {
 
     try {
       setIsUpdatingOrderItems(true);
+      if (isSharedDemoSessionOrder) {
+        updateSessionOrder({
+          items: order.items?.map((item) => ({ ...item, isRestocked: true })),
+        });
+        return;
+      }
       const result = await runCommand(async () => {
         await restockAllItems({
           orderId: order._id,

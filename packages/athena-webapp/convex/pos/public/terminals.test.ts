@@ -24,7 +24,6 @@ const mocks = vi.hoisted(() => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
-  requireSharedDemoStoreReadIfApplicable: vi.fn(),
   resolveTerminalCloudRepairCommand: vi.fn(),
   createRemoteAssistRepository: vi.fn(),
   remoteAssistGetClientByRuntime: vi.fn(),
@@ -49,8 +48,6 @@ vi.mock("../../sharedDemo/actor", () => ({
   getSharedDemoActorWithCtx: mocks.getSharedDemoActorWithCtx,
   requireSharedDemoStoreCapabilityIfApplicable:
     mocks.requireSharedDemoStoreCapabilityIfApplicable,
-  requireSharedDemoStoreReadIfApplicable:
-    mocks.requireSharedDemoStoreReadIfApplicable,
 }));
 
 vi.mock("../../sharedDemo/restore", () => ({
@@ -150,6 +147,9 @@ import {
 
 const SYNC_SECRET_HASH =
   "e3aaef72556405db4093f59a9aa8ee6539f8e6542e60d92f08e782faa0d246fa";
+
+const FALLBACK_AUTH_USER_ID = "athena-user-1";
+const DEMO_ACTOR_USER_ID = "demo-athena-user-1";
 
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
@@ -389,9 +389,22 @@ describe("POS terminal public mutations", () => {
     vi.resetAllMocks();
     mocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
     mocks.requireReadySharedDemoWriteWithCtx.mockResolvedValue(undefined);
-    mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
-      _id: "athena-user-1",
-    });
+    // Mirrors the real helper in lib/athenaUserAuth.ts: identity resolution
+    // short-circuits on the admitted actor, so an admitted demo actor resolves
+    // to its own athenaUser rather than falling through to normal-user auth.
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockImplementation(
+      async (ctx: {
+        db: { get: (table: string, id: string) => Promise<unknown> };
+        operationAdmission?: { actor?: { athenaUserId?: string } };
+      }) => {
+        const admittedUserId = ctx?.operationAdmission?.actor?.athenaUserId;
+        if (admittedUserId) {
+          return ctx.db.get("athenaUser", admittedUserId);
+        }
+
+        return { _id: FALLBACK_AUTH_USER_ID };
+      },
+    );
     mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
     mocks.acknowledgeRegisterLifecycleAuthorityService.mockResolvedValue({
       status: "accepted",
@@ -601,7 +614,7 @@ describe("POS terminal public mutations", () => {
 
   it("reprovisions the demo terminal through the store-scoped daily operations boundary", async () => {
     mocks.getSharedDemoActorWithCtx.mockResolvedValue({
-      athenaUserId: "athena-user-1",
+      athenaUserId: DEMO_ACTOR_USER_ID,
       kind: "shared_demo",
       organizationId: "org-1",
       storeId: "store-1",
@@ -620,7 +633,27 @@ describe("POS terminal public mutations", () => {
     expect(
       mocks.requireSharedDemoStoreCapabilityIfApplicable,
     ).not.toHaveBeenCalled();
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor and resolves that actor's identity, never the normal-user
+    // fallback.
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: DEMO_ACTOR_USER_ID,
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({ athenaUserId: FALLBACK_AUTH_USER_ID }),
+        }),
+      }),
+    );
     expect(mocks.registerTerminalCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         db: ctx.db,
@@ -630,7 +663,7 @@ describe("POS terminal public mutations", () => {
       }),
       expect.objectContaining({
         allowRegisterNumberChange: true,
-        registeredByUserId: "athena-user-1",
+        registeredByUserId: DEMO_ACTOR_USER_ID,
         storeId: "store-1",
       }),
     );
@@ -1169,7 +1202,7 @@ describe("POS terminal public mutations", () => {
   it("looks up the demo terminal by fingerprint through the demo read boundary", async () => {
     const ctx = buildCtx();
     mocks.getSharedDemoActorWithCtx.mockResolvedValue({
-      athenaUserId: "athena-user-1",
+      athenaUserId: DEMO_ACTOR_USER_ID,
       kind: "shared_demo",
       storeId: "store-1",
     });
@@ -1180,8 +1213,37 @@ describe("POS terminal public mutations", () => {
     });
 
     expect(mocks.getSharedDemoActorWithCtx).toHaveBeenCalledWith(ctx);
-    expect(mocks.requireSharedDemoStoreReadIfApplicable).not.toHaveBeenCalled();
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor and resolves that actor's identity, never the normal-user
+    // fallback.
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: DEMO_ACTOR_USER_ID,
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({ athenaUserId: FALLBACK_AUTH_USER_ID }),
+        }),
+      }),
+    );
+    // The resolved identity must be the demo actor's, not the normal-user
+    // fallback - this is what a broken short-circuit would silently change.
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: DEMO_ACTOR_USER_ID }),
+    );
+    expect(mocks.requireOrganizationMemberRoleWithCtx).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: FALLBACK_AUTH_USER_ID }),
+    );
   });
 
   it("returns the sync secret only from terminal registration", async () => {
@@ -1908,7 +1970,7 @@ describe("POS terminal public mutations", () => {
   it("loads terminal health through the demo read boundary", async () => {
     const ctx = buildCtx();
     mocks.getSharedDemoActorWithCtx.mockResolvedValue({
-      athenaUserId: "athena-user-1",
+      athenaUserId: DEMO_ACTOR_USER_ID,
       kind: "shared_demo",
       storeId: "store-1",
     });
@@ -1922,8 +1984,37 @@ describe("POS terminal public mutations", () => {
     });
 
     expect(mocks.getSharedDemoActorWithCtx).toHaveBeenCalledTimes(2);
-    expect(mocks.requireSharedDemoStoreReadIfApplicable).not.toHaveBeenCalled();
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    // Identity resolution now runs through the shared auth helper, so the
+    // helper IS called. What must stay true is that it is handed the admitted
+    // demo actor and resolves that actor's identity, never the normal-user
+    // fallback.
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: DEMO_ACTOR_USER_ID,
+            kind: "shared_demo",
+          }),
+        }),
+      }),
+    );
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({ athenaUserId: FALLBACK_AUTH_USER_ID }),
+        }),
+      }),
+    );
+    // The resolved identity must be the demo actor's, not the normal-user
+    // fallback - this is what a broken short-circuit would silently change.
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: DEMO_ACTOR_USER_ID }),
+    );
+    expect(mocks.requireOrganizationMemberRoleWithCtx).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: FALLBACK_AUTH_USER_ID }),
+    );
   });
 
   it("exports validator-safe terminal health attention reasons", () => {
@@ -3000,10 +3091,9 @@ function buildCtx(
               };
         }
 
-        if (tableName === "athenaUser" && id === "athena-user-1") {
-          return { _id: "athena-user-1" };
+        if (tableName === "athenaUser") {
+          return { _id: id };
         }
-
         if (tableName === "posTerminal" && id === "terminal-1") {
           return Object.prototype.hasOwnProperty.call(overrides, "terminal")
             ? overrides.terminal

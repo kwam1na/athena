@@ -168,11 +168,10 @@ export const getOpeningAutoStartPolicyReadDefinition =
     "operations.dailyOperationsAutomation.getOpeningAutoStartPolicy.read",
   );
 
-export const getEodAutoCompletePolicyReadDefinition =
-  defineDailyOperationsRead(
-    "operations/dailyOperationsAutomation:getEodAutoCompletePolicy",
-    "operations.dailyOperationsAutomation.getEodAutoCompletePolicy.read",
-  );
+export const getEodAutoCompletePolicyReadDefinition = defineDailyOperationsRead(
+  "operations/dailyOperationsAutomation:getEodAutoCompletePolicy",
+  "operations.dailyOperationsAutomation.getEodAutoCompletePolicy.read",
+);
 
 export const getRegisterCloseoutApprovalPolicyReadDefinition =
   defineDailyOperationsRead(
@@ -251,6 +250,11 @@ export const listInventoryProductsReadDefinition = defineInventoryCatalogRead(
   "inventory.products.getAll.read",
 );
 
+export const searchProductSkusReadDefinition = defineInventoryCatalogRead(
+  "inventory/skuSearch:searchProductSkus",
+  "inventory.skuSearch.searchProductSkus.read",
+);
+
 export const listInventorySnapshotReadDefinition = defineStockAdjustmentsRead(
   "stockOps/adjustments:listInventorySnapshot",
   "stockOps.adjustments.listInventorySnapshot.read",
@@ -262,11 +266,10 @@ export const listInventorySnapshotForProductSkusReadDefinition =
     "stockOps.adjustments.listInventorySnapshotForProductSkus.read",
   );
 
-export const getInventoryUnitSummaryReadDefinition =
-  defineStockAdjustmentsRead(
-    "stockOps/adjustments:getInventoryUnitSummary",
-    "stockOps.adjustments.getInventoryUnitSummary.read",
-  );
+export const getInventoryUnitSummaryReadDefinition = defineStockAdjustmentsRead(
+  "stockOps/adjustments:getInventoryUnitSummary",
+  "stockOps.adjustments.getInventoryUnitSummary.read",
+);
 
 export const listInventorySnapshotPageReadDefinition =
   defineStockAdjustmentsRead(
@@ -577,7 +580,9 @@ export const getOnlineOrderReadDefinition = defineReadOperation({
         return {};
       }
       const onlineOrderId = ctx.db.normalizeId("onlineOrder", identifier);
-      let order = onlineOrderId ? await ctx.db.get("onlineOrder", onlineOrderId) : null;
+      let order = onlineOrderId
+        ? await ctx.db.get("onlineOrder", onlineOrderId)
+        : null;
       if (!order) {
         order = await ctx.db
           .query("onlineOrder")

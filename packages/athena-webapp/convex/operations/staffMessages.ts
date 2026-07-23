@@ -22,13 +22,7 @@ export const STAFF_MESSAGE_RATE_LIMIT = 5;
 async function requireStoreMember(ctx: any, storeId: any) {
   const store = await ctx.db.get("store", storeId);
   if (!store) throw new Error("Store not found.");
-  const admittedActor = (
-    ctx as Partial<OperationMutationCtx | OperationQueryCtx>
-  ).operationAdmission?.actor;
-  const user =
-    admittedActor?.kind === "shared_demo"
-      ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const user = await requireAuthenticatedAthenaUserWithCtx(ctx);
   if (!user) throw new Error("Sign in again to continue.");
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],

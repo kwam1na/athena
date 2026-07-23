@@ -89,14 +89,7 @@ function formatServiceLineMeta(line: PosServiceReceiptLine) {
 }
 
 function formatProductLineMeta(item: CartItem, formatter: Intl.NumberFormat) {
-  const skuOrBarcode = item.sku || item.barcode;
-
-  return [
-    `${item.quantity} x ${formatStoredAmount(formatter, item.price)}`,
-    skuOrBarcode,
-  ]
-    .filter(Boolean)
-    .join(" • ");
+  return `${item.quantity} x ${formatStoredAmount(formatter, item.price)}`;
 }
 
 interface OrderSummaryProps {
@@ -675,7 +668,8 @@ export function OrderSummary({
             )
           : undefined;
 
-      const storeContact = getStoreConfigV2(activeStore).contact;
+      const storeConfig = getStoreConfigV2(activeStore);
+      const storeContact = storeConfig.contact;
       const { street, city, state, zipCode, country } = parseReceiptLocation(
         storeContact.location,
       );
@@ -695,6 +689,7 @@ export function OrderSummary({
                   state,
                   zipCode,
                   country,
+                  email: storeContact?.email,
                   phone: storeContact?.phoneNumber,
                   website: formatReceiptWebsite(config.storeFrontUrl),
                 }
@@ -726,6 +721,7 @@ export function OrderSummary({
           payments={formattedPayments}
           changeGiven={changeGiven}
           statusLabel={completedData.status === "voided" ? "Voided" : undefined}
+          storePolicyLines={storeConfig.receipt.policyLines}
         />,
       );
 
@@ -733,12 +729,17 @@ export function OrderSummary({
       const transactionId = receiptPrintTransactionId;
       if (transactionId && onReceiptPrinted) {
         void Promise.resolve(onReceiptPrinted(transactionId)).catch((error) => {
-          logger.warn("Failed to record receipt print", { error: String(error) });
+          logger.warn("Failed to record receipt print", {
+            error: String(error),
+          });
         });
       }
       return true;
     } catch (error) {
-      logger.error("Error in handlePrintReceipt", error instanceof Error ? error : { error: String(error) });
+      logger.error(
+        "Error in handlePrintReceipt",
+        error instanceof Error ? error : { error: String(error) },
+      );
       return false;
     }
   }, [

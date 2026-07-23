@@ -1,11 +1,7 @@
-import { Check, CheckIcon, Send } from "lucide-react";
+import { CheckIcon, Send } from "lucide-react";
 import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
-import {
-  currencyFormatter,
-  getRelativeTime,
-  slugToWords,
-} from "~/src/lib/utils";
+import { getRelativeTime, slugToWords } from "~/src/lib/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { useAction } from "convex/react";
 import { api } from "~/convex/_generated/api";
@@ -16,7 +12,8 @@ import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { runCommand } from "~/src/lib/errors/runCommand";
 
 export function EmailStatusView() {
-  const { order } = useOnlineOrder();
+  const { isSharedDemoSessionOrder, order, updateSessionOrder } =
+    useOnlineOrder();
   const { activeStore } = useGetActiveStore();
 
   const [sendingUpdateEmail, setSendingUpdateEmail] = useState(false);
@@ -42,6 +39,7 @@ export function EmailStatusView() {
 
   const handleSendOrderEmail = async () => {
     let orderStatus = "open";
+    const now = Date.now();
 
     if (shouldShowOutForDelivery) {
       orderStatus = "out-for-delivery";
@@ -61,6 +59,36 @@ export function EmailStatusView() {
 
     try {
       setSendingUpdateEmail(true);
+
+      if (isSharedDemoSessionOrder) {
+        if (orderStatus === "ready-for-pickup") {
+          updateSessionOrder({
+            didSendReadyEmail: true,
+            orderReadyEmailSentAt: now,
+          });
+        } else if (orderStatus === "out-for-delivery") {
+          updateSessionOrder({
+            didSendReadyEmail: true,
+            orderReadyEmailSentAt: now,
+          });
+        } else if (orderStatus === "completed") {
+          updateSessionOrder({
+            didSendCompletedEmail: true,
+            orderCompletedEmailSentAt: now,
+          });
+        } else if (orderStatus === "cancelled") {
+          updateSessionOrder({
+            didSendCancelledEmail: true,
+          });
+        } else {
+          updateSessionOrder({
+            didSendConfirmationEmail: true,
+            orderReceivedEmailSentAt: now,
+          });
+        }
+        toast.success("Demo email recorded for this browser session.");
+        return;
+      }
 
       const result = await runCommand(() =>
         sendOrderEmail({

@@ -1438,7 +1438,7 @@ describe("stock ops adjustments", () => {
     ).toThrow("Cycle counts must reconcile with the cycle-count reason code.");
   });
 
-  it("requires manual adjustment approval when a batch crosses the variance threshold", () => {
+  it("tracks high variance without requiring approval", () => {
     const belowThreshold = summarizeStockAdjustmentLineItems([
       { quantityDelta: STOCK_ADJUSTMENT_APPROVAL_THRESHOLD - 1 },
       { quantityDelta: -1 },
@@ -1449,24 +1449,9 @@ describe("stock ops adjustments", () => {
 
     expect(hasHighStockAdjustmentVariance(belowThreshold)).toBe(false);
     expect(hasHighStockAdjustmentVariance(atThreshold)).toBe(true);
-    expect(
-      requiresStockAdjustmentApproval({
-        adjustmentType: "manual",
-        largestAbsoluteDelta: belowThreshold.largestAbsoluteDelta,
-      }),
-    ).toBe(false);
-    expect(
-      requiresStockAdjustmentApproval({
-        adjustmentType: "manual",
-        largestAbsoluteDelta: atThreshold.largestAbsoluteDelta,
-      }),
-    ).toBe(true);
-    expect(
-      requiresStockAdjustmentApproval({
-        adjustmentType: "cycle_count",
-        largestAbsoluteDelta: atThreshold.largestAbsoluteDelta,
-      }),
-    ).toBe(false);
+    // Variance is measured but never gates the write: approval is
+    // intentionally disabled for every adjustment type and variance size.
+    expect(requiresStockAdjustmentApproval()).toBe(false);
   });
 
   it("requires typed quantities that match the adjustment mode", () => {
@@ -1744,6 +1729,51 @@ describe("stock ops adjustments", () => {
       internal.inventory.catalogSummary.markCatalogSummaryNeedsRefreshInternal,
       { storeId: "store-1" },
     );
+  });
+
+  it("applies high-variance manual adjustments immediately", async () => {
+    const { ctx, tables } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: "pos_only",
+    });
+
+    await submitStockAdjustmentBatchWithCtx(ctx, {
+      adjustmentType: "manual",
+      lineItems: [
+        {
+          productSkuId: "sku-1" as Id<"productSku">,
+          quantityDelta: -6,
+        },
+      ],
+      reasonCode: "damage",
+      storeId: "store-1" as Id<"store">,
+      submissionKey: "manual-high-variance-applies",
+    });
+
+    expect(tables.productSku.get("sku-1")).toMatchObject({
+      inventoryCount: 2,
+      quantityAvailable: 0,
+    });
+    expect(Array.from(tables.stockAdjustmentBatch.values())).toEqual([
+      expect.objectContaining({
+        adjustmentType: "manual",
+        approvalRequired: false,
+        highVarianceFlag: true,
+        largestAbsoluteDelta: 6,
+        status: "applied",
+        submissionKey: "manual-high-variance-applies",
+        varianceThreshold: STOCK_ADJUSTMENT_APPROVAL_THRESHOLD,
+      }),
+    ]);
+    expect(tables.approvalRequest.size).toBe(0);
+    expect(tables.operationalWorkItem.size).toBe(0);
+    expect(Array.from(tables.inventoryMovement.values())).toEqual([
+      expect.objectContaining({
+        movementType: "adjustment",
+        quantityDelta: -6,
+        reasonCode: "damage",
+      }),
+    ]);
   });
 
   it("completes synced sale inventory review work when the affected SKU is adjusted", async () => {
