@@ -25,7 +25,7 @@ tags:
   ]
 related_components:
   [athena-webapp, landing, sharedDemo, cash-controls, daily-operations, pos]
-delivery_diff_fingerprint: 41343ae6aca681b46aa261558dfef621d9d4024739885b7e1bbb186374ae13c1
+delivery_diff_fingerprint: 575259df77b774aad4bd7501e960bc20f07266454f64a8c58d064bee5fa7619b
 ---
 
 # Landing Story Told With Real Product Components As Exhibits

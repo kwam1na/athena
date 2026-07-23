@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { animate } from "animejs";
-import { Maximize2, X } from "lucide-react";
+import { Maximize2 } from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAthenaTheme } from "@/lib/theme";

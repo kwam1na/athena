@@ -1529,6 +1529,51 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/scripts/capture-hero-shot.mjs",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/scripts/capture-register-shot.mjs",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/public/favicon.svg",
+    "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/public/favicon-16x16.png",
+    "",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/public/favicon-32x32.png",
+    "",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/public/apple-touch-icon.png",
+    "",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/public/android-chrome-192x192.png",
+    "",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/public/android-chrome-512x512.png",
+    "",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/public/site.webmanifest",
+    "{}\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/scripts/purge-reporting-dev.sh",
     "#!/usr/bin/env bash\nexit 0\n",
     rootDir
