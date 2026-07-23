@@ -185,10 +185,13 @@ function HeroSection() {
         style={{ opacity: 0 }}
         aria-hidden="true"
       />
-      {/* Hero content — blurb and shot — nudged up ~10% together. */}
-      <div className="relative mx-auto w-full max-w-7xl -translate-y-[10vh]">
+      {/* Hero content — blurb and shot — nudged up ~10% together on desktop.
+          On mobile the blurb fills (or exceeds) the first screen, so the
+          desktop-only upward nudge and fixed height are dropped to avoid the
+          shot colliding with the CTA. */}
+      <div className="relative mx-auto w-full max-w-7xl sm:-translate-y-[10vh]">
         {/* Blurb centered in the first screen, cascading in top-down. */}
-        <div className="flex h-[calc(100svh-4rem)] flex-col items-center justify-center text-center">
+        <div className="flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center text-center">
           <div className="max-w-2xl">
             <p
               ref={eyebrowRef}
@@ -226,8 +229,10 @@ function HeroSection() {
           </div>
         </div>
 
-        {/* Hero shot peeks above the fold, then reveals to full opacity on scroll. */}
-        <div ref={shotWrapRef} className="-mt-[22vh]" style={{ opacity: 0 }}>
+        {/* Hero shot peeks above the fold on desktop, then reveals to full
+            opacity on scroll. On mobile the blurb leaves no room to peek into,
+            so the shot follows it with a normal gap instead of overlapping. */}
+        <div ref={shotWrapRef} className="mt-layout-2xl sm:-mt-[22vh]" style={{ opacity: 0 }}>
           <div
             ref={shotRef}
             style={{

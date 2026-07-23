@@ -327,13 +327,13 @@ Use this when admin quick actions still resolve through toast-only UX. Preserve 
 
 ## Frontend test harness edits
 
-Touched surfaces: `src/test`, `src/tests`, `vitest.setup.ts`
+Touched surfaces: `src/test`, `src/tests`, `vitest.setup.ts`, `.env.test`
 
 Run:
 
 - `bun run --filter '@athena/webapp' test`
 
-Run the package suite when package-local frontend test helpers or focused regression tests change.
+Run the package suite when package-local frontend test helpers, focused regression tests, or the test-mode env file change.
 
 ## Convex or backend-adjacent edits
 
