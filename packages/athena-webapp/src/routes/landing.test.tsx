@@ -141,10 +141,12 @@ describe("landing route", () => {
 
     // The automation reveal pays off the hero's objection.
     expect(
-      screen.getByRole("heading", { name: /the day didn't run itself/i }),
+      screen.getByRole("heading", {
+        name: /the day didn't run itself\. athena did\./i,
+      }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/athena did\. it started the opening/i),
+      screen.getByText(/it started the opening, watched the registers/i),
     ).toBeInTheDocument();
 
     // The traced sale reconciles across the receipt, the traveling chip, and
@@ -152,17 +154,29 @@ describe("landing route", () => {
     const saleAmounts = screen.getAllByText(/GH₵385/);
     expect(saleAmounts.length).toBeGreaterThanOrEqual(2);
 
-    // Demo is the sole CTA (header, hero, closing band); the walkthrough and
-    // sign-in links have been removed from the marketing page. The header
-    // labels it "Try the demo"; the hero and closing band say "Demo Athena".
+    // Demo is the primary CTA (header, hero, closing band); the secondary nav
+    // stays hidden. The header labels it "Try the demo"; the hero and closing
+    // band say "Demo Athena".
     const demoLinks = screen.getAllByRole("link", { name: /demo/i });
     expect(demoLinks).toHaveLength(3);
     for (const link of demoLinks) {
       expect(link).toHaveAttribute("href", "/demo");
       expect(link).not.toHaveAttribute("target", "_blank");
     }
+    // The availability band is the page's one interest-capture path: Athena
+    // runs a single real store today, and the closing band routes market
+    // interest to the walkthrough form.
     expect(
-      screen.queryByRole("link", { name: /request a walkthrough/i }),
+      screen.getByRole("heading", {
+        name: /built running a real store\. opening to more\./i,
+      }),
+    ).toBeInTheDocument();
+    const interestLink = screen.getByRole("link", {
+      name: /tell us about your store/i,
+    });
+    expect(interestLink).toHaveAttribute("href", "/walkthrough");
+    expect(
+      screen.queryByRole("link", { name: /register interest/i }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: /sign in/i }),
@@ -171,6 +185,10 @@ describe("landing route", () => {
     expect(mocked.emitLandingFunnelEvent).toHaveBeenCalledWith("page_view");
     await user.click(demoLinks[0]);
     expect(mocked.emitLandingFunnelEvent).toHaveBeenCalledWith("demo_cta");
+    await user.click(interestLink);
+    expect(mocked.emitLandingFunnelEvent).toHaveBeenCalledWith(
+      "walkthrough_cta",
+    );
   });
 
   it("renders the finished scene compositions without animation infrastructure", () => {

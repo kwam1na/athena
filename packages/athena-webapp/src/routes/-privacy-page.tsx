@@ -1,25 +1,36 @@
 import { Link } from "@tanstack/react-router";
 
+import { LandingGrain } from "@/components/landing/LandingGrain";
 import { WALKTHROUGH_PRIVACY_CONTACT } from "@/lib/marketing/walkthroughPrivacy";
 import { PublicLayout } from "./-public-layout";
+import { FadeIn } from "@/components/common/FadeIn";
 
 export function PrivacyPage() {
   return (
-    <PublicLayout>
-      <main className="mx-auto w-full max-w-4xl px-layout-md py-layout-2xl sm:px-layout-xl sm:py-layout-3xl">
-        <header className="border-b border-border/70 pb-layout-xl">
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Walkthrough requests
-          </p>
-          <h1 className="mt-layout-sm font-display text-4xl font-light leading-tight text-foreground sm:text-5xl">
+    <PublicLayout hideSecondaryNav showThemeToggle>
+      <LandingGrain />
+      <FadeIn className="relative mx-auto w-full max-w-5xl px-layout-md pb-[8rem] pt-layout-3xl sm:px-layout-xl">
+        {/* Matches the interest page: the story's dot grid pools low behind the
+            notice, fully faded before every edge so nothing clips. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-[36rem] text-foreground/[0.12] [mask-image:radial-gradient(45%_45%_at_30%_68%,black,transparent_62%)]"
+          style={{
+            backgroundImage:
+              "radial-gradient(currentColor 1px, transparent 1.5px)",
+            backgroundSize: "26px 26px",
+          }}
+        />
+        <header className="relative border-b border-border/70 pb-layout-xl">
+          <h1 className="font-display text-4xl font-light leading-tight text-foreground sm:text-5xl">
             Privacy and retention details
           </h1>
           <p className="mt-layout-md max-w-2xl text-base leading-7 text-muted-foreground">
-            This notice explains how Athena handles the information collected through the walkthrough form.
+            This notice explains how we handle the information you share when you register interest.
           </p>
         </header>
 
-        <div className="space-y-layout-xl py-layout-xl text-base leading-7 text-foreground">
+        <div className="relative space-y-layout-xl py-layout-xl text-base leading-7 text-foreground">
           <NoticeSection title="Information collected">
             <p>
               The form collects your name, work email, business name, a short description of what you need, and a phone number only when you choose to provide one.
@@ -28,7 +39,7 @@ export function PrivacyPage() {
 
           <NoticeSection title="How the information is used">
             <p>
-              Athena uses these details to review your request, understand the business context, and follow up about a product walkthrough. The request is available only to the restricted Athena operators responsible for this process. A transactional email provider processes the fields needed to notify that team.
+              We use these details to review your interest, understand the business context, and follow up about Athena. The details are available only to the restricted Athena operators responsible for this process. A transactional email provider processes the fields needed to notify that team.
             </p>
           </NoticeSection>
 
@@ -48,30 +59,30 @@ export function PrivacyPage() {
                 >
                   {WALKTHROUGH_PRIVACY_CONTACT}
                 </a>{" "}
-                to request an export or deletion. Athena verifies control of
-                the email stored with the request before acting and does not
+                to request an export or deletion. We verify control of
+                the email stored with the request before acting and do not
                 provide an automatic bypass when that address is unavailable.
               </p>
             ) : (
               <p>
-                Walkthrough requests are not open yet. Athena will publish an
-                owner-approved privacy contact here before accepting requests.
+                Interest submissions are not open yet. We will publish an
+                owner-approved privacy contact here before accepting them.
               </p>
             )}
           </NoticeSection>
 
           <p className="border-t border-border/70 pt-layout-lg text-sm text-muted-foreground">
-            This page describes the walkthrough-request process only. It does not claim a broader certification or legal regime.
+            This page describes how we handle the interest form only. It does not claim a broader certification or legal regime.
           </p>
 
           <Link
             to="/walkthrough"
-            className="inline-flex min-h-11 items-center rounded-md text-sm font-medium text-foreground underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex min-h-11 items-center rounded-md text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            Return to walkthrough request
+            Return to register interest
           </Link>
         </div>
-      </main>
+      </FadeIn>
     </PublicLayout>
   );
 }

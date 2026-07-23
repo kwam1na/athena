@@ -9,6 +9,12 @@ export const SHARED_DEMO_BASELINE_VERSION = 30;
 export const SHARED_DEMO_CASHIER_STAFF_CODE = "DEMO-001";
 export const SHARED_DEMO_MANAGER_STAFF_CODE = "DEMO-002";
 export const SHARED_DEMO_REGISTER_NUMBER = "01";
+// The seeded terminal is identified by this fingerprint everywhere. It is the
+// only durable handle on it: posTerminal is excluded from the restore registry,
+// so nothing else can recover the row once it is gone.
+export const SHARED_DEMO_TERMINAL_FINGERPRINT_HASH = "shared-demo-terminal";
+export const SHARED_DEMO_TERMINAL_SYNC_SECRET_SEED =
+  "shared-demo-non-secret-terminal-seed";
 export const SHARED_DEMO_TIME_ZONE = "America/New_York";
 export const SHARED_DEMO_CASH_SEED = {
   openingFloat: 5000,

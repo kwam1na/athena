@@ -92,11 +92,11 @@ export function getAthenaDocumentTitle(pathname: string) {
   }
 
   if (pathname === "/walkthrough") {
-    return "Request an Athena walkthrough";
+    return "Register interest in Athena";
   }
 
   if (pathname === "/privacy") {
-    return "Athena walkthrough privacy details";
+    return "Athena privacy details";
   }
 
   if (pathname.includes("/demo")) {

@@ -9,10 +9,10 @@ describe("Athena document title", () => {
       "Athena | Product overview",
     );
     expect(getAthenaDocumentTitle("/walkthrough")).toBe(
-      "Request an Athena walkthrough",
+      "Register interest in Athena",
     );
     expect(getAthenaDocumentTitle("/privacy")).toBe(
-      "Athena walkthrough privacy details",
+      "Athena privacy details",
     );
     expect(getAthenaDocumentTitle("/demo")).toBe("Athena | Demo");
   });

@@ -32,6 +32,55 @@ vi.mock("convex/react", () => ({
   useAction: vi.fn(),
 }));
 
+// framer-motion: render `motion.*` as plain, prop-forwarding elements. Entrance
+// animations never advance under jsdom, so a real `initial={{ opacity: 0 }}`
+// would leave content at opacity 0 and fail `toBeVisible()` assertions. Only
+// `motion` is overridden — AnimatePresence, hooks, and every other export stay
+// real — and framer-only props are stripped so no animation styling leaks onto
+// the DOM node.
+vi.mock("framer-motion", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("framer-motion")>();
+  const React = await import("react");
+  const FRAMER_ONLY_PROPS = new Set([
+    "initial", "animate", "exit", "transition", "variants", "custom",
+    "whileHover", "whileTap", "whileFocus", "whileInView", "whileDrag",
+    "drag", "dragConstraints", "dragElastic", "dragMomentum", "dragSnapToOrigin",
+    "layout", "layoutId", "layoutScroll", "layoutDependency", "layoutRoot",
+    "onAnimationStart", "onAnimationComplete", "onUpdate", "viewport",
+    "onHoverStart", "onHoverEnd", "onTap", "onTapStart", "onTapCancel",
+    "onDragStart", "onDragEnd", "onDrag", "onDirectionLock",
+  ]);
+  const build = (tag: unknown) =>
+    React.forwardRef(
+      (props: Record<string, unknown>, ref: React.Ref<unknown>) => {
+        const clean: Record<string, unknown> = {};
+        for (const key of Object.keys(props)) {
+          if (!FRAMER_ONLY_PROPS.has(key)) clean[key] = props[key];
+        }
+        return React.createElement(tag as never, { ...clean, ref });
+      },
+    );
+  // Cache one component per tag/component. JSX reads `motion.div` on every
+  // render, so returning a fresh component each time would give React a new
+  // type and remount the whole subtree — wiping input focus and value.
+  const cache = new Map<unknown, React.ElementType>();
+  const forward = (tag: unknown) => {
+    let component = cache.get(tag);
+    if (!component) {
+      component = build(tag);
+      cache.set(tag, component);
+    }
+    return component;
+  };
+  const motion = new Proxy(function () {}, {
+    // motion.div / motion.button / …
+    get: (_target, tag) => forward(String(tag)),
+    // motion(SomeComponent)
+    apply: (_target, _thisArg, args: unknown[]) => forward(args[0]),
+  }) as unknown as typeof actual.motion;
+  return { ...actual, motion };
+});
+
 // Only run browser-specific mocks when a window object exists (e.g. jsdom).
 if (typeof window !== "undefined") {
   const pointerCaptureStub = () => false;

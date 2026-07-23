@@ -17,6 +17,7 @@ import posRegisterReadyShot from "@/assets/landing/pos-register-ready.png";
 import posRegisterReadyShotDark from "@/assets/landing/pos-register-ready-dark.png";
 import posSyncedShot from "@/assets/landing/pos-synced.png";
 import posSyncedShotDark from "@/assets/landing/pos-synced-dark.png";
+import { LandingGrain } from "@/components/landing/LandingGrain";
 import { AutomationRevealScene } from "@/components/landing/story/AutomationRevealScene";
 import { CashControlsScene } from "@/components/landing/story/CashControlsScene";
 import {
@@ -31,8 +32,9 @@ import { SyncBridgeScene } from "@/components/landing/story/SyncBridgeScene";
 import { AutomationBeat } from "@/components/landing/story/SceneChrome";
 import { useLandingTheme } from "@/components/landing/story/useLandingTheme";
 import { emitLandingFunnelEvent } from "@/lib/marketing/landingFunnelClient";
-import { DEMO_PATH } from "@/lib/navigation/appEntryRoutes";
+import { DEMO_PATH, WALKTHROUGH_PATH } from "@/lib/navigation/appEntryRoutes";
 import { PublicLayout } from "./-public-layout";
+import { Button } from "../components/ui/button";
 
 // Scroll-linked reveal for the hero shot: it starts faint while only its top
 // edge peeks above the fold, then ramps to full opacity as the reader scrolls
@@ -69,9 +71,8 @@ function useHeroShotRevealRef() {
         HERO_SHOT_MIN_OPACITY + (1 - HERO_SHOT_MIN_OPACITY) * eased,
       );
       // Grow from slightly small to full size as it comes into view.
-      el.style.transform = `scale(${
-        HERO_SHOT_MIN_SCALE + (1 - HERO_SHOT_MIN_SCALE) * eased
-      })`;
+      el.style.transform = `scale(${HERO_SHOT_MIN_SCALE + (1 - HERO_SHOT_MIN_SCALE) * eased
+        })`;
     };
     const onScroll = () => {
       if (!raf) raf = requestAnimationFrame(update);
@@ -270,23 +271,6 @@ const CONTROL_LOOP_PILLARS = [
   },
 ] as const;
 
-// A tiled fractal-noise SVG, rendered once and repeated as a background. The
-// page tells a paper-to-system story, so the whole surface carries a faint
-// paper grain — fixed so copy, canvas panels, and screenshots all share it.
-const GRAIN_TILE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E")`;
-
-function LandingGrain() {
-  return (
-    <div
-      aria-hidden="true"
-      // The tile is black noise; on charcoal it must be inverted to read as
-      // light grain, and eased down so it stays a whisper.
-      className="pointer-events-none fixed inset-0 z-[70] opacity-[0.08] dark:opacity-[0.05] dark:[filter:invert(1)]"
-      style={{ backgroundImage: GRAIN_TILE }}
-    />
-  );
-}
-
 // Faint horizontal ruling, like the feint lines of a ledger page — used behind
 // the bookkeeping acts. Masked so it breathes in from an edge rather than
 // covering the whole section.
@@ -434,9 +418,8 @@ function StoryAct({
     >
       {texture}
       <div
-        className={`relative mx-auto grid w-full max-w-7xl items-center gap-layout-2xl lg:grid-cols-2 ${
-          reversed ? "lg:[&>*:first-child]:order-2" : ""
-        }`}
+        className={`relative mx-auto grid w-full max-w-7xl items-center gap-layout-2xl lg:grid-cols-2 ${reversed ? "lg:[&>*:first-child]:order-2" : ""
+          }`}
       >
         <ActCopy {...copyProps} />
         {children}
@@ -702,38 +685,86 @@ export function Index() {
           <div className="relative mx-auto grid w-full max-w-7xl items-center gap-layout-2xl lg:grid-cols-2">
             <div className="max-w-xl">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
-                The day, replayed
+                Everywhere you weren&apos;t
               </p>
               <h2 className="mt-layout-sm font-display text-4xl font-light leading-[1.02] text-foreground sm:text-5xl">
-                The day didn&apos;t run itself.
+                The day didn&apos;t run itself. Athena did.
               </h2>
               <p className="mt-layout-md text-lg leading-8 text-muted-foreground">
-                Athena did. It started the opening, watched the registers,
-                synced every sale, and prepared the close, handling whatever
-                your rules allowed, and bringing you in only for the calls that
-                needed judgment. You saw all of it, even the hours you were
-                nowhere near the store.
+                It started the opening, watched the registers, synced every
+                sale, and prepared the close. Whatever your rules allowed, it
+                handled; whatever needed judgment came to you. You saw every
+                minute of it.
               </p>
             </div>
             <AutomationRevealScene />
           </div>
         </section>
 
-        <section className="relative flex items-start overflow-hidden border-t border-border bg-background px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl">
-          <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-layout-xl lg:flex-row lg:items-end lg:justify-between">
+        {/* The close: the demo invitation and the availability beat share one
+            uninterrupted field — no border or background shift between them —
+            so the page settles rather than starts a new act. The demo stays
+            the primary CTA; the availability beat below carries the page's one
+            interest-capture path to the (otherwise hidden) walkthrough form,
+            reached here at the moment of maximum conviction. */}
+        <section className="relative flex items-start overflow-hidden bg-surface px-layout-md pb-[8rem] pt-[12rem] sm:px-layout-xl">
+          {/* The story's dot grid returns one last time — the same primitive
+              that opens the page and closes the reveal above — but faded in
+              only over the lower half. It gives the "Behind the demo" beat its
+              own quiet floor, separating it from the demo invitation without a
+              border, while the demo block up top keeps clean ground. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 text-foreground/[0.12] [mask-image:linear-gradient(to_bottom,transparent_42%,black_88%)]"
+            style={{
+              backgroundImage:
+                "radial-gradient(currentColor 1px, transparent 1.5px)",
+              backgroundSize: "26px 26px",
+            }}
+          />
+          {/* A faint primary wash rises from the lower-left, anchoring the
+              interest CTA — an echo of the hero's top-right glow. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_8%_92%,hsl(var(--primary)/0.06),transparent_42%)]"
+          />
+          <div className="relative mx-auto w-full max-w-7xl space-y-[10rem] sm:space-y-[15rem]">
+            <div className="flex w-full flex-col gap-layout-xl lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-3xl">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                  Open the store you just read about
+                </p>
+                <h2 className="mt-layout-md font-display text-4xl font-light leading-tight text-foreground sm:text-6xl">
+                  Walk this exact day yourself.
+                </h2>
+              </div>
+              <DemoCtaButton />
+            </div>
+
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                Open the store you just read about
+                Behind the demo
               </p>
-              <h2 className="mt-layout-md font-display text-4xl font-light leading-tight text-foreground sm:text-6xl">
-                Walk this exact day yourself.
+              <h2 className="mt-layout-md font-display text-4xl font-light leading-tight text-foreground sm:text-5xl">
+                Built running a real store. Opening to more.
               </h2>
               <p className="mt-layout-md text-lg leading-8 text-muted-foreground">
-                The demo opens Osu Studio: the same store, the same registers.
-                No signup; it takes seconds.
+                Everything on this page runs a real store today, refined
+                daily in live use.
               </p>
+              <div className="mt-layout-lg">
+                <Link
+                  to={WALKTHROUGH_PATH}
+                  onClick={() => emitLandingFunnelEvent("walkthrough_cta")}
+
+                >
+                  <Button variant={'clear'} className="text-muted-foreground hover:text-foreground font-semibold px-0 group">
+                    Tell us about your store
+                    <ArrowRight className="ml-layout-xs h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                  </Button>
+                </Link>
+              </div>
             </div>
-            <DemoCtaButton />
           </div>
         </section>
       </main>

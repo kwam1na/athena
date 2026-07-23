@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="70b297ed12ab627deae5d5079734d400f0efa259a2e49c6efca02efab9a3e52c">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Register-Interest Public Surface, Shared-Demo Resilience, and Delivery Tooling</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
+      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
+      h2 { font-size: 28px; margin: 0 0 16px; }
+      p { margin: 0 0 14px; }
+      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
+      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
+      @media (hover: hover) and (pointer: fine) {
+        label:hover { border-color: #b6c5d8; }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 700;
+        padding: 11px 16px;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:active { transform: scale(0.97); }
+      button.secondary { background: #475569; }
+      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      #quizResult { font-weight: 700; }
+      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
+      .answer-detail.visible { display: block; }
+      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
+      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
+      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
+      @media (max-width: 820px) { h1 { font-size: 32px; } main { padding: 32px 16px 56px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Register-Interest Public Surface, Shared-Demo Resilience, and Delivery Tooling</h1>
+        <p class="lede">One dirty set delivered together: the public marketing surface reframed from "walkthrough" to interest capture with a shared footer, a self-healing fix for the shared-demo seeded terminal, and three tooling fixes that unblock the merge gate.</p>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Gate: pending local run</span><span class="pill">Base: origin/main</span><span class="pill">22 files + 1 new</span><span class="pill">~943 / ~420 lines</span></div>
+      </header>
+
+      <section class="panel"><h2>Executive Summary</h2>
+<p>This delivery bundles several threads that accumulated in one working tree. The largest is the <strong>register-interest public surface</strong>: the landing page's close was reworked, the "walkthrough" framing was reframed to interest capture across the walkthrough and privacy pages, a shared reveal-on-scroll footer was added to the public shell, the nav secondary links were replaced by the theme switcher on the interest and privacy pages, and the paper-grain texture was extracted into a reusable component.</p>
+<p>The second thread is a <strong>shared-demo resilience fix</strong>: the seeded POS terminal — the row that gives the demo register its "Studio Front Counter" name — had no durable handle and could be lost permanently, leaving a nameless register that survived every hourly restore. Provisioning now heals it on every pass, and the prod deploy runs the restore step so a baseline bump no longer locks the demo out for up to an hour.</p>
+<p>The third thread is <strong>delivery tooling</strong>: a global framer-motion test mock (so entrance-animated content stays visible in jsdom), a tsconfig <code>exclude</code> that stops <code>tsc</code> from parsing gitignored build artifacts and running out of memory, and a deploy-script default that makes the interest form deploy-ready in prod.</p>
+</section>
+
+<section class="panel"><h2>Why It Mattered</h2>
+<p>The public surface is the product's front door and its only market-interest signal; "walkthrough" implied a service the product does not yet offer to other businesses. The shared-demo terminal defect was live in prod — a visibly broken demo card — and self-perpetuating. The tooling fixes were not cosmetic: the merge gate runs <code>tsc --noEmit</code> and the full test suite, both of which the OOM and the framer/visibility interaction would have broken.</p>
+</section>
+
+<section class="panel"><h2>Thread 1 — The Interest Public Surface</h2>
+<p>The landing close was split so the demo invitation and an availability beat ("Built running a real store. Opening to more.") share one uninterrupted field, then blended with the section above it. A minimal footer was added to the shared <code>PublicLayout</code>: it is pinned beneath the page as a fixed layer, and the opaque page content scrolls up off it to reveal it — a drawer-like reveal with no scripting.</p>
+<p>The walkthrough page became the interest page: eyebrow removed, copy reframed, the submit CTA humanized to "Send my details", the field grid bottom-aligned so inputs stay on one line when a neighbor's description wraps, and the submission-error status region restored after a prior edit had dropped it. The privacy page was aligned to match — same shell, texture, padding, and reframed copy — while preserving the two legal phrases its tests pin. Browser-tab titles were de-walkthroughed. The nav's "Register interest" and "Sign in" links were replaced by the theme switcher on both pages.</p>
+</section>
+
+<section class="panel"><h2>Thread 2 — Shared-Demo Seeded Terminal Self-Heal</h2>
+<p>The seeded terminal is identified only by <code>fingerprintHash: "shared-demo-terminal"</code>, and <code>posTerminal</code> is deliberately excluded from the restore registry while <code>registerSession</code> is included. So a deleted seeded terminal left the session and its captured baseline document pointing at a dead id, which the hourly restore re-asserted forever. Three composable helpers now find-or-create the terminal by fingerprint and re-point any dangling session and baseline document — invoked on every provision including the <code>kind: "existing"</code> path, so an already-provisioned store heals without a version bump. The full rationale and verification are in the paired solution note.</p>
+</section>
+
+<section class="panel"><h2>Thread 3 — Delivery Tooling</h2>
+<table>
+  <thead><tr><th>Fix</th><th>Cause</th><th>Resolution</th></tr></thead>
+  <tbody>
+    <tr><td>Global framer-motion mock (<code>vitest.setup.ts</code>)</td><td>FadeIn's <code>initial opacity: 0</code> never animates to 1 in jsdom, so <code>toBeVisible()</code> failed on wrapped content.</td><td>Override only <code>motion.*</code> as prop-forwarding elements, keep every other export real, and <strong>cache one component per tag</strong> so React does not remount stateful subtrees.</td></tr>
+    <tr><td>tsconfig <code>exclude</code></td><td>No <code>include</code>/<code>exclude</code> plus <code>allowJs</code> made <code>tsc</code> parse gitignored build artifacts (<code>dist</code>, <code>storybook-static</code>, <code>coverage</code>), exhausting the heap.</td><td>Add an explicit <code>exclude</code> for those directories (re-listing <code>node_modules</code>, since <code>exclude</code> overrides tsc defaults). Local typecheck now matches CI and finishes in ~55s on default heap.</td></tr>
+    <tr><td>Deploy contact default (<code>deploy-vps.sh</code>)</td><td>The interest form's frontend gate <code>VITE_WALKTHROUGH_PRIVACY_CONTACT</code> had no prod default, keeping the CTA disabled.</td><td>Default it like every other hardcoded prod value in the script, so the next prod build enables the form.</td></tr>
+  </tbody>
+</table>
+</section>
+
+<section class="panel"><h2>The Framer Mock's One Sharp Edge</h2>
+<p>The first version of the mock returned a fresh <code>forwardRef</code> component on every <code>motion.div</code> access. Because JSX reads <code>motion.div</code> on every render, React saw a new component type each time and remounted the whole subtree — which manifested as dropped keystrokes in register-closeout inputs (typing "30" yielded "3"). Caching the component per tag fixed it. This was caught by running the full suite specifically to vet the global mock; the input remount was the only fallout.</p>
+</section>
+
+<section class="panel"><h2>Validation</h2>
+<ul>
+<li><strong>Shared-demo:</strong> three behavioral <code>convex-test</code> cases (rename reaches provisioned store; deleted terminal recreated with both bindings repaired; healthy and browser bindings untouched), plus the real <code>provisionSharedDemo</code> mutation run against dev returning <code>kind: "existing"</code> with one seeded terminal.</li>
+<li><strong>Public surface:</strong> landing, walkthrough, privacy, and <code>__root</code> title suites updated and green; the walkthrough/privacy route tests assert the theme switcher replaces the nav links.</li>
+<li><strong>Tooling:</strong> the full <code>src</code> suite (3164 passing before the intentional <code>cycle_count</code> assertion update; green after) run to confirm the global framer mock introduced no regressions; <code>tsc --noEmit</code> clean in ~55s on default heap.</li>
+<li><strong>Interest pipeline (dev, end to end):</strong> a live POST to the dev endpoint returned <code>202 {"accepted":true}</code>, the request stored, and the notification attempt reached <code>state: "sent"</code> with a MailerSend provider id — confirming the sending domain is verified.</li>
+</ul>
+</section>
+
+<section class="panel"><h2>What Intentionally Did Not Change</h2>
+<ul>
+<li>Internal identifiers stayed "walkthrough": the component name, the <code>walkthrough_cta</code> funnel event, the convex functions, the HTTP route path, and the retention crons. Renaming them would be a large, risky refactor with no user-facing benefit.</li>
+<li>The privacy page's substantive legal copy (retention windows, "transactional email provider", "owner-approved privacy contact") was preserved — only the walkthrough-branded surface framing was reframed.</li>
+<li>The <code>OperationsQueueView</code> stock-adjustment link mode change from <code>manual</code> to <code>cycle_count</code> is an intentional product change carried in this set; its assertions were updated to match.</li>
+</ul>
+</section>
+
+<section class="panel"><h2>Key Files</h2>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><code>convex/sharedDemo/provision.ts</code>, <code>config.ts</code></td><td>Seeded-terminal find-or-create + dangling-binding repair; fingerprint/seed constants.</td></tr>
+    <tr><td><code>scripts/deploy-vps.sh</code></td><td>Post-deploy shared-demo provisioning step; prod default for the interest privacy contact.</td></tr>
+    <tr><td><code>src/routes/-public-layout.tsx</code></td><td>Reveal-on-scroll footer; theme switcher gating.</td></tr>
+    <tr><td><code>src/routes/-index-route-view.tsx</code>, <code>-walkthrough-page.tsx</code>, <code>-privacy-page.tsx</code></td><td>Landing close rework; interest/privacy reframe, texture, alignment.</td></tr>
+    <tr><td><code>src/components/landing/LandingGrain.tsx</code> (new), <code>WalkthroughRequestForm.tsx</code></td><td>Shared paper-grain; field alignment + error-status restore.</td></tr>
+    <tr><td><code>vitest.setup.ts</code>, <code>tsconfig.json</code></td><td>Global framer mock; build-artifact exclude.</td></tr>
+  </tbody>
+</table>
+</section>
+
+<section class="panel">
+  <h2>Subagent Evidence</h2>
+  <p>This delivery was executed inline rather than via subagent fan-out; the evidence below is the verification actually run during the session, gathered directly.</p>
+  <ul>
+    <li><strong>Prod row reads:</strong> <code>convex data --prod</code> against <code>posTerminal</code>, <code>registerSession</code>, <code>sharedDemoBaselineDocument</code>, and <code>sharedDemoRestoreState</code> established that the seeded terminal was absent and the session/document referenced a dead id — the diagnosis that drove the self-heal design.</li>
+    <li><strong>Dev mutation run:</strong> <code>provisionSharedDemo</code> executed against the dev deployment returned <code>kind: "existing"</code> with a single seeded terminal, proving the heal runs on the <code>existing</code> path and no-ops on a healthy store.</li>
+    <li><strong>Dev interest smoke test:</strong> a live HTTP POST to the walkthrough endpoint returned <code>202</code>; the stored request's notification attempt reached <code>state: "sent"</code>, confirming HMAC/origin/contact config and MailerSend domain verification end to end.</li>
+    <li><strong>Full-suite regression sweep:</strong> the entire <code>src</code> test suite was run to vet the global framer mock; the only fallout (input remount from a non-cached mock) was found and fixed before proceeding.</li>
+  </ul>
+</section>
+
+<section id="quiz" class="panel">
+  <h2>Quiz: Pass Required</h2>
+  <p>You must score at least 8 out of 10 to pass.</p>
+  <form id="changeQuiz" data-threshold="8">
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>1. Why did the shared-demo register card render with no terminal name?</legend>
+    <label><input type="radio" name="q1" value="0" /> The terminal name column was dropped from the schema</label>
+<label><input type="radio" name="q1" value="1" /> The display name constant was renamed but never migrated</label>
+<label><input type="radio" name="q1" value="2" /> The name is a join on session.terminalId, which resolved to a deleted posTerminal, so the join dropped it</label>
+<label><input type="radio" name="q1" value="3" /> The card intentionally hides the name for demo stores</label>
+  </fieldset>
+  <div class="answer-detail">listTerminalNames does db.get on session.terminalId and drops the entry when the terminal is missing. Prod had no row with fingerprintHash "shared-demo-terminal", and the session pointed at the deleted id.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>2. Why did the broken terminal reference survive every hourly restore?</legend>
+    <label><input type="radio" name="q2" value="0" /> The restore was disabled in prod</label>
+<label><input type="radio" name="q2" value="1" /> registerSession is in the restore registry but posTerminal is not, so each restore re-inserts the session from a baseline document that still holds the dead terminalId</label>
+<label><input type="radio" name="q2" value="2" /> The restore only runs in dev</label>
+<label><input type="radio" name="q2" value="3" /> The terminal was recreated each hour but with a new id</label>
+  </fieldset>
+  <div class="answer-detail">posTerminal is excluded from SHARED_DEMO_MUTABLE_TABLES so device registration survives restores; registerSession is included, so its captured baseline document — carrying the frozen terminalId — is replayed every hour.</div>
+</div>
+
+<div class="quiz-question" data-answer="3">
+  <fieldset>
+    <legend>3. Why didn't re-running provisionSharedDemo fix the broken store on its own?</legend>
+    <label><input type="radio" name="q3" value="0" /> Provisioning is only callable from a cron</label>
+<label><input type="radio" name="q3" value="1" /> It threw on the missing terminal</label>
+<label><input type="radio" name="q3" value="2" /> It recreated the terminal but not the session</label>
+<label><input type="radio" name="q3" value="3" /> At the current baseline it falls through to kind:"existing" with no terminal check, and only the reset branch — which the store won't take — creates a missing terminal</label>
+  </fieldset>
+  <div class="answer-detail">This is the recurring failure mode: a recovery guarded behind a version bump that has already passed. The fix runs the foundation check unconditionally, including on the existing path.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>4. Why must the repair fix the captured baseline document and not just the live session?</legend>
+    <label><input type="radio" name="q4" value="0" /> The frozen baseline document outlives the live row and would reinstate the dead terminalId on the next restore</label>
+<label><input type="radio" name="q4" value="1" /> The live session is read-only</label>
+<label><input type="radio" name="q4" value="2" /> The baseline document is what the UI renders from</label>
+<label><input type="radio" name="q4" value="3" /> Only the document is indexed by terminalId</label>
+  </fieldset>
+  <div class="answer-detail">Fixing only the live row leaves the captured document to re-assert the dangling id the next time the restore replays it. Both halves must be re-pointed.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>5. What was the one sharp edge in the first global framer-motion mock?</legend>
+    <label><input type="radio" name="q5" value="0" /> It leaked animation styles onto the DOM</label>
+<label><input type="radio" name="q5" value="1" /> It broke AnimatePresence exit animations</label>
+<label><input type="radio" name="q5" value="2" /> It returned a new component per motion.* access, so React remounted stateful subtrees and inputs lost their value</label>
+<label><input type="radio" name="q5" value="3" /> It failed to strip the initial prop</label>
+  </fieldset>
+  <div class="answer-detail">JSX reads motion.div every render; a fresh forwardRef each time is a new component type, forcing a remount. Typing "30" yielded "3" until the mock cached one component per tag.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>6. What actually caused the local tsc out-of-memory crash?</legend>
+    <label><input type="radio" name="q6" value="0" /> A circular type in the shared-demo code</label>
+<label><input type="radio" name="q6" value="1" /> No include/exclude plus allowJs made tsc parse gitignored build artifacts (dist, storybook-static, coverage), including multi-megabyte minified bundles</label>
+<label><input type="radio" name="q6" value="2" /> The default heap was too small for the source tree</label>
+<label><input type="radio" name="q6" value="3" /> A corrupt node_modules</label>
+  </fieldset>
+  <div class="answer-detail">These directories are gitignored and absent in CI, which is why CI typecheck was clean while local OOM'd. An explicit exclude makes local match CI.</div>
+</div>
+
+<div class="quiz-question" data-answer="3">
+  <fieldset>
+    <legend>7. Why does adding exclude to the tsconfig require re-listing node_modules?</legend>
+    <label><input type="radio" name="q7" value="0" /> node_modules contains build output</label>
+<label><input type="radio" name="q7" value="1" /> The paths alias needs it</label>
+<label><input type="radio" name="q7" value="2" /> It is required by moduleResolution bundler</label>
+<label><input type="radio" name="q7" value="3" /> Specifying exclude overrides tsc's default exclude set, which otherwise includes node_modules</label>
+  </fieldset>
+  <div class="answer-detail">tsc's built-in exclude (node_modules, bower_components, jspm_packages, outDir) applies only when no explicit exclude is set; once you provide one, you must re-add node_modules.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>8. Why was the interest-form CTA disabled, and what enables it?</legend>
+    <label><input type="radio" name="q8" value="0" /> WALKTHROUGH_SUBMISSION_ENABLED requires a valid VITE_WALKTHROUGH_PRIVACY_CONTACT; setting it enables the CTA and flips the privacy page to "ready"</label>
+<label><input type="radio" name="q8" value="1" /> The convex backend was unconfigured in prod</label>
+<label><input type="radio" name="q8" value="2" /> The submit mutation was not deployed</label>
+<label><input type="radio" name="q8" value="3" /> MailerSend was rate-limited</label>
+  </fieldset>
+  <div class="answer-detail">The gate is a build-time frontend flag. The prod convex backend (HMAC, origins, contact, recipient, MailerSend) was already fully configured; the deploy script now defaults the frontend contact so the next prod build enables the form.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>9. What did the reframe deliberately NOT change?</legend>
+    <label><input type="radio" name="q9" value="0" /> The submit button label</label>
+<label><input type="radio" name="q9" value="1" /> Internal identifiers — the component name, walkthrough_cta funnel event, convex functions, HTTP route path, and retention crons</label>
+<label><input type="radio" name="q9" value="2" /> The privacy page layout</label>
+<label><input type="radio" name="q9" value="3" /> The landing close copy</label>
+  </fieldset>
+  <div class="answer-detail">Only user-facing "walkthrough" framing was reframed to interest. Renaming the plumbing (funnel events, backend, routes, crons) would be a large, risky refactor with no user benefit.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>10. How was the dev interest pipeline verified end to end?</legend>
+    <label><input type="radio" name="q10" value="0" /> By reading the source of the submit handler</label>
+<label><input type="radio" name="q10" value="1" /> By asserting the CTA was enabled in a unit test</label>
+<label><input type="radio" name="q10" value="2" /> A live POST returned 202 accepted and the notification attempt reached state "sent" with a MailerSend provider id</label>
+<label><input type="radio" name="q10" value="3" /> It was not verified against a running deployment</label>
+  </fieldset>
+  <div class="answer-detail">Running the real path — POST to the dev endpoint, then reading back the stored request and its notification attempt — confirmed HMAC/origin/contact config and that the sending domain is verified.</div>
+</div>
+
+    <div class="quiz-actions">
+      <button type="button" id="gradeQuiz">Grade quiz</button>
+      <button type="button" class="secondary" id="resetQuiz">Reset</button>
+      <span id="quizResult" aria-live="polite"></span>
+    </div>
+  </form>
+</section>
+
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
+          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
+          if (isCorrect) score += 1;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>

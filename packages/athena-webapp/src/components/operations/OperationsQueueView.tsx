@@ -148,10 +148,10 @@ type QueueWorkItem = {
     members: QueueWorkItem[];
     oldestActionableAt?: number;
     resolutionAvailability:
-      | "available"
-      | "budget_exceeded"
-      | "remediation_in_progress"
-      | "source_incomplete";
+    | "available"
+    | "budget_exceeded"
+    | "remediation_in_progress"
+    | "source_incomplete";
   };
   priority: string;
   sourceIdentity?: string;
@@ -439,11 +439,11 @@ function groupOpenWorkItems(workItems: QueueWorkItem[]) {
   return workItems.map((item) => ({
     items: item.logicalGroup
       ? [
-          item,
-          ...item.logicalGroup.members.filter(
-            (member) => member._id !== item._id,
-          ),
-        ]
+        item,
+        ...item.logicalGroup.members.filter(
+          (member) => member._id !== item._id,
+        ),
+      ]
       : [item],
     key: item.logicalGroup?.key ?? item._id,
   }));
@@ -704,7 +704,7 @@ function StockAdjustmentReferenceLink({
         storeUrlSlug,
       }}
       search={{
-        mode: "manual",
+        mode: "cycle_count",
         o: getOrigin(),
         sku: skuId,
       }}
@@ -803,7 +803,7 @@ function QueueWorkItemActionSlot({
             className={openWorkActionLinkClassName}
             params={{ orgUrlSlug, storeUrlSlug }}
             search={{
-              mode: "manual",
+              mode: "cycle_count",
               o: getOrigin(),
               sku: stockAdjustmentSkuId,
             }}
@@ -1026,41 +1026,41 @@ function QueueWorkItemCard({
   const serviceCollapsedMetadataEntries: OperationReviewMetadataEntry[] =
     item.type === "service_appointment"
       ? [
-          {
-            label: "Owner",
-            value: item.assignedStaffName ?? "Unassigned",
-          },
-          {
-            label: "Customer",
-            value: item.customerName ?? "No customer",
-          },
-          {
-            label: "Scheduled",
-            value: item.dueAt ? getRelativeTime(item.dueAt) : "Not scheduled",
-          },
-          {
-            label: "Created",
-            value: getRelativeTime(item.createdAt),
-          },
-        ]
+        {
+          label: "Owner",
+          value: item.assignedStaffName ?? "Unassigned",
+        },
+        {
+          label: "Customer",
+          value: item.customerName ?? "No customer",
+        },
+        {
+          label: "Scheduled",
+          value: item.dueAt ? getRelativeTime(item.dueAt) : "Not scheduled",
+        },
+        {
+          label: "Created",
+          value: getRelativeTime(item.createdAt),
+        },
+      ]
       : [
-          {
-            label: "Owner",
-            value: item.assignedStaffName ?? "Unassigned",
-          },
-          {
-            label: "Customer",
-            value: item.customerName ?? "No customer",
-          },
-          {
-            label: "Created",
-            value: getRelativeTime(item.createdAt),
-          },
-          {
-            label: "Due",
-            value: item.dueAt ? getRelativeTime(item.dueAt) : "Not scheduled",
-          },
-        ];
+        {
+          label: "Owner",
+          value: item.assignedStaffName ?? "Unassigned",
+        },
+        {
+          label: "Customer",
+          value: item.customerName ?? "No customer",
+        },
+        {
+          label: "Created",
+          value: getRelativeTime(item.createdAt),
+        },
+        {
+          label: "Due",
+          value: item.dueAt ? getRelativeTime(item.dueAt) : "Not scheduled",
+        },
+      ];
   const purchaseOrderCollapsedMetadataEntries: OperationReviewMetadataEntry[] =
     [
       {
@@ -1227,13 +1227,13 @@ function QueueWorkItemCard({
   const expandedOnlyMetadataEntries: OperationReviewMetadataEntry[] =
     item.type === "synced_sale_inventory_review"
       ? [
-          {
-            label: "Affected sale lines",
-            value: formatOptionalLineCount(
-              getQueueWorkItemInventoryReviewLineCount(item),
-            ),
-          },
-        ]
+        {
+          label: "Affected sale lines",
+          value: formatOptionalLineCount(
+            getQueueWorkItemInventoryReviewLineCount(item),
+          ),
+        },
+      ]
       : [];
   const metadataEntries: OperationReviewMetadataEntry[] = [
     ...collapsedMetadataEntries,
@@ -1360,10 +1360,10 @@ function SyncedSaleInventoryReviewGroupCard({
     representative.logicalGroup?.resolutionAvailability === "budget_exceeded"
       ? "This inventory review group needs support to complete safely."
       : representative.logicalGroup?.resolutionAvailability ===
-          "remediation_in_progress"
+        "remediation_in_progress"
         ? "Support is completing this inventory review group."
         : representative.logicalGroup?.resolutionAvailability ===
-            "source_incomplete"
+          "source_incomplete"
           ? "Open Work is still loading the complete inventory review set."
           : null;
 
@@ -1915,9 +1915,9 @@ function OpenWorkInventoryExportButton({
     stockOpsApi.adjustments.listInventorySnapshotForProductSkus,
     inventoryItems === undefined
       ? {
-          productSkuIds,
-          storeId,
-        }
+        productSkuIds,
+        storeId,
+      }
       : "skip",
   ) as InventorySnapshotItem[] | undefined;
   const rows = useMemo(() => {
@@ -2046,8 +2046,8 @@ export function OperationsQueueViewContent({
   );
   const selectedWorkTypeSummary = selectedOpenWorkType
     ? workItemSummary?.byType.find(
-        (entry) => entry.type === selectedOpenWorkType,
-      )
+      (entry) => entry.type === selectedOpenWorkType,
+    )
     : undefined;
   const effectiveWorkItemSummary = selectedOpenWorkType
     ? selectedWorkTypeSummary
@@ -2056,15 +2056,15 @@ export function OperationsQueueViewContent({
   const isOpenWorkCountLowerBound = effectiveWorkItemSummary
     ? effectiveWorkItemSummary.completeness === "incomplete"
     : filteredWorkItems.some(
-        (item) => item.logicalGroup?.completeness === "incomplete",
-      );
+      (item) => item.logicalGroup?.completeness === "incomplete",
+    );
   const openWorkHeaderTitle = isLoadingQueue
     ? "Open work"
     : formatOpenWorkHeaderTitle(
-        openWorkCount,
-        selectedOpenWorkType,
-        isOpenWorkCountLowerBound,
-      );
+      openWorkCount,
+      selectedOpenWorkType,
+      isOpenWorkCountLowerBound,
+    );
   const openWorkHeaderDescription =
     "Service intake and stock review work that still needs progress or completion.";
   const openWorkHeaderContentKey = isLoadingQueue
@@ -2367,11 +2367,11 @@ export function OperationsQueueViewContent({
                             Manager approval is active
                             {approvalDecisionUnlockExpiresAt
                               ? ` until ${new Date(
-                                  approvalDecisionUnlockExpiresAt,
-                                ).toLocaleTimeString([], {
-                                  hour: "numeric",
-                                  minute: "2-digit",
-                                })}`
+                                approvalDecisionUnlockExpiresAt,
+                              ).toLocaleTimeString([], {
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}`
                               : ""}
                             .
                           </p>
@@ -2555,10 +2555,10 @@ export function OperationsQueueViewContent({
                                           <span>Stock</span>
                                           <span>
                                             {typeof lineItem.quantityDelta ===
-                                            "number"
+                                              "number"
                                               ? formatQuantityDelta(
-                                                  lineItem.quantityDelta,
-                                                )
+                                                lineItem.quantityDelta,
+                                              )
                                               : "-"}
                                           </span>
                                         </Badge>
@@ -2583,8 +2583,8 @@ export function OperationsQueueViewContent({
                                   </div>
                                   <div className="flex flex-wrap items-center gap-2">
                                     {paymentCorrectionSummary.transaction &&
-                                    orgUrlSlug &&
-                                    storeUrlSlug ? (
+                                      orgUrlSlug &&
+                                      storeUrlSlug ? (
                                       <Button
                                         asChild
                                         size="sm"
@@ -2631,8 +2631,8 @@ export function OperationsQueueViewContent({
                                     <dd className="mt-1 font-medium text-foreground">
                                       {paymentCorrectionSummary.previousPaymentMethod
                                         ? formatApprovalRequestType(
-                                            paymentCorrectionSummary.previousPaymentMethod,
-                                          )
+                                          paymentCorrectionSummary.previousPaymentMethod,
+                                        )
                                         : "Unknown"}
                                     </dd>
                                   </div>
@@ -2643,13 +2643,13 @@ export function OperationsQueueViewContent({
                                     <dd className="mt-1 font-medium text-foreground">
                                       {paymentCorrectionSummary.nextPaymentMethod
                                         ? formatApprovalRequestType(
-                                            paymentCorrectionSummary.nextPaymentMethod,
-                                          )
+                                          paymentCorrectionSummary.nextPaymentMethod,
+                                        )
                                         : "Unknown"}
                                     </dd>
                                   </div>
                                   {typeof paymentCorrectionSummary.amount ===
-                                  "number" ? (
+                                    "number" ? (
                                     <div>
                                       <dt className="text-xs text-muted-foreground">
                                         Amount
@@ -2679,8 +2679,8 @@ export function OperationsQueueViewContent({
                                   </div>
                                   <div className="flex flex-wrap items-center gap-2">
                                     {transactionVoidSummary.registerSession &&
-                                    orgUrlSlug &&
-                                    storeUrlSlug ? (
+                                      orgUrlSlug &&
+                                      storeUrlSlug ? (
                                       <Button
                                         asChild
                                         size="sm"
@@ -2704,8 +2704,8 @@ export function OperationsQueueViewContent({
                                       </Button>
                                     ) : null}
                                     {transactionVoidSummary.transaction &&
-                                    orgUrlSlug &&
-                                    storeUrlSlug ? (
+                                      orgUrlSlug &&
+                                      storeUrlSlug ? (
                                       <Button
                                         asChild
                                         size="sm"
@@ -2753,9 +2753,9 @@ export function OperationsQueueViewContent({
                                       {transactionVoidSummary.transaction
                                         ?.paymentMethod
                                         ? formatApprovalRequestType(
-                                            transactionVoidSummary.transaction
-                                              .paymentMethod,
-                                          )
+                                          transactionVoidSummary.transaction
+                                            .paymentMethod,
+                                        )
                                         : "Unknown"}
                                     </dd>
                                   </div>
@@ -2766,10 +2766,10 @@ export function OperationsQueueViewContent({
                                     <dd className="mt-1 font-medium text-foreground">
                                       {transactionVoidSummary.transaction
                                         ? formatStoredAmount(
-                                            ghsCurrencyFormatter,
-                                            transactionVoidSummary.transaction
-                                              .total,
-                                          )
+                                          ghsCurrencyFormatter,
+                                          transactionVoidSummary.transaction
+                                            .total,
+                                        )
                                         : "Unknown"}
                                     </dd>
                                   </div>
@@ -2837,8 +2837,8 @@ export function OperationsQueueViewContent({
                                   </div>
                                   <div className="flex flex-wrap items-center gap-2">
                                     {itemAdjustmentSummary.registerSession &&
-                                    orgUrlSlug &&
-                                    storeUrlSlug ? (
+                                      orgUrlSlug &&
+                                      storeUrlSlug ? (
                                       <Button
                                         asChild
                                         size="sm"
@@ -2862,8 +2862,8 @@ export function OperationsQueueViewContent({
                                       </Button>
                                     ) : null}
                                     {itemAdjustmentSummary.transaction &&
-                                    orgUrlSlug &&
-                                    storeUrlSlug ? (
+                                      orgUrlSlug &&
+                                      storeUrlSlug ? (
                                       <Button
                                         asChild
                                         size="sm"
@@ -2909,11 +2909,11 @@ export function OperationsQueueViewContent({
                                     </dt>
                                     <dd className="mt-1 font-medium text-foreground">
                                       {typeof itemAdjustmentSummary.originalTotal ===
-                                      "number"
+                                        "number"
                                         ? formatStoredAmount(
-                                            ghsCurrencyFormatter,
-                                            itemAdjustmentSummary.originalTotal,
-                                          )
+                                          ghsCurrencyFormatter,
+                                          itemAdjustmentSummary.originalTotal,
+                                        )
                                         : "Unknown"}
                                     </dd>
                                   </div>
@@ -2923,11 +2923,11 @@ export function OperationsQueueViewContent({
                                     </dt>
                                     <dd className="mt-1 font-medium text-foreground">
                                       {typeof itemAdjustmentSummary.adjustedTotal ===
-                                      "number"
+                                        "number"
                                         ? formatStoredAmount(
-                                            ghsCurrencyFormatter,
-                                            itemAdjustmentSummary.adjustedTotal,
-                                          )
+                                          ghsCurrencyFormatter,
+                                          itemAdjustmentSummary.adjustedTotal,
+                                        )
                                         : "Unknown"}
                                     </dd>
                                   </div>
@@ -2939,9 +2939,9 @@ export function OperationsQueueViewContent({
                                       {itemAdjustmentSummary.transaction
                                         ?.paymentMethod
                                         ? formatApprovalRequestType(
-                                            itemAdjustmentSummary.transaction
-                                              .paymentMethod,
-                                          )
+                                          itemAdjustmentSummary.transaction
+                                            .paymentMethod,
+                                        )
                                         : "Unknown"}
                                     </dd>
                                   </div>
@@ -2984,42 +2984,42 @@ export function OperationsQueueViewContent({
                                   <div>
                                     <dt className="text-xs text-muted-foreground">
                                       {itemAdjustmentSummary.settlementDirection ===
-                                      "refund"
+                                        "refund"
                                         ? "Refund due"
                                         : itemAdjustmentSummary.settlementDirection ===
-                                              "collection" ||
-                                            itemAdjustmentSummary.settlementDirection ===
-                                              "collect"
+                                          "collection" ||
+                                          itemAdjustmentSummary.settlementDirection ===
+                                          "collect"
                                           ? "Balance due"
                                           : "No payment movement"}
                                     </dt>
                                     <dd className="mt-1 font-medium text-foreground">
                                       {itemAdjustmentSummary.settlementDirection ===
-                                      "none"
+                                        "none"
                                         ? "No payment movement"
                                         : typeof itemAdjustmentSummary.settlementAmount ===
-                                            "number"
+                                          "number"
                                           ? formatStoredAmount(
-                                              ghsCurrencyFormatter,
-                                              itemAdjustmentSummary.settlementAmount,
-                                            )
+                                            ghsCurrencyFormatter,
+                                            itemAdjustmentSummary.settlementAmount,
+                                          )
                                           : "Unknown"}
                                     </dd>
                                   </div>
                                   {itemAdjustmentSummary.settlementDirection !==
-                                  "none" ? (
+                                    "none" ? (
                                     <div>
                                       <dt className="text-xs text-muted-foreground">
                                         {itemAdjustmentSummary.settlementDirection ===
-                                        "refund"
+                                          "refund"
                                           ? "Refund payout"
                                           : "Collection method"}
                                       </dt>
                                       <dd className="mt-1 font-medium text-foreground">
                                         {itemAdjustmentSummary.settlementMethod
                                           ? formatApprovalRequestType(
-                                              itemAdjustmentSummary.settlementMethod,
-                                            )
+                                            itemAdjustmentSummary.settlementMethod,
+                                          )
                                           : "Unknown"}
                                       </dd>
                                     </div>
@@ -3066,10 +3066,10 @@ export function OperationsQueueViewContent({
                                             >
                                               Qty{" "}
                                               {typeof lineItem.quantityDelta ===
-                                              "number"
+                                                "number"
                                                 ? formatQuantityDelta(
-                                                    lineItem.quantityDelta,
-                                                  )
+                                                  lineItem.quantityDelta,
+                                                )
                                                 : "-"}
                                             </Badge>
                                           </div>
@@ -3099,8 +3099,8 @@ export function OperationsQueueViewContent({
                                     </dt>
                                     <dd className="mt-1 font-medium text-foreground">
                                       {varianceReviewSummary.registerSessionId &&
-                                      orgUrlSlug &&
-                                      storeUrlSlug ? (
+                                        orgUrlSlug &&
+                                        storeUrlSlug ? (
                                         <Link
                                           className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
                                           params={{
@@ -3129,11 +3129,11 @@ export function OperationsQueueViewContent({
                                     </dt>
                                     <dd className="mt-1 font-medium text-foreground">
                                       {typeof varianceReviewSummary.expectedCash ===
-                                      "number"
+                                        "number"
                                         ? formatStoredAmount(
-                                            ghsCurrencyFormatter,
-                                            varianceReviewSummary.expectedCash,
-                                          )
+                                          ghsCurrencyFormatter,
+                                          varianceReviewSummary.expectedCash,
+                                        )
                                         : "Unknown"}
                                     </dd>
                                   </div>
@@ -3143,11 +3143,11 @@ export function OperationsQueueViewContent({
                                     </dt>
                                     <dd className="mt-1 font-medium text-foreground">
                                       {typeof varianceReviewSummary.countedCash ===
-                                      "number"
+                                        "number"
                                         ? formatStoredAmount(
-                                            ghsCurrencyFormatter,
-                                            varianceReviewSummary.countedCash,
-                                          )
+                                          ghsCurrencyFormatter,
+                                          varianceReviewSummary.countedCash,
+                                        )
                                         : "Not recorded"}
                                     </dd>
                                   </div>
@@ -3164,11 +3164,11 @@ export function OperationsQueueViewContent({
                                       )}
                                     >
                                       {typeof varianceReviewSummary.variance ===
-                                      "number"
+                                        "number"
                                         ? formatStoredAmount(
-                                            ghsCurrencyFormatter,
-                                            varianceReviewSummary.variance,
-                                          )
+                                          ghsCurrencyFormatter,
+                                          varianceReviewSummary.variance,
+                                        )
                                         : "Unknown"}
                                     </dd>
                                   </div>
@@ -3189,8 +3189,8 @@ export function OperationsQueueViewContent({
                                     <dd className="mt-1 font-medium text-foreground">
                                       {varianceReviewSummary.status
                                         ? formatApprovalRequestType(
-                                            varianceReviewSummary.status,
-                                          )
+                                          varianceReviewSummary.status,
+                                        )
                                         : "Unknown"}
                                     </dd>
                                   </div>
@@ -3227,8 +3227,8 @@ export function OperationsQueueViewContent({
                                     </dt>
                                     <dd className="mt-1 font-medium text-foreground">
                                       {registerSyncReviewSummary.registerSession &&
-                                      orgUrlSlug &&
-                                      storeUrlSlug ? (
+                                        orgUrlSlug &&
+                                        storeUrlSlug ? (
                                         <Link
                                           className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
                                           params={{
@@ -3304,15 +3304,15 @@ export function OperationsQueueViewContent({
                                           decision: "approved",
                                           ...(request.requestType ===
                                             "register_sync_review" ||
-                                          request.requestType ===
+                                            request.requestType ===
                                             "variance_review"
                                             ? {
-                                                registerSessionId:
-                                                  request.registerSessionSummary
-                                                    ?.registerSessionId,
-                                                requestType:
-                                                  request.requestType,
-                                              }
+                                              registerSessionId:
+                                                request.registerSessionSummary
+                                                  ?.registerSessionId,
+                                              requestType:
+                                                request.requestType,
+                                            }
                                             : {}),
                                         })
                                       }
@@ -3333,15 +3333,15 @@ export function OperationsQueueViewContent({
                                           decision: "rejected",
                                           ...(request.requestType ===
                                             "register_sync_review" ||
-                                          request.requestType ===
+                                            request.requestType ===
                                             "variance_review"
                                             ? {
-                                                registerSessionId:
-                                                  request.registerSessionSummary
-                                                    ?.registerSessionId,
-                                                requestType:
-                                                  request.requestType,
-                                              }
+                                              registerSessionId:
+                                                request.registerSessionSummary
+                                                  ?.registerSessionId,
+                                              requestType:
+                                                request.requestType,
+                                            }
                                             : {}),
                                         })
                                       }
@@ -3421,9 +3421,9 @@ export function OperationsQueueView({
 }: OperationsQueueViewProps = {}) {
   const routeParams = useParams({ strict: false }) as
     | {
-        orgUrlSlug?: string;
-        storeUrlSlug?: string;
-      }
+      orgUrlSlug?: string;
+      storeUrlSlug?: string;
+    }
     | undefined;
   const search = useSearch({ strict: false }) as { o?: unknown };
   const {
@@ -3447,19 +3447,19 @@ export function OperationsQueueView({
     operationsApi.operationalWorkItems.getQueueSnapshot,
     canQueryProtectedData
       ? {
-          storeId: activeStore!._id,
-          ...(openWorkSearch?.workType
-            ? { workType: openWorkSearch.workType }
-            : {}),
-        }
+        storeId: activeStore!._id,
+        ...(openWorkSearch?.workType
+          ? { workType: openWorkSearch.workType }
+          : {}),
+      }
       : "skip",
   ) as
     | {
-        approvalRequests: QueueApprovalRequest[];
-        overflow?: QueueOverflow;
-        workItemSummary?: QueueWorkItemSummary;
-        workItems: QueueWorkItem[];
-      }
+      approvalRequests: QueueApprovalRequest[];
+      overflow?: QueueOverflow;
+      workItemSummary?: QueueWorkItemSummary;
+      workItems: QueueWorkItem[];
+    }
     | undefined;
   const shouldLoadStockWorkspace =
     canQueryProtectedData &&
@@ -3480,10 +3480,10 @@ export function OperationsQueueView({
     api.inventory.skuSearch.searchProductSkus,
     shouldLoadStockWorkspace && normalizedStockSearchQuery
       ? {
-          limit: 75,
-          query: stockAdjustmentSearch?.query ?? "",
-          storeId: activeStore!._id,
-        }
+        limit: 75,
+        query: stockAdjustmentSearch?.query ?? "",
+        storeId: activeStore!._id,
+      }
       : "skip",
   ) as ProductSkuSearchResponse | undefined;
   const stockSearchProductSkuIds = useMemo(
@@ -3504,9 +3504,9 @@ export function OperationsQueueView({
     stockOpsApi.adjustments.listInventorySnapshotForProductSkus,
     shouldLoadStockWorkspace && stockSearchProductSkuIds.length > 0
       ? {
-          productSkuIds: stockSearchProductSkuIds,
-          storeId: activeStore!._id,
-        }
+        productSkuIds: stockSearchProductSkuIds,
+        storeId: activeStore!._id,
+      }
       : "skip",
   ) as InventorySnapshotItem[] | undefined;
   const inventoryItemsForStockAdjustment = useMemo(
@@ -3523,8 +3523,8 @@ export function OperationsQueueView({
     stockOpsApi.adjustments.getInventoryUnitSummary,
     shouldLoadStockWorkspace
       ? {
-          storeId: activeStore!._id,
-        }
+        storeId: activeStore!._id,
+      }
       : "skip",
   ) as InventoryUnitSummary | undefined;
   const isInventorySnapshotLoadingFirstPage =
@@ -3540,8 +3540,8 @@ export function OperationsQueueView({
     const selectedItem =
       stockAdjustmentSearch?.sku !== undefined
         ? inventoryItemsForStockAdjustment.find(
-            (item) => String(item._id) === stockAdjustmentSearch.sku,
-          )
+          (item) => String(item._id) === stockAdjustmentSearch.sku,
+        )
         : inventoryItemsForStockAdjustment[0];
 
     return selectedItem
@@ -3560,23 +3560,23 @@ export function OperationsQueueView({
     stockOpsApi.cycleCountDrafts.getActiveCycleCountDraft,
     canUseCycleCountDraft
       ? {
-          scopeKey: selectedCycleCountScopeKey!,
-          storeId: activeStore!._id,
-        }
+        scopeKey: selectedCycleCountScopeKey!,
+        storeId: activeStore!._id,
+      }
       : "skip",
   ) as
     | {
-        draft: Omit<CycleCountDraftState, "lines">;
-        lines: CycleCountDraftState["lines"];
-      }
+      draft: Omit<CycleCountDraftState, "lines">;
+      lines: CycleCountDraftState["lines"];
+    }
     | null
     | undefined;
   const activeCycleCountDraftSummary = useQuery(
     stockOpsApi.cycleCountDrafts.getActiveCycleCountDraftSummary,
     shouldLoadStockWorkspace
       ? {
-          storeId: activeStore!._id,
-        }
+        storeId: activeStore!._id,
+      }
       : "skip",
   ) as CycleCountDraftSummary | undefined;
   const submitStockAdjustmentBatch = useMutation(
@@ -3831,25 +3831,25 @@ export function OperationsQueueView({
             : APPROVAL_DECISION_ACTION_KEY;
       const approvalSubject =
         args.registerSessionId &&
-        (args.requestType === "register_sync_review" ||
-          args.requestType === "variance_review")
+          (args.requestType === "register_sync_review" ||
+            args.requestType === "variance_review")
           ? {
-              id: String(args.registerSessionId),
-              label:
-                request?.registerSessionSummary?.registerNumber ??
-                request?.workItemTitle ??
-                undefined,
-              type: "register_session",
-            }
+            id: String(args.registerSessionId),
+            label:
+              request?.registerSessionSummary?.registerNumber ??
+              request?.workItemTitle ??
+              undefined,
+            type: "register_session",
+          }
           : {
-              id: String(args.approvalRequestId),
-              label:
-                request?.workItemTitle ??
-                (request
-                  ? formatApprovalRequestType(request.requestType)
-                  : undefined),
-              type: "approval_request",
-            };
+            id: String(args.approvalRequestId),
+            label:
+              request?.workItemTitle ??
+              (request
+                ? formatApprovalRequestType(request.requestType)
+                : undefined),
+            type: "approval_request",
+          };
       const approvalProofResult = await runCommand(
         () =>
           authenticateStaffCredentialForApproval({
@@ -3926,8 +3926,8 @@ export function OperationsQueueView({
         args.decision === "approved"
           ? (approvalCopy?.approvedToast ?? "Approval request approved")
           : (approvalCopy?.rejectedToast ??
-              retireOnlyApprovalCopy?.rejectedToast ??
-              "Approval request rejected"),
+            retireOnlyApprovalCopy?.rejectedToast ??
+            "Approval request rejected"),
       );
     } finally {
       setDecisioningApprovalRequestId(null);

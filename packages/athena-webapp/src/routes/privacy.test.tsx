@@ -1,5 +1,4 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 const mocked = vi.hoisted(() => ({
@@ -41,13 +40,19 @@ describe("walkthrough privacy route", () => {
     expect(WALKTHROUGH_PRIVACY_NOTICE_STATUS).toBe("prelaunch_pending_owner_contact");
   });
 
-  it("does not attribute the shared-header CTA to the landing page", async () => {
-    const user = userEvent.setup();
+  it("shows the theme switcher in the nav instead of the register-interest and sign-in links", () => {
     render(<PrivacyPage />);
 
-    await user.click(
-      screen.getByRole("link", { name: "Request a walkthrough" }),
-    );
+    expect(
+      screen.getByRole("button", { name: /switch to (light|dark) theme/i }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("link", { name: "Register interest" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Sign in" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Try the demo" })).toBeVisible();
     expect(mocked.emitLandingFunnelEvent).not.toHaveBeenCalledWith(
       "walkthrough_cta",
     );

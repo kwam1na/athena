@@ -1,5 +1,4 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 const mocked = vi.hoisted(() => ({
@@ -23,20 +22,25 @@ vi.mock("@tanstack/react-router", () => ({
 import { WalkthroughPage } from "./-walkthrough-page";
 
 describe("walkthrough route", () => {
-  it("uses the public shell without recounting its self-link as a landing CTA", async () => {
-    const user = userEvent.setup();
+  it("uses the public shell with the theme switcher in place of the self-link and sign-in", () => {
     render(<WalkthroughPage />);
 
     expect(screen.getByRole("navigation", { name: "Primary navigation" })).toBeVisible();
-    expect(screen.getByRole("heading", { level: 1, name: "Show us what you need to see clearly." })).toBeVisible();
-    expect(screen.getByRole("form", { name: "Walkthrough request" })).toBeVisible();
+    expect(screen.getByRole("heading", { level: 1, name: "Tell us what you need to see clearly." })).toBeVisible();
+    expect(screen.getByRole("form", { name: "Register interest" })).toBeVisible();
     expect(screen.getByRole("link", { name: "privacy and retention details" })).toBeVisible();
 
-    await user.click(
-      screen.getByRole("link", { name: "Request a walkthrough" }),
-    );
-    expect(mocked.emitLandingFunnelEvent).not.toHaveBeenCalledWith(
-      "walkthrough_cta",
-    );
+    // The nav drops its own register-interest and sign-in links here and shows
+    // the theme switcher instead; the demo remains the only nav CTA.
+    expect(
+      screen.getByRole("button", { name: /switch to (light|dark) theme/i }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("link", { name: "Register interest" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Sign in" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Try the demo" })).toBeVisible();
   });
 });

@@ -1,6 +1,11 @@
+/// <reference types="vite/client" />
+
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
+
+import schema from "../schema";
 
 import {
   SHARED_DEMO_OPENING_MESSAGE,
@@ -8,6 +13,7 @@ import {
   SHARED_DEMO_PRODUCTS,
   SHARED_DEMO_STAFF_STORY,
   SHARED_DEMO_STORE_IDENTITY,
+  SHARED_DEMO_TERMINAL_DISPLAY_NAME,
   sharedDemoProductImageUrl,
   sharedDemoPickupOrderAmount,
   sharedDemoPickupOrderTimeline,
@@ -21,6 +27,7 @@ import {
   SHARED_DEMO_SEED,
   SHARED_DEMO_STAFF_PIN_HASH,
   SHARED_DEMO_PRISTINE_TABLE_COUNTS,
+  ensureSharedDemoRegisterFoundationWithCtx,
   sharedDemoBootstrapSeedMatches,
   sharedDemoCheckoutSessionMatchesOrder,
   planSharedDemoMigration,
@@ -34,7 +41,81 @@ import {
 import {
   SHARED_DEMO_BASELINE_VERSION,
   SHARED_DEMO_REGISTER_NUMBER,
+  SHARED_DEMO_TERMINAL_FINGERPRINT_HASH,
 } from "./config";
+
+const modules = import.meta.glob("../**/*.ts");
+
+/**
+ * A store in the shape production is in: seeded terminal, the register session
+ * bound to it, and the captured baseline document that the hourly restore
+ * replays over that session.
+ */
+async function seedDemoRegisterFoundation(ctx: any) {
+  const ownerUserId = await ctx.db.insert("athenaUser", {
+    email: "demo@example.test",
+  });
+  const organizationId = await ctx.db.insert("organization", {
+    createdByUserId: ownerUserId,
+    name: "Demo Org",
+    slug: "demo-org",
+  });
+  const storeId = await ctx.db.insert("store", {
+    createdByUserId: ownerUserId,
+    currency: "GHS",
+    name: "Demo Store",
+    organizationId,
+    slug: "demo-store",
+  });
+  const terminalId = await ctx.db.insert("posTerminal", {
+    browserInfo: { platform: "shared_demo", userAgent: "Athena Demo" },
+    displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME,
+    fingerprintHash: SHARED_DEMO_TERMINAL_FINGERPRINT_HASH,
+    heartbeatEnabled: false,
+    registerNumber: SHARED_DEMO_REGISTER_NUMBER,
+    registeredAt: 1,
+    registeredByUserId: ownerUserId,
+    status: "active",
+    storeId,
+  });
+  const sessionId = await ctx.db.insert("registerSession", {
+    expectedCash: 5_000,
+    openedAt: 1,
+    openedByUserId: ownerUserId,
+    openingFloat: 5_000,
+    organizationId,
+    registerNumber: SHARED_DEMO_REGISTER_NUMBER,
+    status: "active",
+    storeId,
+    terminalId,
+  });
+  const baselineDocumentId = await ctx.db.insert("sharedDemoBaselineDocument", {
+    baselineVersion: SHARED_DEMO_BASELINE_VERSION,
+    document: {
+      expectedCash: 5_000,
+      openedAt: 1,
+      openedByUserId: ownerUserId,
+      openingFloat: 5_000,
+      organizationId,
+      registerNumber: SHARED_DEMO_REGISTER_NUMBER,
+      status: "active",
+      storeId,
+      terminalId,
+    },
+    documentId: String(sessionId),
+    storeId,
+    tableName: "registerSession",
+  });
+
+  return {
+    baselineDocumentId,
+    organizationId,
+    ownerUserId,
+    sessionId,
+    storeId,
+    terminalId,
+  };
+}
 
 describe("shared demo provisioning", () => {
   it("preserves POS sync continuity through staff story migrations", () => {
@@ -348,23 +429,113 @@ describe("shared demo provisioning", () => {
     ).toHaveLength(2);
   });
 
-  it("migrates the seeded terminal display name for already-provisioned stores", () => {
-    const source = readFileSync("convex/sharedDemo/provision.ts", "utf8");
-    const normalized = source.replace(/\s+/g, " ");
+  // SHARED_DEMO_TERMINAL_DISPLAY_NAME only reaches the database at provision
+  // time, so a rename never reaches a store that was already provisioned unless
+  // the register foundation re-patches it.
+  it("renames the seeded terminal for already-provisioned stores", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const seed = await seedDemoRegisterFoundation(ctx);
+      await ctx.db.patch("posTerminal", seed.terminalId, {
+        displayName: "Studio Front Register",
+      });
 
-    // SHARED_DEMO_TERMINAL_DISPLAY_NAME only reaches the database at provision
-    // time, so a rename never reaches a store that was already provisioned
-    // unless the continuity migration re-patches it. Renaming the constant
-    // without this patch leaves existing demo stores on the old name.
-    expect(normalized).toContain(
-      'ctx.db.patch("posTerminal", seededTerminal._id, { displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME, }',
-    );
-    expect(normalized).toContain(
-      'seededTerminal.fingerprintHash === "shared-demo-terminal"',
-    );
-    expect(normalized).toContain(
-      "seededTerminal.displayName !== SHARED_DEMO_TERMINAL_DISPLAY_NAME",
-    );
+      await ensureSharedDemoRegisterFoundationWithCtx(ctx, {
+        now: 1_000,
+        ownerUserId: seed.ownerUserId,
+        storeId: seed.storeId,
+      });
+
+      const terminal = await ctx.db.get("posTerminal", seed.terminalId);
+      expect(terminal?.displayName).toBe(SHARED_DEMO_TERMINAL_DISPLAY_NAME);
+    });
+  });
+
+  // Reproduces the production defect: the seeded terminal was deleted, leaving
+  // the register session and its captured baseline document both pointing at an
+  // id that resolves to nothing. posTerminal is outside the restore registry, so
+  // without this repair the store can never recover the row and the register
+  // renders unnamed forever.
+  it("recreates a deleted seeded terminal and repairs both bindings", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const seed = await seedDemoRegisterFoundation(ctx);
+      await ctx.db.delete("posTerminal", seed.terminalId);
+
+      const result = await ensureSharedDemoRegisterFoundationWithCtx(ctx, {
+        now: 1_000,
+        ownerUserId: seed.ownerUserId,
+        storeId: seed.storeId,
+      });
+
+      expect(result.terminal._id).not.toBe(seed.terminalId);
+      expect(result.terminal.displayName).toBe(
+        SHARED_DEMO_TERMINAL_DISPLAY_NAME,
+      );
+      expect(result.terminal.registerNumber).toBe(SHARED_DEMO_REGISTER_NUMBER);
+      expect(result).toMatchObject({
+        repairedBaselineDocuments: 1,
+        repairedSessions: 1,
+      });
+
+      const session = await ctx.db.get("registerSession", seed.sessionId);
+      expect(session?.terminalId).toBe(result.terminal._id);
+      const baselineDocument = await ctx.db.get(
+        "sharedDemoBaselineDocument",
+        seed.baselineDocumentId,
+      );
+      expect(
+        (baselineDocument?.document as { terminalId?: string } | undefined)
+          ?.terminalId,
+      ).toBe(result.terminal._id);
+    });
+  });
+
+  it("leaves healthy bindings and browser registers untouched", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const seed = await seedDemoRegisterFoundation(ctx);
+      const browserTerminalId = await ctx.db.insert("posTerminal", {
+        browserInfo: { platform: "MacIntel", userAgent: "Chrome" },
+        displayName: "Courtyard Till",
+        fingerprintHash: "browser-fingerprint",
+        heartbeatEnabled: false,
+        registerNumber: "47",
+        registeredAt: 1,
+        registeredByUserId: seed.ownerUserId,
+        status: "active",
+        storeId: seed.storeId,
+      });
+      const browserSessionId = await ctx.db.insert("registerSession", {
+        expectedCash: 5_000,
+        openedAt: 1,
+        openedByUserId: seed.ownerUserId,
+        openingFloat: 5_000,
+        organizationId: seed.organizationId,
+        registerNumber: "47",
+        status: "active",
+        storeId: seed.storeId,
+        terminalId: browserTerminalId,
+      });
+      await ctx.db.delete("posTerminal", browserTerminalId);
+
+      const result = await ensureSharedDemoRegisterFoundationWithCtx(ctx, {
+        now: 1_000,
+        ownerUserId: seed.ownerUserId,
+        storeId: seed.storeId,
+      });
+
+      expect(result.terminal._id).toBe(seed.terminalId);
+      expect(result).toMatchObject({
+        repairedBaselineDocuments: 0,
+        repairedSessions: 0,
+      });
+      const browserSession = await ctx.db.get(
+        "registerSession",
+        browserSessionId,
+      );
+      expect(browserSession?.terminalId).toBe(browserTerminalId);
+    });
   });
 
   it("seeds the pickup order timeline and received-email state", () => {
