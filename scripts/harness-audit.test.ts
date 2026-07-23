@@ -1644,6 +1644,7 @@ async function createFixtureRepo() {
     rootDir
   );
   await write("packages/athena-webapp/vite.config.ts", "export default {};\n", rootDir);
+  await write("packages/athena-webapp/tsconfig.json", "{}\n", rootDir);
 
   await write(
     "packages/storefront-webapp/index.html",

@@ -1387,7 +1387,7 @@ describe("OperationsQueueViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("links synced sale inventory work items to manual stock adjustments", async () => {
+  it("links synced sale inventory work items to cycle count stock adjustments", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
 
@@ -1439,7 +1439,7 @@ describe("OperationsQueueViewContent", () => {
     expect(titleHref.pathname).toBe(
       "/wigclub/store/wigclub/operations/stock-adjustments",
     );
-    expect(titleHref.searchParams.get("mode")).toBe("manual");
+    expect(titleHref.searchParams.get("mode")).toBe("cycle_count");
     expect(titleHref.searchParams.get("sku")).toBe("product-sku-1");
     expect(screen.queryByText("Primary SKU")).not.toBeInTheDocument();
     expect(screen.queryByText("product-sku-1")).not.toBeInTheDocument();
@@ -1475,7 +1475,7 @@ describe("OperationsQueueViewContent", () => {
     expect(stockAdjustmentsHref.pathname).toBe(
       "/wigclub/store/wigclub/operations/stock-adjustments",
     );
-    expect(stockAdjustmentsHref.searchParams.get("mode")).toBe("manual");
+    expect(stockAdjustmentsHref.searchParams.get("mode")).toBe("cycle_count");
     expect(stockAdjustmentsHref.searchParams.get("sku")).toBe("product-sku-1");
     expect(
       screen.queryByRole("button", { name: "Mark reviewed" }),

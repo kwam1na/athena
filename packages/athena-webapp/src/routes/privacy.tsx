@@ -5,7 +5,7 @@ export const Route = createFileRoute("/privacy")({
   component: PrivacyPage,
   head: () => ({
     meta: [
-      { title: "Athena walkthrough privacy details" },
+      { title: "Athena privacy details" },
       {
         name: "description",
         content: "How Athena handles information submitted with a walkthrough request.",

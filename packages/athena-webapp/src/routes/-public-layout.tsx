@@ -35,6 +35,36 @@ function ThemeToggle() {
   );
 }
 
+// A minimal footer that sits pinned beneath the page. The page content scrolls
+// as one opaque layer above it (see PublicLayout), so the footer stays hidden
+// until the reader reaches the very bottom and the page slides up off it — a
+// quiet reveal with no scripting. FOOTER_HEIGHT must match the row height below
+// so the page reserves exactly enough room to uncover it.
+const FOOTER_HEIGHT = "4rem";
+
+function PublicFooter() {
+  const year = new Date().getFullYear();
+
+  return (
+    <footer className="fixed inset-x-0 bottom-0 z-0 bg-background">
+      <div
+        className="mx-auto flex w-full max-w-7xl items-center justify-between gap-layout-md px-layout-sm sm:px-layout-xl"
+        style={{ height: FOOTER_HEIGHT }}
+      >
+        <p className="text-xs text-muted-foreground">© {year} Athena</p>
+        <nav aria-label="Footer" className="flex items-center gap-layout-md">
+          <Link
+            to="/privacy"
+            className="text-xs font-medium text-muted-foreground transition-colors duration-standard ease-standard hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            Privacy
+          </Link>
+        </nav>
+      </div>
+    </footer>
+  );
+}
+
 export function PublicLayout({
   children,
   trackFunnelCtas = false,
@@ -61,13 +91,12 @@ export function PublicLayout({
   }, []);
 
   return (
-    <div className="min-h-svh bg-background text-foreground">
+    <div className="relative min-h-svh bg-background text-foreground">
       <header
-        className={`sticky top-0 z-40 border-b border-border/70 backdrop-blur-md transition-colors duration-standard ease-standard ${
-          scrolled
+        className={`sticky top-0 z-40 border-b border-border/70 backdrop-blur-md transition-colors duration-standard ease-standard ${scrolled
             ? "bg-background/70 supports-[backdrop-filter]:bg-background/60"
             : "bg-background/40 supports-[backdrop-filter]:bg-background/25"
-        }`}
+          }`}
       >
         <nav
           aria-label="Primary navigation"
@@ -93,7 +122,7 @@ export function PublicLayout({
                   }
                   className="hidden min-h-11 items-center justify-center whitespace-nowrap rounded-md px-layout-2xs text-sm font-medium text-muted-foreground transition-colors duration-standard ease-standard hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:inline-flex sm:px-layout-sm"
                 >
-                  Request a walkthrough
+                  Register interest
                 </Link>
                 <Link
                   to={LOGIN_PATH}
@@ -118,7 +147,16 @@ export function PublicLayout({
         </nav>
       </header>
 
-      {children}
+      <PublicFooter />
+      {/* The page rides above the footer as one opaque layer and reserves a
+          footer-height margin below it, so the footer stays covered until the
+          reader scrolls to the end and the page slides up off it. */}
+      <div
+        className="relative z-10 min-h-[calc(100svh-4rem)] bg-background"
+        style={{ marginBottom: FOOTER_HEIGHT }}
+      >
+        {children}
+      </div>
     </div>
   );
 }

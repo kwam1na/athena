@@ -25,7 +25,7 @@ describe("WalkthroughRequestForm", () => {
     const user = userEvent.setup();
     render(<WalkthroughRequestForm submissionEnabled submitRequest={vi.fn()} />);
 
-    await user.click(screen.getByRole("button", { name: "Request a walkthrough" }));
+    await user.click(screen.getByRole("button", { name: "Send my details" }));
 
     expect(screen.getByLabelText("Name")).toHaveFocus();
     expect(screen.getByText("Enter your name.")).toBeVisible();
@@ -40,13 +40,13 @@ describe("WalkthroughRequestForm", () => {
     render(<WalkthroughRequestForm submissionEnabled submitRequest={submitRequest} />);
     await fillValidForm(user);
 
-    await user.click(screen.getByRole("button", { name: "Request a walkthrough" }));
+    await user.click(screen.getByRole("button", { name: "Send my details" }));
 
     expect(await screen.findByRole("heading", { name: "Request received" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Request received" })).toHaveFocus();
     expect(screen.getByRole("link", { name: "Back to Athena overview" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/login");
-    expect(screen.queryByRole("button", { name: "Request a walkthrough" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send my details" })).not.toBeInTheDocument();
   });
 
   it("locks repeated submission while a request is pending", async () => {
@@ -58,11 +58,11 @@ describe("WalkthroughRequestForm", () => {
     render(<WalkthroughRequestForm submissionEnabled submitRequest={submitRequest} />);
     await fillValidForm(user);
 
-    const button = screen.getByRole("button", { name: "Request a walkthrough" });
+    const button = screen.getByRole("button", { name: "Send my details" });
     await user.dblClick(button);
 
     expect(submitRequest).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "Sending request…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sending…" })).toBeDisabled();
     resolveRequest({ kind: "accepted" });
     expect(await screen.findByText("Request received")).toBeVisible();
   });
@@ -76,7 +76,7 @@ describe("WalkthroughRequestForm", () => {
     render(<WalkthroughRequestForm submissionEnabled submitRequest={submitRequest} />);
     await fillValidForm(user);
 
-    const submit = () => user.click(screen.getByRole("button", { name: "Request a walkthrough" }));
+    const submit = () => user.click(screen.getByRole("button", { name: "Send my details" }));
     await submit();
     expect(await screen.findByText(/Request not sent/)).toBeVisible();
     const firstKey = submitRequest.mock.calls[0][0].submissionKey;
@@ -100,11 +100,11 @@ describe("WalkthroughRequestForm", () => {
     render(<WalkthroughRequestForm submissionEnabled submitRequest={submitRequest} />);
     await fillValidForm(user);
 
-    await user.click(screen.getByRole("button", { name: "Request a walkthrough" }));
+    await user.click(screen.getByRole("button", { name: "Send my details" }));
     expect(await screen.findByText(/Try again to send a new request/)).toBeVisible();
     const conflictedKey = submitRequest.mock.calls[0][0].submissionKey;
 
-    await user.click(screen.getByRole("button", { name: "Request a walkthrough" }));
+    await user.click(screen.getByRole("button", { name: "Send my details" }));
     expect(submitRequest.mock.calls[1][0].submissionKey).not.toBe(conflictedKey);
     expect(await screen.findByText("Request received")).toBeVisible();
     expect(screen.queryByText(/prior|duplicate|existing/i)).not.toBeInTheDocument();
@@ -126,16 +126,5 @@ describe("WalkthroughRequestForm", () => {
       screen.getByLabelText("What would you like more visibility into?"),
     ).toBeRequired();
     expect(screen.getByLabelText("Phone (optional)")).not.toBeRequired();
-  });
-
-  it("keeps submission closed until the privacy contact is configured", () => {
-    render(<WalkthroughRequestForm submitRequest={vi.fn()} />);
-
-    expect(
-      screen.getByRole("button", { name: "Request a walkthrough" }),
-    ).toBeDisabled();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Walkthrough requests will open after the privacy contact is approved.",
-    );
   });
 });

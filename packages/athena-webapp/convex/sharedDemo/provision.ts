@@ -31,6 +31,7 @@ import {
 import {
   deleteRegisterSessionWithAuthority,
   insertRegisterSessionWithAuthority,
+  patchRegisterSessionWithAuthority,
 } from "../operations/registerSessionAuthorityRevision";
 import { hashPosTerminalSyncSecret } from "../pos/application/sync/terminalSyncSecret";
 import {
@@ -40,6 +41,8 @@ import {
   SHARED_DEMO_CASHIER_STAFF_CODE,
   SHARED_DEMO_MANAGER_STAFF_CODE,
   SHARED_DEMO_REGISTER_NUMBER,
+  SHARED_DEMO_TERMINAL_FINGERPRINT_HASH,
+  SHARED_DEMO_TERMINAL_SYNC_SECRET_SEED,
   SHARED_DEMO_TIME_ZONE,
 } from "./config";
 export {
@@ -851,6 +854,144 @@ async function migrateSharedDemoStoryWithCtx(
   }
 }
 
+// The seeded terminal is the one demo row nothing can restore: posTerminal sits
+// outside SHARED_DEMO_MUTABLE_TABLES on purpose, so a store that loses it never
+// gets it back. The seeded register session keeps a terminalId that resolves to
+// nothing, its name disappears from every register-identity surface, and the
+// hourly restore re-asserts the dead id from the frozen baseline document. Both
+// halves have to be repaired: the live row and the captured document.
+export async function ensureSharedDemoSeededTerminalWithCtx(
+  ctx: MutationCtx,
+  args: {
+    now: number;
+    ownerUserId: Id<"athenaUser">;
+    storeId: Id<"store">;
+  },
+) {
+  const terminals = await ctx.db
+    .query("posTerminal")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .take(500);
+  const existing = terminals.find(
+    (terminal) =>
+      terminal.fingerprintHash === SHARED_DEMO_TERMINAL_FINGERPRINT_HASH,
+  );
+
+  if (existing) {
+    const patch: {
+      displayName?: string;
+      registerNumber?: string;
+      status?: "active";
+    } = {};
+    if (existing.displayName !== SHARED_DEMO_TERMINAL_DISPLAY_NAME) {
+      patch.displayName = SHARED_DEMO_TERMINAL_DISPLAY_NAME;
+    }
+    if (existing.registerNumber !== SHARED_DEMO_REGISTER_NUMBER) {
+      patch.registerNumber = SHARED_DEMO_REGISTER_NUMBER;
+    }
+    if (existing.status !== "active") {
+      patch.status = "active";
+    }
+    if (Object.keys(patch).length === 0) return existing;
+    await ctx.db.patch("posTerminal", existing._id, patch);
+    return { ...existing, ...patch };
+  }
+
+  const terminalId = await ctx.db.insert("posTerminal", {
+    browserInfo: { platform: "shared_demo", userAgent: "Athena Demo" },
+    displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME,
+    fingerprintHash: SHARED_DEMO_TERMINAL_FINGERPRINT_HASH,
+    heartbeatEnabled: false,
+    loginMode: "pos_only",
+    registerNumber: SHARED_DEMO_REGISTER_NUMBER,
+    registeredAt: args.now,
+    registeredByUserId: args.ownerUserId,
+    status: "active",
+    storeId: args.storeId,
+    syncSecretHash: await hashPosTerminalSyncSecret(
+      SHARED_DEMO_TERMINAL_SYNC_SECRET_SEED,
+    ),
+    transactionCapability: "products_and_services",
+  });
+  const created = await ctx.db.get("posTerminal", terminalId);
+  if (!created) throw new Error("Demo register is missing.");
+  return created;
+}
+
+/**
+ * Re-point seeded register bindings whose terminalId no longer resolves. Browser
+ * registers are left alone: they are transient and the restore sweeps them.
+ */
+export async function repairSharedDemoSeededTerminalBindingWithCtx(
+  ctx: MutationCtx,
+  args: { storeId: Id<"store">; terminalId: Id<"posTerminal"> },
+) {
+  let repairedSessions = 0;
+  let repairedBaselineDocuments = 0;
+
+  const sessions = await ctx.db
+    .query("registerSession")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .take(500);
+  for (const session of sessions) {
+    if (session.registerNumber !== SHARED_DEMO_REGISTER_NUMBER) continue;
+    if (session.terminalId === args.terminalId) continue;
+    if (session.terminalId) {
+      const bound = await ctx.db.get("posTerminal", session.terminalId);
+      if (bound) continue;
+    }
+    await patchRegisterSessionWithAuthority(ctx, session._id, {
+      terminalId: args.terminalId,
+    });
+    repairedSessions += 1;
+  }
+
+  // The captured document outlives the live row, so leaving it alone would let
+  // the next restore reinstate the dangling id.
+  const baselineDocuments = await ctx.db
+    .query("sharedDemoBaselineDocument")
+    .withIndex("by_storeId_tableName", (q) =>
+      q.eq("storeId", args.storeId).eq("tableName", "registerSession"),
+    )
+    .take(500);
+  for (const row of baselineDocuments) {
+    const document = row.document as Record<string, unknown>;
+    if (document.registerNumber !== SHARED_DEMO_REGISTER_NUMBER) continue;
+    if (document.terminalId === args.terminalId) continue;
+    const boundId = document.terminalId as Id<"posTerminal"> | undefined;
+    if (boundId) {
+      const bound = await ctx.db.get("posTerminal", boundId);
+      if (bound) continue;
+    }
+    await ctx.db.patch("sharedDemoBaselineDocument", row._id, {
+      document: { ...document, terminalId: args.terminalId },
+    });
+    repairedBaselineDocuments += 1;
+  }
+
+  return { repairedBaselineDocuments, repairedSessions };
+}
+
+/**
+ * Runs on every provisioning pass, not only on migration, so a store that lost
+ * its terminal heals on the next hourly cron instead of needing a version bump.
+ */
+export async function ensureSharedDemoRegisterFoundationWithCtx(
+  ctx: MutationCtx,
+  args: {
+    now: number;
+    ownerUserId: Id<"athenaUser">;
+    storeId: Id<"store">;
+  },
+) {
+  const terminal = await ensureSharedDemoSeededTerminalWithCtx(ctx, args);
+  const repaired = await repairSharedDemoSeededTerminalBindingWithCtx(ctx, {
+    storeId: args.storeId,
+    terminalId: terminal._id,
+  });
+  return { ...repaired, terminal };
+}
+
 export const provisionSharedDemo = internalMutation({
   args: { now: v.optional(v.number()) },
   handler: async (ctx, args) => {
@@ -1066,20 +1207,11 @@ export const provisionSharedDemo = internalMutation({
           // staff story above is: the constant only reaches the database at
           // provision time, so a rename would otherwise never reach a store
           // that was already provisioned.
-          const seededTerminals = await ctx.db
-            .query("posTerminal")
-            .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
-            .take(500);
-          for (const seededTerminal of seededTerminals) {
-            if (
-              seededTerminal.fingerprintHash === "shared-demo-terminal" &&
-              seededTerminal.displayName !== SHARED_DEMO_TERMINAL_DISPLAY_NAME
-            ) {
-              await ctx.db.patch("posTerminal", seededTerminal._id, {
-                displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME,
-              });
-            }
-          }
+          await ensureSharedDemoRegisterFoundationWithCtx(ctx, {
+            now,
+            ownerUserId: owner._id,
+            storeId: existingStore._id,
+          });
           const messages = await ctx.db
             .query("staffMessage")
             .withIndex("by_storeId_createdAt", (q) =>
@@ -1370,52 +1502,10 @@ export const provisionSharedDemo = internalMutation({
         for (const session of registerSessions) {
           await deleteRegisterSessionWithAuthority(ctx, session._id);
         }
-        const terminals = await ctx.db
-          .query("posTerminal")
-          .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
-          .take(500);
-        let templateTerminal = terminals.find(
-          (terminal) =>
-            terminal.fingerprintHash === "shared-demo-terminal" &&
-            terminal.status === "active",
+        const templateTerminal = await ensureSharedDemoSeededTerminalWithCtx(
+          ctx,
+          { now, ownerUserId: owner._id, storeId: existingStore._id },
         );
-        if (
-          templateTerminal &&
-          templateTerminal.registerNumber !== SHARED_DEMO_REGISTER_NUMBER
-        ) {
-          await ctx.db.patch("posTerminal", templateTerminal._id, {
-            registerNumber: SHARED_DEMO_REGISTER_NUMBER,
-          });
-          templateTerminal = {
-            ...templateTerminal,
-            registerNumber: SHARED_DEMO_REGISTER_NUMBER,
-          };
-        }
-        if (!templateTerminal) {
-          const terminalId = await ctx.db.insert("posTerminal", {
-            browserInfo: {
-              platform: "shared_demo",
-              userAgent: "Athena Demo",
-            },
-            displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME,
-            fingerprintHash: "shared-demo-terminal",
-            heartbeatEnabled: false,
-            loginMode: "pos_only",
-            registerNumber: SHARED_DEMO_REGISTER_NUMBER,
-            registeredAt: now,
-            registeredByUserId: owner._id,
-            status: "active",
-            storeId: existingStore._id,
-            syncSecretHash: await hashPosTerminalSyncSecret(
-              "shared-demo-non-secret-terminal-seed",
-            ),
-            transactionCapability: "products_and_services",
-          });
-          const createdTerminal = await ctx.db.get("posTerminal", terminalId);
-          if (!createdTerminal) throw new Error("Demo register is missing.");
-          templateTerminal = createdTerminal;
-        }
-        if (!templateTerminal) throw new Error("Demo register is missing.");
         const registerSessionRange = sharedDemoOperatingDateRange(now);
         await insertRegisterSessionWithAuthority(ctx, {
           expectedCash: calculateSharedDemoExpectedCash(SHARED_DEMO_CASH_SEED),
@@ -1509,6 +1599,15 @@ export const provisionSharedDemo = internalMutation({
           storeId: existingStore._id,
         };
       }
+      // A store already at the current baseline still gets the register
+      // foundation checked: losing the seeded terminal is not a versioned
+      // change, so waiting for the next migration would leave the demo
+      // showing an unnamed register indefinitely.
+      await ensureSharedDemoRegisterFoundationWithCtx(ctx, {
+        now,
+        ownerUserId: owner._id,
+        storeId: existingStore._id,
+      });
       return {
         athenaUserId: owner._id,
         kind: "existing" as const,

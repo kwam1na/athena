@@ -18,7 +18,7 @@ DEV_CONVEX_CLOUD="${DEV_CONVEX_CLOUD:-https://jovial-wildebeest-179.convex.cloud
 DEV_CONVEX_SITE="${DEV_CONVEX_SITE:-https://jovial-wildebeest-179.convex.site}"
 DEV_API_URL="${DEV_API_URL:-https://dev.wigclub.store}"
 STOREFRONT_URL="${STOREFRONT_URL:-https://wigclub.store}"
-VITE_WALKTHROUGH_PRIVACY_CONTACT="${VITE_WALKTHROUGH_PRIVACY_CONTACT:-}"
+VITE_WALKTHROUGH_PRIVACY_CONTACT="${VITE_WALKTHROUGH_PRIVACY_CONTACT:-Kwamina.0x00@gmail.com}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
@@ -646,6 +646,40 @@ MESSAGE
       PATH="$(dirname "$node_bin"):$PATH" CONVEX_DEPLOYMENT="$deployment" npx convex deploy
     fi
   )
+
+  provision_shared_demo_prod "$deployment" "$node_bin"
+}
+
+# SHARED_DEMO_BASELINE_VERSION lives in code, but admission compares it against
+# the baselineVersion persisted in sharedDemoRestoreState. Only provisioning
+# writes that row, and its only scheduled caller is the top-of-the-hour
+# shared-demo-hourly-restore cron -- so a deploy that bumps the constant locks
+# every visitor out of the demo until the next hour. Run the cron's own
+# implementation here to migrate the row as soon as the new code is live.
+provision_shared_demo_prod() {
+  local deployment="$1"
+  local node_bin="$2"
+
+  printf 'Provisioning the shared demo baseline...\n'
+
+  if (
+    cd packages/athena-webapp
+    PATH="$(dirname "$node_bin"):$PATH" CONVEX_DEPLOYMENT="$deployment" \
+      npx convex run sharedDemo/scheduledRestore:verifyHourlyRestoreNow '{}'
+  ); then
+    return 0
+  fi
+
+  cat >&2 <<MESSAGE
+
+WARNING: the Convex deploy succeeded, but shared demo provisioning failed.
+If this deploy changed SHARED_DEMO_BASELINE_VERSION, the demo will reject
+visitors until the baseline row catches up. The shared-demo-hourly-restore cron
+retries at the top of each hour; to retry now:
+
+  cd packages/athena-webapp && CONVEX_DEPLOYMENT=$deployment npx convex run sharedDemo/scheduledRestore:verifyHourlyRestoreNow '{}'
+
+MESSAGE
 }
 
 show_versions() {

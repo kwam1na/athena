@@ -6,7 +6,7 @@ export const Route = createFileRoute("/walkthrough")({
   component: WalkthroughPage,
   head: () => ({
     meta: [
-      { title: "Request an Athena walkthrough" },
+      { title: "Register interest in Athena" },
       {
         name: "description",
         content: "Tell Athena what you need to see across sales and inventory.",

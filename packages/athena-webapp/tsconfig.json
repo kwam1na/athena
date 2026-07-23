@@ -32,5 +32,18 @@
       "@/*": ["./src/*"],
       "@cvx/*": ["./convex/*"],
     }
-  }
+  },
+  // No `include` is set, so tsc walks the whole package; with `allowJs` that
+  // otherwise pulls in gitignored build artifacts (huge minified bundles under
+  // dist/ and storybook-static/, plus instrumented coverage output) and runs
+  // the compiler out of memory. These never exist in CI, which is why local
+  // typechecks OOM while CI stays clean. Specifying `exclude` overrides tsc's
+  // defaults, so node_modules is re-listed here.
+  "exclude": [
+    "node_modules",
+    "dist",
+    "storybook-static",
+    "coverage",
+    "graphify-out"
+  ]
 }

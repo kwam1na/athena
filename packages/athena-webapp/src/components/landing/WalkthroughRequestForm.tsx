@@ -135,7 +135,7 @@ export function WalkthroughRequestForm({
 
   return (
     <form
-      aria-label="Walkthrough request"
+      aria-label="Register interest"
       className="space-y-layout-xl"
       noValidate
       onSubmit={handleSubmit}
@@ -144,7 +144,8 @@ export function WalkthroughRequestForm({
         <FormField
           id="walkthrough-name"
           label="Name"
-          description="The person we should contact."
+          description=""
+          align="bottom"
           error={errors.name}
         >
           <Input
@@ -166,7 +167,8 @@ export function WalkthroughRequestForm({
         <FormField
           id="walkthrough-email"
           label="Work email"
-          description="We will use this address to follow up about your request."
+          description=""
+          align="bottom"
           error={errors.workEmail}
         >
           <Input
@@ -190,7 +192,8 @@ export function WalkthroughRequestForm({
         <FormField
           id="walkthrough-business"
           label="Business name"
-          description="The business you would like to discuss."
+          description=""
+          align="bottom"
           error={errors.businessName}
         >
           <Input
@@ -212,7 +215,8 @@ export function WalkthroughRequestForm({
         <FormField
           id="walkthrough-phone"
           label="Phone (optional)"
-          description="Include a number only if phone is the better way to reach you."
+          description=""
+          align="bottom"
           error={errors.phone}
         >
           <Input
@@ -236,13 +240,14 @@ export function WalkthroughRequestForm({
       <FormField
         id="walkthrough-need"
         label="What would you like more visibility into?"
-        description="For example, today's sales, product movement, or stock decisions."
+        description=""
         error={errors.businessNeed}
       >
         <Textarea
           ref={(node) => { fieldRefs.current.businessNeed = node ?? undefined; }}
           id="walkthrough-need"
           name="businessNeed"
+          placeholder="For example, today's sales, product movement, or stock decisions."
           required
           maxLength={1500}
           disabled={isPending}
@@ -270,9 +275,9 @@ export function WalkthroughRequestForm({
 
       <div className="border-t border-border/70 pt-layout-lg">
         <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-          Athena uses these details to review and follow up on your request. Open
+          We use these details to review and follow up on your request. Open
           requests are retained for up to 180 days. Read the{" "}
-          <Link className="text-foreground underline underline-offset-4" to="/privacy">
+          <Link className="text-muted-foreground font-semibold hover:text-foreground" to="/privacy">
             privacy and retention details
           </Link>
           .
@@ -286,7 +291,7 @@ export function WalkthroughRequestForm({
         >
           {submissionError ??
             (!submissionEnabled
-              ? "Walkthrough requests will open after the privacy contact is approved."
+              ? "We're not taking submissions just yet — check back soon."
               : null)}
         </div>
 
@@ -296,7 +301,7 @@ export function WalkthroughRequestForm({
           aria-busy={isPending}
           className="mt-layout-sm min-h-11 bg-primary text-primary-foreground hover:bg-primary/90"
         >
-          {isPending ? "Sending request…" : "Request a walkthrough"}
+          {isPending ? "Sending…" : "Send my details"}
         </Button>
       </div>
     </form>
@@ -308,14 +313,45 @@ function FormField({
   label,
   description,
   error,
+  align = "top",
   children,
 }: {
   id: string;
   label: string;
   description: string;
   error?: string;
+  // "bottom" anchors the control to the base of a stretched grid cell so inputs
+  // stay on one line even when a neighbor's description wraps to a second line
+  // (Phone vs Business name). Only use it for fields inside the equal-height
+  // grid — a full-width field has no cell to fill and would stretch tall,
+  // leaving a gap between its description and control.
+  align?: "top" | "bottom";
   children: React.ReactNode;
 }) {
+  if (align === "bottom") {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="space-y-layout-xs">
+          <label
+            className="block text-sm font-medium text-foreground"
+            htmlFor={id}
+          >
+            {label}
+          </label>
+          <p id={`${id}-description`} className="text-sm text-muted-foreground">
+            {description}
+          </p>
+        </div>
+        <div className="mt-auto space-y-layout-xs pt-layout-xs">
+          {children}
+          <p id={`${id}-error`} className="min-h-5 text-sm text-destructive">
+            {error}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-layout-xs">
       <label className="block text-sm font-medium text-foreground" htmlFor={id}>
@@ -341,7 +377,7 @@ function WalkthroughConfirmation({
     <section aria-labelledby="walkthrough-confirmation" className="space-y-layout-lg">
       <div className="space-y-layout-sm">
         <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          Walkthrough request
+          Register interest
         </p>
         <h2
           ref={headingRef}
