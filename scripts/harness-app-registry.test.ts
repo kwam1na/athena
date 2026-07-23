@@ -379,10 +379,10 @@ describe("HARNESS_APP_REGISTRY", () => {
     );
 
     expect(frontendHarnessScenario).toMatchObject({
-      touchedPaths: ["src/test", "src/tests", "vitest.setup.ts"],
+      touchedPaths: ["src/test", "src/tests", "vitest.setup.ts", ".env.test"],
       commands: [{ kind: "script", script: "test" }],
       note:
-        "Run the package suite when package-local frontend test helpers or focused regression tests change.",
+        "Run the package suite when package-local frontend test helpers, focused regression tests, or the test-mode env file change.",
     });
   });
 
