@@ -868,6 +868,13 @@
       "pathPrefixes": [
         "packages/athena-webapp/.storybook",
         "packages/athena-webapp/index.html",
+        "packages/athena-webapp/public/favicon.svg",
+        "packages/athena-webapp/public/favicon-16x16.png",
+        "packages/athena-webapp/public/favicon-32x32.png",
+        "packages/athena-webapp/public/apple-touch-icon.png",
+        "packages/athena-webapp/public/android-chrome-192x192.png",
+        "packages/athena-webapp/public/android-chrome-512x512.png",
+        "packages/athena-webapp/public/site.webmanifest",
         "packages/athena-webapp/src/stories",
         "packages/athena-webapp/src/index.css",
         "packages/athena-webapp/src/design-system-build-config.test.ts",
@@ -878,6 +885,8 @@
         "packages/athena-webapp/eslint.config.js",
         "packages/athena-webapp/scripts/frontend-lint-changed.sh",
         "packages/athena-webapp/scripts/capture-operations-shot.mjs",
+        "packages/athena-webapp/scripts/capture-hero-shot.mjs",
+        "packages/athena-webapp/scripts/capture-register-shot.mjs",
         "packages/athena-webapp/.gitignore"
       ],
       "commands": [

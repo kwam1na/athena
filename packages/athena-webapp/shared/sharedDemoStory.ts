@@ -32,7 +32,7 @@ export const SHARED_DEMO_STAFF_STORY = {
   },
 } as const;
 
-export const SHARED_DEMO_TERMINAL_DISPLAY_NAME = "Studio Front Register";
+export const SHARED_DEMO_TERMINAL_DISPLAY_NAME = "Studio Front Counter";
 
 export const SHARED_DEMO_OPENING_MESSAGE =
   "Afua: Morning studio count is complete. The pickup order is ready at the counter.";

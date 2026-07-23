@@ -1155,6 +1155,13 @@ describe("HARNESS_APP_REGISTRY", () => {
       touchedPaths: [
         ".storybook",
         "index.html",
+        "public/favicon.svg",
+        "public/favicon-16x16.png",
+        "public/favicon-32x32.png",
+        "public/apple-touch-icon.png",
+        "public/android-chrome-192x192.png",
+        "public/android-chrome-512x512.png",
+        "public/site.webmanifest",
         "src/stories",
         "src/index.css",
         "src/design-system-build-config.test.ts",
@@ -1165,6 +1172,8 @@ describe("HARNESS_APP_REGISTRY", () => {
         "eslint.config.js",
         "scripts/frontend-lint-changed.sh",
         "scripts/capture-operations-shot.mjs",
+        "scripts/capture-hero-shot.mjs",
+        "scripts/capture-register-shot.mjs",
         ".gitignore",
       ],
       commands: [
@@ -1173,7 +1182,7 @@ describe("HARNESS_APP_REGISTRY", () => {
         { kind: "script", script: "storybook:build" },
       ],
       note:
-        "Use this when the document shell, Storybook config, story files, package-level frontend tooling, or the operations screenshot capture script changes need isolated validation.",
+        "Use this when the document shell, favicon and web-manifest assets, Storybook config, story files, package-level frontend tooling, or the operations/landing screenshot capture scripts change need isolated validation.",
     });
   });
 

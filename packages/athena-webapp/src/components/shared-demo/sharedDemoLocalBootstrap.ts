@@ -107,19 +107,27 @@ export async function provisionSharedDemoRegister<TData>(input: {
   };
 }
 
+// Names for terminals a shared-demo visitor provisions. This is a shared
+// store, so several people can be in it at once and see one another's
+// terminals; these read as the named stations of one artisanal studio (Osu
+// Studio — Atelier) rather than gags, so the terminal list looks like a real
+// shop's counters instead of a clown car. "Studio Front Counter" is left out
+// on purpose: it's the seeded story terminal (SHARED_DEMO_TERMINAL_DISPLAY_NAME)
+// that already appears in the demo's transaction history, so visitors' own
+// terminals stay distinct from it.
 const SHARED_DEMO_TERMINAL_NAMES = [
-  "Scan Solo",
-  "The Tilluminati",
-  "Receipt Raccoon",
-  "Cashanova",
-  "Sir Scans-a-Lot",
-  "Drawer McDrawerface",
-  "Counter Culture",
-  "Barcode Bandit",
-  "Change Agent",
-  "Ctrl Alt Receipt",
-  "Till Swift",
-  "The Checkout Whisperer",
+  "Gallery Counter",
+  "Atelier Till",
+  "Courtyard Till",
+  "Workshop Counter",
+  "Showroom Counter",
+  "Veranda Till",
+  "Terrace Counter",
+  "Storefront Till",
+  "Garden Counter",
+  "Mezzanine Counter",
+  "Studio Back Counter",
+  "Boutique Till",
 ] as const;
 
 export function getSharedDemoTerminalName(fingerprintHash: string) {

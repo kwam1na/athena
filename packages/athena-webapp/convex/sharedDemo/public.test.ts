@@ -25,7 +25,7 @@ describe("shared demo public contract", () => {
       },
       terminal: {
         _id: "terminal-1",
-        displayName: "Studio Front Register",
+        displayName: "Studio Front Counter",
         loginMode: "pos_only",
         registerNumber: SHARED_DEMO_REGISTER_NUMBER,
         status: "active",
@@ -103,7 +103,7 @@ describe("shared demo public contract", () => {
         terminals: [
           {
             _id: "terminal-1",
-            displayName: "Studio Front Register",
+            displayName: "Studio Front Counter",
             registerNumber: SHARED_DEMO_REGISTER_NUMBER,
             status: "active",
             storeId: "store-1",

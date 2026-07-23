@@ -17,7 +17,9 @@ describe("static product-page metadata", () => {
       "Athena | Sales and inventory visibility for owner-led retail",
     );
     expect(
-      document.querySelector('meta[name="description"]')?.getAttribute("content"),
+      document
+        .querySelector('meta[name="description"]')
+        ?.getAttribute("content"),
     ).toBe(
       "See today's sales, understand what moved, and keep the history behind your business close.",
     );
@@ -38,7 +40,9 @@ describe("static product-page metadata", () => {
     expect(content("og:site_name")).toBe("Athena");
     expect(content("og:title")).toBe(document.title);
     expect(content("og:description")).toBe(
-      document.querySelector('meta[name="description"]')?.getAttribute("content"),
+      document
+        .querySelector('meta[name="description"]')
+        ?.getAttribute("content"),
     );
     expect(content("og:url")).toBe("https://athena.wigclub.store/");
   });

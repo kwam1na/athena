@@ -55,9 +55,18 @@ export function SyncBridgeScene() {
       opacity: [{ from: 0, to: 1 }],
       scale: { from: 0.7, to: 1 },
     });
+    // The two cards sit side by side on lg and stack on mobile (see the grid
+    // and the ArrowRight/ArrowDown swap), so the sale chip travels along the
+    // matching axis: rightward on desktop, downward when stacked.
+    const travelsDown = !window.matchMedia("(min-width: 1024px)").matches;
     timeline.add(
       chip,
-      { duration: 500, translateX: { from: -36, to: 36 } },
+      {
+        duration: 500,
+        ...(travelsDown
+          ? { translateY: { from: -36, to: 36 } }
+          : { translateX: { from: -36, to: 36 } }),
+      },
       "<<+=150",
     );
     if (pending && synced) {
@@ -109,8 +118,17 @@ export function SyncBridgeScene() {
     const root = rootRef.current;
     if (!root || reducedMotion) return;
     if (typeof IntersectionObserver === "undefined") return;
-    const cleanup = build(root);
+    let cleanup = build(root);
+    // Rebuild when the layout flips between stacked and side-by-side so the
+    // chip's travel axis matches the current arrangement.
+    const mql = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => {
+      cleanup?.();
+      cleanup = build(root);
+    };
+    mql.addEventListener("change", onChange);
     return () => {
+      mql.removeEventListener("change", onChange);
       cleanup?.();
     };
   }, [build, reducedMotion]);
@@ -203,7 +221,15 @@ export function SyncBridgeScene() {
             {bridgeActivity.registerSession.registerNumber}
           </span>
         </div>
-        <div data-bridge-books className="mt-layout-md">
+        {/* Story emphasis: the traced sale and the lines that make it up (sale,
+            payment, cart) stay full-weight; the sale row itself is tinted as the
+            anchor that mirrors the receipt and drives the drawer delta below.
+            The session-scaffolding rows (session started, register opened) fade
+            back so the eye follows the sale from receipt to books. */}
+        <div
+          data-bridge-books
+          className="mt-layout-md transition-opacity [&_tr[data-activity-category=register]]:opacity-40 [&_tr[data-activity-category=session]]:opacity-40 [&_tr[data-activity-category=sale]]:bg-primary/[0.05]"
+        >
           <WorkspaceExhibit>
             {/* Slugs + currency make the rows render exactly as in-product:
                 the receipt link chip and the float amount need them. */}

@@ -361,6 +361,11 @@ describe("RegisterSessionViewContent", () => {
     );
 
     const header = screen.getByTestId("register-session-page-header");
+    expect(header).toHaveClass("flex-col", "items-stretch", "sm:flex-row");
+    expect(screen.getByTestId("register-session-header-identity")).toHaveClass(
+      "flex-col",
+      "sm:flex-row",
+    );
     expect(header).toHaveTextContent(
       /Register 3\s*\/\s*Front counter\s*synced\s*·\s*Closing/,
     );
@@ -459,9 +464,12 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByTestId("register-session-page-header")).toHaveClass(
       "h-auto",
       "min-h-16",
-      "items-start",
+      "flex-col",
+      "items-stretch",
       "border-b",
       "py-3",
+      "sm:flex-row",
+      "sm:items-center",
       "sm:py-4",
     );
     expect(screen.getByTestId("register-session-page-header")).not.toHaveClass(
@@ -841,15 +849,32 @@ describe("RegisterSessionViewContent", () => {
     expect(
       screen.getByTestId("register-session-page-header"),
     ).toHaveTextContent(/Register 3\s*\/\s*Front counter\s*\/\s*POS activity/);
+    expect(screen.getByTestId("register-session-page-header")).toHaveClass(
+      "flex-col",
+      "items-stretch",
+      "sm:flex-row",
+    );
+    expect(
+      screen.getByTestId("register-session-activity-header-identity"),
+    ).toHaveClass("flex-col", "sm:flex-row");
+    expect(screen.getByTestId("register-session-identity")).toHaveClass(
+      "flex-col",
+      "sm:flex-row",
+    );
     expect(
       screen.getByTestId("register-session-page-header"),
     ).not.toHaveTextContent(/synced|Active/);
-    expect(screen.getByText("/ POS activity")).toHaveClass(
+    const activityHeaderIdentity = screen.getByTestId(
+      "register-session-activity-header-identity",
+    );
+    expect(within(activityHeaderIdentity).getByText("POS activity")).toHaveClass(
       "text-xs",
       "text-muted-foreground",
       "sm:text-sm",
     );
-    expect(screen.getByText("/ POS activity")).not.toHaveClass("font-medium");
+    expect(
+      within(activityHeaderIdentity).getByText("POS activity"),
+    ).not.toHaveClass("font-medium");
     const coverageCopy = screen.getByText(
       "Only reported activity appears here. Recent activity may take a moment to appear.",
     );
