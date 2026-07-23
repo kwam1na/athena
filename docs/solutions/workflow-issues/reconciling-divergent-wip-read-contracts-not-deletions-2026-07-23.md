@@ -13,7 +13,7 @@ applies_when:
   - Tests fail after a refactor and the assertions look like they contradict the change
   - A cross-cutting refactor was validated with name-filtered test runs
 tags: [git, stash, merge-conflict, operation-admission, shared-demo, intent-inference, test-mocks]
-delivery_diff_fingerprint: 55afb12f81bbb232c05aefebc7356dc231e07870dd80cf99f58668237c7f49dd
+delivery_diff_fingerprint: a23a7b700f3ab4a59bd2a29bdb4eacbe118da3c4eaaa2229e607d28a4b5bd445
 ---
 
 # Reconciling a Divergent WIP — Find the Author's Intent Record Before Inferring It From the Diff

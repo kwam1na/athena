@@ -77,16 +77,19 @@ describe("shared demo provisioning", () => {
     expect(planSharedDemoMigration(28)).toEqual({
       mode: "preserve_operational_continuity",
     });
+    expect(planSharedDemoMigration(29)).toEqual({
+      mode: "preserve_operational_continuity",
+    });
     for (const baselineVersion of [11, 12, 13, 14, 15]) {
       expect(planSharedDemoMigration(baselineVersion)).toEqual({
         mode: "reset_operational_state",
       });
     }
     expect(() => planSharedDemoMigration(10)).toThrow(
-      "Shared demo baseline migration 10->29 is not registered.",
+      "Shared demo baseline migration 10->30 is not registered.",
     );
     expect(buildSharedDemoContinuityMigrationStatePatch(123)).toEqual({
-      baselineVersion: 29,
+      baselineVersion: 30,
       completedAt: 123,
     });
   });
@@ -323,7 +326,7 @@ describe("shared demo provisioning", () => {
       "Opened bath and body goods are final sale.",
     ]);
     expect(SHARED_DEMO_PICKUP_ORDER.orderNumber).toBe("10427");
-    expect(SHARED_DEMO_BASELINE_VERSION).toBe(29);
+    expect(SHARED_DEMO_BASELINE_VERSION).toBe(30);
   });
 
   it("seeds and migrates receipt header details and policy", () => {
@@ -343,6 +346,25 @@ describe("shared demo provisioning", () => {
     expect(
       source.match(/SHARED_DEMO_STORE_IDENTITY\.receiptPolicyLines/g),
     ).toHaveLength(2);
+  });
+
+  it("migrates the seeded terminal display name for already-provisioned stores", () => {
+    const source = readFileSync("convex/sharedDemo/provision.ts", "utf8");
+    const normalized = source.replace(/\s+/g, " ");
+
+    // SHARED_DEMO_TERMINAL_DISPLAY_NAME only reaches the database at provision
+    // time, so a rename never reaches a store that was already provisioned
+    // unless the continuity migration re-patches it. Renaming the constant
+    // without this patch leaves existing demo stores on the old name.
+    expect(normalized).toContain(
+      'ctx.db.patch("posTerminal", seededTerminal._id, { displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME, }',
+    );
+    expect(normalized).toContain(
+      'seededTerminal.fingerprintHash === "shared-demo-terminal"',
+    );
+    expect(normalized).toContain(
+      "seededTerminal.displayName !== SHARED_DEMO_TERMINAL_DISPLAY_NAME",
+    );
   });
 
   it("seeds the pickup order timeline and received-email state", () => {

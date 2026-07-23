@@ -104,12 +104,13 @@ export function planSharedDemoMigration(baselineVersion: number) {
     26: "preserve_operational_continuity",
     27: "preserve_operational_continuity",
     28: "preserve_operational_continuity",
+    29: "preserve_operational_continuity",
   } as const;
   const mode =
     migrationClassifications[
       baselineVersion as keyof typeof migrationClassifications
     ];
-  if (!mode || SHARED_DEMO_BASELINE_VERSION !== 29) {
+  if (!mode || SHARED_DEMO_BASELINE_VERSION !== 30) {
     throw new Error(
       `Shared demo baseline migration ${baselineVersion}->${SHARED_DEMO_BASELINE_VERSION} is not registered.`,
     );
@@ -1061,6 +1062,24 @@ export const provisionSharedDemo = internalMutation({
             jobTitle: SHARED_DEMO_STAFF_STORY.manager.jobTitle,
             lastName: SHARED_DEMO_STAFF_STORY.manager.lastName,
           });
+          // Seeded display fields are re-patched on migration the same way the
+          // staff story above is: the constant only reaches the database at
+          // provision time, so a rename would otherwise never reach a store
+          // that was already provisioned.
+          const seededTerminals = await ctx.db
+            .query("posTerminal")
+            .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
+            .take(500);
+          for (const seededTerminal of seededTerminals) {
+            if (
+              seededTerminal.fingerprintHash === "shared-demo-terminal" &&
+              seededTerminal.displayName !== SHARED_DEMO_TERMINAL_DISPLAY_NAME
+            ) {
+              await ctx.db.patch("posTerminal", seededTerminal._id, {
+                displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME,
+              });
+            }
+          }
           const messages = await ctx.db
             .query("staffMessage")
             .withIndex("by_storeId_createdAt", (q) =>

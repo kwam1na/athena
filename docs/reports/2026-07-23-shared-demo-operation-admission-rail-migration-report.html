@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="55afb12f81bbb232c05aefebc7356dc231e07870dd80cf99f58668237c7f49dd">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="a23a7b700f3ab4a59bd2a29bdb4eacbe118da3c4eaaa2229e607d28a4b5bd445">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -154,7 +154,8 @@ expect(requireOrganizationMemberRoleWithCtx).not.toHaveBeenCalledWith(
 <li>lint:convex:changed: exit 0. lint:frontend:changed: exit 0 (14 pre-existing react-refresh warnings, non-blocking).</li>
 <li>Every replaced assertion was falsified: admission was deliberately broken and the new assertion confirmed to fail. Telemetry was falsified two independent ways, catching at two different assertions.</li>
 <li>Three replacements were initially vacuous because the demo actor and the normal-user fallback shared an id, making fallthrough undetectable by construction. Those fixtures were given distinct identities (dailyClose, staffCredentials) or additional assertions on the userId actually threaded through (terminals) until each failed under break.</li>
-<li>Residual risk not covered by tests: no browser validation was performed in this session. The originating session also deferred browser validation.</li>
+<li>Live verification against the dev deployment: provisionSharedDemo returned kind &#x27;migrated&#x27;, the seeded terminal&#x27;s displayName moved from &#x27;Studio Front Register&#x27; to &#x27;Studio Front Counter&#x27;, and baselineVersion moved 29 to 30, with registerNumber and status unchanged. This is behavioral proof rather than a source assertion.</li>
+<li>Residual risk not covered by tests: no browser click-through was performed in this session, and no verification was performed against production. The originating session also deferred browser validation.</li>
 </ul>
 </section>
 <section class="panel"><h2>What Intentionally Did Not Change</h2>
@@ -164,6 +165,7 @@ expect(requireOrganizationMemberRoleWithCtx).not.toHaveBeenCalledWith(
 <li>The synced-sale inventory review UI in OperationsQueueView remains removed, as the branch has it. Consequence, recorded deliberately: resolveSyncedSaleInventoryReviewGroup is now a live, admission-gated, fully-tested convex write path with no frontend entry point. It is the only symbol newly orphaned by this branch.</li>
 <li>sharedDemo/provision.ts keeps main&#x27;s varianceApprovalThreshold of 100 from #695, merged with the branch&#x27;s contact and receipt fields.</li>
 <li>storeFront/onlineOrder.ts keeps the branch&#x27;s check ordering; the two checks are mutually exclusive by actor kind, so ordering is observationally neutral.</li>
+<li>Seeded display constants reach the database only at provision time. The branch renamed SHARED_DEMO_TERMINAL_DISPLAY_NAME to &#x27;Studio Front Counter&#x27;, which required a migration patch plus a baseline bump to 30 — the migration block only runs when the stored version is strictly below the current one, so a store already at 29 would never have received the rename. Any future rename of a seeded display constant needs the same two-part change.</li>
 </ul>
 </section>
 <section class="panel"><h2>Next-Time Guidance</h2>
