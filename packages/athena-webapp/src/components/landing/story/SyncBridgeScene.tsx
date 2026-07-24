@@ -136,11 +136,15 @@ export function SyncBridgeScene() {
   return (
     <div
       ref={rootRef}
-      className="grid items-start gap-layout-sm lg:grid-cols-[minmax(0,0.55fr)_minmax(4rem,auto)_minmax(0,2fr)] lg:items-center"
+      // Single column on mobile: cap it at the container width (minmax(0,1fr))
+      // and let each item shrink (min-w-0 below), or the embedded register
+      // activity component's min-content would blow the track past the viewport
+      // and clip every row — the POS card included.
+      className="grid grid-cols-[minmax(0,1fr)] items-start gap-layout-sm lg:grid-cols-[minmax(0,0.55fr)_minmax(4rem,auto)_minmax(0,2fr)] lg:items-center"
     >
       <figure
         aria-label="The completed sale on the register, waiting to sync."
-        className="rounded-xl border border-border bg-background p-layout-md shadow-surface"
+        className="min-w-0 rounded-xl border border-border bg-background p-layout-md shadow-surface"
       >
         <div className="flex items-center justify-between gap-layout-sm">
           <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -196,7 +200,7 @@ export function SyncBridgeScene() {
       </figure>
 
       <div
-        className="relative flex items-center justify-center py-layout-sm lg:min-h-40 lg:py-0"
+        className="relative flex min-w-0 items-center justify-center py-layout-sm lg:min-h-40 lg:py-0"
         aria-hidden="true"
       >
         <ArrowRight className="hidden h-5 w-5 text-muted-foreground lg:block" />
@@ -211,7 +215,7 @@ export function SyncBridgeScene() {
 
       <figure
         aria-label="The same sale as a real activity row in the register session in Cash Controls, with the drawer's expected cash updated."
-        className="rounded-xl border border-border bg-background p-layout-md shadow-surface"
+        className="min-w-0 rounded-xl border border-border bg-background p-layout-md shadow-surface"
       >
         <div className="flex items-center justify-between gap-layout-sm">
           <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
