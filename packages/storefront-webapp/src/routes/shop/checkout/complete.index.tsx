@@ -121,7 +121,11 @@ export const CheckoutComplete = () => {
     }
   };
 
-  if (!activeSession.hasCompletedPayment) {
+  // Payment is settled if EITHER the Paystack webhook completed it or the
+  // client verified it against Paystack. Gating only on hasCompletedPayment
+  // showed "we couldn't find payment information" for verified-but-not-
+  // webhook-completed orders.
+  if (!activeSession.hasCompletedPayment && !activeSession.hasVerifiedPayment) {
     return (
       <motion.div
         initial={{ opacity: 0 }}

@@ -48,6 +48,7 @@ import {
 import { cn } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import { DemoNotice } from "../shared-demo/DemoNotice";
 
 type ContinuityState =
   | "cancelled_cover"
@@ -646,8 +647,8 @@ export function ProcurementViewContent({
   const query = controlledQuery ?? localQuery;
   const controlledSelectedProductSkuId = selectedSku
     ? (recommendations.find((recommendation) =>
-        matchesRecommendationSku(recommendation, selectedSku),
-      )?._id ?? null)
+      matchesRecommendationSku(recommendation, selectedSku),
+    )?._id ?? null)
     : null;
   const activeSelectedProductSkuId =
     selectedSku === undefined
@@ -764,7 +765,7 @@ export function ProcurementViewContent({
             inventoryItem?.colorName,
             inventoryItem?.size,
             inventoryItem?.length === null ||
-            inventoryItem?.length === undefined
+              inventoryItem?.length === undefined
               ? undefined
               : String(inventoryItem.length),
           ],
@@ -1137,8 +1138,7 @@ export function ProcurementViewContent({
         ),
       );
       toast.success(
-        `${linesByVendor.size} draft purchase order${
-          linesByVendor.size === 1 ? "" : "s"
+        `${linesByVendor.size} draft purchase order${linesByVendor.size === 1 ? "" : "s"
         } created`,
       );
 
@@ -1212,6 +1212,8 @@ export function ProcurementViewContent({
             <PageWorkspace>
               <ProcurementWorkspaceHeader />
 
+              {isSharedDemo && <DemoNotice text="This workspace is view-only in the demo" />}
+
               <section
                 aria-label="Procurement workspace controls"
                 className="space-y-layout-sm"
@@ -1239,11 +1241,10 @@ export function ProcurementViewContent({
                       {modeRecommendations.length} stock{" "}
                       {modeRecommendations.length === 1 ? "item" : "items"}.
                       {catalogOnlySearchOptions.length > 0
-                        ? ` ${catalogOnlySearchOptions.length} catalog ${
-                            catalogOnlySearchOptions.length === 1
-                              ? "match has"
-                              : "matches have"
-                          } no procurement action.`
+                        ? ` ${catalogOnlySearchOptions.length} catalog ${catalogOnlySearchOptions.length === 1
+                          ? "match has"
+                          : "matches have"
+                        } no procurement action.`
                         : ""}
                     </>
                   }
@@ -1417,9 +1418,8 @@ export function ProcurementViewContent({
                                           linkedPurchaseOrders.length,
                                         )}
                                         {linkedVendorCount > 0
-                                          ? ` · ${linkedVendorCount} vendor${
-                                              linkedVendorCount === 1 ? "" : "s"
-                                            }`
+                                          ? ` · ${linkedVendorCount} vendor${linkedVendorCount === 1 ? "" : "s"
+                                          }`
                                           : ""}
                                       </span>
                                     ) : null}
@@ -1508,7 +1508,7 @@ export function ProcurementViewContent({
                                               isReceivingActive
                                                 ? "border-primary-border bg-primary-soft/40"
                                                 : selectedPurchaseOrderId ===
-                                                    purchaseOrder.purchaseOrderId
+                                                  purchaseOrder.purchaseOrderId
                                                   ? "border-primary-border bg-primary-soft/30"
                                                   : "border-border",
                                             )}
@@ -1590,7 +1590,7 @@ export function ProcurementViewContent({
                                                     size="sm"
                                                     variant={
                                                       action.nextStatus ===
-                                                      "cancelled"
+                                                        "cancelled"
                                                         ? "utility"
                                                         : "primary-soft"
                                                     }
@@ -1754,8 +1754,8 @@ export function ProcurementViewContent({
                         </span>
                       ) : (
                         (receivingPurchaseOrder?.poNumber ??
-                        selectedReceivingPurchaseOrder?.poNumber ??
-                        "Purchase order")
+                          selectedReceivingPurchaseOrder?.poNumber ??
+                          "Purchase order")
                       )
                     }
                   />

@@ -44,16 +44,6 @@ vi.mock("@/hooks/use-navigate-back", () => ({
   useNavigateBack: () => () => undefined,
 }));
 
-// jsdom lacks ResizeObserver; the embedded store-pulse chart needs it.
-class ResizeObserverStub {
-  disconnect() {}
-  observe() {}
-  unobserve() {}
-}
-window.ResizeObserver =
-  window.ResizeObserver ??
-  (ResizeObserverStub as unknown as typeof ResizeObserver);
-
 // jsdom has no matchMedia; the embedded workspace components use it for
 // responsive variants.
 Object.defineProperty(window, "matchMedia", {
@@ -174,7 +164,7 @@ describe("landing route", () => {
     const interestLink = screen.getByRole("link", {
       name: /tell us about your store/i,
     });
-    expect(interestLink).toHaveAttribute("href", "/walkthrough");
+    expect(interestLink).toHaveAttribute("href", "/register-interest");
     expect(
       screen.queryByRole("link", { name: /register interest/i }),
     ).not.toBeInTheDocument();
@@ -233,7 +223,7 @@ describe("landing route", () => {
 
     // The automation reveal replays the day's moments.
     expect(
-      screen.getByText(/every decision stayed with the owner/i),
+      screen.getByText(/every decision stayed with you/i),
     ).toBeInTheDocument();
   });
 

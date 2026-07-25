@@ -8,7 +8,7 @@ describe("Athena document title", () => {
     expect(getAthenaDocumentTitle("/landing")).toBe(
       "Athena | Product overview",
     );
-    expect(getAthenaDocumentTitle("/walkthrough")).toBe(
+    expect(getAthenaDocumentTitle("/register-interest")).toBe(
       "Register interest in Athena",
     );
     expect(getAthenaDocumentTitle("/privacy")).toBe(

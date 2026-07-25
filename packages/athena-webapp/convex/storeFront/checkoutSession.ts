@@ -896,7 +896,15 @@ export const completeCheckoutSessions = internalMutation({
         q.and(
           q.lt(q.field("expiresAt"), oneHourAgo),
           q.eq(q.field("isFinalizingPayment"), true),
-          q.eq(q.field("hasCompletedPayment"), true),
+          // Payment is settled if EITHER the Paystack webhook completed it
+          // (hasCompletedPayment) OR the client verified it against Paystack
+          // (hasVerifiedPayment). These are redundant confirmations via
+          // different channels; keying only on hasCompletedPayment left
+          // verified-but-not-webhook-completed sessions stuck forever.
+          q.or(
+            q.eq(q.field("hasCompletedPayment"), true),
+            q.eq(q.field("hasVerifiedPayment"), true),
+          ),
           q.eq(q.field("hasCompletedCheckoutSession"), false),
         ),
       )
@@ -1377,11 +1385,20 @@ async function retrieveActiveCheckoutSession(
 
   // a session is active if:
   // it has not expired, or isFinalizingPayment is true, or has
+  //
+  // Return the NEWEST matching session (order desc on the index's implicit
+  // _creationTime). A placed-order session that never got marked complete
+  // (e.g. its finalize step errored) stays "active" via isFinalizingPayment;
+  // taking the oldest match would let it shadow the user's real new session and
+  // wedge checkout ("This checkout session has already been completed"). We keep
+  // such a session findable — the post-Paystack verify/complete flow needs it —
+  // but never ahead of a newer session the user has since started.
   return await ctx.db
     .query("checkoutSession")
     .withIndex("by_storeFrontUserId", (q) =>
       q.eq("storeFrontUserId", storeFrontUserId),
     )
+    .order("desc")
     .filter((q) =>
       q.and(
         q.or(
@@ -2088,7 +2105,11 @@ export const getPendingCheckoutSessions = query({
       )
       .filter((q) =>
         q.and(
-          q.eq(q.field("hasCompletedPayment"), true),
+          // Settled payment via either channel (webhook or client-verify).
+          q.or(
+            q.eq(q.field("hasCompletedPayment"), true),
+            q.eq(q.field("hasVerifiedPayment"), true),
+          ),
           q.eq(q.field("placedOrderId"), undefined),
           q.neq(q.field("isPaymentRefunded"), true),
         ),

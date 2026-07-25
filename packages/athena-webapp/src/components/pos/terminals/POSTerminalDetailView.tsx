@@ -71,6 +71,7 @@ import type {
   TerminalRuntimeStatus,
   TerminalSyncEvidence,
 } from "./terminalHealthTypes";
+import { DemoNotice } from "../../shared-demo/DemoNotice";
 
 const posTerminalApi = api.inventory.posTerminal as unknown as {
   getTerminalHealthDetail: FunctionReference<
@@ -86,10 +87,10 @@ const TERMINAL_DETAIL_LIST_VISIBLE_LIMIT = 5;
 type RemoteAssistClientSummary = {
   _id: Id<"remoteAssistClient"> | string;
   accessPolicy:
-    | "attended_required"
-    | "disabled"
-    | "unattended_allowed"
-    | string;
+  | "attended_required"
+  | "disabled"
+  | "unattended_allowed"
+  | string;
   displayName: string;
   enrollmentStatus: "active" | "disabled" | "revoked" | string;
   lastPresenceAt?: number;
@@ -98,24 +99,24 @@ type RemoteAssistClientSummary = {
 
 type RemoteAssistStartResult =
   | {
-      kind: "ok";
-      data: {
-        _id: Id<"remoteAssistSession"> | string;
-        effectiveMode: "attended" | "unattended" | string;
-        status: string;
-      };
-    }
-  | {
-      kind: "user_error";
-      error: {
-        code?: string;
-        message: string;
-      };
-    }
-  | {
-      kind: "approval_required";
-      approval: ApprovalRequirement;
+    kind: "ok";
+    data: {
+      _id: Id<"remoteAssistSession"> | string;
+      effectiveMode: "attended" | "unattended" | string;
+      status: string;
     };
+  }
+  | {
+    kind: "user_error";
+    error: {
+      code?: string;
+      message: string;
+    };
+  }
+  | {
+    kind: "approval_required";
+    approval: ApprovalRequirement;
+  };
 
 type RemoteAssistSessionSummary = {
   _id: Id<"remoteAssistSession"> | string;
@@ -131,16 +132,16 @@ type RemoteAssistSessionSummary = {
 
 type RemoteAssistEndResult =
   | {
-      kind: "ok";
-      data: RemoteAssistSessionSummary;
-    }
+    kind: "ok";
+    data: RemoteAssistSessionSummary;
+  }
   | {
-      kind: "user_error";
-      error: {
-        code?: string;
-        message: string;
-      };
+    kind: "user_error";
+    error: {
+      code?: string;
+      message: string;
     };
+  };
 
 const remoteAssistApi = api.remoteAssist.public;
 
@@ -178,47 +179,48 @@ type POSTerminalDetailViewContentProps = {
   remoteAssistClient?: RemoteAssistClientSummary | null;
   remoteAssistSession?: RemoteAssistSessionSummary | null;
   storeUrlSlug?: string;
+  isSharedDemo?: boolean;
 };
 
 type TerminalRegisterSessionReviewResult =
   | {
-      kind: "ok";
-      data?: {
-        action?: "already_resolved" | "resolved" | string;
-        projectedCount?: number;
-        resolvedCount?: number;
-      };
-    }
-  | {
-      kind: "user_error";
-      error: {
-        message: string;
-      };
-    }
-  | {
-      kind: "unexpected_error";
-      error: {
-        message: string;
-      };
+    kind: "ok";
+    data?: {
+      action?: "already_resolved" | "resolved" | string;
+      projectedCount?: number;
+      resolvedCount?: number;
     };
+  }
+  | {
+    kind: "user_error";
+    error: {
+      message: string;
+    };
+  }
+  | {
+    kind: "unexpected_error";
+    error: {
+      message: string;
+    };
+  };
 
 type TerminalRecoveryMutationResult =
   | {
-      kind: "ok";
-      data?: unknown;
-    }
+    kind: "ok";
+    data?: unknown;
+  }
   | {
-      kind: "user_error";
-      error: {
-        message: string;
-      };
-    }
-  | {
-      kind: "unexpected_error";
-      error: {
-        message: string;
-      };
+    kind: "user_error";
+    error: {
+      message: string;
     };
+  }
+  | {
+    kind: "unexpected_error";
+    error: {
+      message: string;
+    };
+  };
 
 function DetailPanel({
   children,
@@ -486,7 +488,7 @@ function RuntimeReportGroup({
           value={formatOldestUnsynced(runtimeStatus)}
         />
         {runtimeStatus?.sync.heldWithoutProgress ||
-        typeof runtimeStatus?.sync.backoffUntil === "number" ? (
+          typeof runtimeStatus?.sync.backoffUntil === "number" ? (
           <RailSignalRow
             label="Sync retry"
             tone="warning"
@@ -533,8 +535,8 @@ function getRuntimeSyncTone(status?: TerminalRuntimeStatus["sync"]["status"]) {
 function getRuntimeAppUpdateTone(
   status?: TerminalRuntimeStatus["appUpdate"] extends infer AppUpdate
     ? AppUpdate extends { status?: infer Status }
-      ? Status
-      : never
+    ? Status
+    : never
     : never,
 ) {
   switch (status) {
@@ -835,7 +837,7 @@ function RuntimeBuildVersionStatus({
               presentation.status === "stale" && "text-warning",
               (presentation.status === "checking" ||
                 presentation.status === "unknown") &&
-                "text-foreground",
+              "text-foreground",
             )}
             aria-label={`Athena webapp ${presentation.label}. Version details.`}
           >
@@ -1037,7 +1039,7 @@ function ConflictSection({
   const recoveryPreview = detail?.recoveryPreview ?? detail?.recovery;
   const collectedLocalReviewEvents =
     recoveryPreview?.commandStatus?.commandType === "collect_local_review" &&
-    recoveryPreview.commandStatus.verificationStatus === "verified"
+      recoveryPreview.commandStatus.verificationStatus === "verified"
       ? (recoveryPreview.commandStatus.localReviewEvents ?? [])
       : [];
   const runtimeReviewCount = runtimeStatus?.sync.reviewEventCount ?? 0;
@@ -2404,16 +2406,16 @@ function RecoveryPanel({
     buildTerminalOperationalExplanationPresentation(detail);
   const hasServerOperationalExplanation = Boolean(
     detail.operationalExplanation &&
-      !shouldSuppressInventoryOperationalExplanation(detail),
+    !shouldSuppressInventoryOperationalExplanation(detail),
   );
   const hasCurrentRecoveryWork = hasCurrentSupportRecoveryWork(recovery);
   const supportReadiness = hasCurrentRecoveryWork
     ? recovery.readiness
     : {
-        description:
-          "Current terminal evidence has no repair or review blockers.",
-        label: "No support action needed",
-      };
+      description:
+        "Current terminal evidence has no repair or review blockers.",
+      label: "No support action needed",
+    };
 
   return (
     <DetailPanel
@@ -2642,7 +2644,7 @@ function RemoteAssistPanel({
       } else if (result.kind === "approval_required") {
         toast.error(
           result.approval.copy.message ||
-            "Local approval is required before Remote Assist can continue.",
+          "Local approval is required before Remote Assist can continue.",
         );
       } else {
         toast.error(result.error.message);
@@ -2995,6 +2997,7 @@ export function POSTerminalDetailViewContent({
   remoteAssistClient,
   remoteAssistSession,
   storeUrlSlug,
+  isSharedDemo,
 }: POSTerminalDetailViewContentProps) {
   if (queryUnavailable) {
     return (
@@ -3042,6 +3045,8 @@ export function POSTerminalDetailViewContent({
             description="Inspect the latest terminal check-in, support recovery evidence, and support notes."
           />
 
+          {isSharedDemo && <DemoNotice text="POS Terminal Overview is view-only in the demo" />}
+
           <div className="grid gap-layout-xl xl:grid-cols-[20rem_minmax(0,1fr)]">
             <TerminalContextRail
               classification={classification}
@@ -3079,7 +3084,7 @@ export function POSTerminalDetailViewContent({
                 onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
                 operationalExplanation={
                   detail.operationalExplanation &&
-                  !shouldSuppressInventoryOperationalExplanation(detail)
+                    !shouldSuppressInventoryOperationalExplanation(detail)
                     ? buildTerminalOperationalExplanationPresentation(detail)
                     : undefined
                 }
@@ -3106,10 +3111,10 @@ export function POSTerminalDetailView() {
   const demoContext = useSharedDemoContext();
   const params = useParams({ strict: false }) as
     | {
-        orgUrlSlug?: string;
-        storeUrlSlug?: string;
-        terminalId?: string;
-      }
+      orgUrlSlug?: string;
+      storeUrlSlug?: string;
+      terminalId?: string;
+    }
     | undefined;
   const isLoadingAccess =
     isLoadingUser || isLoadingStores || isLoadingPermissions;
@@ -3122,27 +3127,27 @@ export function POSTerminalDetailView() {
     posTerminalApi.getTerminalHealthDetail,
     canQuery
       ? {
-          storeId: activeStore!._id,
-          terminalId: params!.terminalId as Id<"posTerminal">,
-        }
+        storeId: activeStore!._id,
+        terminalId: params!.terminalId as Id<"posTerminal">,
+      }
       : "skip",
   ) as TerminalHealthDetail | null | undefined;
   const remoteAssistClient = useQuery(
     remoteAssistApi.getClientByRuntime,
     canQuery && !demoContext && activeStore?.organizationId
       ? {
-          organizationId: activeStore.organizationId as Id<"organization">,
-          runtimeIdentity: params!.terminalId as string,
-          runtimeType: "pos_terminal",
-        }
+        organizationId: activeStore.organizationId as Id<"organization">,
+        runtimeIdentity: params!.terminalId as string,
+        runtimeType: "pos_terminal",
+      }
       : "skip",
   ) as RemoteAssistClientSummary | null | undefined;
   const remoteAssistSession = useQuery(
     remoteAssistApi.getCurrentSessionByClient,
     canManageTerminalHealth && remoteAssistClient?._id
       ? {
-          clientId: remoteAssistClient._id as Id<"remoteAssistClient">,
-        }
+        clientId: remoteAssistClient._id as Id<"remoteAssistClient">,
+      }
       : "skip",
   ) as RemoteAssistSessionSummary | null | undefined;
   const resolveRegisterSessionSyncReview = useMutation(
@@ -3339,6 +3344,7 @@ export function POSTerminalDetailView() {
       remoteAssistClient={remoteAssistClient ?? null}
       remoteAssistSession={remoteAssistSession ?? null}
       storeUrlSlug={params.storeUrlSlug}
+      isSharedDemo={Boolean(demoContext)}
     />
   );
 }

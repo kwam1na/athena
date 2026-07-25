@@ -14,6 +14,7 @@ export const SHARED_DEMO_STORE_IDENTITY = {
     "Opened bath and body goods are final sale.",
   ],
   storeName: "Osu Studio — Atelier",
+  website: "www.osustudio.com"
 } as const;
 
 export const SHARED_DEMO_STAFF_STORY = {

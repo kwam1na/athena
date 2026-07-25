@@ -8,6 +8,7 @@ import {
   calculateSharedDemoExpectedCash,
   SHARED_DEMO_CASH_SEED,
   SHARED_DEMO_MANAGER_STAFF_CODE,
+  SHARED_DEMO_REGISTER_NUMBER,
   SHARED_DEMO_TIME_ZONE,
 } from "./config";
 import {
@@ -17,6 +18,24 @@ import {
 } from "./openingBaseline";
 const REGISTER_OPEN_LOOKBACK_MS = 4 * 60 * 60 * 1_000;
 const BROWSER_SESSION_NOTE_PREFIX = "shared-demo:browser-register:";
+
+// The seeded "Studio Front Counter" is the store's main till — the one that
+// opens the store for the day. Anchor its open time to a believable morning
+// moment with odd minutes (08:47 local) rather than the operating-day start, so
+// it never reads as a machine-generated round hour and sits visibly earlier
+// than the afternoon browser tills (which open at real entry time). Clamp to
+// `now` so a just-past-midnight restore never shows a future open time.
+const SEEDED_REGISTER_OPEN_OFFSET_MS = (8 * 60 + 47) * 60 * 1_000;
+
+export function sharedDemoSeededRegisterOpenedAt(args: {
+  now: number;
+  operatingDayStartAt: number;
+}) {
+  return Math.min(
+    args.operatingDayStartAt + SEEDED_REGISTER_OPEN_OFFSET_MS,
+    args.now,
+  );
+}
 
 export type SharedDemoRegisterAllocation = "reuse" | "clone";
 
@@ -56,6 +75,41 @@ export function buildSharedDemoRegisterNarrative(args: {
     registerNumber: args.registerNumber,
     terminalId: args.terminalId,
   };
+}
+
+// The seeded "Studio Front Counter" register (registerNumber "01") is restored
+// verbatim from a captured baseline, so its opened date stays frozen at the
+// moment the store was first provisioned. That drops it out of any view scoped
+// to the current operating date (e.g. Daily Operations' "Open register
+// sessions" band) even though Live drawers — which lists by status alone —
+// still shows it. Roll its operating-date fields onto the current demo day on
+// each restore, exactly as rollSharedDemoOpeningBaselineWithCtx does for the
+// opening baseline, so the seeded drawer stays part of "today" in the story.
+export async function rollSharedDemoSeededRegisterWithCtx(
+  ctx: MutationCtx,
+  args: { now: number; storeId: Id<"store"> },
+) {
+  const range = sharedDemoOperatingDateRange(args.now);
+  const openedAt = sharedDemoSeededRegisterOpenedAt({
+    now: args.now,
+    operatingDayStartAt: range.startAt,
+  });
+
+  const sessions = await ctx.db
+    .query("registerSession")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .take(500);
+  for (const session of sessions) {
+    if (session.registerNumber !== SHARED_DEMO_REGISTER_NUMBER) continue;
+    if (session.status !== "active" && session.status !== "open") continue;
+    if (session.openedOperatingDate === range.operatingDate) continue;
+    await patchRegisterSessionWithAuthority(ctx, session._id, {
+      openedAt,
+      openedOperatingDate: range.operatingDate,
+      openedOperatingDateEndAt: range.endAt,
+      openedOperatingDateStartAt: range.startAt,
+    });
+  }
 }
 
 export function buildSharedDemoStoreSchedule(args: {

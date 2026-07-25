@@ -52,7 +52,7 @@ export function AutomationRevealScene() {
         ))}
       </ol>
       <p className="mt-layout-md text-sm leading-6 text-muted-foreground">
-        Every decision stayed with the owner.
+        Every decision stayed with you.
       </p>
     </figure>
   );

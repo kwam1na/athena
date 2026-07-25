@@ -67,13 +67,17 @@ function defineStockAdjustmentsRead(functionName: string, operationId: string) {
   });
 }
 
-function defineInventoryCatalogRead(functionName: string, operationId: string) {
+function defineInventoryCatalogRead(
+  functionName: string,
+  operationId: string,
+  publicAccess: "admit" | "deny" = "deny",
+) {
   return defineReadOperation({
     functionName,
     operationId,
     access: { kind: "read", intent: "inventory.catalog.view" },
     scope: { kind: "store", storeIdArg: "storeId" },
-    actors: { normalUser: "admit", sharedDemo: "admit" },
+    actors: { normalUser: "admit", sharedDemo: "admit", public: publicAccess },
   });
 }
 
@@ -245,9 +249,12 @@ export const getActiveCycleCountDraftSummaryReadDefinition =
     "stockOps.cycleCountDrafts.getActiveCycleCountDraftSummary.read",
   );
 
+// Storefront product listing is served to anonymous shoppers (via the public
+// /products HTTP route → productUtil action → this query), so it opts public in.
 export const listInventoryProductsReadDefinition = defineInventoryCatalogRead(
   "inventory/products:getAll",
   "inventory.products.getAll.read",
+  "admit",
 );
 
 export const searchProductSkusReadDefinition = defineInventoryCatalogRead(

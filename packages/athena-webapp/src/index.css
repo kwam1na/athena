@@ -301,6 +301,22 @@
     @apply border-border;
   }
 
+  /* Default scale for the authenticated app, on desktop only. Scoped via the
+     `app-scaled` class that -authenticated-layout toggles on <html> while the
+     authed shell is mounted, so public/auth pages render at 100%. Must live on
+     <html>: `fixed inset-0` shells escape an ancestor wrapper's zoom but do
+     inherit it from the root. `zoom` (not `transform: scale`) reflows layout and
+     scales px + rem uniformly, and leaves the viewport size — hence media-query
+     breakpoints and window.innerWidth / matchMedia — untouched, so responsive
+     layout and JS mobile detection stay in sync. The min-width gate keeps mobile
+     at 100%; full-viewport shells derive height from `inset-0`, not an explicit
+     `h-svh`, which `zoom` would otherwise scale to 80% and clip. */
+  @media (min-width: 768px) {
+    html.app-scaled {
+      zoom: 0.95;
+    }
+  }
+
   body {
     @apply bg-background text-foreground font-sans;
   }
@@ -311,6 +327,7 @@
   }
 
   @media (max-width: 767px) {
+
     input:not([type="checkbox"]):not([type="radio"]),
     select,
     textarea {
@@ -355,6 +372,7 @@
 }
 
 @keyframes status-breathe {
+
   0%,
   100% {
     opacity: 0.45;
@@ -424,6 +442,7 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
+
   ::view-transition-old(root),
   ::view-transition-new(root) {
     animation-duration: var(--motion-fast);
@@ -446,20 +465,19 @@
   }
 
   .store-pulse-sales-trend-chart .recharts-area-curve {
-    animation: store-pulse-sales-trend-draw 520ms
-      var(--ease-emphasized) both;
+    animation: store-pulse-sales-trend-draw 520ms var(--ease-emphasized) both;
     stroke-dasharray: 1;
     stroke-dashoffset: 0;
   }
 
   .store-pulse-sales-trend-chart .recharts-area-area {
-    animation: store-pulse-sales-trend-fill 380ms
-      var(--ease-standard) both;
+    animation: store-pulse-sales-trend-fill 380ms var(--ease-standard) both;
     animation-delay: 120ms;
   }
 }
 
 @layer utilities {
+
   /* Rotate the loop group about the figure's center (its viewBox coords). */
   .control-loop-spin {
     transform-box: view-box;

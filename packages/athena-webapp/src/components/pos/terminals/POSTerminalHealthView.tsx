@@ -619,7 +619,7 @@ export function POSTerminalHealthViewContent({
                                     {operationalExplanation.saleImpactLabel}
                                   </p>
                                   {operationalExplanation.supportAction !==
-                                  "none" ? (
+                                    "none" ? (
                                     <p className="mt-layout-sm text-sm text-foreground">
                                       <span className="font-medium">
                                         Next step:

@@ -1,13 +1,16 @@
 export const APP_ENTRY_PATH = "/" as const;
 export const PUBLIC_HOME_PATH = "/landing" as const;
 export const LOGIN_PATH = "/login" as const;
-export const WALKTHROUGH_PATH = "/walkthrough" as const;
+export const WALKTHROUGH_PATH = "/register-interest" as const;
 export const DEMO_PATH = "/demo" as const;
 
 const PUBLIC_ROUTE_PATHS = new Set<string>([
   PUBLIC_HOME_PATH,
   LOGIN_PATH,
   WALKTHROUGH_PATH,
+  // The pre-rename path still resolves (it redirects to WALKTHROUGH_PATH), so
+  // keep it public for recovery routing.
+  "/walkthrough",
   DEMO_PATH,
   "/privacy",
 ]);

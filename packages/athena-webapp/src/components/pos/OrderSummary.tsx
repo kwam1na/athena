@@ -253,7 +253,7 @@ export function OrderSummary({
       : cartItems;
   const effectiveServiceLines =
     completedTransactionData?.serviceLines &&
-    (readOnly || isTransactionCompleted)
+      (readOnly || isTransactionCompleted)
       ? completedTransactionData.serviceLines
       : serviceLines;
   const completedServiceLines = completedTransactionData?.serviceLines ?? [];
@@ -334,17 +334,17 @@ export function OrderSummary({
     : null;
   const completedDateLabel = completedAtDate
     ? completedAtDate.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })
     : "Pending";
   const completedTimeLabel = completedAtDate
     ? completedAtDate.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      })
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    })
     : "Pending";
   const completedTransactionPaymentMethods = completedTransactionData
     ? completedTransactionData.payments?.length
@@ -364,25 +364,25 @@ export function OrderSummary({
     : (completedOrderNumber ?? "Transaction");
   const effectiveReceiptMessaging = receiptMessaging
     ? {
-        ...receiptMessaging,
-        actorStaffProfileId:
-          receiptMessaging.actorStaffProfileId ?? actorStaffProfileId,
-        customerPhone:
-          receiptMessaging.customerPhone ?? effectiveCustomerInfo?.phone,
-        transactionId:
-          receiptMessaging.transactionId ??
-          completedTransactionData?.transactionId ??
-          null,
-        transactionNumber:
-          receiptMessaging.transactionNumber ?? completedOrderNumber,
-      }
+      ...receiptMessaging,
+      actorStaffProfileId:
+        receiptMessaging.actorStaffProfileId ?? actorStaffProfileId,
+      customerPhone:
+        receiptMessaging.customerPhone ?? effectiveCustomerInfo?.phone,
+      transactionId:
+        receiptMessaging.transactionId ??
+        completedTransactionData?.transactionId ??
+        null,
+      transactionNumber:
+        receiptMessaging.transactionNumber ?? completedOrderNumber,
+    }
     : completedTransactionData
       ? {
-          actorStaffProfileId,
-          customerPhone: effectiveCustomerInfo?.phone,
-          transactionId: completedTransactionData.transactionId ?? null,
-          transactionNumber: completedOrderNumber,
-        }
+        actorStaffProfileId,
+        customerPhone: effectiveCustomerInfo?.phone,
+        transactionId: completedTransactionData.transactionId ?? null,
+        transactionNumber: completedOrderNumber,
+      }
       : null;
   void effectiveReceiptMessaging;
   const summaryRows = [
@@ -457,20 +457,20 @@ export function OrderSummary({
     : "text-transaction-signal";
   const [completionBlockTitle, completionBlockDetail] = completionBlockMessage
     ? (() => {
-        const [title, ...detailParts] = completionBlockMessage.split(". ");
-        return [
-          title.replace(/\.$/, ""),
-          detailParts.join(". ").replace(/\.$/, "") ||
-            "Add a customer to continue.",
-        ];
-      })()
+      const [title, ...detailParts] = completionBlockMessage.split(". ");
+      return [
+        title.replace(/\.$/, ""),
+        detailParts.join(". ").replace(/\.$/, "") ||
+        "Add a customer to continue.",
+      ];
+    })()
     : [null, null];
 
   const completedAdjustmentSettlementLabel =
     completedAdjustmentSummary?.settlementDirection === "refund"
       ? "Refund due"
       : completedAdjustmentSummary?.settlementDirection === "collection" ||
-          completedAdjustmentSummary?.settlementDirection === "collect"
+        completedAdjustmentSummary?.settlementDirection === "collect"
         ? "Balance due"
         : "Adjustment settlement";
   const completedAdjustmentSettlementValue =
@@ -478,18 +478,18 @@ export function OrderSummary({
       ? "No payment movement"
       : completedAdjustmentSummary
         ? [
-            formatStoredAmount(
-              formatter,
-              completedAdjustmentSummary.settlementAmount,
-            ),
-            completedAdjustmentSummary.settlementMethod
-              ? `via ${formatPaymentMethod(
-                  completedAdjustmentSummary.settlementMethod,
-                )}`
-              : null,
-          ]
-            .filter(Boolean)
-            .join(" ")
+          formatStoredAmount(
+            formatter,
+            completedAdjustmentSummary.settlementAmount,
+          ),
+          completedAdjustmentSummary.settlementMethod
+            ? `via ${formatPaymentMethod(
+              completedAdjustmentSummary.settlementMethod,
+            )}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" ")
         : null;
 
   useEffect(() => {
@@ -650,9 +650,9 @@ export function OrderSummary({
       const formattedPayments =
         receiptPayments.length > 0
           ? receiptPayments.map((payment) => ({
-              method: payment.method,
-              amount: formatStoredAmount(formatter, payment.amount),
-            }))
+            method: payment.method,
+            amount: formatStoredAmount(formatter, payment.amount),
+          }))
           : undefined;
       const totalPaidFromPayments = receiptPayments.reduce(
         (sum, payment) => sum + payment.amount,
@@ -660,12 +660,12 @@ export function OrderSummary({
       );
       const changeGiven =
         formattedPayments &&
-        totalPaidFromPayments > completedData.total &&
-        receiptPayments.length > 0
+          totalPaidFromPayments > completedData.total &&
+          receiptPayments.length > 0
           ? formatStoredAmount(
-              formatter,
-              totalPaidFromPayments - completedData.total,
-            )
+            formatter,
+            totalPaidFromPayments - completedData.total,
+          )
           : undefined;
 
       const storeConfig = getStoreConfigV2(activeStore);
@@ -684,15 +684,15 @@ export function OrderSummary({
           storeContact={
             activeStore.config
               ? {
-                  street,
-                  city,
-                  state,
-                  zipCode,
-                  country,
-                  email: storeContact?.email,
-                  phone: storeContact?.phoneNumber,
-                  website: formatReceiptWebsite(config.storeFrontUrl),
-                }
+                street,
+                city,
+                state,
+                zipCode,
+                country,
+                email: storeContact?.email,
+                phone: storeContact?.phoneNumber,
+                website: formatReceiptWebsite(storeContact?.website ?? config.storeFrontUrl),
+              }
               : undefined
           }
           receiptNumber={
@@ -1316,27 +1316,27 @@ export function OrderSummary({
           {(effectiveCustomerInfo?.name ||
             effectiveCustomerInfo?.email ||
             effectiveCustomerInfo?.phone) && (
-            <section className="rounded-[1.5rem] border border-border/80 bg-[hsl(var(--surface))] p-5 shadow-[var(--shadow-surface)]">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                Customer
-              </p>
-              <div className="mt-4 space-y-1">
-                <p className="text-lg font-semibold text-foreground">
-                  {effectiveCustomerInfo.name || "Guest checkout"}
+              <section className="rounded-[1.5rem] border border-border/80 bg-[hsl(var(--surface))] p-5 shadow-[var(--shadow-surface)]">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                  Customer
                 </p>
-                {effectiveCustomerInfo.email && (
-                  <p className="text-sm text-muted-foreground">
-                    {effectiveCustomerInfo.email}
+                <div className="mt-4 space-y-1">
+                  <p className="text-lg font-semibold text-foreground">
+                    {effectiveCustomerInfo.name || "Guest checkout"}
                   </p>
-                )}
-                {effectiveCustomerInfo.phone && (
-                  <p className="text-sm text-muted-foreground">
-                    {effectiveCustomerInfo.phone}
-                  </p>
-                )}
-              </div>
-            </section>
-          )}
+                  {effectiveCustomerInfo.email && (
+                    <p className="text-sm text-muted-foreground">
+                      {effectiveCustomerInfo.email}
+                    </p>
+                  )}
+                  {effectiveCustomerInfo.phone && (
+                    <p className="text-sm text-muted-foreground">
+                      {effectiveCustomerInfo.phone}
+                    </p>
+                  )}
+                </div>
+              </section>
+            )}
         </aside>
       </div>
     );
@@ -1417,13 +1417,13 @@ export function OrderSummary({
             onClearPayments={
               onClearPayments
                 ? async () => {
-                    const saved = await onClearPayments();
-                    if (saved === false) return false;
-                    setSelectedPaymentMethod(null);
-                    handleEditingPaymentIdChange(null);
-                    onPaymentFlowChange?.(false);
-                    return saved;
-                  }
+                  const saved = await onClearPayments();
+                  if (saved === false) return false;
+                  setSelectedPaymentMethod(null);
+                  handleEditingPaymentIdChange(null);
+                  onPaymentFlowChange?.(false);
+                  return saved;
+                }
                 : undefined
             }
             onPaymentsExpandedChange={onPaymentsExpandedChange}

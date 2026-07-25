@@ -34,6 +34,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/landing.tsx`](../../src/routes/landing.tsx)
 - [`src/routes/privacy.test.tsx`](../../src/routes/privacy.test.tsx)
 - [`src/routes/privacy.tsx`](../../src/routes/privacy.tsx)
+- [`src/routes/register-interest.tsx`](../../src/routes/register-interest.tsx)
 - [`src/routes/walkthrough.test.tsx`](../../src/routes/walkthrough.test.tsx)
 - [`src/routes/walkthrough.tsx`](../../src/routes/walkthrough.tsx)
 

@@ -35,6 +35,7 @@ import type { Id } from "~/convex/_generated/dataModel";
 import { api } from "~/convex/_generated/api";
 import { SkuSearchFilterBar } from "../stock-ops/SkuSearchFilterBar";
 import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
+import { DemoNotice } from "../shared-demo/DemoNotice";
 
 const PRODUCT_SEARCH_PAGE_SIZE = 10;
 
@@ -53,16 +54,7 @@ function getProductSearchPageIndex(page: number | string | undefined) {
   return Math.floor(pageNumber) - 1;
 }
 
-function DemoNotice() {
-  return <aside
-    aria-label="Demo guidance"
-    className="w-fit max-w-full rounded-md border border-border bg-muted/40 px-layout-md py-layout-sm"
-  >
-    <p className="text-sm leading-6 text-muted-foreground">
-      Full catalog onboarding is not available in the demo
-    </p>
-  </aside>
-}
+
 
 export default function Products() {
   const categories = useGetCategories();
@@ -300,7 +292,7 @@ export default function Products() {
       <PageWorkspaceGrid className="xl:grid-cols-[minmax(0,1fr)_300px] 2xl:grid-cols-[minmax(0,1fr)_280px]">
         <PageWorkspaceMain>
           <section className="min-w-0 space-y-layout-lg">
-            {isSharedDemo && <DemoNotice />}
+            {isSharedDemo && <DemoNotice text="Full catalog onboarding is not available in the demo" />}
             <SkuSearchFilterBar
               action={
                 hasFullAdminAccess ? (

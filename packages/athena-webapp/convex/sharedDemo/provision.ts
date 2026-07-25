@@ -62,6 +62,7 @@ import {
   rollSharedDemoOpeningBaselineWithCtx,
   sharedDemoOperatingDateRange,
 } from "./openingBaseline";
+import { sharedDemoSeededRegisterOpenedAt } from "./registerBaseline";
 
 export const SHARED_DEMO_SEED = {
   version: SHARED_DEMO_BASELINE_VERSION,
@@ -111,7 +112,7 @@ export function planSharedDemoMigration(baselineVersion: number) {
   } as const;
   const mode =
     migrationClassifications[
-      baselineVersion as keyof typeof migrationClassifications
+    baselineVersion as keyof typeof migrationClassifications
     ];
   if (!mode || SHARED_DEMO_BASELINE_VERSION !== 30) {
     throw new Error(
@@ -187,13 +188,13 @@ export function transformSharedDemoCatalogImageBaselineDocument(row: {
   if (!product) return row.document;
   const images = Array.isArray(row.document.images)
     ? row.document.images.map((image) =>
-        typeof image === "string"
-          ? image.replace(
-              /\/products\/shared-demo\/v\d+\//,
-              `/products/shared-demo/${SHARED_DEMO_PRODUCT_IMAGE_VERSION}/`,
-            )
-          : image,
-      )
+      typeof image === "string"
+        ? image.replace(
+          /\/products\/shared-demo\/v\d+\//,
+          `/products/shared-demo/${SHARED_DEMO_PRODUCT_IMAGE_VERSION}/`,
+        )
+        : image,
+    )
     : row.document.images;
   return { ...row.document, images };
 }
@@ -221,12 +222,12 @@ export function transformSharedDemoPickupOrderBaselineDocument(row: {
     orderNumber: SHARED_DEMO_PICKUP_ORDER.orderNumber,
     ...(row.timeline
       ? {
-          didSendConfirmationEmail: true,
-          orderReceivedEmailSentAt: row.timeline.orderReceivedEmailSentAt,
-          placedAt: row.timeline.placedAt,
-          readyAt: row.timeline.placedAt + 2_200_000,
-          updatedAt: row.timeline.placedAt + 2_200_000,
-        }
+        didSendConfirmationEmail: true,
+        orderReceivedEmailSentAt: row.timeline.orderReceivedEmailSentAt,
+        placedAt: row.timeline.placedAt,
+        readyAt: row.timeline.placedAt + 2_200_000,
+        updatedAt: row.timeline.placedAt + 2_200_000,
+      }
       : {}),
   };
 }
@@ -355,7 +356,7 @@ export function sharedDemoBootstrapSeedMatches(input: {
     session.status === "active" &&
     session.openingFloat === SHARED_DEMO_CASH_SEED.openingFloat &&
     session.expectedCash ===
-      calculateSharedDemoExpectedCash(SHARED_DEMO_CASH_SEED) &&
+    calculateSharedDemoExpectedCash(SHARED_DEMO_CASH_SEED) &&
     input.messageBodies.length === 1 &&
     input.messageBodies[0] === SHARED_DEMO_OPENING_MESSAGE &&
     input.openingCount === 1 &&
@@ -742,25 +743,25 @@ async function migrateSharedDemoStoryWithCtx(
       lastName: string;
     };
   }> = [
-    {
-      profile: staffProfiles.find(
-        (row) => row.linkedUserId === args.ownerUserId,
-      ),
-      story: SHARED_DEMO_STAFF_STORY.owner,
-    },
-    {
-      profile: staffProfiles.find(
-        (row) => row.staffCode === SHARED_DEMO_CASHIER_STAFF_CODE,
-      ),
-      story: SHARED_DEMO_STAFF_STORY.cashier,
-    },
-    {
-      profile: staffProfiles.find(
-        (row) => row.staffCode === SHARED_DEMO_MANAGER_STAFF_CODE,
-      ),
-      story: SHARED_DEMO_STAFF_STORY.manager,
-    },
-  ];
+      {
+        profile: staffProfiles.find(
+          (row) => row.linkedUserId === args.ownerUserId,
+        ),
+        story: SHARED_DEMO_STAFF_STORY.owner,
+      },
+      {
+        profile: staffProfiles.find(
+          (row) => row.staffCode === SHARED_DEMO_CASHIER_STAFF_CODE,
+        ),
+        story: SHARED_DEMO_STAFF_STORY.cashier,
+      },
+      {
+        profile: staffProfiles.find(
+          (row) => row.staffCode === SHARED_DEMO_MANAGER_STAFF_CODE,
+        ),
+        story: SHARED_DEMO_STAFF_STORY.manager,
+      },
+    ];
   for (const { profile, story } of staffPatches) {
     if (!profile) continue;
     await ctx.db.patch("staffProfile", profile._id, {
@@ -1004,13 +1005,13 @@ export const provisionSharedDemo = internalMutation({
       .unique();
     const existingStore = existingOrganization
       ? await ctx.db
-          .query("store")
-          .withIndex("by_organizationId_slug", (q) =>
-            q
-              .eq("organizationId", existingOrganization._id)
-              .eq("slug", SHARED_DEMO_SEED.storeSlug),
-          )
-          .unique()
+        .query("store")
+        .withIndex("by_organizationId_slug", (q) =>
+          q
+            .eq("organizationId", existingOrganization._id)
+            .eq("slug", SHARED_DEMO_SEED.storeSlug),
+        )
+        .unique()
       : null;
     if (existingOrganization || existingStore) {
       if (
@@ -1113,9 +1114,9 @@ export const provisionSharedDemo = internalMutation({
         );
         const orderItems = demoOrder
           ? await ctx.db
-              .query("onlineOrderItem")
-              .withIndex("by_orderId", (q) => q.eq("orderId", demoOrder._id))
-              .take(500)
+            .query("onlineOrderItem")
+            .withIndex("by_orderId", (q) => q.eq("orderId", demoOrder._id))
+            .take(500)
           : [];
         for (const storyProduct of SHARED_DEMO_PRODUCTS) {
           const demoSku = productSkus.find(
@@ -1244,6 +1245,7 @@ export const provisionSharedDemo = internalMutation({
                 email: SHARED_DEMO_STORE_IDENTITY.contactEmail,
                 location: SHARED_DEMO_STORE_IDENTITY.contactLocation,
                 phoneNumber: SHARED_DEMO_STORE_IDENTITY.contactPhoneNumber,
+                website: SHARED_DEMO_STORE_IDENTITY.website,
               },
               receipt: {
                 ...((existingStore.config?.receipt as
@@ -1404,7 +1406,7 @@ export const provisionSharedDemo = internalMutation({
             deliveryInstructions: demoOrder.deliveryInstructions,
             deliveryMethod:
               demoOrder.deliveryMethod === "delivery" ||
-              demoOrder.deliveryMethod === "pickup"
+                demoOrder.deliveryMethod === "pickup"
                 ? demoOrder.deliveryMethod
                 : undefined,
             deliveryOption: demoOrder.deliveryOption,
@@ -1509,7 +1511,10 @@ export const provisionSharedDemo = internalMutation({
         const registerSessionRange = sharedDemoOperatingDateRange(now);
         await insertRegisterSessionWithAuthority(ctx, {
           expectedCash: calculateSharedDemoExpectedCash(SHARED_DEMO_CASH_SEED),
-          openedAt: Math.max(registerSessionRange.startAt, now - 14_400_000),
+          openedAt: sharedDemoSeededRegisterOpenedAt({
+            now,
+            operatingDayStartAt: registerSessionRange.startAt,
+          }),
           openedByStaffProfileId: manager._id,
           openedByUserId: owner._id,
           openedOperatingDate: registerSessionRange.operatingDate,
@@ -1782,10 +1787,10 @@ export const provisionSharedDemo = internalMutation({
       transactionCapability: "products_and_services",
     });
     const registerSessionRange = sharedDemoOperatingDateRange(now);
-    const registerOpenedAt = Math.max(
-      registerSessionRange.startAt,
-      now - 14_400_000,
-    );
+    const registerOpenedAt = sharedDemoSeededRegisterOpenedAt({
+      now,
+      operatingDayStartAt: registerSessionRange.startAt,
+    });
     await insertRegisterSessionWithAuthority(ctx, {
       expectedCash: calculateSharedDemoExpectedCash(SHARED_DEMO_CASH_SEED),
       openedAt: registerOpenedAt,

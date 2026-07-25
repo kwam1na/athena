@@ -1,6 +1,9 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { createServer } from "node:http";
+import { connect as netConnect } from "node:net";
+import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -642,5 +645,278 @@ describe("resolveHarnessBehaviorShell", () => {
     });
 
     expect(shellPath).toBe("/bin/bash");
+  });
+});
+
+describe("scenario process isolation", () => {
+  async function reserveFreePort() {
+    const server = createServer();
+    await new Promise<void>((resolve) => {
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const port = (server.address() as AddressInfo).port;
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
+    return port;
+  }
+
+  async function isListening(port: number) {
+    return new Promise<boolean>((resolve) => {
+      const socket = netConnect({ host: "127.0.0.1", port });
+      const settle = (listening: boolean) => {
+        socket.destroy();
+        resolve(listening);
+      };
+      socket.setTimeout(500);
+      socket.once("connect", () => settle(true));
+      socket.once("timeout", () => settle(false));
+      socket.once("error", () => settle(false));
+    });
+  }
+
+  it("fails when a scenario port stays served by a foreign process", async () => {
+    const rootDir = await createFixtureRoot("athena-harness-behavior-port-");
+    const port = await reserveFreePort();
+
+    const squatter = createServer((_request, response) => {
+      response.statusCode = 200;
+      response.end("squatter");
+    });
+    await new Promise<void>((resolve) => {
+      squatter.listen(port, "127.0.0.1", resolve);
+    });
+
+    // Keep the guard's wait window short so the test exercises the
+    // still-occupied outcome without waiting out the production window.
+    process.env.HARNESS_BEHAVIOR_PORT_WAIT_MS = "300";
+
+    try {
+      await expect(
+        runHarnessBehaviorScenario(rootDir, {
+          name: "unit-port-guard",
+          processes: [],
+          readiness: [
+            {
+              name: "app-shell",
+              kind: "http",
+              url: `http://127.0.0.1:${port}/`,
+              timeoutMs: 1_000,
+            },
+          ],
+          browser: async () => ({}),
+          assert: async () => {},
+        })
+      ).rejects.toThrow(/already in use before boot/);
+    } finally {
+      delete process.env.HARNESS_BEHAVIOR_PORT_WAIT_MS;
+      await new Promise<void>((resolve) => {
+        squatter.close(() => resolve());
+      });
+    }
+  });
+
+  it("waits out a port that is still being released instead of failing boot", async () => {
+    const rootDir = await createFixtureRoot("athena-harness-behavior-drain-");
+    const port = await reserveFreePort();
+
+    const draining = createServer((_request, response) => {
+      response.statusCode = 200;
+      response.end("draining");
+    });
+    await new Promise<void>((resolve) => {
+      draining.listen(port, "127.0.0.1", resolve);
+    });
+
+    // Mirrors the CI failure: the previous scenario's server is still closing
+    // when the next scenario boots. That is transient, not a foreign owner, so
+    // the guard should wait rather than fail. The replacement server stands in
+    // for the one this scenario would have booted itself.
+    // Bounded so the cleanup-phase release wait (which cannot succeed here,
+    // because the stand-in replacement is not harness-managed) stays short.
+    process.env.HARNESS_BEHAVIOR_PORT_WAIT_MS = "1500";
+
+    let replacement: ReturnType<typeof createServer> | undefined;
+    setTimeout(() => {
+      draining.close(() => {
+        // Leave a real gap where the port is observably free, as happens
+        // between one scenario's teardown and the next one's server binding.
+        setTimeout(() => {
+          replacement = createServer((_request, response) => {
+            response.statusCode = 200;
+            response.end("booted");
+          });
+          replacement.listen(port, "127.0.0.1");
+        }, 400);
+      });
+    }, 400);
+
+    const report = await runHarnessBehaviorScenario(rootDir, {
+      name: "unit-port-drain",
+      processes: [],
+      readiness: [
+        {
+          name: "app-shell",
+          kind: "custom",
+          check: async () => {},
+        },
+        {
+          name: "app-shell-port",
+          kind: "http",
+          url: `http://127.0.0.1:${port}/`,
+          timeoutMs: 1_000,
+        },
+      ],
+      browser: async () => ({}),
+      assert: async () => {},
+    });
+
+    expect(report.status).toBe("passed");
+    delete process.env.HARNESS_BEHAVIOR_PORT_WAIT_MS;
+
+    if (replacement) {
+      await new Promise<void>((resolve) => {
+        replacement!.close(() => resolve());
+      });
+    }
+  });
+
+  it("terminates grandchildren so scenario ports are released on cleanup", async () => {
+    const rootDir = await createFixtureRoot("athena-harness-behavior-orphan-");
+    const port = await reserveFreePort();
+
+    // The scenario command forks a long-lived grandchild that owns the port,
+    // mirroring `bun run ... dev` -> vite. Signalling only the shell leaves the
+    // grandchild alive and holding the port.
+    await write(
+      "fixtures/grandchild.ts",
+      [
+        "Bun.serve({",
+        `  port: ${port},`,
+        '  hostname: "127.0.0.1",',
+        '  fetch: () => new Response("ok"),',
+        "});",
+        'console.log("GRANDCHILD_READY");',
+        "setInterval(() => {}, 1000);",
+      ].join("\n"),
+      rootDir
+    );
+
+    const grandchildPath = path.join(rootDir, "fixtures", "grandchild.ts");
+
+    await runHarnessBehaviorScenario(rootDir, {
+      name: "unit-orphan-cleanup",
+      processes: [
+        {
+          id: "parent",
+          command: `bun ${grandchildPath}`,
+          readyPattern: "GRANDCHILD_READY",
+          readyTimeoutMs: 5_000,
+        },
+      ],
+      readiness: [],
+      browser: async () => ({}),
+      assert: async () => {},
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(await isListening(port)).toBe(false);
+  });
+});
+
+describe("scenario port reclaim", () => {
+  async function reserveFreePortForReclaim() {
+    const server = createServer();
+    await new Promise<void>((resolve) => {
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const port = (server.address() as AddressInfo).port;
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
+    return port;
+  }
+
+  it("reclaims a port from a survivor that escaped the process group", async () => {
+    const rootDir = await createFixtureRoot("athena-harness-behavior-reclaim-");
+    const port = await reserveFreePortForReclaim();
+
+    // The server is started in its OWN process group (`detached`) by the
+    // scenario process, so the harness's group sweep cannot reach it. This
+    // reproduces what `bun run --filter ... dev` does on CI, where the sweep
+    // alone left the port held. Done portably rather than via `setsid`, which
+    // does not exist on macOS and would make this test vacuous there.
+    await write(
+      "fixtures/server.ts",
+      [
+        "Bun.serve({",
+        `  port: ${port},`,
+        '  hostname: "127.0.0.1",',
+        '  fetch: () => new Response("ok"),',
+        "});",
+        "setInterval(() => {}, 1000);",
+      ].join("\n"),
+      rootDir
+    );
+
+    await write(
+      "fixtures/escapee.ts",
+      [
+        'import { spawn } from "node:child_process";',
+        'import path from "node:path";',
+        "const child = spawn(",
+        '  process.execPath,',
+        `  [path.join(${JSON.stringify(rootDir)}, "fixtures", "server.ts")],`,
+        '  { detached: true, stdio: "ignore" }',
+        ");",
+        "child.unref();",
+        "setTimeout(() => {",
+        '  console.log("ESCAPEE_READY");',
+        "}, 300);",
+        "setInterval(() => {}, 1000);",
+      ].join("\n"),
+      rootDir
+    );
+
+    const escapeePath = path.join(rootDir, "fixtures", "escapee.ts");
+    const setsidPrefix = "";
+
+    await runHarnessBehaviorScenario(rootDir, {
+      name: "unit-port-reclaim",
+      processes: [
+        {
+          id: "escapee",
+          command: `${setsidPrefix}bun ${escapeePath}`,
+          readyPattern: "ESCAPEE_READY",
+          readyTimeoutMs: 5_000,
+        },
+      ],
+      readiness: [
+        {
+          name: "escapee-port",
+          kind: "http",
+          url: `http://127.0.0.1:${port}/`,
+          timeoutMs: 5_000,
+        },
+      ],
+      browser: async () => ({}),
+      assert: async () => {},
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    const stillListening = await new Promise<boolean>((resolve) => {
+      const socket = netConnect({ host: "127.0.0.1", port });
+      const settle = (listening: boolean) => {
+        socket.destroy();
+        resolve(listening);
+      };
+      socket.setTimeout(500);
+      socket.once("connect", () => settle(true));
+      socket.once("timeout", () => settle(false));
+      socket.once("error", () => settle(false));
+    });
+
+    expect(stillListening).toBe(false);
   });
 });

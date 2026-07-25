@@ -11,6 +11,7 @@ import { withOperationMutationAdmission } from "../operationAdmission/publicMuta
 import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import { getDailyOpeningSnapshotReadDefinition } from "../operationAdmission/readDefinitions";
 import type { OperationMutationCtx } from "../operationAdmission/types";
+import { requireOperationActorAthenaUserId } from "../operationAdmission/actors";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
 import { recordOperationalEventWithCtx } from "./operationalEvents";
@@ -1626,7 +1627,7 @@ export const startStoreDay = mutation({
       }
 
       const openingActor = await resolveSharedDemoOpeningActorWithCtx(ctx, {
-        athenaUserId: admittedActor.athenaUserId,
+        athenaUserId: requireOperationActorAthenaUserId(admittedActor),
         storeId: args.storeId,
       });
       if (openingActor.kind !== "ok") return openingActor;

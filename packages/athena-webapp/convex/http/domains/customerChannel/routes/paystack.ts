@@ -90,59 +90,14 @@ paystackRoutes.post("/", async (c) => {
       console.error("failed to create order", createOrderResponse.error);
     }
 
-    if (createOrderResponse.success) {
-      // Fetch the created order and store
-      const order = await c.env.runQuery(api.storeFront.onlineOrder.get, {
-        identifier: checkout_session_id as Id<"checkoutSession">,
-      });
-
-      if (order) {
-        const store = await c.env.runQuery(api.inventory.stores.getById, {
-          id: order.storeId,
-        });
-
-        // Calculate order amounts
-        const items = order.items || [];
-        const discount = order.discount;
-        const deliveryFee = order.deliveryFee || 0; // already pesewas
-        const subtotal = order.amount || 0;
-
-        const orderAmount = calculateOrderAmount({
-          items,
-          discount,
-          deliveryFee,
-          subtotal,
-        });
-        const discountValue = getOrderDiscountValue(items, discount);
-
-        // Send emails using the service
-        const emailResults = await sendPaymentVerificationEmails({
-          order,
-          store,
-          orderAmount,
-          discountValue,
-          didSendNewOrderEmail: order.didSendNewOrderReceivedEmail || false,
-          didSendConfirmationEmail: order.didSendConfirmationEmail || false,
-        });
-
-        // Update order with email status flags
-        await c.env.runMutation(api.storeFront.onlineOrder.update, {
-          orderId: order._id,
-          update: {
-            didSendConfirmationEmail: emailResults.confirmationSent,
-            didSendNewOrderReceivedEmail: emailResults.adminNotificationSent,
-            orderReceivedEmailSentAt: emailResults.confirmationSent
-              ? Date.now()
-              : undefined,
-          },
-        });
-      }
-    }
-
     const orderDetailsFromWebhook =
       order_details && typeof order_details === "object" ? order_details : {};
 
-    // update important fields first
+    // Persist the settled-payment state FIRST, before any best-effort
+    // side-effects (notification emails, order flag updates). Downstream
+    // completion and verification key off hasCompletedPayment, so a failure in
+    // those side-effects must never prevent this write — that ordering is what
+    // previously left paid sessions stuck with hasCompletedPayment unset.
     await c.env.runMutation(
       internal.storeFront.checkoutSession.updateCheckoutSession,
       {
@@ -186,6 +141,65 @@ paystackRoutes.post("/", async (c) => {
         },
       },
     );
+
+    // Best-effort: notification emails + order email-status flags. Isolated in
+    // try/catch so a failure here cannot abort the webhook or undo the
+    // payment-state write above.
+    if (createOrderResponse.success) {
+      try {
+        // Fetch the created order and store
+        const order = await c.env.runQuery(api.storeFront.onlineOrder.get, {
+          identifier: checkout_session_id as Id<"checkoutSession">,
+        });
+
+        if (order) {
+          const store = await c.env.runQuery(api.inventory.stores.getById, {
+            id: order.storeId,
+          });
+
+          // Calculate order amounts
+          const items = order.items || [];
+          const discount = order.discount;
+          const deliveryFee = order.deliveryFee || 0; // already pesewas
+          const subtotal = order.amount || 0;
+
+          const orderAmount = calculateOrderAmount({
+            items,
+            discount,
+            deliveryFee,
+            subtotal,
+          });
+          const discountValue = getOrderDiscountValue(items, discount);
+
+          // Send emails using the service
+          const emailResults = await sendPaymentVerificationEmails({
+            order,
+            store,
+            orderAmount,
+            discountValue,
+            didSendNewOrderEmail: order.didSendNewOrderReceivedEmail || false,
+            didSendConfirmationEmail: order.didSendConfirmationEmail || false,
+          });
+
+          // Update order with email status flags
+          await c.env.runMutation(api.storeFront.onlineOrder.update, {
+            orderId: order._id,
+            update: {
+              didSendConfirmationEmail: emailResults.confirmationSent,
+              didSendNewOrderReceivedEmail: emailResults.adminNotificationSent,
+              orderReceivedEmailSentAt: emailResults.confirmationSent
+                ? Date.now()
+                : undefined,
+            },
+          });
+        }
+      } catch (error) {
+        console.error(
+          "failed to send order notification emails from webhook",
+          error,
+        );
+      }
+    }
   }
 
   if (payload?.event == "refund.processed") {

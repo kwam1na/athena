@@ -36,14 +36,19 @@ const MainComponent = () => {
 
     if (!activeSession) return;
 
+    // Payment is settled if EITHER the Paystack webhook completed it or the
+    // client verified it against Paystack.
+    const hasSettledPayment =
+      activeSession.hasCompletedPayment || activeSession.hasVerifiedPayment;
+
     const needsVerification =
       activeSession.externalReference &&
-      activeSession.hasCompletedPayment &&
+      hasSettledPayment &&
       activeSession.placedOrderId &&
       origin === "paystack";
 
     const isIncomplete =
-      activeSession.hasCompletedPayment &&
+      hasSettledPayment &&
       activeSession.placedOrderId &&
       !activeSession.hasCompletedCheckoutSession &&
       origin === null;

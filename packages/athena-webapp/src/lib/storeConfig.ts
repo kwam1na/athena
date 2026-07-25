@@ -460,6 +460,7 @@ export const getStoreConfigV2 = (input: StoreConfigInput): StoreConfigV2 => {
         asString(contact.location),
         asString(legacyContactInfo.location),
       ),
+      website: asString(contact.website)
     }) as StoreContactConfig,
     receipt: cleanUndefined({
       policyLines: asOptionalArray(receipt.policyLines, (value) =>

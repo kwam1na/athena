@@ -5,7 +5,7 @@ import type { AthenaCapability } from "../platform/capabilityCatalog";
 export type OperationAdmissionCtx =
   Pick<QueryCtx, "auth" | "db"> | Pick<MutationCtx, "auth" | "db">;
 
-export type OperationActorKind = "normal_user" | "shared_demo";
+export type OperationActorKind = "normal_user" | "shared_demo" | "public";
 
 export type OperationActor =
   | {
@@ -18,6 +18,11 @@ export type OperationActor =
       athenaUserId: Id<"athenaUser">;
       organizationId: Id<"organization">;
       storeId: Id<"store">;
+    }
+  | {
+      // Anonymous storefront shopper — no authenticated identity. Only admitted
+      // for operations that explicitly opt in via actors.public === "admit".
+      kind: "public";
     };
 
 export type OperationScope =
@@ -38,6 +43,9 @@ export type OperationEffects =
 export type OperationActorCoverage = {
   normalUser: "admit" | "deny";
   sharedDemo: "admit" | "deny";
+  // Anonymous storefront callers. Optional and deny-by-default: an operation
+  // must set this to "admit" to be reachable without an authenticated identity.
+  public?: "admit" | "deny";
 };
 
 export type OperationDefinition = {

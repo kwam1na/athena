@@ -43,6 +43,20 @@ type ManagerElevationContextValue = {
   startManagerElevation: () => void;
 };
 
+// A safe, inert value returned when the hook renders without a live provider
+// in the tree. This can legitimately happen for a single render pass while
+// React recovers from a Convex `useSyncExternalStore` tear (the shell that
+// mounts the provider is chosen from external-store state, so an in-flight
+// concurrent render can momentarily read the tree without it). Returning an
+// inert value keeps that recoverable render from escalating into a fatal error
+// boundary; the next, consistent render restores the real provider value.
+const INERT_MANAGER_ELEVATION: ManagerElevationContextValue = {
+  activeElevation: null,
+  endManagerElevation: async () => {},
+  isManagerElevated: false,
+  startManagerElevation: () => {},
+};
+
 const ManagerElevationContext = createContext<
   ManagerElevationContextValue | undefined
 >(undefined);
@@ -228,13 +242,10 @@ export function ManagerElevationProvider({
 export function useManagerElevation() {
   const context = useContext(ManagerElevationContext);
 
-  if (context === undefined) {
-    throw new Error(
-      "useManagerElevation must be used within a ManagerElevationProvider",
-    );
-  }
-
-  return context;
+  // Fall back to an inert value rather than throwing: the guard used to escalate
+  // a transient, recoverable render (a Convex store tear during concurrent
+  // rendering) into a fatal error-boundary crash. See INERT_MANAGER_ELEVATION.
+  return context ?? INERT_MANAGER_ELEVATION;
 }
 
 export function useOptionalManagerElevation() {

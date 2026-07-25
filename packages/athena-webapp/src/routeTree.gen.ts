@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WalkthroughRouteImport } from './routes/walkthrough'
+import { Route as RegisterInterestRouteImport } from './routes/register-interest'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as LandingRouteImport } from './routes/landing'
 import { Route as DemoRouteImport } from './routes/demo'
@@ -105,6 +106,11 @@ import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionI
 const WalkthroughRoute = WalkthroughRouteImport.update({
   id: '/walkthrough',
   path: '/walkthrough',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterInterestRoute = RegisterInterestRouteImport.update({
+  id: '/register-interest',
+  path: '/register-interest',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -669,6 +675,7 @@ export interface FileRoutesByFullPath {
   '/demo': typeof DemoRoute
   '/landing': typeof LandingRoute
   '/privacy': typeof PrivacyRoute
+  '/register-interest': typeof RegisterInterestRoute
   '/walkthrough': typeof WalkthroughRoute
   '/login': typeof LoginLayoutRouteWithChildren
   '/join-team/': typeof JoinTeamIndexRoute
@@ -762,6 +769,7 @@ export interface FileRoutesByTo {
   '/demo': typeof DemoRoute
   '/landing': typeof LandingRoute
   '/privacy': typeof PrivacyRoute
+  '/register-interest': typeof RegisterInterestRoute
   '/walkthrough': typeof WalkthroughRoute
   '/join-team': typeof JoinTeamIndexRoute
   '/$orgUrlSlug': typeof AuthedOrgUrlSlugIndexRoute
@@ -854,6 +862,7 @@ export interface FileRoutesById {
   '/demo': typeof DemoRoute
   '/landing': typeof LandingRoute
   '/privacy': typeof PrivacyRoute
+  '/register-interest': typeof RegisterInterestRoute
   '/walkthrough': typeof WalkthroughRoute
   '/login/_layout': typeof LoginLayoutRouteWithChildren
   '/join-team/': typeof JoinTeamIndexRoute
@@ -949,6 +958,7 @@ export interface FileRouteTypes {
     | '/demo'
     | '/landing'
     | '/privacy'
+    | '/register-interest'
     | '/walkthrough'
     | '/login'
     | '/join-team/'
@@ -1042,6 +1052,7 @@ export interface FileRouteTypes {
     | '/demo'
     | '/landing'
     | '/privacy'
+    | '/register-interest'
     | '/walkthrough'
     | '/join-team'
     | '/$orgUrlSlug'
@@ -1133,6 +1144,7 @@ export interface FileRouteTypes {
     | '/demo'
     | '/landing'
     | '/privacy'
+    | '/register-interest'
     | '/walkthrough'
     | '/login/_layout'
     | '/join-team/'
@@ -1228,6 +1240,7 @@ export interface RootRouteChildren {
   DemoRoute: typeof DemoRoute
   LandingRoute: typeof LandingRoute
   PrivacyRoute: typeof PrivacyRoute
+  RegisterInterestRoute: typeof RegisterInterestRoute
   WalkthroughRoute: typeof WalkthroughRoute
   LoginLayoutRoute: typeof LoginLayoutRouteWithChildren
   JoinTeamIndexRoute: typeof JoinTeamIndexRoute
@@ -1240,6 +1253,13 @@ declare module '@tanstack/react-router' {
       path: '/walkthrough'
       fullPath: '/walkthrough'
       preLoaderRoute: typeof WalkthroughRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register-interest': {
+      id: '/register-interest'
+      path: '/register-interest'
+      fullPath: '/register-interest'
+      preLoaderRoute: typeof RegisterInterestRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -2201,6 +2221,7 @@ const rootRouteChildren: RootRouteChildren = {
   DemoRoute: DemoRoute,
   LandingRoute: LandingRoute,
   PrivacyRoute: PrivacyRoute,
+  RegisterInterestRoute: RegisterInterestRoute,
   WalkthroughRoute: WalkthroughRoute,
   LoginLayoutRoute: LoginLayoutRouteWithChildren,
   JoinTeamIndexRoute: JoinTeamIndexRoute,

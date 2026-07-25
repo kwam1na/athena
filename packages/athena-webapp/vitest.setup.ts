@@ -2,18 +2,25 @@ import "@testing-library/jest-dom";
 import { configure } from "@testing-library/react";
 import { vi, beforeEach } from "vitest";
 
-// Under the heavy parallel CI coverage run, the async effects behind
-// `waitFor` / `findBy*` assertions can take longer than Testing Library's
-// 1000ms default to settle, producing intermittent timeouts even though the
-// assertion itself would pass (e.g. the POS local-sync runtime seeding a
-// drawer through a chain of awaited store reads). Give async utilities more
-// headroom in CI only; local runs keep the short default for fast feedback.
-// `waitFor` still resolves as soon as its callback passes, so this does not
-// slow the happy path — it only raises the ceiling before a timeout is
-// declared.
-if (process.env.CI) {
-  configure({ asyncUtilTimeout: 5000 });
-}
+// Under a heavy parallel coverage run, the async effects behind `waitFor` /
+// `findBy*` assertions can take longer than Testing Library's 1000ms default
+// to settle, producing intermittent timeouts even though the assertion itself
+// would pass (e.g. the POS local-sync runtime seeding a drawer through a chain
+// of awaited store reads).
+//
+// This headroom is deliberately not gated on `process.env.CI`. The load that
+// causes the timeout comes from running the full suite in parallel, which the
+// local `pr:athena` gate does too — gating on CI left the local gate running
+// the same 661-file coverage sweep on the unextended 1000ms default, so it
+// flaked (observed: 1023ms, a hair over the ceiling) on runs that were green
+// in CI. Tying the fix to the environment variable rather than to the actual
+// cause made the gate less reliable than the CI it was meant to mirror.
+//
+// `waitFor` resolves as soon as its callback passes, so this does not slow the
+// happy path; it only raises the ceiling before a timeout is declared. The
+// cost is that a genuinely failing async assertion takes up to 5s to report
+// instead of 1s.
+configure({ asyncUtilTimeout: 5000 });
 
 // Mock toast notifications
 vi.mock("react-hot-toast", () => ({
@@ -83,6 +90,38 @@ vi.mock("framer-motion", async (importOriginal) => {
 
 // Only run browser-specific mocks when a window object exists (e.g. jsdom).
 if (typeof window !== "undefined") {
+  // jsdom has no layout engine, so ResizeObserver is absent and
+  // getBoundingClientRect reports 0×0. Recharts' ResponsiveContainer measures
+  // its box that way and, finding 0×0, renders the chart at zero size and logs
+  // "The width(0) and height(0) of chart should be greater than 0". Provide a
+  // ResizeObserver that reports a fixed non-zero box on observe() so the
+  // container adopts a real size and the chart renders (and stays silent).
+  const RESIZE_BOX = { width: 800, height: 600 } as const;
+  class ResizeObserverStub implements ResizeObserver {
+    constructor(private readonly callback: ResizeObserverCallback) {}
+    observe(target: Element) {
+      const contentRect = {
+        ...RESIZE_BOX,
+        top: 0,
+        left: 0,
+        right: RESIZE_BOX.width,
+        bottom: RESIZE_BOX.height,
+        x: 0,
+        y: 0,
+        toJSON() {},
+      } as DOMRectReadOnly;
+      this.callback(
+        [{ target, contentRect } as ResizeObserverEntry],
+        this,
+      );
+    }
+    unobserve() {}
+    disconnect() {}
+  }
+  if (!window.ResizeObserver) {
+    window.ResizeObserver = ResizeObserverStub;
+  }
+
   const pointerCaptureStub = () => false;
   const pointerReleaseStub = () => undefined;
 
