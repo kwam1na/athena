@@ -206,6 +206,22 @@ export const posTerminalRuntimeSyncValidator = v.object({
   backoffUntil: v.optional(v.number()),
   heldEventCount: v.optional(v.number()),
   heldWithoutProgress: v.optional(v.boolean()),
+  // Set when the terminal has diagnosed *why* its uploads are held: the cloud
+  // cursor is waiting on this upload sequence and the local ledger does not
+  // contain it. This is the terminal asserting the event is gone, which lets
+  // gap reconciliation skip the hole without a probe round trip.
+  heldBehindMissingUploadSequence: v.optional(v.number()),
+  // The terminal's own classification of the held batch. `awaiting_local_upload`
+  // and `awaiting_review` are positive assertions that it still holds the
+  // awaited event, which gap reconciliation must never skip past.
+  heldBlockerKind: v.optional(
+    v.union(
+      v.literal("none"),
+      v.literal("awaiting_local_upload"),
+      v.literal("missing_locally"),
+      v.literal("awaiting_review"),
+    ),
+  ),
 });
 
 export const posTerminalRuntimeStaffAuthorityValidator = v.object({

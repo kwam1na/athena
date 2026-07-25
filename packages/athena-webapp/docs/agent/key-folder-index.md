@@ -12,8 +12,8 @@ This key-folder index highlights the main directories agents are likely to need 
 - [`src/components/operations`](../../src/components/operations) — Manager-queue and stock-adjustment workflows that share approval rails with other operational surfaces. Currently 35 file(s); key children: CommandApprovalDialog.test.tsx, CommandApprovalDialog.tsx, DailyCloseHistoryView.test.tsx, DailyCloseHistoryView.tsx, DailyCloseView.test.tsx.
 - [`src/components/procurement`](../../src/components/procurement) — Procurement planning and receiving views for replenishment pressure and purchase-order execution. Currently 4 file(s); key children: ProcurementView.test.tsx, ProcurementView.tsx, ReceivingView.test.tsx, ReceivingView.tsx.
 - [`src/hooks`](../../src/hooks) — React hooks that fan out auth, shell, and feature state. Currently 49 file(s); key children: use-image-upload.ts, use-mobile.tsx, use-navigate-back.ts, use-navigation-keyboard-shortcuts.ts, use-pagination-persistence.test.ts.
-- [`src/contexts`](../../src/contexts) — Context providers for app-wide state and wiring. Currently 12 file(s); key children: AppShellFullscreenContext.tsx, ManagerElevationContext.test.tsx, ManagerElevationContext.tsx, OnlineOrderContext.test.tsx, OnlineOrderContext.tsx.
-- [`src/lib`](../../src/lib) — Shared frontend helpers, schemas, and package utilities. Currently 268 file(s); key children: access, app-messages, app-update, aws.ts, behaviorUtils.ts.
+- [`src/contexts`](../../src/contexts) — Context providers for app-wide state and wiring. Currently 13 file(s); key children: AppShellFullscreenContext.test.tsx, AppShellFullscreenContext.tsx, ManagerElevationContext.test.tsx, ManagerElevationContext.tsx, OnlineOrderContext.test.tsx.
+- [`src/lib`](../../src/lib) — Shared frontend helpers, schemas, and package utilities. Currently 270 file(s); key children: access, app-messages, app-update, aws.ts, behaviorUtils.ts.
 - [`shared`](../../shared) — Browser-safe helpers shared with Convex-backed workflows. Currently 42 file(s); key children: approvalPolicy.ts, auth.ts, commandResult.test.ts, commandResult.ts, currencyFormatter.test.ts.
 - [`src/utils`](../../src/utils) — Cross-cutting browser helpers and lower-level utilities. Currently 4 file(s); key children: formatNumber.ts, index.ts, versionChecker.test.ts, versionChecker.ts.
 
@@ -23,7 +23,7 @@ This key-folder index highlights the main directories agents are likely to need 
 - [`convex/reporting`](../../convex/reporting) — Versioned facts, inventory valuation, replayable projections, activation, evidence, and store-scoped reporting reads. Currently 131 file(s); key children: access.test.ts, access.ts, activation.test.ts, activation.ts, attentionRules.test.ts.
 - [`convex/serviceOps`](../../convex/serviceOps) — Service catalog, appointment, and service-case workflows layered on operational work items. Currently 8 file(s); key children: appointments.ts, catalog.ts, catalogAppointments.test.ts, moduleWiring.test.ts, serviceCaseTracing.test.ts.
 - [`convex/workflowTraces`](../../convex/workflowTraces) — Shared workflow trace creation, lookup, presentation, and adapter helpers. Currently 19 file(s); key children: adapters, core.ts, presentation.test.ts, presentation.ts, public.ts.
-- [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 938 file(s); key children: README.md, _generated, app.ts, auth, auth.config.js.
+- [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 945 file(s); key children: README.md, _generated, app.ts, auth, auth.config.js.
 - [`src/tests`](../../src/tests) — Focused browser-facing regression tests. Currently 9 file(s); key children: README.md, SUMMARY.md, pos, prod.
 - [`src/test`](../../src/test) — Package test harness helpers and setup. Currently 1 file(s); key children: setup.ts.
 

@@ -852,7 +852,7 @@ export async function runDailyCloseAutoCompleteEligibilityWithCtx(
   });
 }
 
-function isValidOperatingDate(value: string) {
+export function isValidOperatingDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
 
   const parsed = Date.parse(`${value}T00:00:00.000Z`);
@@ -863,7 +863,7 @@ function isValidOperatingDate(value: string) {
   );
 }
 
-function addDaysToOperatingDate(operatingDate: string, days: number) {
+export function addDaysToOperatingDate(operatingDate: string, days: number) {
   return new Date(
     Date.parse(`${operatingDate}T00:00:00.000Z`) + days * 24 * 60 * 60_000,
   )
@@ -1423,7 +1423,7 @@ function summarizeHistoricEodAutoCloseBatch(
   };
 }
 
-function operatingDateForPolicy(args: {
+export function operatingDateForPolicy(args: {
   now: number;
   operatingTimezoneOffsetMinutes?: number;
 }) {

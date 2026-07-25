@@ -42,6 +42,18 @@ crons.interval(
   {},
 );
 
+// Unwedges POS terminals parked behind a burned upload sequence. The policy
+// itself only escalates after the gap has aged well past this interval, so a
+// frequent sweep costs little and shortens the stuck window to minutes rather
+// than however long it takes someone to read a health alert.
+crons.interval(
+  "reconcile-pos-local-sync-gaps",
+  { minutes: process.env.STAGE == "prod" ? 15 : 1440 },
+  internal.pos.application.sync.reconcileSequenceGaps
+    .reconcilePosLocalSyncSequenceGaps,
+  {},
+);
+
 crons.interval(
   "release-pos-session-items",
   { minutes: process.env.STAGE == "prod" ? 10 : 1440 },
@@ -75,6 +87,27 @@ if (process.env.STAGE == "prod") {
     "daily-operations-automation",
     "0 */2 * * *",
     internal.operations.dailyOperationsAutomation.runConfiguredDailyOperationsAutomation,
+    {},
+  );
+}
+
+// Safety net for store days that missed their eligibility window entirely. The
+// window above is only ~4 hours wide, so a blocker that outlives it strands the
+// day permanently; this sweep keeps revisiting owed days until they close or
+// are escalated. Runs at half past the hour so it observes the state the
+// primary automation just left behind rather than racing it.
+if (process.env.STAGE == "prod") {
+  crons.hourly(
+    "owed-daily-close-sweep",
+    { minuteUTC: 30 },
+    internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
+    {},
+  );
+} else {
+  crons.cron(
+    "owed-daily-close-sweep",
+    "30 */2 * * *",
+    internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
     {},
   );
 }

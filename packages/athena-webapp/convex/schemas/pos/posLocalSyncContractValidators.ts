@@ -171,6 +171,7 @@ const posLocalSyncPayloadValidators = {
   sale_cleared: v.object({
     localPosSessionId: v.string(),
     reason: v.optional(v.string()),
+    supersededByLocalTransactionId: v.optional(v.string()),
   }),
   expense_recorded: v.object({
     localExpenseSessionId: v.string(),

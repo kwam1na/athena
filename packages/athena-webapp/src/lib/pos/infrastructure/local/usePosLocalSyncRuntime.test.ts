@@ -386,6 +386,16 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           terminalId: "terminal-cloud-1",
           syncSecretHash: "sync-secret-1",
           events: [
+            // The pending clear uploads ahead of its superseding sale instead
+            // of being dropped — dropping it would burn upload sequence 4 and
+            // wedge the sale behind the server's ordering cursor forever.
+            expect.objectContaining({
+              eventType: "sale_cleared",
+              localEventId: "event-clear",
+              payload: expect.objectContaining({
+                supersededByLocalTransactionId: "local-txn-1",
+              }),
+            }),
             expect.objectContaining({
               eventType: "sale_completed",
               localEventId: "event-checkout",

@@ -227,6 +227,74 @@ describe("usePrint Hook", () => {
   });
 
   describe("Error Handling", () => {
+    it("does not print into a window that is already closed", () => {
+      // Chrome answers a print() on a discarded browsing context with
+      // "Failed to execute 'print' on 'Window': The provided callback is no
+      // longer runnable", which is what surfaced as unhandled rejections on the
+      // production terminal during rapid sales.
+      const { result } = renderHook(() => usePrint());
+
+      act(() => {
+        result.current.printReceipt("<div>Test</div>");
+      });
+
+      mockPrintWindow.closed = true;
+
+      act(() => {
+        mockPrintWindow.onload?.();
+      });
+
+      expect(mockPrintWindow.print).not.toHaveBeenCalled();
+    });
+
+    it("prints once when the load handler and the slow-load fallback both fire", () => {
+      // The fallback used to re-invoke onload directly, so a slow document
+      // could print twice — the second landing on a window already scheduled
+      // for teardown.
+      vi.useFakeTimers();
+      const { result } = renderHook(() => usePrint());
+      mockPrintWindow.document.readyState = "loading";
+
+      act(() => {
+        result.current.printReceipt("<div>Test</div>");
+      });
+      act(() => {
+        mockPrintWindow.onload?.();
+      });
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      vi.useRealTimers();
+
+      expect(mockPrintWindow.print).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not print after the window has begun closing", () => {
+      vi.useFakeTimers();
+      const { result } = renderHook(() => usePrint());
+      mockPrintWindow.document.readyState = "loading";
+
+      act(() => {
+        result.current.printReceipt("<div>Test</div>");
+      });
+      // Load, print, and let the teardown timer run.
+      act(() => {
+        mockPrintWindow.onload?.();
+      });
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      mockPrintWindow.print.mockClear();
+
+      // The slow-load fallback fires afterwards and must stay quiet.
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      vi.useRealTimers();
+
+      expect(mockPrintWindow.print).not.toHaveBeenCalled();
+    });
+
     it("should handle blocked popup window", () => {
       const consoleError = vi
         .spyOn(console, "error")

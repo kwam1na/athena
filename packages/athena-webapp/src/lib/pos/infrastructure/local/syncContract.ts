@@ -213,7 +213,21 @@ function toUploadEvent(
     const payload = asRecord(event.payload);
     const localPosSessionId =
       event.localPosSessionId ?? stringOrEmpty(payload.localPosSessionId);
-    if (hasLaterCompletedSale(event, orderedEvents, localPosSessionId)) {
+    // A never-uploaded clear whose session later completed a sale must STILL
+    // upload — its upload sequence is already allocated, and dropping it here
+    // leaves an unfillable hole that wedges every later event behind the
+    // server's ordering cursor. Annotate it so the server accepts the sequence
+    // without voiding the session the superseding sale needs.
+    const supersedingSale = findLaterCompletedSale(
+      event,
+      orderedEvents,
+      localPosSessionId,
+    );
+    if (supersedingSale && event.sync.uploaded) {
+      // Already uploaded once (typically parked in review by the pre-annotation
+      // server): its sequence is consumed server-side, so skipping the retry
+      // creates no gap — and re-uploading with an annotated payload would fail
+      // the immutable retry match. The locally-settled sweep clears it.
       return null;
     }
 
@@ -227,6 +241,14 @@ function toUploadEvent(
       payload: {
         localPosSessionId,
         reason: nullableStringToOptional(payload.reason),
+        ...(supersedingSale
+          ? {
+              supersededByLocalTransactionId:
+                stringOrEmpty(
+                  asRecord(supersedingSale.payload).localTransactionId,
+                ) || supersedingSale.localEventId,
+            }
+          : {}),
       },
     };
   }
@@ -314,12 +336,14 @@ function syncEventTypeForLocalEvent<EventType extends PosLocalSyncEventType>(
   return expectedEventType;
 }
 
-function hasLaterCompletedSale(
+function findLaterCompletedSale(
   event: PosLocalEventRecord,
   orderedEvents: PosLocalEventRecord[],
   localPosSessionId: string,
-) {
-  return orderedEvents.some(
+): PosLocalEventRecord | undefined {
+  if (!localPosSessionId) return undefined;
+
+  return orderedEvents.find(
     (candidate) =>
       candidate.sequence > event.sequence &&
       candidate.type === "transaction.completed" &&

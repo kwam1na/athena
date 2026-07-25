@@ -688,7 +688,15 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
               await transaction.getAllKeys("authority")
             ).filter((key) => !key.startsWith(TERMINAL_INTEGRITY_PREFIX));
 
+            // Deleting an event that still owns an unsynced upload sequence
+            // burns that number permanently: the cloud cursor waits on a
+            // predecessor no local ledger can ever produce, and every later
+            // event stays held behind it. Retain those and let them drain
+            // normally — the cutover only needs to clear settled state.
             for (const event of registerOperationalEvents) {
+              if (holdsUnsyncedUploadSequence(event)) {
+                continue;
+              }
               await transaction.delete("events", String(event.sequence));
             }
             for (const mapping of registerSessionMappings) {
@@ -2918,6 +2926,21 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       }
     },
   };
+}
+
+/**
+ * Whether this event still owns an upload sequence the cloud has not accepted.
+ * Removing such an event leaves an unfillable hole in the cursor's sequence
+ * numbering, which wedges every later event behind it indefinitely.
+ */
+export function holdsUnsyncedUploadSequence(
+  event: Pick<PosLocalEventRecord, "uploadSequence" | "sync">,
+): boolean {
+  if (event.uploadSequence === undefined) {
+    return false;
+  }
+
+  return event.sync.status !== "synced";
 }
 
 function omitStaffProofToken(event: PosLocalEventRecord) {

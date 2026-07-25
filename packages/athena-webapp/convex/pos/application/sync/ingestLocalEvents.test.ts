@@ -13,6 +13,7 @@ import {
 } from "./ingestLocalEvents";
 import { createConvexLocalSyncRepository } from "../../infrastructure/repositories/localSyncRepository";
 import type { Id } from "../../../_generated/dataModel";
+import type { SequenceGapState } from "./sequenceGapPolicy";
 import { hashPosLocalStaffProofToken } from "./staffProof";
 import type {
   LocalSyncConflictRecord,
@@ -1563,6 +1564,84 @@ describe("createLocalSyncIngestionService", () => {
     expect(
       repository.events.find((event) => event.sequence === 2)?.status,
     ).toBe("projected");
+  });
+
+  it("heals a wedge behind a superseded sale clear in one batch", async () => {
+    // End-to-end replay of the M Supplies wedge: the clear at sequence 2 was
+    // historically dropped from uploads, so sequence 3 sat held forever. With
+    // the superseded annotation the clear now uploads, consumes its sequence
+    // without voiding anything, and the held successor projects in the same
+    // batch.
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    await service.ingestBatch(
+      buildBatch({ events: [buildSaleCompletedEvent({ sequence: 1 })] }),
+    );
+    const wedged = await service.ingestBatch(
+      buildBatch({ events: [buildSaleCompletedEvent({ sequence: 3 })] }),
+    );
+    expect(wedged.kind).toBe("ok");
+    if (wedged.kind !== "ok") throw new Error("Expected ok result");
+    expect(wedged.data.held).toEqual([
+      expect.objectContaining({ sequence: 3, code: "out_of_order" }),
+    ]);
+    expect(
+      await repository.getSequenceGap({
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        cursor: {
+          syncScope: "pos",
+          localSyncCursorId: "local-register-1",
+          localRegisterSessionId: "local-register-1",
+        },
+      }),
+    ).toMatchObject({ missingFromSequence: 2 });
+
+    const healed = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildSaleClearedEvent({
+            sequence: 2,
+            payload: {
+              localPosSessionId: "local-session-3",
+              reason: "Sale cleared",
+              supersededByLocalTransactionId: "local-txn-3",
+            },
+          }),
+          buildSaleCompletedEvent({ sequence: 3 }),
+        ],
+      }),
+    );
+
+    expect(healed.kind).toBe("ok");
+    if (healed.kind !== "ok") throw new Error("Expected ok result");
+    expect(healed.data.held).toEqual([]);
+    expect(healed.data.accepted).toEqual([
+      expect.objectContaining({ sequence: 2, status: "projected" }),
+      expect.objectContaining({ sequence: 3, status: "projected" }),
+    ]);
+    expect(healed.data.syncCursor).toMatchObject({
+      acceptedThroughSequence: 3,
+    });
+    // The tracked gap is gone and the superseded clear raised no conflicts
+    // (its no-void behavior is asserted at the projection layer).
+    expect(healed.data.conflicts).toEqual([]);
+    expect(
+      await repository.getSequenceGap({
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        cursor: {
+          syncScope: "pos",
+          localSyncCursorId: "local-register-1",
+          localRegisterSessionId: "local-register-1",
+        },
+      }),
+    ).toBeUndefined();
   });
 
   it("rejects a terminal/store mismatch before recording events", async () => {
@@ -3623,6 +3702,7 @@ describe("createLocalSyncIngestionService", () => {
       },
       acceptedThroughSequence: 42,
       updatedAt: 100,
+      gap: undefined,
     });
     await repository.updateAcceptedThroughSequence({
       storeId: "store-1" as never,
@@ -3634,6 +3714,7 @@ describe("createLocalSyncIngestionService", () => {
       },
       acceptedThroughSequence: 64,
       updatedAt: 200,
+      gap: undefined,
     });
     await repository.updateAcceptedThroughSequence({
       storeId: "store-1" as never,
@@ -3645,6 +3726,7 @@ describe("createLocalSyncIngestionService", () => {
       },
       acceptedThroughSequence: 7,
       updatedAt: 250,
+      gap: undefined,
     });
 
     await expect(
@@ -5186,6 +5268,7 @@ function createFakeSyncRepository(
     patch: unknown;
   }> = [];
   const acceptedThroughSequenceByCursor = new Map<string, number>();
+  const sequenceGapByCursor = new Map<string, SequenceGapState>();
   const terminal = overrides.terminal ?? {
     _id: "terminal-1",
     storeId: "store-1",
@@ -5431,7 +5514,18 @@ function createFakeSyncRepository(
         ) ?? 0
       );
     },
+    async getSequenceGap(args) {
+      return sequenceGapByCursor.get(
+        `${args.cursor.syncScope}:${args.cursor.localSyncCursorId}`,
+      );
+    },
     async updateAcceptedThroughSequence(args) {
+      const gapKey = `${args.cursor.syncScope}:${args.cursor.localSyncCursorId}`;
+      if (args.gap) {
+        sequenceGapByCursor.set(gapKey, args.gap);
+      } else {
+        sequenceGapByCursor.delete(gapKey);
+      }
       acceptedThroughSequenceByCursor.set(
         `${args.cursor.syncScope}:${args.cursor.localSyncCursorId}`,
         args.acceptedThroughSequence,

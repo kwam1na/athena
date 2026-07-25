@@ -253,6 +253,14 @@ export type PosLocalSyncRegisterClosedPayload = {
 export type PosLocalSyncSaleClearedPayload = {
   localPosSessionId: string;
   reason?: string;
+  /**
+   * Set when the terminal knows a later completed sale superseded this clear
+   * in the same POS session. The event still uploads — skipping it would burn
+   * its upload sequence and wedge every later event behind the gap — but the
+   * server must not void the session, or the superseding sale would land in
+   * review as "completing a cleared session".
+   */
+  supersededByLocalTransactionId?: string;
 };
 
 export type PosLocalSyncRegisterReopenedPayload = {

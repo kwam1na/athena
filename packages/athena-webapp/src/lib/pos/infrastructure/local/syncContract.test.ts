@@ -228,6 +228,91 @@ describe("syncContract", () => {
     expect(buildPosLocalSyncUploadEvents([event], [event])).toEqual([]);
   });
 
+  it("uploads a superseded sale clear instead of burning its sequence", () => {
+    // The M Supplies wedge: a pending cart.cleared whose session later
+    // completed a sale was silently dropped from every batch, leaving an
+    // unfillable hole at its upload sequence while later events uploaded and
+    // wedged behind the server's ordering cursor.
+    const events: PosLocalEventRecord[] = [
+      buildLocalEvent({
+        localEventId: "event-clear",
+        sequence: 17,
+        uploadSequence: 17,
+        type: "cart.cleared",
+        payload: {
+          localPosSessionId: "local-session-1",
+          reason: "Sale cleared",
+        },
+      }),
+      buildLocalEvent({
+        localEventId: "event-sale",
+        sequence: 18,
+        uploadSequence: 18,
+        type: "transaction.completed",
+        payload: {
+          localPosSessionId: "local-session-1",
+          localTransactionId: "local-txn-18",
+          receiptNumber: "LOCAL-1-000018",
+          subtotal: 0,
+          tax: 0,
+          total: 0,
+          payments: [],
+        },
+      }),
+    ];
+
+    const uploads = buildPosLocalSyncUploadEvents(events, events);
+
+    // Contiguous sequences — nothing dropped, nothing to wedge behind.
+    expect(uploads.map((upload) => upload.sequence)).toEqual([17, 18]);
+    expect(uploads[0]).toEqual(
+      expect.objectContaining({
+        localEventId: "event-clear",
+        eventType: "sale_cleared",
+        payload: expect.objectContaining({
+          supersededByLocalTransactionId: "local-txn-18",
+        }),
+      }),
+    );
+  });
+
+  it("does not mark a clear superseded by a sale in a different session", () => {
+    const events: PosLocalEventRecord[] = [
+      buildLocalEvent({
+        localEventId: "event-clear",
+        sequence: 1,
+        type: "cart.cleared",
+        payload: {
+          localPosSessionId: "local-session-1",
+          reason: "Sale cleared",
+        },
+      }),
+      buildLocalEvent({
+        localEventId: "event-sale",
+        localPosSessionId: "local-session-other",
+        sequence: 2,
+        uploadSequence: 2,
+        type: "transaction.completed",
+        payload: {
+          localPosSessionId: "local-session-other",
+          localTransactionId: "local-txn-2",
+          receiptNumber: "LOCAL-1-000002",
+          subtotal: 0,
+          tax: 0,
+          total: 0,
+          payments: [],
+        },
+      }),
+    ];
+
+    const uploads = buildPosLocalSyncUploadEvents(events, events);
+    expect(uploads).toHaveLength(2);
+    expect(
+      (uploads[0]?.payload as Record<string, unknown>)
+        .supersededByLocalTransactionId,
+    ).toBeUndefined();
+  });
+
   it("maps clear-only sales to syncable sale clear events", () => {
     const event = buildLocalEvent({
       localEventId: "event-clear",

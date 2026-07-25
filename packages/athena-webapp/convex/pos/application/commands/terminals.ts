@@ -333,6 +333,10 @@ export type TerminalRuntimeStatusInput = {
     backoffUntil?: number;
     heldEventCount?: number;
     heldWithoutProgress?: boolean;
+    heldBehindMissingUploadSequence?: number;
+    heldBlockerKind?: NonNullable<
+      Doc<"posTerminalRuntimeStatus">["sync"]["heldBlockerKind"]
+    >;
   };
   runtimeCounters?: Record<string, number>;
   staffAuthority: {
@@ -586,6 +590,14 @@ export async function submitTerminalRuntimeStatus(
         typeof args.status.sync.heldWithoutProgress === "boolean"
           ? args.status.sync.heldWithoutProgress
           : undefined,
+      // Gap-reconciliation evidence. Dropping these here would blind the
+      // cloud sweep: it could no longer tell "terminal still holds the
+      // awaited event" from "no answer", and the probe timeout would skip
+      // past live POS history.
+      heldBehindMissingUploadSequence: positiveInteger(
+        args.status.sync.heldBehindMissingUploadSequence,
+      ),
+      heldBlockerKind: cleanHeldBlockerKind(args.status.sync.heldBlockerKind),
     }),
     ...omitUndefined({
       runtimeCounters: cleanRuntimeCounters(args.status.runtimeCounters),
@@ -1252,6 +1264,21 @@ const appUpdateBlockerCodes = new Set<AppUpdateBlockerCode | undefined>([
 function positiveTimestamp(value: number | undefined) {
   return Number.isFinite(value) && value !== undefined && value > 0
     ? value
+    : undefined;
+}
+
+const HELD_BLOCKER_KINDS = [
+  "none",
+  "awaiting_local_upload",
+  "missing_locally",
+  "awaiting_review",
+] as const;
+
+function cleanHeldBlockerKind(
+  value: string | undefined,
+): (typeof HELD_BLOCKER_KINDS)[number] | undefined {
+  return HELD_BLOCKER_KINDS.includes(value as never)
+    ? (value as (typeof HELD_BLOCKER_KINDS)[number])
     : undefined;
 }
 

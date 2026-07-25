@@ -353,40 +353,54 @@ ${receiptPrintStyles}
 
       printWindow.document.close();
 
-      // Wait for content to load, then print
-      printWindow.onload = () => {
+      const closeAfterDelay = () => {
+        setTimeout(() => {
+          if (printWindow && !printWindow.closed && !isClosing) {
+            isClosing = true;
+            printWindow.close();
+          }
+        }, 500);
+      };
+
+      // The print window is torn down on a timer while the browser may still
+      // be settling the print dialog, so `print()` can land on a context that
+      // is already being discarded — Chrome answers that with "The provided
+      // callback is no longer runnable". Never touch a window that is closed or
+      // closing, and only ever print once: the load handler and the slow-load
+      // fallback below both route through here, and re-entering would both
+      // double-print and print into a tearing-down window.
+      let hasPrinted = false;
+      const runPrint = () => {
+        if (hasPrinted || isClosing) return;
+        hasPrinted = true;
+
         try {
+          if (!printWindow || printWindow.closed) {
+            return;
+          }
+
           setContinuousReceiptPageSize(printWindow);
           printWindow.print();
-
-          // Close the window after a brief delay to allow print dialog to process
-          setTimeout(() => {
-            if (printWindow && !printWindow.closed && !isClosing) {
-              isClosing = true;
-              printWindow.close();
-            }
-          }, 500);
+          closeAfterDelay();
         } catch (error) {
           console.error("Error during printing:", error);
-          setTimeout(() => {
-            if (printWindow && !printWindow.closed && !isClosing) {
-              isClosing = true;
-              printWindow.close();
-            }
-          }, 500);
+          closeAfterDelay();
         }
       };
 
-      // Fallback in case onload doesn't fire (but don't duplicate print call)
+      // Wait for content to load, then print
+      printWindow.onload = runPrint;
+
+      // Fallback in case onload never fires. Documents built with
+      // document.write can finish before the handler is attached, leaving no
+      // load event to wait on.
       setTimeout(() => {
         if (
           printWindow &&
           !printWindow.closed &&
           printWindow.document.readyState !== "complete"
         ) {
-          if (printWindow.onload) {
-            (printWindow.onload as () => void)();
-          }
+          runPrint();
         }
       }, 1000);
     } catch (error) {

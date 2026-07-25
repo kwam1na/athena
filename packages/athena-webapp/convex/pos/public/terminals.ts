@@ -730,7 +730,7 @@ const terminalRecoveryCommandReturnValidator = v.object({
   verificationStatus: posTerminalRecoveryVerificationStatusValidator,
   commandContext: posTerminalRecoveryCommandPayloadValidator,
   expectedEvidence: posTerminalRecoveryExpectedEvidenceValidator,
-  issuedByUserId: v.id("athenaUser"),
+  issuedByUserId: v.optional(v.id("athenaUser")),
   issuedAt: v.number(),
   expiresAt: v.number(),
   claimedAt: v.optional(v.number()),
@@ -852,6 +852,12 @@ function stripRuntimeStatusInput(
       backoffUntil: status.sync.backoffUntil,
       heldEventCount: status.sync.heldEventCount,
       heldWithoutProgress: status.sync.heldWithoutProgress,
+      // Gap-reconciliation evidence — must survive both this strip and the
+      // command-layer sanitizer, or the cloud sweep goes blind to "the
+      // terminal still holds the awaited event".
+      heldBehindMissingUploadSequence:
+        status.sync.heldBehindMissingUploadSequence,
+      heldBlockerKind: status.sync.heldBlockerKind,
     },
     runtimeCounters: status.runtimeCounters,
     staffAuthority: {

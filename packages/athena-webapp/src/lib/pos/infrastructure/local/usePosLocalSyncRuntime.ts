@@ -55,6 +55,10 @@ import {
   type PosRegisterSessionLocalActivitySummary,
 } from "../../../../../shared/posRegisterSessionActivityContract";
 import {
+  diagnoseHeldSyncBlocker,
+  type HeldSyncBlocker,
+} from "./syncGapDiagnosis";
+import {
   createPosLocalSyncScheduler,
   type PosLocalSyncTrigger,
 } from "./syncScheduler";
@@ -186,6 +190,10 @@ export type PosLocalRuntimeSyncDebug = {
   lastHeldEventCount?: number;
   lastReviewEventCount?: number;
   heldWithoutProgress?: boolean;
+  /** What the held batch is actually blocked on, per `diagnoseHeldSyncBlocker`. */
+  heldBlockerKind?: HeldSyncBlocker["kind"];
+  /** Set only when the awaited predecessor is gone from the local ledger. */
+  heldBehindMissingUploadSequence?: number;
   lastTrigger?: PosLocalSyncTrigger;
   lastTriggerAt?: number;
   lastTriggerPriority?: "high" | "normal";
@@ -302,6 +310,10 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const [storageHealth, setStorageHealth] =
     useState<PosLocalStorageHealth | null>(null);
   const lastEventAppendTokenRef = useRef(0);
+  // The blocker diagnosed by the most recent drain. Held in a ref because the
+  // scheduler's held-without-progress callback fires within the same drain,
+  // before a `setDebug` from that drain has been applied.
+  const lastHeldBlockerRef = useRef<HeldSyncBlocker>({ kind: "none" });
   const lastExpectedDemoEpochRef = useRef<number | undefined>(undefined);
   const lastManualRetryTokenRef = useRef(0);
   const { storeFactory, storeId, terminalId } = input;
@@ -696,11 +708,21 @@ export function usePosLocalSyncRuntimeStatus(input: {
                 if (shouldStop()) {
                   return;
                 }
+                const blocker = lastHeldBlockerRef.current;
                 setDebug((current) => ({
                   ...current,
                   heldWithoutProgress: true,
                 }));
                 if (consecutiveCount !== 1) {
+                  return;
+                }
+                // The review-inclusive drain only helps when the precursor is
+                // actually a withheld review event. When the awaited sequence
+                // is simply gone from the local ledger, this drain uploads
+                // nothing and the wedge would loop forever — so skip it and
+                // let the reported missing sequence drive cloud gap
+                // reconciliation instead.
+                if (blocker.kind === "missing_locally") {
                   return;
                 }
                 // Give a held successor of a stuck needs_review precursor a
@@ -892,6 +914,21 @@ export function usePosLocalSyncRuntimeStatus(input: {
             const rejectedEventIds = collectServerRejectedLocalEventIds(
               result.data.accepted,
             );
+            // Diagnose what the held batch is actually waiting on rather than
+            // assuming a stuck review precursor. A predecessor that is gone
+            // from the local ledger is reported to the cloud, which is the
+            // evidence gap reconciliation needs to step over the hole.
+            const heldBlocker = diagnoseHeldSyncBlocker({
+              acceptedThroughSequence:
+                result.data.syncCursor.acceptedThroughSequence,
+              heldEventCount: result.data.held.length,
+              localUploadSequences: collectCursorUploadSequences(
+                latestEvents.value.events,
+                eventsToUpload,
+              ),
+              reviewEventCount: reviewEventIds.length,
+            });
+            lastHeldBlockerRef.current = heldBlocker;
             setDebug((current) => ({
               ...current,
               lastHeldEventCount: result.data.held.length,
@@ -901,6 +938,11 @@ export function usePosLocalSyncRuntimeStatus(input: {
               ...(result.data.held.length === 0
                 ? { heldWithoutProgress: false }
                 : {}),
+              heldBlockerKind: heldBlocker.kind,
+              heldBehindMissingUploadSequence:
+                heldBlocker.kind === "missing_locally"
+                  ? heldBlocker.missingUploadSequence
+                  : undefined,
             }));
             const localReviewEventIds = collectReviewLocalEventIds(
               latestEvents.value.events,
@@ -1109,6 +1151,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
       failedEventCount: debug.failedEventCount,
       heldEventCount: debug.lastHeldEventCount,
       heldWithoutProgress: debug.heldWithoutProgress,
+      heldBehindMissingUploadSequence: debug.heldBehindMissingUploadSequence,
+      heldBlockerKind: debug.heldBlockerKind,
       lastFailure: debug.lastFailure,
       lastTrigger: debug.lastTrigger,
       localOnlyEventCount: debug.localOnlyEventCount,
@@ -1121,6 +1165,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
     }),
     [
       debug.failedEventCount,
+      debug.heldBehindMissingUploadSequence,
+      debug.heldBlockerKind,
       debug.heldWithoutProgress,
       debug.lastFailure,
       debug.lastHeldEventCount,
@@ -3222,6 +3268,37 @@ export function collectSyncedLocalEventIds(
     events,
     acceptedUploadEventIds,
   );
+}
+
+/**
+ * Upload sequences the local ledger still holds for the same sync cursor as
+ * the batch just uploaded. Scoping to that one cursor matters: sequences are
+ * allocated per cursor, so a sibling session's numbering would otherwise make
+ * a genuinely burned sequence look present.
+ */
+function collectCursorUploadSequences(
+  events: PosLocalEventRecord[],
+  batchEvents: PosLocalEventRecord[],
+): number[] {
+  const cursorKeys = new Set(batchEvents.map(getLocalEventCursorKey));
+
+  return events
+    .filter(
+      (event) =>
+        cursorKeys.has(getLocalEventCursorKey(event)) &&
+        event.uploadSequence !== undefined,
+    )
+    .map((event) => event.uploadSequence as number);
+}
+
+function getLocalEventCursorKey(event: PosLocalEventRecord): string {
+  const scope = event.localExpenseSessionId ? "expense" : "pos";
+  const cursorId =
+    scope === "expense"
+      ? (event.localExpenseSessionId ?? "")
+      : (event.localRegisterSessionId ?? "");
+
+  return `${scope}:${cursorId}`;
 }
 
 function collectReviewLocalEventIds(

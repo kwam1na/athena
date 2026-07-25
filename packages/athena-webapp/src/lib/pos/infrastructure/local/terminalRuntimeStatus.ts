@@ -92,6 +92,18 @@ export type PosTerminalRuntimeSyncDebugInput = {
   failedEventCount?: number;
   heldEventCount?: number;
   heldWithoutProgress?: boolean;
+  /**
+   * The upload sequence cloud sync is waiting on when the local ledger no
+   * longer contains it. Reporting it lets cloud gap reconciliation resolve the
+   * wedge on evidence instead of on a timeout.
+   */
+  heldBehindMissingUploadSequence?: number;
+  /** The terminal's own classification of what the held batch is waiting on. */
+  heldBlockerKind?:
+    | "none"
+    | "awaiting_local_upload"
+    | "missing_locally"
+    | "awaiting_review";
   lastFailure?: string | null;
   lastTrigger?: PosLocalSyncTrigger;
   localOnlyEventCount?: number;
@@ -494,6 +506,15 @@ export function buildPosTerminalRuntimeStatus(
         : {}),
       ...(input.syncDebug?.heldWithoutProgress !== undefined
         ? { heldWithoutProgress: input.syncDebug.heldWithoutProgress }
+        : {}),
+      ...(input.syncDebug?.heldBehindMissingUploadSequence !== undefined
+        ? {
+            heldBehindMissingUploadSequence:
+              input.syncDebug.heldBehindMissingUploadSequence,
+          }
+        : {}),
+      ...(input.syncDebug?.heldBlockerKind !== undefined
+        ? { heldBlockerKind: input.syncDebug.heldBlockerKind }
         : {}),
     },
     ...(input.runtimeCounters && Object.keys(input.runtimeCounters).length > 0

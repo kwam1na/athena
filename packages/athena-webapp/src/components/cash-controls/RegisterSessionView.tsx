@@ -2470,6 +2470,10 @@ function getRegisterSyncReviewItemSummary(item: PosReconciliationItem) {
     return "Service customer attribution is missing. Reject this item, then recreate the service work with a customer if needed.";
   }
 
+  if (item.reviewKind === "sequence_gap_skipped") {
+    return "Sync was reconciled past register activity this terminal could no longer provide. Check the drawer against recorded sales for the skipped sequences, then reject this item to clear it.";
+  }
+
   if (
     item.reviewKind === "staff_access" ||
     item.summary?.trim() === STAFF_ACCESS_SYNC_REVIEW_SUMMARY
