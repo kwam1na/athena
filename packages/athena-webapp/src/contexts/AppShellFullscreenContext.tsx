@@ -38,6 +38,14 @@ export function useAppShellFullscreenMode() {
     setFullscreenOverrideRef.current?.(null);
 
     const handleToggleFullscreen = (event: KeyboardEvent) => {
+      // `key` is not guaranteed to be a string. Synthetic keydown events — the
+      // ones barcode scanners and some IMEs dispatch — routinely omit it, and
+      // this listener is attached at the document level on every POS screen, so
+      // an unguarded `.toLowerCase()` throws on ordinary scanning.
+      if (typeof event.key !== "string") {
+        return;
+      }
+
       if (
         event.key.toLowerCase() !== "f" ||
         event.metaKey ||

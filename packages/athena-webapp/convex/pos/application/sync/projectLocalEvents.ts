@@ -2131,6 +2131,15 @@ async function projectSaleCleared(
   repository: SyncProjectionRepository,
   args: SaleClearedArgs,
 ): Promise<ProjectionResult> {
+  // A clear the terminal already knows was superseded by a later completed
+  // sale in the same session carries no financial effect: it exists in the
+  // upload only to keep the sequence contiguous. Accept it without voiding
+  // anything — voiding here would push the superseding sale into review as
+  // "completing a cleared session".
+  if (args.event.payload.supersededByLocalTransactionId) {
+    return { status: "projected", mappings: [], conflicts: [] };
+  }
+
   const registerSession = await repository.getRegisterSessionByLocalId({
     storeId: args.storeId,
     terminalId: args.terminalId,

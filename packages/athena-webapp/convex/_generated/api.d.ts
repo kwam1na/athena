@@ -216,6 +216,7 @@ import type * as operations_openWorkInventoryReviews from "../operations/openWor
 import type * as operations_operationalEvents from "../operations/operationalEvents.js";
 import type * as operations_operationalWorkItems from "../operations/operationalWorkItems.js";
 import type * as operations_oversizedOperationalWorkRepair from "../operations/oversizedOperationalWorkRepair.js";
+import type * as operations_owedDailyCloseSweep from "../operations/owedDailyCloseSweep.js";
 import type * as operations_paymentAllocations from "../operations/paymentAllocations.js";
 import type * as operations_paymentTotals from "../operations/paymentTotals.js";
 import type * as operations_posTerminalHealthAlertEmail from "../operations/posTerminalHealthAlertEmail.js";
@@ -267,11 +268,13 @@ import type * as pos_application_sync_ingestLocalEvents from "../pos/application
 import type * as pos_application_sync_posRegisterSessionActivity from "../pos/application/sync/posRegisterSessionActivity.js";
 import type * as pos_application_sync_projectLocalEvents from "../pos/application/sync/projectLocalEvents.js";
 import type * as pos_application_sync_projectionPolicies from "../pos/application/sync/projectionPolicies.js";
+import type * as pos_application_sync_reconcileSequenceGaps from "../pos/application/sync/reconcileSequenceGaps.js";
 import type * as pos_application_sync_registerCatalogRevision from "../pos/application/sync/registerCatalogRevision.js";
 import type * as pos_application_sync_registerMappingAuthorityRevision from "../pos/application/sync/registerMappingAuthorityRevision.js";
 import type * as pos_application_sync_registerSessionCloseoutHolds from "../pos/application/sync/registerSessionCloseoutHolds.js";
 import type * as pos_application_sync_registerSessionSyncReview from "../pos/application/sync/registerSessionSyncReview.js";
 import type * as pos_application_sync_resolveLocalSyncReview from "../pos/application/sync/resolveLocalSyncReview.js";
+import type * as pos_application_sync_sequenceGapPolicy from "../pos/application/sync/sequenceGapPolicy.js";
 import type * as pos_application_sync_staffProof from "../pos/application/sync/staffProof.js";
 import type * as pos_application_sync_staffProofValidation from "../pos/application/sync/staffProofValidation.js";
 import type * as pos_application_sync_terminalSyncSecret from "../pos/application/sync/terminalSyncSecret.js";
@@ -815,6 +818,7 @@ declare const fullApi: ApiFromModules<{
   "operations/operationalEvents": typeof operations_operationalEvents;
   "operations/operationalWorkItems": typeof operations_operationalWorkItems;
   "operations/oversizedOperationalWorkRepair": typeof operations_oversizedOperationalWorkRepair;
+  "operations/owedDailyCloseSweep": typeof operations_owedDailyCloseSweep;
   "operations/paymentAllocations": typeof operations_paymentAllocations;
   "operations/paymentTotals": typeof operations_paymentTotals;
   "operations/posTerminalHealthAlertEmail": typeof operations_posTerminalHealthAlertEmail;
@@ -866,11 +870,13 @@ declare const fullApi: ApiFromModules<{
   "pos/application/sync/posRegisterSessionActivity": typeof pos_application_sync_posRegisterSessionActivity;
   "pos/application/sync/projectLocalEvents": typeof pos_application_sync_projectLocalEvents;
   "pos/application/sync/projectionPolicies": typeof pos_application_sync_projectionPolicies;
+  "pos/application/sync/reconcileSequenceGaps": typeof pos_application_sync_reconcileSequenceGaps;
   "pos/application/sync/registerCatalogRevision": typeof pos_application_sync_registerCatalogRevision;
   "pos/application/sync/registerMappingAuthorityRevision": typeof pos_application_sync_registerMappingAuthorityRevision;
   "pos/application/sync/registerSessionCloseoutHolds": typeof pos_application_sync_registerSessionCloseoutHolds;
   "pos/application/sync/registerSessionSyncReview": typeof pos_application_sync_registerSessionSyncReview;
   "pos/application/sync/resolveLocalSyncReview": typeof pos_application_sync_resolveLocalSyncReview;
+  "pos/application/sync/sequenceGapPolicy": typeof pos_application_sync_sequenceGapPolicy;
   "pos/application/sync/staffProof": typeof pos_application_sync_staffProof;
   "pos/application/sync/staffProofValidation": typeof pos_application_sync_staffProofValidation;
   "pos/application/sync/terminalSyncSecret": typeof pos_application_sync_terminalSyncSecret;

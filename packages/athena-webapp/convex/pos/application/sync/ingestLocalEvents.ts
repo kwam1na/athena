@@ -6,6 +6,7 @@ import { createConvexLocalSyncRepository } from "../../infrastructure/repositori
 import { resolveReportingCalendarReferenceWithCtx } from "../../../reporting/operatingPeriods";
 import { projectLocalSyncEvent } from "./projectLocalEvents";
 import { patchRegisterSessionActivityFromLocalSyncWithCtx } from "./posRegisterSessionActivity";
+import { recordSequenceGapObservation } from "./sequenceGapPolicy";
 import { hashPosLocalStaffProofToken } from "./staffProof";
 import type {
   LocalSyncConflictRecord,
@@ -638,12 +639,33 @@ export function createLocalSyncIngestionService(
       }
 
       if (cursorIdentity !== null) {
+        // A held successor with nothing accepted at `acceptedThroughSequence +
+        // 1` means this batch is parked behind an upload-sequence hole. Record
+        // the observation durably so gap reconciliation can escalate it if it
+        // never closes; clear it the moment the cursor moves past.
+        const blockedBehindGap = held.some(
+          (outcome) => outcome.sequence > acceptedThroughSequence + 1,
+        );
+        const existingGap = await dependencies.repository.getSequenceGap({
+          storeId: batch.storeId,
+          terminalId: batch.terminalId,
+          cursor: cursorIdentity,
+        });
+        const gap = blockedBehindGap
+          ? recordSequenceGapObservation({
+              existing: existingGap,
+              missingFromSequence: acceptedThroughSequence + 1,
+              now: dependencies.now(),
+            })
+          : undefined;
+
         await dependencies.repository.updateAcceptedThroughSequence({
           storeId: batch.storeId,
           terminalId: batch.terminalId,
           cursor: cursorIdentity,
           acceptedThroughSequence,
           updatedAt: dependencies.now(),
+          gap,
         });
       }
 
@@ -915,6 +937,9 @@ function parseLocalSyncEvent(
         payload: {
           localPosSessionId: event.payload.localPosSessionId as string,
           reason: optionalString(event.payload.reason),
+          supersededByLocalTransactionId: optionalString(
+            event.payload.supersededByLocalTransactionId,
+          ),
         },
       },
     };
@@ -1512,6 +1537,10 @@ function validateSaleClearedPayload(payload: Record<string, unknown>) {
 
   if (!isOptionalNonEmptyString(payload.reason)) {
     return "POS sale clear reason is invalid.";
+  }
+
+  if (!isOptionalNonEmptyString(payload.supersededByLocalTransactionId)) {
+    return "POS sale clear superseding transaction reference is invalid.";
   }
 
   return null;

@@ -4709,6 +4709,47 @@ describe("projectLocalSyncEvent", () => {
     expect(repository.recordedSaleInventoryMovements).toEqual([]);
   });
 
+  it("accepts a superseded sale clear without voiding the session", async () => {
+    // The clear uploads only to keep the sequence contiguous: its session
+    // completed a later sale, so voiding here would push that sale into
+    // review as "completing a cleared session".
+    const repository = createProjectionRepository({
+      existingPosSession: {
+        _id: "session-1",
+        registerSessionId: "register-session-1",
+        staffProfileId: "staff-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-clear-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 17,
+        eventType: "sale_cleared",
+        occurredAt: 20,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          localPosSessionId: "session-1",
+          reason: "Sale cleared",
+          supersededByLocalTransactionId: "local-txn-18",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.posSessionPatches).toEqual([]);
+    expect(repository.releasedHoldRequests).toEqual([]);
+  });
+
   it("projects clear-only cloud-backed local sales into voided POS sessions", async () => {
     const repository = createProjectionRepository({
       existingPosSession: {

@@ -315,6 +315,10 @@ export function createConvexLocalSyncRepository(
       const cursor = await findLocalSyncCursor(args);
       return cursor?.acceptedThroughSequence ?? 0;
     },
+    async getSequenceGap(args) {
+      const cursor = await findLocalSyncCursor(args);
+      return cursor?.gap;
+    },
     async updateAcceptedThroughSequence(args) {
       const existing = await findLocalSyncCursor(args);
       if (existing) {
@@ -330,6 +334,9 @@ export function createConvexLocalSyncRepository(
             localExpenseSessionId: args.cursor.localExpenseSessionId,
             acceptedThroughSequence: args.acceptedThroughSequence,
             updatedAt: args.updatedAt,
+            // Explicit undefined clears a resolved gap rather than leaving
+            // stale escalation state behind on the cursor.
+            gap: args.gap,
           },
         );
         return;
@@ -345,6 +352,7 @@ export function createConvexLocalSyncRepository(
         localExpenseSessionId: args.cursor.localExpenseSessionId,
         acceptedThroughSequence: args.acceptedThroughSequence,
         updatedAt: args.updatedAt,
+        ...(args.gap ? { gap: args.gap } : {}),
       });
     },
     normalizeCloudId(tableName, value) {

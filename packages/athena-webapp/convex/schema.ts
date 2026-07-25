@@ -1028,7 +1028,11 @@ const schema = defineSchema({
       "terminalId",
       "localRegisterSessionId",
     ])
-    .index("by_store_terminal", ["storeId", "terminalId"]),
+    .index("by_store_terminal", ["storeId", "terminalId"])
+    // Gap reconciliation sweeps only cursors that are actually stuck. Cursors
+    // without a gap have `undefined` here, which sorts below every timestamp,
+    // so a lower-bounded range scan skips the healthy majority entirely.
+    .index("by_gap_first_observed", ["gap.firstObservedAt"]),
   posLocalSyncMapping: defineTable(posLocalSyncMappingSchema)
     .index("by_store_terminal_local", [
       "storeId",

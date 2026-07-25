@@ -68,7 +68,8 @@ export async function issueTerminalRecoveryCommand(
     commandType: TerminalRecoveryCommandType;
     expectedEvidence: TerminalRecoveryExpectedEvidence;
     issuedAt: number;
-    issuedByUserId: Id<"athenaUser">;
+    /** Omitted for cloud-issued commands such as gap reconciliation probes. */
+    issuedByUserId?: Id<"athenaUser">;
     commandContext: TerminalRecoveryCommandPayload;
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
@@ -140,7 +141,7 @@ export async function issueTerminalRecoveryCommand(
     verificationStatus: "waiting_for_acknowledgement" as const,
     commandContext,
     expectedEvidence,
-    issuedByUserId: args.issuedByUserId,
+    ...(args.issuedByUserId ? { issuedByUserId: args.issuedByUserId } : {}),
     issuedAt: args.issuedAt,
     expiresAt: args.issuedAt + COMMAND_TTL_MS,
   };

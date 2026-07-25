@@ -20,6 +20,7 @@ import type { RegisterSessionCloseoutHold } from "./registerSessionCloseoutHolds
 import type { ReportingIngressArgs } from "../../../reporting/ingress";
 import type { CommerceInventoryEffectArgs } from "../../../reporting/inventory/commerceEffects";
 import type { CommandResult } from "../../../../shared/commandResult";
+import type { SequenceGapState } from "./sequenceGapPolicy";
 
 export type { PosLocalSyncEventStatus, PosLocalSyncEventType };
 
@@ -28,7 +29,8 @@ export type PosLocalSyncConflictType =
   | "inventory"
   | "payment"
   | "permission"
-  | "server_rejected";
+  | "server_rejected"
+  | "sequence_gap_skipped";
 
 export type PosLocalSyncMappingKind =
   | "registerSession"
@@ -251,6 +253,7 @@ export type LocalSyncCursorRecord = {
   localExpenseSessionId?: string;
   acceptedThroughSequence: number;
   updatedAt: number;
+  gap?: SequenceGapState;
 };
 
 export type LocalSyncCursorIdentity = {
@@ -803,12 +806,22 @@ export type LocalSyncIngestionRepository = {
     terminalId: Id<"posTerminal">;
     cursor: LocalSyncCursorIdentity;
   }): Promise<number>;
+  getSequenceGap(args: {
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+    cursor: LocalSyncCursorIdentity;
+  }): Promise<SequenceGapState | undefined>;
   updateAcceptedThroughSequence(args: {
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
     cursor: LocalSyncCursorIdentity;
     acceptedThroughSequence: number;
     updatedAt: number;
+    /**
+     * Gap state to persist alongside the cursor. `undefined` clears any tracked
+     * gap, which is the normal outcome once a held sequence finally lands.
+     */
+    gap: SequenceGapState | undefined;
   }): Promise<void>;
   hasActivePosRole(args: {
     staffProfileId: Id<"staffProfile">;

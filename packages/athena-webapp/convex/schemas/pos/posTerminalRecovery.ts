@@ -38,6 +38,9 @@ export const posTerminalRecoveryCommandPayloadValidator = v.object({
   localReviewClearLimit: v.optional(v.number()),
   localReviewEventIds: v.optional(v.array(v.string())),
   localRegisterSessionId: v.optional(v.string()),
+  // Set on a gap-reconciliation probe: the upload sequence the cloud cursor is
+  // stuck waiting on, so the terminal can answer whether it still holds it.
+  missingUploadSequence: v.optional(v.number()),
   reason: v.optional(v.string()),
 });
 
@@ -148,7 +151,9 @@ export const posTerminalRecoveryCommandSchema = v.object({
   verificationStatus: posTerminalRecoveryVerificationStatusValidator,
   commandContext: posTerminalRecoveryCommandPayloadValidator,
   expectedEvidence: posTerminalRecoveryExpectedEvidenceValidator,
-  issuedByUserId: v.id("athenaUser"),
+  // Absent for commands the cloud issues on its own (gap reconciliation
+  // probes). A present id always means a human pressed the button.
+  issuedByUserId: v.optional(v.id("athenaUser")),
   issuedAt: v.number(),
   expiresAt: v.number(),
   claimedAt: v.optional(v.number()),

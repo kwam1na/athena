@@ -22,6 +22,7 @@ export type PosReconciliationItem = {
     | "register_closeout_variance"
     | "register_not_open_sale"
     | "missing_register_session_mapping"
+    | "sequence_gap_skipped"
     | "server_rejected"
     | "service_customer_attribution"
     | "inventory_review"

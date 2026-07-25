@@ -39,6 +39,7 @@ export type RegisterSessionSyncReviewKind =
   | "register_closeout_variance"
   | "register_not_open_sale"
   | "missing_register_session_mapping"
+  | "sequence_gap_skipped"
   | "server_rejected"
   | "service_customer_attribution"
   | "inventory_review"
@@ -162,6 +163,18 @@ export function classifyRegisterSessionSyncReview(
       actionPolicy: "override_or_reject",
       conflictType: "server_rejected",
       reviewKind: "server_rejected",
+    };
+  }
+
+  // Informational audit of a reconciled upload-sequence gap. History has
+  // already moved past the hole, so there is nothing to apply — the manager is
+  // being told which sequences were stepped over so a missing sale can be
+  // investigated against the drawer.
+  if (conflict.conflictType === "sequence_gap_skipped") {
+    return {
+      actionPolicy: "reject_only",
+      conflictType: "sequence_gap_skipped",
+      reviewKind: "sequence_gap_skipped",
     };
   }
 

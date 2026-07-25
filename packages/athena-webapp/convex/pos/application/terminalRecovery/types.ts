@@ -47,6 +47,8 @@ export type TerminalRecoveryCommandPayload = {
   localReviewClearLimit?: number;
   localReviewEventIds?: string[];
   localRegisterSessionId?: string;
+  /** Gap-probe only: the upload sequence cloud sync is stuck waiting on. */
+  missingUploadSequence?: number;
   reason?: string;
 };
 
