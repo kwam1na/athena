@@ -91,7 +91,7 @@ export function getAthenaDocumentTitle(pathname: string) {
     return "Athena | Product overview";
   }
 
-  if (pathname === "/walkthrough") {
+  if (pathname === "/register-interest") {
     return "Register interest in Athena";
   }
 

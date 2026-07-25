@@ -150,11 +150,11 @@ type DailyOperationsAutomationOutcome =
 
 type DailyOperationsAutomationStatus = {
   bucket?:
-    | "failed"
-    | "action_taken"
-    | "needs_review"
-    | "policy_skipped"
-    | "scheduled_later";
+  | "failed"
+  | "action_taken"
+  | "needs_review"
+  | "policy_skipped"
+  | "scheduled_later";
   id: string;
   lane: "opening" | "close";
   occurredAt?: number | null;
@@ -210,17 +210,17 @@ type DailyOperationsCompletedCloseAttribution = {
 
 type DailyOperationsAutomationUpdate =
   | {
-      id: string;
-      occurredAt?: number | null;
-      status: DailyOperationsAutomationStatus;
-      type: "status";
-    }
+    id: string;
+    occurredAt?: number | null;
+    status: DailyOperationsAutomationStatus;
+    type: "status";
+  }
   | {
-      completedClose: DailyOperationsCompletedCloseAttribution;
-      id: string;
-      occurredAt?: number | null;
-      type: "completion";
-    };
+    completedClose: DailyOperationsCompletedCloseAttribution;
+    id: string;
+    occurredAt?: number | null;
+    type: "completion";
+  };
 
 export type DailyOperationsSnapshot = {
   automationStatuses?: DailyOperationsAutomationStatus[];
@@ -357,7 +357,7 @@ export type DailyOperationsSnapshot = {
 
 export type DailyOperationsViewContentProps = {
   cachedPriorWeekBoundaryMetric?:
-    DailyOperationsSnapshot["weekMetrics"][number] | null;
+  DailyOperationsSnapshot["weekMetrics"][number] | null;
   cachedWeekAnalyticsFetchedAt?: number;
   cachedWeekMetrics?: DailyOperationsSnapshot["weekMetrics"];
   cachedWeekStorePulse?: StorePulseSummary | null;
@@ -412,7 +412,7 @@ type CachedWeekAnalytics = {
   fetchedAt: number;
   metrics: DailyOperationsSnapshot["weekMetrics"];
   priorWeekBoundaryMetric?:
-    DailyOperationsSnapshot["weekMetrics"][number] | null;
+  DailyOperationsSnapshot["weekMetrics"][number] | null;
   storePulse?: StorePulseSummary | null;
 };
 
@@ -444,7 +444,7 @@ type DailyOperationsTimelinePreviewSnapshot =
 type DailyOperationsWeekAnalyticsSnapshot = {
   operatingDate: string;
   priorWeekBoundaryMetric?:
-    DailyOperationsSnapshot["weekMetrics"][number] | null;
+  DailyOperationsSnapshot["weekMetrics"][number] | null;
   weekEndOperatingDate: string;
   weekMetrics: DailyOperationsSnapshot["weekMetrics"];
 };
@@ -1095,11 +1095,11 @@ function compareSummaryPaymentTotals(
 function getPaymentTotalAmount(
   summary:
     | {
-        paymentTotals?: Array<{
-          amount: number;
-          method: string;
-        }>;
-      }
+      paymentTotals?: Array<{
+        amount: number;
+        method: string;
+      }>;
+    }
     | undefined,
   method: string,
 ) {
@@ -1439,7 +1439,7 @@ function OpenRegisterSessionsPanel({
         </p>
       </div>
       <div className="mt-layout-sm flex w-full max-w-md min-w-0 flex-col divide-y divide-border/70">
-        {sessions.map((session) => {
+        {sessions.slice(0, 2).map((session) => {
           const sessionLabel =
             session.registerSession?.displayLabel ??
             session.source.label ??
@@ -1470,6 +1470,16 @@ function OpenRegisterSessionsPanel({
             </article>
           );
         })}
+        {sessions.length > 2 && <div className="pt-2">
+          <Link to={'/$orgUrlSlug/store/$storeUrlSlug/cash-controls'}
+            params={buildParams(orgUrlSlug, storeUrlSlug)}
+            search={{ o: getOrigin() }}
+            className="inline-flex min-w-0 items-center gap-layout-xs rounded-sm text-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <span className="truncate">View all</span>
+            <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+          </Link>
+        </div>}
       </div>
     </section>
   );
@@ -1799,8 +1809,8 @@ function AutomationStatusPanel({
                     {getDailyOperationsCompletionAttributionDetail(
                       update.completedClose,
                       carryForwardCount ??
-                        update.completedClose.carryForwardCount ??
-                        0,
+                      update.completedClose.carryForwardCount ??
+                      0,
                     )}
                   </p>
                   {update.occurredAt ? (
@@ -2011,9 +2021,8 @@ function getScheduledRunMessage(run: DailyOperationsScheduledRunSummary) {
   const label = formatScheduledRunLabel(run.cronFamily);
 
   if (run.outcome === "partial_failure") {
-    return `${label} partially ran. ${run.succeededCount} applied, ${run.failedCount} ${
-      run.failedCount === 1 ? "needs" : "need"
-    } review.`;
+    return `${label} partially ran. ${run.succeededCount} applied, ${run.failedCount} ${run.failedCount === 1 ? "needs" : "need"
+      } review.`;
   }
 
   if (run.outcome === "no_candidates") {
@@ -2408,17 +2417,17 @@ function buildCachedStorePulseForOperatingDate({
   const combinedSummary =
     weekOperatorSnapshot && selectedDayOperatorSnapshot
       ? {
-          ...baseSummary,
-          operatorSnapshot: {
-            ...selectedDayOperatorSnapshot,
-            historyDays: weekOperatorSnapshot.historyDays,
-            trend: mergeSelectedStorePulseTrend(
-              weekOperatorSnapshot.trend,
-              selectedDayOperatorSnapshot.trend,
-            ),
-            usableHistoryDays: weekOperatorSnapshot.usableHistoryDays,
-          },
-        }
+        ...baseSummary,
+        operatorSnapshot: {
+          ...selectedDayOperatorSnapshot,
+          historyDays: weekOperatorSnapshot.historyDays,
+          trend: mergeSelectedStorePulseTrend(
+            weekOperatorSnapshot.trend,
+            selectedDayOperatorSnapshot.trend,
+          ),
+          usableHistoryDays: weekOperatorSnapshot.usableHistoryDays,
+        },
+      }
       : baseSummary;
 
   return selectStorePulseTrendThroughOperatingDate(
@@ -2582,12 +2591,12 @@ function DailyOperationsWeekMetricsPreview({
     metrics.length > 0
       ? metrics
       : WEEKDAY_PREVIEW_LABELS.map((_, index) => ({
-          isClosed: index < 3,
-          isReopened: false,
-          isSelected: false,
-          operatingDate: shiftLocalOperatingDate(previewWeekStart, index),
-          transactionCount: 0,
-        }));
+        isClosed: index < 3,
+        isReopened: false,
+        isSelected: false,
+        operatingDate: shiftLocalOperatingDate(previewWeekStart, index),
+        transactionCount: 0,
+      }));
   const weekEndOperatingDate = metrics.at(-1)?.operatingDate;
 
   return (
@@ -3380,7 +3389,7 @@ export function DailyOperationsViewContent({
 
   const timelinePreview =
     snapshot &&
-    timelinePreviewSnapshot?.operatingDate === snapshot.operatingDate
+      timelinePreviewSnapshot?.operatingDate === snapshot.operatingDate
       ? timelinePreviewSnapshot
       : undefined;
   const previewTimeline = timelinePreview?.timeline;
@@ -3397,10 +3406,10 @@ export function DailyOperationsViewContent({
     : [];
   const priorComparisonMetric = snapshot
     ? getPriorComparisonMetric(
-        snapshot,
-        cachedWeekMetrics,
-        cachedPriorWeekBoundaryMetric,
-      )
+      snapshot,
+      cachedWeekMetrics,
+      cachedPriorWeekBoundaryMetric,
+    )
     : undefined;
   const priorWindowLabel = snapshot
     ? getPriorWindowLabel(snapshot.operatingDate)
@@ -3430,9 +3439,9 @@ export function DailyOperationsViewContent({
   );
   const primaryActionEmphasisStatus = snapshot
     ? getPrimaryActionEmphasisStatus({
-        isHistoricalDate,
-        status: snapshot.lifecycle.status,
-      })
+      isHistoricalDate,
+      status: snapshot.lifecycle.status,
+    })
     : undefined;
   const primaryActionEmphasis = primaryActionEmphasisStatus
     ? getPrimaryActionEmphasis(primaryActionEmphasisStatus)
@@ -3450,32 +3459,32 @@ export function DailyOperationsViewContent({
   const pendingApprovalsLane = getPendingApprovalsLaneFromLanes(operationLanes);
   const snapshotOpenRegisterSessions = !isHistoricalDate
     ? (snapshot?.attentionItems.filter(
-        (item) =>
-          item.source.type === "register_session" &&
-          item.registerSession?.isOpenedForOperatingDate === true &&
-          item.params?.sessionId !== undefined &&
-          item.to !== undefined,
-      ) ?? [])
+      (item) =>
+        item.source.type === "register_session" &&
+        item.registerSession?.isOpenedForOperatingDate === true &&
+        item.params?.sessionId !== undefined &&
+        item.to !== undefined,
+    ) ?? [])
     : [];
   const openRegisterSessions =
     openRegisterSessionsSnapshot &&
-    snapshot &&
-    Array.isArray(openRegisterSessionsSnapshot.sessions) &&
-    openRegisterSessionsSnapshot.operatingDate === snapshot.operatingDate
+      snapshot &&
+      Array.isArray(openRegisterSessionsSnapshot.sessions) &&
+      openRegisterSessionsSnapshot.operatingDate === snapshot.operatingDate
       ? openRegisterSessionsSnapshot.sessions.map((session) => ({
-          id: session.id,
-          label: "Register session is still open",
-          message: "",
-          owner: "daily_close" as const,
-          params: { sessionId: session.id },
-          registerSession: {
-            displayLabel: session.displayLabel,
-            isOpenedForOperatingDate: true,
-          },
-          severity: "critical" as const,
-          source: { id: session.id, type: "register_session" },
-          to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
-        }))
+        id: session.id,
+        label: "Register session is still open",
+        message: "",
+        owner: "daily_close" as const,
+        params: { sessionId: session.id },
+        registerSession: {
+          displayLabel: session.displayLabel,
+          isOpenedForOperatingDate: true,
+        },
+        severity: "critical" as const,
+        source: { id: session.id, type: "register_session" },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      }))
       : snapshotOpenRegisterSessions;
   const actionableLanes = operationLanes.filter(isActionableLane);
   const hasAutomationReviewEvidence = Boolean(
@@ -3503,9 +3512,9 @@ export function DailyOperationsViewContent({
   const storePulseDetailSnapshot =
     snapshot && loadedStorePulse !== undefined
       ? {
-          ...snapshot,
-          storePulse: loadedStorePulse,
-        }
+        ...snapshot,
+        storePulse: loadedStorePulse,
+      }
       : undefined;
   const requestStorePulseSnapshot =
     onRequestStorePulseSnapshot ?? onRequestDetailSnapshot;
@@ -3672,7 +3681,7 @@ export function DailyOperationsViewContent({
                 ) : null}
 
                 {shouldShowHistoricalWorkflowPanel ||
-                shouldShowHistoricalAutomationCompletion ? (
+                  shouldShowHistoricalAutomationCompletion ? (
                   <section className="space-y-layout-md">
                     {shouldShowHistoricalWorkflowPanel ? (
                       <HistoricalWorkflowPanel snapshot={snapshot} />
@@ -4110,9 +4119,9 @@ function DailyOperationsConnectedView({
   const canAccessSurface = canAccessProtectedSurface ?? hasFullAdminAccess;
   const params = useParams({ strict: false }) as
     | {
-        orgUrlSlug?: string;
-        storeUrlSlug?: string;
-      }
+      orgUrlSlug?: string;
+      storeUrlSlug?: string;
+    }
     | undefined;
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as {
@@ -4132,14 +4141,14 @@ function DailyOperationsConnectedView({
   const storePulseWindow: StorePulseWindow = "today";
   const snapshotArgs = canQueryProtectedData
     ? {
-        ...operatingDateRange,
-        operatingTimezoneOffsetMinutes: getOperatingTimezoneOffsetMinutes(
-          operatingDateRange.operatingDate,
-        ),
-        storeId: activeStore!._id,
-        storePulseWindow,
-        weekEndOperatingDate,
-      }
+      ...operatingDateRange,
+      operatingTimezoneOffsetMinutes: getOperatingTimezoneOffsetMinutes(
+        operatingDateRange.operatingDate,
+      ),
+      storeId: activeStore!._id,
+      storePulseWindow,
+      weekEndOperatingDate,
+    }
     : "skip";
   const snapshotRequestKey =
     snapshotArgs === "skip"
@@ -4220,12 +4229,12 @@ function DailyOperationsConnectedView({
     isTodayRefreshRequested;
   const todayRefreshArgs =
     shouldQueryTodayRefreshSnapshot &&
-    snapshotArgs !== "skip" &&
-    todayRefreshRequest
+      snapshotArgs !== "skip" &&
+      todayRefreshRequest
       ? {
-          ...snapshotArgs,
-          refreshRequestedAt: todayRefreshRequest.requestedAt,
-        }
+        ...snapshotArgs,
+        refreshRequestedAt: todayRefreshRequest.requestedAt,
+      }
       : "skip";
 
   const compactSnapshot = useExpectedDailyOperationsQuery(
@@ -4260,7 +4269,7 @@ function DailyOperationsConnectedView({
   ) as DailyOperationsAutomationSnapshot | undefined;
   const openRegisterSessionsSnapshot = useExpectedDailyOperationsQuery(
     getDailyOperationsOpenRegisterSessionsSnapshot ??
-      getDailyOperationsSnapshot,
+    getDailyOperationsSnapshot,
     getDailyOperationsOpenRegisterSessionsSnapshot && canQueryProtectedData
       ? snapshotArgs
       : "skip",
@@ -4289,10 +4298,10 @@ function DailyOperationsConnectedView({
   const normalizedDetailSnapshot =
     detailSnapshot && detailSnapshotMetric
       ? normalizeDailyOperationsSnapshotWithWeekMetric(
-          detailSnapshot,
-          detailSnapshotMetric,
-          detailSnapshot.weekMetrics,
-        )
+        detailSnapshot,
+        detailSnapshotMetric,
+        detailSnapshot.weekMetrics,
+      )
       : detailSnapshot;
   const baseSnapshot = compactSnapshot ?? cachedDaySnapshotEntry?.snapshot;
   const mergedSnapshot = baseSnapshot
@@ -4317,9 +4326,9 @@ function DailyOperationsConnectedView({
   const refreshedStorePulseSnapshot =
     snapshotArgs !== "skip" && cachedTodayRefreshSnapshot
       ? {
-          operatingDate: cachedTodayRefreshSnapshot.operatingDate,
-          storePulse: cachedTodayRefreshSnapshot.storePulse ?? null,
-        }
+        operatingDate: cachedTodayRefreshSnapshot.operatingDate,
+        storePulse: cachedTodayRefreshSnapshot.storePulse ?? null,
+      }
       : undefined;
   const storePulseSnapshot =
     refreshedStorePulseSnapshot ??
@@ -4328,45 +4337,45 @@ function DailyOperationsConnectedView({
   const rawCachedWeekMetrics =
     snapshotArgs !== "skip" && clientWeekAnalytics
       ? selectWeekMetricsForOperatingDate(
-          clientWeekAnalytics.metrics,
-          snapshotArgs.operatingDate,
-        )
+        clientWeekAnalytics.metrics,
+        snapshotArgs.operatingDate,
+      )
       : cachedWeekAnalytics && snapshotArgs !== "skip"
         ? selectWeekMetricsForOperatingDate(
-            cachedWeekAnalytics.metrics,
-            snapshotArgs.operatingDate,
-          )
+          cachedWeekAnalytics.metrics,
+          snapshotArgs.operatingDate,
+        )
         : undefined;
   const cachedWeekMetrics =
     snapshotArgs !== "skip"
       ? replaceWeekMetricForOperatingDate(
-          rawCachedWeekMetrics,
-          cachedTodayRefreshSnapshot?.weekMetric ??
-            snapshot?.weekMetrics.find(
-              (metric) => metric.operatingDate === snapshotArgs.operatingDate,
-            ),
-          snapshotArgs.operatingDate,
-        )
+        rawCachedWeekMetrics,
+        cachedTodayRefreshSnapshot?.weekMetric ??
+        snapshot?.weekMetrics.find(
+          (metric) => metric.operatingDate === snapshotArgs.operatingDate,
+        ),
+        snapshotArgs.operatingDate,
+      )
       : rawCachedWeekMetrics;
   const cachedWeekStorePulse =
     clientWeekAnalytics && snapshot && cachedWeekMetrics
       ? buildCachedWeekStorePulseSummary({
-          ...snapshot,
-          storePulse: clientWeekAnalytics.storePulse,
-          weekMetrics: cachedWeekMetrics,
-        })
+        ...snapshot,
+        storePulse: clientWeekAnalytics.storePulse,
+        weekMetrics: cachedWeekMetrics,
+      })
       : cachedTodayRefreshSnapshot?.storePulse && snapshot
         ? buildCachedWeekStorePulseSummary({
-            ...snapshot,
-            storePulse: cachedTodayRefreshSnapshot.storePulse,
-            weekMetrics: cachedWeekMetrics ?? snapshot.weekMetrics,
-          })
+          ...snapshot,
+          storePulse: cachedTodayRefreshSnapshot.storePulse,
+          weekMetrics: cachedWeekMetrics ?? snapshot.weekMetrics,
+        })
         : (cachedWeekAnalytics?.storePulse ??
           (snapshot && cachedWeekMetrics
             ? buildWeekMetricStorePulseSummary({
-                ...snapshot,
-                weekMetrics: cachedWeekMetrics,
-              })
+              ...snapshot,
+              weekMetrics: cachedWeekMetrics,
+            })
             : undefined));
 
   useEffect(() => {
@@ -4460,7 +4469,7 @@ function DailyOperationsConnectedView({
       !todayRefreshRequest ||
       todayRefreshRequest.snapshotRequestKey !== snapshotRequestKey ||
       queriedTodayRefreshSnapshot.refreshRequestedAt !==
-        todayRefreshRequest.requestedAt
+      todayRefreshRequest.requestedAt
     ) {
       return;
     }

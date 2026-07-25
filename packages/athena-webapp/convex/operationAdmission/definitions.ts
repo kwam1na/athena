@@ -158,6 +158,7 @@ function orderStoreWriteOperation(args: {
     { mode: "protected"; gateways: readonly string[] } | { mode: "none" };
   functionName: string;
   operationId: string;
+  publicAccess?: "admit" | "deny";
 }) {
   return defineOperation({
     functionName: args.functionName,
@@ -186,7 +187,11 @@ function orderStoreWriteOperation(args: {
     },
     readiness: { kind: "store_write" },
     effects: args.effects ?? { mode: "none" },
-    actors: { normalUser: "admit", sharedDemo: "admit" },
+    actors: {
+      normalUser: "admit",
+      sharedDemo: "admit",
+      public: args.publicAccess ?? "deny",
+    },
   });
 }
 
@@ -433,11 +438,16 @@ export const submitActiveCycleCountDraftsOperationDefinition =
     storeIdArg: "storeId",
   });
 
+// Anonymous storefront + Paystack webhook drive order status/refund updates
+// post-checkout with no signed-in user, so this write opts public in. The
+// handler already short-circuits store-access checks for non-normal_user
+// actors, preserving the pre-admission-rails anonymous behavior.
 export const updateOnlineOrderOperationDefinition = orderStoreWriteOperation({
   functionName: "storeFront/onlineOrder:update",
   operationId: "storeFront/onlineOrder.update",
   capability: "orders.fulfill",
   effects: { mode: "protected", gateways: ["order_notification.send"] },
+  publicAccess: "admit",
 });
 
 export const processReturnExchangeOperationDefinition =

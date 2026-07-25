@@ -690,7 +690,7 @@ describe("Authed layout", () => {
     expect(mocked.SidebarProvider).toHaveBeenCalledWith(
       expect.objectContaining({
         className:
-          "fixed inset-0 h-svh !min-h-0 flex-col overflow-hidden bg-app-canvas",
+          "fixed inset-0 !min-h-0 flex-col overflow-hidden bg-app-canvas",
         defaultOpen: true,
       }),
     );

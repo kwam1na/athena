@@ -193,17 +193,15 @@ describe("ManagerElevationProvider", () => {
     expect(mocks.startManagerElevation).not.toHaveBeenCalled();
   });
 
-  it("requires the provider around consumers", () => {
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
+  it("returns an inert value when no provider is in the tree", async () => {
+    // Without a provider the hook must not throw: a transient provider-less
+    // render can occur while React recovers from a Convex store tear, and
+    // throwing would escalate that recoverable render into a fatal crash.
+    const { result } = renderHook(() => useManagerElevation());
 
-    try {
-      expect(() => renderHook(() => useManagerElevation())).toThrow(
-        "useManagerElevation must be used within a ManagerElevationProvider",
-      );
-    } finally {
-      consoleError.mockRestore();
-    }
+    expect(result.current.activeElevation).toBeNull();
+    expect(result.current.isManagerElevated).toBe(false);
+    expect(() => result.current.startManagerElevation()).not.toThrow();
+    await expect(result.current.endManagerElevation()).resolves.toBeUndefined();
   });
 });

@@ -110,8 +110,9 @@ function isSharedDemoAthenaUserReadCapability(
 }
 
 function getOperationAdmissionActorUserId(ctx: AthenaAuthCtx) {
-  return (ctx as Partial<OperationMutationCtx>).operationAdmission?.actor
-    .athenaUserId;
+  const actor = (ctx as Partial<OperationMutationCtx>).operationAdmission?.actor;
+  if (!actor || actor.kind === "public") return undefined;
+  return actor.athenaUserId;
 }
 
 export async function getAuthenticatedAthenaUserWithCtx(

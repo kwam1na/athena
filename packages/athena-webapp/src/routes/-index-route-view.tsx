@@ -34,7 +34,6 @@ import { useLandingTheme } from "@/components/landing/story/useLandingTheme";
 import { emitLandingFunnelEvent } from "@/lib/marketing/landingFunnelClient";
 import { DEMO_PATH, WALKTHROUGH_PATH } from "@/lib/navigation/appEntryRoutes";
 import { PublicLayout } from "./-public-layout";
-import { Button } from "../components/ui/button";
 
 // Scroll-linked reveal for the hero shot: it starts faint while only its top
 // edge peeks above the fold, then ramps to full opacity as the reader scrolls
@@ -198,7 +197,7 @@ function HeroSection() {
               style={HERO_COPY_HIDDEN}
               className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground"
             >
-              For the owner who can&apos;t be everywhere
+              For the retail owner who can&apos;t be everywhere
             </p>
             <h1
               ref={headlineRef}
@@ -312,9 +311,10 @@ function ControlLoopSection() {
             A store&apos;s whole day, in one place.
           </span>{" "}
           <span className="text-muted-foreground">
-            Athena is an operating system for an owner-led store: sell in person
-            and online, track stock, fulfill orders, and manage cash, with
-            enough evidence to trust the day without watching it happen.
+            Athena is an operating system for an owner-led store. Selling,
+            stock, fulfillment, and cash all run through one system, so you
+            always know what happened, even when you weren&apos;t behind the
+            counter.
           </span>
         </h2>
 
@@ -518,14 +518,14 @@ export function Index() {
           background="bg-background"
           layout="stacked"
           stackedGap="space-y-layout-3xl"
-          workspace="Device-first"
+          workspace="Terminal-first"
           title="The network drops. Sales don't."
-          copy="A sale starts at the counter and lands on the device first, instantly. Lose the connection and the counter keeps moving: the sale is held safe, then syncs itself the moment the network returns."
-          automation="No manual sync, no re-entry, nothing to remember."
+          copy="Sales complete on the terminal whether or not the network is up; each one syncs itself the moment it can. The counter never waits on a connection."
+          automation="Your staff just sell. Athena worries about the connection."
         >
           <div className="w-full space-y-layout-3xl">
-            {/* Establishing beat: the full register, clear and waiting, one
-                minute before the traced 3:14 PM sale the next two beats follow. */}
+            {/* Establishing beat: the full register, clear and waiting, before
+                the sale the next two beats follow through the network drop. */}
             <div>
               <LandingWorkspaceShot
                 alt="The POS register ready for the next sale: an empty cart, a fresh sale started, and the product lookup entry in focus."
@@ -541,13 +541,13 @@ export function Index() {
                   aria-hidden="true"
                   className="mt-[8px] h-2 w-2 shrink-0 rounded-full bg-primary"
                 />
-                3:13 PM — the counter is clear and the lookup is in focus. The
-                next customer is already walking up.
+                Register ready. A new sale is open, running entirely on the
+                terminal.
               </p>
             </div>
             <div className="max-w-5xl">
               <LandingWorkspaceShot
-                alt="The register's POS status reading 'pending sync': a sale just recorded on the device, held safely before it uploads."
+                alt="The register's POS status reading 'pending sync': sales recorded on the terminal, queued safely until they upload."
                 bordered={false}
                 className="max-w-5xl"
                 cropHeightFraction={0.52}
@@ -562,13 +562,13 @@ export function Index() {
                   aria-hidden="true"
                   className="mt-[8px] h-2 w-2 shrink-0 rounded-full bg-warning"
                 />
-                3:14 PM — the connection drops. The finished sale is held safely
-                on the device.
+                Offline, the counter keeps selling. Completed sales queue safely
+                on the terminal, shown as pending sync.
               </p>
             </div>
             <div className="ml-auto max-w-5xl">
               <LandingWorkspaceShot
-                alt="The register's POS status reading 'synced': the sale uploaded on its own once the connection returned."
+                alt="The register's POS status reading 'synced': queued sales uploaded on their own once the connection returned."
                 bordered={false}
                 className="max-w-5xl"
                 cropHeightFraction={0.52}
@@ -583,8 +583,8 @@ export function Index() {
                   aria-hidden="true"
                   className="mt-[8px] h-2 w-2 shrink-0 rounded-full bg-success"
                 />
-                Minutes later — back online. The sale synced on its own,
-                straight into the day&apos;s numbers.
+                Connection back. Every queued sale syncs on its own into the
+                day&apos;s numbers.
               </p>
             </div>
           </div>
@@ -662,7 +662,7 @@ export function Index() {
           stackedGap="space-y-layout-3xl"
           workspace="EOD Review"
           title="Today closes where tomorrow begins."
-          copy="The end-of-day review runs under the rules you set: totals settled, the drawer accounted for, and anything that needs judgment flagged for you, reviewable from the back office or from home. Anything unfinished carries forward; tomorrow's opening is already prepared, and no one waited on you to lock up."
+          copy="The end-of-day review runs under the rules you set: totals settled, the drawer accounted for, and anything that needs judgment flagged for you, reviewable from the back office or from home. Anything unfinished carries forward, so tomorrow's opening is already prepared."
           automation="Under your rules, Athena completes the close. Anything needing an approval waits for you."
         >
           <LandingWorkspaceShot
@@ -690,7 +690,7 @@ export function Index() {
           <div className="relative mx-auto grid w-full max-w-7xl items-center gap-layout-2xl lg:grid-cols-2">
             <div className="max-w-xl">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
-                Everywhere you weren&apos;t
+                While you were away
               </p>
               <h2 className="mt-layout-sm font-display text-4xl font-light leading-[1.02] text-foreground sm:text-5xl">
                 The day didn&apos;t run itself. Athena did.
@@ -737,7 +737,7 @@ export function Index() {
             <div className="flex w-full flex-col gap-layout-xl lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-3xl">
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                  Open the store you just read about
+                  Open Osu Studio, the fictional store you just read about
                 </p>
                 <h2 className="mt-layout-md font-display text-4xl font-light leading-tight text-foreground sm:text-6xl">
                   Walk this exact day yourself.
@@ -754,19 +754,20 @@ export function Index() {
                 Built running a real store. Opening to more.
               </h2>
               <p className="mt-layout-md text-lg leading-8 text-muted-foreground">
-                Everything on this page runs a real store today, refined
-                daily in live use.
+                Every feature on this page runs a real store today, through
+                real sales and real closes.
               </p>
               <div className="mt-layout-lg">
                 <Link
                   to={WALKTHROUGH_PATH}
                   onClick={() => emitLandingFunnelEvent("walkthrough_cta")}
-
+                  className="group inline-flex min-h-11 items-center text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  <Button variant={'clear'} className="text-muted-foreground hover:text-foreground font-semibold px-0 group">
-                    Tell us about your store
-                    <ArrowRight className="ml-layout-xs h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-                  </Button>
+                  Tell us about your store
+                  <ArrowRight
+                    className="ml-layout-xs h-4 w-4 transition-transform group-hover:translate-x-0.5"
+                    aria-hidden="true"
+                  />
                 </Link>
               </div>
             </div>

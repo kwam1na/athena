@@ -19,6 +19,7 @@ import {
 } from "../operationAdmission/adapters";
 import { decideApprovalRequestOperationDefinition } from "../operationAdmission/definitions";
 import { admitPublicMutation } from "../operationAdmission/publicMutation";
+import { requireOperationActorAthenaUserId } from "../operationAdmission/actors";
 import type {
   OperationMutationCtx,
 } from "../operationAdmission/types";
@@ -651,7 +652,7 @@ async function getApprovalAdmissionAthenaUserOrRequireAuth(
   if (operationAdmission) {
     const athenaUser = await ctx.db.get(
       "athenaUser",
-      operationAdmission.actor.athenaUserId,
+      requireOperationActorAthenaUserId(operationAdmission.actor),
     );
     if (!athenaUser) throw new Error("Sign in again to continue.");
     return athenaUser;

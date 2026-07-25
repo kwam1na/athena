@@ -744,6 +744,8 @@ export function buildCashControlsDashboardSnapshot(args: {
     Id<"registerSession">,
     CashControlPendingVoidApprovalSummary
   >;
+  recentDeposits?: CashControlDepositAllocation[];
+  recentDepositRegisterNumbersById?: Map<Id<"registerSession">, string>;
   registerSessions: CashControlRegisterSession[];
   staffNamesById: StaffNameMap;
   syncConflictsBySessionId?: Map<
@@ -754,12 +756,17 @@ export function buildCashControlsDashboardSnapshot(args: {
   totalSalesBySessionId?: Map<Id<"registerSession">, number>;
 }) {
   const totalDepositedBySessionId = sumDepositsBySession(args.deposits);
-  const registerNumberBySessionId = new Map(
-    args.registerSessions.map((registerSession) => [
-      registerSession._id,
-      registerSession.registerNumber?.trim() || "Unnamed register",
-    ]),
-  );
+  const recentDeposits = args.recentDeposits ?? args.deposits;
+  const registerNumberBySessionId = new Map([
+    ...(args.recentDepositRegisterNumbersById ?? new Map()),
+    ...args.registerSessions.map(
+      (registerSession) =>
+        [
+          registerSession._id,
+          registerSession.registerNumber?.trim() || "Unnamed register",
+        ] as const,
+    ),
+  ]);
 
   const sessionSummaries = [...args.registerSessions]
     .sort((left, right) => right.openedAt - left.openedAt)
@@ -790,7 +797,7 @@ export function buildCashControlsDashboardSnapshot(args: {
         registerSession.status === "closing" ||
         registerSession.status === "closeout_rejected",
     ),
-    recentDeposits: [...args.deposits]
+    recentDeposits: [...recentDeposits]
       .sort((left, right) => right.recordedAt - left.recordedAt)
       .slice(0, RECENT_DEPOSIT_LIMIT)
       .map((deposit) => ({
@@ -894,18 +901,50 @@ async function listTerminalNames(
   );
 }
 
-async function listStoreDeposits(
+async function listDashboardDeposits(
+  ctx: Pick<QueryCtx, "db">,
+  registerSessionIds: Iterable<Id<"registerSession">>,
+) {
+  const uniqueSessionIds = Array.from(new Set(registerSessionIds));
+
+  const depositsBySession = await Promise.all(
+    uniqueSessionIds.map((registerSessionId) =>
+      listSessionDeposits(ctx, registerSessionId),
+    ),
+  );
+
+  return depositsBySession.flat();
+}
+
+async function listRecentStoreDeposits(
   ctx: Pick<QueryCtx, "db">,
   storeId: Id<"store">,
 ) {
-  const allocations =
-    // eslint-disable-next-line @convex-dev/no-collect-in-query -- The cash-controls dashboard needs the full store-scoped deposit ledger to compute register totals and recent deposit history.
-    await ctx.db
-      .query("paymentAllocation")
-      .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
-      .collect();
+  // The index orders by status before recordedAt, so scan each status'
+  // most-recent window separately and merge to get the true chronological head.
+  const perStatus = await Promise.all(
+    (["recorded", "voided"] as const).map((status) =>
+      ctx.db
+        .query("paymentAllocation")
+        .withIndex(
+          "by_storeId_allocationType_direction_status_recordedAt",
+          (q) =>
+            q
+              .eq("storeId", storeId)
+              .eq("allocationType", CASH_DEPOSIT_ALLOCATION_TYPE)
+              .eq("direction", "out")
+              .eq("status", status),
+        )
+        .order("desc")
+        .take(RECENT_DEPOSIT_LIMIT),
+    ),
+  );
 
-  return allocations.filter(isCashControlDepositAllocation);
+  return perStatus
+    .flat()
+    .filter(isCashControlDepositAllocation)
+    .sort((left, right) => right.recordedAt - left.recordedAt)
+    .slice(0, RECENT_DEPOSIT_LIMIT);
 }
 
 async function listSessionDeposits(
@@ -1136,25 +1175,20 @@ export const getDashboardSnapshot = query({
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireCashControlsStoreAccess(ctx, args.storeId);
 
-      const [
-        registerSessions,
-        pendingApprovalRequests,
-        deposits,
-        syncConflictsBySessionId,
-      ] = await Promise.all([
-        listRegisterSessionsForDashboard(ctx, args.storeId),
-        ctx.db
-          .query("approvalRequest")
-          .withIndex("by_storeId_status", (q) =>
-            q.eq("storeId", args.storeId).eq("status", "pending"),
-          )
-          .order("desc")
-          .take(SESSION_LIMIT),
-        listStoreDeposits(ctx, args.storeId),
-        listRegisterSessionSyncReviewConflicts(ctx, args.storeId, {
-          includeRejectedEvidence: true,
-        }),
-      ]);
+      const [registerSessions, pendingApprovalRequests, syncConflictsBySessionId] =
+        await Promise.all([
+          listRegisterSessionsForDashboard(ctx, args.storeId),
+          ctx.db
+            .query("approvalRequest")
+            .withIndex("by_storeId_status", (q) =>
+              q.eq("storeId", args.storeId).eq("status", "pending"),
+            )
+            .order("desc")
+            .take(SESSION_LIMIT),
+          listRegisterSessionSyncReviewConflicts(ctx, args.storeId, {
+            includeRejectedEvidence: true,
+          }),
+        ]);
 
       const dashboardRegisterSessions =
         await appendRegisterSessionsForSyncConflicts(
@@ -1167,6 +1201,47 @@ export const getDashboardSnapshot = query({
           ctx,
           dashboardRegisterSessions,
         );
+      const displayedSessionIds = new Set(
+        dashboardRegisterSessionsWithTraceIds.map(
+          (registerSession) => registerSession._id,
+        ),
+      );
+      const [deposits, recentDeposits] = await Promise.all([
+        listDashboardDeposits(ctx, displayedSessionIds),
+        listRecentStoreDeposits(ctx, args.storeId),
+      ]);
+      // Recent deposits may reference sessions outside the displayed set;
+      // resolve their register numbers so the recent-deposits list stays labeled.
+      const missingRecentDepositSessionIds = Array.from(
+        new Set(
+          recentDeposits
+            .map((deposit) => deposit.registerSessionId)
+            .filter(
+              (registerSessionId): registerSessionId is Id<"registerSession"> =>
+                Boolean(registerSessionId) &&
+                !displayedSessionIds.has(registerSessionId!),
+            ),
+        ),
+      );
+      const recentDepositRegisterNumbersById = new Map(
+        (
+          await Promise.all(
+            missingRecentDepositSessionIds.map(async (registerSessionId) => {
+              const registerSession = await ctx.db.get(
+                "registerSession",
+                registerSessionId,
+              );
+              return registerSession
+                ? ([
+                    registerSessionId,
+                    registerSession.registerNumber?.trim() ||
+                      "Unnamed register",
+                  ] as const)
+                : null;
+            }),
+          )
+        ).filter(Boolean) as Array<[Id<"registerSession">, string]>,
+      );
       const pendingVoidApprovalsBySessionId =
         await listPendingVoidApprovalSummariesBySessionId(ctx, {
           registerSessions: dashboardRegisterSessionsWithTraceIds,
@@ -1192,7 +1267,7 @@ export const getDashboardSnapshot = query({
         ctx,
         collectStaffProfileIds({
           approvalRequests: relevantApprovalRequests,
-          deposits,
+          deposits: [...deposits, ...recentDeposits],
           registerSessions: dashboardRegisterSessionsWithTraceIds,
           syncConflictsBySessionId,
         }),
@@ -1210,6 +1285,8 @@ export const getDashboardSnapshot = query({
         approvalRequestsBySessionId,
         deposits,
         pendingVoidApprovalsBySessionId,
+        recentDeposits,
+        recentDepositRegisterNumbersById,
         registerSessions: dashboardRegisterSessionsWithTraceIds,
         staffNamesById,
         syncConflictsBySessionId,

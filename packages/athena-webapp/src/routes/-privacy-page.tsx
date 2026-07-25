@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router";
 
 import { LandingGrain } from "@/components/landing/LandingGrain";
+import { WALKTHROUGH_PATH } from "@/lib/navigation/appEntryRoutes";
 import { WALKTHROUGH_PRIVACY_CONTACT } from "@/lib/marketing/walkthroughPrivacy";
 import { PublicLayout } from "./-public-layout";
 import { FadeIn } from "@/components/common/FadeIn";
+import { ArrowLeft } from "lucide-react";
 
 export function PrivacyPage() {
   return (
@@ -76,10 +78,14 @@ export function PrivacyPage() {
           </p>
 
           <Link
-            to="/walkthrough"
-            className="inline-flex min-h-11 items-center rounded-md text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            to={WALKTHROUGH_PATH}
+            className="group inline-flex min-h-11 items-center text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            Return to register interest
+            <ArrowLeft
+              className="mr-layout-xs h-4 w-4 transition-transform group-hover:-translate-x-0.5"
+              aria-hidden="true"
+            />
+            Back to registering your interest
           </Link>
         </div>
       </FadeIn>

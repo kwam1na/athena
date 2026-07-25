@@ -328,6 +328,9 @@ describe("shared demo provisioning", () => {
     expect(SHARED_DEMO_STORE_IDENTITY.contactPhoneNumber).toBe(
       "+233 24 555 0142",
     );
+    expect(SHARED_DEMO_STORE_IDENTITY.website).toBe(
+      "www.osustudio.com",
+    );
     expect(SHARED_DEMO_PRODUCTS).toHaveLength(8);
     const kente = SHARED_DEMO_PRODUCTS.find(
       (product) => product.slug === "demo-kente-scarf",

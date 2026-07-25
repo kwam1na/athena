@@ -18,6 +18,7 @@ import {
   getQueueSnapshotReadDefinition,
 } from "../operationAdmission/readDefinitions";
 import type { OperationQueryCtx } from "../operationAdmission/types";
+import { requireOperationActorAthenaUserId } from "../operationAdmission/actors";
 import { listOpenLocalSyncConflictsByRegisterSession } from "../cashControls/deposits";
 import { listOpenLocalSyncConflictsByRegisterSessionWithCompleteness } from "../pos/application/sync/registerSessionSyncReview";
 import {
@@ -71,7 +72,7 @@ async function authorizeOperationalWorkSummaryRead(
   const admittedActor = (ctx as Partial<OperationQueryCtx>).operationAdmission
     ?.actor;
   const athenaUser = admittedActor
-    ? ({ _id: admittedActor.athenaUserId } as const)
+    ? ({ _id: requireOperationActorAthenaUserId(admittedActor) } as const)
     : await requireAuthenticatedAthenaUserWithCtx(ctx);
 
   await requireOrganizationMemberRoleWithCtx(ctx, {

@@ -195,7 +195,7 @@ export function SyncBridgeScene() {
           </p>
         </div>
         <p className="mt-layout-sm text-xs leading-5 text-muted-foreground">
-          Recorded on the device the moment it happened.
+          Recorded on the terminal the moment it happened.
         </p>
       </figure>
 

@@ -138,12 +138,12 @@ export type StoreDeliveryFeesConfig = {
 export type StoreWaiveDeliveryFeesConfig =
   | boolean
   | {
-      all?: boolean;
-      international?: boolean;
-      otherRegions?: boolean;
-      withinAccra?: boolean;
-      minimumOrderAmount?: number;
-    };
+    all?: boolean;
+    international?: boolean;
+    otherRegions?: boolean;
+    withinAccra?: boolean;
+    minimumOrderAmount?: number;
+  };
 
 export type StoreTaxConfig = {
   enabled?: boolean;
@@ -224,6 +224,7 @@ export type StoreContactConfig = {
   email?: string;
   location?: string;
   phoneNumber?: string;
+  website?: string;
 };
 
 export type StoreReceiptConfig = {

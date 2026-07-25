@@ -32,6 +32,7 @@ import {
   getDailyOperationsWeekAnalyticsSnapshotReadDefinition,
 } from "../operationAdmission/readDefinitions";
 import type { OperationQueryCtx } from "../operationAdmission/types";
+import { requireOperationActorAthenaUserId } from "../operationAdmission/actors";
 import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import {
   projectLogicalOperationalWork,
@@ -2718,7 +2719,7 @@ async function authorizeDailyOperationsSnapshot(
   const admittedActor = (ctx as Partial<OperationQueryCtx>).operationAdmission
     ?.actor;
   const athenaUser = admittedActor
-    ? ({ _id: admittedActor.athenaUserId } as const)
+    ? ({ _id: requireOperationActorAthenaUserId(admittedActor) } as const)
     : await requireAuthenticatedAthenaUserWithCtx(ctx);
   const membership = await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],

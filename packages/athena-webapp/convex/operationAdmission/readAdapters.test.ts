@@ -85,6 +85,54 @@ describe("operation read admission adapters", () => {
     ).rejects.toThrow("demo is unavailable in this environment");
     expect(normalAdapter.resolve).not.toHaveBeenCalled();
   });
+
+  it("admits an anonymous caller for a public-opted-in read", async () => {
+    const anonymousNormalAdapter: OperationReadAdapter = {
+      kind: "normal_user",
+      resolve: vi.fn(async () => ({ kind: "not_applicable" as const })),
+    };
+
+    const publicDefinition = defineReadOperation({
+      operationId: "storefront.read",
+      access: { kind: "read", intent: "storefront.view" },
+      scope: { kind: "store", storeIdArg: "storeId" },
+      actors: { normalUser: "admit", sharedDemo: "admit", public: "admit" },
+    });
+
+    await expect(
+      resolveReadOperationAdmission(
+        demoCtx({ principal: null }) as never,
+        { storeId: "store-1" },
+        publicDefinition,
+        {
+          normalAdapter: anonymousNormalAdapter,
+          sharedDemoAdapter: createSharedDemoReadOperationAdapter(),
+        },
+      ),
+    ).resolves.toMatchObject({
+      actor: { kind: "public" },
+      constraints: { storeId: "store-1" },
+    });
+  });
+
+  it("rejects an anonymous caller when the read does not opt public in", async () => {
+    const anonymousNormalAdapter: OperationReadAdapter = {
+      kind: "normal_user",
+      resolve: vi.fn(async () => ({ kind: "not_applicable" as const })),
+    };
+
+    await expect(
+      resolveReadOperationAdmission(
+        demoCtx({ principal: null }) as never,
+        { storeId: "store-1" },
+        definition,
+        {
+          normalAdapter: anonymousNormalAdapter,
+          sharedDemoAdapter: createSharedDemoReadOperationAdapter(),
+        },
+      ),
+    ).rejects.toThrow("Sign in again to continue.");
+  });
 });
 
 function demoCtx(args: { principal: Record<string, unknown> | null }) {

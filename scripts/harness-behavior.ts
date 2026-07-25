@@ -1,5 +1,6 @@
 import path from "node:path";
 import { spawn as spawnChildProcess } from "node:child_process";
+import { connect as netConnect } from "node:net";
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 
@@ -411,12 +412,17 @@ async function stopProcess(
     sleep(timeoutMs).then(() => Number.NaN),
   ]);
 
-  if (!Number.isNaN(exitCode)) {
-    return;
+  if (Number.isNaN(exitCode)) {
+    processRef.kill("SIGKILL");
+    await processRef.exited;
   }
 
+  // The wrapper shell exits as soon as it is signalled, so waiting on its exit
+  // says nothing about the grandchildren that actually own the ports (vite).
+  // Sweep the process group unconditionally: without this the SIGKILL
+  // escalation above never fires for survivors, and they linger long enough to
+  // block the next scenario's boot.
   processRef.kill("SIGKILL");
-  await processRef.exited;
 }
 
 async function startProcess(
@@ -561,43 +567,35 @@ function spawnCommand(
   const shellPath = resolveHarnessBehaviorShell({
     env: process.env,
   });
-  const runtime = (globalThis as { Bun?: typeof Bun }).Bun;
   const mergedEnv = {
     ...process.env,
     ...envOverrides,
   };
 
-  if (runtime) {
-    const bunSubprocess = runtime.spawn([shellPath, "-lc", command], {
-      cwd,
-      env: mergedEnv,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-
-    return {
-      pid: bunSubprocess.pid,
-      stdout: bunSubprocess.stdout,
-      stderr: bunSubprocess.stderr,
-      kill: (signal?: string) => {
-        bunSubprocess.kill(signal);
-      },
-      exited: bunSubprocess.exited,
-    };
-  }
-
+  // Spawn into a dedicated process group (`detached`) so cleanup can signal the
+  // whole tree. Scenario commands are shells that fork long-lived grandchildren
+  // (`bun run ... dev` -> vite); signalling only the shell leaves those
+  // grandchildren alive and reparented to init, still holding their ports. A
+  // later scenario then binds to the survivor instead of booting its own server
+  // and asserts against foreign fixture state.
+  //
+  // node:child_process is used on both runtimes because Bun.spawn cannot place
+  // the child in its own process group, which is the entire point here.
   const nodeSubprocess = spawnChildProcess(shellPath, ["-lc", command], {
     cwd,
     env: mergedEnv,
     stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
   });
 
+  const pid = nodeSubprocess.pid ?? -1;
+
   return {
-    pid: nodeSubprocess.pid ?? -1,
+    pid,
     stdout: nodeSubprocess.stdout,
     stderr: nodeSubprocess.stderr,
     kill: (signal?: string) => {
-      nodeSubprocess.kill(signal as NodeJS.Signals | undefined);
+      killProcessTree(pid, signal, nodeSubprocess);
     },
     exited: new Promise<number>((resolve) => {
       nodeSubprocess.once("close", (code) => {
@@ -605,6 +603,274 @@ function spawnCommand(
       });
     }),
   };
+}
+
+function collectScenarioLocalPorts(scenario: {
+  readiness: HarnessBehaviorReadinessCheck[];
+}) {
+  const ports = new Map<number, string>();
+
+  for (const check of scenario.readiness) {
+    if (check.kind !== "http") {
+      continue;
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(check.url);
+    } catch {
+      continue;
+    }
+
+    if (parsed.hostname !== "127.0.0.1" && parsed.hostname !== "localhost") {
+      continue;
+    }
+
+    const port = Number(parsed.port);
+    if (!Number.isInteger(port) || port <= 0) {
+      continue;
+    }
+
+    if (!ports.has(port)) {
+      ports.set(port, check.name);
+    }
+  }
+
+  return ports;
+}
+
+async function isLocalPortListening(port: number) {
+  return new Promise<boolean>((resolve) => {
+    const socket = netConnect({ host: "127.0.0.1", port });
+    const settle = (listening: boolean) => {
+      socket.destroy();
+      resolve(listening);
+    };
+
+    socket.setTimeout(500);
+    socket.once("connect", () => settle(true));
+    socket.once("timeout", () => settle(false));
+    socket.once("error", () => settle(false));
+  });
+}
+
+// Kept well under the scenarios' cleanup latency threshold: after the process
+// group is swept the sockets go away promptly, so this is slack for teardown
+// scheduling rather than a budget to spend. A wait as long as the threshold
+// itself can only turn slow teardown into a threshold breach.
+const DEFAULT_PORT_RELEASE_TIMEOUT_MS = 3_000;
+// The boot guard can afford longer: it is distinguishing a still-draining port
+// from a foreign owner, and boot has no comparable latency ceiling.
+const DEFAULT_PORT_ACQUIRE_TIMEOUT_MS = 10_000;
+const PORT_POLL_INTERVAL_MS = 100;
+
+function resolvePortWaitMs(
+  fallbackMs: number,
+  env: NodeJS.ProcessEnv = process.env
+) {
+  const raw = env.HARNESS_BEHAVIOR_PORT_WAIT_MS;
+  if (!raw) {
+    return fallbackMs;
+  }
+
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallbackMs;
+}
+
+async function waitForPortRelease(port: number, timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    if (!(await isLocalPortListening(port))) {
+      return true;
+    }
+    await sleep(PORT_POLL_INTERVAL_MS);
+  }
+
+  return !(await isLocalPortListening(port));
+}
+
+/**
+ * Wait for this scenario's own ports to be released after its processes are
+ * signalled, so the next scenario does not race a socket that is still
+ * unwinding.
+ */
+async function waitForScenarioPortsReleased(
+  scenario: { readiness: HarnessBehaviorReadinessCheck[] },
+  logger: HarnessBehaviorLogger
+) {
+  for (const [port] of collectScenarioLocalPorts(scenario)) {
+    const released = await waitForPortRelease(
+      port,
+      resolvePortWaitMs(DEFAULT_PORT_RELEASE_TIMEOUT_MS)
+    );
+    if (!released) {
+      // Signalling the process group is not sufficient on every platform:
+      // `bun run --filter ... dev` can start the real server in its own
+      // session, outside the group we created, so it survives the sweep and
+      // keeps the port.
+      //
+      // Reclaiming by port is safe here because of the boot precondition: the
+      // scenario refused to start unless this port was free, so whatever holds
+      // it now was started by this scenario. That invariant is what makes this
+      // a targeted reclaim rather than killing an unrelated developer server.
+      const reclaimed = await killPortListeners(port, logger);
+      const freed = reclaimed
+        ? await waitForPortRelease(
+            port,
+            resolvePortWaitMs(DEFAULT_PORT_RELEASE_TIMEOUT_MS)
+          )
+        : false;
+
+      if (!freed) {
+        logPhase(
+          logger,
+          "cleanup",
+          `port 127.0.0.1:${port} still listening after teardown`
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Fail when a scenario's port is served by something we did not boot.
+ * Readiness only probes the URL, so a survivor from an earlier run satisfies
+ * it instantly and the scenario silently asserts against foreign fixture
+ * state — passing or failing for reasons unrelated to the code under test.
+ *
+ * A brief wait first, because a port held by a previous scenario that is still
+ * shutting down is a transient condition, not a foreign owner. Only a port
+ * still held after that window is treated as genuinely occupied.
+ */
+async function assertScenarioPortsAvailable(
+  scenario: { readiness: HarnessBehaviorReadinessCheck[] },
+  logger: HarnessBehaviorLogger
+) {
+  const ports = collectScenarioLocalPorts(scenario);
+  const occupied: string[] = [];
+
+  for (const [port, checkName] of ports) {
+    const free = await waitForPortRelease(
+      port,
+      resolvePortWaitMs(DEFAULT_PORT_ACQUIRE_TIMEOUT_MS)
+    );
+    if (!free) {
+      occupied.push(`127.0.0.1:${port} (readiness check "${checkName}")`);
+    }
+  }
+
+  if (occupied.length === 0) {
+    return;
+  }
+
+  logPhase(
+    logger,
+    "boot",
+    `port precondition failed: ${occupied.join(", ")}`
+  );
+
+  throw new Error(
+    `Scenario ports already in use before boot: ${occupied.join(", ")}. ` +
+      "A previous run left a server behind, or another process owns the port. " +
+      "Stop it before rerunning; the scenario would otherwise assert against a " +
+      "server it did not boot."
+  );
+}
+
+function captureCommandOutput(command: string) {
+  return new Promise<string>((resolve) => {
+    const shellPath = resolveHarnessBehaviorShell({ env: process.env });
+    const subprocess = spawnChildProcess(shellPath, ["-lc", command], {
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+
+    let output = "";
+    subprocess.stdout?.setEncoding("utf8");
+    subprocess.stdout?.on("data", (chunk: string) => {
+      output += chunk;
+    });
+    subprocess.once("error", () => resolve(""));
+    subprocess.once("close", () => resolve(output));
+  });
+}
+
+/**
+ * Kill whatever still listens on a scenario port. Only sound to call after the
+ * boot precondition has established the port was free before the scenario
+ * started, which makes the current listener this scenario's own.
+ *
+ * Several lookups are tried because no single one is present everywhere: lsof
+ * is typical on macOS, ss on CI images, fuser as a last resort.
+ */
+async function killPortListeners(port: number, logger: HarnessBehaviorLogger) {
+  const lookups = [
+    `lsof -tiTCP:${port} -sTCP:LISTEN 2>/dev/null`,
+    `ss -ltnpH 'sport = :${port}' 2>/dev/null | grep -oE 'pid=[0-9]+' | cut -d= -f2`,
+    `fuser -n tcp ${port} 2>/dev/null`,
+  ];
+
+  const pids = new Set<number>();
+  for (const lookup of lookups) {
+    const output = await captureCommandOutput(lookup);
+    for (const token of output.split(/\s+/)) {
+      const pid = Number(token.trim());
+      if (Number.isInteger(pid) && pid > 0 && pid !== process.pid) {
+        pids.add(pid);
+      }
+    }
+    if (pids.size > 0) {
+      break;
+    }
+  }
+
+  if (pids.size === 0) {
+    return false;
+  }
+
+  for (const pid of pids) {
+    try {
+      process.kill(pid, "SIGKILL");
+      logPhase(
+        logger,
+        "cleanup",
+        `reclaimed port 127.0.0.1:${port} from surviving pid ${pid}`
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ESRCH") {
+        logPhase(
+          logger,
+          "cleanup",
+          `could not kill pid ${pid} holding 127.0.0.1:${port}`
+        );
+      }
+    }
+  }
+
+  return true;
+}
+
+function killProcessTree(
+  pid: number,
+  signal: string | undefined,
+  fallback: { kill: (signal?: NodeJS.Signals) => void }
+) {
+  const resolvedSignal = (signal ?? "SIGTERM") as NodeJS.Signals;
+
+  if (pid > 0) {
+    try {
+      // A negative pid targets the process group created by `detached`, so
+      // grandchildren are signalled alongside the shell that spawned them.
+      process.kill(-pid, resolvedSignal);
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH") {
+        return;
+      }
+    }
+  }
+
+  fallback.kill(resolvedSignal);
 }
 
 async function runShellCommand(command: string, cwd: string) {
@@ -1155,6 +1421,7 @@ export async function runHarnessBehaviorScenario<TBrowserResult>(
   try {
     await runPhase("boot", async () => {
       logPhase(logger, "boot", "booting scenario processes");
+      await assertScenarioPortsAvailable(scenario, logger);
       for (const processDefinition of scenario.processes) {
         const runningProcess = await startProcess(rootDir, processDefinition, logger);
         runningProcesses.set(processDefinition.id, runningProcess);
@@ -1260,6 +1527,13 @@ export async function runHarnessBehaviorScenario<TBrowserResult>(
         for (const runningProcess of [...runningProcesses.values()].reverse()) {
           await runningProcess.stop();
         }
+
+        // A stopped process has not finished releasing its listening socket the
+        // instant `stop()` resolves: the signalled grandchildren still have to
+        // unwind. Cleanup is only actually complete once the scenario's ports
+        // are free, so wait for that here rather than leaving the next scenario
+        // to collide with a socket that is still closing.
+        await waitForScenarioPortsReleased(scenario, logger);
       });
     } catch (cleanupError) {
       const wrappedCleanupError = wrapPhaseError("cleanup", cleanupError);

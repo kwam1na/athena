@@ -30,7 +30,7 @@ describe("SharedDemoOwnerHome", () => {
       screen.getByRole("heading", { name: "Run Osu Studio" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Changes reset at the start of every hour."),
+      screen.getByText(/everyone explores the same store at once/i),
     ).toBeInTheDocument();
     expect(screen.getByText("Register open")).toBeInTheDocument();
     expect(screen.getByText("Pickup ready")).toBeInTheDocument();

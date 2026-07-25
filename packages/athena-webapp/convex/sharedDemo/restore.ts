@@ -6,6 +6,7 @@ import { internalMutation, type MutationCtx } from "../_generated/server";
 import { SHARED_DEMO_BASELINE_VERSION } from "./config";
 import { restoreMutableDemoStoreRowsWithCtx } from "./domainRestore";
 import { rollSharedDemoOpeningBaselineWithCtx } from "./openingBaseline";
+import { rollSharedDemoSeededRegisterWithCtx } from "./registerBaseline";
 
 export const SHARED_DEMO_BASELINE = {
   version: SHARED_DEMO_BASELINE_VERSION,
@@ -134,6 +135,10 @@ async function applyBaselineDocumentsWithCtx(
     args.storeId,
   );
   await rollSharedDemoOpeningBaselineWithCtx(ctx, {
+    now: args.now,
+    storeId: args.storeId,
+  });
+  await rollSharedDemoSeededRegisterWithCtx(ctx, {
     now: args.now,
     storeId: args.storeId,
   });

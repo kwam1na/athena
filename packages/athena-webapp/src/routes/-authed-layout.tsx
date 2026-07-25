@@ -391,30 +391,30 @@ function PosTerminalShell({
   isOffline: boolean;
   setFullscreenOverride: Dispatch<SetStateAction<boolean | null>>;
 }) {
+  // PermissionsProvider and ManagerElevationProvider are supplied once by the
+  // parent Layout, above the shell-selection branch, so they keep a stable
+  // identity no matter which shell renders. See the note there.
   return (
-    <PermissionsProvider>
-      <ManagerElevationProvider>
-        <AppShellFullscreenContext.Provider value={{ setFullscreenOverride }}>
-          <PosTerminalAppSessionRecoveryProvider
-            value={appSessionRecovery ?? null}
+    <AppShellFullscreenContext.Provider value={{ setFullscreenOverride }}>
+      <PosTerminalAppSessionRecoveryProvider value={appSessionRecovery ?? null}>
+        <SidebarProvider className="contents" defaultOpen={false}>
+          <main
+            className={cn(
+              "flex min-h-0 flex-1 flex-col overflow-hidden",
+              isOffline ? "bg-app-canvas" : "bg-background",
+              isFullscreenActive
+                ? // `fixed inset-0` (not h-svh) so the fullscreen register fills
+                  // the viewport under the app's default `zoom`, which would
+                  // otherwise scale an explicit 100svh height to 80%.
+                  "fixed inset-0 box-border py-layout-md md:py-8"
+                : "h-[calc(100svh-4rem)] p-8",
+            )}
           >
-            <SidebarProvider className="contents" defaultOpen={false}>
-              <main
-                className={cn(
-                  "flex min-h-0 flex-1 flex-col overflow-hidden",
-                  isOffline ? "bg-app-canvas" : "bg-background",
-                  isFullscreenActive
-                    ? "box-border h-svh py-layout-md md:py-8"
-                    : "h-[calc(100svh-4rem)] p-8",
-                )}
-              >
-                {children}
-              </main>
-            </SidebarProvider>
-          </PosTerminalAppSessionRecoveryProvider>
-        </AppShellFullscreenContext.Provider>
-      </ManagerElevationProvider>
-    </PermissionsProvider>
+            {children}
+          </main>
+        </SidebarProvider>
+      </PosTerminalAppSessionRecoveryProvider>
+    </AppShellFullscreenContext.Provider>
   );
 }
 
@@ -789,23 +789,29 @@ export default function Layout() {
     setFullscreenOverride(null);
   }, [routeWantsFullscreen]);
 
-  if (
-    !shouldRenderPosTerminalShell &&
-      !shouldRenderPosSignInGate &&
-      !shouldRenderPendingPosTerminalShell &&
-      !isBlockedPosAppSession &&
-      (isLoading || user === null)
-  ) {
-    return null; // or a loading spinner if you prefer
-  }
+  // The shell that renders is chosen from external-store state (auth, POS
+  // recovery, offline). Compute that choice into `shellContent`, then mount it
+  // under a SINGLE PermissionsProvider/ManagerElevationProvider pair below. That
+  // keeps those providers at an invariant position across every branch, so a
+  // Convex `useSyncExternalStore` update that flips the branch mid-render can't
+  // momentarily render a consumer (e.g. UserMenu) without its provider.
+  let shellContent: ReactNode;
 
   if (
+    !shouldRenderPosTerminalShell &&
+    !shouldRenderPosSignInGate &&
+    !shouldRenderPendingPosTerminalShell &&
+    !isBlockedPosAppSession &&
+    (isLoading || user === null)
+  ) {
+    shellContent = null; // or a loading spinner if you prefer
+  } else if (
     shouldRenderPosTerminalShell ||
     shouldRenderPosSignInGate ||
     shouldRenderPendingPosTerminalShell ||
     isBlockedPosAppSession
   ) {
-    return (
+    shellContent = (
       <PosTerminalShell
         appSessionRecovery={posAppSessionRecoveryRuntimeInput}
         isFullscreenActive={isFullscreenActive}
@@ -843,47 +849,43 @@ export default function Layout() {
         </SharedDemoRuntime>
       </PosTerminalShell>
     );
+  } else {
+    shellContent = (
+      <AppShellFullscreenContext.Provider value={{ setFullscreenOverride }}>
+        <SidebarProvider
+          className="fixed inset-0 !min-h-0 flex-col overflow-hidden bg-app-canvas"
+          defaultOpen
+        >
+          <MobileSidebarRouteDismiss routeKey={routeKey} />
+          {isFullscreenActive ? null : (
+            <TopBar shellVariant={APP_SHELL_VARIANT} userEmail={userEmail} />
+          )}
+          <div
+            className={cn("flex !min-h-0 flex-1", isFullscreenActive && "h-svh")}
+          >
+            {isFullscreenActive ? null : (
+              <AppSidebar shellVariant={APP_SHELL_VARIANT} />
+            )}
+            <SidebarInset className="h-full !min-h-0 overflow-hidden">
+              <main className="box-border flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-transparent p-layout-md md:p-8">
+                {shouldMountRemoteAssistRuntime ? (
+                  <PosRemoteAssistRuntimeHost
+                    appSessionRecovery={posAppSessionRecoveryRuntimeInput}
+                    entryContext={localPosEntryContext}
+                  />
+                ) : null}
+                <AuthedComponent />
+              </main>
+            </SidebarInset>
+          </div>
+        </SidebarProvider>
+      </AppShellFullscreenContext.Provider>
+    );
   }
 
   return (
     <PermissionsProvider>
-      <ManagerElevationProvider>
-        <AppShellFullscreenContext.Provider value={{ setFullscreenOverride }}>
-          <SidebarProvider
-            className="fixed inset-0 h-svh !min-h-0 flex-col overflow-hidden bg-app-canvas"
-            defaultOpen
-          >
-            <MobileSidebarRouteDismiss routeKey={routeKey} />
-            {isFullscreenActive ? null : (
-              <TopBar
-                shellVariant={APP_SHELL_VARIANT}
-                userEmail={userEmail}
-              />
-            )}
-            <div
-              className={cn(
-                "flex !min-h-0 flex-1",
-                isFullscreenActive && "h-svh",
-              )}
-            >
-              {isFullscreenActive ? null : (
-                <AppSidebar shellVariant={APP_SHELL_VARIANT} />
-              )}
-              <SidebarInset className="h-full !min-h-0 overflow-hidden">
-                <main className="box-border flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-transparent p-layout-md md:p-8">
-                  {shouldMountRemoteAssistRuntime ? (
-                    <PosRemoteAssistRuntimeHost
-                      appSessionRecovery={posAppSessionRecoveryRuntimeInput}
-                      entryContext={localPosEntryContext}
-                    />
-                  ) : null}
-                  <AuthedComponent />
-                </main>
-              </SidebarInset>
-            </div>
-          </SidebarProvider>
-        </AppShellFullscreenContext.Provider>
-      </ManagerElevationProvider>
+      <ManagerElevationProvider>{shellContent}</ManagerElevationProvider>
     </PermissionsProvider>
   );
 }

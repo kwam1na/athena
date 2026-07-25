@@ -71,9 +71,6 @@ export function SharedDemoOwnerHome({ routes }: { routes: SharedDemoRoutes }) {
           Explore a working day across sales, stock, cash, orders, and daily
           operations.
         </p>
-        <p className="mt-layout-md inline-flex items-center gap-layout-xs text-sm text-muted-foreground">
-          Changes reset at the start of every hour.
-        </p>
       </section>
 
       <section
@@ -88,7 +85,9 @@ export function SharedDemoOwnerHome({ routes }: { routes: SharedDemoRoutes }) {
             Today at a glance
           </h2>
           <p className="mt-layout-xs max-w-xl text-sm leading-6 text-muted-foreground">
-            This is a shared demo. Activity may change while you explore.
+            This is a shared demo. Everyone explores the same store at once, so
+            activity you didn&apos;t create may appear, and changes reset at the
+            top of each hour.
           </p>
         </div>
         <ul className="flex flex-wrap gap-x-layout-lg gap-y-layout-sm md:justify-end">

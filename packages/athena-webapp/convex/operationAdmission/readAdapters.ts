@@ -42,6 +42,28 @@ export function createNormalUserReadOperationAdapter(): OperationReadAdapter {
   };
 }
 
+export function createPublicReadOperationAdapter(): OperationReadAdapter {
+  return {
+    kind: "public",
+    resolve: async (ctx, args, definition) => {
+      if (definition.actors.public !== "admit") {
+        return { kind: "not_applicable" };
+      }
+      const constraints = await resolveOperationScope(ctx, args, definition);
+      return {
+        actor: { kind: "public" },
+        constraints,
+        decision: { adapter: "public", outcome: "admitted" },
+        provenance: {
+          kind: "public",
+          operationId: definition.operationId,
+          readIntent: definition.access.intent,
+        },
+      };
+    },
+  };
+}
+
 export function createSharedDemoReadOperationAdapter(): OperationReadAdapter {
   return {
     kind: "shared_demo",
@@ -100,6 +122,7 @@ export async function resolveReadOperationAdmission(
   adapters: {
     normalAdapter?: OperationReadAdapter;
     sharedDemoAdapter?: OperationReadAdapter;
+    publicAdapter?: OperationReadAdapter;
   } = {},
 ) {
   const sharedDemoAdapter = adapters.sharedDemoAdapter;
@@ -118,13 +141,36 @@ export async function resolveReadOperationAdmission(
 
   const normalAdapter =
     adapters.normalAdapter ?? createNormalUserReadOperationAdapter();
-  const normalOutcome = await normalAdapter.resolve(ctx, args, definition);
+  const publicAdapter =
+    adapters.publicAdapter ?? createPublicReadOperationAdapter();
+
+  // The normal adapter throws "Sign in again" for anonymous callers. Rather
+  // than have it swallow that, we let it throw and fall through to the public
+  // adapter, which admits an anonymous actor only for operations that opt in
+  // (actors.public === "admit"). If public does not admit, the original
+  // authentication error is preserved.
+  let normalOutcome: Awaited<ReturnType<OperationReadAdapter["resolve"]>>;
+  try {
+    normalOutcome = await normalAdapter.resolve(ctx, args, definition);
+  } catch (error) {
+    const publicOutcome = await publicAdapter.resolve(ctx, args, definition);
+    if (isAdmitted(publicOutcome)) {
+      return { ...publicOutcome, operation: definition };
+    }
+    throw error;
+  }
   if (isAdmitted(normalOutcome)) {
     return { ...normalOutcome, operation: definition };
   }
   if (normalOutcome.kind === "denied") {
     throw new Error("This operation is not available for the current actor.");
   }
+
+  const publicOutcome = await publicAdapter.resolve(ctx, args, definition);
+  if (isAdmitted(publicOutcome)) {
+    return { ...publicOutcome, operation: definition };
+  }
+
   throw new Error("Sign in again to continue.");
 }
 
