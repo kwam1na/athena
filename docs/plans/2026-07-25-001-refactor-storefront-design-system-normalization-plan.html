@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Storefront design system normalization plan</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1f2933;
+      --muted: #607080;
+      --line: #dce3e8;
+      --paper: #ffffff;
+      --canvas: #f6f7f8;
+      --accent: #a63262;
+      --accent-soft: #faedf3;
+      --danger: #a43c32;
+      --warning: #8a5a12;
+      --success: #276749;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--accent); }
+    a:focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 3px;
+    }
+    main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 32px auto 72px;
+    }
+    header, section, nav {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+    header { padding: 40px; }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 850px;
+      margin: 8px 0 12px;
+      font-size: clamp(34px, 5vw, 58px);
+      line-height: 1.05;
+      letter-spacing: -.035em;
+    }
+    h2 {
+      margin: 0 0 18px;
+      font-size: 26px;
+      line-height: 1.2;
+    }
+    h3 {
+      margin: 22px 0 8px;
+      font-size: 18px;
+    }
+    p { margin: 8px 0 14px; }
+    .lede {
+      max-width: 850px;
+      color: var(--muted);
+      font-size: 19px;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 22px;
+    }
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    nav {
+      margin: 16px 0;
+      padding: 18px 24px;
+    }
+    nav ul {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    section {
+      margin-top: 16px;
+      padding: 30px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      border-radius: 8px;
+      padding: 16px 18px;
+    }
+    .danger { border-left-color: var(--danger); background: #fff2f0; }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 16px;
+      background: #fff;
+    }
+    .card h3 { margin-top: 0; }
+    .priority {
+      display: inline-block;
+      min-width: 34px;
+      margin-right: 7px;
+      border-radius: 6px;
+      padding: 2px 7px;
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .p0 { background: var(--danger); }
+    .p1 { background: var(--warning); }
+    .p2 { background: var(--muted); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 11px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+    ul, ol { padding-left: 22px; }
+    li + li { margin-top: 6px; }
+    code {
+      border-radius: 5px;
+      background: #eef1f3;
+      padding: 2px 5px;
+      font-size: .9em;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(120px, 1fr));
+      gap: 8px;
+      align-items: stretch;
+      margin-top: 18px;
+    }
+    .flow div {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 12px;
+      background: #fafbfc;
+      font-size: 13px;
+      text-align: center;
+    }
+    .flow div:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -14px;
+      top: 50%;
+      z-index: 1;
+      color: var(--accent);
+      font-weight: 700;
+      transform: translateY(-50%);
+    }
+    .unit {
+      display: grid;
+      grid-template-columns: 52px 1fr;
+      gap: 14px;
+      padding: 18px 0;
+      border-top: 1px solid var(--line);
+    }
+    .unit:first-of-type { border-top: 0; }
+    .unit-id {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--accent);
+      color: white;
+      font-weight: 800;
+    }
+    .unit h3 { margin: 0 0 5px; }
+    .unit p { margin: 4px 0; }
+    .gate { color: var(--success); font-weight: 650; }
+    .small { color: var(--muted); font-size: 13px; }
+    footer {
+      margin-top: 18px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 13px;
+    }
+    @media (max-width: 780px) {
+      main { width: min(100% - 20px, 1180px); margin-top: 10px; }
+      header, section { padding: 22px; }
+      .flow { grid-template-columns: 1fr; }
+      .flow div:not(:last-child)::after {
+        content: "↓";
+        top: auto;
+        right: 50%;
+        bottom: -18px;
+        transform: translateX(50%);
+      }
+      table { display: block; overflow-x: auto; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">Refactor plan · Deep · Active</div>
+      <h1>Normalize the storefront design system</h1>
+      <p class="lede">
+        Turn the storefront's existing Tailwind, Radix, shadcn-style, CVA, and Framer Motion
+        foundations into an authoritative customer-facing system without copying Athena's
+        operator visual language or changing commerce behavior.
+      </p>
+      <div class="meta">
+        <span class="chip">Created July 25, 2026</span>
+        <span class="chip">Deepened July 25, 2026</span>
+        <span class="chip">9 implementation units</span>
+        <span class="chip">Light-first, theme-ready</span>
+        <span class="chip"><a href="./2026-07-25-001-refactor-storefront-design-system-normalization-plan.md">Canonical Markdown</a></span>
+      </div>
+    </header>
+
+    <nav aria-label="Plan contents">
+      <ul>
+        <li><a href="#frame">Problem frame</a></li>
+        <li><a href="#findings">Audit findings</a></li>
+        <li><a href="#target">Target system</a></li>
+        <li><a href="#decisions">Decisions</a></li>
+        <li><a href="#units">Implementation units</a></li>
+        <li><a href="#gates">Phase gates</a></li>
+        <li><a href="#risks">Risks</a></li>
+        <li><a href="#verification">Verification</a></li>
+      </ul>
+    </nav>
+
+    <section id="frame">
+      <h2>Problem frame</h2>
+      <p>
+        Storefront has the ingredients of a design system but no governing authority.
+        Feature code bypasses partial tokens and a large primitive inventory with raw palette
+        utilities, arbitrary dimensions, duplicated forms/modals, route-local spacing, and
+        one-off motion.
+      </p>
+      <div class="grid">
+        <article class="card">
+          <h3>57 UI files</h3>
+          <p class="small">A sizable primitive inventory, but no supported/experimental/deprecated catalog.</p>
+        </article>
+        <article class="card">
+          <h3>44 container repetitions</h3>
+          <p class="small">The implicit 1024px layout has no named component or token authority.</p>
+        </article>
+        <article class="card">
+          <h3>247 arbitrary values</h3>
+          <p class="small">Responsive and sizing decisions are scattered through features.</p>
+        </article>
+        <article class="card">
+          <h3>59 blank-state candidates</h3>
+          <p class="small">Critical routes often render null or an empty viewport while loading.</p>
+        </article>
+        <article class="card">
+          <h3>33 shared filenames</h3>
+          <p class="small">Only 12 Athena/storefront primitive filenames remain byte-identical.</p>
+        </article>
+        <article class="card">
+          <h3>Zero storefront stories</h3>
+          <p class="small">No living workbench currently documents foundations, patterns, or templates.</p>
+        </article>
+      </div>
+      <div class="callout danger" style="margin-top:16px">
+        <strong>Safety leads the roadmap.</strong> Pinch zoom is disabled and the central controls
+        commonly suppress browser outlines without providing a reliable visible focus treatment.
+        These are foundation defects, not route-level polish.
+      </div>
+    </section>
+
+    <section id="findings">
+      <h2>Audit findings</h2>
+      <table>
+        <thead>
+          <tr><th>Priority</th><th>Finding</th><th>Normalization response</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="priority p0">P0</span></td><td>User scaling is disabled in two places.</td><td>One viewport authority; restore zoom before visual migration.</td></tr>
+          <tr><td><span class="priority p0">P0</span></td><td>Shared controls and route actions have unsafe focus/semantics.</td><td>Visible focus, true controls, names, hit targets, and keyboard behavior become primitive contracts.</td></tr>
+          <tr><td><span class="priority p0">P0</span></td><td>Loading/error/empty states are fragmented and often invisible.</td><td>Create one state family with safe copy, live feedback, and explicit recovery.</td></tr>
+          <tr><td><span class="priority p1">P1</span></td><td>Historical accent slots and raw hues hide intent.</td><td>Introduce semantic commerce roles with temporary aliases.</td></tr>
+          <tr><td><span class="priority p1">P1</span></td><td>Dark-mode declarations exist without a complete theme authority.</td><td>Ship light-first; keep tokens theme-ready without claiming unsupported behavior.</td></tr>
+          <tr><td><span class="priority p1">P1</span></td><td>Button, form, modal, layout, and motion contracts conflict.</td><td>Separate variants, size, state, and feature content; centralize rhythm and motion.</td></tr>
+          <tr><td><span class="priority p2">P2</span></td><td>The UI folder mixes primitives, unused inventory, and feature-specific components.</td><td>Curate support status and clean up only after consumers migrate.</td></tr>
+          <tr><td><span class="priority p2">P2</span></td><td>No living documentation or enforcement exists.</td><td>Add one active Storybook config, a11y checks, contract tests, and changed-code policy.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="target">
+      <h2>Target system</h2>
+      <p>
+        Reuse Athena's <em>system shape</em>, not its visual identity. The storefront remains
+        customer-facing, comfortable, image-led, and brand-specific.
+      </p>
+      <div class="flow" aria-label="Design system layers">
+        <div>Customer doctrine</div>
+        <div>Semantic foundations</div>
+        <div>Accessible primitives</div>
+        <div>Commerce patterns</div>
+        <div>Journey templates</div>
+        <div>Automated enforcement</div>
+      </div>
+      <div class="callout" style="margin-top:24px">
+        <strong>Visual thesis:</strong> warm, image-led, refined commerce with quiet neutral
+        surfaces, one recognizable action accent, comfortable touch density, and typography
+        that supports merchandise instead of competing with it.
+      </div>
+    </section>
+
+    <section id="decisions">
+      <h2>Key decisions</h2>
+      <table>
+        <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Normalize <code>components/ui</code> in place.</td><td>A directory move creates import churn but does not improve contracts.</td></tr>
+          <tr><td>Keep semantic values storefront-local.</td><td>Customer commerce and operator workflows need different hierarchy, density, shell, and brand values.</td></tr>
+          <tr><td>Light-first, theme-ready.</td><td>The current dark block is incomplete and has no application authority.</td></tr>
+          <tr><td>Use temporary accent aliases.</td><td>Route-by-route migration is safer than a flag day.</td></tr>
+          <tr><td>Primitives do not own commerce state.</td><td>Foundations cannot import product, route, analytics, or checkout behavior.</td></tr>
+          <tr><td>One active Storybook config.</td><td>Avoid Athena's current duplicate-config drift and ensure a11y runs in the real workbench.</td></tr>
+          <tr><td>Freeze nonvisual contracts first.</td><td>All 34 route sources must trace selectors, telemetry, URLs, state, persistence, and synthetic/redacted baseline evidence.</td></tr>
+          <tr><td>Checkout storage remains immutable unless versioned.</td><td>Field normalization must not strand persisted customer sessions.</td></tr>
+          <tr><td>Preserve current auth return paths.</td><td>Changing destinations is product behavior outside this refactor.</td></tr>
+          <tr><td>Use WCAG 2.2 AA as the normative baseline.</td><td>Accessibility cannot depend solely on local conventions that the audit already found deficient.</td></tr>
+          <tr><td>Use synthetic/redacted review artifacts.</td><td>Storybook, screenshots, and traces must not become a customer-data, token, or payment-data exposure channel.</td></tr>
+          <tr><td>No shared package yet.</td><td>Extract only after real usage proves identical neutral contracts.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="units">
+      <h2>Implementation units</h2>
+
+      <article class="unit">
+        <div class="unit-id">U1</div>
+        <div>
+          <h3>Contract freeze, foundations, and accessibility</h3>
+          <p>Trace every route's states, selectors, telemetry, persistence, and synthetic/redacted evidence. Establish doctrine, WCAG 2.2 AA mapping, semantic tokens, light-first authority, zoom, focus, and reduced-motion contracts.</p>
+          <p class="small">Primary outputs: design guide, 34-route migration baseline, artifact policy, token/config tests, canonical CSS/Tailwind/viewport wiring.</p>
+        </div>
+      </article>
+
+      <article class="unit">
+        <div class="unit-id">U2</div>
+        <div>
+          <h3>Workbench and guardrails</h3>
+          <p>Create one active Storybook workbench with Guidance, Foundations, Primitives, Patterns, and Templates; enable a11y and add an executable changed-file raw-value policy.</p>
+          <p class="small">Guardrails land early so migration does not accumulate new drift.</p>
+        </div>
+      </article>
+
+      <article class="unit">
+        <div class="unit-id">U3</div>
+        <div>
+          <h3>Action and form primitives</h3>
+          <p>Harden button hierarchy, 44×44px standalone touch targets, loading, icon actions, inputs, selection controls, labels, help, and validation semantics.</p>
+          <p class="small">Exit evidence: keyboard, names, focus, native disabled/busy, stable loading dimensions, form associations, consumer inventory, and unmigrated-journey compatibility smoke tests.</p>
+        </div>
+      </article>
+
+      <article class="unit">
+        <div class="unit-id">U4</div>
+        <div>
+          <h3>Overlay, state, feedback, and media patterns</h3>
+          <p>Normalize dialog/sheet focus, state-content and overlay behavior matrices, async states, safe errors, status roles, skeletons, and image fallback/aspect/alt behavior.</p>
+          <p class="small">Terminal states retain distinct domain meaning, and every overlay records dismissal, focus, scroll, and teardown behavior.</p>
+        </div>
+      </article>
+
+      <article class="unit">
+        <div class="unit-id">U5</div>
+        <div>
+          <h3>Shell and responsive layout migration</h3>
+          <p>Encode page/container/section/grid rhythm and migrate every live shell mutation to a declarative model for homepage, browsing, checkout, receipt, banner, menus, bag, filters, and scroll visibility.</p>
+          <p class="small">Overlay teardown must restore body scroll, focus, navbar state, and route-correct composition.</p>
+        </div>
+      </article>
+
+      <article class="unit">
+        <div class="unit-id">U6</div>
+        <div>
+          <h3>Catalog and product migration</h3>
+          <p>Migrate homepage, filters, cards, gallery, variants, reviews, inventory/offer states, and mobile actions as the first complete commerce template; relocate merchandising-aware modals out of the primitive boundary.</p>
+          <p class="small">Mobile and desktop share state/action components, and a fit review must explicitly revise or approve the system before checkout.</p>
+        </div>
+      </article>
+
+      <article class="unit">
+        <div class="unit-id">U7</div>
+        <div>
+          <h3>Bag and checkout migration</h3>
+          <p>Converge duplicated fields and normalize conversion surfaces while preserving schemas, storage, fulfillment, fee logic, payment branches, terminal semantics, retries, telemetry, authorization boundaries, and idempotency.</p>
+          <p class="small">Checkout lands only after primitives and catalog have proven the system.</p>
+        </div>
+      </article>
+
+      <article class="unit">
+        <div class="unit-id">U8</div>
+        <div>
+          <h3>Account, post-purchase, and content routes</h3>
+          <p>Migrate account, orders, rewards, saved items, reviews, policies, contact, receipt, maintenance, and not-found independently of checkout; relocate review-aware modals to their feature boundary.</p>
+          <p class="small">Current post-auth destinations, protected-data boundaries, and partial guest-ownership transfer behavior remain unchanged.</p>
+        </div>
+      </article>
+
+      <article class="unit">
+        <div class="unit-id">U9</div>
+        <div>
+          <h3>Final catalog cleanup</h3>
+          <p>Classify the supported UI catalog and remove only zero-consumer aliases, copies, assets, native-control bypasses, and policy exceptions after U6, U7, and U8 complete.</p>
+          <p class="small">Supported <code>components/ui</code> files may not import route, API, query, telemetry, or feature state; cleanup remains a separate rollback boundary.</p>
+        </div>
+      </article>
+    </section>
+
+    <section id="gates">
+      <h2>Phase gates</h2>
+      <table>
+        <thead><tr><th>Gate</th><th>Required evidence</th></tr></thead>
+        <tbody>
+          <tr><td class="gate">Contract freeze → foundations</td><td>All 34 route entries and synthetic/redacted evidence cover applicable states, redirects, persistence, selectors, URLs/search, and telemetry.</td></tr>
+          <tr><td class="gate">Foundations → primitives</td><td>Zoom restored; WCAG mapping, token/config, focus, motion, and light-first authority agree.</td></tr>
+          <tr><td class="gate">Primitives → shell</td><td>Action/form/overlay/state contracts pass keyboard, naming, focus, loading, safe error, and active-Storybook a11y checks.</td></tr>
+          <tr><td class="gate">Shell → browse</td><td>Named viewport matrix, shell modes, overlay teardown, route-transition state, landmarks, and headings pass.</td></tr>
+          <tr><td class="gate">Browse → checkout</td><td>Catalog/product is a complete template family; the fit owner records revise or proceed against explicit blockers and owned deviations.</td></tr>
+          <tr><td class="gate">Checkout compatibility</td><td>Storage, derived state, fulfillment, terminal routes, refresh/retry idempotency, repeat safety, authorization, and observability pass.</td></tr>
+          <tr><td class="gate">All journeys → cleanup</td><td>U6, U7, and U8 evidence is complete; search and policy tests prove legacy paths have no live consumers.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="risks">
+      <h2>Risks and mitigations</h2>
+      <div class="grid">
+        <article class="card"><h3>Accidental redesign</h3><p>Lock semantic roles and visual thesis; migrate behavior-preservingly with route snapshots.</p></article>
+        <article class="card"><h3>Flag-day token rename</h3><p>Use temporary aliases and enforce semantic roles on new/changed code first.</p></article>
+        <article class="card"><h3>Primitive blast radius</h3><p>Add contract tests, preserve compatibility variants, and migrate by journey.</p></article>
+        <article class="card"><h3>Checkout regression</h3><p>Characterize persistence and state first; require compatibility gates and idempotent refresh/retry.</p></article>
+        <article class="card"><h3>Static-only accessibility</h3><p>Require keyboard, focus restoration, live regions, reduced motion, contrast, and zoom evidence.</p></article>
+        <article class="card"><h3>Storybook drift</h3><p>Use app foundations and one active configuration protected by tests.</p></article>
+        <article class="card"><h3>Athena coupling</h3><p>Reuse governance only; keep operator tokens, shell, density, and page treatments separate.</p></article>
+        <article class="card"><h3>Unsafe cleanup</h3><p>Delete only after import evidence, snapshots, route migration, and zero live usage.</p></article>
+      </div>
+    </section>
+
+    <section id="verification">
+      <h2>Verification strategy</h2>
+      <ul>
+        <li>Keyboard-only traversal across navigation, filters, product/gallery, bag, checkout, overlays, auth, and post-purchase.</li>
+        <li>WCAG 2.2 AA mapping plus visible focus, accessible names, focus restoration, live async feedback, and native disabled/busy behavior.</li>
+        <li>Reduced-motion runs with no delayed hidden navigation, infinite demand pulse, or staged essential content.</li>
+        <li>Named responsive widths: 320, 375/390, 767/768, 1024, 1279/1280, and wide desktop, plus landscape/zoom/large text.</li>
+        <li>State matrices for loading, background refresh, empty, recoverable error, terminal error, disabled/pending, and success.</li>
+        <li>Checkout persistence, fulfillment transitions, payment branches, terminal direct-entry/refresh/retry, and mutation idempotency.</li>
+        <li>Token/config policy, primitive consumer compatibility, Storybook a11y/interaction checks, browser snapshots, package build, and mapped harness behaviors.</li>
+        <li>Protected-route negative tests and preservation of route/search contracts, readiness selectors, test IDs, telemetry, observability, API, and domain outcomes.</li>
+        <li>Synthetic fixtures and redacted artifacts with documented access, deployment, retention, and secret/token prohibitions.</li>
+      </ul>
+      <div class="callout">
+        <strong>Success means authority, not merely consistency.</strong> Routes should consume a
+        documented and tested vocabulary; contributors should be prevented from introducing new
+        visual and accessibility drift while the old inventory is deliberately retired.
+      </div>
+    </section>
+
+    <footer>
+      Canonical source:
+      <a href="./2026-07-25-001-refactor-storefront-design-system-normalization-plan.md">2026-07-25-001-refactor-storefront-design-system-normalization-plan.md</a>
+    </footer>
+  </main>
+</body>
+</html>

@@ -2,6 +2,7 @@ import type { Store } from "@athena/webapp";
 import { useOptionalStoreContext } from "@/contexts/StoreContext";
 import { useCountdown } from "@/components/common/hooks";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
+import { StorefrontPage } from "@/components/common/StorefrontPage";
 
 export const MaintenanceMode = ({ store }: { store?: Store }) => {
   const context = useOptionalStoreContext();
@@ -17,25 +18,23 @@ export const MaintenanceMode = ({ store }: { store?: Store }) => {
     "We're working on bringing you amazing products. Check back soon!";
 
   return (
-    <div className="container mx-auto px-4 lg:px-0 overflow-hidden bg-accent5 md:bg-background">
-      <div className="flex flex-col items-center justify-center h-screen">
-        <div className="space-y-12">
-          <h1 className="text-3xl text-accent2 font-light uppercase flex items-center justify-center w-full tracking-widest py-4">
+    <StorefrontPage className="flex min-h-dvh items-center justify-center bg-surface-subtle">
+        <div className="space-y-12 text-center">
+          <p className="text-3xl font-light uppercase tracking-widest text-brand">
             Wigclub
-          </h1>
+          </p>
           <div className="space-y-4">
-            <p className="text-lg text-center font-medium">{heading}</p>
+            <h1 className="text-xl font-medium">{heading}</h1>
 
             <p className="text-muted-foreground text-center">{message}</p>
 
             {timeLeft && (
-              <p className="text-lg text-center font-bold text-accent2">
+              <p className="text-lg text-center font-bold text-brand" role="timer">
                 {timeLeft}
               </p>
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </StorefrontPage>
   );
 };

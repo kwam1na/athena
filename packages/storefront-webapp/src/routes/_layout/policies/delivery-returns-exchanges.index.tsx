@@ -3,6 +3,8 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { useScrollToTop } from "@/hooks/useScrollToTop";
 import { capitalizeFirstLetter, capitalizeWords } from "@/lib/utils";
 import { createFileRoute } from "@tanstack/react-router";
+import { StorefrontPage } from "@/components/common/StorefrontPage";
+import { PageState } from "@/components/states/PageState";
 
 export const Route = createFileRoute(
   "/_layout/policies/delivery-returns-exchanges/",
@@ -15,12 +17,23 @@ const OnlineOrderPolicy = () => {
 
   useScrollToTop();
 
-  if (!store) return <div className="h-screen" />;
+  if (!store) {
+    return (
+      <PageState
+        state="loading"
+        title="Loading delivery policy"
+        description="We're getting the latest store policy."
+      />
+    );
+  }
 
   return (
-    <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
+    <StorefrontPage as="section" spacing="relaxed">
+      <FadeIn>
       <div className="space-y-8">
-        <h1 className="text-lg">Deliveries, Returns and Exchanges</h1>
+        <h1 className="text-2xl font-semibold">
+          Deliveries, returns and exchanges
+        </h1>
 
         <p className="text-sm">
           {`At ${store?.name && capitalizeWords(store?.name as string)}, we are committed to providing you with the best products
@@ -111,6 +124,7 @@ const OnlineOrderPolicy = () => {
           </div>
         </div>
       </div>
-    </FadeIn>
+      </FadeIn>
+    </StorefrontPage>
   );
 };

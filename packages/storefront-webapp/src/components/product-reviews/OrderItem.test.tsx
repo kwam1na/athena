@@ -26,5 +26,8 @@ describe("product review OrderItem", () => {
 
     expect(screen.getByText("GH₵29.99")).toBeInTheDocument();
     expect(screen.queryByText("GH₵2,999")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "Wigclub Bonnets" }),
+    ).toBeInTheDocument();
   });
 });

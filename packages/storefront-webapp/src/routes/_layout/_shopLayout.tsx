@@ -2,7 +2,6 @@ import ProductFilter from "@/components/filter/ProductFilter";
 import ProductFilterBar from "@/components/filter/ProductFilterBar";
 import { useGetShopSearchParams } from "@/components/navigation/hooks";
 import { Button } from "@/components/ui/button";
-import { useStoreContext } from "@/contexts/StoreContext";
 import { useGetProductFilters } from "@/hooks/useGetProductFilters";
 import {
   createFileRoute,
@@ -37,16 +36,6 @@ function MobileFilters({
   clearFilters: () => void;
   filtersCount: number;
 }) {
-  useEffect(() => {
-    // Disable scrolling when component mounts
-    document.body.style.overflow = "hidden";
-
-    // Re-enable scrolling when component unmounts
-    return () => {
-      document.body.style.overflow = "unset";
-    };
-  }, []);
-
   return (
     <div className="fixed inset-0 z-50 w-full h-screen bg-background">
       <div className="absolute z-40 w-full h-screen bg-background">
@@ -89,10 +78,9 @@ function MobileFilters({
 
 function LayoutComponent() {
   const [showFilters, setShowFilters] = useState(false);
-  const [showMobileFilters, setShowMobileFilters] = useState(false);
-
-  // TODO: combine this into useNavigationBarContext
-  const { hideNavbar, showNavbar } = useStoreContext();
+  const { activeOverlay, closeOverlay, openOverlay } =
+    useNavigationBarContext();
+  const showMobileFilters = activeOverlay === "mobile-filter";
 
   const searchParams = useGetShopSearchParams();
 
@@ -102,14 +90,14 @@ function LayoutComponent() {
 
   const hasActiveFilters = Boolean(searchParams.color || searchParams.length);
 
-  const onClickOnMobileFilters = () => {
-    setShowMobileFilters(true);
-    hideNavbar();
+  const onClickOnMobileFilters = (
+    trigger?: HTMLElement | null,
+  ) => {
+    openOverlay("mobile-filter", trigger);
   };
 
   const onMobileFiltersCloseClick = () => {
-    setShowMobileFilters(false);
-    showNavbar();
+    closeOverlay();
   };
 
   const clearFilters = () => {

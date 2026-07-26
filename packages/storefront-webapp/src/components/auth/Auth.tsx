@@ -1,13 +1,3 @@
-import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
-import { useEffect } from "react";
-
-export const AuthComponent = ({ children }: { children: React.ReactNode }) => {
-  const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
-
-  useEffect(() => {
-    setNavBarLayout("fixed");
-    setAppLocation("shop");
-  }, []);
-
-  return <>{children}</>;
-};
+export const AuthComponent = ({ children }: { children: React.ReactNode }) => (
+  <section aria-label="Customer account">{children}</section>
+);

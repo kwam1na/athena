@@ -17,5 +17,9 @@ describe("MaintenanceMode", () => {
         "We're working on bringing you amazing products. Check back soon!",
       ),
     ).toBeInTheDocument();
+    expect(screen.getByRole("main")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "We're updating our store..." }),
+    ).toBeInTheDocument();
   });
 });

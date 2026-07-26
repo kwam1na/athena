@@ -1,6 +1,9 @@
 # Storefront Webapp Agent Docs
 
 - [Architecture](./architecture.md)
+- [Design system](./design.md)
+- [Design-system migration baseline](./design-system-migration-baseline.md)
+- [Design-system artifact policy](./design-system-artifact-policy.md)
 - [Testing](./testing.md)
 - [Code map](./code-map.md)
 - [Route index](./route-index.md)

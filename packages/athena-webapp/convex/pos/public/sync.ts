@@ -294,6 +294,10 @@ async function scheduleRegisterCloseoutNotifications(
     }>;
   },
 ) {
+  if ((ctx as OperationMutationCtx).operationAdmission.actor.kind === "shared_demo") {
+    return;
+  }
+
   const closeoutEventIds = new Set(
     args.events
       .filter((event) => event.eventType === "register_closed")

@@ -158,6 +158,37 @@ describe("HARNESS_APP_REGISTRY", () => {
     });
   });
 
+  it("maps storefront design-system workbench edits to package, build, and Storybook validation", () => {
+    const storefront = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "storefront-webapp"
+    );
+    const storybookScenario = storefront?.validationScenarios.find(
+      (scenario) =>
+        scenario.title === "Storybook and design-system tooling edits"
+    );
+
+    expect(storybookScenario).toMatchObject({
+      touchedPaths: [
+        ".storybook",
+        "src/stories",
+        "src/styles",
+        "src/index.css",
+        "src/design-system-build-config.test.ts",
+        "tailwind.config.js",
+        "postcss.config.cjs",
+        "package.json",
+        "scripts/design-system-policy-changed.sh",
+        "scripts/design-system-policy.ts",
+      ],
+      commands: [
+        { kind: "script", script: "test" },
+        { kind: "script", script: "build" },
+        { kind: "script", script: "storybook:build" },
+        { kind: "script", script: "lint:design-system:changed" },
+      ],
+    });
+  });
+
   it("covers Athena convex validation scripts in the backend-adjacent scenario", () => {
     const athena = HARNESS_APP_REGISTRY.find(
       (entry) => entry.appName === "athena-webapp"

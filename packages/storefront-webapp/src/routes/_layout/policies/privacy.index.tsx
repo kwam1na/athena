@@ -1,6 +1,7 @@
 import { FadeIn } from "@/components/common/FadeIn";
 import { useScrollToTop } from "@/hooks/useScrollToTop";
 import { createFileRoute } from "@tanstack/react-router";
+import { StorefrontPage } from "@/components/common/StorefrontPage";
 
 export const Route = createFileRoute("/_layout/policies/privacy/")({
   component: () => <PrivacyPolicy />,
@@ -10,9 +11,10 @@ const PrivacyPolicy = () => {
   useScrollToTop();
 
   return (
-    <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
+    <StorefrontPage as="section" spacing="relaxed">
+      <FadeIn>
       <div className="space-y-8">
-        <h1 className="text-lg">Privacy Policy</h1>
+        <h1 className="text-2xl font-semibold">Privacy policy</h1>
         <div className="space-y-4 text-sm">
           <p>
             Your privacy is important to us. It is our policy to respect your
@@ -57,6 +59,7 @@ const PrivacyPolicy = () => {
           <p>This policy is effective as of 1 January 2025.</p>
         </div>
       </div>
-    </FadeIn>
+      </FadeIn>
+    </StorefrontPage>
   );
 };

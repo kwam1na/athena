@@ -1,393 +1,193 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { Link } from "@tanstack/react-router";
-import { AlignLeft } from "lucide-react";
+import { Menu, ShoppingBag } from "lucide-react";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useGetStoreCategories } from "../navigation/hooks";
-import CartIcon from "../shopping-bag/CartIcon";
-
-import { AnimatePresence, easeInOut, motion } from "framer-motion";
 import { BagMenu } from "./BagMenu";
 import { MobileBagMenu } from "./MobileBagMenu";
 import { MobileMenu } from "./MobileMenu";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { SiteBanner } from "./SiteBanner";
-import { cn } from "@/lib/utils";
 import {
-  getMainWrapperClass,
-  getNavBGClass,
   getHoverClass,
+  getNavBGClass,
   getSubmenuBGClass,
-  getNavBarAnimationDelay,
 } from "./navBarStyles";
 
-const item = {
-  hidden: { y: -2, opacity: 0 },
-  show: { y: 0, opacity: 1 },
-  exit: { y: 0, opacity: 0 },
-};
-
 export default function NavigationBar() {
-  const { store, navBarClassname, showNavbar, hideNavbar } = useStoreContext();
-  const { navBarLayout, appLocation } = useNavigationBarContext();
-
-  if (!store || !appLocation) return null;
-
-  return (
-    <NavigationBarInner
-      appLocation={appLocation}
-      hideNavbar={hideNavbar}
-      navBarClassname={navBarClassname}
-      navBarLayout={navBarLayout}
-      showNavbar={showNavbar}
-      store={store}
-    />
-  );
-}
-
-function NavigationBarInner({
-  store,
-  navBarClassname,
-  showNavbar,
-  hideNavbar,
-  navBarLayout,
-  appLocation,
-}: {
-  store: NonNullable<ReturnType<typeof useStoreContext>["store"]>;
-  navBarClassname: string;
-  showNavbar: () => void;
-  hideNavbar: () => void;
-  navBarLayout: ReturnType<typeof useNavigationBarContext>["navBarLayout"];
-  appLocation: NonNullable<
-    ReturnType<typeof useNavigationBarContext>["appLocation"]
-  >;
-}) {
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
-  const [isMobileMenuShowing, setIsMobileMenuShowing] = useState(false);
-  const [isMobileBagMenuShowing, setIsMobileBagMenuShowing] = useState(false);
-  const [shouldLoadBagState, setShouldLoadBagState] = useState(
-    appLocation !== "homepage",
-  );
-
+  const { store } = useStoreContext();
+  const shell = useNavigationBarContext();
+  const { categories, categoryToSubcategoriesMap } = useGetStoreCategories();
   const { bagCount } = useShoppingBag({
     enabled:
-      shouldLoadBagState || activeMenu === "bag" || isMobileBagMenuShowing,
+      shell.appLocation !== "homepage" ||
+      shell.activeOverlay === "desktop-bag" ||
+      shell.activeOverlay === "mobile-bag",
   });
-  const { categories, categoryToSubcategoriesMap } = useGetStoreCategories();
 
-  // Use styling utility instead of hardcoded hover class logic
-  const hoverClass = getHoverClass(navBarLayout, appLocation);
-
-  const container = {
-    hidden: { opacity: 1 },
-    show: {
-      opacity: 1,
-      transition: {
-        type: "spring",
-        ease: easeInOut,
-        delay: 0.05,
-        staggerChildren: 0.025,
-        bounce: 0,
-      },
-    },
-  };
-
-  const StoreCategoriesSubmenu = () => {
-    if (!activeMenu) return null;
-
-    const subMenuItems = categoryToSubcategoriesMap?.[activeMenu];
-
-    return (
-      <>
-        <motion.div variants={item}>
-          <Link
-            to="/shop/$categorySlug"
-            params={(p) => ({
-              ...p,
-              categorySlug: activeMenu,
-            })}
-            className={`text-xs ${hoverClass} transition-colors`}
-            onClick={() => setActiveMenu(null)}
-          >
-            Shop all
-          </Link>
-        </motion.div>
-        <div
-          className={`grid ${subMenuItems?.length && subMenuItems?.length > 5 ? "grid-cols-2" : "grid-cols-1"} gap-4`}
-        >
-          {subMenuItems?.map((s) => (
-            <motion.div variants={item} key={s.value}>
-              <Link
-                key={s.value}
-                to="/shop/$categorySlug/$subcategorySlug"
-                params={(p) => ({
-                  ...p,
-                  categorySlug: activeMenu,
-                  subcategorySlug: s.value,
-                })}
-                className={`text-xs ${hoverClass} transition-colors`}
-                onClick={() => setActiveMenu(null)}
-              >
-                {s.label}
-              </Link>
-            </motion.div>
-          ))}
-        </div>
-      </>
-    );
-  };
-
-  const LinkSubmenu = ({
-    slug,
-    children,
-  }: {
-    slug: string;
-    children: React.ReactNode;
-  }) => {
-    return (
-      <motion.div
-        layoutId="link-submenu"
-        key="link-menu"
-        variants={container}
-        initial="hidden"
-        animate="show"
-        exit={"exit"}
-        className={`absolute w-full ${getSubmenuBGClass(navBarLayout, appLocation)} left-0 animate-fadeIn z-50`}
-        onMouseEnter={() => setActiveMenu(slug)}
-        onMouseLeave={() => setActiveMenu(null)}
-      >
-        <div className="py-8 container mx-auto max-w-[1024px]">
-          <div className="flex flex-col font-medium gap-4">{children}</div>
-        </div>
-      </motion.div>
-    );
-  };
-
-  const onHideNavbarClick = () => {
-    setIsMobileMenuShowing(true);
-    hideNavbar();
-  };
-
-  const onShowNavbarClick = () => {
-    setIsMobileMenuShowing(false);
-    showNavbar();
-  };
-
-  const handleShowMobileBagMenu = () => {
-    setShouldLoadBagState(true);
-    setIsMobileBagMenuShowing(true);
-    hideNavbar();
-  };
-
-  const handleHideMobileBagMenu = () => {
-    setIsMobileBagMenuShowing(false);
-    showNavbar();
-  };
-
-  const [isScrollingDown, setIsScrollingDown] = useState(false);
-  const [prevScrollY, setPrevScrollY] = useState(0);
-
-  // Handle scroll direction detection
   useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      if (currentScrollY > prevScrollY && currentScrollY > 50) {
-        setIsScrollingDown(true);
-      } else {
-        setIsScrollingDown(false);
-      }
-      setPrevScrollY(currentScrollY);
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") shell.closeOverlay();
     };
+    document.addEventListener("keydown", onEscape);
+    return () => document.removeEventListener("keydown", onEscape);
+  }, [shell]);
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [prevScrollY]);
-
-  useEffect(() => {
-    if (appLocation !== "homepage") {
-      setShouldLoadBagState(true);
-    }
-  }, [appLocation]);
-
-  // Use styling utilities instead of hardcoded class strings
-  const mainWrapperClass = getMainWrapperClass(navBarLayout);
-  const navBGClass = getNavBGClass(!!activeMenu, navBarLayout, appLocation);
+  if (!store || !shell.appLocation) return null;
+  const hover = getHoverClass(shell.navBarLayout, shell.appLocation);
+  const desktopOpen =
+    shell.activeOverlay === "desktop-menu" ||
+    shell.activeOverlay === "desktop-bag";
+  const subcategories = shell.activeMenu
+    ? categoryToSubcategoriesMap?.[shell.activeMenu]
+    : undefined;
 
   return (
-    <div className="flex flex-col">
-      <motion.div
-        className={`w-full z-50 ${mainWrapperClass}`}
-        initial={{ opacity: 0 }}
-        animate={{
-          opacity: 1,
-          y: isScrollingDown && !activeMenu ? -100 : 0,
-          transition: {
-            y: { duration: 0.3, ease: "easeInOut" },
-            opacity: {
-              duration: 1,
-              delay: getNavBarAnimationDelay(appLocation),
-              ease: [0.6, 0.05, 0.04, 0.9],
-            },
-          },
-        }}
+    <header className="w-full">
+      <SiteBanner />
+      <div
+        className={getNavBGClass(
+          desktopOpen,
+          shell.navBarLayout,
+          shell.appLocation,
+        )}
       >
-        <AnimatePresence>
-          <div>
-            <SiteBanner />
-          </div>
-
-          <div key="nav-bar">
-            <div className={`w-full ${navBGClass} transition-all ease-out`}>
-              <nav
-                className={`${navBarClassname} container mx-auto max-w-[1024px]`}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="flex gap-16">
-                    <div onMouseEnter={() => setActiveMenu(null)}>
-                      <Link to="/">
-                        <h1
-                          className={`text-md font-medium ${hoverClass} tracking-widest`}
-                        >
-                          {store?.name && (store?.name as string).toUpperCase()}
-                        </h1>
-                      </Link>
-                    </div>
-                    {
-                      <div className="hidden lg:flex gap-12">
-                        {/* <div
-                          key={"sale"}
-                          className="group relative h-full flex items-center"
-                          // onMouseEnter={() => setActiveMenu(s.value)}
-                        >
-                          <Link
-                            to="/shop/$categorySlug"
-                            params={(p) => ({
-                              ...p,
-                              categorySlug: "sale",
-                            })}
-                            className={`text-xs ${hoverClass} transition-colors`}
-                            onClick={() => setActiveMenu(null)}
-                          >
-                            Sale
-                          </Link>
-                          <div className="absolute -bottom-6 left-0 w-full h-6" />
-                        </div> */}
-
-                        {categories?.map((s) => (
-                          <div
-                            key={s.value}
-                            className="group relative h-full flex items-center"
-                            onMouseEnter={() => setActiveMenu(s.value)}
-                          >
-                            <Link
-                              to="/shop/$categorySlug"
-                              params={(p) => ({
-                                ...p,
-                                categorySlug: s.value,
-                              })}
-                              className={`text-xs ${hoverClass} transition-colors`}
-                              onClick={() => setActiveMenu(null)}
-                            >
-                              {s.label}
-                            </Link>
-                            {/* Invisible extender to prevent hover gap */}
-                            <div className="absolute -bottom-6 left-0 w-full h-6" />
-                          </div>
-                        ))}
-                      </div>
-                    }
-                  </div>
-
-                  <div className="flex gap-8">
-                    <div
-                      onMouseEnter={() => setActiveMenu(null)}
-                      className="flex items-center gap-4"
-                    >
-                      <span
-                        className="hidden lg:flex cursor-pointer hover:-rotate-6 transition-all duration-300 ease-out"
-                        onClick={() => {
-                          setShouldLoadBagState(true);
-                          setActiveMenu("bag");
-                        }}
-                      >
-                        <CartIcon
-                          notificationCount={bagCount}
-                          hoverClass={hoverClass}
-                        />
-                      </span>
-
-                      <span
-                        className="flex lg:hidden"
-                        onClick={handleShowMobileBagMenu}
-                      >
-                        <CartIcon
-                          notificationCount={bagCount}
-                          hoverClass={hoverClass}
-                        />
-                      </span>
-                      <AlignLeft
-                        className={`lg:hidden w-5 h-5 ${hoverClass}`}
-                        onClick={onHideNavbarClick}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </nav>
+        <nav
+          aria-label="Storefront navigation"
+          className="mx-auto flex max-w-content items-center justify-between px-gutter py-layout-sm"
+        >
+          <div className="flex items-center gap-layout-2xl">
+            <Link to="/" className={`text-sm font-medium tracking-widest ${hover}`}>
+              {String(store.name ?? "").toUpperCase()}
+            </Link>
+            <div className="hidden gap-layout-xl lg:flex">
+              {categories?.map((category) => (
+                <Link
+                  key={category.value}
+                  to="/shop/$categorySlug"
+                  params={(params) => ({
+                    ...params,
+                    categorySlug: category.value,
+                  })}
+                  className={`text-xs ${hover}`}
+                  onFocus={(event) =>
+                    shell.openOverlay(
+                      "desktop-menu",
+                      event.currentTarget,
+                      category.value,
+                    )
+                  }
+                  onMouseEnter={(event) =>
+                    shell.openOverlay(
+                      "desktop-menu",
+                      event.currentTarget,
+                      category.value,
+                    )
+                  }
+                >
+                  {category.label}
+                </Link>
+              ))}
             </div>
-
-            {/* Submenus */}
-            {activeMenu && (
-              <LinkSubmenu slug={activeMenu}>
-                {activeMenu == "bag" ? (
-                  <BagMenu setActiveMenu={setActiveMenu} />
-                ) : (
-                  <StoreCategoriesSubmenu />
+          </div>
+          <div className="flex gap-layout-xs">
+            <button
+              type="button"
+              aria-label={`Open shopping bag${bagCount ? `, ${bagCount} items` : ""}`}
+              className={`hidden h-11 w-11 items-center justify-center rounded-md lg:flex ${hover}`}
+              onClick={(event) =>
+                shell.openOverlay("desktop-bag", event.currentTarget, "bag")
+              }
+            >
+              <ShoppingBag className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              aria-label="Open shopping bag"
+              className={`flex h-11 w-11 items-center justify-center rounded-md lg:hidden ${hover}`}
+              onClick={(event) =>
+                shell.openOverlay("mobile-bag", event.currentTarget)
+              }
+            >
+              <ShoppingBag className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              aria-label="Open menu"
+              className={`flex h-11 w-11 items-center justify-center rounded-md lg:hidden ${hover}`}
+              onClick={(event) =>
+                shell.openOverlay("mobile-menu", event.currentTarget)
+              }
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          </div>
+        </nav>
+      </div>
+      {desktopOpen && (
+        <section
+          aria-label="Storefront navigation menu"
+          className={`absolute left-0 z-50 w-full ${getSubmenuBGClass(
+            shell.navBarLayout,
+            shell.appLocation,
+          )}`}
+          onMouseLeave={() => shell.closeOverlay({ restoreFocus: false })}
+        >
+          <div className="mx-auto max-w-content px-gutter py-layout-xl">
+            {shell.activeOverlay === "desktop-bag" ? (
+              <BagMenu
+                setActiveMenu={() =>
+                  shell.closeOverlay({ restoreFocus: false })
+                }
+              />
+            ) : (
+              <div className="flex flex-col gap-layout-md">
+                {shell.activeMenu && (
+                  <Link
+                    to="/shop/$categorySlug"
+                    params={(params) => ({
+                      ...params,
+                      categorySlug: shell.activeMenu!,
+                    })}
+                    onClick={() =>
+                      shell.closeOverlay({ restoreFocus: false })
+                    }
+                  >
+                    Shop all
+                  </Link>
                 )}
-              </LinkSubmenu>
+                {shell.activeMenu &&
+                  subcategories?.map((item) => (
+                    <Link
+                      key={item.value}
+                      to="/shop/$categorySlug/$subcategorySlug"
+                      params={(params) => ({
+                        ...params,
+                        categorySlug: shell.activeMenu!,
+                        subcategorySlug: item.value,
+                      })}
+                      onClick={() =>
+                        shell.closeOverlay({ restoreFocus: false })
+                      }
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
+              </div>
             )}
           </div>
-
-          {/* Content Overlay */}
-          {activeMenu && (
-            <motion.div
-              key="overlay"
-              initial={{ opacity: 0 }}
-              animate={{
-                opacity: 1,
-                transition: {
-                  duration: 0.175,
-                  delay: 0.2,
-                  ease: "easeOut",
-                },
-              }}
-              exit={{
-                opacity: 0,
-                transition: {
-                  duration: 0.2,
-                  ease: "easeInOut",
-                },
-              }}
-              className={cn(
-                "w-full bg-white bg-opacity-20 backdrop-blur-md z-10",
-                navBarLayout == "sticky" && "h-screen",
-              )}
-              onMouseEnter={() => setActiveMenu(null)}
-            />
-          )}
-
-          {isMobileMenuShowing && (
-            <MobileMenu key={"mobile-menu"} onCloseClick={onShowNavbarClick} />
-          )}
-
-          {isMobileBagMenuShowing && (
-            <MobileBagMenu
-              key={"mobile-bag-menu"}
-              setActiveMenu={setActiveMenu}
-              onCloseClick={handleHideMobileBagMenu}
-            />
-          )}
-        </AnimatePresence>
-      </motion.div>
-    </div>
+        </section>
+      )}
+      {shell.activeOverlay === "mobile-menu" && (
+        <MobileMenu onCloseClick={() => shell.closeOverlay()} />
+      )}
+      {shell.activeOverlay === "mobile-bag" && (
+        <MobileBagMenu
+          setActiveMenu={() => shell.closeOverlay()}
+          onCloseClick={() => shell.closeOverlay()}
+        />
+      )}
+    </header>
   );
 }

@@ -1,6 +1,7 @@
 import { FadeIn } from "@/components/common/FadeIn";
 import { useScrollToTop } from "@/hooks/useScrollToTop";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { StorefrontPage } from "@/components/common/StorefrontPage";
 
 export const Route = createFileRoute("/_layout/policies/tos/")({
   component: () => <TOS />,
@@ -137,9 +138,10 @@ const TOS = () => {
   ];
 
   return (
-    <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
+    <StorefrontPage as="section" spacing="relaxed">
+      <FadeIn>
       <div className="space-y-8">
-        <h1 className="text-lg">Terms of Service</h1>
+        <h1 className="text-2xl font-semibold">Terms of service</h1>
 
         <p className="text-sm">
           By accessing and using this site, you agree to the following terms and
@@ -157,6 +159,7 @@ const TOS = () => {
           ))}
         </div>
       </div>
-    </FadeIn>
+      </FadeIn>
+    </StorefrontPage>
   );
 };

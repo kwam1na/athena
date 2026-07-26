@@ -38,7 +38,6 @@ import { EmptyState } from "../states/empty/empty-state";
 import { FadeIn } from "../common/FadeIn";
 import { ArrowRightIcon } from "@radix-ui/react-icons";
 import ImageWithFallback from "../ui/image-with-fallback";
-import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { useCheckoutSessionQueries } from "@/lib/queries/checkout";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import {
@@ -410,13 +409,6 @@ export default function ShoppingBag() {
   const { formatter, userId, isNavbarShowing, store } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
   const { track } = useStorefrontObservability();
-
-  const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
-
-  useEffect(() => {
-    setNavBarLayout("fixed");
-    setAppLocation("shop");
-  }, []);
 
   const {
     bag,

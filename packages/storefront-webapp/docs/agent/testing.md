@@ -46,3 +46,19 @@ Escalate validation based on the surface you touched:
 - Full browser journeys, navigation, or payment redirects that are covered under [tests/e2e](../../tests/e2e): run `bun run --filter '@athena/storefront-webapp' test:e2e` with the setup in [playwright.config.ts](../../playwright.config.ts). For general checkout component or route-boundary edits without a matching Playwright spec, rely on `bun run harness:review` and the mapped runtime behavior scenarios instead.
 
 This package exposes a scoped architecture lint command in [package.json](../../package.json) for the checkout/auth hot paths; use it when you need lint coverage for those route boundaries instead of assuming the broader package test suite will catch import-direction regressions.
+
+For design-system work, use the package-local Storybook with
+`bun run --filter '@athena/storefront-webapp' storybook`. Its active
+configuration imports the shipped `src/index.css`, runs accessibility checks in
+error mode, and orders the catalog as Guidance, Foundations, Primitives,
+Patterns, and Templates. Validate it with
+`bun run --filter '@athena/storefront-webapp' storybook:build`.
+
+Run `bun run --filter '@athena/storefront-webapp' lint:design-system:changed`
+for changed storefront source. The selector covers committed branch changes,
+staged changes, unstaged changes, and untracked files. The policy inspects only
+introduced lines so existing route debt remains migratable while new raw hex,
+raw status hues, and unapproved arbitrary Tailwind values fail. Exceptions are
+rule-specific and documented in `scripts/design-system-policy.ts`; the receipt
+print surface currently permits exact print geometry but does not bypass color
+policy.

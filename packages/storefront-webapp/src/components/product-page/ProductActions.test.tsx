@@ -26,4 +26,21 @@ describe("ProductActions", () => {
 
     expect(screen.getByTestId("storefront-product-add-to-bag")).toBeInTheDocument();
   });
+
+  it("makes both commerce actions named and repeat-safe while updating", () => {
+    render(
+      <ProductActions
+        handleUpdateBag={vi.fn(async () => {})}
+        handleUpdateSavedBag={vi.fn(async () => {})}
+        isUpdatingBag
+        isSoldOut={false}
+        addedItemSuccessfully={null}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Adding to bag" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save product" })).toBeDisabled();
+  });
 });

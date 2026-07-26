@@ -176,3 +176,4 @@ dist
 
 # Local build artifacts
 stats.html
+storybook-static

@@ -25,6 +25,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/_layout/_shopLayout.tsx`](../../src/routes/_layout/_shopLayout.tsx)
 - [`src/routes/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug.tsx`](../../src/routes/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug.tsx)
 - [`src/routes/_layout/_shopLayout/shop/$categorySlug/index.tsx`](../../src/routes/_layout/_shopLayout/shop/$categorySlug/index.tsx)
+- [`src/routes/_layout/account.test.ts`](../../src/routes/_layout/account.test.ts)
 - [`src/routes/_layout/account.tsx`](../../src/routes/_layout/account.tsx)
 - [`src/routes/_layout/contact-us.tsx`](../../src/routes/_layout/contact-us.tsx)
 - [`src/routes/_layout/policies/delivery-returns-exchanges.index.tsx`](../../src/routes/_layout/policies/delivery-returns-exchanges.index.tsx)

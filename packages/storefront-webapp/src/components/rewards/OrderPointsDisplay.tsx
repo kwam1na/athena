@@ -39,11 +39,7 @@ export function OrderPointsDisplay({
   }
 
   return (
-    <div
-      className={`flex items-center gap-2 mt-1 ${
-        isAwarded ? "text-accent2" : ""
-      }`}
-    >
+    <div className={`mt-1 flex items-center gap-2 ${isAwarded ? "text-success" : "text-muted-foreground"}`}>
       <Award className="w-4 h-4" />
       <span className={`text-sm`}>
         {isAwarded

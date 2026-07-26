@@ -37,6 +37,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
 import { formatStoredAmount } from "@/lib/currency";
+import { PageState } from "@/components/states/PageState";
+import { StorefrontPage } from "@/components/common/StorefrontPage";
+import { Field } from "@/components/ui/field";
 
 export const Route = createFileRoute(
   "/_layout/_ordersLayout/shop/orders/$orderId/review"
@@ -224,6 +227,7 @@ const PickupDetails = ({ order }: { order: any }) => {
               <a
                 href={WIGLUB_HAIR_STUDIO_LOCATION_URL}
                 target="_blank"
+                rel="noopener noreferrer"
                 className="font-medium underline"
               >
                 See map and directions
@@ -244,7 +248,15 @@ const OrderDetail = () => {
     onlineOrderQueries.detail(orderId || "")
   );
 
-  if (isLoading) return <div className="h-screen"></div>;
+  if (isLoading) {
+    return (
+      <PageState
+        state="loading"
+        title="Loading review details"
+        description="We're retrieving the items from this order."
+      />
+    );
+  }
 
   if (!data) {
     return <NotFound />;
@@ -301,18 +313,24 @@ const OrderDetail = () => {
   };
 
   return (
-    <FadeIn className="space-y-24 lg:space-y-40 py-8 pb-32 w-full container mx-auto max-w-[1024px] px-6 xl:px-0">
+    <StorefrontPage as="section" spacing="relaxed">
+      <FadeIn className="space-y-24 lg:space-y-40">
       <div className="space-y-16">
         <OrderNavigation />
 
         <div className="grid grid-cols-2 gap-16">
           <div className="space-y-8">
-            <Input placeholder="Title" />
-            <Textarea className="h-40" placeholder="Review" />
+            <Field label="Review title" required>
+              <Input placeholder="Review title" />
+            </Field>
+            <Field label="Your review" required>
+              <Textarea className="h-40" placeholder="Share your experience" />
+            </Field>
           </div>
           <OrderItems order={data} />
         </div>
       </div>
-    </FadeIn>
+      </FadeIn>
+    </StorefrontPage>
   );
 };

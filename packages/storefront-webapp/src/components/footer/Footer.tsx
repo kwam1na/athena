@@ -1,26 +1,29 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { Link } from "@tanstack/react-router";
 import { useGetStoreCategories } from "../navigation/hooks";
-import { forwardRef, useEffect, useState } from "react";
+import { forwardRef, useEffect, useState, type ReactNode } from "react";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
 
-interface FooterLinkGroup {
-  header: string;
-  links: React.ReactNode[];
-}
+type FooterLinkGroup = {
+  heading: string;
+  links: ReactNode[];
+};
 
 function LinkGroup({ group }: { group: FooterLinkGroup }) {
   return (
-    <ul className="space-y-4">
-      <li>
-        <p className="font-medium">{group.header}</p>
-      </li>
-      <ul className="space-y-2">
-        {group.links.map((link, idx) => (
-          <li key={idx}>{link}</li>
+    <section aria-labelledby={`footer-${group.heading.toLowerCase()}`}>
+      <h2
+        id={`footer-${group.heading.toLowerCase()}`}
+        className="font-medium"
+      >
+        {group.heading}
+      </h2>
+      <ul className="mt-layout-md space-y-layout-xs">
+        {group.links.map((link, index) => (
+          <li key={index}>{link}</li>
         ))}
       </ul>
-    </ul>
+    </section>
   );
 }
 
@@ -31,85 +34,76 @@ export function FooterInner({
 }) {
   const { store } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
-
-  const storeLinks = categories?.map((s) => (
-    <Link
-      key={s.value}
-      to="/shop/$categorySlug"
-      params={(p) => ({
-        ...p,
-        categorySlug: s.value,
-      })}
-    >
-      {s.label}
-    </Link>
-  ));
-
+  const externalProps = {
+    target: "_blank",
+    rel: "noopener noreferrer",
+  } as const;
   const linkGroups: FooterLinkGroup[] = [
     {
-      header: "Shop",
-      links: storeLinks || [],
+      heading: "Shop",
+      links:
+        categories?.map((category) => (
+          <Link
+            key={category.value}
+            to="/shop/$categorySlug"
+            params={(params) => ({
+              ...params,
+              categorySlug: category.value,
+            })}
+          >
+            {category.label}
+          </Link>
+        )) ?? [],
     },
     {
-      header: "Follow us",
+      heading: "Follow us",
       links: [
-        <a href="https://www.instagram.com/wigclub/" target="_blank">
+        <a href="https://www.instagram.com/wigclub/" {...externalProps}>
           Instagram
         </a>,
-        <a href="https://www.tiktok.com/@wigclubshop" target="_blank">
-          Tiktok
+        <a href="https://www.tiktok.com/@wigclubshop" {...externalProps}>
+          TikTok
         </a>,
-        <a href="https://x.com/WigClub_" target="_blank">
+        <a href="https://x.com/WigClub_" {...externalProps}>
           X
         </a>,
       ],
     },
     {
-      header: "Company",
-      links: [
-        // <Link>About us</Link>,
-        <Link to="/contact-us">Contact us</Link>,
-      ],
+      heading: "Company",
+      links: [<Link to="/contact-us">Contact us</Link>],
     },
     {
-      header: "Policies",
+      heading: "Policies",
       links: [
         <Link to="/policies/privacy">Privacy policy</Link>,
         <Link to="/policies/delivery-returns-exchanges">
           Deliveries, returns and exchanges
         </Link>,
         <Link to="/policies/tos">Terms of service</Link>,
-        // <Link>FAQs</Link>,
       ],
     },
   ];
 
   return (
-    <footer className="container mx-auto max-w-[1024px] flex flex-col gap-24 justify-center pb-8 text-sm font-light">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-12">
-        {linkGroups.map((group, idx) => (
-          <LinkGroup key={idx} group={group} />
+    <footer className="mx-auto flex w-full max-w-content flex-col gap-layout-2xl px-gutter pb-layout-lg pt-layout-xl text-sm font-light">
+      <div className="grid grid-cols-2 gap-layout-xl sm:grid-cols-4">
+        {linkGroups.map((group) => (
+          <LinkGroup key={group.heading} group={group} />
         ))}
       </div>
-
-      <div className="space-y-4 text-sm">
-        <div className="space-y-2">
-          <p>{storeConfig.contact.location}</p>
-          <div>
-            <a
-              href={`tel:${storeConfig.contact.phoneNumber}`}
-              className="hover:underline font-medium"
-            >
-              {storeConfig.contact.phoneNumber}
-            </a>
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center w-full text-xs font-medium text-muted-foreground">
-        <p>
-          © {new Date().getFullYear()} {store?.name}. All rights reserved
-        </p>
-      </div>
+      <address className="not-italic">
+        <p>{storeConfig.contact.location}</p>
+        <a
+          href={`tel:${storeConfig.contact.phoneNumber}`}
+          className="mt-layout-xs inline-flex min-h-11 items-center font-medium hover:underline"
+        >
+          {storeConfig.contact.phoneNumber}
+        </a>
+      </address>
+      <p className="text-xs font-medium text-muted-foreground">
+        © {new Date().getFullYear()} {store?.name}. All rights reserved
+      </p>
     </footer>
   );
 }
@@ -121,47 +115,27 @@ const Footer = forwardRef<
   }
 >(({ deferCategories = false }, ref) => {
   const [categoriesEnabled, setCategoriesEnabled] = useState(!deferCategories);
-
   useEffect(() => {
     if (!deferCategories) {
       setCategoriesEnabled(true);
       return;
     }
-
-    const enableCategories = () => {
-      setCategoriesEnabled(true);
-    };
-
+    const enable = () => setCategoriesEnabled(true);
     if ("requestIdleCallback" in window) {
-      const idleId = window.requestIdleCallback(enableCategories, {
-        timeout: 1500,
-      });
-
-      return () => {
-        window.cancelIdleCallback(idleId);
-      };
+      const id = window.requestIdleCallback(enable, { timeout: 1500 });
+      return () => window.cancelIdleCallback(id);
     }
-
-    const timeoutId = globalThis.setTimeout(enableCategories, 1500);
-
-    return () => {
-      globalThis.clearTimeout(timeoutId);
-    };
+    const id = globalThis.setTimeout(enable, 1500);
+    return () => globalThis.clearTimeout(id);
   }, [deferCategories]);
-
-  const { categories } = useGetStoreCategories({
-    enabled: categoriesEnabled,
-  });
+  const { categories } = useGetStoreCategories({ enabled: categoriesEnabled });
 
   return (
-    <div ref={ref} className="pt-8 bg-accent5">
-      <div className="container mx-auto max-w-[1024px] px-6 lg:px-0">
-        <FooterInner categories={categories} />
-      </div>
+    <div ref={ref} className="bg-surface-subtle">
+      <FooterInner categories={categories} />
     </div>
   );
 });
 
 Footer.displayName = "Footer";
-
 export default Footer;

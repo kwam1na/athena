@@ -14,6 +14,19 @@ Run:
 
 Start here for most layout, component, and route behavior changes that do not alter the checkout or browser-journey contract.
 
+## Storybook and design-system tooling edits
+
+Touched surfaces: `.storybook`, `src/stories`, `src/styles`, `src/index.css`, `src/design-system-build-config.test.ts`, `tailwind.config.js`, `postcss.config.cjs`, `package.json`, `scripts/design-system-policy-changed.sh`, `scripts/design-system-policy.ts`
+
+Run:
+
+- `bun run --filter '@athena/storefront-webapp' test`
+- `bun run --filter '@athena/storefront-webapp' build`
+- `bun run --filter '@athena/storefront-webapp' storybook:build`
+- `bun run --filter '@athena/storefront-webapp' lint:design-system:changed`
+
+Use this when storefront foundations, stories, Storybook configuration, or changed-file visual policy wiring changes so the app and living workbench are validated from the same package authority.
+
 ## Route runtime or build-pipeline edits
 
 Touched surfaces: `index.html`, `package.json`, `tsconfig.json`, `src/main.tsx`, `src/router.tsx`, `src/routeTree.gen.ts`, `vite.config.ts`

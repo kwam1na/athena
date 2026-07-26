@@ -5,8 +5,9 @@ import { awardPointsForPastOrder, EligibleOrder } from "@/api/rewards";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { formatStoredAmount } from "@/lib/currency";
+import { InlineAlert } from "@/components/ui/inline-alert";
+import { LoadingButton } from "@/components/ui/loading-button";
 
 interface PastOrdersRewardsProps {
   userEmail: string;
@@ -65,7 +66,7 @@ export function PastOrdersRewards({ userEmail }: PastOrdersRewardsProps) {
 
   if (isLoading) {
     return (
-      <div className="py-4 text-sm text-gray-500">
+      <div className="py-4 text-sm text-muted-foreground" role="status">
         Checking for past orders...
       </div>
     );
@@ -78,32 +79,24 @@ export function PastOrdersRewards({ userEmail }: PastOrdersRewardsProps) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mt-8">
-      <h2 className="text-2xl font-bold mb-4">Claim Points for Past Orders</h2>
+    <section className="mt-8 rounded-lg border bg-surface p-6 shadow-surface">
+      <h2 className="mb-4 text-2xl font-semibold">Claim points for past orders</h2>
 
       {error && (
-        <div className="p-4 mb-4 border rounded-md bg-red-50 border-red-500 text-red-700 flex items-start gap-2">
-          <AlertCircle className="h-4 w-4 mt-0.5" />
-          <div>
-            <div className="font-semibold">Error</div>
-            <div>{error}</div>
-          </div>
-        </div>
+        <InlineAlert tone="danger" title="Unable to claim points">
+          {error}
+        </InlineAlert>
       )}
 
       {successMessage && (
-        <div className="p-4 mb-4 border rounded-md bg-green-50 border-green-500 text-green-700 flex items-start gap-2">
-          <CheckCircle2 className="h-4 w-4 mt-0.5" />
-          <div>
-            <div className="font-semibold">Success</div>
-            <div>{successMessage}</div>
-          </div>
-        </div>
+        <InlineAlert tone="success" title="Points claimed">
+          {successMessage}
+        </InlineAlert>
       )}
 
       {eligibleOrders.length > 0 ? (
         <div className="space-y-4">
-          <p className="text-sm text-gray-600 mb-4">
+          <p className="mb-4 text-sm text-muted-foreground">
             We found previous orders associated with your email. Claim your
             reward points now!
           </p>
@@ -136,9 +129,13 @@ export function PastOrdersRewards({ userEmail }: PastOrdersRewardsProps) {
                       {order.potentialPoints.toLocaleString()}
                     </td>
                     <td className="py-3">
-                      <Button
+                      <LoadingButton
                         size="sm"
                         onClick={() => handleClaimPoints(order)}
+                        isLoading={
+                          claimPointsMutation.isPending &&
+                          !claimedOrderIds.includes(order._id)
+                        }
                         disabled={
                           claimPointsMutation.isPending ||
                           claimedOrderIds.includes(order._id)
@@ -149,7 +146,7 @@ export function PastOrdersRewards({ userEmail }: PastOrdersRewardsProps) {
                           : claimPointsMutation.isPending
                             ? "Claiming..."
                             : "Claim Points"}
-                      </Button>
+                      </LoadingButton>
                     </td>
                   </tr>
                 ))}
@@ -158,10 +155,10 @@ export function PastOrdersRewards({ userEmail }: PastOrdersRewardsProps) {
           </div>
         </div>
       ) : claimedOrderIds.length > 0 ? (
-        <div className="text-center py-4 text-green-600">
+        <div className="py-4 text-center text-success" role="status">
           All available points have been claimed!
         </div>
       ) : null}
-    </div>
+    </section>
   );
 }

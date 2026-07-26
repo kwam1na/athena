@@ -1,7 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import Footer from "./footer/Footer";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { useHomepageSnapshotQueries } from "@/lib/queries/homepageSnapshot";
 import { MARKER_KEY } from "@/lib/constants";
 import { ProductReminderBar } from "./ProductReminderBar";
@@ -52,8 +50,6 @@ export default function HomePage({
   const { store, userId } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
   const { track } = useStorefrontObservability();
-
-  const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
   const [shouldLoadEngagementPrompts, setShouldLoadEngagementPrompts] =
     useState(false);
@@ -152,9 +148,6 @@ export default function HomePage({
   }, [shouldLoadEngagementPrompts]);
 
   useEffect(() => {
-    setNavBarLayout("sticky");
-    setAppLocation(origin);
-
     // generate a random uuid and save it to local storage
     const uuid = localStorage.getItem(MARKER_KEY);
     if (!uuid) {
