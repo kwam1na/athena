@@ -147,6 +147,8 @@ async function createFixtureRepo() {
             test: "vitest run",
             "test:e2e": "playwright test",
             build: "vite build && tsc --noEmit",
+            "storybook:build": "storybook build",
+            "lint:design-system:changed": "bun ./scripts/design-system-policy.ts --changed",
             "lint:architecture": "bun ../../scripts/architecture-boundary-check.ts storefront-webapp",
           };
 

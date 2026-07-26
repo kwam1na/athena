@@ -16,4 +16,19 @@ describe("ShoppingBagCheckoutButton", () => {
 
     expect(screen.getByTestId("storefront-bag-start-checkout")).toBeInTheDocument();
   });
+
+  it("prevents a repeat checkout while an order is pending", () => {
+    const { container } = render(
+      <ShoppingBagCheckoutButton
+        hasPendingOrders
+        isProcessingCheckoutRequest={false}
+        isUpdatingBag={false}
+        onCheckoutClick={vi.fn()}
+      />,
+    );
+
+    expect(
+      container.querySelector('[data-testid="storefront-bag-start-checkout"]'),
+    ).toBeDisabled();
+  });
 });

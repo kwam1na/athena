@@ -34,6 +34,7 @@ import {
   createAuthRequestStartedEvent,
 } from "@/lib/storefrontJourneyEvents";
 import { emitStorefrontFailure } from "@/lib/storefrontFailureObservability";
+import { StorefrontPage } from "@/components/common/StorefrontPage";
 
 const nameRegex = /^[a-zA-Zà-öø-ÿÀ-ÖØ-ß\-'\.\s]+$/;
 
@@ -180,15 +181,16 @@ const Signup = () => {
 
   return (
     <AuthComponent>
-      <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
+      <StorefrontPage aria-labelledby="signup-heading" spacing="relaxed">
+      <FadeIn>
         <div className="space-y-8 py-16">
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit)}
-              className="space-y-8 flex flex-col items-center p-12"
+              className="flex flex-col items-center gap-layout-xl"
             >
-              <div className="space-y-8 w-[320px] md:w-[400px]">
-                <p className="text-lg">{`Create your ${store?.name && capitalizeWords(store?.name as string)} account`}</p>
+              <div className="w-full max-w-md space-y-layout-xl">
+                <h1 id="signup-heading" className="text-xl font-medium">{`Create your ${store?.name && capitalizeWords(store?.name as string)} account`}</h1>
                 <div className="w-full">
                   <FormField
                     control={form.control}
@@ -282,6 +284,7 @@ const Signup = () => {
           </Form>
         </div>
       </FadeIn>
+      </StorefrontPage>
     </AuthComponent>
   );
 };

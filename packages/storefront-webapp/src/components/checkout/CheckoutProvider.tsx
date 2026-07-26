@@ -8,7 +8,6 @@ import {
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { CheckoutUnavailable } from "../states/checkout unavailable/CheckoutUnavailable";
-import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { isFeeWaived, isAnyFeeWaived } from "@/lib/feeUtils";
 
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
@@ -19,6 +18,7 @@ import { webOrderSchema } from "./schemas/webOrderSchema";
 import { calculateDeliveryFee } from "./deliveryFees";
 import { deriveCheckoutState } from "./deriveCheckoutState";
 import { loadCheckoutState, saveCheckoutState } from "./checkoutStorage";
+import { PageState } from "../states/PageState";
 
 export { webOrderSchema } from "./schemas/webOrderSchema";
 
@@ -86,8 +86,6 @@ export const CheckoutProvider = ({
   const { user, store } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
 
-  const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
-
   const { waiveDeliveryFees, fulfillment, deliveryFees } = storeConfig.commerce;
   // Default to true if not set (for backward compatibility)
   const isPickupEnabled = fulfillment?.enableStorePickup ?? true;
@@ -122,11 +120,6 @@ export const CheckoutProvider = ({
 
   const pickupAvailable = isPickupEnabled && !isPickupRestricted;
   const deliveryAvailable = isDeliveryEnabled && !isDeliveryRestricted;
-
-  useEffect(() => {
-    setNavBarLayout("fixed");
-    setAppLocation("checkout");
-  }, []);
 
   // Auto-switch to delivery if pickup is disabled/restricted and currently selected
   useEffect(() => {
@@ -395,7 +388,15 @@ export const CheckoutProvider = ({
     return <CheckoutUnavailable />;
   }
 
-  if (isLoading || data === undefined) return null;
+  if (isLoading || data === undefined) {
+    return (
+      <PageState
+        state="loading"
+        title="Preparing checkout"
+        description="Loading your bag and secure checkout details."
+      />
+    );
+  }
 
   const hasServerBackedCheckout =
     Boolean(data?.placedOrderId) ||

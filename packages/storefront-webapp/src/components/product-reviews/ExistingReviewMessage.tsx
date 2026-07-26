@@ -1,8 +1,9 @@
 import { motion } from "framer-motion";
-import { CheckCircle2, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { format } from "date-fns";
+import { InlineAlert } from "../ui/inline-alert";
 
 interface ExistingReviewMessageProps {
   creationTime: number;
@@ -23,22 +24,11 @@ export const ExistingReviewMessage = ({
     }}
     className="space-y-6"
   >
-    <motion.div
-      className="space-y-3 text-blue-700 bg-blue-50 p-6 rounded-lg"
-      animate={{ scale: 1 }}
-      transition={{
-        duration: 0.8,
-        ease: [0.16, 1, 0.3, 1],
-      }}
-    >
-      <div className="flex items-center gap-2">
-        <CheckCircle2 className="w-5 h-5" />
-        <h3 className="font-medium">You've already reviewed this product</h3>
-      </div>
+    <InlineAlert tone="info" title="You've already reviewed this product">
       <p className="text-sm pl-7">
         You submitted your review on {format(creationTime, "MMMM d, yyyy")}.
       </p>
-    </motion.div>
+    </InlineAlert>
 
     <motion.div
       className="flex flex-col sm:flex-row gap-4"

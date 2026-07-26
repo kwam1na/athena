@@ -1,11 +1,9 @@
 import { FadeIn } from "@/components/common/FadeIn";
-import { PastOrdersRewards } from "@/components/rewards/PastOrdersRewards";
 import { RewardsPanel } from "@/components/rewards/RewardsPanel";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { useUserQueries } from "@/lib/queries/user";
-import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { StorefrontPage } from "@/components/common/StorefrontPage";
+import { PageState } from "@/components/states/PageState";
 
 export const Route = createFileRoute("/_layout/rewards/")({
   component: RewardsPage,
@@ -19,31 +17,33 @@ export default function RewardsPage() {
     return <Navigate to="/login" />;
   }
 
+  if (isLoading) {
+    return (
+      <PageState
+        state="loading"
+        title="Loading your rewards"
+        description="We're checking your points and recent activity."
+      />
+    );
+  }
+
   return (
-    <FadeIn className="min-h-screen space-y-8 lg:space-y-24 pb-56">
-      <div className="space-y-8">
-        <div className="w-full">
-          <div className="container mx-auto max-w-[1024px] space-y-4">
-            <div className="flex items-center py-2 px-6 lg:px-0">
-              <p className="text-lg font-light">Rewards</p>
-            </div>
-
-            <div className="px-6 lg:px-0">
-              {user?.firstName ? (
-                <p className="text-2xl font-medium pt-8 pb-4">{`Hi, ${user?.firstName}.`}</p>
-              ) : (
-                <p className="text-2xl font-medium pt-8 pb-4">Hi there.</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="container mx-auto max-w-[1024px] space-y-16 px-6 lg:px-0">
-          <p className="text-lg font-medium">Your Reward Points</p>
-
+    <StorefrontPage as="section" spacing="relaxed">
+      <FadeIn className="space-y-16">
+        <header className="space-y-3">
+          <h1 className="text-2xl font-semibold">Rewards</h1>
+          <p className="text-muted-foreground">
+            {user?.firstName ? `Hi, ${user.firstName}.` : "Hi there."} View
+            your points and reward activity.
+          </p>
+        </header>
+        <section aria-labelledby="reward-points-heading" className="space-y-8">
+          <h2 id="reward-points-heading" className="text-lg font-medium">
+            Your reward points
+          </h2>
           <RewardsPanel />
-        </div>
-      </div>
-    </FadeIn>
+        </section>
+      </FadeIn>
+    </StorefrontPage>
   );
 }

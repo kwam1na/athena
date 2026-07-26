@@ -1,6 +1,7 @@
 import { Outlet, createRootRoute } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import NavigationBar from "@/components/navigation-bar/NavigationBar";
+import Footer from "@/components/footer/Footer";
 import { StoreProvider, useStoreContext } from "@/contexts/StoreContext";
 import { Toaster } from "@/components/ui/sonner";
 import { z } from "zod";
@@ -24,59 +25,41 @@ const productsPageSchema = z.object({
   utm_source: z.string().optional(),
   reference: z.string().optional(),
 });
-
 export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      {
-        charSet: "utf-8",
-      },
-      {
-        name: "viewport",
-        content:
-          "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no",
-      },
-      {
-        title: "Wigclub",
-      },
-    ],
-  }),
-
+  head: () => ({ meta: [{ charSet: "utf-8" }, { title: "Wigclub" }] }),
   validateSearch: productsPageSchema,
-
   component: Body,
-
   errorComponent: ErrorBoundary,
-
-  notFoundComponent: () => {
-    return <NotFound />;
-  },
+  notFoundComponent: () => <NotFound />,
 });
-
 function RootComponent() {
-  const { navBarLayout } = useNavigationBarContext();
-
-  // Use styling utility for navbar wrapper positioning
-  const navBarClassname = getNavBarWrapperClass(navBarLayout);
-
+  const { navBarLayout, routeState } = useNavigationBarContext();
   return (
     <StoreProvider>
       <RootDocument>
         <StorefrontObservabilityProvider>
-          <div className="flex flex-col bg-background">
-            <div className={navBarClassname}>
-              <NavigationBar />
-            </div>
-            <main className="flex-grow bg-background">
+          <div className="flex min-h-dvh flex-col bg-background">
+            <a
+              href="#storefront-main"
+              className="sr-only z-skipLink bg-surface p-3 focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+            >
+              Skip to content
+            </a>
+            {routeState.navigationVisible && (
+              <div className={getNavBarWrapperClass(navBarLayout)}>
+                <NavigationBar />
+              </div>
+            )}
+            <main id="storefront-main" tabIndex={-1} className="flex-grow">
               <Outlet />
             </main>
+            {routeState.location === "shop" && <Footer />}
           </div>
         </StorefrontObservabilityProvider>
       </RootDocument>
     </StoreProvider>
   );
 }
-
 function Body() {
   return (
     <NavigationBarProvider>
@@ -84,28 +67,16 @@ function Body() {
     </NavigationBarProvider>
   );
 }
-
 const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: Infinity,
-    },
-  },
+  defaultOptions: { queries: { staleTime: Infinity } },
 });
-
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { store } = useStoreContext();
-
-  if (isInMaintenanceMode(store?.config)) {
-    return <MaintenanceMode />;
-  }
-
+  if (isInMaintenanceMode(store?.config)) return <MaintenanceMode />;
   return (
-    <div>
-      <QueryClientProvider client={queryClient}>
-        <Toaster />
-        {children}
-      </QueryClientProvider>
-    </div>
+    <QueryClientProvider client={queryClient}>
+      <Toaster />
+      {children}
+    </QueryClientProvider>
   );
 }

@@ -6,6 +6,7 @@ import {
   TooltipProvider,
 } from "../ui/tooltip";
 import { STAR_LABELS } from "./types";
+import { IconButton } from "../ui/icon-button";
 
 interface RatingSelectorProps {
   label: string;
@@ -24,26 +25,28 @@ export const RatingSelector = ({
 }: RatingSelectorProps) => (
   <div className="space-y-1">
     <p className="text-sm text-muted-foreground">
-      {label} {!optional && <span className="text-red-500">*</span>}
+      {label} {!optional && <span className="text-danger">*</span>}
     </p>
     <TooltipProvider>
       <div className="flex gap-1">
         {[1, 2, 3, 4, 5].map((star) => (
           <Tooltip key={star}>
             <TooltipTrigger asChild>
-              <button
+              <IconButton
+                label={`Rate ${label} ${star} out of 5`}
                 onClick={() => onChange(star)}
-                className="focus:outline-none"
                 type="button"
+                variant="ghost"
+                className="rounded-full"
               >
                 <Star
                   className={`w-6 h-6 ${
                     star <= value
-                      ? "fill-accent2 text-accent2"
-                      : "text-gray-300"
+                      ? "fill-brand text-brand"
+                      : "text-muted-foreground"
                   }`}
                 />
-              </button>
+              </IconButton>
             </TooltipTrigger>
             <TooltipContent>{tooltipLabels[star - 1]}</TooltipContent>
           </Tooltip>

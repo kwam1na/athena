@@ -5,12 +5,11 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { Link, useSearch } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
 import { ShoppingBagAction, useShoppingBag } from "@/hooks/useShoppingBag";
-import { ProductSku, SavedBagItem } from "@athena/webapp";
-import { capitalizeWords, getProductName } from "@/lib/utils";
+import { SavedBagItem } from "@athena/webapp";
+import { getProductName } from "@/lib/utils";
 import { AnimatePresence, easeInOut, motion } from "framer-motion";
 import { EmptyState } from "../states/empty/empty-state";
 import { FadeIn } from "../common/FadeIn";
-import ImageWithFallback from "../ui/image-with-fallback";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import {
   createSavedBagViewedEvent,
@@ -19,6 +18,16 @@ import {
 } from "@/lib/storefrontJourneyEvents";
 import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
 import { formatStoredAmount } from "@/lib/currency";
+import { StorefrontPage } from "../common/StorefrontPage";
+import { StorefrontImage } from "../ui/storefront-image";
+import { IconButton } from "../ui/icon-button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 
 export default function SavedBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
@@ -61,8 +70,9 @@ export default function SavedBag() {
   };
 
   return (
-    <FadeIn className="container mx-auto max-w-[1024px] min-h-screen px-6 xl:px-0 space-y-8 lg:space-y-24 py-8">
-      {!isSavedEmpty && <h1 className="text-lg font-light mb-8">Saved</h1>}
+    <StorefrontPage as="section" spacing="relaxed">
+      <FadeIn className="space-y-12">
+      {!isSavedEmpty && <h1 className="text-2xl font-semibold">Saved items</h1>}
 
       {isSavedEmpty && (
         <EmptyState
@@ -110,14 +120,12 @@ export default function SavedBag() {
                         origin: "saved_bag",
                       }}
                     >
-                      <ImageWithFallback
-                        src={
-                          (item as any).productImage ||
-                          fallbackImageUrl ||
-                          placeholder
-                        }
-                        alt={(item as any).productName || "product image"}
-                        className="w-32 h-32 lg:w-40 lg:h-40 object-cover rounded-lg"
+                      <StorefrontImage
+                        src={(item as any).productImage || placeholder}
+                        fallbackSrc={fallbackImageUrl}
+                        alt={(item as any).productName || getProductName(item)}
+                        aspectRatio="1 / 1"
+                        wrapperClassName="h-32 w-32 rounded-lg lg:h-40 lg:w-40"
                       />
                     </Link>
 
@@ -134,29 +142,36 @@ export default function SavedBag() {
                               )
                             : "Product unavailable"}
                         </p>
-                        <select
-                          value={item.quantity}
-                          onChange={(e) =>
+                        <Select
+                          value={String(item.quantity)}
+                          onValueChange={(value) =>
                             updateSavedBag({
-                              quantity: parseInt(e.target.value),
+                              quantity: Number(value),
                               itemId: item._id,
                             })
                           }
                           disabled={isUpdatingSavedBag || !item.price}
-                          className="w-12 py-2 bg-background text-xs"
                         >
-                          {[...Array(10)].map((_, i) => (
-                            <option key={i + 1} value={i + 1}>
-                              {i + 1}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger
+                            className="w-control-comfortable"
+                            aria-label={`Quantity for ${getProductName(item)}`}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[...Array(10)].map((_, i) => (
+                              <SelectItem key={i + 1} value={String(i + 1)}>
+                                {i + 1}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       <div className="flex gap-2">
-                        <Button
+                        <IconButton
+                          label={`Move ${getProductName(item)} to bag`}
                           variant="ghost"
-                          size="icon"
                           disabled={isUpdatingSavedBag || !item.price}
                           onClick={async () => {
                             setBagAction("moving-to-bag");
@@ -173,11 +188,11 @@ export default function SavedBag() {
                           }}
                         >
                           <ShoppingBasket className="h-4 w-4" />
-                        </Button>
+                        </IconButton>
 
-                        <Button
+                        <IconButton
+                          label={`Remove ${getProductName(item)} from saved items`}
                           variant="ghost"
-                          size="icon"
                           disabled={isUpdatingSavedBag}
                           onClick={async () => {
                             setBagAction("deleting-from-saved-bag");
@@ -194,7 +209,7 @@ export default function SavedBag() {
                           }}
                         >
                           <Trash2 className="h-4 w-4" />
-                        </Button>
+                        </IconButton>
                       </div>
                     </div>
                   </motion.div>
@@ -204,6 +219,7 @@ export default function SavedBag() {
           </div>
         </div>
       )}
-    </FadeIn>
+      </FadeIn>
+    </StorefrontPage>
   );
 }

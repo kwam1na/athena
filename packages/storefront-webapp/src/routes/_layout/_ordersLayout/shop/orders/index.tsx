@@ -7,7 +7,6 @@ import { EmptyState } from "@/components/states/empty/empty-state";
 import { motion } from "framer-motion";
 import { capitalizeFirstLetter, formatDate, slugToWords } from "@/lib/utils";
 import { getOrderAmount } from "@/components/checkout/utils";
-import ImageWithFallback from "@/components/ui/image-with-fallback";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { OnlineOrder } from "@athena/webapp";
 import { FadeIn } from "@/components/common/FadeIn";
@@ -15,6 +14,10 @@ import { Badge } from "@/components/ui/badge";
 import { Banknote, Smartphone, Clock, CircleCheck } from "lucide-react";
 import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
 import { formatStoredAmount } from "@/lib/currency";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { StorefrontImage } from "@/components/ui/storefront-image";
+import { PageState } from "@/components/states/PageState";
+import { StorefrontPage } from "@/components/common/StorefrontPage";
 
 export const Route = createFileRoute("/_layout/_ordersLayout/shop/orders/")({
   component: () => <Purchases />,
@@ -78,13 +81,9 @@ const OrderItem = ({
 
           {/* Show payment status for POD orders */}
           {isPODOrder && order.status !== "cancelled" && (
-            <Badge
-              variant="outline"
-              className={`flex items-center gap-1 ${
-                order.paymentCollected
-                  ? "text-green-600 border-green-200"
-                  : "text-amber-600 border-amber-200"
-              }`}
+            <StatusBadge
+              tone={order.paymentCollected ? "success" : "warning"}
+              showIcon={false}
             >
               {order.paymentCollected ? (
                 <>
@@ -97,7 +96,7 @@ const OrderItem = ({
                   <span className="text-xs">Payment Pending</span>
                 </>
               )}
-            </Badge>
+            </StatusBadge>
           )}
         </div>
         <p>{formatDate(order._creationTime)}</p>
@@ -113,20 +112,18 @@ const OrderItem = ({
       <div className="hidden md:flex gap-4">
         {order?.items?.slice(0, 3).map((item: any, idx: number) => (
           <div key={idx} className="h-32 w-32">
-            <ImageWithFallback
-              src={
-                item.productImage ||
-                fallbackImageUrl ||
-                placeholder
-              }
-              alt={"product image"}
-              className="aspect-square object-cover rounded-sm"
+            <StorefrontImage
+              src={item.productImage || placeholder}
+              fallbackSrc={fallbackImageUrl}
+              alt={item.productName || `Item from order ${order.orderNumber}`}
+              aspectRatio="1 / 1"
+              wrapperClassName="h-32 w-32 rounded-sm"
             />
           </div>
         ))}
         {order?.items && order?.items?.length > 3 && (
-          <div className="h-32 w-32 bg-accent2/40 rounded-sm flex items-center justify-center">
-            <span className="text-gray-600">+{order.items.length - 3}</span>
+          <div className="flex h-32 w-32 items-center justify-center rounded-sm bg-selection">
+            <span className="text-selection-foreground">+{order.items.length - 3}</span>
           </div>
         )}
       </div>
@@ -135,20 +132,18 @@ const OrderItem = ({
         {order?.items &&
           order?.items.slice(0, 2).map((item: any, idx: number) => (
             <div key={idx} className="h-32 w-32">
-              <ImageWithFallback
-                src={
-                  item.productImage ||
-                  fallbackImageUrl ||
-                  placeholder
-                }
-                alt={"product image"}
-                className="aspect-square object-cover rounded-sm"
+              <StorefrontImage
+                src={item.productImage || placeholder}
+                fallbackSrc={fallbackImageUrl}
+                alt={item.productName || `Item from order ${order.orderNumber}`}
+                aspectRatio="1 / 1"
+                wrapperClassName="h-32 w-32 rounded-sm"
               />
             </div>
           ))}
         {order?.items && order?.items.length > 2 && (
-          <div className="h-32 w-32 bg-accent2/40 rounded-sm flex items-center justify-center">
-            <span className="text-gray-600">+{order.items.length - 2}</span>
+          <div className="flex h-32 w-32 items-center justify-center rounded-sm bg-selection">
+            <span className="text-selection-foreground">+{order.items.length - 2}</span>
           </div>
         )}
       </div>
@@ -163,7 +158,16 @@ const Orders = () => {
 
   const { data, isLoading } = useQuery(onlineOrderQueries.list());
 
-  if (isLoading) return <div className="h-screen"></div>;
+  if (isLoading) {
+    return (
+      <PageState
+        state="loading"
+        title="Loading your orders"
+        description="We're getting your latest purchases."
+        inline
+      />
+    );
+  }
 
   if (data?.length === 0) {
     return (
@@ -192,21 +196,22 @@ const Purchases = () => {
 
   const { data, isLoading } = useQuery(onlineOrderQueries.list());
 
-  if (isLoading) return <div className="h-screen"></div>;
+  if (isLoading) {
+    return (
+      <PageState
+        state="loading"
+        title="Loading your orders"
+        description="We're getting your latest purchases."
+      />
+    );
+  }
 
   return (
-    <FadeIn className="pb-56 space-y-8 lg:space-y-24">
-      <div className="w-full">
-        <div className="container mx-auto max-w-[1024px] space-y-4">
-          <div className="flex items-center py-2 px-6 lg:px-0">
-            <p className="text-lg font-light">Orders</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="container mx-auto max-w-[1024px] px-6 xl:px-0">
+    <StorefrontPage as="section" spacing="relaxed">
+      <FadeIn className="space-y-12">
+        <h1 className="text-2xl font-semibold">Orders</h1>
         <Orders />
-      </div>
-    </FadeIn>
+      </FadeIn>
+    </StorefrontPage>
   );
 };

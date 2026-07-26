@@ -38,6 +38,7 @@ import {
   createAuthVerificationViewedEvent,
 } from "@/lib/storefrontJourneyEvents";
 import { emitStorefrontFailure } from "@/lib/storefrontFailureObservability";
+import { StorefrontPage } from "@/components/common/StorefrontPage";
 
 export const FormSchema = z.object({
   code: z.string().min(6, {
@@ -303,8 +304,12 @@ function InputOTPForm() {
 
   return (
     <AuthComponent>
-      <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
+      <StorefrontPage aria-labelledby="verify-heading" spacing="relaxed">
+      <FadeIn>
         <div className="space-y-8">
+          <h1 id="verify-heading" className="text-center text-xl font-medium">
+            Verify your account
+          </h1>
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit)}
@@ -375,6 +380,7 @@ function InputOTPForm() {
           </div>
         </div>
       </FadeIn>
+      </StorefrontPage>
     </AuthComponent>
   );
 }

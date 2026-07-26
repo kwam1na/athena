@@ -24,6 +24,7 @@ import { useEffect } from "react";
 import { getDiscountValue, getOrderAmount } from "@/components/checkout/utils";
 import { Discount } from "@/components/checkout/types";
 import { formatStoredAmount } from "@/lib/currency";
+import { PageState } from "@/components/states/PageState";
 
 export const Route = createFileRoute("/shop/checkout/pod-confirmation")({
   component: PODConfirmationPage,
@@ -168,7 +169,7 @@ const PODOrderDetails = ({ session }: { session: any }) => {
       animate={{
         opacity: 1,
         y: 0,
-        transition: { ease: "easeOut", duration: 0.8, delay: 1.1 },
+        transition: { ease: "easeOut", duration: 0.3 },
       }}
       className="grid grid-cols-1 lg:grid-cols-2 w-full lg:w-[80%] gap-8"
     >
@@ -225,26 +226,22 @@ const PODConfirmationContent = () => {
     }
   }, [session, queryClient, bagQueries]);
 
-  if (isLoading || session === undefined) return null;
+  if (isLoading || session === undefined) {
+    return <PageState state="loading" title="Loading order confirmation" />;
+  }
 
   if (!session?.placedOrderId) {
     return (
-      <div className="container mx-auto max-w-[1024px] h-full flex justify-center">
-        <div className="flex flex-col gap-16 mt-24 w-[80%]">
-          <div className="space-y-4">
-            <p className="text-xl">Order Not Found</p>
-            <p className="text-muted-foreground">
-              We couldn't find your order confirmation.
-            </p>
-          </div>
-
-          <Link to="/">
-            <Button variant={"clear"} className="px-0">
-              Continue Shopping
-            </Button>
-          </Link>
-        </div>
-      </div>
+      <PageState
+        state="error"
+        title="Order confirmation not found"
+        description="We couldn't find the order associated with this checkout."
+        primaryAction={
+          <Button asChild>
+            <Link to="/">Continue shopping</Link>
+          </Button>
+        }
+      />
     );
   }
 
@@ -259,7 +256,7 @@ const PODConfirmationContent = () => {
           initial={{ opacity: 0 }}
           animate={{
             opacity: 1,
-            transition: { ease: "easeOut", duration: 0.6, delay: 0.3 },
+            transition: { ease: "easeOut", duration: 0.3 },
           }}
           className="space-y-12"
         >
@@ -291,7 +288,7 @@ const PODConfirmationContent = () => {
           animate={{
             opacity: 1,
             y: 0,
-            transition: { ease: "easeOut", duration: 0.8, delay: 0.9 },
+            transition: { ease: "easeOut", duration: 0.3 },
           }}
           className="space-y-8 w-full lg:w-[40%]"
         >
@@ -311,7 +308,7 @@ const PODConfirmationContent = () => {
             animate={{
               opacity: 1,
               y: 0,
-              transition: { ease: "easeOut", duration: 0.8, delay: 1.4 },
+              transition: { ease: "easeOut", duration: 0.3 },
             }}
           >
             <GuestRewardsPrompt
@@ -325,7 +322,7 @@ const PODConfirmationContent = () => {
           initial={{ opacity: 0 }}
           animate={{
             opacity: 1,
-            transition: { ease: "easeOut", duration: 0.4, delay: 1.5 },
+            transition: { ease: "easeOut", duration: 0.3 },
           }}
           className="space-x-12 pt-8"
         >

@@ -24,28 +24,30 @@ export default function ProductFilterBar({
 
   return (
     <div
-      className={`flex justify-between items-center container mx-auto max-w-[1024px] px-6 lg:px-0 sticky bg-white`}
+      className="sticky mx-auto flex max-w-content items-center justify-between bg-surface px-gutter"
     >
       <div className="flex items-center py-4">
-        <p className="text-md font-medium">{`${capitalizeWords(slugToWords(subcategorySlug || categorySlug || ""))}`}</p>
+        <h1 className="text-xl font-semibold">{`${capitalizeWords(slugToWords(subcategorySlug || categorySlug || ""))}`}</h1>
       </div>
       {showFilterButton && (
         <>
           <Button
             variant="clear"
+            aria-expanded={showFilters}
             onClick={() => setShowFilters(!showFilters)}
-            className="hidden text-xs lg:flex ml-auto p-0"
+            className="ml-auto hidden text-xs lg:flex"
           >
-            <p>{showFilters ? "Hide filters" : showFiltersText}</p>
+            <span>{showFilters ? "Hide filters" : showFiltersText}</span>
             <SlidersHorizontal className="w-4 h-4 ml-2" />
           </Button>
 
           <Button
             variant="clear"
+            aria-haspopup="dialog"
             onClick={onFilterClickOnMobile}
-            className="lg:hidden ml-auto p-0"
+            className="ml-auto lg:hidden"
           >
-            <p>{showFilters ? "Hide filters" : showFiltersText}</p>
+            <span>{showFilters ? "Hide filters" : showFiltersText}</span>
             <SlidersHorizontal className="w-4 h-4 ml-2" />
           </Button>
         </>

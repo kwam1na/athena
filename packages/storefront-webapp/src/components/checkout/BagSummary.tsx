@@ -283,19 +283,22 @@ function BagSummary() {
   );
 
   return (
-    <motion.div className="py-6 bg-background shadow-sm rounded-lg w-[80vw] lg:w-[30vw] space-y-12">
-      <div className="flex items-center px-6 w-full">
-        <p>Order summary</p>
+    <section
+      aria-labelledby="order-summary-heading"
+      className="w-full max-w-md space-y-layout-lg rounded-lg border border-border bg-surface p-layout-lg shadow-surface"
+    >
+      <div className="flex w-full items-center">
+        <h2 id="order-summary-heading" className="text-lg font-medium">
+          Order summary
+        </h2>
         <div className="ml-auto">
-          <Link to="/shop/bag">
-            <Button variant={"clear"}>
-              <p>Update bag</p>
-            </Button>
-          </Link>
+          <Button asChild variant="link">
+            <Link to="/shop/bag">Update bag</Link>
+          </Button>
         </div>
       </div>
 
-      <div className="px-8">
+      <div>
         <BagSummaryItems
           items={checkoutState?.bag?.items}
           discount={checkoutState.discount}
@@ -303,7 +306,7 @@ function BagSummary() {
       </div>
 
       {/* Promo Code */}
-      <div className="px-8 space-y-2">
+      <div className="space-y-layout-xs">
         <div className="space-y-6">
           <div className="space-y-4">
             <InputWithEndButton
@@ -316,7 +319,9 @@ function BagSummary() {
               onKeyDown={handleKeyDown}
             />
             {invalidMessage && (
-              <p className="px-2 text-xs text-accent4">{invalidMessage}</p>
+              <p role="alert" className="px-2 text-xs text-danger">
+                {invalidMessage}
+              </p>
             )}
           </div>
 
@@ -330,7 +335,7 @@ function BagSummary() {
               >
                 <Badge
                   variant={"outline"}
-                  className="bg-accent5/60 text-accent2 border-none"
+                  className="border-none bg-offer/10 text-offer-foreground"
                 >
                   <Tag className="w-3 h-3 mr-2" />
                   <p className="text-xs font-medium">
@@ -356,7 +361,7 @@ function BagSummary() {
                 >
                   <Badge
                     variant={"outline"}
-                    className="bg-accent5/60 text-accent2 border-none"
+                    className="border-none bg-success/10 text-success"
                   >
                     <Tag className="w-3 h-3 mr-2" />
                     <p className="text-xs font-medium">Free delivery applied</p>
@@ -367,10 +372,10 @@ function BagSummary() {
         </div>
       </div>
 
-      <Separator className="bg-accent5" />
+      <Separator />
 
       {/* Summary */}
-      <div className="px-8 space-y-8 pt-4 mt-4">
+      <div className="space-y-layout-sm border-t border-border pt-layout-lg">
         <div className="flex justify-between">
           <p className="text-sm">Subtotal</p>
           <p className="text-sm">
@@ -403,7 +408,7 @@ function BagSummary() {
           <p className="text-lg">{formatStoredAmount(formatter, total)}</p>
         </div>
       </div>
-    </motion.div>
+    </section>
   );
 }
 

@@ -128,8 +128,8 @@ export default function MobileBagSummary() {
       : "select items";
 
   return (
-    <div>
-      <Accordion type="single" collapsible className="w-full space-y-4">
+    <section aria-label="Order summary">
+      <Accordion type="single" collapsible className="w-full">
         <AccordionItem value="orderSummary" className="border-none">
           <AccordionTrigger className="flex w-full">
             <div className="flex items-center justify-between w-full pr-4">
@@ -168,7 +168,7 @@ export default function MobileBagSummary() {
                     onKeyDown={handleKeyDown}
                   />
                   {invalidMessage && (
-                    <p className="px-2 text-xs text-accent4">
+                    <p role="alert" className="px-2 text-xs text-danger">
                       {invalidMessage}
                     </p>
                   )}
@@ -184,7 +184,7 @@ export default function MobileBagSummary() {
                     >
                       <Badge
                         variant={"outline"}
-                        className="bg-accent2/10 text-accent2 border-none"
+                        className="border-none bg-offer/10 text-offer-foreground"
                       >
                         <Tag className="w-3 h-3 mr-2" />
                         <p className="text-xs font-medium">
@@ -210,7 +210,7 @@ export default function MobileBagSummary() {
                       >
                         <Badge
                           variant={"outline"}
-                          className="bg-accent2/10 text-accent2 border-none"
+                          className="border-none bg-success/10 text-success"
                         >
                           <Tag className="w-3 h-3 mr-2" />
                           <p className="text-xs font-medium">
@@ -264,6 +264,6 @@ export default function MobileBagSummary() {
           </AccordionContent>
         </AccordionItem>
       </Accordion>
-    </div>
+    </section>
   );
 }

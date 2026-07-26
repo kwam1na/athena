@@ -15,12 +15,10 @@ import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
 
 export const BagMenu = ({
   isMobile,
-  setActiveMenu,
-  onCloseClick,
+  onClose,
 }: {
   isMobile?: boolean;
-  setActiveMenu: (menu: string | null) => void;
-  onCloseClick?: () => void;
+  onClose: () => void;
 }) => {
   const item = {
     hidden: { y: -2, opacity: 0 },
@@ -47,8 +45,7 @@ export const BagMenu = ({
   const handleOnLinkClick = async ({
     isLogout = false,
   }: { isLogout?: boolean } = {}) => {
-    onCloseClick && onCloseClick();
-    setActiveMenu(null);
+    onClose();
 
     if (isLogout) {
       handleLogout();
@@ -160,13 +157,14 @@ export const BagMenu = ({
         )}
 
         {user && (
-          <a
-            className={`flex items-center gap-4 ${hoverClass}`}
+          <button
+            type="button"
+            className={`flex min-h-11 items-center gap-4 rounded-md text-left ${hoverClass}`}
             onClick={() => handleOnLinkClick({ isLogout: true })}
           >
             <PersonIcon className="w-4 h-4" />
-            <p className="text-sm cursor-pointer">{`Sign out ${user?.firstName ?? ""}`}</p>
-          </a>
+            <span className="text-sm">{`Sign out ${user?.firstName ?? ""}`}</span>
+          </button>
         )}
       </div>
     </motion.div>

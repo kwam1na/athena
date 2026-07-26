@@ -1,9 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getSharedDemoActorWithCtx: vi.fn(),
+  hashPosTerminalSyncSecret: vi.fn(),
   ingestLocalEventsWithCtx: vi.fn(),
   ingestRegisterSessionActivityWithCtx: vi.fn(),
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   requireReadySharedDemoWriteWithCtx: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
@@ -25,9 +27,13 @@ vi.mock("../application/sync/posRegisterSessionActivity", () => ({
     mocks.ingestRegisterSessionActivityWithCtx,
 }));
 vi.mock("../../lib/athenaUserAuth", () => ({
-  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+  requireAuthenticatedAthenaUserWithCtx:
+    mocks.requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx:
     mocks.requireOrganizationMemberRoleWithCtx,
+}));
+vi.mock("../application/sync/terminalSyncSecret", () => ({
+  hashPosTerminalSyncSecret: mocks.hashPosTerminalSyncSecret,
 }));
 
 import {
@@ -57,8 +63,13 @@ const baseArgs = {
   syncSecretHash: "secret",
   terminalId: "terminal-1",
 };
+const originalStage = process.env.STAGE;
 
 describe("shared demo POS sync enforcement", () => {
+  afterEach(() => {
+    process.env.STAGE = originalStage;
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getSharedDemoActorWithCtx.mockResolvedValue({
@@ -70,6 +81,10 @@ describe("shared demo POS sync enforcement", () => {
       kind: "shared_demo",
       storeId: "store-1",
     });
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "user-1",
+    });
+    mocks.hashPosTerminalSyncSecret.mockResolvedValue("hashed-secret");
   });
 
   it.each([
@@ -125,6 +140,69 @@ describe("shared demo POS sync enforcement", () => {
       storeId: "store-1",
     });
     expect(mocks.ingestLocalEventsWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("persists an admitted shared-demo closeout without scheduling live notifications", async () => {
+    process.env.STAGE = "prod";
+    mocks.ingestLocalEventsWithCtx.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [],
+        held: [],
+        mappings: [
+          {
+            cloudId: "register-session-1",
+            cloudTable: "registerSession",
+            localEventId: "event-closeout-1",
+            localIdKind: "closeout",
+          },
+        ],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "local-register-1",
+          acceptedThroughSequence: 1,
+        },
+      },
+    });
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string, id: string) => {
+          if (table === "store" && id === "store-1") {
+            return { organizationId: "org-1" };
+          }
+          if (table === "posTerminal" && id === "terminal-1") {
+            return {
+              status: "active",
+              storeId: "store-1",
+              syncSecretHash: "hashed-secret",
+            };
+          }
+          return null;
+        }),
+        query: vi.fn(),
+      },
+      scheduler: { runAfter: vi.fn() },
+    };
+
+    const result = await invoke(ctx, {
+      ...baseArgs,
+      events: [
+        {
+          eventType: "register_closed",
+          localEventId: "event-closeout-1",
+          localRegisterSessionId: "local-register-1",
+          occurredAt: 123,
+          payload: { countedCash: 100 },
+          sequence: 1,
+          staffProfileId: "staff-1",
+        },
+      ],
+    });
+
+    expect(result, JSON.stringify(result)).toMatchObject({ kind: "ok" });
+    expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledOnce();
+    expect(ctx.db.query).not.toHaveBeenCalled();
+    expect(ctx.scheduler.runAfter).not.toHaveBeenCalled();
   });
 
   it("requires the observed restore epoch before register activity ingestion", async () => {

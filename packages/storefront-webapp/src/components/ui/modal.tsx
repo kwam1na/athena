@@ -2,15 +2,13 @@ import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import {
   Dialog,
   DialogContent,
-  DialogContentNaked,
-  DialogContentFullscreen,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-interface ModalProps {
+export interface ModalProps {
   title: string;
   description?: string;
   isOpen: boolean;
@@ -41,62 +39,35 @@ export const Modal: React.FC<ModalProps> = ({
     }
   };
 
-  // Use fullscreen dialog component if fullscreen prop is true
-  if (fullscreen) {
-    return (
-      <Dialog open={isOpen} onOpenChange={onChange}>
-        <DialogContentFullscreen
-          className={cn(
-            "bg-transparent border-none p-0",
-            wideOnDesktop && "sm:max-w-[50vw]",
-            withoutBackground && "bg-transparent"
-          )}
-        >
-          <DialogTitle className="mt-6">{title}</DialogTitle>
-          {children}
-        </DialogContentFullscreen>
-      </Dialog>
-    );
-  }
-
   return (
     <Dialog open={isOpen} onOpenChange={onChange}>
-      {withoutCloseButton && (
-        <DialogContentNaked
-          className={cn(
-            "bg-transparent border-none",
-            withoutBackground && "bg-transparent"
-          )}
-        >
-          {!!withoutHeader == false && (
-            <DialogHeader className="flex gap-6">
-              <DialogTitle className="mt-6">{title}</DialogTitle>
+      <DialogContent
+        presentation={
+          fullscreen ? "fullscreen" : withoutBackground ? "naked" : "default"
+        }
+        showCloseButton={!withoutCloseButton}
+        className={cn(
+          fullscreen && "p-0",
+          wideOnDesktop && "sm:max-w-4xl",
+        )}
+      >
+        {!withoutHeader ? (
+          <DialogHeader className="flex gap-2">
+            <DialogTitle>{title}</DialogTitle>
+            {description && (
               <DialogDescription>{description}</DialogDescription>
-            </DialogHeader>
-          )}
-          <div>{children}</div>
-        </DialogContentNaked>
-      )}
-      {!withoutCloseButton && (
-        <DialogContent
-          className={cn(
-            "bg-transparent border-none",
-            withoutBackground && "bg-transparent"
-          )}
-        >
-          {!!withoutHeader == false && (
-            <DialogHeader className="flex gap-6">
-              <p className="text-sm">{title}</p>
-              <DialogDescription>{description}</DialogDescription>
-            </DialogHeader>
-          )}
+            )}
+          </DialogHeader>
+        ) : (
           <VisuallyHidden.Root>
             <DialogTitle>{title}</DialogTitle>
+            {description && (
+              <DialogDescription>{description}</DialogDescription>
+            )}
           </VisuallyHidden.Root>
-
-          <div>{children}</div>
-        </DialogContent>
-      )}
+        )}
+        <div>{children}</div>
+      </DialogContent>
     </Dialog>
   );
 };

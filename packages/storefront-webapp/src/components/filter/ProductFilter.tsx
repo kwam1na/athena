@@ -43,13 +43,13 @@ export default function ProductFilter() {
   ];
 
   return (
-    <div>
+    <div aria-label="Product filters">
       <Accordion type="multiple" className="w-full space-y-4">
         <AccordionItem value="color" className="border-none">
-          <AccordionTrigger className="w-[160px]">
-            <p className="text-sm">
+          <AccordionTrigger className="w-full">
+            <span className="text-sm">
               {selectedColors > 0 ? `Color (${selectedColors})` : "Color"}
-            </p>
+            </span>
           </AccordionTrigger>
 
           <AccordionContent>
@@ -64,10 +64,10 @@ export default function ProductFilter() {
         <Separator />
 
         <AccordionItem value="length" className="border-none">
-          <AccordionTrigger className="w-[160px]">
-            <p className="text-sm">
+          <AccordionTrigger className="w-full">
+            <span className="text-sm">
               {selectedLength > 0 ? `Length (${selectedLength})` : "Length"}
-            </p>
+            </span>
           </AccordionTrigger>
 
           <AccordionContent>

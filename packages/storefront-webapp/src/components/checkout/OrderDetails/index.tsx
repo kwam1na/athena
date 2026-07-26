@@ -132,7 +132,7 @@ export const OrderDetails = ({
   delayAnimation?: boolean;
 }) => {
   const transition = delayAnimation
-    ? { ease: "easeOut", duration: 0.8, delay: 1.1 }
+    ? { ease: "easeOut", duration: 0.3 }
     : { ease: "easeOut" };
 
   return (

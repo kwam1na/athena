@@ -3,9 +3,11 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { capitalizeWords } from "@/lib/utils";
 import { FadeIn } from "@/components/common/FadeIn";
 import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
-import ImageWithFallback from "@/components/ui/image-with-fallback";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
 import { useScrollToTop } from "@/hooks/useScrollToTop";
+import { StorefrontPage } from "@/components/common/StorefrontPage";
+import { PageState } from "@/components/states/PageState";
+import { StorefrontImage } from "@/components/ui/storefront-image";
 
 export const Route = createFileRoute("/_layout/contact-us")({
   component: () => <ContactUs />,
@@ -17,13 +19,22 @@ const ContactUs = () => {
 
   useScrollToTop();
 
-  if (!store) return <div className="h-screen" />;
+  if (!store) {
+    return (
+      <PageState
+        state="loading"
+        title="Loading contact details"
+        description="We're getting the latest store information."
+      />
+    );
+  }
 
   return (
-    <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
+    <StorefrontPage as="section" spacing="relaxed">
+      <FadeIn>
       <div className="space-y-16">
         <div className="space-y-8">
-          <p className="text-lg">Contact us</p>
+          <h1 className="text-2xl font-semibold">Contact us</h1>
 
           <p className="text-sm">
             {`At ${store?.name && capitalizeWords(store?.name as string)}, we're committed to exceptional service and premium
@@ -32,10 +43,11 @@ const ContactUs = () => {
           </p>
         </div>
 
-        <ImageWithFallback
-          className="w-150 h-150 object-cover"
+        <StorefrontImage
           src={storeConfig.media.images.showroomImage}
-          alt="showroom"
+          alt={`${capitalizeWords(store.name)} showroom`}
+          aspectRatio="4 / 3"
+          wrapperClassName="max-w-content rounded-lg"
         />
 
         <div className="flex flex-col gap-8 md:grid md:grid-cols-2">
@@ -58,7 +70,8 @@ const ContactUs = () => {
               <a
                 href={WIGLUB_HAIR_STUDIO_LOCATION_URL}
                 target="_blank"
-                className="font-medium"
+                rel="noopener noreferrer"
+                className="font-medium underline-offset-4 hover:underline"
               >
                 See map and directions
               </a>
@@ -75,6 +88,7 @@ const ContactUs = () => {
           </div>
         </div>
       </div>
-    </FadeIn>
+      </FadeIn>
+    </StorefrontPage>
   );
 };

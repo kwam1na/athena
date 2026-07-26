@@ -2,12 +2,11 @@ import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { useBannerMessageQueries } from "@/lib/queries/bannerMessage";
-import { cn } from "@/lib/utils";
 import { PromoCode, BannerMessage } from "@athena/webapp";
 import { useQuery } from "@tanstack/react-query";
-import { motion } from "framer-motion";
-import { useState, useEffect } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { formatStoredAmount } from "@/lib/currency";
+import { getRevealMotion } from "@/lib/motion";
 import {
   getBannerTextClass,
   getBannerBGClass,
@@ -30,6 +29,12 @@ export const SiteBanner = () => {
   const textClass = getBannerTextClass(navBarLayout, appLocation);
   const bgClass = getBannerBGClass(navBarLayout, appLocation);
   const animationDelay = getBannerAnimationDelay(appLocation);
+  const prefersReducedMotion = useReducedMotion() ?? false;
+  const revealMotion = getRevealMotion(prefersReducedMotion, {
+    delay: animationDelay,
+    distance: -100,
+    duration: 1.4,
+  });
 
   const getPromoMessage = (promoCode: PromoCode) => {
     if (!promoCode) return "";
@@ -60,13 +65,8 @@ export const SiteBanner = () => {
 
   return (
     <motion.div
-      initial={{ y: -100, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{
-        duration: 1.4,
-        delay: animationDelay,
-        ease: "easeInOut",
-      }}
+      {...revealMotion}
+      data-testid="site-banner"
       className={`w-full py-2 overflow-hidden ${textClass} ${bgClass}`}
     >
       <div className="flex items-center whitespace-nowrap text-xs md:justify-center">

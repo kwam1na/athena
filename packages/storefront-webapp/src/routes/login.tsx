@@ -33,6 +33,7 @@ import {
   createAuthRequestStartedEvent,
 } from "@/lib/storefrontJourneyEvents";
 import { emitStorefrontFailure } from "@/lib/storefrontFailureObservability";
+import { StorefrontPage } from "@/components/common/StorefrontPage";
 
 export const customerDetailsSchema = z.object({
   email: z
@@ -162,17 +163,20 @@ const Login = () => {
 
   return (
     <AuthComponent>
-      <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
+      <StorefrontPage aria-labelledby="login-heading" spacing="relaxed">
+      <FadeIn>
         <div className="space-y-8 py-16">
           {/* <h1 className="text-xl font-medium">Login for faster checkout.</h1> */}
 
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit)}
-              className="space-y-8 flex flex-col items-center p-12"
+              className="flex flex-col items-center gap-layout-xl"
             >
-              <div className="space-y-8 w-[320px] md:w-[400px]">
-                <p className="text-lg">{header}</p>
+              <div className="w-full max-w-md space-y-layout-xl">
+                <h1 id="login-heading" className="text-xl font-medium">
+                  {header}
+                </h1>
                 <div className="w-full">
                   <FormField
                     control={form.control}
@@ -216,6 +220,7 @@ const Login = () => {
           </Form>
         </div>
       </FadeIn>
+      </StorefrontPage>
     </AuthComponent>
   );
 };

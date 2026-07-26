@@ -1,10 +1,9 @@
-import { useEffect } from "react";
-
 import { useStoreContext } from "@/contexts/StoreContext";
 import { toDisplayAmount } from "@/lib/currency";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
 import type { PosTransaction } from "@/api/posTransaction";
 import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
+import { PageState } from "@/components/states/PageState";
 
 type PosReceiptPageProps = {
   queryOptions: UseQueryOptions<PosTransaction, Error, PosTransaction, string[]>;
@@ -18,7 +17,10 @@ const paymentLabel = (method: string) => {
   return method.replace("_", " ");
 };
 
-const shouldRetryReceiptLookup = (failureCount: number, error: Error) => {
+export const shouldRetryReceiptLookup = (
+  failureCount: number,
+  error: Error,
+) => {
   if (failureCount >= 2) {
     return false;
   }
@@ -32,16 +34,8 @@ const shouldRetryReceiptLookup = (failureCount: number, error: Error) => {
 };
 
 export const PosReceiptPage = ({ queryOptions }: PosReceiptPageProps) => {
-  const { formatter, store, hideNavbar, showNavbar } = useStoreContext();
+  const { formatter, store } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
-
-  useEffect(() => {
-    hideNavbar();
-
-    return () => {
-      showNavbar();
-    };
-  }, [hideNavbar, showNavbar]);
 
   const { data, isLoading } = useQuery({
     ...queryOptions,
@@ -51,12 +45,18 @@ export const PosReceiptPage = ({ queryOptions }: PosReceiptPageProps) => {
   const money = (value?: number) => formatter.format(toDisplayAmount(value ?? 0));
 
   if (isLoading) {
-    return <div className="h-screen" />;
+    return (
+      <PageState
+        state="loading"
+        title="Loading receipt"
+        description="We're retrieving this shared receipt."
+      />
+    );
   }
 
   if (!data) {
     return (
-      <main className="h-screen bg-white flex items-center justify-center px-4">
+      <div className="h-screen bg-white flex items-center justify-center px-4">
         <article
           className="w-80 border border-dashed border-black p-4 text-black"
           style={{
@@ -71,7 +71,7 @@ export const PosReceiptPage = ({ queryOptions }: PosReceiptPageProps) => {
           <div className="my-3 border-t border-dashed border-black" />
           <p className="text-center text-xs">We could not find this receipt.</p>
         </article>
-      </main>
+      </div>
     );
   }
 
@@ -102,7 +102,7 @@ export const PosReceiptPage = ({ queryOptions }: PosReceiptPageProps) => {
   const [street, city, state, zipCode, country] = locationParts;
 
   return (
-    <main className="min-h-screen h-screen bg-white flex items-center justify-center px-4 py-8">
+    <div className="min-h-screen h-screen bg-white flex items-center justify-center px-4 py-8">
       <style>{`
         .receipt-shell {
           width: 320px;
@@ -309,6 +309,6 @@ export const PosReceiptPage = ({ queryOptions }: PosReceiptPageProps) => {
           </div>
         </div>
       </article>
-    </main>
+    </div>
   );
 };

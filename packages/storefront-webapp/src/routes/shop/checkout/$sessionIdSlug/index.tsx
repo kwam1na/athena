@@ -22,6 +22,7 @@ import { AlertCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import { createOrderReviewViewedEvent } from "@/lib/storefrontJourneyEvents";
+import { PageState } from "@/components/states/PageState";
 
 const getErrorMessage = (value: unknown, fallback: string) =>
   typeof value === "string" && value.length > 0 ? value : fallback;
@@ -155,7 +156,9 @@ const CheckoutSession = () => {
     }
   };
 
-  if ((!sessionData && isLoading) || isLoadingOnlineOrder) return null;
+  if ((!sessionData && isLoading) || isLoadingOnlineOrder) {
+    return <PageState state="loading" title="Loading order review" />;
+  }
 
   if (!sessionData && !isLoading) {
     return (

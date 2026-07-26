@@ -1,11 +1,10 @@
-import { motion } from "framer-motion";
 import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { ProductCard } from "../ProductCard";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { Product, ProductSku } from "@athena/webapp";
 import { getProductName } from "@/lib/productUtils";
-import ImageWithFallback from "../ui/image-with-fallback";
+import { StorefrontImage } from "../ui/storefront-image";
 import { formatStoredAmount } from "@/lib/currency";
 import type { HomepageDisplayProduct } from "./homePageContent";
 
@@ -41,15 +40,11 @@ export function FeaturedProductsSection({
   return (
     <div className="space-y-40 md:space-y-48">
       {featuredSectionSorted.map((data, index) => (
-        <motion.div
+        <div
           key={data._id ?? `featured-homepage-item-${index}`}
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.2 }}
         >
           <FeaturedSection data={data} origin={origin} />
-        </motion.div>
+        </div>
       ))}
     </div>
   );
@@ -74,7 +69,7 @@ function FeaturedSection({
 
     return (
       <div className="space-y-8">
-        <p className="text-md font-medium">{`Shop ${name}`}</p>
+        <h2 className="text-md font-medium">{`Shop ${name}`}</h2>
 
         <div className="space-y-8 lg:space-y-24">
           <ProductGrid
@@ -109,7 +104,7 @@ function FeaturedSection({
     if (!products?.length) return null;
     return (
       <div className="space-y-8">
-        <p className="text-md font-medium">{`Shop ${name}`}</p>
+        <h2 className="text-md font-medium">{`Shop ${name}`}</h2>
 
         <div className="space-y-8 lg:space-y-24">
           <ProductGrid
@@ -197,9 +192,10 @@ function FeaturedProduct({
         params={(params) => ({ ...params, productSlug: product._id })}
         search={{ variant: product.skus?.[0].sku, origin }}
       >
-        <ImageWithFallback
+        <StorefrontImage
           alt={`${product.name} image`}
-          className="aspect-square object-cover w-[400px] h-[400px] md:w-[600px] md:h-[640px] rounded"
+          aspectRatio="1 / 1"
+          wrapperClassName="w-full max-w-2xl rounded-card"
           src={product.skus[0].images[0]}
         />
       </Link>
@@ -222,12 +218,12 @@ function ProductGrid({
   const productsWithSkus = products.filter((product) => product.skus?.length);
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8 md:gap-24 xl:gap-4">
+    <div className="grid grid-cols-2 gap-layout-md md:grid-cols-3 xl:grid-cols-4">
       {productsWithSkus.slice(0, 4).map((product) => (
         <Link
           to="/shop/product/$productSlug"
           key={product?._id}
-          className="h-64 w-48 md:h-80 md:w-80 xl:h-96 xl:w-96 flex-shrink-0"
+          className="rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
           params={(params) => ({
             ...params,
             productSlug: product?._id,

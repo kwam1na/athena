@@ -1131,6 +1131,31 @@ export const HARNESS_APP_REGISTRY = [
         note: "Start here for most layout, component, and route behavior changes that do not alter the checkout or browser-journey contract.",
       },
       {
+        title: "Storybook and design-system tooling edits",
+        touchedPaths: [
+          ".storybook",
+          "src/stories",
+          "src/styles",
+          "src/index.css",
+          "src/design-system-build-config.test.ts",
+          "tailwind.config.js",
+          "postcss.config.cjs",
+          "package.json",
+          "components.json",
+          "README.md",
+          ".gitignore",
+          "scripts/design-system-policy-changed.sh",
+          "scripts/design-system-policy.ts",
+        ],
+        commands: [
+          { kind: "script", script: "test" },
+          { kind: "script", script: "build" },
+          { kind: "script", script: "storybook:build" },
+          { kind: "script", script: "lint:design-system:changed" },
+        ],
+        note: "Use this when storefront foundations, stories, Storybook configuration, or changed-file visual policy wiring changes so the app and living workbench are validated from the same package authority.",
+      },
+      {
         title: "Route runtime or build-pipeline edits",
         touchedPaths: [
           "index.html",

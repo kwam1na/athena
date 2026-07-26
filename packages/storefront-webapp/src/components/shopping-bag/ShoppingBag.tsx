@@ -38,7 +38,6 @@ import { EmptyState } from "../states/empty/empty-state";
 import { FadeIn } from "../common/FadeIn";
 import { ArrowRightIcon } from "@radix-ui/react-icons";
 import ImageWithFallback from "../ui/image-with-fallback";
-import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { useCheckoutSessionQueries } from "@/lib/queries/checkout";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import {
@@ -46,7 +45,7 @@ import {
   createDiscountCodeTriggerEvent,
 } from "@/lib/storefrontJourneyEvents";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
-import { WelcomeBackModal } from "../ui/modals/WelcomeBackModal";
+import { WelcomeBackModal } from "./promotion/WelcomeBackModal";
 import { useProductDiscount } from "@/hooks/useProductDiscount";
 import { DiscountBadge } from "../product-page/DiscountBadge";
 import { useInventoryStatus } from "@/hooks/useInventoryStatus";
@@ -61,23 +60,8 @@ import {
 
 const PendingItem = ({ session, count }: { session: any; count: number }) => {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0, transition: { ease: easeInOut } }}
-      className="flex items-center"
-    >
-      <motion.div
-        animate={{
-          scale: [1, 1.2, 1],
-        }}
-        transition={{
-          duration: 1.6,
-          ease: "easeInOut",
-          repeat: Infinity,
-        }}
-      >
-        <InfoIcon className="w-4 h-4" />
-      </motion.div>
+    <div className="flex items-center rounded-md border border-info/30 bg-info/10 px-layout-sm py-layout-xs text-info-foreground">
+      <InfoIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
       <Link
         to={
           count == 1
@@ -85,18 +69,18 @@ const PendingItem = ({ session, count }: { session: any; count: number }) => {
             : "/shop/checkout/pending"
         }
         params={{ sessionIdSlug: session._id }}
-        className="flex items-center"
+        className="flex min-h-control-compact items-center"
       >
-        <Button variant={"link"}>
-          <p className="text-xs underline">
+        <Button variant="link" className="text-info-foreground">
+          <span className="text-xs underline">
             {count > 1
               ? `You have ${count} pending orders`
               : "You have a pending order"}
-          </p>
+          </span>
         </Button>
         <ArrowRightIcon className="w-4 h-4" />
       </Link>
-    </motion.div>
+    </div>
   );
 };
 
@@ -118,11 +102,10 @@ export function ShoppingBagCheckoutButton({
       isLoading={isProcessingCheckoutRequest}
       onClick={onCheckoutClick}
       data-testid="storefront-bag-start-checkout"
-      className={`group font-light w-[240px] text-accent2 ${isUpdatingBag ? "pointer-events-none" : ""}`}
-      variant={"clear"}
+      className={`group min-h-control-standard w-full min-w-48 sm:w-auto ${isUpdatingBag ? "pointer-events-none" : ""}`}
       disabled={hasPendingOrders}
     >
-      <p className="font-medium">Checkout</p>
+      <span className="font-medium">Checkout</span>
       <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
     </LoadingButton>
   );
@@ -204,8 +187,12 @@ const BagItemWithDiscount = ({
   );
 
   return (
-    <motion.div key={item._id} layout={isNavbarShowing} className="space-y-4">
-      <div className="relative flex space-x-4">
+    <motion.article
+      key={item._id}
+      layout={isNavbarShowing}
+      className="space-y-layout-sm rounded-lg border border-border bg-surface p-layout-sm shadow-surface"
+    >
+      <div className="relative flex">
         <motion.div
           className="absolute inset-0 flex px-16 items-center pointer-events-none"
           variants={{
@@ -232,7 +219,7 @@ const BagItemWithDiscount = ({
               x: bagAction == "deleting-from-bag" ? 0 : -24,
             }),
           }}
-          className="relative z-10 flex gap-8 items-center"
+          className="relative z-10 flex w-full items-start gap-layout-sm sm:gap-layout-lg"
         >
           <Link
             key={index}
@@ -242,16 +229,16 @@ const BagItemWithDiscount = ({
               variant: item.productSku,
               origin: "shopping_bag",
             }}
-            className="space-y-4"
+            className="shrink-0"
           >
-            <div className="relative w-32 h-32 lg:w-40 lg:h-40">
+            <div className="relative h-28 w-24 overflow-hidden rounded-md sm:h-36 sm:w-32">
               <ImageWithFallback
                 src={
                   (item as any)?.productImage ||
                   storeConfig.media.images.fallbackImageUrl
                 }
                 alt={(item as any).productName || "product image"}
-                className="w-full h-full object-cover rounded-lg"
+                className="h-full w-full object-cover"
               />
 
               <DiscountBadge
@@ -262,8 +249,8 @@ const BagItemWithDiscount = ({
             </div>
           </Link>
 
-          <div className="flex-1 space-y-2 lg:space-y-6 text-sm">
-            <div className="flex flex-col gap-2 lg:gap-4">
+          <div className="min-w-0 flex-1 space-y-layout-sm text-sm">
+            <div className="flex flex-col gap-layout-xs">
               <h2 className="font-medium">{item && getProductName(item)}</h2>
 
               {showDiscount && item.price && item.price > 0 ? (
@@ -321,7 +308,9 @@ const BagItemWithDiscount = ({
                 </div>
               )}
 
-              <select
+              <label className="flex w-fit items-center gap-layout-xs text-xs text-muted-foreground">
+                <span>Quantity</span>
+                <select
                 value={item.quantity}
                 onChange={(e) =>
                   onUpdateBag({
@@ -330,14 +319,16 @@ const BagItemWithDiscount = ({
                   })
                 }
                 disabled={!item.price}
-                className={`w-12 py-2 bg-background text-xs ${isUpdatingBag ? "pointer-events-none" : ""}`}
+                aria-label={`Quantity for ${getProductName(item)}`}
+                className={`min-h-control-compact w-16 rounded-md border border-input bg-surface px-2 text-xs text-foreground ${isUpdatingBag ? "pointer-events-none" : ""}`}
               >
                 {[...Array(10)].map((_, i) => (
                   <option key={i + 1} value={i + 1}>
                     {i + 1}
                   </option>
                 ))}
-              </select>
+                </select>
+              </label>
 
               {unavailableSku && (
                 <motion.p className="text-xs font-medium text-accent2">
@@ -352,6 +343,7 @@ const BagItemWithDiscount = ({
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label={`Save ${getProductName(item)} for later`}
                 className={`${isUpdatingBag ? "pointer-events-none" : ""}`}
                 disabled={!item.price}
                 onClick={async () => {
@@ -364,6 +356,7 @@ const BagItemWithDiscount = ({
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label={`Remove ${getProductName(item)} from bag`}
                 className={`${isUpdatingBag ? "pointer-events-none" : ""}`}
                 onClick={async () => {
                   await onDelete(item._id);
@@ -398,7 +391,7 @@ const BagItemWithDiscount = ({
           </p>
         </div>
       )}
-    </motion.div>
+    </motion.article>
   );
 };
 
@@ -410,13 +403,6 @@ export default function ShoppingBag() {
   const { formatter, userId, isNavbarShowing, store } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
   const { track } = useStorefrontObservability();
-
-  const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
-
-  useEffect(() => {
-    setNavBarLayout("fixed");
-    setAppLocation("shop");
-  }, []);
 
   const {
     bag,
@@ -608,7 +594,7 @@ export default function ShoppingBag() {
   };
 
   return (
-    <FadeIn className="container mx-auto max-w-[1024px] px-6 xl:px-0 space-y-8 lg:space-y-24 py-8">
+    <FadeIn className="mx-auto w-full max-w-content space-y-layout-xl px-gutter py-layout-xl">
       {!isBagEmpty && (
         <div className="space-y-4 pb-8">
           {hasPendingOrders && (
@@ -617,7 +603,7 @@ export default function ShoppingBag() {
               count={pendingSessions?.length || 0}
             />
           )}
-          <h1 className="text-lg font-light">Bag</h1>
+          <h1 className="font-display text-3xl font-medium">Your bag</h1>
 
           {/* {potentialRewards > 0 && hasDiscountModalBeenShown && (
             <motion.div
@@ -695,8 +681,8 @@ export default function ShoppingBag() {
       )}
 
       {!isBagEmpty && total !== 0 && (
-        <div className="grid grid-cols-1 gap-8 pb-56">
-          <div className="md:col-span-2 space-y-24">
+        <div className="grid grid-cols-1 gap-layout-lg pb-40">
+          <div className="space-y-layout-lg">
             <AnimatePresence initial={false} custom={bagAction}>
               {bag?.items.map((item: BagItem, index: number) => (
                 <BagItemWithDiscount
@@ -732,19 +718,19 @@ export default function ShoppingBag() {
                 animate={{
                   opacity: 1,
                   y: 0,
-                  transition: { ease: "easeOut", duration: 0.3, delay: 0.5 },
+                  transition: { ease: "easeOut", duration: 0.3 },
                 }}
-                className="space-y-8 flex p-4 bg-accent5 border border-accent5"
+                className="border-t border-border bg-surface/95 px-gutter py-layout-sm shadow-overlay backdrop-blur motion-reduce:transform-none"
               >
-                <div className="ml-auto flex gap-12">
+                <div className="mx-auto flex w-full max-w-content flex-col gap-layout-sm sm:flex-row sm:items-center sm:justify-end sm:gap-layout-xl">
                   <div className="space-y-2">
-                    <div className="flex gap-4 md:gap-8 text-md font-medium text-accent2">
-                      <p>TOTAL</p>
+                    <div className="flex justify-between gap-layout-lg text-sm font-medium text-foreground">
+                      <p>Total</p>
                       <p>{formatStoredAmount(formatter, total)}</p>
                     </div>
 
-                    <p className="text-xs text-gray-500">
-                      * excluding delivery fees
+                    <p className="text-xs text-muted-foreground">
+                      Delivery calculated at checkout
                     </p>
                   </div>
 

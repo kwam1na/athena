@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 export function RewardsPanel() {
   const { store } = useStoreContext();
@@ -63,9 +64,9 @@ export function RewardsPanel() {
 
   return (
     <div className="space-y-16">
-      <div className="bg-white rounded-lg border p-6">
+      <div className="rounded-lg border bg-surface p-6 shadow-surface">
         <div className="mb-6 p-6 rounded-md text-center">
-          <div className="text-sm text-gray-500 mb-2">Available Points</div>
+          <div className="mb-2 text-sm text-muted-foreground">Available points</div>
           {pointsLoading && <Skeleton className="h-10 w-32 mx-auto mb-2" />}
 
           {!pointsLoading && points !== undefined && points >= 0 && (
@@ -75,7 +76,7 @@ export function RewardsPanel() {
       </div>
 
       {hasPoints && (
-        <h2 className="text-lg font-medium mb-4">Points History</h2>
+          <h2 className="mb-4 text-lg font-medium">Points history</h2>
       )}
 
       {historyLoading && (
@@ -102,13 +103,11 @@ export function RewardsPanel() {
                   {historyData.transactions.map((transaction, index) => (
                     <div key={transaction._id}>
                       <div className="py-3 space-y-2">
-                        <p
-                          className={`font-light ${transaction.points > 0 ? "text-accent2" : "text-red-600"}`}
-                        >
+                        <StatusBadge tone={transaction.points > 0 ? "success" : "danger"}>
                           {transaction.points > 0 ? "+" : ""}
                           {transaction.points.toLocaleString()} pts
-                        </p>
-                        <div className="flex items-center gap-2 text-sm text-gray-400">
+                        </StatusBadge>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           {transaction.orderId && (
                             <Link
                               to={`/shop/orders/$orderId`}

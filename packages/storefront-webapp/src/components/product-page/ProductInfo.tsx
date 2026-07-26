@@ -51,10 +51,10 @@ function ViewCount({ productId }: { productId: string }) {
   else if (total > 1) totalText = `${total} total views`;
 
   return (
-    <div className="text-sm text-gray-500 flex items-center gap-2 min-h-[20px]">
+    <div className="flex min-h-5 items-center gap-2 text-sm text-muted-foreground">
       <p>👀</p>
       {isLoading ? (
-        <span className="inline-block w-24 h-3 bg-gray-200 rounded animate-pulse" />
+        <span className="inline-block h-3 w-24 animate-pulse rounded-sm bg-muted motion-reduce:animate-none" />
       ) : (
         <>
           {daily > 0 && <span className="font-medium">{dailyText}</span>}
@@ -111,7 +111,7 @@ export function ProductInfo({
             <p className="text-md md:text-2xl line-through text-muted-foreground">
               {formatStoredAmount(formatter, originalPrice)}
             </p>
-            <p className="text-md md:text-2xl text-accent2">
+            <p className="text-md text-offer md:text-2xl">
               {formatStoredAmount(formatter, discountedPrice)}
             </p>
           </div>

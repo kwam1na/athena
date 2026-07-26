@@ -1,17 +1,21 @@
-import { FadeIn } from "@/components/common/FadeIn";
-import { Lock } from "lucide-react";
+import { StorefrontPage } from "@/components/common/StorefrontPage";
+import { PageState } from "@/components/states/PageState";
+import { Button } from "@/components/ui/button";
+import { Link } from "@tanstack/react-router";
 
 export const CheckoutUnavailable = () => {
   return (
-    <FadeIn className="container mx-auto px-4 lg:px-0 overflow-hidden">
-      <div className="flex items-center justify-center h-screen">
-        <div className="flex items-center gap-2 text-muted-foreground font-medium">
-          <Lock className="w-4 h-4" />
-          <p className="tex-sm text-center">
-            Store checkout is currently unavailable
-          </p>
-        </div>
-      </div>
-    </FadeIn>
+    <StorefrontPage as="section" spacing="relaxed">
+      <PageState
+        state="unavailable"
+        title="Checkout is temporarily unavailable"
+        description="Your bag is saved. Please try again in a few minutes."
+        primaryAction={
+          <Button asChild variant="outline">
+            <Link to="/shop/bag">Return to bag</Link>
+          </Button>
+        }
+      />
+    </StorefrontPage>
   );
 };

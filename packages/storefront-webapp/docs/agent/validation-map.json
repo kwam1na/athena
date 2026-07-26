@@ -22,6 +22,43 @@
       "behaviorScenarios": []
     },
     {
+      "name": "storybook-and-design-system-tooling-edits",
+      "pathPrefixes": [
+        "packages/storefront-webapp/.storybook",
+        "packages/storefront-webapp/src/stories",
+        "packages/storefront-webapp/src/styles",
+        "packages/storefront-webapp/src/index.css",
+        "packages/storefront-webapp/src/design-system-build-config.test.ts",
+        "packages/storefront-webapp/tailwind.config.js",
+        "packages/storefront-webapp/postcss.config.cjs",
+        "packages/storefront-webapp/package.json",
+        "packages/storefront-webapp/components.json",
+        "packages/storefront-webapp/README.md",
+        "packages/storefront-webapp/.gitignore",
+        "packages/storefront-webapp/scripts/design-system-policy-changed.sh",
+        "packages/storefront-webapp/scripts/design-system-policy.ts"
+      ],
+      "commands": [
+        {
+          "kind": "script",
+          "script": "test"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        },
+        {
+          "kind": "script",
+          "script": "storybook:build"
+        },
+        {
+          "kind": "script",
+          "script": "lint:design-system:changed"
+        }
+      ],
+      "behaviorScenarios": []
+    },
+    {
       "name": "route-runtime-or-build-pipeline-edits",
       "pathPrefixes": [
         "packages/storefront-webapp/index.html",

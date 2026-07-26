@@ -1,6 +1,7 @@
 import { getProductName } from "@/lib/utils";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { useQuery } from "@tanstack/react-query";
+import { StorefrontImage } from "../ui/storefront-image";
 
 export function OnsaleProduct() {
   const promoCodeQueries = usePromoCodesQueries();
@@ -12,12 +13,13 @@ export function OnsaleProduct() {
   if (!p || !p.productSku) return null;
 
   return (
-    <div className="w-full border rounded-md p-4 border-accent2/10 bg-accent2/10">
+    <div className="w-full rounded-card border border-info/20 bg-info/10 p-layout-sm">
       <div className="flex h-full w-full gap-4">
-        <img
+        <StorefrontImage
           src={p.productSku.images[0]}
-          alt={`Preview`}
-          className={`aspect-square w-[116px] h-[116px] object-cover rounded-md`}
+          alt={`${getProductName(p.productSku)} offer`}
+          aspectRatio="1 / 1"
+          wrapperClassName="w-28 shrink-0 rounded-card"
         />
         <div className="space-y-4">
           <div className="flex items-center items-start gap-2">

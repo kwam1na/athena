@@ -5,6 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AnimatedCard } from "../ui/AnimatedCard";
 import { Button } from "../ui/button";
+import { IconButton } from "../ui/icon-button";
+import { StorefrontImage } from "../ui/storefront-image";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import {
   createPromoAlertViewedEvent,
@@ -118,38 +120,37 @@ export function PromoAlert({ isOpen, onClose }: PromoAlertProps) {
   return (
     <AnimatedCard
       isOpen={isOpen}
-      className="fixed top-[80px] left-0 right-0 z-10 max-w-md border rounded-md p-4 px-6 mx-4 md:mx-auto shadow-lg transition-colors duration-300 bg-black/30 backdrop-blur-sm border-white/20"
+      className="fixed left-0 right-0 top-20 z-10 mx-4 max-w-md rounded-card border border-border bg-surface-raised p-layout-md text-foreground shadow-overlay md:mx-auto"
     >
       <div className="relative">
-        <button
+        <IconButton
+          label="Close alert"
           onClick={onPromoAlertClose}
-          className="absolute right-0 top-0 text-white"
-          aria-label="Close alert"
+          className="absolute right-0 top-0"
+          variant="clear"
         >
-          <X className="h-4 w-4" />
-        </button>
+          <X aria-hidden="true" className="h-4 w-4" />
+        </IconButton>
 
         <div className="flex items-center gap-4">
-          <img
+          <StorefrontImage
             src={promoItem.productSku.images[0]}
             alt="Promo item"
-            className="w-24 h-24 rounded-md object-cover"
+            aspectRatio="1 / 1"
+            wrapperClassName="w-24 shrink-0 rounded-card"
           />
 
           <div className="space-y-2">
-            <p className="font-medium text-sm text-white">{tagline}</p>
+            <p className="font-medium text-sm">{tagline}</p>
             <div className="space-y-4">
-              <p className="text-sm text-white/80">{body}</p>
+              <p className="text-sm text-muted-foreground">{body}</p>
               <div className="mt-2">
                 <Link
                   to="/shop/$categorySlug"
                   params={{ categorySlug: "hair" }}
                   onClick={handleShopNow}
                 >
-                  <Button
-                    variant="outline"
-                    className="bg-white text-black hover:bg-white/90 border-transparent"
-                  >
+                  <Button variant="outline">
                     Shop Now
                   </Button>
                 </Link>

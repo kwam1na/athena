@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import { Form } from "../ui/form";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,7 +12,6 @@ import { StoreSelector } from "./DeliveryDetails/DeliveryOptionsSelector";
 import { PaymentSection } from "./PaymentSection";
 import { DeliveryDetailsSection } from "./DeliveryDetailsSection";
 import { DeliveryOptions } from "./DeliveryDetails/DeliverySection";
-import { InfoIcon } from "lucide-react";
 
 export const CheckoutForm = () => {
   const { checkoutState } = useCheckout();
@@ -75,18 +73,11 @@ export const CheckoutForm = () => {
 
   return (
     <Form {...form}>
-      <form className="w-full space-y-8" onSubmit={form.handleSubmit(onSubmit)}>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{
-            opacity: 1,
-            transition: { ease: "easeOut", duration: 0.4 },
-          }}
-          className="space-y-16"
-        >
+      <form className="w-full" onSubmit={form.handleSubmit(onSubmit)}>
+        <div className="space-y-layout-2xl">
           <PickupOptions />
 
-          <div className="space-y-8">
+          <div className="space-y-layout-lg">
             {checkoutState.isDeliveryOrder && <DeliveryOptions form={form} />}
 
             {checkoutState.isPickupOrder && <StoreSelector />}
@@ -103,7 +94,7 @@ export const CheckoutForm = () => {
           <CustomerInfoSection form={form} />
 
           <PaymentSection form={form} />
-        </motion.div>
+        </div>
       </form>
     </Form>
   );

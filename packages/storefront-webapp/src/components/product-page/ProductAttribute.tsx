@@ -1,6 +1,7 @@
 import { Product, ProductSku } from "@athena/webapp";
 import { Button } from "../ui/button";
 import { capitalizeWords } from "@/lib/utils";
+import { useId } from "react";
 
 export function ProductAttribute({
   product,
@@ -16,6 +17,9 @@ export function ProductAttribute({
   className?: string;
 }) {
   const isCompact = density === "compact";
+  const colorLabelId = useId();
+  const lengthLabelId = useId();
+  const sizeLabelId = useId();
   const containerClassName = isCompact ? "space-y-7" : "space-y-8";
   const groupClassName = isCompact ? "space-y-2.5" : "space-y-4";
   const labelClassName = isCompact
@@ -27,9 +31,9 @@ export function ProductAttribute({
   const optionClassName = (isSelected: boolean) =>
     `${isCompact ? "h-10 min-w-16 px-4 text-sm" : ""} ${
       isSelected
-        ? "border text-[#EC4683] border-[#EC4683] shadow-md"
-        : "border border-background-muted"
-    } hover:shadow-md hover:border-[#EC4683]`;
+        ? "border-selection-foreground bg-selection text-selection-foreground shadow-surface"
+        : "border-border bg-surface"
+    } hover:border-selection-foreground hover:bg-selection hover:shadow-surface`;
 
   const colors: string[] = Array.from(
     new Set(
@@ -79,7 +83,8 @@ export function ProductAttribute({
   const sizes: Array<number | string> = [...numericSizes, ...stringSizes];
 
   const findSize = (sku: any, value: string) => {
-    return sku.size == value || (sku.size.split(" ") as string[])[0] == value;
+    const skuSize = String(sku.size ?? "");
+    return skuSize == value || skuSize.split(" ")[0] == value;
   };
 
   const handleClick = (
@@ -114,16 +119,22 @@ export function ProductAttribute({
     <div className={`${containerClassName} ${className}`}>
       {Boolean(colors.length) && (
         <div className={groupClassName}>
-          <p className={labelClassName}>Color</p>
+          <p className={labelClassName} id={colorLabelId}>Color</p>
 
-          <div className={optionsClassName}>
+          <div
+            aria-labelledby={colorLabelId}
+            className={optionsClassName}
+            role="group"
+          >
             {colors.map((color, index) => {
               return (
                 <Button
                   variant={"ghost"}
                   key={index}
+                  aria-pressed={selectedSku?.colorName == color}
                   className={optionClassName(selectedSku?.colorName == color)}
                   onClick={() => handleClick("color", color)}
+                  type="button"
                 >
                   {capitalizeWords(color)}
                 </Button>
@@ -135,16 +146,22 @@ export function ProductAttribute({
 
       {Boolean(lengths.length) && (
         <div className={groupClassName}>
-          <p className={labelClassName}>Length</p>
+          <p className={labelClassName} id={lengthLabelId}>Length</p>
 
-          <div className={optionsClassName}>
+          <div
+            aria-labelledby={lengthLabelId}
+            className={optionsClassName}
+            role="group"
+          >
             {lengths.map((length, index) => {
               return (
                 <Button
                   variant={"ghost"}
                   key={index}
+                  aria-pressed={selectedSku?.length == length}
                   className={optionClassName(selectedSku?.length == length)}
                   onClick={() => handleClick("length", length.toString())}
+                  type="button"
                 >
                   {`${length}"`}
                 </Button>
@@ -156,9 +173,13 @@ export function ProductAttribute({
 
       {selectedSku.productCategory !== "Hair" && Boolean(sizes.length) && (
         <div className={groupClassName}>
-          <p className={labelClassName}>Size</p>
+          <p className={labelClassName} id={sizeLabelId}>Size</p>
 
-          <div className={optionsClassName}>
+          <div
+            aria-labelledby={sizeLabelId}
+            className={optionsClassName}
+            role="group"
+          >
             {sizes.map((size, index) => {
               const sizeStr = String(size);
               const isNumeric = typeof size === "number";
@@ -170,8 +191,10 @@ export function ProductAttribute({
                 <Button
                   variant={"ghost"}
                   key={index}
+                  aria-pressed={findSize(selectedSku, sizeStr)}
                   className={optionClassName(findSize(selectedSku, sizeStr))}
                   onClick={() => handleClick("size", sizeStr)}
+                  type="button"
                 >
                   {displayText}
                 </Button>

@@ -21,42 +21,42 @@ export const AboutProduct = ({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
         {productSku.size && (
           <div className="flex items-center gap-2">
-            <Ruler className="w-3.5 h-3.5 text-gray-700" />
+            <Ruler className="h-3.5 w-3.5 text-muted-foreground" />
             <p className="text-sm">{productSku.size || "-"} lace</p>
           </div>
         )}
 
         {productSku.weight && (
           <div className="flex items-center gap-2">
-            <Dumbbell className="w-3.5 h-3.5 text-gray-700" />
+            <Dumbbell className="h-3.5 w-3.5 text-muted-foreground" />
             <p className="text-sm">{productSku.weight || "-"}</p>
           </div>
         )}
 
         {wigMake == "custom" && (
           <div className="flex items-center gap-2">
-            <Gem className="w-3.5 h-3.5 text-gray-700" />
+            <Gem className="h-3.5 w-3.5 text-muted-foreground" />
             <p className="text-sm">Custom made</p>
           </div>
         )}
 
         {wigMake == "factory-made" && (
           <div className="flex items-center gap-2">
-            <Factory className="w-3.5 h-3.5 text-gray-700" />
+            <Factory className="h-3.5 w-3.5 text-muted-foreground" />
             <p className="text-sm">Factory-made</p>
           </div>
         )}
 
         {wigTexture == "single-drawn" && (
           <div className="flex items-center gap-2">
-            <Check className="w-3.5 h-3.5 text-gray-700" />
+            <Check className="h-3.5 w-3.5 text-muted-foreground" />
             <p className="text-sm">Single-drawn</p>
           </div>
         )}
 
         {wigTexture == "double-drawn" && (
           <div className="flex items-center gap-2">
-            <CheckCheck className="w-3.5 h-3.5 text-gray-700" />
+            <CheckCheck className="h-3.5 w-3.5 text-muted-foreground" />
             <p className="text-sm">Double-drawn</p>
           </div>
         )}

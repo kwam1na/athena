@@ -1,11 +1,11 @@
 import { useRef } from "react";
-import { motion } from "framer-motion";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { Button } from "../ui/button";
 import { HomeHero } from "./HomeHero";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
+import { StorefrontImage } from "../ui/storefront-image";
 
 type ShopLookProduct = {
   productId?: string;
@@ -38,7 +38,7 @@ export function HomeHeroSection({
     <div ref={homeHeroRef}>
       <HomeHero nextSectionRef={nextSectionRef} />
       {shopLookProductId && shopLookImage ? (
-        <motion.div className="flex flex-col lg:relative">
+        <section className="grid items-center gap-layout-lg lg:grid-cols-2">
           <Link
             to="/shop/product/$productSlug"
             params={{ productSlug: shopLookProductId }}
@@ -46,29 +46,20 @@ export function HomeHeroSection({
               origin: "shop_this_look",
             }}
           >
-            <motion.img
+            <StorefrontImage
               ref={shopTheLookRef}
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.8 }}
               src={shopLookImage}
               alt="Shop the Look"
-              className="w-full lg:w-[50%] h-screen object-cover"
+              aspectRatio="4 / 5"
+              wrapperClassName="w-full"
               loading="lazy"
               decoding="async"
             />
           </Link>
 
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 1 }}
-            className="lg:absolute lg:right-[240px] lg:top-1/2 lg:-translate-y-1/2 p-8 rounded-lg"
-          >
+          <div className="p-layout-lg">
             <div className="flex flex-col items-center gap-16">
-              <h2 className="text-2xl font-bold text-accent2 text-center tracking-widest leading-loose">
+              <h2 className="text-2xl font-bold text-foreground text-center tracking-widest leading-loose">
                 the{" "}
                 <span className="font-lavish text-6xl md:text-7xl">
                   signature sleek
@@ -91,8 +82,8 @@ export function HomeHeroSection({
                 </Link>
               </div>
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </section>
       ) : null}
     </div>
   );

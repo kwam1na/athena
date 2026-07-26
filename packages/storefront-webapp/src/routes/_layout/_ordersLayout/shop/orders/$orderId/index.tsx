@@ -44,6 +44,9 @@ import { useUserQueries } from "@/lib/queries/user";
 import { OrderPointsDisplay } from "@/components/rewards/OrderPointsDisplay";
 import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
 import { formatStoredAmount } from "@/lib/currency";
+import { PageState } from "@/components/states/PageState";
+import { StorefrontPage } from "@/components/common/StorefrontPage";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 export const Route = createFileRoute(
   "/_layout/_ordersLayout/shop/orders/$orderId/",
@@ -287,6 +290,7 @@ const PickupDetails = ({ order }: { order: any }) => {
               <a
                 href={WIGLUB_HAIR_STUDIO_LOCATION_URL}
                 target="_blank"
+                rel="noopener noreferrer"
                 className="font-medium underline"
               >
                 See map and directions
@@ -340,19 +344,19 @@ const OrderStatusSection = ({ data }: { data: any }) => {
         </div>
       )}
 
-      <div className="flex items-center justify-between w-full lg:w-[30%]">
+      <div className="flex w-full items-center justify-between lg:w-1/3">
         <p>Purchase date</p>
         <p>{formatDate(data._creationTime)}</p>
       </div>
 
-      <div className="flex items-center justify-between w-full lg:w-[30%]">
+      <div className="flex w-full items-center justify-between lg:w-1/3">
         <p>Order #</p>
         <p>{data?.orderNumber}</p>
       </div>
 
       {/* Show payment method for payment on delivery orders */}
       {isPODOrder && (
-        <div className="flex items-center justify-between w-full lg:w-[30%]">
+        <div className="flex w-full items-center justify-between lg:w-1/3">
           <p>Payment method</p>
           <div className="flex items-center gap-1">
             {podMethod === "mobile_money" ? (
@@ -371,27 +375,21 @@ const OrderStatusSection = ({ data }: { data: any }) => {
 
       {/* Show payment status for payment on delivery orders */}
       {isPODOrder && data.status !== "cancelled" && (
-        <div className="flex items-center justify-between w-full lg:w-[30%]">
+        <div className="flex w-full items-center justify-between lg:w-1/3">
           <p>Payment status</p>
-          <div className="flex items-center gap-1">
-            {data.paymentCollected ? (
-              <>
-                <CircleCheck className="w-3.5 h-3.5 text-green-600" />
-                <p className="text-green-600">Payment Collected</p>
-              </>
-            ) : (
-              <>
-                <Clock className="w-3.5 h-3.5 text-amber-600" />
-                <p className="text-amber-600">Payment Due on Delivery</p>
-              </>
-            )}
-          </div>
+          <StatusBadge
+            tone={data.paymentCollected ? "success" : "warning"}
+          >
+            {data.paymentCollected
+              ? "Payment collected"
+              : "Payment due on delivery"}
+          </StatusBadge>
         </div>
       )}
 
       {/* Add reward points display for registered users */}
       {/* {showPoints && (
-        <div className="flex items-center justify-between w-full lg:w-[30%]">
+        <div className="flex w-full items-center justify-between lg:w-1/3">
           <p>Reward points</p>
           <div className="flex items-center gap-1">
             <Award className="w-3.5 h-3.5 text-primary" />
@@ -420,7 +418,15 @@ const OrderDetail = () => {
     onlineOrderQueries.detail(orderId || ""),
   );
 
-  if (isLoading) return <div className="h-screen"></div>;
+  if (isLoading) {
+    return (
+      <PageState
+        state="loading"
+        title="Loading order details"
+        description="We're retrieving this order."
+      />
+    );
+  }
 
   if (!data) {
     return <NotFound />;
@@ -518,7 +524,8 @@ const OrderDetail = () => {
   );
 
   return (
-    <FadeIn className="space-y-24 lg:space-y-40 py-8 pb-32 w-full container mx-auto max-w-[1024px] px-6 xl:px-0">
+    <StorefrontPage as="section" spacing="relaxed">
+      <FadeIn className="space-y-24 lg:space-y-40">
       <div className="space-y-16">
         <OrderNavigation />
 
@@ -538,7 +545,7 @@ const OrderDetail = () => {
         <OrderItems order={data} isReviewable={isReviewable} />
       </div>
 
-      <Separator className="bg-[#F6F6F6]" />
+      <Separator className="bg-border" />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
         <PickupDetails order={data} />
@@ -548,6 +555,7 @@ const OrderDetail = () => {
           <OrderSummary order={data} />
         </div>
       </div>
-    </FadeIn>
+      </FadeIn>
+    </StorefrontPage>
   );
 };

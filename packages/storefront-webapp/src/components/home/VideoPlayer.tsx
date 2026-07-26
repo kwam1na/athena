@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import type Hls from "hls.js";
 import { useEffect, useRef } from "react";
 
@@ -41,17 +40,8 @@ export const VideoPlayer = ({ hlsUrl }: VideoPlayerProps) => {
   }, [hlsUrl]);
 
   return (
-    <motion.video
+    <video
       ref={videoRef}
-      initial={{ opacity: 0, scale: 1.05 }}
-      animate={{
-        opacity: 1,
-        scale: 1,
-        transition: {
-          duration: 1,
-          ease: [0.6, 0.05, 0.01, 0.9],
-        },
-      }}
       className="absolute top-0 left-0 w-full h-full object-cover"
       playsInline
       autoPlay
@@ -59,6 +49,6 @@ export const VideoPlayer = ({ hlsUrl }: VideoPlayerProps) => {
       muted
     >
       <source src={hlsUrl} type="application/x-mpegURL" />
-    </motion.video>
+    </video>
   );
 };

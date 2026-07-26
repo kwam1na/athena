@@ -57,7 +57,7 @@ export function DimensionBar({
         {labels.map((_, i) => (
           <div
             key={i}
-            className={`flex-1 h-3 rounded-full ${i === avgIdx ? "bg-black" : "bg-gray-200"}`}
+            className={`h-3 flex-1 rounded-pill ${i === avgIdx ? "bg-action" : "bg-muted"}`}
             style={{
               marginLeft: i === 0 ? 0 : 4,
               marginRight: i === labels.length - 1 ? 0 : 4,
@@ -70,7 +70,7 @@ export function DimensionBar({
         {labels.map((label, i) => (
           <span
             key={label}
-            className={`text-sm ${i === avgIdx ? "font-bold" : "text-black"}`}
+            className={`text-sm ${i === avgIdx ? "font-bold text-foreground" : "text-muted-foreground"}`}
           >
             {label}
           </span>

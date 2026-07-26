@@ -1,0 +1,269 @@
+{
+  "title": "Storefront Design-System Normalization",
+  "subtitle": "Delivery-candidate guide to the new storefront UI authority",
+  "metadata": [
+    "Delivery candidate",
+    "V26-1103",
+    "Children V26-1104–V26-1112",
+    "PR pending",
+    "No production deploy",
+    "Root alignment deferred"
+  ],
+  "deliverableDiffFingerprint": "9f60d2f9eebb804d8d69d2177b8642c5218045a2ec1271be9ea84d4aca005452",
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "body": [
+        "This delivery turns the storefront's partial Tailwind and copied component inventory into an explicit, package-local design system. It establishes a light-first semantic foundation, accessible primitives, shared page and state patterns, one Storybook workbench, and automated policy checks, then migrates the planned representative customer-journey surfaces onto those contracts.",
+        "The finish line is an open, mergeable, CI-green pull request. It is not merged, deployed, or aligned back to local main in this report."
+      ]
+    },
+    {
+      "title": "Why It Mattered",
+      "body": [
+        "Before this work, CSS variables, raw palette utilities, arbitrary geometry, copied dashboard components, route-local containers, blank loading branches, and several overlay implementations all competed as UI authorities. That made visual consistency difficult and allowed accessibility behavior to vary by route.",
+        "The refactor also fixes global safety gaps: browser zoom is restored, focus treatment is visible, loading controls are truly unavailable, overlays have a shared focus contract, and motion has a reduced-motion path."
+      ]
+    },
+    {
+      "title": "Mental Model",
+      "body": [
+        "Think of the storefront as a one-way stack. Doctrine explains the customer-facing intent. Semantic tokens name that intent. Accessible primitives implement interaction. Patterns compose pages and states. Routes supply commerce data and behavior. Storybook and policy tests inspect every layer. Athena supplied the governance model and conformance expectations—not its operator-specific values, density, shell, or components.",
+        "The dependency direction matters: foundations and primitives do not import products, checkout state, routes, analytics, or API clients. Commerce behavior remains above the design-system boundary."
+      ],
+      "code": "Doctrine → Tokens → Primitives → Patterns → Templates/Routes\n                         ↘ Storybook + policy enforcement"
+    },
+    {
+      "title": "Before and After",
+      "bullets": [
+        "Before: 57 top-level UI files mixed supported primitives, feature code, dashboard copies, and dead inventory. After: a machine-readable catalog classifies every remaining non-test UI file and dependency tests protect primitive neutrality.",
+        "Before: the 1024px container, state screens, form geometry, overlays, and motion were repeated locally. After: StorefrontPage, PageState, semantic control recipes, and Radix-backed overlays own those contracts.",
+        "Before: incomplete dark-mode declarations implied unsupported behavior. After: the system is explicitly light-first and theme-ready without claiming a dark launch.",
+        "Before: there was no active component workbench or changed-file visual policy. After: Storybook is organized into Guidance, Foundations, Primitives, Patterns, and Templates with a11y enforcement and raw-value guardrails.",
+        "Cleanup removed proven zero-consumer components, obsolete modal families, dashboard state copies, and unused Martel font assets. Live legacy accent aliases remain temporarily because consumers still exist; policy blocks new use."
+      ]
+    },
+    {
+      "title": "Journey Migration",
+      "bullets": [
+        "Shell: declarative route state now owns navigation visibility, overlays, focus restoration, and scroll locking.",
+        "Catalog and product: cards, filters, gallery, variants, inventory, reviews, and responsive actions use semantic tokens and shared controls.",
+        "Bag and checkout: storage schemas, pricing, payment gates, redirects, idempotency, and telemetry stay intact while page, form, loading, retry, and terminal presentation normalize.",
+        "Account and post-purchase: representative auth, order, rewards, review, receipt, policy, and maintenance surfaces retain their domain boundaries and gain normalized customer-facing states.",
+        "Storybook and retained browser artifacts use synthetic fixtures under a documented redaction and lifecycle policy."
+      ]
+    },
+    {
+      "title": "Failure and Security Boundaries",
+      "body": [
+        "This is a presentation and accessibility normalization, not a commerce rewrite. TanStack route paths, params, search contracts, generated routing, checkout serialization, API behavior, payment providers, fulfillment and currency calculations, object ownership, auth redirects, and journey telemetry remain feature-owned.",
+        "Invalid receipts stay isolated, unauthenticated account entry still redirects, loading and recoverable failures now render named states, and overlay teardown restores focus and body scroll. Synthetic data is required for stories and retained evidence."
+      ]
+    },
+    {
+      "title": "Validation and Review Evidence",
+      "bullets": [
+        "Storefront Vitest: 232 tests passed after cleanup.",
+        "Focused checkout validation: 30 tests passed; focused catalog/product validation: 19 tests passed.",
+        "Customer-route Playwright: 4/4 mobile and desktop scenarios passed; shell and viewport browser checks also passed during the implementation waves.",
+        "Storefront TypeScript, production build, Storybook production build, architecture boundaries, changed-file design policy, and diff hygiene passed.",
+        "Graphify was rebuilt after code changes. The repository merge-level gate and GitHub required checks are run again after this report and any reviewer fixes.",
+        "The 34-route contract matrix records state, selector, persistence, telemetry, and evidence obligations; responsive Storybook/browser specimens cover representative templates rather than claiming exhaustive visual certification.",
+        "Plan review reached unanimous approval before implementation. Final code review and the final WCAG/conformance audit are still pending at report-generation time."
+      ]
+    },
+    {
+      "title": "Related Carried Change",
+      "body": [
+        "The user explicitly moved the entire original dirty set into this worktree. That included a V26-1096 Athena POS change that suppresses register-closeout notifications for shared-demo actors. It remains tracked as related work rather than being hidden under the storefront ticket, and its focused shared-demo suite passed 11 tests."
+      ]
+    },
+    {
+      "title": "How to Extend the System",
+      "bullets": [
+        "Start in the design doctrine and machine-readable catalog before adding a variant.",
+        "Use semantic tokens; do not add raw status colors, hex values, arbitrary Tailwind geometry, or legacy accent aliases.",
+        "Prefer an existing primitive or pattern. New primitives must remain free of route, feature, API, query, analytics, and context dependencies.",
+        "Add the state to Storybook and a focused interaction or accessibility test, then run the changed-file policy.",
+        "For route work, preserve existing search, selectors, persistence, auth, telemetry, and payment behavior unless a separate product ticket authorizes change."
+      ]
+    },
+    {
+      "title": "Delivery Status",
+      "body": [
+        "Mode: delivery candidate. Linear parent and children are in progress until the PR is open and mergeable. Production deployment is not part of this finish line. Local root alignment is deferred because the branch must not be merged in this workflow."
+      ]
+    }
+  ],
+  "keyFiles": [
+    {
+      "path": "packages/storefront-webapp/docs/agent/design.md",
+      "purpose": "Defines the storefront-specific design doctrine and usage rules."
+    },
+    {
+      "path": "packages/storefront-webapp/src/index.css",
+      "purpose": "Holds the light-first semantic token authority and global accessibility contracts."
+    },
+    {
+      "path": "packages/storefront-webapp/tailwind.config.js",
+      "purpose": "Maps semantic roles into named utilities and migration aliases."
+    },
+    {
+      "path": "packages/storefront-webapp/src/components/common/StorefrontPage.tsx",
+      "purpose": "Centralizes customer-page width, gutters, and vertical rhythm."
+    },
+    {
+      "path": "packages/storefront-webapp/src/components/states/PageState.tsx",
+      "purpose": "Provides named loading, empty, recoverable-error, terminal-error, and success presentation."
+    },
+    {
+      "path": "packages/storefront-webapp/docs/agent/design-system-catalog.json",
+      "purpose": "Machine-readable classification of the supported UI surface."
+    },
+    {
+      "path": "packages/storefront-webapp/scripts/design-system-policy.ts",
+      "purpose": "Rejects newly introduced raw visual values and legacy aliases."
+    },
+    {
+      "path": "packages/storefront-webapp/src/stories/Templates/CustomerJourneys.stories.tsx",
+      "purpose": "Exercises customer route states with synthetic data."
+    },
+    {
+      "path": "packages/storefront-webapp/tests/e2e/storefront-customer-routes.e2e.ts",
+      "purpose": "Verifies mobile/desktop content, auth redirect, and invalid-receipt boundaries."
+    },
+    {
+      "path": "packages/athena-webapp/convex/pos/public/sync.ts",
+      "purpose": "Carries the explicitly related V26-1096 shared-demo notification suppression."
+    }
+  ],
+  "subagents": [
+    {
+      "role": "Session context — ce-session-historian",
+      "summary": "Confirmed no earlier storefront design-system precedent, recovered the dirty-set/worktree and delivery-loop lessons, and grounded the open-mergeable-no-merge finish line."
+    },
+    {
+      "role": "Delivered diff — explorer",
+      "summary": "Mapped the doctrine, foundation, primitive, pattern, journey, workbench, cleanup, behavior boundaries, evidence, and residual risks across the combined branch."
+    },
+    {
+      "role": "Implementation and review agents",
+      "summary": "Independent agents owned foundations/shell/checkout, workbench/catalog, and primitives/account surfaces, with test and policy evidence reported per unit."
+    }
+  ],
+  "quiz": {
+    "passThreshold": 8,
+    "questions": [
+      {
+        "question": "What is the authoritative dependency direction?",
+        "options": [
+          "Routes → primitives → tokens",
+          "Doctrine → tokens → primitives → patterns → routes",
+          "Athena components → shared package → storefront",
+          "Storybook → production routes → tokens"
+        ],
+        "answer": 1,
+        "explanation": "The one-way stack keeps commerce behavior out of foundations and primitives."
+      },
+      {
+        "question": "What did the storefront reuse from Athena?",
+        "options": [
+          "Operator-specific token values and shell",
+          "Every identically named component",
+          "The governance model and conformance expectations",
+          "Athena's dark theme"
+        ],
+        "answer": 2,
+        "explanation": "The storefront remains customer-facing and package-local; only the mature operating model is reused."
+      },
+      {
+        "question": "Which behavior is intentionally unchanged?",
+        "options": [
+          "Checkout storage and payment authority",
+          "The viewport's ability to zoom",
+          "Visible keyboard focus",
+          "Blank loading branches"
+        ],
+        "answer": 0,
+        "explanation": "Checkout serialization, provider gates, idempotency, and domain authority remain unchanged."
+      },
+      {
+        "question": "Why do live accent2–5 aliases remain?",
+        "options": [
+          "They are the preferred new API",
+          "The dark theme needs them",
+          "Existing consumers remain, while policy blocks new uses",
+          "Storybook cannot render semantic colors"
+        ],
+        "answer": 2,
+        "explanation": "They are a bounded migration bridge, not canonical roles."
+      },
+      {
+        "question": "Where should feature-specific modal code live?",
+        "options": [
+          "In the primitive directory",
+          "Beside its feature consumer",
+          "In Athena's component package",
+          "Inside Storybook"
+        ],
+        "answer": 1,
+        "explanation": "Primitives stay feature-neutral; promotion and review modal ownership moved beside their consumers."
+      },
+      {
+        "question": "What protects Storybook and browser artifacts from exposing customer data?",
+        "options": [
+          "They may use production data if hidden",
+          "A synthetic/redacted artifact policy and lifecycle boundaries",
+          "Only CSS snapshots are allowed",
+          "The browser automatically removes identifiers"
+        ],
+        "answer": 1,
+        "explanation": "The policy requires synthetic fixtures and redaction, with access and retention boundaries."
+      },
+      {
+        "question": "What should happen before adding a new visual variant?",
+        "options": [
+          "Add a raw Tailwind value locally",
+          "Copy the nearest Athena component",
+          "Check doctrine/catalog, use semantic tokens, add story and tests",
+          "Disable the changed-file policy"
+        ],
+        "answer": 2,
+        "explanation": "The design-system workflow makes intent, semantics, isolated evidence, and enforcement explicit."
+      },
+      {
+        "question": "What does PageState normalize?",
+        "options": [
+          "Commerce pricing calculations",
+          "Loading, empty, error, and success presentation",
+          "Authentication tokens",
+          "TanStack route generation"
+        ],
+        "answer": 1,
+        "explanation": "PageState owns presentation and announcements, not domain logic."
+      },
+      {
+        "question": "A checkout screen needs a new error treatment. What must remain unchanged?",
+        "options": [
+          "Only the error color",
+          "Storage, payment/provider authority, redirects, idempotency, selectors, and telemetry",
+          "The number of Tailwind classes",
+          "The Storybook story title"
+        ],
+        "answer": 1,
+        "explanation": "Presentation can normalize only while the checkout and observability contracts remain intact."
+      },
+      {
+        "question": "What is the delivery finish line?",
+        "options": [
+          "Merged and deployed to production",
+          "Committed locally with no PR",
+          "Open, CI-green, mergeable PR; do not merge",
+          "Close Linear tickets before review"
+        ],
+        "answer": 2,
+        "explanation": "Final review must approve the code, but merge, production deploy, and root alignment are deliberately outside this workflow."
+      }
+    ]
+  }
+}

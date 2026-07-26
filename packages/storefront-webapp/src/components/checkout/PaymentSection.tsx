@@ -361,7 +361,8 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
             y: 0,
             transition: { duration: 0.3, ease: "easeInOut" },
           }}
-          className="text-sm text-red-600 font-medium"
+          role="alert"
+          className="text-sm font-medium text-danger"
         >
           Please provide all the required information
         </motion.p>
@@ -375,7 +376,8 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
             y: 0,
             transition: { duration: 0.3, ease: "easeInOut" },
           }}
-          className="flex items-center text-sm font-medium"
+          role="alert"
+          className="flex items-center text-sm font-medium text-danger"
         >
           <InfoIcon className="w-4 h-4 mr-2" />
           {errorMessage}

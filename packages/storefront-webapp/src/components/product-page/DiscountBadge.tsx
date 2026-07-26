@@ -3,7 +3,6 @@ import { useProductDiscount } from "@/hooks/useProductDiscount";
 import { formatStoredAmount } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { ProductSku } from "@athena/webapp";
-import { motion } from "framer-motion";
 
 export const DiscountBadge = ({
   size = "lg",
@@ -23,24 +22,19 @@ export const DiscountBadge = ({
   if (!discountInfo.discount) return null;
 
   return (
-    <motion.span
-      initial={{ opacity: 0, y: -4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ ease: "easeInOut" }}
-      exit={{ opacity: 0, y: -4 }}
-      //   key={productSkuId}
+    <span
       className={cn(
-        "absolute top-2 left-2 font-bold bg-accent4/60 w-fit text-accent5 px-2 py-0.5 rounded z-10",
+        "absolute left-2 top-2 z-10 w-fit rounded-pill bg-offer px-layout-xs py-layout-2xs font-bold text-offer-foreground shadow-surface",
         className,
         size === "xs" && "text-xs",
         size === "sm" && "text-sm",
         size === "md" && "text-md",
-        size === "lg" && "text-lg"
+        size === "lg" && "text-lg",
       )}
     >
       {discountInfo.discount.type === "percentage"
         ? `${discountInfo.discount.value}% OFF`
         : `${formatStoredAmount(formatter, discountInfo.discount.value)} OFF`}
-    </motion.span>
+    </span>
   );
 };

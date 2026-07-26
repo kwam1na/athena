@@ -13,8 +13,9 @@ import { StoreFrontUser } from "@athena/webapp";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { StorefrontPage } from "@/components/common/StorefrontPage";
 
-async function accountBeforeLoad(): Promise<void> {
+export async function accountBeforeLoad(): Promise<void> {
   const id = localStorage.getItem(LOGGED_IN_USER_ID_KEY);
 
   if (!id) {
@@ -179,12 +180,13 @@ const Account = () => {
   const { user } = useStoreContext();
 
   return (
-    <FadeIn className="min-h-screen space-y-8 lg:space-y-24 pb-56">
+    <StorefrontPage as="section" spacing="relaxed">
+      <FadeIn className="space-y-16">
       <div className="space-y-8">
-        <div className="w-full bg-accent5">
-          <div className="container mx-auto max-w-[1024px] space-y-4">
-            <div className="flex items-center border-b py-2 px-6 lg:px-0">
-              <p className="text-lg font-light">Account</p>
+        <div className="w-full rounded-lg bg-surface-subtle">
+          <div className="space-y-4">
+            <div className="flex items-center border-b px-6 py-3">
+              <h1 className="text-xl font-semibold">Account</h1>
 
               <Button
                 className="ml-auto p-0"
@@ -205,8 +207,8 @@ const Account = () => {
           </div>
         </div>
 
-        <div className="container mx-auto max-w-[1024px] space-y-16 px-6 lg:px-0">
-          <p className="text-lg font-medium">Account Details</p>
+        <div className="space-y-16">
+          <h2 className="text-lg font-medium">Account details</h2>
 
           <div className="space-y-16">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-16 md:gap-40">
@@ -237,6 +239,7 @@ const Account = () => {
           </div>
         </div>
       </div>
-    </FadeIn>
+      </FadeIn>
+    </StorefrontPage>
   );
 };

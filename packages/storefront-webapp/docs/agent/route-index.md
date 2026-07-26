@@ -17,6 +17,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 
 ## Section `_layout`
 
+- [`src/routes/_layout/-account.test.ts`](../../src/routes/_layout/-account.test.ts)
 - [`src/routes/_layout/_ordersLayout.tsx`](../../src/routes/_layout/_ordersLayout.tsx)
 - [`src/routes/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId.review.tsx`](../../src/routes/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId.review.tsx)
 - [`src/routes/_layout/_ordersLayout/shop/orders/$orderId/index.tsx`](../../src/routes/_layout/_ordersLayout/shop/orders/$orderId/index.tsx)
@@ -46,6 +47,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/shop/checkout/pending.tsx`](../../src/routes/shop/checkout/pending.tsx)
 - [`src/routes/shop/checkout/pod-confirmation.tsx`](../../src/routes/shop/checkout/pod-confirmation.tsx)
 - [`src/routes/shop/checkout/verify.index.tsx`](../../src/routes/shop/checkout/verify.index.tsx)
+- [`src/routes/shop/receipt/-PosReceiptPage.test.ts`](../../src/routes/shop/receipt/-PosReceiptPage.test.ts)
 - [`src/routes/shop/receipt/-PosReceiptPage.tsx`](../../src/routes/shop/receipt/-PosReceiptPage.tsx)
 - [`src/routes/shop/receipt/s/$token/index.tsx`](../../src/routes/shop/receipt/s/$token/index.tsx)
 

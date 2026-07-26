@@ -4,6 +4,7 @@ import { Textarea } from "../ui/textarea";
 import { LoadingButton } from "../ui/loading-button";
 import { RatingSelector } from "./RatingSelector";
 import { ReviewFormData } from "./types";
+import { Field } from "../ui/field";
 
 interface ReviewFormProps {
   isHair: boolean;
@@ -39,28 +40,22 @@ export const ReviewForm = ({
     <>
       {!hasUserReviewedProduct && (
         <>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Title <span className="text-red-500">*</span>
-            </p>
+          <Field label="Title" required>
             <Input
               value={formData.title}
               onChange={(e) => onFormDataChange("title", e.target.value)}
               placeholder="Your title here"
             />
-          </div>
+          </Field>
 
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              Tell us more (optional)
-            </p>
+          <Field label="Tell us more" hint="Optional">
             <Textarea
               className="h-32 sm:h-40"
               value={formData.content}
               onChange={(e) => onFormDataChange("content", e.target.value)}
               placeholder="Share your thoughts here"
             />
-          </div>
+          </Field>
 
           <div className="space-y-8">
             {isHair ? (
@@ -116,7 +111,7 @@ export const ReviewForm = ({
             )}
           </div>
 
-          <div style={{ minHeight: 44 }} className="flex items-center gap-4">
+          <div className="flex min-h-control-standard items-center gap-4">
             <AnimatePresence>
               {isFormValid && (
                 <motion.div

@@ -1,8 +1,9 @@
 import { SavedBagItem } from "@athena/webapp";
-import { HeartIcon, AlertCircleIcon } from "lucide-react";
-import { LoadingButton } from "../ui/loading-button";
+import { AlertCircleIcon, HeartIcon } from "lucide-react";
+
 import { HeartIconFilled } from "@/assets/icons/HeartIconFilled";
-import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
+import { LoadingButton } from "../ui/loading-button";
 
 interface ProductActionsProps {
   handleUpdateBag: () => Promise<void>;
@@ -12,6 +13,7 @@ interface ProductActionsProps {
   isSoldOut: boolean;
   addedItemSuccessfully: boolean | null;
   className?: string;
+  layout?: "default" | "mobile";
 }
 
 export function ProductActions({
@@ -21,58 +23,54 @@ export function ProductActions({
   savedBagItem,
   isSoldOut,
   addedItemSuccessfully,
-  className = "",
+  className,
+  layout = "default",
 }: ProductActionsProps) {
   return (
-    <div className={`space-y-4 ${className}`}>
-      <div className="flex gap-4">
-        <motion.div
-          initial={{ opacity: 0, y: 4 }}
-          animate={{
-            opacity: 1,
-            y: 0,
-            transition: { ease: "easeInOut" },
-          }}
+    <div className={cn("space-y-layout-sm", className)}>
+      <div className="flex gap-layout-sm">
+        <LoadingButton
+          aria-label={isUpdatingBag ? "Adding to bag" : undefined}
+          className="min-w-0 flex-1"
+          data-testid="storefront-product-add-to-bag"
+          disabled={isSoldOut}
+          isLoading={isUpdatingBag}
+          loadingLabel="Adding to bag"
+          onClick={handleUpdateBag}
         >
-          <LoadingButton
-            className="w-[288px]"
-            isLoading={false}
-            onClick={handleUpdateBag}
-            disabled={isSoldOut}
-            data-testid="storefront-product-add-to-bag"
-          >
-            {isUpdatingBag ? "Adding to Bag.." : "Add to Bag"}
-          </LoadingButton>
-        </motion.div>
+          Add to bag
+        </LoadingButton>
 
-        <motion.div
-          initial={{ opacity: 0, y: 4 }}
-          animate={{
-            opacity: 1,
-            y: 0,
-            transition: { ease: "easeInOut" },
-          }}
+        <LoadingButton
+          aria-label={savedBagItem ? "Remove saved product" : "Save product"}
+          className={cn(
+            "shrink-0",
+            layout === "mobile" ? "w-14 px-0" : "px-layout-md",
+            savedBagItem &&
+              "border-selection-foreground bg-selection text-selection-foreground shadow-surface",
+          )}
+          disabled={isSoldOut || isUpdatingBag}
+          isLoading={false}
+          onClick={handleUpdateSavedBag}
+          type="button"
+          variant="outline"
         >
-          <LoadingButton
-            variant={"outline"}
-            isLoading={false}
-            onClick={handleUpdateSavedBag}
-            disabled={isSoldOut}
-            className={`${savedBagItem ? "border-[#EC4683] shadow-md" : ""} hover:shadow-md`}
-          >
-            {!savedBagItem && (
-              <HeartIcon className="w-4 h-4 text-muted-foreground" />
-            )}
-            {savedBagItem && <HeartIconFilled width={16} height={16} />}
-          </LoadingButton>
-        </motion.div>
+          {!savedBagItem ? (
+            <HeartIcon aria-hidden="true" className="h-5 w-5" />
+          ) : (
+            <HeartIconFilled width={18} height={18} />
+          )}
+        </LoadingButton>
       </div>
 
       {addedItemSuccessfully === false && (
-        <div className="flex gap-1 items-center text-destructive">
-          <AlertCircleIcon className="w-3.5 h-3.5" />
+        <div
+          className="flex items-center gap-layout-2xs text-danger"
+          role="alert"
+        >
+          <AlertCircleIcon aria-hidden="true" className="h-4 w-4" />
           <p className="text-sm">
-            An error occurred processing your last request
+            We couldn't update your bag. Try again.
           </p>
         </div>
       )}
