@@ -77,18 +77,24 @@ export default function NavigationBar() {
             </Link>
             <div className="hidden gap-layout-xl lg:flex">
               {categories?.map((category) => (
-                <Link
+                <button
+                  type="button"
                   key={category.value}
-                  to="/shop/$categorySlug"
-                  params={(params) => ({
-                    ...params,
-                    categorySlug: category.value,
-                  })}
                   className={`text-xs ${hover}`}
-                  aria-haspopup="menu"
+                  aria-controls="desktop-navigation-overlay"
                   aria-expanded={
                     shell.activeOverlay === "desktop-menu" &&
                     shell.activeMenu === category.value
+                  }
+                  onClick={(event) =>
+                    shell.activeOverlay === "desktop-menu" &&
+                    shell.activeMenu === category.value
+                      ? shell.closeOverlay()
+                      : shell.openOverlay(
+                          "desktop-menu",
+                          event.currentTarget,
+                          category.value,
+                        )
                   }
                   onKeyDown={(event) => {
                     if (event.key !== "ArrowDown") return;
@@ -108,7 +114,7 @@ export default function NavigationBar() {
                   }
                 >
                   {category.label}
-                </Link>
+                </button>
               ))}
             </div>
           </div>
@@ -148,6 +154,7 @@ export default function NavigationBar() {
       </div>
       {desktopOpen && (
         <section
+          id="desktop-navigation-overlay"
           ref={desktopOverlay}
           data-testid="desktop-navigation-overlay"
           aria-label="Storefront navigation menu"
@@ -157,6 +164,15 @@ export default function NavigationBar() {
             shell.appLocation,
           )}`}
           onMouseLeave={() => shell.closeOverlay({ restoreFocus: false })}
+          onKeyDown={(event) => {
+            if (!event.shiftKey || event.key !== "Tab") return;
+            const firstAction = desktopOverlay.current?.querySelector<HTMLElement>(
+              'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+            );
+            if (event.target !== firstAction) return;
+            event.preventDefault();
+            shell.closeOverlay();
+          }}
         >
           <div className="mx-auto max-w-content px-gutter py-layout-xl">
             {shell.activeOverlay === "desktop-bag" ? (
