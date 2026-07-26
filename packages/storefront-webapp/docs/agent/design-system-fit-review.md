@@ -51,10 +51,30 @@ status treatments; loading and errors use `PageState`.
 - U9 removed the unreferenced `UpsellModal` family after repository search
   confirmed that it had no runtime, route, or Storybook consumer.
 
+## Final cross-journey sign-off
+
+The final review includes the shell, catalog/product, bag/checkout, identity,
+post-purchase, receipt, content, and terminal-state journeys. The authoritative
+state and overlay disposition is recorded in
+[`design-state-and-overlay-matrix.md`](./design-state-and-overlay-matrix.md).
+The route compatibility disposition remains in
+[`design-system-migration-baseline.md`](./design-system-migration-baseline.md).
+
+| Final gate | Disposition |
+| --- | --- |
+| P0/P1 accessibility findings | Closed. Desktop shell overlays now own initial focus, Escape dismissal, restoration, and route teardown; supported Dialog/Sheet contracts remain covered. |
+| Reduced motion | Closed. Shared reveals and SiteBanner expose immediate, non-translating content when reduced motion is requested. |
+| Policy exceptions | Accepted. Receipt print geometry is the only documented raw-value exception. |
+| Compatibility variants | Accepted with owners recorded above; none changes commerce behavior. |
+| Responsive behavior | Accepted at the package breakpoint matrix and shell widths from 320px through 1440px. |
+| Residual visual drift | Accepted as migration debt only where captured by the whole-tree baseline; new drift remains blocking. |
+
 ## Decision
 
-**Recommendation: proceed to U7, pending implementing-lead sign-off.** No
-unresolved P0/P1 accessibility issue, undocumented policy exception, unowned
-compatibility variant, or breakpoint-specific commerce behavior was found.
-The implementing lead must record the final proceed-or-revise decision before
-U7 starts.
+**Implementing-lead sign-off: proceed.** The normalized storefront design
+system is fit for package-wide use and U9 closure. No unresolved P0/P1
+accessibility issue, undocumented policy exception, unowned compatibility
+variant, or breakpoint-specific commerce behavior remains in this review.
+Future visual work must preserve the state/overlay matrix and may only reduce,
+never expand, the residual-drift baseline without an explicitly reviewed
+exception.

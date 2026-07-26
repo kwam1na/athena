@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   NavigationBarStateProvider,
@@ -48,5 +54,28 @@ describe("navigation shell state", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(document.body.style.overflow).toBe("");
     expect(opener).toHaveFocus();
+  });
+
+  it("tears down an open overlay without restoring stale focus on navigation", async () => {
+    const { rerender } = render(
+      <NavigationBarStateProvider pathname="/">
+        <Probe />
+      </NavigationBarStateProvider>,
+    );
+    const opener = screen.getByRole("button", { name: "Open" });
+    fireEvent.click(opener);
+    expect(screen.getByTestId("overlay")).toHaveTextContent("mobile-menu");
+
+    rerender(
+      <NavigationBarStateProvider pathname="/shop/orders">
+        <Probe />
+      </NavigationBarStateProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("overlay")).toHaveTextContent("none"),
+    );
+    expect(opener).not.toHaveFocus();
+    expect(document.body.style.overflow).toBe("");
   });
 });

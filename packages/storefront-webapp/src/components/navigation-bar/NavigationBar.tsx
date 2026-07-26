@@ -2,7 +2,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { Link } from "@tanstack/react-router";
 import { Menu, ShoppingBag } from "lucide-react";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useGetStoreCategories } from "../navigation/hooks";
 import { BagMenu } from "./BagMenu";
 import { MobileBagMenu } from "./MobileBagMenu";
@@ -25,16 +25,19 @@ export default function NavigationBar() {
       shell.activeOverlay === "desktop-bag" ||
       shell.activeOverlay === "mobile-bag",
   });
+  const desktopOverlay = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") shell.closeOverlay();
+      if (event.key === "Escape" && shell.activeOverlay) {
+        event.preventDefault();
+        shell.closeOverlay();
+      }
     };
     document.addEventListener("keydown", onEscape);
     return () => document.removeEventListener("keydown", onEscape);
-  }, [shell]);
+  }, [shell.activeOverlay, shell.closeOverlay]);
 
-  if (!store || !shell.appLocation) return null;
   const hover = getHoverClass(shell.navBarLayout, shell.appLocation);
   const desktopOpen =
     shell.activeOverlay === "desktop-menu" ||
@@ -42,6 +45,17 @@ export default function NavigationBar() {
   const subcategories = shell.activeMenu
     ? categoryToSubcategoriesMap?.[shell.activeMenu]
     : undefined;
+
+  useEffect(() => {
+    if (!desktopOpen) return;
+    const overlay = desktopOverlay.current;
+    const firstAction = overlay?.querySelector<HTMLElement>(
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    queueMicrotask(() => (firstAction ?? overlay)?.focus());
+  }, [desktopOpen, shell.activeMenu, shell.activeOverlay]);
+
+  if (!store || !shell.appLocation) return null;
 
   return (
     <header className="w-full">
@@ -127,7 +141,10 @@ export default function NavigationBar() {
       </div>
       {desktopOpen && (
         <section
+          ref={desktopOverlay}
+          data-testid="desktop-navigation-overlay"
           aria-label="Storefront navigation menu"
+          tabIndex={-1}
           className={`absolute left-0 z-50 w-full ${getSubmenuBGClass(
             shell.navBarLayout,
             shell.appLocation,

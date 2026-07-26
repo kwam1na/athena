@@ -126,6 +126,8 @@ async function createFixtureRepo() {
         scripts: {
           build: "echo build",
           "lint:architecture": "echo architecture",
+          "lint:design-system:changed": "echo design system",
+          "storybook:build": "echo storybook",
           test: "echo test",
           "test:e2e": "echo e2e",
         },
@@ -135,6 +137,37 @@ async function createFixtureRepo() {
     ),
     rootDir
   );
+  await write("packages/storefront-webapp/.gitignore", "storybook-static\n", rootDir);
+  await write("packages/storefront-webapp/.storybook/main.ts", "export default {};\n", rootDir);
+  await write("packages/storefront-webapp/components.json", "{}\n", rootDir);
+  await write("packages/storefront-webapp/postcss.config.cjs", "module.exports = {};\n", rootDir);
+  await write("packages/storefront-webapp/README.md", "# Storefront Webapp\n", rootDir);
+  await write(
+    "packages/storefront-webapp/scripts/design-system-policy-changed.sh",
+    "#!/bin/sh\n",
+    rootDir
+  );
+  await write(
+    "packages/storefront-webapp/scripts/design-system-policy.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/storefront-webapp/src/design-system-build-config.test.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/storefront-webapp/src/stories/Overview.stories.tsx",
+    "export default {};\n",
+    rootDir
+  );
+  await write(
+    "packages/storefront-webapp/src/styles/design-system-policy.test.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write("packages/storefront-webapp/tailwind.config.js", "module.exports = {};\n", rootDir);
   await write(
     "packages/valkey-proxy-server/package.json",
     JSON.stringify(
@@ -358,7 +391,7 @@ async function createFixtureRepo() {
       "- `storefront-checkout-verification-recovery`",
       "Default regression: `bun run --filter '@athena/storefront-webapp' test`.",
       "Browser journeys: `bun run --filter '@athena/storefront-webapp' test:e2e`.",
-      "Covered test surfaces include `tests/e2e`.",
+      "Covered test surfaces include `src` and `tests/e2e`.",
     ].join("\n"),
     rootDir
   );
@@ -1854,6 +1887,8 @@ describe("runHarnessAudit", () => {
           scripts: {
             build: "echo build",
             "lint:architecture": "echo architecture",
+            "lint:design-system:changed": "echo design system",
+            "storybook:build": "echo storybook",
             test: "echo test",
           },
         },

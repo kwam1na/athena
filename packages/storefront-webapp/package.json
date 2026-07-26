@@ -9,6 +9,7 @@
     "start": "vite",
     "lint:architecture": "bun ../../scripts/architecture-boundary-check.ts storefront-webapp",
     "lint:design-system:changed": "bash scripts/design-system-policy-changed.sh",
+    "lint:design-system:all": "bun scripts/design-system-policy.ts --all",
     "storybook": "storybook dev -p 6007",
     "storybook:build": "storybook build",
     "build-storybook": "bun run storybook:build",

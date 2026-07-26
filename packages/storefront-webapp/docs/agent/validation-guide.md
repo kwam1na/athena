@@ -16,7 +16,7 @@ Start here for most layout, component, and route behavior changes that do not al
 
 ## Storybook and design-system tooling edits
 
-Touched surfaces: `.storybook`, `src/stories`, `src/styles`, `src/index.css`, `src/design-system-build-config.test.ts`, `tailwind.config.js`, `postcss.config.cjs`, `package.json`, `scripts/design-system-policy-changed.sh`, `scripts/design-system-policy.ts`
+Touched surfaces: `.storybook`, `src/stories`, `src/styles`, `src/index.css`, `src/design-system-build-config.test.ts`, `tailwind.config.js`, `postcss.config.cjs`, `package.json`, `components.json`, `README.md`, `.gitignore`, `scripts/design-system-policy-changed.sh`, `scripts/design-system-policy.ts`
 
 Run:
 

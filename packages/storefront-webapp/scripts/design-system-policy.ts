@@ -13,6 +13,15 @@ export type DesignSystemPolicyViolation = {
   message: string;
 };
 
+export const RESIDUAL_DRIFT_BASELINE: Readonly<
+  Record<DesignSystemPolicyRule, number>
+> = {
+  "raw-hex": 13,
+  "raw-status-hue": 2,
+  "arbitrary-value": 58,
+  "legacy-alias": 25,
+};
+
 type PolicyException = {
   path: string;
   rules: DesignSystemPolicyRule[];
@@ -105,6 +114,25 @@ export function checkDesignSystemLine(
     .map(({ rule, message }) => ({ rule, message }));
 }
 
+export function countWholeTreeDesignSystemDrift(paths: readonly string[]) {
+  const counts: Record<DesignSystemPolicyRule, number> = {
+    "raw-hex": 0,
+    "raw-status-hue": 0,
+    "arbitrary-value": 0,
+    "legacy-alias": 0,
+  };
+
+  for (const path of paths) {
+    for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+      for (const violation of checkDesignSystemLine(path, line)) {
+        counts[violation.rule] += 1;
+      }
+    }
+  }
+
+  return counts;
+}
+
 function readAddedLines(base: string, path: string) {
   try {
     execFileSync("git", ["ls-files", "--error-unmatch", "--", path], {
@@ -151,6 +179,34 @@ function readAddedLines(base: string, path: string) {
 
 function runCli() {
   const args = process.argv.slice(2);
+  if (args.includes("--all")) {
+    const paths = execFileSync("git", ["ls-files", "src"], {
+      encoding: "utf8",
+    })
+      .split(/\r?\n/)
+      .filter((path) => /\.(?:css|ts|tsx)$/.test(path));
+    const counts = countWholeTreeDesignSystemDrift(paths);
+    const regressions = Object.entries(counts).filter(
+      ([rule, count]) =>
+        count >
+        RESIDUAL_DRIFT_BASELINE[rule as DesignSystemPolicyRule],
+    );
+
+    if (regressions.length) {
+      for (const [rule, count] of regressions) {
+        console.error(
+          `${rule}: ${count} residual violations exceeds baseline ${RESIDUAL_DRIFT_BASELINE[rule as DesignSystemPolicyRule]}.`,
+        );
+      }
+      process.exitCode = 1;
+      return;
+    }
+
+    console.log(
+      `Storefront whole-tree design-system policy passed: ${JSON.stringify(counts)}.`,
+    );
+    return;
+  }
   const baseFlagIndex = args.indexOf("--base");
   const base =
     baseFlagIndex >= 0 && args[baseFlagIndex + 1]

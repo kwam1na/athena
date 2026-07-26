@@ -32,6 +32,9 @@
         "packages/storefront-webapp/tailwind.config.js",
         "packages/storefront-webapp/postcss.config.cjs",
         "packages/storefront-webapp/package.json",
+        "packages/storefront-webapp/components.json",
+        "packages/storefront-webapp/README.md",
+        "packages/storefront-webapp/.gitignore",
         "packages/storefront-webapp/scripts/design-system-policy-changed.sh",
         "packages/storefront-webapp/scripts/design-system-policy.ts"
       ],

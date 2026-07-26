@@ -4,8 +4,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   checkDesignSystemLine,
+  countWholeTreeDesignSystemDrift,
   getDesignSystemPolicyExceptions,
+  RESIDUAL_DRIFT_BASELINE,
 } from "../../scripts/design-system-policy";
+import { execFileSync } from "node:child_process";
 
 describe("storefront design-system policy", () => {
   it.each([
@@ -64,5 +67,22 @@ describe("storefront design-system policy", () => {
         reason: expect.stringContaining("print"),
       }),
     ]);
+  });
+
+  it("keeps whole-tree residual drift at or below the reviewed baseline", () => {
+    const paths = execFileSync("git", ["ls-files", "src"], {
+      encoding: "utf8",
+    })
+      .split(/\r?\n/)
+      .filter((path) => /\.(?:css|ts|tsx)$/.test(path));
+    const counts = countWholeTreeDesignSystemDrift(paths);
+
+    for (const rule of Object.keys(
+      RESIDUAL_DRIFT_BASELINE,
+    ) as Array<keyof typeof RESIDUAL_DRIFT_BASELINE>) {
+      expect(counts[rule], rule).toBeLessThanOrEqual(
+        RESIDUAL_DRIFT_BASELINE[rule],
+      );
+    }
   });
 });

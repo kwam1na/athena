@@ -154,5 +154,9 @@ usage is zero.
 - Follow [`design-system-artifact-policy.md`](./design-system-artifact-policy.md) for fixtures,
   screenshots, videos, traces, and Storybook.
 - Confirm catalog maturity in [`design-system-catalog.md`](./design-system-catalog.md).
+- Preserve the authoritative state and overlay behavior in
+[`design-state-and-overlay-matrix.md`](./design-state-and-overlay-matrix.md).
+- Run `bun run lint:design-system:all`; residual violations may decrease but no
+  rule count may exceed the reviewed whole-tree baseline.
 - Check keyboard, zoom/reflow, reduced motion, loading, empty, error, and success states.
 - Run the package's focused tests, typecheck, and build.
