@@ -829,12 +829,12 @@ export const STOREFRONT_CHECKOUT_BOOTSTRAP_SCENARIO: HarnessBehaviorScenario<Sto
       const flowResult = await runPlaywrightFlow({
         url: `http://127.0.0.1:${STOREFRONT_RUNTIME_APP_PORT}${STOREFRONT_CHECKOUT_BOOTSTRAP_PATH}`,
         steps: async ({ page }) => {
-          await page.waitForSelector("text=Secure checkout", {
-            timeout: 30_000,
+          const heading = page.getByRole("heading", {
+            level: 1,
+            name: "Checkout",
           });
-
-          const observedText =
-            (await page.textContent("text=Secure checkout"))?.trim() ?? "";
+          await heading.waitFor({ timeout: 30_000 });
+          const observedText = (await heading.textContent())?.trim() ?? "";
           return { observedText };
         },
       });
@@ -863,9 +863,9 @@ export const STOREFRONT_CHECKOUT_BOOTSTRAP_SCENARIO: HarnessBehaviorScenario<Sto
     ],
     thresholds: STOREFRONT_RUNTIME_LATENCY_THRESHOLDS,
     assert: async ({ browserResult, runtimeSignals }) => {
-      if (browserResult.observedText !== "Secure checkout") {
+      if (browserResult.observedText !== "Checkout") {
         throw new Error(
-          `Expected storefront checkout heading "Secure checkout", received "${browserResult.observedText}".`
+          `Expected storefront level-one heading "Checkout", received "${browserResult.observedText}".`
         );
       }
 

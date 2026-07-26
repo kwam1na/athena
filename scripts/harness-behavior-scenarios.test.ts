@@ -50,6 +50,10 @@ describe("HARNESS_BEHAVIOR_SCENARIOS", () => {
     expect(bootstrapScenario?.runtimeSignals?.map((signal) => signal.name)).toContain(
       "storefront-checkout-bootstrap-loaded"
     );
+    expect(bootstrapScenario?.browser?.toString()).toContain(
+      'getByRole("heading",'
+    );
+    expect(bootstrapScenario?.browser?.toString()).toContain('name: "Checkout"');
     expect(validationScenario?.runtimeSignals?.map((signal) => signal.name)).toContain(
       "storefront-checkout-session-missing"
     );
