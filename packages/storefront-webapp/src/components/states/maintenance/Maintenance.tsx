@@ -18,7 +18,10 @@ export const MaintenanceMode = ({ store }: { store?: Store }) => {
     "We're working on bringing you amazing products. Check back soon!";
 
   return (
-    <StorefrontPage className="flex min-h-dvh items-center justify-center bg-surface-subtle">
+    <StorefrontPage
+      as="main"
+      className="flex min-h-dvh items-center justify-center bg-surface-subtle"
+    >
         <div className="space-y-12 text-center">
           <p className="text-3xl font-light uppercase tracking-widest text-brand">
             Wigclub

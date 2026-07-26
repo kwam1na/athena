@@ -1,22 +1,16 @@
-import React, { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { Input } from "@/components/ui/input";
+import React from "react";
 import { Button } from "@/components/ui/button";
-import { cn, currencyFormatter, formatDate } from "@/lib/utils";
-import { submitOffer, type OfferRequest } from "@/api/offers";
-import { validateEmail } from "@/lib/validations/email";
-import { WelcomeBackModalConfig } from "./config/welcomeBackModalConfig";
-import { Badge } from "../badge";
-import { PromoCode } from "./types";
+import { formatDate } from "@/lib/utils";
+import { LeaveReviewModalConfig } from "./leaveReviewModalConfig";
 import { OnlineOrder } from "@athena/webapp";
-import { ProductSkuCard } from "@/components/ProductCard";
 import { Link } from "@tanstack/react-router";
+import { StorefrontImage } from "@/components/ui/storefront-image";
 
 interface LeaveAReviewModalFormProps {
   onClose: () => void;
   onSuccess?: () => void;
   orderToReview: OnlineOrder;
-  config: WelcomeBackModalConfig;
+  config: LeaveReviewModalConfig;
 }
 
 export const LeaveAReviewModalForm: React.FC<LeaveAReviewModalFormProps> = ({
@@ -43,9 +37,10 @@ export const LeaveAReviewModalForm: React.FC<LeaveAReviewModalFormProps> = ({
         <div>
           <div className="flex justify-center p-4 rounded-lg">
             <div className="flex gap-4 w-fit">
-              <img
-                alt={`${itemToReview?.productName} image`}
-                className="aspect-square w-24 h-24 md-w-40 md-h-40 object-cover rounded"
+              <StorefrontImage
+                alt={itemToReview?.productName || "Product to review"}
+                aspectRatio="1 / 1"
+                wrapperClassName="h-24 w-24 rounded md:h-40 md:w-40"
                 src={itemToReview?.productImage}
               />
 
@@ -71,23 +66,21 @@ export const LeaveAReviewModalForm: React.FC<LeaveAReviewModalFormProps> = ({
               }
             }}
           >
-            <Button
-              type="submit"
-              className="w-full md:w-[60%] font-semibold py-2 sm:py-3 rounded"
-              style={{ backgroundColor: "#ff6f91" }}
-            >
+            <Button type="button" className="w-full font-semibold md:w-3/5">
               {config.ctaText}
             </Button>
           </Link>
         </div>
       </div>
 
-      <button
+      <Button
+        type="button"
+        variant="clear"
         onClick={onClose}
-        className="mt-4 text-white hover:underline cursor-pointer text-sm"
+        className="mt-4 text-white hover:text-white/80"
       >
         No thanks
-      </button>
+      </Button>
     </div>
   );
 };

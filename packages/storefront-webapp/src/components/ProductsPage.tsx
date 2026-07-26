@@ -6,14 +6,16 @@ import { ProductCard, ProductSkuCard } from "./ProductCard";
 import { useGetProductFilters } from "@/hooks/useGetProductFilters";
 import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
 import { useEffect } from "react";
+import { PageState } from "./states/PageState";
+import { StorefrontPage } from "./common/StorefrontPage";
 
 function ProductCardLoadingSkeleton() {
   return (
-    <div className="space-y-4">
-      <Skeleton className="w-64 h-64 bg-accent5 rounded-md"></Skeleton>
-      <div className="space-y-2">
-        <Skeleton className="w-[180px] h-[16px] bg-accent5 rounded"></Skeleton>
-        <Skeleton className="w-[96px] h-[16px] bg-accent5 rounded"></Skeleton>
+    <div className="space-y-layout-sm" aria-hidden="true">
+      <Skeleton className="aspect-square w-full rounded-lg" />
+      <div className="space-y-layout-xs">
+        <Skeleton className="h-4 w-44 rounded-sm" />
+        <Skeleton className="h-4 w-24 rounded-sm" />
       </div>
     </div>
   );
@@ -43,42 +45,35 @@ export default function ProductsPage({
 
   if (products?.length == 0 && filtersCount > 0) {
     return (
-      <div className="space-y-8 container mx-auto max-w-[1024px] h-screen">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <div className="space-y-4">
-            <div className="w-[80px] h-[24px] bg-accent5 rounded" />
-          </div>
-        </div>
-
-        <div>
-          <p className="text-sm font-light">
-            No products found with the selected filters
-          </p>
-        </div>
-      </div>
+      <StorefrontPage as="div" spacing="compact">
+        <PageState
+          description="Clear or adjust your filters to see more products."
+          inline
+          state="empty"
+          title="No products match these filters"
+        />
+      </StorefrontPage>
     );
   }
 
   if (products?.length == 0 && !productSkus) {
     return (
-      <div className="space-y-8 container mx-auto max-w-[1024px] h-screen">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <div className="space-y-4">
-            <div className="w-[80px] h-[24px] bg-accent5 rounded" />
-          </div>
-        </div>
-
-        <div>
-          <p className="text-sm font-light">
-            We're currently updating this section of our store. Check back soon.
-          </p>
-        </div>
-      </div>
+      <StorefrontPage as="div" spacing="compact">
+        <PageState
+          description="We're updating this collection. Check back soon."
+          inline
+          state="empty"
+          title="Nothing here yet"
+        />
+      </StorefrontPage>
     );
   }
 
   return (
-    <div className="container mx-auto grid grid-cols-2 lg:grid-cols-3 gap-2 lg:gap-12">
+    <div
+      aria-busy={isLoading || undefined}
+      className="grid min-w-0 grid-cols-2 gap-layout-sm md:grid-cols-3 lg:gap-layout-xl"
+    >
       {isLoading && (
         <>
           <ProductCardLoadingSkeleton />
@@ -107,7 +102,7 @@ export default function ProductsPage({
               productSlug: sku.productId,
             })}
             search={{ variant: sku.sku, origin }}
-            className="block mb-4"
+            className="group mb-layout-md block min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
           >
             <ProductSkuCard
               fallbackImageUrl={fallbackImageUrl}
@@ -127,7 +122,7 @@ export default function ProductsPage({
               productSlug: product?._id,
             })}
             search={{ variant: product?.skus?.[0].sku, origin }}
-            className="block mb-4"
+            className="group mb-layout-md block min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
           >
             <ProductCard
               fallbackImageUrl={fallbackImageUrl}

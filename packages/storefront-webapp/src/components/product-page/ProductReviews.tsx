@@ -3,7 +3,6 @@ import { ReviewSummary } from "./ReviewSummary";
 import { ProductReview } from "./ProductReview";
 import { Skeleton } from "../ui/skeleton";
 import { DimensionBar } from "./DimensionBar";
-import { motion, AnimatePresence } from "framer-motion";
 
 interface ReviewsProps {
   productId: string;
@@ -50,19 +49,11 @@ export function Reviews({ productId, productCategory }: ReviewsProps) {
         />
       )}
       <div className="space-y-4">
-        <AnimatePresence>
-          {reviews.map((review) => (
-            <motion.div
-              key={review._id}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, ease: "easeInOut" }}
-              className="first:border-t-0 border-t"
-            >
-              <ProductReview review={review} />
-            </motion.div>
-          ))}
-        </AnimatePresence>
+        {reviews.map((review) => (
+          <div key={review._id} className="first:border-t-0 border-t">
+            <ProductReview review={review} />
+          </div>
+        ))}
       </div>
     </div>
   );

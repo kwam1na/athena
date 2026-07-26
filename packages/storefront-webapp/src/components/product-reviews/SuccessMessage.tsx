@@ -1,7 +1,8 @@
 import { motion } from "framer-motion";
-import { CheckCircle2, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
+import { InlineAlert } from "../ui/inline-alert";
 
 interface SuccessMessageProps {
   orderId: string;
@@ -18,23 +19,12 @@ export const SuccessMessage = ({ orderId }: SuccessMessageProps) => (
     }}
     className="space-y-6"
   >
-    <motion.div
-      className="space-y-3 text-green-700 bg-green-50 p-6 rounded-lg"
-      animate={{ scale: 1 }}
-      transition={{
-        duration: 0.8,
-        ease: [0.16, 1, 0.3, 1],
-      }}
-    >
-      <div className="flex items-center gap-2">
-        <CheckCircle2 className="w-5 h-5" />
-        <h3 className="font-medium">Thank you for your review!</h3>
-      </div>
+    <InlineAlert tone="success" title="Thank you for your review!">
       <p className="text-sm pl-7">
         Your feedback has been received and will show up on the product page
         shortly.
       </p>
-    </motion.div>
+    </InlineAlert>
 
     <motion.div
       className="flex flex-col sm:flex-row gap-4"

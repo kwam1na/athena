@@ -1,6 +1,6 @@
-import { PromoCode } from "../types";
+import { PromoCode } from "../ui/modals/types";
 
-export interface WelcomeBackModalConfig {
+export interface LeaveReviewModalConfig {
   title: React.ReactNode;
   subtitle?: string;
   body: string;
@@ -13,7 +13,7 @@ export const defaultBackgroundImageUrl =
   "https://images.wigclub.store/stores/nn7byz68a3j4tfjvgdf9evpt3n78kk38/products/n5790y3zfjn41k43ghjtqhjbxh7c5n5j/66093c1a-01c0-4f90-5e91-4f91231e906a.webp";
 
 // Modal configurations
-export const welcomeBackConfigs: WelcomeBackModalConfig[] = [
+export const welcomeBackConfigs: LeaveReviewModalConfig[] = [
   {
     title: "Get 25% off your first order",
     body: "Enter your email and we'll send you a discount code to use at checkout.",
@@ -28,7 +28,7 @@ export const welcomeBackConfigs: WelcomeBackModalConfig[] = [
   },
 ];
 
-export const nextOrderConfigs: WelcomeBackModalConfig[] = [
+export const nextOrderConfigs: LeaveReviewModalConfig[] = [
   {
     title: "Get 25% off your next order",
     body: "Enter your email and we'll send you a discount code to use at checkout.",
@@ -43,39 +43,41 @@ export const nextOrderConfigs: WelcomeBackModalConfig[] = [
   },
 ];
 
-export const getModalConfig = (
-  promoCode: PromoCode,
-  type: "welcomeBack" | "nextOrder"
+export const getLeaveReviewModalConfig = (
+  incentive: string | PromoCode,
+  type: "points" | "discount" = "points",
 ) => {
-  if (type == "welcomeBack") {
+  if (type === "discount" && typeof incentive !== "string") {
+    // Promo code discount display
     return {
       title: (
-        <p className="text-4xl space-y-4 flex flex-col items-center">
+        <div className="text-4xl space-y-4">
           <p>Get</p>
-          <p className="text-accent2 text-8xl md:text-9xl">
-            {promoCode.displayText} off
+          <p className="text-8xl text-brand md:text-9xl">
+            {incentive.displayText} off
           </p>
-          <p>your first purchase</p>
-        </p>
+          <p>your next purchase</p>
+        </div>
       ),
-      body: "Enter your email to get your exclusive discount code to use at checkout. Ends July 20th",
+      body: "Leave a review on your last order to claim your discount",
       backgroundImageUrl: defaultBackgroundImageUrl,
-      ctaText: "Claim my discount",
+      ctaText: "Leave a review",
     };
   }
 
+  // Points display (existing behavior)
   return {
     title: (
       <div className="text-4xl space-y-4">
         <p>Get</p>
-        <p className="text-accent2 text-8xl md:text-9xl">
-          {promoCode.displayText} off
+        <p className="text-8xl text-brand md:text-9xl">
+          {typeof incentive === "string" ? incentive : ""} points
         </p>
-        <p>your next purchase</p>
+        <p>to redeem on your next purchase</p>
       </div>
     ),
-    body: "Enter your email to get your exclusive discount code to use at checkout. Ends July 20th",
+    body: "Leave a review on your last order to claim your points",
     backgroundImageUrl: defaultBackgroundImageUrl,
-    ctaText: "Claim my discount",
+    ctaText: "Leave a review",
   };
 };

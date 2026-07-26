@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import type { HTMLAttributes } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ProductActions } from "./ProductActions";
 
@@ -11,6 +11,8 @@ vi.mock("framer-motion", () => ({
     ),
   },
 }));
+
+afterEach(cleanup);
 
 describe("ProductActions", () => {
   it("exposes a stable add-to-bag hook", () => {

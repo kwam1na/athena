@@ -1,4 +1,4 @@
-import { PromoCode } from "../types";
+import { PromoCode } from "@/components/ui/modals/types";
 
 export interface WelcomeBackModalConfig {
   title: React.ReactNode;
@@ -44,40 +44,38 @@ export const nextOrderConfigs: WelcomeBackModalConfig[] = [
 ];
 
 export const getModalConfig = (
-  incentive: string | PromoCode,
-  type: "points" | "discount" = "points"
+  promoCode: PromoCode,
+  type: "welcomeBack" | "nextOrder"
 ) => {
-  if (type === "discount" && typeof incentive !== "string") {
-    // Promo code discount display
+  if (type == "welcomeBack") {
     return {
       title: (
-        <div className="text-4xl space-y-4">
+        <div className="flex flex-col items-center space-y-4 text-4xl">
           <p>Get</p>
-          <p className="text-accent2 text-8xl md:text-9xl">
-            {incentive.displayText} off
+          <p className="text-8xl text-offer md:text-9xl">
+            {promoCode.displayText} off
           </p>
-          <p>your next purchase</p>
+          <p>your first purchase</p>
         </div>
       ),
-      body: "Leave a review on your last order to claim your discount",
+      body: "Enter your email to get your exclusive discount code to use at checkout. Ends July 20th",
       backgroundImageUrl: defaultBackgroundImageUrl,
-      ctaText: "Leave a review",
+      ctaText: "Claim my discount",
     };
   }
 
-  // Points display (existing behavior)
   return {
     title: (
       <div className="text-4xl space-y-4">
         <p>Get</p>
-        <p className="text-accent2 text-8xl md:text-9xl">
-          {typeof incentive === "string" ? incentive : ""} points
+        <p className="text-8xl text-offer md:text-9xl">
+          {promoCode.displayText} off
         </p>
-        <p>to redeem on your next purchase</p>
+        <p>your next purchase</p>
       </div>
     ),
-    body: "Leave a review on your last order to claim your points",
+    body: "Enter your email to get your exclusive discount code to use at checkout. Ends July 20th",
     backgroundImageUrl: defaultBackgroundImageUrl,
-    ctaText: "Leave a review",
+    ctaText: "Claim my discount",
   };
 };

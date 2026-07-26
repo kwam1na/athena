@@ -5,7 +5,8 @@ import { pathToFileURL } from "node:url";
 export type DesignSystemPolicyRule =
   | "raw-hex"
   | "raw-status-hue"
-  | "arbitrary-value";
+  | "arbitrary-value"
+  | "legacy-alias";
 
 export type DesignSystemPolicyViolation = {
   rule: DesignSystemPolicyRule;
@@ -39,6 +40,8 @@ const rawStatusHuePattern =
   /(?:^|[\s"'`])(?:[\w-]+:)*(?:bg|border|decoration|fill|from|outline|ring|stroke|text|to|via)-(?:red|orange|amber|yellow|lime|green|emerald|cyan|sky|blue|rose)-\d{2,3}(?:\/\d{1,3})?(?=$|[\s"'`])/;
 const arbitraryValuePattern =
   /(?:^|[\s"'`])(?:[\w-]+:)*(?:-?[\w]+(?:-[\w]+)*)-\[[^\]]+\](?=$|[\s"'`])/;
+const legacyAliasPattern =
+  /(?:^|[\s"'`])(?:[\w-]+:)*(?:[\w-]+-)?accent(?:-?[2-5])(?:-[\w-]+)?(?:\/\d{1,3})?(?=$|[\s"'`])/;
 
 export function getDesignSystemPolicyExceptions() {
   return policyExceptions.map((exception) => ({
@@ -85,6 +88,12 @@ export function checkDesignSystemLine(
       rule: "arbitrary-value",
       pattern: arbitraryValuePattern,
       message: "Use a named design-system utility instead of an arbitrary value.",
+    },
+    {
+      rule: "legacy-alias",
+      pattern: legacyAliasPattern,
+      message:
+        "Use a supported semantic role instead of a deprecated accent alias.",
     },
   ];
 

@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { ProductSkuCard } from "../ProductCard";
@@ -24,14 +23,10 @@ export function BestSellersSection({
   if (!bestSellersProducts?.length) return null;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.6, delay: 0.2 }}
-      className="space-y-8"
-    >
-      <p className="text-md font-medium">Shop best sellers</p>
+    <section className="space-y-layout-md" aria-labelledby="best-sellers-heading">
+      <h2 id="best-sellers-heading" className="text-md font-medium">
+        Shop best sellers
+      </h2>
 
       <div className="space-y-8 lg:space-y-24">
         <ProductSkuGrid
@@ -56,7 +51,7 @@ export function BestSellersSection({
           </Link>
         </div>
       </div>
-    </motion.div>
+    </section>
   );
 }
 
@@ -71,12 +66,12 @@ function ProductSkuGrid({
   origin: string;
 }) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8 md:gap-24 xl:gap-4">
+    <div className="grid grid-cols-2 gap-layout-md md:grid-cols-3 xl:grid-cols-4">
       {products?.slice(0, 4).map((product) => (
         <Link
           to="/shop/product/$productSlug"
           key={product?._id}
-          className="h-64 w-48 md:h-80 md:w-80 xl:h-96 xl:w-96 flex-shrink-0"
+          className="rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
           params={(params) => ({
             ...params,
             productSlug: product?.productId,

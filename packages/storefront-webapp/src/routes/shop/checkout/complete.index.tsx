@@ -25,6 +25,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { emitStorefrontFailure } from "@/lib/storefrontFailureObservability";
+import { PageState } from "@/components/states/PageState";
 
 export const Route = createFileRoute("/shop/checkout/complete/")({
   component: () => <CheckoutCompleteView />,
@@ -146,7 +147,7 @@ export const CheckoutComplete = () => {
           initial={{ opacity: 0 }}
           animate={{
             opacity: 1,
-            transition: { ease: "easeOut", duration: 0.6, delay: 0.3 },
+            transition: { ease: "easeOut", duration: 0.3 },
           }}
           className="space-y-12"
         >
@@ -183,7 +184,7 @@ export const CheckoutComplete = () => {
           initial={{ opacity: 0 }}
           animate={{
             opacity: 1,
-            transition: { ease: "easeOut", duration: 0.6, delay: 0.3 },
+            transition: { ease: "easeOut", duration: 0.3 },
           }}
           className="space-y-12"
         >
@@ -198,7 +199,7 @@ export const CheckoutComplete = () => {
           animate={{
             opacity: 1,
             y: 0,
-            transition: { ease: "easeOut", duration: 0.8, delay: 0.9 },
+            transition: { ease: "easeOut", duration: 0.3 },
           }}
           className="space-y-8 w-full lg:w-[40%]"
         >
@@ -216,7 +217,7 @@ export const CheckoutComplete = () => {
             animate={{
               opacity: 1,
               y: 0,
-              transition: { ease: "easeOut", duration: 0.8, delay: 1.4 },
+              transition: { ease: "easeOut", duration: 0.3 },
             }}
           >
             <GuestRewardsPrompt
@@ -230,7 +231,7 @@ export const CheckoutComplete = () => {
           initial={{ opacity: 0 }}
           animate={{
             opacity: 1,
-            transition: { ease: "easeOut", duration: 0.4, delay: 1.5 },
+            transition: { ease: "easeOut", duration: 0.3 },
           }}
           className="flex flex-col gap-4 md:gap-8 lg:flex-row pt-8"
         >
@@ -272,7 +273,7 @@ const CheckoutCompleteView = () => {
   const { data, isLoading } = useGetActiveCheckoutSession();
 
   if (isLoading || data === undefined) {
-    return null;
+    return <PageState state="loading" title="Finalizing your order" />;
   }
 
   if (data === null) {

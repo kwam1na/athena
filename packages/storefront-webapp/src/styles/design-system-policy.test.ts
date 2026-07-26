@@ -16,6 +16,11 @@ describe("storefront design-system policy", () => {
       'const className = "max-w-[1024px]"',
       "arbitrary-value",
     ],
+    [
+      "legacy accent alias",
+      'const className = "text-accent2"',
+      "legacy-alias",
+    ],
   ])("rejects a newly introduced %s", (_label, line, rule) => {
     expect(checkDesignSystemLine("src/components/Example.tsx", line)).toEqual(
       expect.arrayContaining([expect.objectContaining({ rule })]),

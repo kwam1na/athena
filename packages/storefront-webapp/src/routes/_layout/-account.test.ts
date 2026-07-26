@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
 import { LOGGED_IN_USER_ID_KEY } from "@/lib/constants";
 
 const { getActiveUser, getStoreDetails } = vi.hoisted(() => ({
@@ -11,7 +10,6 @@ vi.mock("@/api/storeFrontUser", () => ({
   getActiveUser,
   updateUser: vi.fn(),
 }));
-
 vi.mock("@/lib/utils", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/utils")>()),
   getStoreDetails,
@@ -19,7 +17,7 @@ vi.mock("@/lib/utils", async (importOriginal) => ({
 
 import { accountBeforeLoad } from "./account";
 
-describe("account route authorization", () => {
+describe("account route authorization boundary", () => {
   beforeEach(() => {
     localStorage.clear();
     getActiveUser.mockReset();
@@ -30,15 +28,14 @@ describe("account route authorization", () => {
     });
   });
 
-  it("redirects direct unauthenticated entry before rendering account data", async () => {
+  it("redirects unauthenticated direct entry before loading account data", async () => {
     await expect(accountBeforeLoad()).rejects.toBeDefined();
     expect(getActiveUser).not.toHaveBeenCalled();
   });
 
-  it("retains the server-backed ownership check for authenticated entry", async () => {
+  it("retains the active-user ownership check for authenticated entry", async () => {
     localStorage.setItem(LOGGED_IN_USER_ID_KEY, "user_fixture");
     getActiveUser.mockResolvedValue({ _id: "user_fixture" });
-
     await expect(accountBeforeLoad()).resolves.toBeUndefined();
     expect(getActiveUser).toHaveBeenCalledOnce();
   });
@@ -46,7 +43,6 @@ describe("account route authorization", () => {
   it("redirects when the active-user ownership check expires", async () => {
     localStorage.setItem(LOGGED_IN_USER_ID_KEY, "user_fixture");
     getActiveUser.mockRejectedValue(new Error("Expired session"));
-
     await expect(accountBeforeLoad()).rejects.toBeDefined();
   });
 });

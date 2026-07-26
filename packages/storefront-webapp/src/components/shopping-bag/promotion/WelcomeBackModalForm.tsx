@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { submitOffer, type OfferRequest } from "@/api/offers";
 import { validateEmail } from "@/lib/validations/email";
-import { WelcomeBackModalConfig } from "./config/welcomeBackModalConfig";
-import { Badge } from "../badge";
-import { PromoCode } from "./types";
+import { WelcomeBackModalConfig } from "./welcomeBackModalConfig";
+import { Badge } from "@/components/ui/badge";
+import { PromoCode } from "@/components/ui/modals/types";
 
 interface WelcomeBackModalFormProps {
   onClose: () => void;
@@ -81,16 +81,18 @@ export const WelcomeBackModalForm: React.FC<WelcomeBackModalFormProps> = ({
             required
             className={cn(
               "bg-primary/60 backdrop-blur-sm border-none text-white placeholder:text-white/70 h-10 sm:h-12",
-              (validationError || mutation.error) && "border-red-500 border-2"
+              (validationError || mutation.error) && "border-2 border-danger"
             )}
             disabled={mutation.isPending}
             // Remove onBlur validation to prevent validation when clicking elsewhere on modal
           />
           {validationError && (
-            <p className="text-red-300 text-sm mt-1">{validationError}</p>
+            <p role="alert" className="mt-1 text-sm text-danger-foreground">
+              {validationError}
+            </p>
           )}
           {!validationError && mutation.error && (
-            <p className="text-red-300 text-sm mt-1">
+            <p role="alert" className="mt-1 text-sm text-danger-foreground">
               {mutation.error instanceof Error
                 ? mutation.error.message
                 : "Failed to submit email"}
@@ -100,8 +102,7 @@ export const WelcomeBackModalForm: React.FC<WelcomeBackModalFormProps> = ({
 
         <Button
           type="submit"
-          className="w-full font-semibold py-2 sm:py-3 rounded"
-          style={{ backgroundColor: "#ff6f91" }}
+          className="w-full bg-brand py-2 font-semibold text-brand-foreground hover:bg-brand/90 sm:py-3"
           disabled={mutation.isPending}
         >
           {mutation.isPending ? "Sending..." : config.ctaText}

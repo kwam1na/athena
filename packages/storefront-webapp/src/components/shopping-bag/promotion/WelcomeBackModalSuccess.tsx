@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   successVariants,
   checkIconVariants,
-} from "./animations/welcomeBackModalAnimations";
+} from "@/components/ui/modals/animations/welcomeBackModalAnimations";
 
 interface WelcomeBackModalSuccessProps {
   onClose: () => void;

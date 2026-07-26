@@ -13,6 +13,7 @@ import {
 import { CheckoutProvider } from "@/components/checkout/CheckoutProvider";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import { createPaymentVerificationStartedEvent } from "@/lib/storefrontJourneyEvents";
+import { PageState } from "@/components/states/PageState";
 
 export const Route = createFileRoute("/shop/checkout/verify/")({
   component: () => <VerifyCheckoutSessionPayment />,
@@ -66,7 +67,9 @@ const Verify = () => {
     }
   }, [data, session, externalReference]);
 
-  if (isLoading || session === undefined) return null;
+  if (isLoading || session === undefined) {
+    return <PageState state="loading" title="Preparing payment verification" />;
+  }
 
   if (!externalReference) {
     return <UnableToVerifyCheckoutPayment />;
@@ -77,7 +80,7 @@ const Verify = () => {
   }
 
   return (
-    <div className="container mx-auto max-w-[1024px] px-6 lg:px-0 flex items-center justify-center min-h-[80vh] p-40">
+    <div className="mx-auto flex min-h-storefrontTerminal w-full max-w-content items-center justify-center px-gutter py-layout-3xl">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{
@@ -87,16 +90,14 @@ const Verify = () => {
         className="space-y-4"
       >
         <div className="flex gap-2 items-center justify-center">
-          <Icons.spinner className="ml-2 h-4 w-4 animate-spin" />
+          <Icons.spinner className="ml-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
           <p className="text-sm">Verifying your payment...</p>
         </div>
 
-        <div className="w-full flex gap-1 text-muted-foreground">
-          <p className="text-sm">
-            If you are not redirected in the next minute, click
-          </p>
+        <div className="flex w-full flex-wrap justify-center gap-1 text-muted-foreground">
+          <p className="text-sm">If this takes longer than a minute,</p>
           <Link to="/shop/checkout/complete">
-            <p className="text-sm underline">here</p>
+            <p className="text-sm underline">continue to your order</p>
           </Link>
         </div>
       </motion.div>

@@ -13,6 +13,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef } from "react";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import { createCheckoutCompletionCanceledEvent } from "@/lib/storefrontJourneyEvents";
+import { PageState } from "@/components/states/PageState";
 
 export const Route = createFileRoute("/shop/checkout/$sessionIdSlug/canceled")({
   component: () => <CheckoutCanceledView />,
@@ -48,7 +49,9 @@ const CheckoutCanceledView = () => {
     });
   }, [sessionData, track]);
 
-  if ((!sessionData && isLoading) || isRefetching) return null;
+  if ((!sessionData && isLoading) || isRefetching) {
+    return <PageState state="loading" title="Checking cancellation status" />;
+  }
 
   if ((!sessionData && !isLoading) || !sessionData?.isPaymentRefunded) {
     return (

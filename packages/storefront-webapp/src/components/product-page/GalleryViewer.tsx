@@ -1,103 +1,73 @@
-import React, { useEffect, useRef, useState } from "react";
-import { ScrollArea } from "../ui/scroll-area";
-import { ProductSku } from "@athena/webapp";
+import { useState } from "react";
+
+import { StorefrontImage } from "../ui/storefront-image";
+import { cn } from "@/lib/utils";
 
 interface GalleryViewerProps {
   images: string[];
+  productName: string;
+  fallbackImageUrl?: string;
 }
 
-const GalleryViewer: React.FC<GalleryViewerProps> = ({ images }) => {
+export default function GalleryViewer({
+  images,
+  productName,
+  fallbackImageUrl,
+}: GalleryViewerProps) {
   const [activeImage, setActiveImage] = useState(0);
-  const imageRefs = useRef<HTMLImageElement[] | null[]>([]);
-  const [didClickOnPreview, setDidClickOnPreview] = useState(false);
-
-  const scroller = useRef<HTMLDivElement | null>(null);
-
-  // Setup Intersection Observer
-  useEffect(() => {
-    if (didClickOnPreview) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const index = imageRefs.current.findIndex(
-              (img) => img === entry.target
-            );
-            setActiveImage(index);
-          }
-        });
-      },
-      {
-        threshold: 0.5,
-      }
-    );
-
-    imageRefs.current.forEach((img) => {
-      if (img) observer.observe(img);
-    });
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [imageRefs.current, didClickOnPreview]);
-
-  const handleClickOnPreview = (index: number) => {
-    setDidClickOnPreview(true);
-
-    const selectedImage = imageRefs.current[index];
-    if (selectedImage && scroller.current) {
-      const offset = selectedImage.offsetTop - scroller.current.offsetTop;
-
-      scroller.current.scrollTo({
-        top: offset,
-        behavior: "smooth",
-      });
-    }
-
-    setActiveImage(index);
-
-    setTimeout(() => {
-      setDidClickOnPreview(false);
-    }, 500);
-  };
+  const selectedImage = images[activeImage] ?? fallbackImageUrl;
 
   return (
-    <div className="w-full flex flex-row items-center gap-8">
-      <ScrollArea
-        ref={scroller}
-        className="snap-mandatory snap-y w-full h-[600px] lg:w-[800px] lg:h-[800px]"
-      >
-        {images.map((img, index) => (
-          <div className="snap-center" key={index}>
-            <img
-              ref={(el) => (imageRefs.current[index] = el)}
-              alt={`image`}
-              className={`aspect-square w-full h-[600px] lg:w-[800px] lg:h-[800px] lg:rounded-md object-cover cursor-pointer`}
-              src={img}
-            />
-          </div>
-        ))}
-      </ScrollArea>
+    <section
+      aria-label={`${productName} image gallery`}
+      className="flex w-full min-w-0 flex-col gap-layout-sm lg:flex-row"
+    >
+      <StorefrontImage
+        alt={`${productName}, view ${activeImage + 1} of ${images.length}`}
+        aspectRatio="1 / 1"
+        fallbackSrc={fallbackImageUrl}
+        src={selectedImage}
+        wrapperClassName="min-w-0 flex-1 rounded-lg"
+        className="object-cover"
+      />
 
-      {/* Preview Panel */}
-      <div className="hidden lg:flex lg:flex-col lg:mt-auto">
-        {images.map((img, index) => (
-          <div
-            key={index}
-            className={`cursor-pointer`}
-            onClick={() => handleClickOnPreview(index)}
-          >
-            <img
-              src={img}
-              alt={`Preview ${index}`}
-              className={`aspect-square w-16 h-16 object-cover rounded-md ${activeImage == index ? "opacity-100" : "opacity-20"}`}
-            />
-          </div>
-        ))}
-      </div>
-    </div>
+      {images.length > 1 && (
+        <div
+          aria-label={`${productName} gallery thumbnails`}
+          className="flex gap-layout-xs overflow-x-auto pb-layout-2xs lg:w-20 lg:shrink-0 lg:flex-col lg:overflow-visible"
+          role="group"
+        >
+          {images.map((image, index) => {
+            const isActive = activeImage === index;
+
+            return (
+              <button
+                aria-current={isActive ? "true" : undefined}
+                aria-label={`Show ${productName} image ${index + 1} of ${images.length}`}
+                className={cn(
+                  "min-h-control-standard min-w-control-standard shrink-0 rounded-md border-2 bg-surface p-1 transition-opacity duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2",
+                  isActive
+                    ? "border-selection-foreground opacity-100"
+                    : "border-transparent opacity-60 hover:opacity-100",
+                )}
+                key={`${image}-${index}`}
+                onClick={() => setActiveImage(index)}
+                type="button"
+              >
+                <StorefrontImage
+                  alt=""
+                  aria-hidden="true"
+                  aspectRatio="1 / 1"
+                  decorative
+                  fallbackSrc={fallbackImageUrl}
+                  src={image}
+                  wrapperClassName="h-16 w-16 rounded-sm"
+                />
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
-};
-
-export default GalleryViewer;
+}

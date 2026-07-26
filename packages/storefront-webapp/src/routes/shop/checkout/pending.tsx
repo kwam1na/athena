@@ -6,6 +6,7 @@ import { formatStoredAmount } from "@/lib/currency";
 import { ArrowRightIcon } from "@radix-ui/react-icons";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { PageState } from "@/components/states/PageState";
 
 export const Route = createFileRoute("/shop/checkout/pending")({
   component: () => <PendingOrders />,
@@ -20,20 +21,32 @@ const Pending = () => {
     checkoutSessionQueries.pendingSessions()
   );
 
-  if (isLoading) return <div className="h-screen" />;
+  if (isLoading) {
+    return <PageState state="loading" title="Loading pending orders" />;
+  }
+
+  if (!pendingOrders?.length) {
+    return (
+      <PageState
+        state="empty"
+        title="No pending orders"
+        description="Orders that still need your attention will appear here."
+      />
+    );
+  }
 
   return (
-    <FadeIn className="container mx-auto max-w-[1024px] min-h-screen px-6 xl:px-0 space-y-8 lg:space-y-24 py-8">
-      <p>Pending orders</p>
+    <FadeIn className="mx-auto min-h-dvh w-full max-w-content space-y-layout-xl px-gutter py-layout-xl">
+      <h1 className="font-display text-3xl font-medium">Pending orders</h1>
 
-      <div className="grid grid-cols-1 gap-8">
+      <div className="grid grid-cols-1 gap-layout-sm">
         {pendingOrders?.map((session: any) => {
           return (
             <Link
               to="/shop/checkout/$sessionIdSlug"
               params={{ sessionIdSlug: session._id }}
               key={session._id}
-              className="flex gap-2 hover:underline"
+              className="flex min-h-control-standard items-center justify-between rounded-lg border border-border bg-surface p-layout-sm shadow-surface transition-colors duration-fast hover:bg-selection"
             >
               <p className="text-sm font-medium">{`${formatStoredAmount(formatter, session.amount)} order placed on ${new Date(session._creationTime).toDateString()}`}</p>
               <ArrowRightIcon className="w-4 h-4" />

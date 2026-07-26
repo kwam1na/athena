@@ -18,6 +18,7 @@ import { webOrderSchema } from "./schemas/webOrderSchema";
 import { calculateDeliveryFee } from "./deliveryFees";
 import { deriveCheckoutState } from "./deriveCheckoutState";
 import { loadCheckoutState, saveCheckoutState } from "./checkoutStorage";
+import { PageState } from "../states/PageState";
 
 export { webOrderSchema } from "./schemas/webOrderSchema";
 
@@ -387,7 +388,15 @@ export const CheckoutProvider = ({
     return <CheckoutUnavailable />;
   }
 
-  if (isLoading || data === undefined) return null;
+  if (isLoading || data === undefined) {
+    return (
+      <PageState
+        state="loading"
+        title="Preparing checkout"
+        description="Loading your bag and secure checkout details."
+      />
+    );
+  }
 
   const hasServerBackedCheckout =
     Boolean(data?.placedOrderId) ||

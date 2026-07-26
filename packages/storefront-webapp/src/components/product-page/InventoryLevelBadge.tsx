@@ -1,33 +1,30 @@
-import { Badge } from "../ui/badge";
+import { StatusBadge } from "../ui/status-badge";
 
 export const SoldOutBadge = () => {
   return (
-    <Badge
-      variant={"outline"}
-      className="bg-red-100 border-red-100 text-red-600"
-    >
+    <StatusBadge tone="danger">
       Sold Out
-    </Badge>
+    </StatusBadge>
   );
 };
 
 export const LowStockBadge = ({ message }: { message: string }) => {
   return (
-    <Badge variant={"outline"} className="border-yellow-600 text-yellow-600">
+    <StatusBadge tone="warning">
       {message}
-    </Badge>
+    </StatusBadge>
   );
 };
 
 export const SellingFastBadge = () => {
   return (
-    <Badge variant={"outline"} className="border-orange-600 text-orange-600">
+    <StatusBadge tone="warning">
       🔥 Selling fast — Few left!
-    </Badge>
+    </StatusBadge>
   );
 };
 
-export const SellingFastSignal = ({ message }: { message: string }) => {
+export const SellingFastSignal = ({ message: _message }: { message: string }) => {
   return (
     <div className="flex items-center gap-2">
       <SellingFastBadge />

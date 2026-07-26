@@ -60,7 +60,8 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/storefrontObservability.test.ts`](../../src/lib/storefrontObservability.test.ts)
 - [`src/lib/utils.test.ts`](../../src/lib/utils.test.ts)
 - [`src/routes/-homePageLoader.test.ts`](../../src/routes/-homePageLoader.test.ts)
-- [`src/routes/_layout/account.test.ts`](../../src/routes/_layout/account.test.ts)
+- [`src/routes/_layout/-account.test.ts`](../../src/routes/_layout/-account.test.ts)
+- [`src/routes/shop/receipt/-PosReceiptPage.test.ts`](../../src/routes/shop/receipt/-PosReceiptPage.test.ts)
 - [`src/stories/storybook-config.test.ts`](../../src/stories/storybook-config.test.ts)
 - [`src/styles/design-system-policy.test.ts`](../../src/styles/design-system-policy.test.ts)
 

@@ -25,7 +25,8 @@ function StarRating({ rating, size = "md" }: StarRatingProps) {
       {Array.from({ length: 5 }).map((_, i) => (
         <Star
           key={i}
-          className={`${sizeClasses[size]} fill-yellow-400 text-yellow-400`}
+          aria-hidden="true"
+          className={`${sizeClasses[size]} fill-warning text-warning`}
         />
       ))}
     </div>
@@ -108,36 +109,37 @@ export function ProductReview({ review }: ProductReviewProps) {
       <div className="w-full md:w-1/4 flex flex-col items-start gap-2 mb-4 md:mb-0">
         <StarRating rating={overallRating} size="md" />
         <span className="font-medium">{reviewerName}</span>
-        <span className="text-gray-400 text-sm">{reviewDate}</span>
+        <span className="text-sm text-muted-foreground">{reviewDate}</span>
       </div>
       {/* Right column */}
       <div className="w-full md:w-3/4 flex flex-col gap-2 relative">
         <div className="flex items-start justify-between">
           <span className="font-extrabold tracking-tight">{review.title}</span>
           <button
-            className="flex items-center gap-1 px-5 py-2 rounded-full border border-gray-200 bg-white shadow-sm text-sm font-medium text-gray-900 hover:bg-gray-50 ml-4"
+            aria-label={`Mark review by ${reviewerName} helpful`}
+            className="ml-4 flex min-h-control-standard items-center gap-1 rounded-pill border border-border bg-surface px-5 py-2 text-sm font-medium text-foreground shadow-surface hover:bg-surface-subtle"
             disabled={loading}
             onClick={handleHelpful}
           >
-            <ThumbsUp className="w-3.5 h-3.5" />
-            <p className="text-xs">Helpful ({helpfulCount})</p>
+            <ThumbsUp aria-hidden="true" className="h-3.5 w-3.5" />
+            <span className="text-xs">Helpful ({helpfulCount})</span>
           </button>
         </div>
-        <div className="flex gap-6 text-sm text-gray-700 mt-1">
+        <div className="mt-1 flex gap-6 text-sm text-muted-foreground">
           {trueToLength && (
-            <span className="text-xs text-gray-500 mb-2">
+            <span className="mb-2 text-xs text-muted-foreground">
               True to Length: {trueToLength}/5
             </span>
           )}
           {/* Product Name */}
           {review.productSku && (
-            <span className="text-xs text-gray-500 mb-2">
+            <span className="mb-2 text-xs text-muted-foreground">
               {getProductName(review.productSku)}
             </span>
           )}
         </div>
         {review.content && (
-          <p className="text-gray-700 text-sm mt-1">{review.content}</p>
+          <p className="mt-1 text-sm text-foreground/80">{review.content}</p>
         )}
       </div>
     </div>

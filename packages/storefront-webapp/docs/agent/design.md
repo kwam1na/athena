@@ -120,12 +120,31 @@ Commerce patterns may compose primitives; templates may compose patterns; routes
 templates to product state. Keep the system package-local until repeated real usage proves a
 contract is genuinely neutral across Athena and storefront.
 
-## Legacy migration aliases
+## Catalog maturity and consumption
+
+[`design-system-catalog.md`](./design-system-catalog.md) defines the supported surface and the
+promotion and deprecation rules. New work should import supported primitives directly from
+their file under `src/components/ui`; the project intentionally has no catch-all barrel
+export.
+
+Before adding a primitive:
+
+1. Confirm that an existing supported contract cannot express the need.
+2. Keep the implementation free of route, API, query, telemetry, context, and feature state.
+3. Add focused behavior coverage and a Storybook specimen.
+4. Add it to the machine-readable catalog as supported only after those checks pass.
+
+Experimental code may be reused within an existing journey, but it is not a stable
+cross-journey API. Feature-specific and deprecated files must not gain new consumers.
+
+## Deprecated migration aliases
 
 `accent2`, `accent3`, `accent4`, and `accent5` are a temporary, non-canonical bridge for
 existing route code. They remain resolvable during migration but must not appear in new or
-normalized code, Storybook guidance, or component APIs. Replace them with `brand`, `action`,
-`selection`, `offer`, or a status role, then remove the aliases once repository usage is zero.
+normalized code, Storybook guidance, or component APIs. Repository search still finds live
+consumers, so the aliases cannot yet be removed safely. Replace them with `brand`, `action`,
+`selection`, `offer`, or a status role, then remove the aliases only when source and story
+usage is zero.
 
 ## Change checklist
 
@@ -134,5 +153,6 @@ normalized code, Storybook guidance, or component APIs. Replace them with `brand
   [`design-system-migration-baseline.md`](./design-system-migration-baseline.md).
 - Follow [`design-system-artifact-policy.md`](./design-system-artifact-policy.md) for fixtures,
   screenshots, videos, traces, and Storybook.
+- Confirm catalog maturity in [`design-system-catalog.md`](./design-system-catalog.md).
 - Check keyboard, zoom/reflow, reduced motion, loading, empty, error, and success states.
 - Run the package's focused tests, typecheck, and build.

@@ -25,8 +25,11 @@ export function ReviewSummary({ reviews }: ReviewSummaryProps) {
   return (
     <div className="flex items-center gap-2">
       <div className="flex items-center gap-1">
-        <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-        <span className=" font-medium">{averageRating.toFixed(1)}</span>
+        <Star
+          aria-hidden="true"
+          className="h-4 w-4 fill-warning text-warning"
+        />
+        <span className="font-medium">{averageRating.toFixed(1)}</span>
       </div>
       <span className="text-muted-foreground">({reviews.length})</span>
     </div>

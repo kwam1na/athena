@@ -16,7 +16,7 @@ export function StorybookShell({
     <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-10 md:px-10 md:py-16">
         <header className="max-w-3xl space-y-3">
-          <p className="text-sm font-semibold uppercase tracking-wider text-accent-2-foreground">
+          <p className="text-sm font-semibold uppercase tracking-wider text-selection-foreground">
             {eyebrow}
           </p>
           <h1 className="text-4xl font-semibold tracking-tight">{title}</h1>

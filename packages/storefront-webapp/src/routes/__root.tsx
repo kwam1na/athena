@@ -41,7 +41,7 @@ function RootComponent() {
           <div className="flex min-h-dvh flex-col bg-background">
             <a
               href="#storefront-main"
-              className="sr-only z-[100] bg-surface p-3 focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+              className="sr-only z-skipLink bg-surface p-3 focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
             >
               Skip to content
             </a>

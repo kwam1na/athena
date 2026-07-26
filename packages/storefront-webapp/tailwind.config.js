@@ -146,6 +146,12 @@ export default {
         surface: "var(--shadow-surface)",
         overlay: "var(--shadow-overlay)",
       },
+      zIndex: {
+        skipLink: "100",
+      },
+      minHeight: {
+        storefrontTerminal: "70dvh",
+      },
       transitionDuration: {
         fast: "var(--motion-fast)",
         standard: "var(--motion-standard)",

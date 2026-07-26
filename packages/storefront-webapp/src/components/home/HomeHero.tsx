@@ -1,10 +1,10 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { Link } from "@tanstack/react-router";
-import { motion } from "framer-motion";
 import { lazy, Suspense } from "react";
 import { ScrollDownButton } from "../ui/ScrollDownButton";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
 import { Button } from "../ui/button";
+import { StorefrontImage } from "../ui/storefront-image";
 
 interface HomeHeroProps {
   nextSectionRef?: React.RefObject<HTMLDivElement>;
@@ -43,7 +43,7 @@ export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
     isStoreResolved && !shouldShowImage && !shouldShowVideo;
 
   return (
-    <section className="relative w-full h-screen flex items-center justify-center bg-background text-white text-center">
+    <section className="relative flex min-h-screen w-full items-center justify-center bg-background text-action-foreground text-center">
       {/* Background Video - shown when heroDisplayType is "reel" or not set */}
       {shouldShowVideo && hlsUrl && (
         <Suspense fallback={null}>
@@ -53,46 +53,22 @@ export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
 
       {/* Background Image - shown when heroDisplayType is "image" */}
       {shouldShowImage && (
-        <motion.img
-          initial={{ opacity: 0, scale: 1.05 }}
-          animate={{
-            opacity: 1,
-            scale: 1,
-            transition: {
-              duration: 1,
-              ease: [0.6, 0.05, 0.01, 0.9],
-            },
-          }}
+        <StorefrontImage
           src={storeConfig.media.homeHero.headerImage}
-          className="absolute top-0 left-0 w-full h-full object-cover"
+          wrapperClassName="absolute inset-0 h-full w-full"
           alt="Hero header"
         />
       )}
 
       {/* Dark Overlay - conditionally shown */}
       {shouldShowOverlay && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{
-            opacity: 0.7,
-            transition: {
-              duration: 0.5,
-              delay: 1.1, // Start after image animation completes
-            },
-          }}
-          className="absolute inset-0 bg-black"
-        />
+        <div className="absolute inset-0 bg-overlay/70" />
       )}
 
       {shouldShowFallback && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-primary px-6 text-accent5">
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: "easeOut" }}
-            className="max-w-xl space-y-6"
-          >
-            <p className="text-sm uppercase tracking-[0.22em]">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-action px-gutter text-action-foreground">
+          <div className="max-w-xl space-y-layout-md">
+            <p className="text-sm uppercase tracking-widest">
               {store?.name ?? "Storefront"}
             </p>
             <h1 className="font-lavish text-7xl md:text-9xl">
@@ -105,7 +81,7 @@ export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
             >
               <Button variant="secondary">Shop hair</Button>
             </Link>
-          </motion.div>
+          </div>
         </div>
       )}
 
@@ -119,41 +95,20 @@ export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
 
       {/* Text Content - conditionally shown */}
       {shouldShowText && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center -translate-y-[10%]">
-          <motion.p
-            initial={{ opacity: 0, y: -8 }}
-            animate={{
-              opacity: 1,
-              y: 0,
-              transition: { ease: "easeOut", duration: 0.4, delay: 1.1 },
-            }}
-            className="text-2xl text-center text-accent5 drop-shadow-lg"
-          >
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-gutter">
+          <p className="text-2xl text-center text-action-foreground drop-shadow-lg">
             Switch your look
-          </motion.p>
-          <motion.p
-            initial={{ opacity: 0, y: 8 }}
-            animate={{
-              opacity: 1,
-              y: 0,
-              transition: { ease: "easeOut", duration: 0.4, delay: 1.1 },
-            }}
-            className="font-lavish text-8xl md:text-9xl text-center text-accent5 drop-shadow-lg"
-          >
+          </p>
+          <p className="font-lavish text-8xl md:text-9xl text-center text-action-foreground drop-shadow-lg">
             to match your mood
-          </motion.p>
+          </p>
         </div>
       )}
 
       {/* Scroll down button - positioned at bottom of hero section */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 2, duration: 0.6 }}
-        className="absolute bottom-28 md:bottom-4 left-0 right-0 flex justify-center"
-      >
+      <div className="absolute bottom-28 md:bottom-4 left-0 right-0 flex justify-center">
         <ScrollDownButton targetRef={nextSectionRef} />
-      </motion.div>
+      </div>
     </section>
   );
 };

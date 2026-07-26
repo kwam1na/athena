@@ -50,9 +50,18 @@ vi.mock("@tanstack/react-router", async () => {
 });
 
 describe("Checkout", () => {
-  it("exposes a stable checkout readiness hook", () => {
+  it("exposes a stable checkout readiness hook and canonical sections", () => {
     render(<Checkout />);
 
-    expect(screen.getByTestId("storefront-checkout-ready")).toBeInTheDocument();
+    const checkout = screen.getByTestId("storefront-checkout-ready");
+
+    expect(checkout).toBeInTheDocument();
+    expect(checkout).toHaveAttribute("aria-labelledby", "checkout-heading");
+    expect(
+      screen.getByRole("heading", { name: "Checkout" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Checkout Form")).toBeInTheDocument();
+    expect(screen.getByText("Bag Summary")).toBeInTheDocument();
+    expect(screen.getByText("Mobile Bag Summary")).toBeInTheDocument();
   });
 });

@@ -8,6 +8,7 @@ import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
 import { ShoppingBagAction } from "@/hooks/useShoppingBag";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
+import { StorefrontImage } from "@/components/ui/storefront-image";
 
 // Product Details Section
 export function PickupDetails({
@@ -24,6 +25,7 @@ export function PickupDetails({
           <a
             href={WIGLUB_HAIR_STUDIO_LOCATION_URL}
             target="_blank"
+            rel="noopener noreferrer"
             className="font-medium underline"
           >
             Get directions
@@ -31,9 +33,9 @@ export function PickupDetails({
         </div>
       </div>
       <SheetTrigger asChild onClick={showShippingPolicy}>
-        <p className="font-medium cursor-pointer">
+        <Button className="h-auto p-0 font-medium" variant="link">
           Deliveries, returns, and exchanges
-        </p>
+        </Button>
       </SheetTrigger>
     </div>
   );
@@ -64,9 +66,10 @@ export function BagProduct({
       <div className="space-y-8">
         <p className="text-md">{actionText}</p>
         <div className="flex gap-4">
-          <img
+          <StorefrontImage
             alt={`Bag image`}
-            className="w-[140px] h-[180px] aspect-square object-cover rounded"
+            aspectRatio="4 / 5"
+            wrapperClassName="w-36 shrink-0 rounded-card"
             src={
               product.images[0] ||
               fallbackImageUrl ||

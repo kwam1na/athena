@@ -9,10 +9,8 @@ import {
 
 export function MobileBagMenu({
   onCloseClick,
-  setActiveMenu,
 }: {
   onCloseClick: () => void;
-  setActiveMenu: (menu: string | null) => void;
 }) {
   return (
     <Sheet open onOpenChange={(open) => !open && onCloseClick()}>
@@ -27,11 +25,7 @@ export function MobileBagMenu({
           </SheetDescription>
         </SheetHeader>
         <div className="pt-layout-xl">
-          <BagMenu
-            isMobile
-            setActiveMenu={setActiveMenu}
-            onCloseClick={onCloseClick}
-          />
+          <BagMenu isMobile onClose={onCloseClick} />
         </div>
       </SheetContent>
     </Sheet>

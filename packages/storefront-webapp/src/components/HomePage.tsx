@@ -10,15 +10,16 @@ import { FeaturedProductsSection } from "./home/FeaturedProductsSection";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 import { useLeaveAReviewModal } from "@/hooks/useLeaveAReviewModal";
 import { GiftIcon } from "lucide-react";
-import { motion } from "framer-motion";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { postAnalytics } from "@/api/analytics";
-import { LeaveAReviewModal } from "./ui/modals/LeaveAReviewModal";
+import { LeaveAReviewModal } from "./product-reviews/LeaveAReviewModal";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import { createLandingPageViewedEvent } from "@/lib/storefrontJourneyEvents";
 import { resolveHomepageContent } from "./home/homePageContent";
 import type { HomePageLoaderData } from "@/routes/-homePageLoader";
+import Footer from "./footer/Footer";
+import { IconButton } from "./ui/icon-button";
 
 const origin = "homepage";
 
@@ -193,16 +194,13 @@ export default function HomePage({
       {!hasCompletedLeaveReviewModalFlow &&
         storeConfig.promotions.leaveAReviewDiscountCodeModalPromoCode &&
         canShowModal && (
-          <motion.button
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.4, delay: 2.6, ease: "easeIn" }}
+          <IconButton
+            label="Leave a review"
             onClick={handleClickOnLeaveReviewButton}
-            className="fixed right-4 top-1/2 transform -translate-y-1/2 z-10 bg-accent5/60 text-primary rounded-full p-3 shadow-md flex items-center transition-all duration-100 hover:scale-105"
-            aria-label="Leave a review"
+            className="fixed right-4 top-1/2 z-10 -translate-y-1/2 rounded-pill bg-action text-action-foreground shadow-overlay"
           >
-            <GiftIcon className="h-5 w-5" />
-          </motion.button>
+            <GiftIcon aria-hidden="true" className="h-5 w-5" />
+          </IconButton>
         )}
 
       <LeaveAReviewModal
@@ -214,7 +212,7 @@ export default function HomePage({
 
       <HomePageReadyShell>
         <div className="overflow-x-hidden">
-          <div className="space-y-16 md:space-y-56 pb-32">
+          <div className="space-y-layout-xl pb-layout-xl">
             {/* Hero Section */}
             <HomeHeroSectionWithRef
               heroRef={homeHeroRef}
@@ -223,18 +221,18 @@ export default function HomePage({
               nextSectionRef={bestSellersRef}
             />
 
-            <div className="container mx-auto space-y-24 md:space-y-48 pb-8 px-4 lg:px-0">
+            <div className="mx-auto max-w-content space-y-layout-xl px-gutter pb-layout-md">
               {/* Best Sellers Section with peek-a-boo effect on mobile */}
               {!hasHomepageData && isLoading && (
                 <div
                   data-testid="homepage-critical-content"
-                  className="min-h-[12rem]"
+                  className="min-h-48"
                 />
               )}
 
               {Boolean(bestSellersProducts.length) && (
                 <div ref={bestSellersRef} className="relative md:mt-0">
-                  <div className="absolute -top-12 left-0 right-0 h-12 bg-gradient-to-b from-transparent to-white/10 md:hidden" />
+                  <div className="absolute -top-12 left-0 right-0 h-12 bg-gradient-to-b from-transparent to-surface/10 md:hidden" />
                   <BestSellersSection
                     bestSellersProducts={bestSellersProducts}
                     origin={origin}

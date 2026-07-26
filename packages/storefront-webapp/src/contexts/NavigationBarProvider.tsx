@@ -97,7 +97,7 @@ export function NavigationBarStateProvider({
     };
   }, [activeOverlay]);
 
-  const value = useMemo(
+  const value = useMemo<ContextValue>(
     () => ({
       activeMenu,
       activeOverlay,

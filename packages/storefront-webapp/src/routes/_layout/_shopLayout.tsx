@@ -1,7 +1,16 @@
 import ProductFilter from "@/components/filter/ProductFilter";
 import ProductFilterBar from "@/components/filter/ProductFilterBar";
+import { StorefrontPage } from "@/components/common/StorefrontPage";
 import { useGetShopSearchParams } from "@/components/navigation/hooks";
 import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useGetProductFilters } from "@/hooks/useGetProductFilters";
 import {
   createFileRoute,
@@ -9,8 +18,7 @@ import {
   useNavigate,
   useParams,
 } from "@tanstack/react-router";
-import { XIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { z } from "zod";
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
@@ -37,42 +45,40 @@ function MobileFilters({
   filtersCount: number;
 }) {
   return (
-    <div className="fixed inset-0 z-50 w-full h-screen bg-background">
-      <div className="absolute z-40 w-full h-screen bg-background">
-        <div className="flex pt-4 px-2">
-          <Button
-            className="ml-auto"
-            variant={"clear"}
-            onClick={onMobileFiltersCloseClick}
-          >
-            <XIcon className="w-5 h-5" />
-          </Button>
+    <Sheet
+      onOpenChange={(open) => {
+        if (!open) onMobileFiltersCloseClick();
+      }}
+      open
+    >
+      <SheetContent className="flex w-full flex-col gap-layout-xl sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>Filter products</SheetTitle>
+          <SheetDescription>
+            Narrow this collection by color or length.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <ProductFilter />
         </div>
 
-        <div className="space-y-40">
-          <div className="pt-16 px-12 space-y-12">
-            <p>Filter</p>
-            <ProductFilter />
-          </div>
-
-          <div className="w-full flex gap-4 justify-center">
+        <SheetFooter className="gap-layout-sm">
             {hasActiveFilters && (
               <Button
                 variant={"outline"}
-                className="px-16"
                 onClick={clearFilters}
               >
                 {`Clear (${filtersCount})`}
               </Button>
             )}
 
-            <Button className="px-16" onClick={onMobileFiltersCloseClick}>
+            <Button onClick={onMobileFiltersCloseClick}>
               Apply
             </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -126,8 +132,8 @@ function LayoutComponent() {
   const { filtersCount } = useGetProductFilters();
 
   return (
-    <div className="pb-40">
-      <div className="bg-white col-span-12 sticky top-0 z-40">
+    <div className="pb-layout-3xl">
+      <div className="sticky top-0 z-40 border-b border-border bg-surface">
         <ProductFilterBar
           showFilters={showFilters}
           setShowFilters={setShowFilters}
@@ -136,8 +142,8 @@ function LayoutComponent() {
         />
       </div>
 
-      <div className="hidden xl:block sticky top-0">
-        <div className="absolute w-[20%] h-[480px]">
+      <StorefrontPage as="div" className="flex gap-layout-xl" spacing="compact">
+        <aside className="hidden w-64 shrink-0 xl:block" aria-label="Catalog filters">
           <AnimatePresence initial={false}>
             {showFilters && (
               <motion.div
@@ -148,13 +154,12 @@ function LayoutComponent() {
                   transition: { ease: "easeInOut" },
                 }}
                 exit={{ opacity: 0, x: -8 }}
-                className="p-16 space-y-8"
+                className="sticky top-24 space-y-layout-lg"
               >
-                <p>Filters</p>
+                <h2 className="text-lg font-semibold">Filters</h2>
                 {hasActiveFilters && (
                   <Button
                     variant={"outline"}
-                    className="px-16"
                     onClick={clearFilters}
                   >
                     {`Clear (${filtersCount})`}
@@ -165,14 +170,12 @@ function LayoutComponent() {
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
-      </div>
+        </aside>
 
-      <div className="container mx-auto max-w-[1024px] flex py-8 gap-4">
-        <div className={"col-span-12 container mx-auto px-6 lg:px-0"}>
+        <div className="min-w-0 flex-1">
           <Outlet />
         </div>
-      </div>
+      </StorefrontPage>
 
       {showMobileFilters && (
         <MobileFilters

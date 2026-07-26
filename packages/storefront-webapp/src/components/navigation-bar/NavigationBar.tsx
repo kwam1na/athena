@@ -137,7 +137,7 @@ export default function NavigationBar() {
           <div className="mx-auto max-w-content px-gutter py-layout-xl">
             {shell.activeOverlay === "desktop-bag" ? (
               <BagMenu
-                setActiveMenu={() =>
+                onClose={() =>
                   shell.closeOverlay({ restoreFocus: false })
                 }
               />
@@ -183,10 +183,7 @@ export default function NavigationBar() {
         <MobileMenu onCloseClick={() => shell.closeOverlay()} />
       )}
       {shell.activeOverlay === "mobile-bag" && (
-        <MobileBagMenu
-          setActiveMenu={() => shell.closeOverlay()}
-          onCloseClick={() => shell.closeOverlay()}
-        />
+        <MobileBagMenu onCloseClick={() => shell.closeOverlay()} />
       )}
     </header>
   );

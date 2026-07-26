@@ -8,13 +8,13 @@ import {
   backgroundVariants,
   overlayVariants,
   contentVariants,
-} from "./animations/welcomeBackModalAnimations";
+} from "@/components/ui/modals/animations/welcomeBackModalAnimations";
 import {
   welcomeBackConfigs,
   defaultBackgroundImageUrl,
   nextOrderConfigs,
   getModalConfig,
-} from "./config/welcomeBackModalConfig";
+} from "./welcomeBackModalConfig";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import {
   createWelcomeBackModalViewedEvent,
@@ -23,7 +23,7 @@ import {
 } from "@/lib/storefrontJourneyEvents";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { PromoCode } from "./types";
+import { PromoCode } from "@/components/ui/modals/types";
 
 interface WelcomeBackModalProps {
   isOpen: boolean;
@@ -137,7 +137,7 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
             />
 
             {/* Content */}
-            <div className="relative z-10 p-4 sm:p-6 flex flex-col items-center justify-between w-full max-w-[90%] sm:max-w-full mx-auto text-white h-full">
+            <div className="relative z-10 mx-auto flex h-full w-full max-w-xl flex-col items-center justify-between p-4 text-white sm:max-w-full sm:p-6">
               <div className="flex-1" />
 
               <motion.div

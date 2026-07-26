@@ -5,7 +5,9 @@ import {
   useProductDiscounts,
 } from "@/hooks/useProductDiscount";
 import { formatStoredAmount } from "@/lib/currency";
-import ImageWithFallback from "./ui/image-with-fallback";
+import { StorefrontImage } from "./ui/storefront-image";
+import { StatusBadge } from "./ui/status-badge";
+import placeholder from "@/assets/placeholder.png";
 
 type ProductCardSku = Pick<
   ProductSku,
@@ -68,32 +70,35 @@ export function ProductCard({
   const isFree = hasDiscount && discountedPrice === 0;
 
   return (
-    <div className="flex flex-col space-y-4">
+    <article className="flex min-w-0 flex-col space-y-layout-sm">
       <div className="overflow-hidden relative">
-        <ImageWithFallback
+        <StorefrontImage
           alt={`${product?.name} image`}
-          className="aspect-square md:aspect-auto md:w-[300px] md:h-[400px] object-cover rounded"
+          aspectRatio="3 / 4"
+          className="object-cover transition-transform duration-standard ease-standard group-hover:scale-105 motion-reduce:transform-none"
           decoding="async"
+          fallbackSrc={fallbackImageUrl || placeholder}
           loading="lazy"
           sizes="(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw"
           src={displayedSku.images[0] || fallbackImageUrl}
+          wrapperClassName="rounded-lg"
         />
         {isSoldOut && (
-          <div className="font-medium text-xs absolute top-0 left-0 m-2 text-white bg-black bg-opacity-40 rounded-md px-2 py-1">
+          <StatusBadge className="absolute left-2 top-2" tone="danger">
             Sold Out
-          </div>
+          </StatusBadge>
         )}
 
         {!isSoldOut && isSellingFast && (
-          <div className="font-medium text-xs absolute top-0 left-0 m-2 text-white bg-black bg-opacity-40 rounded-md px-2 py-1">
+          <StatusBadge className="absolute left-2 top-2" tone="warning">
             🔥 Selling fast — Few left
-          </div>
+          </StatusBadge>
         )}
 
         {!isSoldOut && hasDiscount && !isSellingFast && (
-          <div className="font-medium text-xs absolute top-0 left-0 m-2 text-white bg-black bg-opacity-40 rounded-md px-2 py-1">
+          <StatusBadge className="absolute left-2 top-2" tone="info">
             Sale
-          </div>
+          </StatusBadge>
         )}
       </div>
       <div className="flex flex-col items-start space-y-2">
@@ -123,11 +128,11 @@ export function ProductCard({
             </div>
           )}
           {uniqueColors > 1 && (
-            <p className="text-sm text-gray-600">{uniqueColors} colors</p>
+            <p className="text-sm text-muted-foreground">{uniqueColors} colors</p>
           )}
         </div>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -150,27 +155,30 @@ export function ProductSkuCard({
   const isFree = hasDiscount && discountedPrice === 0;
 
   return (
-    <div className="flex flex-col">
+    <article className="flex min-w-0 flex-col">
       <div className="mb-2 overflow-hidden relative">
-        <ImageWithFallback
+        <StorefrontImage
           alt={`${sku?.productName} image`}
-          className="aspect-square md:aspect-auto md:w-[300px] md:h-[400px] object-cover rounded"
+          aspectRatio="3 / 4"
+          className="object-cover transition-transform duration-standard ease-standard group-hover:scale-105 motion-reduce:transform-none"
           decoding="async"
+          fallbackSrc={fallbackImageUrl || placeholder}
           loading="lazy"
           sizes="(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw"
           src={sku.images[0] || fallbackImageUrl}
+          wrapperClassName="rounded-lg"
         />
 
         {isSoldOut && (
-          <div className="font-medium text-xs absolute top-0 left-0 m-2 text-white bg-black bg-opacity-40 rounded-md px-2 py-1">
+          <StatusBadge className="absolute left-2 top-2" tone="danger">
             Sold Out
-          </div>
+          </StatusBadge>
         )}
 
         {!isSoldOut && hasDiscount && (
-          <div className="font-medium text-xs absolute top-0 left-0 m-2 text-white bg-black bg-opacity-40 rounded-md px-2 py-1">
+          <StatusBadge className="absolute left-2 top-2" tone="info">
             Sale
-          </div>
+          </StatusBadge>
         )}
       </div>
       <div className="text-sm flex flex-col items-start gap-4">
@@ -199,6 +207,6 @@ export function ProductSkuCard({
           </div>
         )}
       </div>
-    </div>
+    </article>
   );
 }

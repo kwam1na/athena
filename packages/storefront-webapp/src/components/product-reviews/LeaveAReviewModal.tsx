@@ -6,11 +6,11 @@ import {
   backgroundVariants,
   overlayVariants,
   contentVariants,
-} from "./animations/welcomeBackModalAnimations";
+} from "../ui/modals/animations/welcomeBackModalAnimations";
 import {
   defaultBackgroundImageUrl,
-  getModalConfig,
-} from "./config/leaveReviewModalConfig";
+  getLeaveReviewModalConfig,
+} from "./leaveReviewModalConfig";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import {
   createLeaveReviewModalViewedEvent,
@@ -18,7 +18,7 @@ import {
 } from "@/lib/storefrontJourneyEvents";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { useQuery } from "@tanstack/react-query";
-import { PromoCode } from "./types";
+import { PromoCode } from "../ui/modals/types";
 import { LeaveAReviewModalForm } from "./LeaveAReviewModalForm";
 import { getPotentialPoints } from "@/components/checkout/utils";
 import { useReviewQueries } from "@/lib/queries/reviews";
@@ -95,13 +95,16 @@ export const LeaveAReviewModal: React.FC<LeaveAReviewModalProps> = ({
     ? promoCode
     : getPotentialPoints(orderToReview).toLocaleString();
 
-  const currentConfig = getModalConfig(incentiveValue, incentiveType);
+  const currentConfig = getLeaveReviewModalConfig(
+    incentiveValue,
+    incentiveType,
+  );
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title=""
+      title="Leave a review"
       withoutHeader
       withoutCloseButton
       withoutBackground
@@ -139,7 +142,7 @@ export const LeaveAReviewModal: React.FC<LeaveAReviewModalProps> = ({
             />
 
             {/* Content */}
-            <div className="relative z-10 p-4 sm:p-6 flex flex-col items-center justify-between w-full max-w-[90%] sm:max-w-full mx-auto text-white h-full">
+            <div className="relative z-10 mx-auto flex h-full w-11/12 flex-col items-center justify-between p-4 text-white sm:w-full sm:p-6">
               <div className="flex-1" />
 
               <motion.div

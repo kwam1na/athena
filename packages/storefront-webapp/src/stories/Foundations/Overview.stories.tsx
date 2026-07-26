@@ -27,7 +27,7 @@ function FoundationsOverview() {
           <div className="rounded-lg bg-primary p-5 text-primary-foreground">
             Primary action
           </div>
-          <div className="rounded-lg bg-accent-3 p-5 text-accent-2-foreground">
+          <div className="rounded-lg bg-selection p-5 text-selection-foreground">
             Storefront accent
           </div>
         </div>

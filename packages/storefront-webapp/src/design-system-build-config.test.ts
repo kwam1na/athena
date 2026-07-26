@@ -36,7 +36,7 @@ describe("storefront design-system foundation", () => {
     expect(colors.overlay).toBe("hsl(var(--overlay) / <alpha-value>)");
   });
 
-  it("keeps historical accent aliases resolving only as a migration bridge", () => {
+  it("keeps historical accent aliases resolving only while live consumers remain", () => {
     const colors = tailwindConfig.theme.extend.colors;
 
     expect(colors.accent2.DEFAULT).toBe("hsl(var(--accent-2))");
@@ -45,8 +45,52 @@ describe("storefront design-system foundation", () => {
     expect(colors.accent5.DEFAULT).toBe("hsl(var(--accent-5))");
 
     const designGuide = readPackageFile("docs/agent/design.md");
-    expect(designGuide).toContain("Legacy migration aliases");
+    expect(designGuide).toContain("Deprecated migration aliases");
     expect(designGuide).toContain("non-canonical");
+  });
+
+  it("keeps the curated UI catalog complete and supported primitives dependency-neutral", () => {
+    const catalog = JSON.parse(
+      readPackageFile("docs/agent/design-system-catalog.json"),
+    ) as Record<string, string[]>;
+    const catalogPaths = Object.values(catalog).flat().sort();
+    const uiRoot = path.join(packageDir, "src/components/ui");
+    const uiFiles = fs
+      .readdirSync(uiRoot, { recursive: true, withFileTypes: true })
+      .filter(
+        (entry) =>
+          entry.isFile() &&
+          /\.(?:ts|tsx)$/.test(entry.name) &&
+          !entry.name.includes(".test."),
+      )
+      .map((entry) =>
+        path
+          .relative(packageDir, path.join(entry.parentPath, entry.name))
+          .split(path.sep)
+          .join("/"),
+      )
+      .sort();
+
+    expect(catalogPaths).toEqual(uiFiles);
+    expect(catalog.removable).toEqual([]);
+
+    const forbiddenPrimitiveDependencies =
+      /@\/(?:api|routes|hooks|contexts|lib\/queries|components\/(?!ui))/;
+    for (const supportedPath of catalog.supported) {
+      expect(readPackageFile(supportedPath)).not.toMatch(
+        forbiddenPrimitiveDependencies,
+      );
+    }
+
+    const supportedStory = readPackageFile(
+      "src/stories/Primitives/SupportedCatalog.stories.tsx",
+    );
+    for (const supportedPath of catalog.supported) {
+      const moduleName = path.basename(supportedPath, path.extname(supportedPath));
+      expect(supportedStory).toContain(
+        `@/components/ui/${moduleName}`,
+      );
+    }
   });
 
   it("uses one scalable viewport and one global stylesheet authority", () => {

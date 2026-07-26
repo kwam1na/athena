@@ -16,6 +16,7 @@ import { capitalizeFirstLetter } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
+import { PageState } from "@/components/states/PageState";
 
 export const Route = createFileRoute("/shop/checkout/$sessionIdSlug/complete")({
   component: () => <CheckoutCompleteView />,
@@ -30,7 +31,9 @@ const CheckoutCompleteView = () => {
     checkoutSessionQueries.session(sessionIdSlug)
   );
 
-  if (!sessionData && isLoading) return null;
+  if (!sessionData && isLoading) {
+    return <PageState state="loading" title="Loading order confirmation" />;
+  }
 
   if (!sessionData && !isLoading) {
     return (
@@ -52,7 +55,7 @@ const CheckoutCompleteView = () => {
           initial={{ opacity: 0 }}
           animate={{
             opacity: 1,
-            transition: { ease: "easeOut", duration: 0.6, delay: 0.3 },
+            transition: { ease: "easeOut", duration: 0.3 },
           }}
           className="space-y-12"
         >
@@ -78,7 +81,7 @@ const CheckoutCompleteView = () => {
           animate={{
             opacity: 1,
             y: 0,
-            transition: { ease: "easeOut", duration: 0.8, delay: 0.9 },
+            transition: { ease: "easeOut", duration: 0.3 },
           }}
           className="space-y-8 w-[40%]"
         >
@@ -96,7 +99,7 @@ const CheckoutCompleteView = () => {
           initial={{ opacity: 0 }}
           animate={{
             opacity: 1,
-            transition: { ease: "easeOut", duration: 0.4, delay: 1.5 },
+            transition: { ease: "easeOut", duration: 0.3 },
           }}
           className="space-x-12 pt-8"
         >

@@ -3,6 +3,7 @@ import { toDisplayAmount } from "@/lib/currency";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
 import type { PosTransaction } from "@/api/posTransaction";
 import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
+import { PageState } from "@/components/states/PageState";
 
 type PosReceiptPageProps = {
   queryOptions: UseQueryOptions<PosTransaction, Error, PosTransaction, string[]>;
@@ -16,7 +17,10 @@ const paymentLabel = (method: string) => {
   return method.replace("_", " ");
 };
 
-const shouldRetryReceiptLookup = (failureCount: number, error: Error) => {
+export const shouldRetryReceiptLookup = (
+  failureCount: number,
+  error: Error,
+) => {
   if (failureCount >= 2) {
     return false;
   }
@@ -41,7 +45,13 @@ export const PosReceiptPage = ({ queryOptions }: PosReceiptPageProps) => {
   const money = (value?: number) => formatter.format(toDisplayAmount(value ?? 0));
 
   if (isLoading) {
-    return <div className="h-screen" />;
+    return (
+      <PageState
+        state="loading"
+        title="Loading receipt"
+        description="We're retrieving this shared receipt."
+      />
+    );
   }
 
   if (!data) {

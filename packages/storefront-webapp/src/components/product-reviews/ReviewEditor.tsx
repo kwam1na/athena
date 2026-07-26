@@ -23,21 +23,20 @@ import { ReviewForm } from "./ReviewForm";
 import { SuccessMessage } from "./SuccessMessage";
 import { ErrorMessage } from "./ErrorMessage";
 import { ExistingReviewMessage } from "./ExistingReviewMessage";
-import { ArrowRight, CheckCircle } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import {
   createReviewEditorViewedEvent,
   createReviewSubmittedEvent,
 } from "@/lib/storefrontJourneyEvents";
 import { cn } from "@/lib/utils";
+import { InlineAlert } from "../ui/inline-alert";
+import { PageState } from "../states/PageState";
+import { StorefrontPage } from "../common/StorefrontPage";
 
 const PublishedReviewMessage = ({ productId }: { productId: string }) => {
   return (
-    <div className="rounded-lg border p-6 space-y-4">
-      <div className="flex items-center gap-2 text-green-600">
-        <CheckCircle className="h-5 w-5" />
-        <h3 className="font-medium">Your review has been published!</h3>
-      </div>
+    <InlineAlert tone="success" title="Your review has been published!">
       <p className="text-sm">
         Thank you for your feedback. Your review is now visible on the product
         page.
@@ -52,7 +51,7 @@ const PublishedReviewMessage = ({ productId }: { productId: string }) => {
           <ArrowRight className="w-3.5 h-3.5 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
         </Link>
       </div>
-    </div>
+    </InlineAlert>
   );
 };
 
@@ -134,8 +133,15 @@ export const ReviewEditor = () => {
       enabled: !!item?.productSkuId,
     });
 
-  if (isLoading || isLoadingReview || isLoadingUserProductReviews)
-    return <div className="h-screen"></div>;
+  if (isLoading || isLoadingReview || isLoadingUserProductReviews) {
+    return (
+      <PageState
+        state="loading"
+        title="Loading your review"
+        description="We're checking this order item and its review status."
+      />
+    );
+  }
 
   if (!item) {
     return <NotFound />;
@@ -226,47 +232,49 @@ export const ReviewEditor = () => {
   };
 
   return (
-    <FadeIn
-      className={cn(
-        "container mx-auto max-w-[1024px] h-screen px-6 xl:px-0 space-y-8 lg:space-y-24 py-8 pb-56",
-        !hasReviewedThisOrderItem && !isSubmitted && "h-full"
-      )}
-    >
-      <div className="space-y-8">
-        <OrderNavigation />
+    <StorefrontPage as="section" spacing="relaxed">
+      <FadeIn
+        className={cn(
+          "space-y-8 lg:space-y-24",
+          !hasReviewedThisOrderItem && !isSubmitted && "min-h-full",
+        )}
+      >
+        <div className="space-y-8">
+          <OrderNavigation />
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr,2fr] gap-24">
-          <OrderItem item={item} formatter={formatter} />
+          <div className="grid grid-cols-1 gap-24 lg:grid-cols-3">
+            <OrderItem item={item} formatter={formatter} />
 
-          <div className="space-y-12">
-            {!isSubmitted && !hasReviewedThisOrderItem ? (
-              <>
-                {hasUserReviewedProduct && existingUserReview && (
-                  <ExistingReviewMessage
-                    creationTime={existingUserReview._creationTime}
-                    orderId={orderId || ""}
+            <div className="space-y-12 lg:col-span-2">
+              {!isSubmitted && !hasReviewedThisOrderItem ? (
+                <>
+                  {hasUserReviewedProduct && existingUserReview && (
+                    <ExistingReviewMessage
+                      creationTime={existingUserReview._creationTime}
+                      orderId={orderId || ""}
+                    />
+                  )}
+                  <ReviewForm
+                    isHair={isHair}
+                    formData={formData}
+                    onFormDataChange={handleFormDataChange}
+                    isSubmitting={isSubmitting}
+                    onSubmit={handleSubmit}
+                    hasUserReviewedProduct={hasUserReviewedProduct}
                   />
-                )}
-                <ReviewForm
-                  isHair={isHair}
-                  formData={formData}
-                  onFormDataChange={handleFormDataChange}
-                  isSubmitting={isSubmitting}
-                  onSubmit={handleSubmit}
-                  hasUserReviewedProduct={hasUserReviewedProduct}
-                />
-                {submissionStatus.type === "error" && (
-                  <ErrorMessage message={submissionStatus.message} />
-                )}
-              </>
-            ) : isReviewPublished ? (
-              <PublishedReviewMessage productId={item.productId} />
-            ) : (
-              <SuccessMessage orderId={orderId || ""} />
-            )}
+                  {submissionStatus.type === "error" && (
+                    <ErrorMessage message={submissionStatus.message} />
+                  )}
+                </>
+              ) : isReviewPublished ? (
+                <PublishedReviewMessage productId={item.productId} />
+              ) : (
+                <SuccessMessage orderId={orderId || ""} />
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </FadeIn>
+      </FadeIn>
+    </StorefrontPage>
   );
 };
