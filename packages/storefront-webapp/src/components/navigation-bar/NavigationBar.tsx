@@ -85,13 +85,20 @@ export default function NavigationBar() {
                     categorySlug: category.value,
                   })}
                   className={`text-xs ${hover}`}
-                  onFocus={(event) =>
+                  aria-haspopup="menu"
+                  aria-expanded={
+                    shell.activeOverlay === "desktop-menu" &&
+                    shell.activeMenu === category.value
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key !== "ArrowDown") return;
+                    event.preventDefault();
                     shell.openOverlay(
                       "desktop-menu",
                       event.currentTarget,
                       category.value,
-                    )
-                  }
+                    );
+                  }}
                   onMouseEnter={(event) =>
                     shell.openOverlay(
                       "desktop-menu",

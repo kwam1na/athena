@@ -49,6 +49,36 @@ test("desktop overlays own focus, close on Escape, and restore their trigger", a
   await expect(trigger).toBeFocused();
 });
 
+test("desktop category overlays allow backward traversal and Escape dismissal", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/");
+
+  const categoryTrigger = page.locator("a[aria-haspopup='menu']").first();
+  test.skip(
+    (await categoryTrigger.count()) === 0,
+    "Category overlay integration requires a configured storefront.",
+  );
+
+  await categoryTrigger.focus();
+  await expect(categoryTrigger).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+
+  const overlay = page.getByTestId("desktop-navigation-overlay");
+  await expect(overlay).toBeVisible();
+  await expect(overlay.locator("a, button").first()).toBeFocused();
+
+  await page.keyboard.press("Shift+Tab");
+  await expect(categoryTrigger).toBeFocused();
+  await expect(overlay).toBeVisible();
+
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Escape");
+  await expect(overlay).toHaveCount(0);
+  await expect(categoryTrigger).toBeFocused();
+});
+
 test("desktop overlays close without restoring stale focus after navigation", async ({
   page,
 }) => {
