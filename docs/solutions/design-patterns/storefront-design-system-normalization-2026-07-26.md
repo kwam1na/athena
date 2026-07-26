@@ -18,7 +18,7 @@ tags:
   - storybook
   - harness
   - semantic-tokens
-delivery_diff_fingerprint: 67699bee0d14392377ebaab710f6fbd231e4f6c7167d9a172b97ae41218ba8c7
+delivery_diff_fingerprint: e16fc2752fdd8aad483276c0997435d1dac6399def1557fd6209798b65909c4a
 ---
 
 # Storefront design-system normalization without commerce behavior drift
