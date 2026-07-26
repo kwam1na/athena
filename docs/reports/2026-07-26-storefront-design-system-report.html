@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="39220b502fecb8acedbe748b8b4bf3af513c87dcdd8ee2087a81f2fc19ad0083">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="3c3077710c22bc4abb3e8a93934c22f90b0b79cb64958418d8278aba267ae3ba">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -37,8 +37,10 @@
       code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
       pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
       pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+      .table-scroll { max-width: 100%; overflow-x: auto; }
       table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
       th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      td code { overflow-wrap: anywhere; }
       th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
       tr:last-child td { border-bottom: 0; }
       .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
@@ -80,7 +82,7 @@
         <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">V26-1103</span><span class="pill">Children V26-1104–V26-1112</span><span class="pill">PR pending</span><span class="pill">No production deploy</span><span class="pill">Root alignment deferred</span></div>
       </header>
       <section class="panel"><h2>Executive Summary</h2>
-<p>This delivery turns the storefront&#x27;s partial Tailwind and copied component inventory into an explicit, package-local design system. It establishes a light-first semantic foundation, accessible primitives, shared page and state patterns, one Storybook workbench, and automated policy checks, then migrates the customer journeys onto those contracts.</p>
+<p>This delivery turns the storefront&#x27;s partial Tailwind and copied component inventory into an explicit, package-local design system. It establishes a light-first semantic foundation, accessible primitives, shared page and state patterns, one Storybook workbench, and automated policy checks, then migrates the planned representative customer-journey surfaces onto those contracts.</p>
 <p>The finish line is an open, mergeable, CI-green pull request. It is not merged, deployed, or aligned back to local main in this report.</p>
 </section>
 <section class="panel"><h2>Why It Mattered</h2>
@@ -88,7 +90,7 @@
 <p>The refactor also fixes global safety gaps: browser zoom is restored, focus treatment is visible, loading controls are truly unavailable, overlays have a shared focus contract, and motion has a reduced-motion path.</p>
 </section>
 <section class="panel"><h2>Mental Model</h2>
-<p>Think of the storefront as a one-way stack. Doctrine explains the customer-facing intent. Semantic tokens name that intent. Accessible primitives implement interaction. Patterns compose pages and states. Routes supply commerce data and behavior. Storybook and policy tests inspect every layer.</p>
+<p>Think of the storefront as a one-way stack. Doctrine explains the customer-facing intent. Semantic tokens name that intent. Accessible primitives implement interaction. Patterns compose pages and states. Routes supply commerce data and behavior. Storybook and policy tests inspect every layer. Athena supplied the governance model and conformance expectations—not its operator-specific values, density, shell, or components.</p>
 <p>The dependency direction matters: foundations and primitives do not import products, checkout state, routes, analytics, or API clients. Commerce behavior remains above the design-system boundary.</p>
 <pre><code>Doctrine → Tokens → Primitives → Patterns → Templates/Routes
                          ↘ Storybook + policy enforcement</code></pre>
@@ -109,7 +111,7 @@
 <li>Shell: declarative route state now owns navigation visibility, overlays, focus restoration, and scroll locking.</li>
 <li>Catalog and product: cards, filters, gallery, variants, inventory, reviews, and responsive actions use semantic tokens and shared controls.</li>
 <li>Bag and checkout: storage schemas, pricing, payment gates, redirects, idempotency, and telemetry stay intact while page, form, loading, retry, and terminal presentation normalize.</li>
-<li>Account and post-purchase: auth ownership, order access, rewards, reviews, receipts, policies, and maintenance states retain their domain boundaries and gain complete customer-facing states.</li>
+<li>Account and post-purchase: representative auth, order, rewards, review, receipt, policy, and maintenance surfaces retain their domain boundaries and gain normalized customer-facing states.</li>
 <li>Storybook and retained browser artifacts use synthetic fixtures under a documented redaction and lifecycle policy.</li>
 </ul>
 </section>
@@ -125,7 +127,8 @@
 <li>Customer-route Playwright: 4/4 mobile and desktop scenarios passed; shell and viewport browser checks also passed during the implementation waves.</li>
 <li>Storefront TypeScript, production build, Storybook production build, architecture boundaries, changed-file design policy, and diff hygiene passed.</li>
 <li>Graphify was rebuilt after code changes. The repository merge-level gate and GitHub required checks are run again after this report and any reviewer fixes.</li>
-<li>Plan review reached unanimous approval before implementation. Final code review is still pending at report-generation time.</li>
+<li>The 34-route contract matrix records state, selector, persistence, telemetry, and evidence obligations; responsive Storybook/browser specimens cover representative templates rather than claiming exhaustive visual certification.</li>
+<li>Plan review reached unanimous approval before implementation. Final code review and the final WCAG/conformance audit are still pending at report-generation time.</li>
 </ul>
 </section>
 <section class="panel"><h2>Related Carried Change</h2>
@@ -147,6 +150,7 @@
       
 <section class="panel">
   <h2>Key Files</h2>
+  <div class="table-scroll" role="region" aria-label="Key files" tabindex="0">
   <table>
     <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
     <tbody><tr><td><code>packages/storefront-webapp/docs/agent/design.md</code></td><td>Defines the storefront-specific design doctrine and usage rules.</td></tr>
@@ -160,6 +164,7 @@
 <tr><td><code>packages/storefront-webapp/tests/e2e/storefront-customer-routes.e2e.ts</code></td><td>Verifies mobile/desktop content, auth redirect, and invalid-receipt boundaries.</td></tr>
 <tr><td><code>packages/athena-webapp/convex/pos/public/sync.ts</code></td><td>Carries the explicitly related V26-1096 shared-demo notification suppression.</td></tr></tbody>
   </table>
+  </div>
 </section>
 
       
@@ -266,13 +271,13 @@
 
 <div class="quiz-question" data-answer="1">
   <fieldset>
-    <legend>9. Why is the V26-1096 sync edit in this PR?</legend>
-    <label><input type="radio" name="q9" value="0" /> It is part of the storefront token system</label>
-<label><input type="radio" name="q9" value="1" /> The user explicitly required the entire original dirty set to move, and it is tracked as related work</label>
-<label><input type="radio" name="q9" value="2" /> Graphify generated it</label>
-<label><input type="radio" name="q9" value="3" /> Storybook depends on POS sync</label>
+    <legend>9. A checkout screen needs a new error treatment. What must remain unchanged?</legend>
+    <label><input type="radio" name="q9" value="0" /> Only the error color</label>
+<label><input type="radio" name="q9" value="1" /> Storage, payment/provider authority, redirects, idempotency, selectors, and telemetry</label>
+<label><input type="radio" name="q9" value="2" /> The number of Tailwind classes</label>
+<label><input type="radio" name="q9" value="3" /> The Storybook story title</label>
   </fieldset>
-  <div class="answer-detail">The edit is explicitly related and tested rather than silently mislabeled as storefront work.</div>
+  <div class="answer-detail">Presentation can normalize only while the checkout and observability contracts remain intact.</div>
 </div>
 
 <div class="quiz-question" data-answer="2">
@@ -280,10 +285,10 @@
     <legend>10. What is the delivery finish line?</legend>
     <label><input type="radio" name="q10" value="0" /> Merged and deployed to production</label>
 <label><input type="radio" name="q10" value="1" /> Committed locally with no PR</label>
-<label><input type="radio" name="q10" value="2" /> Open, CI-green, unanimously approved, mergeable PR; do not merge</label>
+<label><input type="radio" name="q10" value="2" /> Open, CI-green, mergeable PR; do not merge</label>
 <label><input type="radio" name="q10" value="3" /> Close Linear tickets before review</label>
   </fieldset>
-  <div class="answer-detail">Merge, production deploy, and root alignment are deliberately outside this workflow.</div>
+  <div class="answer-detail">Final review must approve the code, but merge, production deploy, and root alignment are deliberately outside this workflow.</div>
 </div>
 
     <div class="quiz-actions">
@@ -300,10 +305,22 @@
       const result = document.getElementById("quizResult");
       const form = document.getElementById("changeQuiz");
       const threshold = Number(form.dataset.threshold || 0);
+      questions.forEach((question, index) => {
+        const detail = question.querySelector(".answer-detail");
+        const fieldset = question.querySelector("fieldset");
+        detail.id = `q${index + 1}-feedback`;
+        detail.dataset.explanation = detail.textContent;
+        detail.setAttribute("role", "status");
+        fieldset.setAttribute("aria-describedby", detail.id);
+      });
       function clearGrades() {
         questions.forEach((question) => {
           question.classList.remove("correct", "incorrect");
-          question.querySelector(".answer-detail").classList.remove("visible");
+          const detail = question.querySelector(".answer-detail");
+          const fieldset = question.querySelector("fieldset");
+          detail.classList.remove("visible");
+          detail.textContent = detail.dataset.explanation;
+          fieldset.removeAttribute("aria-invalid");
         });
         result.textContent = "";
         result.style.color = "";
@@ -316,7 +333,11 @@
           const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
           if (isCorrect) score += 1;
           question.classList.add(isCorrect ? "correct" : "incorrect");
-          question.querySelector(".answer-detail").classList.add("visible");
+          const detail = question.querySelector(".answer-detail");
+          const fieldset = question.querySelector("fieldset");
+          detail.textContent = `${isCorrect ? "Correct" : "Incorrect"}. ${detail.dataset.explanation}`;
+          detail.classList.add("visible");
+          fieldset.setAttribute("aria-invalid", isCorrect ? "false" : "true");
         });
         const passed = score >= threshold;
         result.textContent = passed
