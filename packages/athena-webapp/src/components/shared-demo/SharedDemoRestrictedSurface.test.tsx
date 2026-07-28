@@ -51,6 +51,7 @@ describe("shared demo restricted surfaces", () => {
       "/demo/store/central/members",
       "/demo/store/central/configuration",
       "/demo/store/central/bulk-operations",
+      "/demo/store/central/operations/inventory-import/cost-overlay",
       "/demo/store/central/products/new",
       "/demo/store/central/products/complimentary/new",
       "/demo/settings/organization",

@@ -62,7 +62,11 @@ function addSafeIntegers(left: number, right: number, label: string): number {
   return Number(result);
 }
 
-function multiplySafeIntegers(left: number, right: number, label: string): number {
+function multiplySafeIntegers(
+  left: number,
+  right: number,
+  label: string,
+): number {
   const result = BigInt(left) * BigInt(right);
   if (result > MAX_SAFE_INTEGER_BIGINT) {
     throw new Error(`${label} must remain a safe integer.`);
@@ -148,7 +152,9 @@ function normalizeAndValidatePosition(
       throw new Error("Known cost pool must be zero without costed quantity.");
     }
     if (position.currency !== null) {
-      throw new Error("Valuation currency must be null without costed quantity.");
+      throw new Error(
+        "Valuation currency must be null without costed quantity.",
+      );
     }
     return copyPosition(position);
   }
@@ -215,7 +221,8 @@ function validateDeficitLots(
     return { ...lot };
   });
   const total = normalized.reduce(
-    (sum, lot) => addSafeIntegers(sum, lot.remainingQuantity, "Deficit lot total"),
+    (sum, lot) =>
+      addSafeIntegers(sum, lot.remainingQuantity, "Deficit lot total"),
     0,
   );
   if (total + deferredDeficitQuantity !== position.unresolvedDeficitQuantity) {
@@ -312,8 +319,13 @@ function applyInboundPart(
   const costBasis = normalizeCostBasis(input.costBasis, input.quantity);
 
   if (costBasis.kind === "known") {
-    if (position.currency !== null && position.currency !== costBasis.currency) {
-      throw new Error("Inbound currency must match the current valuation currency.");
+    if (
+      position.currency !== null &&
+      position.currency !== costBasis.currency
+    ) {
+      throw new Error(
+        "Inbound currency must match the current valuation currency.",
+      );
     }
   }
 
@@ -404,8 +416,8 @@ function applyInboundPart(
     costedQuantity: nextCostedQuantity,
     currency:
       nextCostedQuantity > 0
-        ? position.currency ??
-          (costBasis.kind === "known" ? costBasis.currency : null)
+        ? (position.currency ??
+          (costBasis.kind === "known" ? costBasis.currency : null))
         : null,
     knownCostPool: nextKnownCostPool,
     uncostedQuantity: addSafeIntegers(
@@ -469,11 +481,7 @@ export function getWeightedAverageUnitCost(
   if (position.costedQuantity === 0) {
     return null;
   }
-  return roundProportion(
-    position.knownCostPool,
-    1,
-    position.costedQuantity,
-  );
+  return roundProportion(position.knownCostPool, 1, position.costedQuantity);
 }
 
 export function knownUnitCostBasis(args: {
@@ -593,10 +601,7 @@ export function applyOutboundValuation(
   assertNonemptyString(input.outboundEffectId, "Outbound effect id");
   assertNonnegativeSafeInteger(input.occurredAt, "Outbound occurrence time");
 
-  const uncostedQuantity = Math.min(
-    position.uncostedQuantity,
-    input.quantity,
-  );
+  const uncostedQuantity = Math.min(position.uncostedQuantity, input.quantity);
   const quantityAfterUncosted = input.quantity - uncostedQuantity;
   const costedQuantity = Math.min(
     position.costedQuantity,
@@ -692,7 +697,9 @@ export function applyReturnValuation(
     "Original outbound quantity",
   );
   if (input.quantity > originalQuantity) {
-    throw new Error("Return quantity cannot exceed the original outbound basis.");
+    throw new Error(
+      "Return quantity cannot exceed the original outbound basis.",
+    );
   }
 
   const restoredUncostedQuantity = Math.min(
@@ -735,7 +742,9 @@ export function applyReturnValuation(
 
   if (restoredCostedQuantity > 0) {
     if (originalBasis.currency === null) {
-      throw new Error("Original outbound currency is required for known return cost.");
+      throw new Error(
+        "Original outbound currency is required for known return cost.",
+      );
     }
     const knownResult = applyInboundPart(currentPosition, {
       costBasis: knownExtendedCostBasis({
@@ -789,11 +798,19 @@ export function applyValuationCorrection(
   assertNonemptyString(input.effectId, "Correction effect id");
   assertNonemptyString(input.reason, "Correction reason");
   assertNonnegativeSafeInteger(input.occurredAt, "Correction occurrence time");
-  assertNonnegativeSafeInteger(input.costedQuantity, "Corrected costed quantity");
-  assertNonnegativeSafeInteger(input.knownCostPool, "Corrected known cost pool");
+  assertNonnegativeSafeInteger(
+    input.costedQuantity,
+    "Corrected costed quantity",
+  );
+  assertNonnegativeSafeInteger(
+    input.knownCostPool,
+    "Corrected known cost pool",
+  );
 
   if (position.unresolvedDeficitQuantity > 0) {
-    throw new Error("Manual valuation correction cannot cost unresolved deficit.");
+    throw new Error(
+      "Manual valuation correction cannot cost unresolved deficit.",
+    );
   }
   const onHandQuantity = addSafeIntegers(
     position.costedQuantity,
@@ -801,7 +818,9 @@ export function applyValuationCorrection(
     "On-hand quantity",
   );
   if (input.costedQuantity > onHandQuantity) {
-    throw new Error("Corrected costed quantity cannot exceed on-hand quantity.");
+    throw new Error(
+      "Corrected costed quantity cannot exceed on-hand quantity.",
+    );
   }
 
   const nextPosition = normalizeAndValidatePosition({
@@ -814,6 +833,110 @@ export function applyValuationCorrection(
     knownCostPool: input.knownCostPool,
     uncostedQuantity: onHandQuantity - input.costedQuantity,
     unresolvedDeficitQuantity: position.unresolvedDeficitQuantity,
+  });
+
+  return {
+    evidence: {
+      actorId: input.actorId.trim(),
+      effectId: input.effectId.trim(),
+      newBasis: copyPosition(nextPosition),
+      occurredAt: input.occurredAt,
+      priorBasis: copyPosition(position),
+      reason: input.reason.trim(),
+    },
+    position: nextPosition,
+  };
+}
+
+export type ExactValuationBasisTarget = {
+  costedQuantity: number;
+  currency: string | null;
+  knownCostPool: number;
+  uncostedQuantity: number;
+};
+
+export type ExactValuationBasisCorrectionInput = {
+  actorId: string;
+  effectId: string;
+  expectedCurrentBasis: InventoryValuationPosition;
+  occurredAt: number;
+  reason: string;
+  targetBasis: ExactValuationBasisTarget;
+};
+
+function valuationPositionsEqual(
+  left: InventoryValuationPosition,
+  right: InventoryValuationPosition,
+): boolean {
+  return (
+    left.basisVersion === right.basisVersion &&
+    left.costedQuantity === right.costedQuantity &&
+    left.currency === right.currency &&
+    left.knownCostPool === right.knownCostPool &&
+    left.uncostedQuantity === right.uncostedQuantity &&
+    left.unresolvedDeficitQuantity === right.unresolvedDeficitQuantity
+  );
+}
+
+export function applyExactValuationBasisCorrection(
+  positionInput: InventoryValuationPosition,
+  input: ExactValuationBasisCorrectionInput,
+): ValuationCorrectionResult {
+  const position = normalizeAndValidatePosition(positionInput);
+  const expectedCurrentBasis = normalizeAndValidatePosition(
+    input.expectedCurrentBasis,
+  );
+  if (!valuationPositionsEqual(position, expectedCurrentBasis)) {
+    throw new Error(
+      "Exact valuation basis correction is stale; current basis changed.",
+    );
+  }
+  if (position.unresolvedDeficitQuantity > 0) {
+    throw new Error(
+      "Exact valuation basis correction cannot restore unresolved deficit.",
+    );
+  }
+
+  assertNonemptyString(input.actorId, "Correction actor id");
+  assertNonemptyString(input.effectId, "Correction effect id");
+  assertNonemptyString(input.reason, "Correction reason");
+  assertNonnegativeSafeInteger(input.occurredAt, "Correction occurrence time");
+  assertNonnegativeSafeInteger(
+    input.targetBasis.costedQuantity,
+    "Target costed quantity",
+  );
+  assertNonnegativeSafeInteger(
+    input.targetBasis.knownCostPool,
+    "Target known cost pool",
+  );
+  assertNonnegativeSafeInteger(
+    input.targetBasis.uncostedQuantity,
+    "Target uncosted quantity",
+  );
+
+  const currentOnHandQuantity = addSafeIntegers(
+    position.costedQuantity,
+    position.uncostedQuantity,
+    "Current on-hand quantity",
+  );
+  const targetOnHandQuantity = addSafeIntegers(
+    input.targetBasis.costedQuantity,
+    input.targetBasis.uncostedQuantity,
+    "Target on-hand quantity",
+  );
+  if (targetOnHandQuantity !== currentOnHandQuantity) {
+    throw new Error(
+      "Exact valuation basis correction must preserve on-hand quantity.",
+    );
+  }
+
+  const nextPosition = normalizeAndValidatePosition({
+    basisVersion: incrementBasisVersion(position.basisVersion),
+    costedQuantity: input.targetBasis.costedQuantity,
+    currency: input.targetBasis.currency,
+    knownCostPool: input.targetBasis.knownCostPool,
+    uncostedQuantity: input.targetBasis.uncostedQuantity,
+    unresolvedDeficitQuantity: 0,
   });
 
   return {

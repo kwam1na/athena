@@ -1,12 +1,14 @@
 ---
 title: "Athena Inventory Import Review Versions"
 date: 2026-06-07
+last_updated: 2026-07-28
 category: architecture
 module: athena-webapp
 problem_type: legacy_inventory_import
 component: operations
 resolution_type: durable_review_boundary
 severity: medium
+delivery_diff_fingerprint: 22b8db255dbbd2a8c4312fa820ce0bef3288792b5e22f04d61adc449965c0339
 tags:
   - inventory
   - imports
@@ -49,9 +51,14 @@ Split import review from import execution:
 - Let each review row capture separate source choices for product name, quantity,
   and price. A row is ready for handoff only after every differing field has a
   source decision, or the row is explicitly skipped.
-- Save the current export as an `inventoryImportReviewVersion` record that
-  stores raw content, parsed row data, file metadata, notes, counts, and actor
-  context.
+- Save file metadata, notes, counts, and actor context on the
+  `inventoryImportReviewVersion` record. Store raw content and row decisions in
+  bounded `inventoryImportReviewVersionPayloadChunk` child records so realistic
+  review payloads cannot cross Convex's 1 MiB document limit.
+- Stage payload child records through resumable public mutations capped below
+  256 KiB per call, then finalize the version from at most 8 MiB of aggregate
+  payload. This leaves transaction headroom for document/query overhead and
+  keeps the original browser save path off oversized Convex arguments.
 - Load the latest saved review version for the store so review state survives a
   device refresh or handoff.
 - Keep the destructive import mutation available only for a future dedicated
@@ -77,8 +84,10 @@ a dedicated workflow with explicit review and confirmation steps.
 
 - Keep legacy import parsing tolerant of alternate headers and missing optional
   fields.
-- Store raw export content with parsed rows so later reviewers can compare the
-  normalized preview against the source file.
+- Preserve raw export content with parsed rows so later reviewers can compare
+  the normalized preview against the source file, but chunk both payloads into
+  bounded child documents instead of embedding unbounded data on the review
+  version.
 - Store row-level draft decisions with separate name, quantity, price, and action
   fields. Do not flatten those decisions into notes only; notes are audit copy,
   while structured fields are what later import execution should consume.

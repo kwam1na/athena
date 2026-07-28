@@ -636,6 +636,38 @@ export const listPosServiceCatalogSnapshotReadDefinition = definePosRead(
   "serviceOps.catalog.listPosServiceCatalogSnapshot.read",
 );
 
+function defineInventoryCostOverlayRead(
+  functionName:
+    | "getLatestCostOverlaySourceDescriptor"
+    | "getCostOverlayRun"
+    | "resolveCostOverlayRunFromUrl"
+    | "listRecentCostOverlayRuns"
+    | "listCostOverlayRows"
+    | "getCostOverlayUndoPreview",
+) {
+  return defineReadOperation({
+    functionName: `inventory/inventoryImportCostOverlay:${functionName}`,
+    operationId: `inventory.inventoryImportCostOverlay.${functionName}.read`,
+    access: { kind: "read" as const, intent: "inventory.cost_overlay.view" },
+    scope: { kind: "store" as const, storeIdArg: "storeId" },
+    actors: { normalUser: "admit" as const, sharedDemo: "deny" as const },
+  });
+}
+
+export const getCostOverlayRunReadDefinition =
+  defineInventoryCostOverlayRead("getCostOverlayRun");
+export const resolveCostOverlayRunFromUrlReadDefinition =
+  defineInventoryCostOverlayRead("resolveCostOverlayRunFromUrl");
+export const getLatestCostOverlaySourceDescriptorReadDefinition =
+  defineInventoryCostOverlayRead("getLatestCostOverlaySourceDescriptor");
+export const listRecentCostOverlayRunsReadDefinition =
+  defineInventoryCostOverlayRead("listRecentCostOverlayRuns");
+export const listCostOverlayRowsReadDefinition = defineInventoryCostOverlayRead(
+  "listCostOverlayRows",
+);
+export const getCostOverlayUndoPreviewReadDefinition =
+  defineInventoryCostOverlayRead("getCostOverlayUndoPreview");
+
 export const OPERATION_READ_ADMISSION_DEFINITIONS = [
   getDailyOperationsSnapshotReadDefinition,
   getDailyOperationsDetailSnapshotReadDefinition,
@@ -710,6 +742,12 @@ export const OPERATION_READ_ADMISSION_DEFINITIONS = [
   getNewestOnlineOrderReadDefinition,
   getOnlineOrderMetricsReadDefinition,
   listPosServiceCatalogSnapshotReadDefinition,
+  getCostOverlayRunReadDefinition,
+  resolveCostOverlayRunFromUrlReadDefinition,
+  getLatestCostOverlaySourceDescriptorReadDefinition,
+  listRecentCostOverlayRunsReadDefinition,
+  listCostOverlayRowsReadDefinition,
+  getCostOverlayUndoPreviewReadDefinition,
 ] as const;
 
 export function validateReadOperationDefinition(

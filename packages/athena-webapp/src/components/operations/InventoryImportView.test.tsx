@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ok, userError } from "~/shared/commandResult";
+import { buildInventoryImportReviewUploadKey } from "@/lib/inventory-import/inventoryImportReviewUploadKey";
 import { InventoryImportView } from "./InventoryImportView";
 
 const mockedHooks = vi.hoisted(() => ({
@@ -11,6 +12,7 @@ const mockedHooks = vi.hoisted(() => ({
   latestReviewVersion: null as unknown,
   navigate: vi.fn(),
   saveReviewVersion: vi.fn(),
+  stageReviewVersionPayloadChunk: vi.fn(),
   stageReviewRowsForPos: vi.fn(),
   search: {} as Record<string, unknown>,
   useMutation: vi.fn(),
@@ -25,6 +27,7 @@ const mockedHooks = vi.hoisted(() => ({
 
 vi.mock("convex/react", () => ({
   useMutation: (...args: unknown[]) => mockedHooks.useMutation(...args),
+  useQueries: () => ({}),
   useQuery: (...args: unknown[]) => mockedHooks.useQuery(...args),
 }));
 
@@ -126,6 +129,7 @@ describe("InventoryImportView", () => {
     window.scrollTo = vi.fn();
     window.sessionStorage.clear();
     mockedHooks.saveReviewVersion.mockReset();
+    mockedHooks.stageReviewVersionPayloadChunk.mockReset();
     mockedHooks.stageReviewRowsForPos.mockReset();
     mockedHooks.navigate.mockReset();
     mockedHooks.useMutation.mockReset();
@@ -134,10 +138,17 @@ describe("InventoryImportView", () => {
     mockedHooks.inventorySkuContext = [];
     mockedHooks.latestReviewVersion = null;
     mockedHooks.search = {};
+    mockedHooks.stageReviewVersionPayloadChunk.mockResolvedValue(
+      ok({ alreadyStaged: false, chunkIndex: 0 }),
+    );
     let mutationCallIndex = 0;
     mockedHooks.useMutation.mockImplementation(() => {
       mutationCallIndex += 1;
-      return mutationCallIndex % 2 === 1
+      const mutationIndex = (mutationCallIndex - 1) % 3;
+      if (mutationIndex === 0) {
+        return mockedHooks.stageReviewVersionPayloadChunk;
+      }
+      return mutationIndex === 1
         ? mockedHooks.saveReviewVersion
         : mockedHooks.stageReviewRowsForPos;
     });
@@ -161,6 +172,41 @@ describe("InventoryImportView", () => {
       isLoadingAccess: false,
     });
     mockedHooks.useSharedDemoContext.mockReturnValue(null);
+  });
+
+  it("keys review payload retries from normalized content, decisions, and finalize metadata", async () => {
+    const base = {
+      fileName: " legacy.csv ",
+      importKey: "review-key",
+      issueCount: 1,
+      notes: " operator note ",
+      rawContent: "sku,cost\nA,4",
+      rawContentChunkCount: 1,
+      rowCount: 1,
+      rowDecisionChunkCount: 0,
+      rowDecisions: [],
+      sourceFormat: "csv" as const,
+    };
+
+    expect(await buildInventoryImportReviewUploadKey(base)).toBe(
+      await buildInventoryImportReviewUploadKey({
+        ...base,
+        fileName: "legacy.csv",
+        notes: "operator note",
+      }),
+    );
+    expect(
+      await buildInventoryImportReviewUploadKey({
+        ...base,
+        fileName: "different.csv",
+      }),
+    ).not.toBe(await buildInventoryImportReviewUploadKey(base));
+    expect(
+      await buildInventoryImportReviewUploadKey({
+        ...base,
+        sourceFormat: "json",
+      }),
+    ).not.toBe(await buildInventoryImportReviewUploadKey(base));
   });
 
   it("keeps inventory import view-only in the shared demo", () => {
@@ -698,7 +744,13 @@ describe("InventoryImportView", () => {
             "Row 2 Comb: Name from import; Qty from import",
             "Row 3 New Clip: Create item",
           ].join("\n"),
-          rowDecisions: [
+        }),
+      );
+      expect(mockedHooks.stageReviewVersionPayloadChunk).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chunk: {
+            kind: "row_decisions",
+            rowDecisions: [
             expect.objectContaining({
               nameSource: "import",
               productName: "Comb",
@@ -710,7 +762,8 @@ describe("InventoryImportView", () => {
               productName: "New Clip",
               rowNumber: 3,
             }),
-          ],
+            ],
+          },
         }),
       );
     });
@@ -755,24 +808,30 @@ describe("InventoryImportView", () => {
     await user.click(screen.getByRole("button", { name: "Save for import handoff" }));
 
     await waitFor(() => {
-      expect(mockedHooks.saveReviewVersion).toHaveBeenCalledWith(
+      expect(mockedHooks.stageReviewVersionPayloadChunk).toHaveBeenCalledWith(
         expect.objectContaining({
-          rowDecisions: expect.arrayContaining([
-            expect.objectContaining({
-              action: "create_item",
-              productName: "New Product 1",
-              rowNumber: 2,
-            }),
-            expect.objectContaining({
-              action: "create_item",
-              productName: "New Product 12",
-              rowNumber: 13,
-            }),
-          ]),
+          chunk: expect.objectContaining({
+            kind: "row_decisions",
+            rowDecisions: expect.arrayContaining([
+              expect.objectContaining({
+                action: "create_item",
+                productName: "New Product 1",
+                rowNumber: 2,
+              }),
+              expect.objectContaining({
+                action: "create_item",
+                productName: "New Product 12",
+                rowNumber: 13,
+              }),
+            ]),
+          }),
         }),
       );
     });
-    const savedRows = mockedHooks.saveReviewVersion.mock.calls.at(-1)?.[0]?.rowDecisions;
+    const savedRows = mockedHooks.stageReviewVersionPayloadChunk.mock.calls
+      .map(([args]) => args.chunk)
+      .filter((chunk) => chunk.kind === "row_decisions")
+      .flatMap((chunk) => chunk.rowDecisions);
     expect(savedRows).toHaveLength(12);
   });
 
@@ -948,15 +1007,18 @@ describe("InventoryImportView", () => {
 
     await waitFor(
       () => {
-        expect(mockedHooks.saveReviewVersion).toHaveBeenCalledWith(
+        expect(mockedHooks.stageReviewVersionPayloadChunk).toHaveBeenCalledWith(
           expect.objectContaining({
-            rowDecisions: [
-              expect.objectContaining({
-                productName: "Comb",
-                quantitySource: "import",
-                rowNumber: 2,
-              }),
-            ],
+            chunk: expect.objectContaining({
+              kind: "row_decisions",
+              rowDecisions: [
+                expect.objectContaining({
+                  productName: "Comb",
+                  quantitySource: "import",
+                  rowNumber: 2,
+                }),
+              ],
+            }),
           }),
         );
       },
@@ -1136,11 +1198,18 @@ describe("InventoryImportView", () => {
         expect.objectContaining({
           fileName: "manual.csv",
           issueCount: 0,
-          rawContent: content,
+          rawContentChunkCount: 1,
           rowCount: 1,
+          rowDecisionChunkCount: 0,
           sourceFormat: "csv",
           storeId: "store-1",
           terminalId: "terminal-1",
+        }),
+      );
+      expect(mockedHooks.stageReviewVersionPayloadChunk).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chunk: { kind: "raw_content", rawContent: content },
+          chunkIndex: 0,
         }),
       );
     });
@@ -1275,6 +1344,37 @@ describe("InventoryImportView", () => {
     expect(screen.getByRole("heading", { name: "Inventory review" })).toBeInTheDocument();
     expect(screen.getByText("Loading inventory review")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Inventory import" })).not.toBeInTheDocument();
+  });
+
+  it("shows the saved-review cost overlay entry only to full administrators", () => {
+    mockedHooks.latestReviewVersion = {
+      _id: "review-version-7",
+      createdAt: Date.UTC(2026, 6, 28),
+      fileName: "legacy.csv",
+      issueCount: 0,
+      importKey: "review-key",
+      rawContent: ["product_name,sku,price,qty,cost", "Comb,COMB-1,25,4,10"].join(
+        "\n",
+      ),
+      rowCount: 2,
+      sourceFormat: "csv",
+      versionNumber: 7,
+    };
+
+    const { rerender } = render(<InventoryImportView />);
+    expect(
+      screen.getByRole("link", { name: "Open cost overlay" }),
+    ).toBeInTheDocument();
+
+    mockedHooks.useProtectedAdminPageState.mockReturnValue({
+      hasFullAdminAccess: false,
+      isAuthenticated: true,
+      isLoadingAccess: false,
+    });
+    rerender(<InventoryImportView />);
+    expect(
+      screen.queryByRole("link", { name: "Open cost overlay" }),
+    ).not.toBeInTheDocument();
   });
 
   it("uses the manager elevation terminal when saving without a terminal hook value", async () => {

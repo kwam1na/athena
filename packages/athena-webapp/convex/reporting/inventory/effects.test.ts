@@ -6,6 +6,7 @@ import type { MutationCtx } from "../../_generated/server";
 import { knownUnitCostBasis, uncostedBasis } from "./valuation";
 import {
   applyInventoryEffectWithCtx,
+  applySkuValuationBasisCompensationWithCtx,
   applySkuValuationCorrectionWithCtx,
   type ApplyInventoryEffectArgs,
 } from "./effects";
@@ -685,6 +686,297 @@ describe("atomic inventory effects", () => {
         storeId: "store-1" as Id<"store">,
       }),
     ).rejects.toThrow(/conflicts with existing content/i);
+  });
+
+  it("restores an exact mixed basis with missing SKU cost and preserves all counts", async () => {
+    const { ctx, scheduler, tables } = createEffectCtx({
+      product: new Map([
+        [
+          "product-1",
+          {
+            _id: "product-1",
+            organizationId: "organization-1",
+            storeId: "store-1",
+          },
+        ],
+      ]),
+      productSku: new Map([
+        [
+          "sku-1",
+          {
+            ...productSkuSeed(3, 2).get("sku-1"),
+            unitCost: 200,
+          },
+        ],
+      ]),
+      reportingInventoryPosition: new Map([
+        [
+          "position-1",
+          {
+            _id: "position-1",
+            costedQuantity: 3,
+            currencyCode: "GHS",
+            currencyMinorUnitScale: 2,
+            knownCostPoolMinor: 600,
+            lastEffectAt: 900,
+            mode: "authoritative",
+            onHandQuantity: 3,
+            organizationId: "organization-1",
+            productSkuId: "sku-1",
+            sellableQuantity: 2,
+            storeId: "store-1",
+            uncostedQuantity: 0,
+            unresolvedDeficitQuantity: 0,
+            updatedAt: 900,
+            valuationStatus: "current",
+            version: 8,
+          },
+        ],
+      ]),
+    });
+
+    const args = {
+      actorUserId: "user-1" as Id<"athenaUser">,
+      currencyMinorUnitScale: 2,
+      expectedCurrentBasis: {
+        version: 8,
+        costedQuantity: 3,
+        currencyCode: "GHS",
+        knownCostPoolMinor: 600,
+        uncostedQuantity: 0,
+      },
+      expectedInventoryCount: 3,
+      expectedQuantityAvailable: 2,
+      expectedUnitCostMinor: 200,
+      occurrenceAt: 2_000,
+      organizationId: "organization-1" as Id<"organization">,
+      productSkuId: "sku-1" as Id<"productSku">,
+      reason: "Undo inventory import cost overlay",
+      requestKey: "cost-overlay:undo:run-1:row-1",
+      storeId: "store-1" as Id<"store">,
+      targetBasis: {
+        costedQuantity: 1,
+        currencyCode: "GHS",
+        knownCostPoolMinor: 101,
+        uncostedQuantity: 2,
+      },
+      targetUnitCostMinor: null,
+    };
+
+    const result = await applySkuValuationBasisCompensationWithCtx(ctx, args);
+
+    expect(result.replayed).toBe(false);
+    expect(tables.productSku.get("sku-1")).toMatchObject({
+      inventoryCount: 3,
+      quantityAvailable: 2,
+      unitCost: undefined,
+    });
+    expect(tables.reportingInventoryPosition.get("position-1")).toMatchObject({
+      costedQuantity: 1,
+      currencyCode: "GHS",
+      knownCostPoolMinor: 101,
+      onHandQuantity: 3,
+      sellableQuantity: 2,
+      uncostedQuantity: 2,
+      version: 9,
+    });
+    expect(tables.inventoryMovement).toHaveLength(0);
+    expect(tables.reportingInventoryEffect).toHaveLength(1);
+    expect(tables.reportingInventoryPositionRevision).toHaveLength(1);
+    expect(tables.reportingSkuValuationCorrection).toHaveLength(1);
+    expect(tables.skuActivityEvent).toHaveLength(1);
+    expect(scheduler.runAfter).toHaveBeenCalledTimes(1);
+    expect(
+      Array.from(tables.reportingInventoryEffect.values())[0],
+    ).toMatchObject({
+      costedQuantityDelta: -2,
+      knownCostPoolDeltaMinor: -499,
+      physicalQuantityDelta: 0,
+      sellableQuantityDelta: 0,
+      uncostedQuantityDelta: 2,
+    });
+
+    const replay = await applySkuValuationBasisCompensationWithCtx(ctx, {
+      ...args,
+      occurrenceAt: 3_000,
+      reason: " Undo inventory import cost overlay ",
+      requestKey: " cost-overlay:undo:run-1:row-1 ",
+    });
+    expect(replay.replayed).toBe(true);
+    expect(tables.reportingInventoryEffect).toHaveLength(1);
+    expect(tables.reportingSkuValuationCorrection).toHaveLength(1);
+    expect(scheduler.runAfter).toHaveBeenCalledTimes(1);
+
+    await expect(
+      applySkuValuationBasisCompensationWithCtx(ctx, {
+        ...args,
+        targetBasis: { ...args.targetBasis, knownCostPoolMinor: 102 },
+      }),
+    ).rejects.toThrow(/conflicts with existing content/i);
+  });
+
+  it("preserves explicit zero SKU cost during exact-basis compensation", async () => {
+    const { ctx, tables } = createEffectCtx({
+      product: new Map([
+        [
+          "product-1",
+          {
+            _id: "product-1",
+            organizationId: "organization-1",
+            storeId: "store-1",
+          },
+        ],
+      ]),
+      productSku: new Map([
+        [
+          "sku-1",
+          {
+            ...productSkuSeed(3, 2).get("sku-1"),
+            unitCost: 200,
+          },
+        ],
+      ]),
+      reportingInventoryPosition: new Map([
+        [
+          "position-1",
+          {
+            _id: "position-1",
+            costedQuantity: 3,
+            currencyCode: "GHS",
+            currencyMinorUnitScale: 2,
+            knownCostPoolMinor: 600,
+            lastEffectAt: 900,
+            mode: "authoritative",
+            onHandQuantity: 3,
+            organizationId: "organization-1",
+            productSkuId: "sku-1",
+            sellableQuantity: 2,
+            storeId: "store-1",
+            uncostedQuantity: 0,
+            unresolvedDeficitQuantity: 0,
+            updatedAt: 900,
+            valuationStatus: "current",
+            version: 8,
+          },
+        ],
+      ]),
+    });
+
+    await applySkuValuationBasisCompensationWithCtx(ctx, {
+      actorUserId: "user-1" as Id<"athenaUser">,
+      currencyMinorUnitScale: 2,
+      expectedCurrentBasis: {
+        version: 8,
+        costedQuantity: 3,
+        currencyCode: "GHS",
+        knownCostPoolMinor: 600,
+        uncostedQuantity: 0,
+      },
+      expectedInventoryCount: 3,
+      expectedQuantityAvailable: 2,
+      expectedUnitCostMinor: 200,
+      occurrenceAt: 2_000,
+      organizationId: "organization-1" as Id<"organization">,
+      productSkuId: "sku-1" as Id<"productSku">,
+      reason: "Undo inventory import cost overlay",
+      requestKey: "cost-overlay:undo:run-1:row-zero",
+      storeId: "store-1" as Id<"store">,
+      targetBasis: {
+        costedQuantity: 3,
+        currencyCode: "GHS",
+        knownCostPoolMinor: 0,
+        uncostedQuantity: 0,
+      },
+      targetUnitCostMinor: 0,
+    });
+
+    expect(tables.productSku.get("sku-1")?.unitCost).toBe(0);
+    expect(tables.reportingInventoryPosition.get("position-1")).toMatchObject({
+      costedQuantity: 3,
+      knownCostPoolMinor: 0,
+      uncostedQuantity: 0,
+    });
+  });
+
+  it("rejects stale compensation before writing any evidence", async () => {
+    const { ctx, tables } = createEffectCtx({
+      product: new Map([
+        [
+          "product-1",
+          {
+            _id: "product-1",
+            organizationId: "organization-1",
+            storeId: "store-1",
+          },
+        ],
+      ]),
+      productSku: new Map([
+        [
+          "sku-1",
+          {
+            ...productSkuSeed(3, 2).get("sku-1"),
+            unitCost: 200,
+          },
+        ],
+      ]),
+      reportingInventoryPosition: new Map([
+        [
+          "position-1",
+          {
+            _id: "position-1",
+            costedQuantity: 3,
+            currencyCode: "GHS",
+            knownCostPoolMinor: 600,
+            lastEffectAt: 900,
+            mode: "authoritative",
+            onHandQuantity: 3,
+            organizationId: "organization-1",
+            productSkuId: "sku-1",
+            sellableQuantity: 2,
+            storeId: "store-1",
+            uncostedQuantity: 0,
+            unresolvedDeficitQuantity: 0,
+            updatedAt: 900,
+            valuationStatus: "current",
+            version: 8,
+          },
+        ],
+      ]),
+    });
+
+    await expect(
+      applySkuValuationBasisCompensationWithCtx(ctx, {
+        actorUserId: "user-1" as Id<"athenaUser">,
+        currencyMinorUnitScale: 2,
+        expectedCurrentBasis: {
+          version: 7,
+          costedQuantity: 3,
+          currencyCode: "GHS",
+          knownCostPoolMinor: 600,
+          uncostedQuantity: 0,
+        },
+        expectedInventoryCount: 3,
+        expectedQuantityAvailable: 2,
+        expectedUnitCostMinor: 200,
+        occurrenceAt: 2_000,
+        organizationId: "organization-1" as Id<"organization">,
+        productSkuId: "sku-1" as Id<"productSku">,
+        reason: "Undo inventory import cost overlay",
+        requestKey: "cost-overlay:undo:run-1:stale-row",
+        storeId: "store-1" as Id<"store">,
+        targetBasis: {
+          costedQuantity: 1,
+          currencyCode: "GHS",
+          knownCostPoolMinor: 101,
+          uncostedQuantity: 2,
+        },
+        targetUnitCostMinor: null,
+      }),
+    ).rejects.toThrow(/stale/i);
+
+    expect(tables.reportingInventoryEffect).toHaveLength(0);
+    expect(tables.reportingSkuValuationCorrection).toHaveLength(0);
+    expect(tables.skuActivityEvent).toHaveLength(0);
   });
 
   it("returns the original effect on identical replay without applying stock twice", async () => {

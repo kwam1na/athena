@@ -1,0 +1,931 @@
+<!doctype html>
+<html
+  lang="en"
+  data-athena-landed-change-report="v1"
+  data-athena-report-diff-fingerprint="22b8db255dbbd2a8c4312fa820ce0bef3288792b5e22f04d61adc449965c0339"
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Inventory import cost overlay — delivery candidate report</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #17211d;
+        --muted: #5f6d66;
+        --line: #d9e1dc;
+        --paper: #f8faf8;
+        --panel: #ffffff;
+        --accent: #176b4a;
+        --accent-soft: #e7f3ec;
+        --warn: #805d10;
+        --warn-soft: #fff7dd;
+        --danger: #9d342f;
+        --danger-soft: #fff0ee;
+        --code: #eff3f0;
+        --shadow: 0 18px 44px rgba(23, 33, 29, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font:
+          15px/1.62 Inter, ui-sans-serif, system-ui, -apple-system,
+          BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      .shell {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 34px 0 72px;
+      }
+
+      .hero,
+      .section {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+
+      .hero {
+        padding: clamp(26px, 5vw, 54px);
+        border-radius: 22px;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        line-height: 1.18;
+        letter-spacing: -0.025em;
+      }
+
+      h1 {
+        max-width: 820px;
+        margin: 0;
+        font-size: clamp(34px, 6vw, 64px);
+      }
+
+      h2 {
+        margin: 0 0 18px;
+        font-size: clamp(23px, 3.2vw, 34px);
+      }
+
+      h3 {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+
+      .lede {
+        max-width: 780px;
+        margin: 18px 0 0;
+        color: var(--muted);
+        font-size: 18px;
+      }
+
+      .pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 24px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 5px 11px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fbfcfb;
+        font-size: 12px;
+        font-weight: 750;
+      }
+
+      .pill.good {
+        border-color: #b8d8c7;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .pill.pending {
+        border-color: #ead493;
+        background: var(--warn-soft);
+        color: var(--warn);
+      }
+
+      .meta {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 28px;
+      }
+
+      .meta div,
+      .metric,
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fbfcfb;
+      }
+
+      .meta div {
+        padding: 13px;
+      }
+
+      .meta dt {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .meta dd {
+        margin: 4px 0 0;
+        font-weight: 720;
+        overflow-wrap: anywhere;
+      }
+
+      .toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        margin: 22px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .section {
+        margin-top: 20px;
+        padding: clamp(24px, 4vw, 42px);
+        border-radius: 18px;
+      }
+
+      .grid-2,
+      .grid-3,
+      .metrics {
+        display: grid;
+        gap: 14px;
+      }
+
+      .grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid-3,
+      .metrics {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .card,
+      .metric {
+        padding: 18px;
+      }
+
+      .card p,
+      .metric p {
+        margin: 6px 0 0;
+        color: var(--muted);
+      }
+
+      .metric strong {
+        display: block;
+        color: var(--accent);
+        font-size: 28px;
+        line-height: 1.1;
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 8px;
+        margin: 18px 0;
+        padding: 0;
+        list-style: none;
+        counter-reset: flow;
+      }
+
+      .flow li {
+        min-height: 116px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 13px;
+        background: #fbfcfb;
+        counter-increment: flow;
+      }
+
+      .flow li::before {
+        content: counter(flow);
+        display: grid;
+        width: 25px;
+        height: 25px;
+        margin-bottom: 10px;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--accent);
+        color: white;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 12px 10px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      code {
+        padding: 2px 5px;
+        border-radius: 5px;
+        background: var(--code);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.9em;
+      }
+
+      .callout {
+        margin: 18px 0;
+        padding: 16px 18px;
+        border-left: 4px solid var(--accent);
+        border-radius: 0 12px 12px 0;
+        background: var(--accent-soft);
+      }
+
+      .callout.warn {
+        border-color: var(--warn);
+        background: var(--warn-soft);
+      }
+
+      .callout.danger {
+        border-color: var(--danger);
+        background: var(--danger-soft);
+      }
+
+      .quiet {
+        color: var(--muted);
+      }
+
+      .quiz-question {
+        margin: 16px 0;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+      }
+
+      .quiz-question legend {
+        padding: 0 6px;
+        font-weight: 800;
+      }
+
+      .option {
+        display: flex;
+        gap: 9px;
+        margin: 9px 0;
+        cursor: pointer;
+      }
+
+      .explanation {
+        display: none;
+        margin: 10px 0 0;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: var(--code);
+        color: var(--muted);
+      }
+
+      .quiz-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-top: 18px;
+      }
+
+      button {
+        min-height: 42px;
+        padding: 9px 16px;
+        border: 1px solid var(--accent);
+        border-radius: 10px;
+        background: var(--accent);
+        color: white;
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+        transition: transform 140ms ease-out;
+      }
+
+      button.secondary {
+        background: white;
+        color: var(--accent);
+      }
+
+      button:active {
+        transform: scale(0.97);
+      }
+
+      #quizResult {
+        min-height: 24px;
+        font-weight: 800;
+      }
+
+      footer {
+        padding: 26px 4px 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 860px) {
+        .meta,
+        .grid-3,
+        .metrics {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .flow {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 620px) {
+        .shell {
+          width: min(100% - 18px, 1120px);
+          padding-top: 10px;
+        }
+
+        .meta,
+        .grid-2,
+        .grid-3,
+        .metrics,
+        .flow {
+          grid-template-columns: 1fr;
+        }
+
+        .section,
+        .hero {
+          border-radius: 14px;
+        }
+
+        table,
+        thead,
+        tbody,
+        tr,
+        th,
+        td {
+          display: block;
+        }
+
+        th {
+          display: none;
+        }
+
+        td {
+          padding-left: 0;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        button {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <p class="eyebrow">Delivery candidate · Athena operations</p>
+        <h1>This delivery candidate adds a safe legacy-cost workflow.</h1>
+        <p class="lede">
+          A full administrator chooses the exact legacy cost column, reviews a
+          frozen server-side run, applies valuation-safe SKU cost corrections,
+          and can compensate unchanged rows through a fenced best-effort undo.
+        </p>
+        <div class="pills">
+          <span class="pill good">Reviewer council: unanimous</span>
+          <span class="pill good">Focused validation: passed</span>
+          <span class="pill pending">PR: pending</span>
+          <span class="pill pending">Production deploy: pending</span>
+          <span class="pill pending">Browser validation: user-deferred</span>
+        </div>
+        <dl class="meta">
+          <div>
+            <dt>Branch</dt>
+            <dd>codex/inventory-import-cost-overlay</dd>
+          </div>
+          <div>
+            <dt>Linear batch</dt>
+            <dd>V26-1113–V26-1119</dd>
+          </div>
+          <div>
+            <dt>Status</dt>
+            <dd>Delivery candidate</dd>
+          </div>
+          <div>
+            <dt>Root alignment</dt>
+            <dd>Deferred until merge</dd>
+          </div>
+        </dl>
+        <ul class="toc">
+          <li><a href="#summary">Summary</a></li>
+          <li><a href="#model">Mental model</a></li>
+          <li><a href="#mechanics">Mechanics</a></li>
+          <li><a href="#boundaries">Failure boundaries</a></li>
+          <li><a href="#validation">Validation</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </header>
+
+      <section class="section" id="summary">
+        <p class="eyebrow">Executive summary</p>
+        <h2>One financial workflow, built on existing Athena rails.</h2>
+        <div class="grid-3">
+          <article class="card">
+            <h3>Source stays exact</h3>
+            <p>
+              CSV duplicate columns retain label and ordinal; JSON values retain
+              their path. Zero is valid. Missing, malformed, negative,
+              over-precision, out-of-range, and conflicting values remain
+              explicit evidence states.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Writes stay prospective</h3>
+            <p>
+              Apply uses the existing reporting-owned valuation correction. It
+              changes the SKU cost and prospective cost basis without rewriting
+              historical sale cost.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Undo stays compensating</h3>
+            <p>
+              Undo appends an exact-basis compensation only when SKU, valuation,
+              and lineage fingerprints still match. Changed rows become stale
+              exceptions instead of being overwritten.
+            </p>
+          </article>
+        </div>
+        <div class="callout">
+          <strong>Intentionally unchanged:</strong> stock counts, availability,
+          selling prices, product identity, historical sale cost, and the
+          existing manager-enabled onboarding flow are not rewritten by this
+          feature.
+        </div>
+      </section>
+
+      <section class="section" id="model">
+        <p class="eyebrow">Mental model</p>
+        <h2>A sealed manifest followed by fenced, one-row financial work.</h2>
+        <ol class="flow">
+          <li><strong>Choose</strong><br />Select the exact saved legacy column.</li>
+          <li><strong>Freeze</strong><br />Build one durable row per anchored SKU.</li>
+          <li><strong>Review</strong><br />Filter, search, and make truthful decisions.</li>
+          <li><strong>Seal</strong><br />Prepare a digest and aggregate impact.</li>
+          <li><strong>Apply</strong><br />Correct one SKU per transaction.</li>
+          <li><strong>Compensate</strong><br />Undo only unchanged post-apply rows.</li>
+        </ol>
+        <p class="quiet">
+          Epochs and worker generations act like track switches: queued work
+          from an earlier direction cannot cross into a later apply, retry, or
+          undo phase.
+        </p>
+      </section>
+
+      <section class="section" id="mechanics">
+        <p class="eyebrow">Layer-by-layer mechanics</p>
+        <h2>Where the behavior lives</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Layer</th>
+              <th>Key files</th>
+              <th>Responsibility</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Review transport</td>
+              <td><code>shared/inventoryImportReviewPayload.ts</code><br /><code>catalogImport.ts</code></td>
+              <td>UTF-8-safe chunks, deterministic upload identity, owner/store sessions, expiry, bounded legacy compatibility.</td>
+            </tr>
+            <tr>
+              <td>Source projection</td>
+              <td><code>shared/inventoryImportSource.ts</code></td>
+              <td>Exact column identity and strict cost interpretation shared by browser and server.</td>
+            </tr>
+            <tr>
+              <td>Run orchestration</td>
+              <td><code>inventoryImportCostOverlay.ts</code></td>
+              <td>Admitted public API, lifecycle, replay ledgers, filtering, bulk work, preview, retry, reopen, and abandon.</td>
+            </tr>
+            <tr>
+              <td>Construction</td>
+              <td><code>inventoryImportCostOverlayConstruction.ts</code></td>
+              <td>Node parsing boundary, frozen snapshot evidence, 5,000-anchor ceiling, bounded continuations and heartbeats.</td>
+            </tr>
+            <tr>
+              <td>Financial work</td>
+              <td><code>inventoryImportCostOverlayWork.ts</code><br /><code>reporting/inventory/effects.ts</code></td>
+              <td>One-row apply/undo transactions, exact-basis compensation, durable exceptions, SKU-search refresh.</td>
+            </tr>
+            <tr>
+              <td>Operator workspace</td>
+              <td><code>InventoryCostOverlayView.tsx</code></td>
+              <td>Full-admin source confirmation, server filtering, bounded bulk decisions, impact checkpoints, recovery, and undo scope.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Large review transport</h3>
+        <p>
+          The browser stages payload chunks at no more than 240 KiB each, with
+          an 8 MiB aggregate limit. Upload sessions are owner/store-bound,
+          capped at five active saves per operator/store, expire after one hour,
+          and clean up abandoned chunks. Small staged reviews can still hydrate
+          through the legacy latest-review API when the complete legacy response
+          fits the explicit 896 KiB compatibility envelope.
+        </p>
+
+        <h3>Decision truthfulness</h3>
+        <p>
+          System-owned <code>ineligible</code> is not a public command input. A
+          missing-cost row may use <code>selected_missing_cost</code>; a
+          known-cost row requires explicit <code>overwrite_selected</code>.
+          Server-side bulk work skips incompatible rows and records only actual
+          changes.
+        </p>
+
+        <h3>Partial undo authority</h3>
+        <p>
+          Finalization trusts an overlay cost only when linked run provenance,
+          row state, provisional markers, and current SKU cost agree. That
+          remains true during <code>undoing</code> and for
+          <code>undo_exception</code> rows after a partial undo; successfully
+          undone, mismatched, or superseded rows stop being authoritative.
+        </p>
+      </section>
+
+      <section class="section" id="boundaries">
+        <p class="eyebrow">Failure boundaries</p>
+        <h2>Bad inputs and interrupted work fail into visible states.</h2>
+        <div class="grid-2">
+          <article class="card">
+            <h3>Hard scope ceilings</h3>
+            <p>
+              8 MiB saved review, 36 transport chunks, 5,000 construction
+              anchors, 100 frozen lineages per SKU, 10 active runs per store,
+              and 10 URL-restored UI pages.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Bounded continuations</h3>
+            <p>
+              Construction commits up to 1,000 rows per action; bulk decisions
+              use 50-row batches; undo preview uses 10-row batches; financial
+              apply and undo stay one row per transaction.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Recovery leases</h3>
+            <p>
+              Heartbeats classify interrupted work after 60 seconds. Retry
+              atomically advances an epoch or generation before scheduling, so
+              repeated recovery does not fork continuation chains.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Best-effort undo</h3>
+            <p>
+              Any post-apply SKU, valuation, deficit, or lineage drift makes the
+              row stale. The worker records the exception and continues; it does
+              not force a global rollback.
+            </p>
+          </article>
+        </div>
+        <div class="callout warn">
+          <strong>Operational note:</strong> worker batch size favors atomicity
+          and recoverability over throughput. The first production-scale run
+          should be monitored for scheduler latency. Browser validation remains
+          explicitly assigned to the operator for this delivery.
+        </div>
+        <h3>Three different failure states</h3>
+        <ul>
+          <li>
+            <strong>Apply exceptions</strong> are row-local outcomes such as
+            <code>stale_before_apply</code>, a deficit-blocked correction, or a
+            valuation-domain error. The run continues and records the exception.
+          </li>
+          <li>
+            <strong>Interrupted work</strong> is a non-terminal phase whose
+            heartbeat went stale. Resume claims a new epoch or generation and
+            continues from the durable cursor.
+          </li>
+          <li>
+            <strong>Undo exceptions</strong> are terminal evidence that a row
+            could not be safely compensated. Still-effective
+            <code>undo_exception</code> rows keep their overlay authority until
+            successful undo or superseding SKU evidence removes it.
+          </li>
+        </ul>
+        <p>
+          Hard ceilings fail closed. Oversized review transport is rejected with
+          staged-save guidance; construction above 5,000 anchors is durably
+          abandoned with an explicit scope reason, requiring the operator to
+          narrow or restart the run.
+        </p>
+        <h3>Authorization after confirmation</h3>
+        <p>
+          Revoked or unauthorized users immediately lose reads and new public
+          commands. Already-confirmed internal work continues against frozen
+          store, actor, source, epoch, and row evidence so a later role change
+          cannot leave a half-applied financial run without an owner.
+        </p>
+      </section>
+
+      <section class="section" id="validation">
+        <p class="eyebrow">Validation and review evidence</p>
+        <h2>What is proven, and what is still pending</h2>
+        <div class="metrics">
+          <article class="metric">
+            <strong>299</strong>
+            <p>Focused tests observed across 14 relevant files.</p>
+          </article>
+          <article class="metric">
+            <strong>12</strong>
+            <p>Named code-review lenses approved with no remaining P0–P2 findings.</p>
+          </article>
+          <article class="metric">
+            <strong>0</strong>
+            <p>Browser checks claimed; validation is intentionally deferred.</p>
+          </article>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Evidence</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>bun run test -- &lt;14 relevant test files&gt;</code></td>
+              <td>299 focused tests passed across transport, overlay, reporting, admission, route, and UI.</td>
+            </tr>
+            <tr>
+              <td><code>bun run typecheck</code></td>
+              <td>Passed after the final generated-type cleanup.</td>
+            </tr>
+            <tr>
+              <td><code>bun run lint:convex:changed</code> and <code>lint:frontend:changed</code></td>
+              <td>Passed, including pagination and public return-validator sensors.</td>
+            </tr>
+            <tr>
+              <td>Operation-admission audit</td>
+              <td>All 16 overlay capabilities have admitted public APIs.</td>
+            </tr>
+            <tr>
+              <td><code>bun run landed-report:check</code></td>
+              <td>Passed with the current deliverable fingerprint.</td>
+            </tr>
+            <tr>
+              <td><code>bun run pr:athena</code></td>
+              <td>Reached the documentation sensor; final rerun pending after report review.</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="quiet">
+          Code-review lenses: correctness, adversarial, security, testing,
+          maintainability, project standards, API contract, reliability,
+          performance, TypeScript, agent-native parity, and architecture.
+        </p>
+        <div class="callout danger">
+          <strong>Not yet claimed:</strong> open PR, CI green, merge, production
+          deployment, browser validation, Linear Done, or local-root alignment.
+        </div>
+      </section>
+
+      <section class="section">
+        <p class="eyebrow">Next-time guidance</p>
+        <h2>How to extend or debug this area</h2>
+        <ol>
+          <li>Start from the saved review version and exact source-column identity; do not infer cost from normalized preview fields.</li>
+          <li>Keep public operations admitted and idempotent. Add a request ledger when historical replay must remain meaningful.</li>
+          <li>Put financial writes through reporting effects and refresh SKU search projection in the same transaction.</li>
+          <li>When adding worker phases, persist cursor, epoch/generation, heartbeat, counts, and a visible terminal failure state.</li>
+          <li>For undo changes, test both exact compensation and the stale path after deliberate post-apply edits.</li>
+        </ol>
+      </section>
+
+      <section class="section" id="quiz">
+        <p class="eyebrow">Quiz: Pass Required</p>
+        <h2>Score at least 8/10</h2>
+        <p class="quiet">
+          The questions test the workflow’s intent and failure boundaries, not
+          file-name trivia.
+        </p>
+        <form id="changeQuiz">
+          <fieldset class="quiz-question" data-answer="b">
+            <legend>1. What makes a legacy cost source unambiguous?</legend>
+            <label class="option"><input type="radio" name="q1" value="a" /> The normalized preview field name</label>
+            <label class="option"><input type="radio" name="q1" value="b" /> Exact CSV label plus ordinal, or exact JSON path</label>
+            <label class="option"><input type="radio" name="q1" value="c" /> The first numeric value in each row</label>
+            <p class="explanation">Duplicate CSV labels require ordinals; JSON values retain their paths.</p>
+          </fieldset>
+
+          <fieldset class="quiz-question" data-answer="b">
+            <legend>2. What happens if the confirming administrator later loses access?</legend>
+            <label class="option"><input type="radio" name="q2" value="a" /> The confirmed internal run is silently cancelled</label>
+            <label class="option"><input type="radio" name="q2" value="b" /> New reads/commands are denied, while already-confirmed fenced work continues</label>
+            <label class="option"><input type="radio" name="q2" value="c" /> The user retains all overlay access until the run ends</label>
+            <p class="explanation">Public authority is checked immediately; confirmed internal work retains frozen authority so the run remains recoverable.</p>
+          </fieldset>
+
+          <fieldset class="quiz-question" data-answer="a">
+            <legend>3. What does apply intentionally avoid rewriting?</legend>
+            <label class="option"><input type="radio" name="q3" value="a" /> Historical sale cost</label>
+            <label class="option"><input type="radio" name="q3" value="b" /> Prospective SKU cost</label>
+            <label class="option"><input type="radio" name="q3" value="c" /> SKU search projection</label>
+            <p class="explanation">Apply changes prospective valuation and SKU cost, not historical sales.</p>
+          </fieldset>
+
+          <fieldset class="quiz-question" data-answer="b">
+            <legend>4. Why can undo leave exceptions?</legend>
+            <label class="option"><input type="radio" name="q4" value="a" /> Undo randomly samples rows</label>
+            <label class="option"><input type="radio" name="q4" value="b" /> Post-apply evidence changed, so compensation is no longer safe</label>
+            <label class="option"><input type="radio" name="q4" value="c" /> Only missing-cost rows can be undone</label>
+            <p class="explanation">Undo compensates only rows whose current SKU, valuation, and lineage still match.</p>
+          </fieldset>
+
+          <fieldset class="quiz-question" data-answer="c">
+            <legend>5. How are interrupted work and duplicate retry chains handled?</legend>
+            <label class="option"><input type="radio" name="q5" value="a" /> Browser local storage</label>
+            <label class="option"><input type="radio" name="q5" value="b" /> A fixed five-second delay</label>
+            <label class="option"><input type="radio" name="q5" value="c" /> Heartbeats detect interruption; atomic epoch/generation claims fence stale or duplicate chains</label>
+            <p class="explanation">The heartbeat supplies the stale signal, while the atomic recovery claim prevents competing continuations.</p>
+          </fieldset>
+
+          <fieldset class="quiz-question" data-answer="a">
+            <legend>6. How are run-wide bulk decisions applied?</legend>
+            <label class="option"><input type="radio" name="q6" value="a" /> Server-filtered, replay-safe bounded batches</label>
+            <label class="option"><input type="radio" name="q6" value="b" /> One browser mutation per visible row</label>
+            <label class="option"><input type="radio" name="q6" value="c" /> One unbounded database transaction</label>
+            <p class="explanation">The server owns matching scope and advances durable 50-row continuations.</p>
+          </fieldset>
+
+          <fieldset class="quiz-question" data-answer="b">
+            <legend>7. Which row remains authoritative after a partial undo?</legend>
+            <label class="option"><input type="radio" name="q7" value="a" /> Whenever the run was ever applied</label>
+            <label class="option"><input type="radio" name="q7" value="b" /> An <code>undo_exception</code> row whose row, provisional, provenance, and current-SKU evidence still agree</label>
+            <label class="option"><input type="radio" name="q7" value="c" /> Only when run status equals applied</label>
+            <p class="explanation">Authority is row-specific. Successfully undone, mismatched, or superseded rows are rejected.</p>
+          </fieldset>
+
+          <fieldset class="quiz-question" data-answer="c">
+            <legend>8. Why does replacing an existing known cost require an explicit overwrite decision?</legend>
+            <label class="option"><input type="radio" name="q8" value="a" /> Because the server cannot represent missing values</label>
+            <label class="option"><input type="radio" name="q8" value="b" /> Because replacing cost always changes stock quantity</label>
+            <label class="option"><input type="radio" name="q8" value="c" /> To prove deliberate operator consent and preserve truthful audit evidence</label>
+            <p class="explanation">Known-cost replacement is materially different from filling a missing cost, so the command records explicit consent.</p>
+          </fieldset>
+
+          <fieldset class="quiz-question" data-answer="a">
+            <legend>9. A row cannot apply because its valuation position has an unresolved deficit. What happens?</legend>
+            <label class="option"><input type="radio" name="q9" value="a" /> The row records an apply exception and the run continues</label>
+            <label class="option"><input type="radio" name="q9" value="b" /> Athena forces the correction through</label>
+            <label class="option"><input type="radio" name="q9" value="c" /> The entire run rolls back</label>
+            <p class="explanation">Deficit-blocked and other valuation-domain rows fail locally with durable evidence.</p>
+          </fieldset>
+
+          <fieldset class="quiz-question" data-answer="b">
+            <legend>10. What is the delivery status at report generation?</legend>
+            <label class="option"><input type="radio" name="q10" value="a" /> Merged and deployed</label>
+            <label class="option"><input type="radio" name="q10" value="b" /> Delivery candidate; PR, deploy, and root alignment pending</label>
+            <label class="option"><input type="radio" name="q10" value="c" /> Abandoned</label>
+            <p class="explanation">This report is part of the candidate branch before PR creation and merge.</p>
+          </fieldset>
+
+          <div class="quiz-actions">
+            <button type="submit">Grade quiz</button>
+            <button class="secondary" id="resetQuiz" type="button">Reset</button>
+            <span id="quizResult" aria-live="polite"></span>
+          </div>
+        </form>
+      </section>
+
+      <section class="section">
+        <p class="eyebrow">Subagent Evidence</p>
+        <h2>Independent context used in this report</h2>
+        <div class="grid-2">
+          <article class="card">
+            <h3>Session context · ce-session-historian</h3>
+            <p>
+              Searched 80 recent agent sessions, confirmed this feature belongs
+              to the active thread, summarized plan decisions, Linear batch
+              state, finish-line constraints, and the absence of PR/deploy/
+              browser evidence.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Delivered diff · explorer</h3>
+            <p>
+              Read Graphify, plan/solution docs, the staged diff, core source,
+              and tests; produced the layer map, before/after flow, bounded
+              failure modes, intentionally unchanged behavior, and validation
+              inventory used above.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Quiz/report reviewer · coherence review complete</h3>
+            <p>
+              Challenged delivery-status wording, reproducibility, authority and
+              failure-boundary explanations, and quiz scenarios. This revision
+              incorporates those findings before delivery validation.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <footer>
+        Generated 2026-07-28 for branch
+        <code>codex/inventory-import-cost-overlay</code>. Fingerprint
+        <code>22b8db255dbbd2a8c4312fa820ce0bef3288792b5e22f04d61adc449965c0339</code>.
+      </footer>
+    </main>
+
+    <script>
+      (() => {
+        const form = document.getElementById("changeQuiz");
+        const reset = document.getElementById("resetQuiz");
+        const result = document.getElementById("quizResult");
+        const questions = [...form.querySelectorAll(".quiz-question")];
+
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          let score = 0;
+
+          questions.forEach((question, index) => {
+            const selected = form.querySelector(
+              `input[name="q${index + 1}"]:checked`,
+            );
+            const correct = selected?.value === question.dataset.answer;
+            if (correct) score += 1;
+            question.querySelector(".explanation").style.display = "block";
+            question.style.borderColor = correct ? "#7db797" : "#d79a93";
+          });
+
+          const passed = score >= 8;
+          result.textContent = `${score}/10 — ${passed ? "Pass" : "Review the explanations and try again"}`;
+          result.style.color = passed ? "#176b4a" : "#9d342f";
+        });
+
+        reset.addEventListener("click", () => {
+          form.reset();
+          result.textContent = "";
+          questions.forEach((question) => {
+            question.style.borderColor = "";
+            question.querySelector(".explanation").style.display = "none";
+          });
+        });
+      })();
+    </script>
+  </body>
+</html>

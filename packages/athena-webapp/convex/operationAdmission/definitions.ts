@@ -458,6 +458,76 @@ export const processReturnExchangeOperationDefinition =
     effects: { mode: "protected", gateways: ["payment.refund"] },
   });
 
+function inventoryImportReviewPayloadWriteOperation(
+  functionName:
+    | "stageInventoryImportReviewVersionPayloadChunk"
+    | "finalizeInventoryImportReviewVersionPayload",
+) {
+  return defineOperation({
+    functionName: `inventory/catalogImport:${functionName}`,
+    operationId: `inventory.catalogImport.${functionName}`,
+    capability: "inventory.import",
+    scope: { kind: "store" as const, storeIdArg: "storeId" },
+    readiness: { kind: "store_write" as const },
+    effects: { mode: "none" as const },
+    actors: { normalUser: "admit" as const, sharedDemo: "deny" as const },
+  });
+}
+
+export const stageInventoryImportReviewVersionPayloadChunkOperationDefinition =
+  inventoryImportReviewPayloadWriteOperation(
+    "stageInventoryImportReviewVersionPayloadChunk",
+  );
+export const finalizeInventoryImportReviewVersionPayloadOperationDefinition =
+  inventoryImportReviewPayloadWriteOperation(
+    "finalizeInventoryImportReviewVersionPayload",
+  );
+
+function costOverlayStoreWriteOperation(
+  functionName:
+    | "createCostOverlayRun"
+    | "updateCostOverlayDecision"
+    | "updateCostOverlayDecisionsBulk"
+    | "prepareCostOverlayRun"
+    | "confirmCostOverlayApply"
+    | "retryCostOverlayWork"
+    | "requestCostOverlayUndo"
+    | "refreshCostOverlayUndoPreview"
+    | "reopenCostOverlayRun"
+    | "abandonCostOverlayRun",
+) {
+  return defineOperation({
+    functionName: `inventory/inventoryImportCostOverlay:${functionName}`,
+    operationId: `inventory.inventoryImportCostOverlay.${functionName}`,
+    capability: "inventory.import",
+    scope: { kind: "store" as const, storeIdArg: "storeId" },
+    readiness: { kind: "store_write" as const },
+    effects: { mode: "none" as const },
+    actors: { normalUser: "admit" as const, sharedDemo: "deny" as const },
+  });
+}
+
+export const createCostOverlayRunOperationDefinition =
+  costOverlayStoreWriteOperation("createCostOverlayRun");
+export const updateCostOverlayDecisionOperationDefinition =
+  costOverlayStoreWriteOperation("updateCostOverlayDecision");
+export const updateCostOverlayDecisionsBulkOperationDefinition =
+  costOverlayStoreWriteOperation("updateCostOverlayDecisionsBulk");
+export const prepareCostOverlayRunOperationDefinition =
+  costOverlayStoreWriteOperation("prepareCostOverlayRun");
+export const confirmCostOverlayApplyOperationDefinition =
+  costOverlayStoreWriteOperation("confirmCostOverlayApply");
+export const retryCostOverlayWorkOperationDefinition =
+  costOverlayStoreWriteOperation("retryCostOverlayWork");
+export const requestCostOverlayUndoOperationDefinition =
+  costOverlayStoreWriteOperation("requestCostOverlayUndo");
+export const refreshCostOverlayUndoPreviewOperationDefinition =
+  costOverlayStoreWriteOperation("refreshCostOverlayUndoPreview");
+export const reopenCostOverlayRunOperationDefinition =
+  costOverlayStoreWriteOperation("reopenCostOverlayRun");
+export const abandonCostOverlayRunOperationDefinition =
+  costOverlayStoreWriteOperation("abandonCostOverlayRun");
+
 export const OPERATION_ADMISSION_DEFINITIONS = [
   resolveSyncedSaleInventoryReviewGroupOperationDefinition,
   decideApprovalRequestOperationDefinition,
@@ -497,6 +567,18 @@ export const OPERATION_ADMISSION_DEFINITIONS = [
   submitActiveCycleCountDraftsOperationDefinition,
   updateOnlineOrderOperationDefinition,
   processReturnExchangeOperationDefinition,
+  stageInventoryImportReviewVersionPayloadChunkOperationDefinition,
+  finalizeInventoryImportReviewVersionPayloadOperationDefinition,
+  createCostOverlayRunOperationDefinition,
+  updateCostOverlayDecisionOperationDefinition,
+  updateCostOverlayDecisionsBulkOperationDefinition,
+  prepareCostOverlayRunOperationDefinition,
+  confirmCostOverlayApplyOperationDefinition,
+  retryCostOverlayWorkOperationDefinition,
+  requestCostOverlayUndoOperationDefinition,
+  refreshCostOverlayUndoPreviewOperationDefinition,
+  reopenCostOverlayRunOperationDefinition,
+  abandonCostOverlayRunOperationDefinition,
 ] as const satisfies readonly OperationDefinition[];
 
 export function validateOperationDefinition(
