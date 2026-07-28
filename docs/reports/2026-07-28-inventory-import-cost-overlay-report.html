@@ -2,7 +2,7 @@
 <html
   lang="en"
   data-athena-landed-change-report="v1"
-  data-athena-report-diff-fingerprint="2e15fc949f8863d06a1d25f163848f3b71b7993ddb5902eb2f2b7cff61969118"
+  data-athena-report-diff-fingerprint="7fe8762fb0a70f044f624d1122ee4b5ee8892ac39188c1d1bd40ab65aa763880"
 >
   <head>
     <meta charset="utf-8" />
@@ -560,12 +560,12 @@
             <tr>
               <td>Construction</td>
               <td><code>inventoryImportCostOverlayConstruction.ts</code></td>
-              <td>Node parsing boundary, frozen snapshot evidence, 5,000-anchor ceiling, bounded continuations and heartbeats.</td>
+              <td>Node parsing boundary, shared store-and-SKU lineage resolution across review versions, frozen snapshot evidence, 5,000-anchor ceiling, bounded continuations and heartbeats.</td>
             </tr>
             <tr>
               <td>Financial work</td>
               <td><code>inventoryImportCostOverlayWork.ts</code><br /><code>reporting/inventory/effects.ts</code></td>
-              <td>One-row apply/undo transactions, exact-basis compensation, durable exceptions, SKU-search refresh.</td>
+              <td>One-row apply/undo transactions, exact-basis compensation, durable exceptions, SKU-search refresh, and prospective cost updates without inventing currency for zero-stock valuation positions.</td>
             </tr>
             <tr>
               <td>Operator workspace</td>
@@ -591,7 +591,9 @@
           missing-cost row may use <code>selected_missing_cost</code>; a
           known-cost row requires explicit <code>overwrite_selected</code>.
           Server-side bulk work skips incompatible rows and records only actual
-          changes.
+          changes. The <code>Costs differ</code> filter includes only rows where
+          both costs are known and their minor-unit values are unequal; missing
+          Athena costs remain in the missing-cost path.
         </p>
 
         <h3>Partial undo authority</h3>
@@ -613,7 +615,7 @@
             <p>
               8 MiB saved review, 36 transport chunks, 5,000 construction
               anchors, 100 frozen lineages per SKU, 10 active runs per store,
-              and 10 URL-restored UI pages.
+              and 334 URL-restored UI pages.
             </p>
           </article>
           <article class="card">

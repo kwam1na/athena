@@ -8,7 +8,7 @@ problem_type: legacy_inventory_import
 component: operations
 resolution_type: durable_review_boundary
 severity: medium
-delivery_diff_fingerprint: 2e15fc949f8863d06a1d25f163848f3b71b7993ddb5902eb2f2b7cff61969118
+delivery_diff_fingerprint: 7fe8762fb0a70f044f624d1122ee4b5ee8892ac39188c1d1bd40ab65aa763880
 tags:
   - inventory
   - imports
@@ -61,6 +61,16 @@ Split import review from import execution:
   keeps the original browser save path off oversized Convex arguments.
 - Load the latest saved review version for the store so review state survives a
   device refresh or handoff.
+- Treat a saved review version as immutable source evidence for later workflows,
+  not as the complete identity boundary for an onboarded SKU. Cost overlays
+  resolve store-scoped SKU lineage across saved review versions, canonicalize
+  duplicate anchors, and freeze the matched source evidence into the run.
+- Keep overlay construction bounded. A run may inspect at most 5,000
+  store-scoped anchors and freezes at most 100 source lineages for a SKU before
+  failing closed with an operator-visible scope reason.
+- Apply future unit cost independently from current valuation. A zero-stock SKU
+  receives its prospective cost, while an empty valuation position retains no
+  currency because there is no on-hand monetary value to denominate.
 - Keep the destructive import mutation available only for a future dedicated
   workflow. The review view should save server-backed evidence, not apply stock
   or catalog changes.
@@ -80,6 +90,10 @@ Do not add a one-click destructive import action to the review screen. Importing
 inventory can create products, update SKUs, and change stock state, so it needs
 a dedicated workflow with explicit review and confirmation steps.
 
+Do not duplicate onboarded-SKU matching inside downstream workflows. Reuse the
+store-and-SKU lineage boundary so provisional and finalized rows resolve
+consistently even when they originated in different saved review versions.
+
 ## Prevention
 
 - Keep legacy import parsing tolerant of alternate headers and missing optional
@@ -92,6 +106,9 @@ a dedicated workflow with explicit review and confirmation steps.
   fields. Do not flatten those decisions into notes only; notes are audit copy,
   while structured fields are what later import execution should consume.
 - Use Convex indexes by store and creation time for latest-review lookup.
+- Define a cost-difference row as one where both the legacy and Athena costs are
+  known and their minor-unit values differ. Missing costs belong to the
+  missing-cost decision path, not the difference filter.
 - Preserve manager elevation terminal context when operations mutations require
   elevated access outside the POS terminal surface.
 - Add focused tests for import parsing, product matching, review URL state,
