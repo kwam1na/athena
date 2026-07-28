@@ -1,6 +1,7 @@
 import { useConvexAuth, useQuery } from "convex/react";
 import { useAuthToken } from "@convex-dev/auth/react";
 import {
+  ATHENA_HAS_AUTHENTICATED_KEY,
   ATHENA_PENDING_AUTH_SYNC_EVENT,
   LOGGED_IN_USER_ID_KEY,
 } from "../lib/constants";
@@ -105,6 +106,7 @@ export const useAuth = () => {
     const authenticatedAthenaUserId = authenticatedAthenaUser?._id ?? null;
 
     if (authenticatedAthenaUserId) {
+      localStorage.setItem(ATHENA_HAS_AUTHENTICATED_KEY, "true");
       if (loggedInUserId !== authenticatedAthenaUserId) {
         localStorage.setItem(LOGGED_IN_USER_ID_KEY, authenticatedAthenaUserId);
         setLoggedInUserId(authenticatedAthenaUserId);

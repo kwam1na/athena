@@ -1,12 +1,16 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import OrganizationsView from "@/components/OrganizationsView";
 import { UpdateReadyBanner } from "@/components/app-update/UpdateReadyBanner";
 import { OrganizationModal } from "@/components/ui/modals/organization-modal";
 import { useNavigationKeyboardShortcuts } from "@/hooks/use-navigation-keyboard-shortcuts";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  ATHENA_HAS_AUTHENTICATED_KEY,
+  LOGGED_IN_USER_ID_KEY,
+} from "@/lib/constants";
 import { api } from "~/convex/_generated/api";
 
 export function AppEntryRoute() {
@@ -29,6 +33,10 @@ export function AppEntryDispatcher() {
     user?._id ? { userId: user._id } : "skip",
   );
   const navigate = useNavigate();
+  const hasAuthenticatedBefore = useRef(
+    localStorage.getItem(ATHENA_HAS_AUTHENTICATED_KEY) === "true" ||
+      Boolean(localStorage.getItem(LOGGED_IN_USER_ID_KEY)),
+  ).current;
 
   useEffect(() => {
     if (userOrgs && userOrgs.length > 0) {
@@ -39,9 +47,9 @@ export function AppEntryDispatcher() {
 
   useEffect(() => {
     if (!isLoading && user === null) {
-      navigate({ to: "/login" });
+      navigate({ to: hasAuthenticatedBefore ? "/login" : "/landing" });
     }
-  }, [isLoading, navigate, user]);
+  }, [hasAuthenticatedBefore, isLoading, navigate, user]);
 
   if (isLoading || user === undefined || (user && userOrgs === undefined)) {
     return null;

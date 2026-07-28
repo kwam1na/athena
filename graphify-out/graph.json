@@ -73667,7 +73667,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_shareddemo_registerbaseline_test_ts",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.test.ts",
-      "source_location": "L131",
+      "source_location": "L145",
       "target": "registerbaseline_test_seedstorewithregister",
       "weight": 1
     },
@@ -73679,7 +73679,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_shareddemo_registerbaseline_ts",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.ts",
-      "source_location": "L174",
+      "source_location": "L179",
       "target": "registerbaseline_bindshareddemoregisterbaselinewithctx",
       "weight": 1
     },
@@ -73727,7 +73727,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_shareddemo_registerbaseline_ts",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.ts",
-      "source_location": "L115",
+      "source_location": "L120",
       "target": "registerbaseline_buildshareddemostoreschedule",
       "weight": 1
     },
@@ -73739,7 +73739,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_shareddemo_registerbaseline_ts",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.ts",
-      "source_location": "L143",
+      "source_location": "L148",
       "target": "registerbaseline_ensureshareddemostoreschedulewithctx",
       "weight": 1
     },
@@ -73763,7 +73763,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_shareddemo_registerbaseline_ts",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.ts",
-      "source_location": "L88",
+      "source_location": "L93",
       "target": "registerbaseline_rollshareddemoseededregisterwithctx",
       "weight": 1
     },
@@ -99947,7 +99947,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_hooks_useauth_ts",
       "source_file": "packages/athena-webapp/src/hooks/useAuth.ts",
-      "source_location": "L14",
+      "source_location": "L15",
       "target": "useauth_useauth",
       "weight": 1
     },
@@ -132551,7 +132551,7 @@
       "relation": "calls",
       "source": "registerbaseline_browsersessionnote",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.ts",
-      "source_location": "L219",
+      "source_location": "L224",
       "target": "registerbaseline_bindshareddemoregisterbaselinewithctx",
       "weight": 1
     },
@@ -132563,7 +132563,7 @@
       "relation": "calls",
       "source": "registerbaseline_buildshareddemoregistercashbaseline",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.ts",
-      "source_location": "L238",
+      "source_location": "L243",
       "target": "registerbaseline_bindshareddemoregisterbaselinewithctx",
       "weight": 1
     },
@@ -132575,7 +132575,7 @@
       "relation": "calls",
       "source": "registerbaseline_buildshareddemoregisternarrative",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.ts",
-      "source_location": "L232",
+      "source_location": "L237",
       "target": "registerbaseline_bindshareddemoregisterbaselinewithctx",
       "weight": 1
     },
@@ -132587,7 +132587,7 @@
       "relation": "calls",
       "source": "registerbaseline_ensureshareddemostoreschedulewithctx",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.ts",
-      "source_location": "L209",
+      "source_location": "L214",
       "target": "registerbaseline_bindshareddemoregisterbaselinewithctx",
       "weight": 1
     },
@@ -132599,7 +132599,7 @@
       "relation": "calls",
       "source": "registerbaseline_planshareddemoregisterallocation",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.ts",
-      "source_location": "L226",
+      "source_location": "L231",
       "target": "registerbaseline_bindshareddemoregisterbaselinewithctx",
       "weight": 1
     },
@@ -132611,7 +132611,7 @@
       "relation": "calls",
       "source": "registerbaseline_buildshareddemostoreschedule",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.ts",
-      "source_location": "L161",
+      "source_location": "L166",
       "target": "registerbaseline_ensureshareddemostoreschedulewithctx",
       "weight": 1
     },
@@ -132623,7 +132623,7 @@
       "relation": "calls",
       "source": "registerbaseline_shareddemoseededregisteropenedat",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.ts",
-      "source_location": "L93",
+      "source_location": "L98",
       "target": "registerbaseline_rollshareddemoseededregisterwithctx",
       "weight": 1
     },
@@ -168913,7 +168913,7 @@
       "label": "seedStoreWithRegister()",
       "norm_label": "seedstorewithregister()",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.test.ts",
-      "source_location": "L131"
+      "source_location": "L145"
     },
     {
       "community": 1125,
@@ -203329,7 +203329,7 @@
       "label": "bindSharedDemoRegisterBaselineWithCtx()",
       "norm_label": "bindshareddemoregisterbaselinewithctx()",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.ts",
-      "source_location": "L174"
+      "source_location": "L179"
     },
     {
       "community": 232,
@@ -203365,7 +203365,7 @@
       "label": "buildSharedDemoStoreSchedule()",
       "norm_label": "buildshareddemostoreschedule()",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.ts",
-      "source_location": "L115"
+      "source_location": "L120"
     },
     {
       "community": 232,
@@ -203374,7 +203374,7 @@
       "label": "ensureSharedDemoStoreScheduleWithCtx()",
       "norm_label": "ensureshareddemostoreschedulewithctx()",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.ts",
-      "source_location": "L143"
+      "source_location": "L148"
     },
     {
       "community": 232,
@@ -203392,7 +203392,7 @@
       "label": "rollSharedDemoSeededRegisterWithCtx()",
       "norm_label": "rollshareddemoseededregisterwithctx()",
       "source_file": "packages/athena-webapp/convex/sharedDemo/registerBaseline.ts",
-      "source_location": "L88"
+      "source_location": "L93"
     },
     {
       "community": 232,

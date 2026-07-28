@@ -27,9 +27,9 @@ function ThemeToggle() {
       className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground transition-colors duration-standard ease-standard hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       {isDark ? (
-        <Sun className="h-4 w-4" aria-hidden="true" />
-      ) : (
         <Moon className="h-4 w-4" aria-hidden="true" />
+      ) : (
+        <Sun className="h-4 w-4" aria-hidden="true" />
       )}
     </button>
   );
@@ -94,8 +94,8 @@ export function PublicLayout({
     <div className="relative min-h-svh bg-background text-foreground">
       <header
         className={`sticky top-0 z-40 border-b border-border/70 backdrop-blur-md transition-colors duration-standard ease-standard ${scrolled
-            ? "bg-background/70 supports-[backdrop-filter]:bg-background/60"
-            : "bg-background/40 supports-[backdrop-filter]:bg-background/25"
+          ? "bg-background/70 supports-[backdrop-filter]:bg-background/60"
+          : "bg-background/40 supports-[backdrop-filter]:bg-background/25"
           }`}
       >
         <nav

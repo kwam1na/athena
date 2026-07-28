@@ -81,6 +81,20 @@ describe("buildSharedDemoRegisterNarrative", () => {
     expect(narrative.openedAt).toBe(Date.parse("2026-07-13T20:30:00.000Z"));
   });
 
+  it("does not collapse an overnight browser session to midnight", () => {
+    const now = Date.parse("2026-07-24T05:30:00.000Z"); // 01:30 ET
+    const narrative = buildSharedDemoRegisterNarrative({
+      now,
+      registerNumber: "213305",
+      terminalId: "terminal-browser" as never,
+    });
+
+    expect(narrative.openedAt).toBe(Date.parse("2026-07-24T04:45:00.000Z"));
+    expect(narrative.openedAt).not.toBe(
+      Date.parse("2026-07-24T04:00:00.000Z"),
+    );
+  });
+
   it("creates all-day demo store hours in the canonical timezone", () => {
     expect(
       buildSharedDemoStoreSchedule({
