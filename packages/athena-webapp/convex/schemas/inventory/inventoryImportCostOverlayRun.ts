@@ -98,6 +98,7 @@ export const inventoryImportCostOverlayRunSchema = v.object({
       v.literal("all"),
       v.literal("eligible"),
       v.literal("selected"),
+      v.literal("different"),
       v.literal("exceptions"),
     ),
   ),

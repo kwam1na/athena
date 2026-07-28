@@ -229,7 +229,6 @@ function renderWorkspace(run: InventoryCostOverlayRun, overlayRows = rows) {
       isLoadingRows={false}
       isPreparing={false}
       onDecisionChange={vi.fn()}
-      onLoadMore={vi.fn()}
       onPrepare={vi.fn()}
       rows={overlayRows}
       run={run}
