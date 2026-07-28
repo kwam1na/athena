@@ -16,7 +16,7 @@
     "audit:convex": "bash ./scripts/convex-audit.sh",
     "test": "vitest run --maxWorkers=4",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage --maxWorkers=4",
+    "test:coverage": "vitest run --coverage --maxWorkers=2",
     "test:ui": "vitest --ui",
     "email:dev": "email dev --dir convex/emails",
     "reporting:purge-dev": "bash scripts/purge-reporting-dev.sh",
