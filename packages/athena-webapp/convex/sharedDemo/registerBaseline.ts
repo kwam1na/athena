@@ -63,8 +63,13 @@ export function buildSharedDemoRegisterNarrative(args: {
   terminalId: Id<"posTerminal">;
 }) {
   const range = sharedDemoOperatingDateRange(args.now, args.schedule);
+  // Before a full lookback fits inside the operating day, place the opening
+  // halfway through the elapsed time instead of pinning every session to 00:00.
+  const elapsedOperatingDayMs = args.now - range.startAt;
+  const earlyDayOpenedAt =
+    range.startAt + Math.floor(elapsedOperatingDayMs / 2);
   const openedAt = Math.max(
-    range.startAt,
+    earlyDayOpenedAt,
     args.now - REGISTER_OPEN_LOOKBACK_MS,
   );
   return {

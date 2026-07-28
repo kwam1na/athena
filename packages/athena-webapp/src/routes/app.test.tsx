@@ -1,6 +1,10 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  ATHENA_HAS_AUTHENTICATED_KEY,
+  LOGGED_IN_USER_ID_KEY,
+} from "@/lib/constants";
 import { AppEntryDispatcher, AppEntryRoute } from "./-app-entry-route";
 
 const mocked = vi.hoisted(() => ({
@@ -45,6 +49,8 @@ describe("App entry route", () => {
     mocked.navigationShortcuts.mockReset();
     mocked.useAuth.mockReset();
     mocked.useQuery.mockReset();
+    vi.mocked(window.localStorage.getItem).mockReset();
+    vi.mocked(window.localStorage.getItem).mockReturnValue(null);
   });
 
   it("owns operational chrome exactly once", () => {
@@ -67,7 +73,35 @@ describe("App entry route", () => {
     expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
-  it("redirects signed-out users to login", async () => {
+  it("redirects first-time signed-out visitors to the landing page", async () => {
+    mocked.useAuth.mockReturnValue({ user: null, isLoading: false });
+    mocked.useQuery.mockReturnValue(undefined);
+
+    render(<AppEntryDispatcher />);
+
+    await waitFor(() =>
+      expect(mocked.navigate).toHaveBeenCalledWith({ to: "/landing" }),
+    );
+  });
+
+  it("preserves the login redirect for returning signed-out users", async () => {
+    vi.mocked(window.localStorage.getItem).mockImplementation((key) =>
+      key === ATHENA_HAS_AUTHENTICATED_KEY ? "true" : null,
+    );
+    mocked.useAuth.mockReturnValue({ user: null, isLoading: false });
+    mocked.useQuery.mockReturnValue(undefined);
+
+    render(<AppEntryDispatcher />);
+
+    await waitFor(() =>
+      expect(mocked.navigate).toHaveBeenCalledWith({ to: "/login" }),
+    );
+  });
+
+  it("treats the legacy stored user ID as returning-user history", async () => {
+    vi.mocked(window.localStorage.getItem).mockImplementation((key) =>
+      key === LOGGED_IN_USER_ID_KEY ? "athena-user-1" : null,
+    );
     mocked.useAuth.mockReturnValue({ user: null, isLoading: false });
     mocked.useQuery.mockReturnValue(undefined);
 

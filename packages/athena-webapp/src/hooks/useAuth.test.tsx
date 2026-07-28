@@ -2,6 +2,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  ATHENA_HAS_AUTHENTICATED_KEY,
   LOGGED_IN_USER_ID_KEY,
   PENDING_ATHENA_AUTH_SYNC_KEY,
 } from "../lib/constants";
@@ -205,6 +206,10 @@ describe("useAuth", () => {
     expect(window.localStorage.setItem).toHaveBeenCalledWith(
       LOGGED_IN_USER_ID_KEY,
       "user-1",
+    );
+    expect(window.localStorage.setItem).toHaveBeenCalledWith(
+      ATHENA_HAS_AUTHENTICATED_KEY,
+      "true",
     );
   });
 
