@@ -118,7 +118,7 @@ describe("shared helper orchestration", () => {
     expect(orderHelper).toContain('from "./orderOperations"');
     expect(onlineOrder).toContain('from "./helpers/orderOperations"');
     expect(onlineOrderItem).toContain(
-      'from "../reporting/inventory/commerceEffects"',
+      'from "../inventoryLedger/commerceEffects"',
     );
     expect(payment).toContain(
       "internal.storeFront.onlineOrder.finalizeRefundInternal",

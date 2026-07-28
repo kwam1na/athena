@@ -17,8 +17,8 @@ import type {
   PosLocalSyncServiceLinePayload,
 } from "../../../../shared/posLocalSyncContract";
 import type { RegisterSessionCloseoutHold } from "./registerSessionCloseoutHolds";
-import type { ReportingIngressArgs } from "../../../reporting/ingress";
-import type { CommerceInventoryEffectArgs } from "../../../reporting/inventory/commerceEffects";
+import type { ReportingIngressArgs } from "./localSyncReportingTypes";
+import type { CommerceInventoryEffectArgs } from "../../../inventoryLedger/commerceEffects";
 import type { CommandResult } from "../../../../shared/commandResult";
 import type { SequenceGapState } from "./sequenceGapPolicy";
 

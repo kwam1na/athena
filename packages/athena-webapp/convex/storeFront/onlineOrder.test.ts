@@ -1,15 +1,157 @@
 import { readFileSync } from "node:fs";
 
 // Shared-demo fulfillment limits preserve public order result envelopes.
+import { convexTest } from "convex-test";
 import { describe, expect, it, vi } from "vitest";
 import { ok } from "../../shared/commandResult";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
+import { internal } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
+import type { MutationCtx } from "../_generated/server";
+import schema from "../schema";
 import {
   getOrderMetrics,
   getReturnExchangeOverview,
   processReturnExchange,
   update,
 } from "./onlineOrder";
+
+const modules = Object.fromEntries(
+  Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
+    path.startsWith("../")
+      ? path.replace(/^\.\.\//, "./")
+      : path.replace(/^\.\//, "./storeFront/"),
+    loader,
+  ]),
+);
+
+/** Minimal store/catalog/order graph shared by the reporting-facts tests below. */
+async function seedFulfillableOrder(
+  ctx: MutationCtx,
+  overrides: { deliveryFee?: number } = {},
+) {
+  const userId = await ctx.db.insert("athenaUser", {
+    email: "admin@example.test",
+  });
+  const organizationId = await ctx.db.insert("organization", {
+    createdByUserId: userId,
+    name: "Org",
+    slug: "org",
+  });
+  const storeId = await ctx.db.insert("store", {
+    createdByUserId: userId,
+    currency: "GHS",
+    name: "Store",
+    organizationId,
+    slug: "store",
+  });
+  const categoryId = await ctx.db.insert("category", {
+    name: "Category",
+    slug: "category",
+    storeId,
+  });
+  const subcategoryId = await ctx.db.insert("subcategory", {
+    categoryId,
+    name: "Subcategory",
+    slug: "subcategory",
+    storeId,
+  });
+  const productId = await ctx.db.insert("product", {
+    availability: "live",
+    categoryId,
+    createdByUserId: userId,
+    currency: "GHS",
+    inventoryCount: 0,
+    name: "Product",
+    organizationId,
+    slug: "product",
+    storeId,
+    subcategoryId,
+  });
+  const productSkuId = await ctx.db.insert("productSku", {
+    attributes: {},
+    images: [],
+    inventoryCount: 0,
+    price: 5_000,
+    productId,
+    quantityAvailable: 0,
+    sku: "SKU-A",
+    storeId,
+  });
+  const storeFrontUserId = await ctx.db.insert("guest", { storeId });
+  const bagId = await ctx.db.insert("bag", {
+    items: [],
+    storeFrontUserId,
+    storeId,
+    updatedAt: Date.now(),
+  });
+  const checkoutSessionId = await ctx.db.insert("checkoutSession", {
+    amount: 10_000,
+    bagId,
+    billingDetails: null,
+    customerDetails: null,
+    deliveryDetails: null,
+    deliveryFee: overrides.deliveryFee ?? 0,
+    deliveryOption: null,
+    deliveryInstructions: null,
+    discount: null,
+    expiresAt: Date.now() + 3_600_000,
+    hasCompletedCheckoutSession: true,
+    hasCompletedPayment: true,
+    hasVerifiedPayment: true,
+    isFinalizingPayment: false,
+    pickupLocation: null,
+    storeFrontUserId,
+    storeId,
+  });
+  const orderId = await ctx.db.insert("onlineOrder", {
+    amount: 10_000,
+    bagId,
+    billingDetails: null,
+    checkoutSessionId,
+    customerDetails: {
+      email: "customer@example.test",
+      firstName: "Ama",
+      lastName: "Owusu",
+      phoneNumber: "0000000000",
+    },
+    deliveryDetails: null,
+    deliveryFee: overrides.deliveryFee ?? 0,
+    deliveryInstructions: null,
+    deliveryMethod: "delivery",
+    deliveryOption: null,
+    discount: null,
+    hasVerifiedPayment: true,
+    orderNumber: "ORD-1",
+    pickupLocation: null,
+    status: "processing",
+    storeId,
+    storeFrontUserId,
+  });
+  const itemId = await ctx.db.insert("onlineOrderItem", {
+    orderId,
+    price: 5_000,
+    productId,
+    productSku: "SKU-A",
+    productSkuId,
+    quantity: 2,
+    storeFrontUserId,
+  });
+  return {
+    itemId,
+    orderId,
+    organizationId,
+    productId,
+    productSkuId,
+    storeId,
+  };
+}
+
+async function readStorefrontFacts(ctx: MutationCtx, storeId: Id<"store">) {
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- test-only helper over a tiny seeded fact set.
+  const facts = await ctx.db.query("reportFact").collect();
+  return facts.filter((fact) => fact.storeId === storeId);
+}
 
 function getSource(relativePath: string) {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
@@ -222,18 +364,13 @@ describe("online order lifecycle workflow tracing", () => {
     expect(source).toContain("traceId: traceSeed.trace.traceId");
   });
 
-  it("recognizes first fulfillment and finalized refunds through reporting ingress", () => {
+  it("wires first fulfillment and finalized refunds through recordFacts", () => {
     const source = getSource("./onlineOrder.ts");
     const paymentSource = getSource("./payment.ts");
 
-    expect(source).toContain("appendReportingIngressWithCtx(ctx, {");
-    expect(source).toContain('kind: "storefront_fulfillment"');
-    expect(source).toContain('sourceEventType: "storefront_fulfilled"');
-    expect(source).toContain('kind: "storefront_refund"');
-    expect(source).toContain("refundId: args.refundId");
-    expect(source).toContain(
-      'sourceEventType: "storefront_refund_finalized"',
-    );
+    expect(source).toContain("await recordFacts(ctx, order.storeId, saleFacts);");
+    expect(source).toContain("await recordFacts(ctx, order.storeId, refundFacts);");
+    expect(source).toContain("await recordFacts(ctx, order.storeId, returnFacts);");
     expect(paymentSource).toContain(
       "onlineOrderItemIds: args.onlineOrderItemIds",
     );
@@ -254,5 +391,95 @@ describe("online order lifecycle workflow tracing", () => {
       "selectedRefundItems.map((item) => item.productSkuId)",
     );
     expect(source).toContain("evidenceProductSkuIds: [");
+  });
+});
+
+describe("online order reporting facts", () => {
+  it("records one sale reportFact per fulfilled item on first completion", async () => {
+    const t = convexTest(schema, modules);
+    const { itemId, orderId, storeId } = await t.run((ctx) =>
+      seedFulfillableOrder(ctx, { deliveryFee: 500 }),
+    );
+
+    const result = await t.mutation(internal.storeFront.onlineOrder.updateInternal, {
+      orderId,
+      update: { status: "delivered" },
+    });
+    expect(result).toEqual({ success: true, message: "Order updated" });
+
+    const facts = await t.run((ctx) => readStorefrontFacts(ctx, storeId));
+    const saleFacts = facts.filter((fact) => fact.factKind === "sale");
+    // One line per order item, plus one for the delivery fee.
+    expect(saleFacts).toHaveLength(2);
+
+    const itemFact = saleFacts.find((fact) => fact.lineId === String(itemId));
+    expect(itemFact).toMatchObject({
+      currency: "GHS",
+      discountAmountMinor: 0,
+      grossAmountMinor: 10_000,
+      netAmountMinor: 10_000,
+      quantity: 2,
+      sourceDomain: "storefront",
+      sourceId: String(orderId),
+      taxAmountMinor: 0,
+    });
+    expect(itemFact?.productSkuId).toBeDefined();
+
+    const deliveryFact = saleFacts.find((fact) => fact.lineId === "delivery");
+    expect(deliveryFact).toMatchObject({
+      grossAmountMinor: 500,
+      netAmountMinor: 500,
+      quantity: 0,
+      unitCostMinor: 0,
+    });
+
+    // Replaying the same completion must not double the facts (identity is
+    // structural on storeId+sourceDomain+sourceId+lineId+factKind).
+    await t.mutation(internal.storeFront.onlineOrder.updateInternal, {
+      orderId,
+      update: { status: "delivered" },
+    });
+    const replayed = await t.run((ctx) => readStorefrontFacts(ctx, storeId));
+    expect(replayed.filter((fact) => fact.factKind === "sale")).toHaveLength(2);
+  });
+
+  it("records a money-only refund reportFact with zero quantity", async () => {
+    const t = convexTest(schema, modules);
+    const { itemId, orderId, storeId } = await t.run((ctx) =>
+      seedFulfillableOrder(ctx),
+    );
+    await t.run(async (ctx) => {
+      await ctx.db.patch("onlineOrder", orderId, {
+        externalTransactionId: "ext-txn-1",
+        refunds: [{ amount: 5_000, date: Date.now(), id: "reservation-1" }],
+      });
+    });
+
+    const ok = await t.mutation(
+      internal.storeFront.onlineOrder.finalizeRefundInternal,
+      {
+        externalTransactionId: "ext-txn-1",
+        onlineOrderItemIds: [itemId],
+        refundAmount: 5_000,
+        refundId: "refund-1",
+        reservationId: "reservation-1",
+      },
+    );
+    expect(ok).toBe(true);
+
+    const facts = await t.run((ctx) => readStorefrontFacts(ctx, storeId));
+    const refundFacts = facts.filter(
+      (fact) => fact.factKind === "refund" && fact.sourceDomain === "storefront",
+    );
+    expect(refundFacts).toHaveLength(1);
+    expect(refundFacts[0]).toMatchObject({
+      currency: "GHS",
+      grossAmountMinor: 5_000,
+      lineId: `refund-1:${String(itemId)}`,
+      netAmountMinor: 5_000,
+      quantity: 0,
+      sourceDomain: "storefront",
+      sourceId: String(orderId),
+    });
   });
 });

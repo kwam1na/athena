@@ -1,8 +1,8 @@
 import { internalMutation, internalQuery, MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
-import { recordPaymentAllocationSkuEvidenceWithCtx } from "../reporting/evidence";
-import { appendReportingIngressWithCtx } from "../reporting/ingress";
+import { recordFacts } from "../reports/ingest";
+import type { NewReportFact } from "../../shared/reportsContract";
 
 export type RecordPaymentAllocationArgs = {
   storeId: Id<"store">;
@@ -172,68 +172,28 @@ async function ensurePaymentAllocationReportingWithCtx(
   const store = await ctx.db.get("store", allocation.storeId);
   if (!store) throw new Error("Payment allocation store is unavailable.");
   const organizationId = allocation.organizationId ?? store.organizationId;
-  const businessEventKey = paymentAllocationReportingIdentity(allocation);
   const isReversal = allocation.status === "voided";
   const isRefund = allocation.direction === "out" && !isReversal;
-  const settlementAmountMinor =
-    isReversal || isRefund
-      ? -Math.abs(allocation.amount)
-      : Math.abs(allocation.amount);
+  const amountMinor = Math.abs(allocation.amount);
   const currencyCode = (allocation.currency ?? store.currency)
     ?.trim()
     .toUpperCase();
-  const result = await appendReportingIngressWithCtx(ctx, {
-    acceptedAt: allocation.recordedAt,
-    adapterVersion: 1,
-    businessEventKey,
-    contentFingerprint: [
-      "payment-allocation-v1",
-      allocation._id,
-      allocation.status,
-      allocation.direction,
-      allocation.amount,
-      allocation.currency ?? store.currency,
-      allocation.method,
-      allocation.targetType,
-      allocation.targetId,
-    ].join(":"),
-    ...(currencyCode ? { currencyCode, currencyMinorUnitScale: 2 } : {}),
-    linkedBusinessEventKey: isReversal
-      ? `payment_allocation:${String(allocation._id)}:recorded`
-      : undefined,
-    materialFields: [
-      "amountMinor",
-      "currency",
-      "direction",
-      "method",
-      "status",
-      "storeId",
-    ],
-    occurredAt: allocation.recordedAt,
-    organizationId,
-    settlementAmountMinor,
+
+  const fact: NewReportFact = {
     sourceDomain: "payments",
-    sourceEventType: isReversal
-      ? "payment_allocation_reversed"
-      : isRefund
-        ? "payment_refund_recorded"
-        : "payment_collection_recorded",
-    sourceReferences: [
-      {
-        relation: isReversal ? "reverses" : "owns",
-        sourceId: String(allocation._id),
-        sourceType: "payment_allocation",
-      },
-    ],
-    storeId: allocation.storeId,
-  });
-  if (result.kind === "conflict") return result;
-  await recordPaymentAllocationSkuEvidenceWithCtx(
-    ctx,
-    allocation,
-    organizationId,
-  );
-  return result;
+    sourceId: String(allocation._id),
+    lineId: "",
+    factKind: isReversal || isRefund ? "payment_refund" : "payment",
+    occurredAt: allocation.recordedAt,
+    currency: currencyCode ?? store.currency,
+    grossAmountMinor: amountMinor,
+    netAmountMinor: amountMinor,
+    taxAmountMinor: 0,
+    discountAmountMinor: 0,
+    quantity: 0,
+  };
+
+  await recordFacts(ctx, allocation.storeId, [fact]);
 }
 
 export async function recordPaymentAllocationWithCtx(

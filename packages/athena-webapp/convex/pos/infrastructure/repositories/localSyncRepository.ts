@@ -41,9 +41,11 @@ import type {
 } from "../../application/sync/types";
 import { listRegisterSessionCloseoutHolds } from "../../application/sync/registerSessionCloseoutHolds";
 import { validatePosLocalStaffProofWithCtx } from "../../application/sync/staffProofValidation";
-import { appendReportingIngressWithCtx } from "../../../reporting/ingress";
+import type { ReportingIngressArgs } from "../../application/sync/localSyncReportingTypes";
+import { recordFacts } from "../../../reports/ingest";
+import type { NewReportFact } from "../../../../shared/reportsContract";
 import { appendPosLifecycleJournalWithCtx } from "../posLifecycleJournal";
-import { applyCommerceInventoryEffectWithCtx } from "../../../reporting/inventory/commerceEffects";
+import { applyCommerceInventoryEffectWithCtx } from "../../../inventoryLedger/commerceEffects";
 import {
   createPosLocalSyncMappingWithAuthority,
   markRegisterMappingAuthorityAmbiguous,
@@ -90,6 +92,61 @@ function areConflictDetailsEquivalent(left: unknown, right: unknown): boolean {
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
   return nextValue ? nextValue : undefined;
+}
+
+/**
+ * Bridge for the legacy `LocalSyncRepository.appendReportingIngress` call
+ * shape (still declared by `application/sync/types.ts`, whose only caller is
+ * the offline sale-completion projection) onto the rebuilt reports ingestion
+ * API. `input.occurredAt` here is already the original local event timestamp
+ * carried in the sync payload (`args.event.occurredAt` in
+ * `projectLocalEvents.ts`), not sync/arrival time — that business-time basis
+ * is preserved as-is by emitting one "sale" fact per line at that same
+ * `occurredAt`.
+ */
+function reportFactsFromLocalSyncIngressArgs(
+  input: ReportingIngressArgs,
+): NewReportFact[] {
+  const lines = input.lines ?? [];
+  if (lines.length === 0) return [];
+
+  const currency = input.currencyCode?.trim().toUpperCase() || "GHS";
+  const transactionSourceId = input.sourceReferences.find(
+    (reference) =>
+      reference.relation === "owns" &&
+      reference.sourceType === "pos_transaction",
+  )?.sourceId;
+  const sourceId = transactionSourceId ?? input.businessEventKey;
+
+  return lines.map((line) => {
+    // Only a fully-known cost basis is carried forward — a partially-costed
+    // line is recorded as uncosted rather than risk understating cost for the
+    // uncovered units (the frozen NewReportFact contract has no field for a
+    // partial cost split).
+    const unitCostMinor =
+      line.costStatus === "known" &&
+      line.quantity !== 0 &&
+      line.cogsKnownMinor !== undefined
+        ? Math.round(line.cogsKnownMinor / Math.abs(line.quantity))
+        : undefined;
+    return {
+      currency,
+      discountAmountMinor: line.discountAmountMinor ?? 0,
+      factKind: "sale",
+      grossAmountMinor: line.grossAmountMinor ?? 0,
+      lineId: line.lineKey,
+      netAmountMinor: line.netAmountMinor ?? 0,
+      occurredAt: input.occurredAt,
+      ...(line.productSkuId
+        ? { productSkuId: String(line.productSkuId) }
+        : {}),
+      quantity: line.quantity,
+      sourceDomain: "pos",
+      sourceId: String(sourceId),
+      taxAmountMinor: line.taxAmountMinor ?? 0,
+      ...(unitCostMinor !== undefined ? { unitCostMinor } : {}),
+    };
+  });
 }
 
 export function createConvexLocalSyncRepository(
@@ -146,8 +203,10 @@ export function createConvexLocalSyncRepository(
   };
 
   return {
-    appendReportingIngress(input) {
-      return appendReportingIngressWithCtx(ctx, input);
+    async appendReportingIngress(input) {
+      const facts = reportFactsFromLocalSyncIngressArgs(input);
+      if (facts.length === 0) return;
+      await recordFacts(ctx, input.storeId, facts);
     },
     async startStoreDayFromLocalSync(input) {
       const result = await startStoreDayWithCtx(ctx, {

@@ -1,148 +1,185 @@
+import { useQuery } from "convex/react";
+import { Link, useParams } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
-import { ReportStatusBand } from "./ReportStatusBand";
-import { ReportsItemsTable, type ReportItemRow } from "./ReportsItemsTable";
-import { getReportStatusKind } from "./reportPresentation";
-
-export type ReportItemsSort =
-  "revenue" | "margin" | "units" | "cover" | "inventory_value" | "attention";
-export type ReportItemsClassification =
-  | "all"
-  | "fast_mover"
-  | "slow_mover"
-  | "nonmoving"
-  | "low_cover"
-  | "high_revenue_low_margin";
-export type ReportItemsResult = {
-  continueCursor: string;
-  facets?: Array<{ value: string; count?: number }>;
-  isDone: boolean;
-  completeness?: string | null;
-  limitingReason?: string | null;
-  page: ReportItemRow[];
-  rollups?: unknown[];
-  status: string;
-};
-
-const SORTS: Array<{ label: string; value: ReportItemsSort }> = [
-  { label: "Net sales", value: "revenue" },
-  { label: "Margin", value: "margin" },
-  { label: "Units", value: "units" },
-  { label: "Cover", value: "cover" },
-  { label: "Inventory value", value: "inventory_value" },
-  { label: "Attention", value: "attention" },
-];
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { EmptyState } from "@/components/states/empty/empty-state";
+import { cn } from "@/lib/utils";
+import useGetActiveStore from "@/hooks/useGetActiveStore";
+import { api } from "~/convex/_generated/api";
+import type { ReportSkuSortBy } from "~/shared/reportsContract";
+import {
+  REPORT_PERIOD_TYPE_LABELS,
+  REPORT_PERIOD_TYPES,
+  periodKeyForSelection,
+  type ReportPeriodType,
+} from "./reportPeriodKeys";
+import { formatOptionalMoney, formatReportProfit, formatUnits } from "./reportFormat";
 
 export function ReportsItemsView({
-  classification,
-  controlsEnabled = true,
-  data,
-  onClassificationChange,
-  onLoadMore,
-  onOpenItem,
-  onSortChange,
-  sort,
+  periodType,
+  periodDate,
+  sortBy,
+  cursor,
+  onPeriodTypeChange,
+  onPeriodDateChange,
+  onSortByChange,
+  onCursorChange,
 }: {
-  classification: ReportItemsClassification;
-  controlsEnabled?: boolean;
-  data: ReportItemsResult | undefined;
-  onClassificationChange: (classification: ReportItemsClassification) => void;
-  onLoadMore?: () => void;
-  onOpenItem: (row: ReportItemRow) => void;
-  onSortChange: (sort: ReportItemsSort) => void;
-  sort: ReportItemsSort;
+  periodType: ReportPeriodType;
+  periodDate: string;
+  sortBy: ReportSkuSortBy;
+  cursor: string | undefined;
+  onPeriodTypeChange: (periodType: ReportPeriodType) => void;
+  onPeriodDateChange: (periodDate: string) => void;
+  onSortByChange: (sortBy: ReportSkuSortBy) => void;
+  onCursorChange: (cursor: string | undefined) => void;
 }) {
-  if (!data)
-    return (
-      <p aria-live="polite" role="status">
-        Loading item performance…
-      </p>
-    );
-  if (data.status === "pre_cutover")
-    return <ReportStatusBand kind="pre_cutover" />;
-  if (data.status === "materializing")
-    return <ReportStatusBand kind="materializing" />;
-  if (data.status === "failed" || data.status === "unavailable")
-    return <ReportStatusBand kind="failed" />;
+  const { activeStore } = useGetActiveStore();
+  const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
+  const periodKey = periodKeyForSelection(periodType, periodDate);
+
+  const result = useQuery(
+    api.reports.queries.listPeriodSkus,
+    activeStore?._id
+      ? { storeId: activeStore._id, periodKey, sortBy, cursor }
+      : "skip",
+  );
+
   return (
-    <section
-      aria-labelledby="reports-items-heading"
-      className="space-y-layout-lg py-layout-lg"
-    >
-      <ReportStatusBand kind={getReportStatusKind(data)} />
-      <div>
-        <h2 className="font-display text-2xl" id="reports-items-heading">
-          Item performance
-        </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          SKU-first performance for the selected reporting period.
-        </p>
+    <div className="space-y-layout-md" data-testid="reports-items">
+      <div className="flex flex-wrap items-end gap-layout-sm">
+        <div className="space-y-1">
+          <Label htmlFor="items-period-type">Period</Label>
+          <Select
+            onValueChange={(value) => onPeriodTypeChange(value as ReportPeriodType)}
+            value={periodType}
+          >
+            <SelectTrigger id="items-period-type" className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {REPORT_PERIOD_TYPES.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {REPORT_PERIOD_TYPE_LABELS[type]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="items-period-date">Anchor date</Label>
+          <Input
+            id="items-period-date"
+            onChange={(event) => onPeriodDateChange(event.target.value)}
+            type="date"
+            value={periodDate}
+          />
+        </div>
+        <div
+          className="flex gap-1 rounded-md border border-border p-1"
+          role="group"
+          aria-label="Sort SKUs"
+        >
+          {(["revenue", "units"] as const satisfies readonly ReportSkuSortBy[]).map(
+            (sort) => (
+              <Button
+                aria-pressed={sortBy === sort}
+                className={cn(
+                  "px-3",
+                  sortBy === sort ? "" : "bg-transparent text-muted-foreground",
+                )}
+                key={sort}
+                onClick={() => onSortByChange(sort)}
+                size="sm"
+                type="button"
+                variant={sortBy === sort ? "default" : "ghost"}
+              >
+                {sort === "revenue" ? "Revenue" : "Units"}
+              </Button>
+            ),
+          )}
+        </div>
       </div>
-      {controlsEnabled ? (
+
+      {result === undefined ? (
+        <Skeleton className="h-64 w-full" data-testid="reports-items-loading" />
+      ) : result.rows.length === 0 ? (
+        <EmptyState title="No SKU activity" description="No SKUs sold in this period." />
+      ) : (
         <>
-          <div
-            aria-label="Filter item performance"
-            className="flex flex-wrap gap-2"
-          >
-            <Button
-              aria-pressed={classification === "all"}
-              onClick={() => onClassificationChange("all")}
-              size="sm"
-              variant={classification === "all" ? "default" : "outline"}
-            >
-              All
-            </Button>
-            {data.facets?.map((facet) => (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>SKU</TableHead>
+                <TableHead>Net sales</TableHead>
+                <TableHead>Units sold</TableHead>
+                <TableHead>Gross profit</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {result.rows.map((row) => (
+                <TableRow key={row.productSkuId}>
+                  <TableCell>
+                    <Link
+                      params={{
+                        orgUrlSlug: orgUrlSlug!,
+                        storeUrlSlug: storeUrlSlug!,
+                        productSkuId: row.productSkuId,
+                      }}
+                      to="/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId"
+                    >
+                      {row.productSkuId}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    {formatOptionalMoney(row.netSalesMinor, activeStore?.currency ?? "USD")}
+                  </TableCell>
+                  <TableCell>{formatUnits(row.unitsSold)}</TableCell>
+                  <TableCell>
+                    {formatReportProfit(row.grossProfitMinor, activeStore?.currency ?? "USD")}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <div className="flex justify-end gap-layout-sm">
+            {cursor ? (
               <Button
-                aria-pressed={classification === facet.value}
-                key={facet.value}
-                onClick={() =>
-                  onClassificationChange(
-                    facet.value as ReportItemsClassification,
-                  )
-                }
-                size="sm"
-                variant={classification === facet.value ? "default" : "outline"}
+                onClick={() => onCursorChange(undefined)}
+                type="button"
+                variant="outline"
               >
-                {facet.value.replaceAll("_", " ")}
-                {facet.count === undefined ? "" : ` (${facet.count})`}
+                Back to start
               </Button>
-            ))}
-          </div>
-          <div
-            aria-label="Sort item performance"
-            className="flex flex-wrap gap-2"
-          >
-            {SORTS.map((option) => (
+            ) : null}
+            {result.continueCursor ? (
               <Button
-                aria-label={`Sort by ${option.label}, descending`}
-                aria-pressed={sort === option.value}
-                key={option.value}
-                onClick={() => onSortChange(option.value)}
-                size="sm"
-                variant={sort === option.value ? "default" : "outline"}
+                onClick={() => onCursorChange(result.continueCursor ?? undefined)}
+                type="button"
               >
-                {option.label}
+                Next page
               </Button>
-            ))}
+            ) : null}
           </div>
         </>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          Custom results use a stable server order.
-        </p>
       )}
-      {data.page.length ? (
-        <ReportsItemsTable onOpenItem={onOpenItem} rows={data.page} />
-      ) : (
-        <p className="rounded-lg border border-border p-layout-lg text-sm text-muted-foreground">
-          No item activity matches this view.
-        </p>
-      )}
-      {!data.isDone && onLoadMore ? (
-        <Button onClick={onLoadMore} variant="outline">
-          Next 25 items
-        </Button>
-      ) : null}
-    </section>
+    </div>
   );
 }

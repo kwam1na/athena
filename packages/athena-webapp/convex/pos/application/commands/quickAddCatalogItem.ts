@@ -3,8 +3,8 @@ import type { MutationCtx } from "../../../_generated/server";
 import { markCatalogSummaryNeedsRefresh } from "../../../inventory/catalogSummary";
 import { upsertProductSkuSearchProjection } from "../../../inventory/skuSearch";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
-import { applyInventoryEffectWithCtx } from "../../../reporting/inventory/effects";
-import { uncostedBasis } from "../../../reporting/inventory/valuation";
+import { applyInventoryEffectWithCtx } from "../../../inventoryLedger/effects";
+import { uncostedBasis } from "../../../inventoryLedger/valuation";
 import { toSlug } from "../../../utils";
 
 type CatalogResult = {

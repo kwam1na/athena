@@ -10,7 +10,7 @@ import { internal } from "../_generated/api";
 import {
   applyCommerceInventoryEffectWithCtx,
   outboundBasisFromEffect,
-} from "../reporting/inventory/commerceEffects";
+} from "../inventoryLedger/commerceEffects";
 import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
 const entity = "onlineOrderItem";

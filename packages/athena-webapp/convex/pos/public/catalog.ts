@@ -34,12 +34,11 @@ import { advanceRegisterCatalogRevision } from "../application/sync/registerCata
 import { refreshCatalogSummaryWithCtx } from "../../inventory/catalogSummary";
 import { quickAddCatalogItem } from "../application/commands/quickAddCatalogItem";
 import { createOrReusePendingCheckoutItem } from "../application/commands/createOrReusePendingCheckoutItem";
-import { applyInventoryEffectWithCtx } from "../../reporting/inventory/effects";
-import { recordPendingCheckoutSkuAttributionWithCtx } from "../../reporting/evidence";
+import { applyInventoryEffectWithCtx } from "../../inventoryLedger/effects";
 import {
   knownUnitCostBasis,
   uncostedBasis,
-} from "../../reporting/inventory/valuation";
+} from "../../inventoryLedger/valuation";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 import { updateOperationalWorkItemStatusWithCtx } from "../../operations/operationalWorkItems";
 import {
@@ -1542,21 +1541,6 @@ export const resolvePendingCheckoutItemReview = mutation({
         retiredLookupAliasId !== null,
       storeId: args.storeId,
     });
-    if (
-      (args.status === "approved" || args.status === "linked_to_catalog") &&
-      args.approvedProductSkuId &&
-      item.provisionalProductSkuId
-    ) {
-      await recordPendingCheckoutSkuAttributionWithCtx(ctx, {
-        canonicalProductId: args.approvedProductId,
-        canonicalProductSkuId: args.approvedProductSkuId,
-        organizationId: store.organizationId,
-        originalProductId: item.provisionalProductId,
-        originalProductSkuId: item.provisionalProductSkuId,
-        pendingCheckoutItemId: item._id,
-        storeId: args.storeId,
-      });
-    }
 
     if (item.operationalWorkItemId) {
       const workItemPatch = mapPendingCheckoutReviewStatusToWorkItemPatch(

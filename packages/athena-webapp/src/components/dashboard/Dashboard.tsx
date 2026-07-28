@@ -573,17 +573,14 @@ const Dashboard = () => {
         <TabsContent value="analytics">
           <div className="flex justify-end mb-2">
             <Link
-              to="/$orgUrlSlug/store/$storeUrlSlug/reports/storefront"
+              to="/$orgUrlSlug/store/$storeUrlSlug/reports"
               params={(p) => ({
                 ...p,
                 orgUrlSlug: p.orgUrlSlug!,
                 storeUrlSlug: p.storeUrlSlug!,
               })}
-              search={{
-                o: getOrigin(),
-              }}
             >
-              View storefront report
+              View reports
             </Link>
           </div>
           <div className="mb-8 p-4 rounded-lg border bg-card">

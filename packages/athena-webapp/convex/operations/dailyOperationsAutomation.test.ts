@@ -132,6 +132,13 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
     const chain = {
       collect: async () => filteredRows(),
       first: async () => filteredRows()[0] ?? null,
+      unique: async () => {
+        const rows = filteredRows();
+        if (rows.length > 1) {
+          throw new Error("unique() found more than one row");
+        }
+        return rows[0] ?? null;
+      },
       async *[Symbol.asyncIterator]() {
         yield* filteredRows();
       },
@@ -1044,9 +1051,10 @@ describe("daily operations automation adapter", () => {
     expect(inserts.map((insert) => insert.table)).toEqual([
       "automationRun",
       "dailyClose",
-      "reportingIngress",
-      "reportingIngressSourceReference",
-      "reportingFactProcessingAttempt",
+      "reportFact",
+      "reportDay",
+      "reportDirtyDay",
+      "reportDirtyDay",
       "operationalEvent",
     ]);
     expect(inserts.at(-1)?.value).toMatchObject({
@@ -1345,9 +1353,10 @@ describe("daily operations automation adapter", () => {
     expect(inserts.map((insert) => insert.table)).toEqual([
       "automationRun",
       "dailyClose",
-      "reportingIngress",
-      "reportingIngressSourceReference",
-      "reportingFactProcessingAttempt",
+      "reportFact",
+      "reportDay",
+      "reportDirtyDay",
+      "reportDirtyDay",
       "operationalEvent",
     ]);
   });
@@ -1449,9 +1458,10 @@ describe("daily operations automation adapter", () => {
     expect(inserts.map((insert) => insert.table)).toEqual([
       "automationRun",
       "dailyClose",
-      "reportingIngress",
-      "reportingIngressSourceReference",
-      "reportingFactProcessingAttempt",
+      "reportFact",
+      "reportDay",
+      "reportDirtyDay",
+      "reportDirtyDay",
       "operationalEvent",
     ]);
     expect(
@@ -2245,9 +2255,10 @@ describe("daily operations automation adapter", () => {
     expect(inserts.map((insert) => insert.table)).toEqual([
       "automationRun",
       "dailyClose",
-      "reportingIngress",
-      "reportingIngressSourceReference",
-      "reportingFactProcessingAttempt",
+      "reportFact",
+      "reportDay",
+      "reportDirtyDay",
+      "reportDirtyDay",
       "operationalEvent",
     ]);
     expect(

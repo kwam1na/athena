@@ -11,9 +11,9 @@ import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 import { markCatalogSummaryNeedsRefresh } from "./catalogSummary";
-import { applyInventoryEffectWithCtx } from "../reporting/inventory/effects";
-import { uncostedBasis } from "../reporting/inventory/valuation";
-import { resolveReportingOperatingPeriodWithCtx } from "../reporting/operatingPeriods";
+import { applyInventoryEffectWithCtx } from "../inventoryLedger/effects";
+import { uncostedBasis } from "../inventoryLedger/valuation";
+import { resolveReportingOperatingPeriodWithCtx } from "../storeTime/operatingPeriods";
 
 const expenseTransactionCreationValidator = v.object({
   transactionId: v.id("expenseTransaction"),

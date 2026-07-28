@@ -14,7 +14,7 @@ import {
   getPosTransactionById,
   patchPosTransaction,
 } from "../infrastructure/repositories/transactionRepository";
-import { appendReportingIngressWithCtx } from "../../reporting/ingress";
+import { recordFacts } from "../../reports/ingest";
 import { appendPosLifecycleJournalWithCtx } from "../infrastructure/posLifecycleJournal";
 
 vi.mock("../infrastructure/posLifecycleJournal", () => ({
@@ -54,8 +54,8 @@ vi.mock("../../operations/paymentAllocations", () => ({
   correctSameAmountSinglePaymentAllocationWithCtx: vi.fn(),
 }));
 
-vi.mock("../../reporting/ingress", () => ({
-  appendReportingIngressWithCtx: vi.fn(),
+vi.mock("../../reports/ingest", () => ({
+  recordFacts: vi.fn(),
 }));
 
 vi.mock("../infrastructure/repositories/transactionRepository", () => ({
@@ -311,28 +311,21 @@ describe("correctTransactionPaymentMethod", () => {
         operationalEventId: "event-1",
       }),
     );
-    expect(appendReportingIngressWithCtx).toHaveBeenCalledWith(
+    expect(recordFacts).toHaveBeenCalledWith(
       ctx,
-      expect.objectContaining({
-        businessEventKey: "pos:txn-1:correction:event-1",
-        correctedSettlementMethod: "card",
-        priorSettlementMethod: "cash",
-        settlementAmountMinor: 0,
-        sourceReferences: expect.arrayContaining([
-          expect.objectContaining({
-            relation: "supports",
-            sourceId: "event-1",
-            sourceType: "operational_event",
-          }),
-        ]),
-        sourceEventType: "pos_settlement_method_reclassified",
-      }),
+      "store-1",
+      expect.arrayContaining([
+        expect.objectContaining({
+          factKind: "correction",
+          grossAmountMinor: 0,
+          lineId: "event-1",
+          netAmountMinor: 0,
+          quantity: 0,
+          sourceDomain: "pos",
+          sourceId: "txn-1",
+        }),
+      ]),
     );
-    const correctionIngress = vi
-      .mocked(appendReportingIngressWithCtx)
-      .mock.calls.at(-1)?.[1];
-    expect(correctionIngress).not.toHaveProperty("grossAmountMinor");
-    expect(correctionIngress).not.toHaveProperty("netAmountMinor");
   });
 
   it("closes the queued approval request after same-submission manager approval", async () => {

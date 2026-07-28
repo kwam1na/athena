@@ -11,21 +11,21 @@ import {
 } from "./serviceCases";
 
 const reportingMocks = vi.hoisted(() => ({
-  appendReportingIngressWithCtx: vi.fn(),
   applyInventoryEffectWithCtx: vi.fn(),
+  recordFacts: vi.fn(),
   recordServiceCaseTraceBestEffort: vi.fn(),
   resolveReportingOperatingPeriodWithCtx: vi.fn(),
 }));
 
-vi.mock("../reporting/inventory/effects", () => ({
+vi.mock("../inventoryLedger/effects", () => ({
   applyInventoryEffectWithCtx: reportingMocks.applyInventoryEffectWithCtx,
 }));
 
-vi.mock("../reporting/ingress", () => ({
-  appendReportingIngressWithCtx: reportingMocks.appendReportingIngressWithCtx,
+vi.mock("../reports/ingest", () => ({
+  recordFacts: reportingMocks.recordFacts,
 }));
 
-vi.mock("../reporting/operatingPeriods", () => ({
+vi.mock("../storeTime/operatingPeriods", () => ({
   resolveReportingOperatingPeriodWithCtx:
     reportingMocks.resolveReportingOperatingPeriodWithCtx,
 }));
@@ -36,7 +36,7 @@ vi.mock("./serviceCaseTracing", () => ({
 }));
 
 beforeEach(() => {
-  reportingMocks.appendReportingIngressWithCtx.mockReset();
+  reportingMocks.recordFacts.mockReset();
   reportingMocks.applyInventoryEffectWithCtx.mockReset();
   reportingMocks.applyInventoryEffectWithCtx.mockResolvedValue({
     movement: { _id: "movement-1" },
@@ -125,7 +125,7 @@ function createInventoryUsageCtx(args?: {
       ]),
     ),
     store: new Map([
-      ["store-1", { _id: "store-1", organizationId: "org-1" }],
+      ["store-1", { _id: "store-1", currency: "GHS", organizationId: "org-1" }],
     ]),
   };
 
@@ -402,22 +402,22 @@ describe("service ops schema foundations", () => {
       data: expect.objectContaining({ status: "completed" }),
     });
     expect(reportingMocks.applyInventoryEffectWithCtx).not.toHaveBeenCalled();
-    const { appendReportingIngressWithCtx } = await import(
-      "../reporting/ingress"
-    );
-    expect(appendReportingIngressWithCtx).toHaveBeenCalledWith(
-      ctx,
+    const { recordFacts } = await import("../reports/ingest");
+    expect(recordFacts).toHaveBeenCalledWith(ctx, "store-1", [
       expect.objectContaining({
-        businessEventKey: "service:case-1:complete",
-        lines: [
-          expect.objectContaining({
-            lineKind: "service",
-            serviceCaseId: "case-1",
-          }),
-        ],
-        sourceEventType: "service_completed",
+        sourceDomain: "service",
+        sourceId: "case-1",
+        lineId: "line-1",
+        factKind: "sale",
+        currency: "GHS",
+        grossAmountMinor: 500,
+        netAmountMinor: 500,
+        taxAmountMinor: 0,
+        discountAmountMinor: 0,
+        quantity: 1,
+        occurredAt: expect.any(Number),
       }),
-    );
+    ]);
   });
 
   it("does not recognize service completion again when POS owns the sale", async () => {
@@ -446,7 +446,7 @@ describe("service ops schema foundations", () => {
       status: "completed",
     });
 
-    expect(reportingMocks.appendReportingIngressWithCtx).not.toHaveBeenCalled();
+    expect(reportingMocks.recordFacts).not.toHaveBeenCalled();
   });
 
   it("allows only supported service-case transitions", () => {

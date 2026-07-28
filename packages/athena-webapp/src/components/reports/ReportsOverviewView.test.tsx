@@ -1,156 +1,107 @@
 import { render, screen } from "@testing-library/react";
-import React from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+import type { ReportOverviewData } from "~/shared/reportsContract";
 
 const useQuery = vi.fn();
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQuery(...args),
 }));
 vi.mock("@/hooks/useGetActiveStore", () => ({
-  default: () => ({
-    activeStore: { _id: "store-1", currency: "USD" },
-    isLoadingStores: false,
-  }),
+  default: () => ({ activeStore: { _id: "store-1", currency: "USD" }, isLoadingStores: false }),
 }));
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    to,
-    ...props
-  }: React.ComponentProps<"a"> & {
-    params?: unknown;
-    search?: unknown;
-    to: string;
-  }) => {
-    delete props.params;
-    delete props.search;
-    return (
-      <a href={to} {...props}>
-        {children}
-      </a>
-    );
-  },
-  useParams: () => ({ orgUrlSlug: "acme", storeUrlSlug: "downtown" }),
+vi.mock("recharts", () => ({
+  CartesianGrid: () => null,
+  Line: () => null,
+  LineChart: ({ children }: { children?: React.ReactNode }) => <svg>{children}</svg>,
+  ResponsiveContainer: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  Tooltip: () => null,
+  XAxis: () => null,
+  YAxis: () => null,
 }));
 
 import { ReportsOverviewView } from "./ReportsOverviewView";
 
+function snapshot(overrides: Partial<ReportOverviewData["today"]> = {}) {
+  return {
+    grossSalesMinor: 100_00,
+    netSalesMinor: 90_00,
+    refundsMinor: 10_00,
+    unitsSold: 12,
+    unitsReturned: 1,
+    uncostedRevenueMinor: 0,
+    grossProfitMinor: 30_00,
+    paymentsCollectedMinor: 90_00,
+    paymentsRefundedMinor: 10_00,
+    paymentAllocatedMinor: 90_00,
+    dayCount: 1,
+    unsettledDayCount: 0,
+    ...overrides,
+  };
+}
+
+const fixture: ReportOverviewData = {
+  updatedAt: 1_700_000_000_000,
+  currency: "USD",
+  today: snapshot(),
+  weekToDate: snapshot({ dayCount: 5, netSalesMinor: 400_00 }),
+  priorWeek: snapshot({ dayCount: 7, netSalesMinor: 350_00 }),
+  trailing30: snapshot({ dayCount: 30, netSalesMinor: 2500_00, grossProfitMinor: null }),
+  comparisons: {
+    netSalesVsPriorWeekBp: 1250,
+    unitsSoldVsPriorWeekBp: null,
+  },
+  dailyTrend: [
+    { operatingDate: "2026-07-26", netSalesMinor: 80_00, status: "reconciled" },
+    { operatingDate: "2026-07-27", netSalesMinor: 90_00, status: "provisional" },
+  ],
+  trust: {
+    reconciledDays: 25,
+    provisionalDays: 3,
+    amendedDays: 2,
+    oldestUnreconciledDate: "2026-07-01",
+  },
+};
+
 describe("ReportsOverviewView", () => {
-  beforeEach(() => useQuery.mockReset());
+  it("renders all KPI and trust values from the overview fixture", () => {
+    useQuery.mockReturnValue(fixture);
+    render(<ReportsOverviewView />);
 
-  it("announces loading and pre-cutover states without presenting zeros", () => {
-    useQuery.mockReturnValueOnce(undefined);
-    const { rerender } = render(<ReportsOverviewView periodKey="wtd" />);
-    expect(screen.getByRole("status")).toHaveTextContent("Loading report");
+    // KPI cards: net sales for each snapshot.
+    expect(screen.getByText("$90")).toBeInTheDocument(); // today net sales
+    expect(screen.getByText("$400")).toBeInTheDocument(); // week to date net sales
+    expect(screen.getByText("$2,500")).toBeInTheDocument(); // trailing 30 net sales
 
-    useQuery.mockReturnValueOnce({ data: null, status: "pre_cutover" });
-    rerender(<ReportsOverviewView periodKey="wtd" />);
-    expect(screen.getByText("Rebuilding reports")).toBeInTheDocument();
-    expect(
-      screen.getByText(/completed sales will appear.*rebuild/i),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
+    // Comparison chip: +12.5% (1250 bp).
+    expect(screen.getByText("+12.5%")).toBeInTheDocument();
+    // Missing comparison renders "—", not a blank or throw.
+    const dashes = screen.getAllByText("—");
+    expect(dashes.length).toBeGreaterThan(0);
+
+    // Trust strip.
+    expect(screen.getByTestId("report-trust-strip")).toHaveTextContent("25");
+    expect(screen.getByTestId("report-trust-strip")).toHaveTextContent("3");
+    expect(screen.getByTestId("report-trust-strip")).toHaveTextContent("2");
+    expect(screen.getByTestId("report-trust-strip")).toHaveTextContent("Jul 1, 2026");
   });
 
-  it("keeps Overview in a preparation state while the reporting epoch materializes", () => {
-    useQuery.mockReturnValue({ data: null, status: "materializing" });
-    render(<ReportsOverviewView periodKey="wtd" />);
-    expect(screen.getByText("Preparing reports")).toBeInTheDocument();
-    expect(screen.queryByText("Reports are current")).not.toBeInTheDocument();
+  it("renders an explicit 'profit unavailable (uncosted)' treatment for null gross profit, not a bare dash", () => {
+    useQuery.mockReturnValue(fixture);
+    render(<ReportsOverviewView />);
+
+    expect(screen.getByText("profit unavailable (uncosted)")).toBeInTheDocument();
   });
 
-  it("renders a balanced money and inventory pulse with explicit cost coverage", () => {
-    useQuery.mockReturnValue({
-      status: "active",
-      data: {
-        completeness: "partial",
-        limitingReason: "uncosted",
-        metrics: {
-          net_sales: 125_00,
-          comparison_net_sales: 100_00,
-          units_sold: 14,
-          comparison_units_sold: 10,
-          known_gross_profit: 45_00,
-          cost_coverage_basis_points: 9000,
-          inventory_value: 810_00,
-          uncosted_on_hand_quantity: 3,
-        },
-        attention: [],
-      },
-    });
-    render(<ReportsOverviewView periodKey="wtd" />);
-
-    expect(
-      screen.getByText("Some costs are not available"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("$125.00")).toBeInTheDocument();
-    expect(screen.getByText("$810.00")).toBeInTheDocument();
-    expect(screen.getByText(/90% cost coverage/i)).toBeInTheDocument();
-    expect(screen.getByText("+25.0%")).toBeInTheDocument();
+  it("shows a loading state while the query is pending", () => {
+    useQuery.mockReturnValue(undefined);
+    render(<ReportsOverviewView />);
+    expect(screen.getByRole("status", { name: "Loading report overview" })).toBeInTheDocument();
   });
 
-  it("does not fabricate a percentage when the comparison denominator is zero", () => {
-    useQuery.mockReturnValue({
-      status: "active",
-      data: {
-        completeness: "complete",
-        metrics: { net_sales: 500, comparison_net_sales: 0 },
-      },
-    });
-    render(<ReportsOverviewView periodKey="wtd" />);
-    expect(screen.getByText("+$5.00 vs prior period")).toBeInTheDocument();
-    expect(screen.queryByText(/Infinity|NaN/)).not.toBeInTheDocument();
-  });
-
-  it("withholds money while preserving non-money metrics for mixed currencies", () => {
-    useQuery.mockReturnValue({
-      status: "active",
-      data: {
-        completeness: "partial",
-        limitingReason: "mixed_currency",
-        metrics: {
-          net_sales: 12500,
-          units_sold: 14,
-          known_gross_profit: 5000,
-          inventory_value: 20000,
-        },
-      },
-    });
-    render(<ReportsOverviewView periodKey="wtd" />);
-    expect(
-      screen.getAllByText("Currencies cannot be combined").length,
-    ).toBeGreaterThan(0);
-    expect(screen.getByText("14")).toBeInTheDocument();
-    expect(screen.queryByText("$125.00")).not.toBeInTheDocument();
-    expect(screen.queryByText("$200.00")).not.toBeInTheDocument();
-  });
-
-  it("routes attention to its owning workflow and labels unavailable evidence", () => {
-    useQuery.mockReturnValue({
-      status: "active",
-      data: {
-        completeness: "complete",
-        metrics: {},
-        attention: [
-          {
-            id: "a1",
-            title: "Terminal activity is still syncing",
-            detail: "Wednesday may change.",
-            destination: { kind: "terminal_health" },
-          },
-          {
-            id: "a2",
-            title: "Historical source unavailable",
-            detail: "The summary remains available.",
-            destination: { kind: "unavailable" },
-          },
-        ],
-      },
-    });
-    render(<ReportsOverviewView periodKey="wtd" />);
-    expect(
-      screen.getByRole("link", { name: /review terminal activity/i }),
-    ).toHaveAttribute("href", expect.stringContaining("pos/terminals"));
-    expect(screen.getByText("Source detail unavailable")).toBeInTheDocument();
+  it("shows an empty state when there is no overview document yet", () => {
+    useQuery.mockReturnValue(null);
+    render(<ReportsOverviewView />);
+    expect(screen.getByText("No report data yet")).toBeInTheDocument();
   });
 });

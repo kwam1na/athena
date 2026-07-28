@@ -1,0 +1,595 @@
+import { describe, expect, it } from "vitest";
+import { foldDay } from "./foldDay";
+import type {
+  CloseRef,
+  FoldFact,
+  ReportFactKind,
+} from "../../shared/reportsContract";
+
+/**
+ * ---------------------------------------------------------------------------
+ * Deliberate divergences from legacy `reporting/projections/factContributions.ts`
+ * ---------------------------------------------------------------------------
+ * The legacy contribution table is a SIGN-CONVENTION REFERENCE ONLY. Where the
+ * design review found it wrong, this fold folds to truth. Each divergence:
+ *
+ * 1. Gross vs net are distinct fields, not the same number.
+ *    Legacy emitted `{gross_sales: amount, net_sales: amount}` from a single
+ *    `amountMinor`, so discounts had to be re-subtracted from net by a separate
+ *    `discount` fact — double-counting whenever both were emitted. Facts now
+ *    carry `grossAmountMinor` AND `netAmountMinor`; the fold adds each to its
+ *    own metric and there is no `discount` fact kind at all.
+ *
+ * 2. `refund`/`return` are separate kinds with separate meanings.
+ *    Legacy handled them in one branch, so every refund incremented
+ *    `units_returned` even when no goods came back, and every return emitted
+ *    `refunds` even for a zero-value exchange. Here: `refund` moves money only
+ *    (refundsMinor, −netSales, NO unit movement); `return` moves goods and
+ *    money (unitsReturned + refundsMinor + −netSales).
+ *
+ * 3. Legacy's `units_sold` was decremented by returns (`units_sold: signedQty`)
+ *    while `units_returned` was also incremented — the same event hitting two
+ *    metrics with opposite signs, which made "units sold today" unreadable.
+ *    Here `unitsSold` counts sales (and signed void/correction reversals) only;
+ *    returns land exclusively in `unitsReturned`.
+ *
+ * 4. Refund/return amounts are magnitude-normalised (`Math.abs`) rather than
+ *    trusted-as-signed. Legacy's `amount > 0 ? -amount : amount` produced
+ *    different results for emitters that already signed their refunds. The
+ *    fold is now emitter-sign-agnostic for these kinds. Reversal kinds
+ *    (`void`/`correction`) are the opposite: they are trusted exactly as
+ *    carried, since only the emitter knows what is being negated.
+ *
+ * 5. Gross profit is all-or-nothing per day, never partial-and-silent.
+ *    Legacy accumulated `gross_profit` from costed facts while separately
+ *    reporting `uncosted_revenue`, so the profit number looked authoritative
+ *    while covering an unknown fraction of revenue. Here ANY uncosted revenue
+ *    forces `grossProfitMinor: null` (same rule per SKU) and the uncovered
+ *    revenue is reported honestly in `uncostedRevenueMinor`.
+ *
+ * 6. Foreign-currency facts are EXCLUDED from totals, not silently summed.
+ *    Legacy only suppressed the `gross_profit` line when currencies were
+ *    incompatible and still added the foreign amount to sales. The fold has no
+ *    FX rate, so it excludes the fact entirely and raises `flags.mixedCurrency`.
+ *    (The fact still counts in `factCount` — it exists, it just isn't money we
+ *    can add.)
+ *
+ * 7. `paymentsRefundedMinor` is a positive magnitude. Legacy stored the signed
+ *    (negative) amount, which made the metric un-summable against
+ *    `paymentsCollectedMinor` without knowing its sign convention. Refunded
+ *    payments now arrive as their own `payment_refund` kind and accumulate as
+ *    `Math.abs`, matching `refundsMinor`.
+ *
+ * 8. `procurement_receipt` / `inventory_issue` contribute NO metric here.
+ *    Legacy folded purchase-commitment and inventory-consumption counters into
+ *    the same metric space as sales. Those are not day-sales metrics and are
+ *    absent from the frozen contract; cost basis reaches the fold only via
+ *    `unitCostMinor` on the revenue fact itself.
+ *
+ * Open, deliberately scoped out of slice A: `refund` facts carry no
+ * `unitCostMinor` path, so a money-only refund reduces net sales without
+ * reversing any cost. Correct for refunds proper (no goods return); a return
+ * with a cost basis does reverse cost, via case 4 below.
+ */
+
+const CLOSE_AT = 3_000;
+
+function fact(overrides: Partial<FoldFact> & { factId: string }): FoldFact {
+  return {
+    sourceDomain: "pos",
+    sourceId: "src-1",
+    lineId: "",
+    factKind: "sale",
+    occurredAt: 1_000,
+    recordedAt: 1_000,
+    currency: "GHS",
+    grossAmountMinor: 0,
+    netAmountMinor: 0,
+    taxAmountMinor: 0,
+    discountAmountMinor: 0,
+    quantity: 0,
+    quarantined: false,
+    ...overrides,
+  };
+}
+
+function sale(over: Partial<FoldFact> & { factId: string }): FoldFact {
+  return fact({
+    factKind: "sale",
+    grossAmountMinor: 1_000,
+    netAmountMinor: 900,
+    quantity: 1,
+    ...over,
+  });
+}
+
+/** Deterministic (seeded) shuffle so a failure is reproducible. */
+function shuffle<T>(items: readonly T[], seed: number): T[] {
+  const out = [...items];
+  let state = seed;
+  for (let i = out.length - 1; i > 0; i--) {
+    state = (state * 1_103_515_245 + 12_345) % 2_147_483_648;
+    const j = state % (i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+describe("foldDay — per-kind golden semantics", () => {
+  it("sale adds gross, net and units", () => {
+    const { day } = foldDay("GHS", [
+      sale({ factId: "f1", grossAmountMinor: 1_000, netAmountMinor: 900, quantity: 2 }),
+    ]);
+    expect(day.grossSalesMinor).toBe(1_000);
+    expect(day.netSalesMinor).toBe(900);
+    expect(day.unitsSold).toBe(2);
+    expect(day.unitsReturned).toBe(0);
+    expect(day.refundsMinor).toBe(0);
+  });
+
+  it("refund adds refunds and subtracts net sales, moving no units", () => {
+    const { day } = foldDay("GHS", [
+      fact({
+        factId: "f1",
+        factKind: "refund",
+        netAmountMinor: 500,
+        quantity: 1,
+        unitCostMinor: undefined,
+      }),
+    ]);
+    expect(day.refundsMinor).toBe(500);
+    expect(day.netSalesMinor).toBe(-500);
+    expect(day.unitsReturned).toBe(0);
+    expect(day.unitsSold).toBe(0);
+  });
+
+  it("refund is sign-agnostic — +500 and -500 fold identically", () => {
+    const positive = foldDay("GHS", [
+      fact({ factId: "f1", factKind: "refund", netAmountMinor: 500 }),
+    ]);
+    const negative = foldDay("GHS", [
+      fact({ factId: "f1", factKind: "refund", netAmountMinor: -500 }),
+    ]);
+    expect(positive).toEqual(negative);
+  });
+
+  it("return adds unitsReturned, refunds and subtracts net sales", () => {
+    const { day } = foldDay("GHS", [
+      fact({
+        factId: "f1",
+        factKind: "return",
+        netAmountMinor: 900,
+        quantity: 2,
+      }),
+    ]);
+    expect(day.unitsReturned).toBe(2);
+    expect(day.refundsMinor).toBe(900);
+    expect(day.netSalesMinor).toBe(-900);
+    expect(day.unitsSold).toBe(0);
+  });
+
+  it("void/correction negate exactly as carried (fold trusts the emitter's signs)", () => {
+    const { day } = foldDay("GHS", [
+      sale({ factId: "f1" }),
+      fact({
+        factId: "f2",
+        factKind: "void",
+        grossAmountMinor: -1_000,
+        netAmountMinor: -900,
+        quantity: -1,
+      }),
+      fact({
+        factId: "f3",
+        factKind: "correction",
+        grossAmountMinor: 200,
+        netAmountMinor: 150,
+        quantity: 0,
+      }),
+    ]);
+    expect(day.grossSalesMinor).toBe(200);
+    expect(day.netSalesMinor).toBe(150);
+    expect(day.unitsSold).toBe(0);
+  });
+
+  it("payment feeds collected + allocated; payment_refund feeds refunded as a magnitude", () => {
+    const { day } = foldDay("GHS", [
+      fact({
+        factId: "f1",
+        sourceDomain: "payments",
+        factKind: "payment",
+        netAmountMinor: 2_000,
+      }),
+      fact({
+        factId: "f2",
+        sourceDomain: "payments",
+        factKind: "payment_refund",
+        netAmountMinor: -750,
+      }),
+    ]);
+    expect(day.paymentsCollectedMinor).toBe(2_000);
+    expect(day.paymentAllocatedMinor).toBe(2_000);
+    expect(day.paymentsRefundedMinor).toBe(750);
+    expect(day.netSalesMinor).toBe(0);
+    expect(day.grossSalesMinor).toBe(0);
+  });
+
+  it("close_snapshot, inventory_issue and procurement_receipt contribute no metrics", () => {
+    const inert: ReportFactKind[] = [
+      "close_snapshot",
+      "inventory_issue",
+      "procurement_receipt",
+    ];
+    const facts = inert.map((factKind, i) =>
+      fact({
+        factId: `f${i}`,
+        factKind,
+        sourceDomain: factKind === "close_snapshot" ? "daily_close" : "inventory",
+        grossAmountMinor: 5_000,
+        netAmountMinor: 5_000,
+        quantity: 7,
+        unitCostMinor: 400,
+        productSkuId: "sku-1",
+      }),
+    );
+    const { day, skuDays } = foldDay("GHS", facts);
+    expect(day.grossSalesMinor).toBe(0);
+    expect(day.netSalesMinor).toBe(0);
+    expect(day.unitsSold).toBe(0);
+    expect(day.grossProfitMinor).toBe(0);
+    expect(day.factCount).toBe(3);
+    expect(skuDays.size).toBe(0);
+  });
+});
+
+describe("foldDay — gross profit and cost basis", () => {
+  it("accumulates profit as net minus unit cost times quantity", () => {
+    const { day } = foldDay("GHS", [
+      sale({
+        factId: "f1",
+        netAmountMinor: 1_000,
+        quantity: 2,
+        unitCostMinor: 300,
+      }),
+    ]);
+    expect(day.grossProfitMinor).toBe(400);
+    expect(day.uncostedRevenueMinor).toBe(0);
+    expect(day.flags.hasUncostedRevenue).toBe(false);
+  });
+
+  it("a costed return reverses both revenue and cost", () => {
+    const { day } = foldDay("GHS", [
+      sale({
+        factId: "f1",
+        netAmountMinor: 1_000,
+        quantity: 2,
+        unitCostMinor: 300,
+      }),
+      fact({
+        factId: "f2",
+        factKind: "return",
+        netAmountMinor: 500,
+        quantity: 1,
+        unitCostMinor: 300,
+      }),
+    ]);
+    // sale: 1000 - 600 = 400; return: -500 + 300 = -200
+    expect(day.grossProfitMinor).toBe(200);
+  });
+
+  it("any uncosted revenue nulls gross profit and is reported honestly", () => {
+    const { day } = foldDay("GHS", [
+      sale({ factId: "f1", netAmountMinor: 1_000, quantity: 1, unitCostMinor: 400 }),
+      sale({ factId: "f2", netAmountMinor: 700, quantity: 1 }),
+    ]);
+    expect(day.grossProfitMinor).toBeNull();
+    expect(day.uncostedRevenueMinor).toBe(700);
+    expect(day.flags.hasUncostedRevenue).toBe(true);
+    expect(day.netSalesMinor).toBe(1_700);
+  });
+
+  it("zero-revenue facts without a cost basis do not raise the uncosted flag", () => {
+    const { day } = foldDay("GHS", [
+      sale({ factId: "f1", grossAmountMinor: 0, netAmountMinor: 0, quantity: 0 }),
+    ]);
+    expect(day.flags.hasUncostedRevenue).toBe(false);
+    expect(day.grossProfitMinor).toBe(0);
+  });
+});
+
+describe("foldDay — exclusions", () => {
+  it("excludes quarantined facts from metrics but counts them", () => {
+    const { day, skuDays } = foldDay("GHS", [
+      sale({ factId: "f1", productSkuId: "sku-1" }),
+      sale({
+        factId: "f2",
+        productSkuId: "sku-2",
+        quarantined: true,
+        netAmountMinor: 99_999,
+      }),
+    ]);
+    expect(day.netSalesMinor).toBe(900);
+    expect(day.flags.quarantinedFactCount).toBe(1);
+    expect(day.factCount).toBe(2);
+    expect(skuDays.has("sku-2")).toBe(false);
+  });
+
+  it("excludes foreign-currency facts from totals and flags mixed currency", () => {
+    const { day, skuDays } = foldDay("GHS", [
+      sale({ factId: "f1", productSkuId: "sku-1" }),
+      sale({
+        factId: "f2",
+        productSkuId: "sku-usd",
+        currency: "USD",
+        netAmountMinor: 50_000,
+        grossAmountMinor: 50_000,
+        quantity: 3,
+      }),
+    ]);
+    expect(day.netSalesMinor).toBe(900);
+    expect(day.grossSalesMinor).toBe(1_000);
+    expect(day.unitsSold).toBe(1);
+    expect(day.flags.mixedCurrency).toBe(true);
+    expect(day.factCount).toBe(2);
+    expect(skuDays.has("sku-usd")).toBe(false);
+  });
+
+  it("does not flag mixed currency when every fact is in store currency", () => {
+    const { day } = foldDay("USD", [
+      sale({ factId: "f1", currency: "USD" }),
+    ]);
+    expect(day.flags.mixedCurrency).toBe(false);
+  });
+});
+
+describe("foldDay — skuDays", () => {
+  it("is sparse: only SKUs with sku-attributable activity appear", () => {
+    const { skuDays } = foldDay("GHS", [
+      sale({ factId: "f1", productSkuId: "sku-a", netAmountMinor: 900, quantity: 1 }),
+      fact({
+        factId: "f2",
+        factKind: "return",
+        productSkuId: "sku-b",
+        netAmountMinor: 400,
+        quantity: 1,
+      }),
+      // No productSkuId → day-level only.
+      sale({ factId: "f3", netAmountMinor: 100, quantity: 1 }),
+      // Payment carries a sku id but is not sku-attributable.
+      fact({
+        factId: "f4",
+        factKind: "payment",
+        productSkuId: "sku-c",
+        netAmountMinor: 5_000,
+      }),
+    ]);
+    expect([...skuDays.keys()].sort()).toEqual(["sku-a", "sku-b"]);
+    expect(skuDays.get("sku-a")).toEqual({
+      unitsSold: 1,
+      unitsReturned: 0,
+      grossSalesMinor: 1_000,
+      netSalesMinor: 900,
+      refundsMinor: 0,
+      uncostedRevenueMinor: 900,
+      grossProfitMinor: null,
+    });
+    expect(skuDays.get("sku-b")).toEqual({
+      unitsSold: 0,
+      unitsReturned: 1,
+      grossSalesMinor: 0,
+      netSalesMinor: -400,
+      refundsMinor: 400,
+      uncostedRevenueMinor: -400,
+      grossProfitMinor: null,
+    });
+  });
+
+  it("nulls gross profit per SKU independently", () => {
+    const { skuDays } = foldDay("GHS", [
+      sale({
+        factId: "f1",
+        productSkuId: "costed",
+        netAmountMinor: 1_000,
+        quantity: 1,
+        unitCostMinor: 250,
+      }),
+      sale({ factId: "f2", productSkuId: "uncosted", netAmountMinor: 800, quantity: 1 }),
+    ]);
+    expect(skuDays.get("costed")!.grossProfitMinor).toBe(750);
+    expect(skuDays.get("uncosted")!.grossProfitMinor).toBeNull();
+  });
+});
+
+describe("foldDay — status, close variance and amendment", () => {
+  const close: CloseRef = {
+    closeId: "close-1",
+    acceptedAt: CLOSE_AT,
+    closeNetSalesMinor: 900,
+  };
+
+  it("is provisional with no close and carries no variance fields", () => {
+    const { day } = foldDay("GHS", [sale({ factId: "f1" })]);
+    expect(day.status).toBe("provisional");
+    expect(day.closeVarianceMinor).toBeUndefined();
+    expect(day.postCloseNetSalesDeltaMinor).toBeUndefined();
+  });
+
+  it("is reconciled when every fact predates the close acceptance", () => {
+    const { day } = foldDay(
+      "GHS",
+      [sale({ factId: "f1", recordedAt: CLOSE_AT })],
+      close,
+    );
+    expect(day.status).toBe("reconciled");
+    expect(day.closeVarianceMinor).toBe(0);
+    expect(day.postCloseNetSalesDeltaMinor).toBeUndefined();
+  });
+
+  it("reports a non-zero variance against a disagreeing close", () => {
+    const { day } = foldDay(
+      "GHS",
+      [sale({ factId: "f1", recordedAt: 1_000, netAmountMinor: 1_150 })],
+      close,
+    );
+    expect(day.status).toBe("reconciled");
+    expect(day.closeVarianceMinor).toBe(250);
+  });
+
+  it("is amended when a fact was recorded after the close, with the post-close delta", () => {
+    const { day } = foldDay(
+      "GHS",
+      [
+        sale({ factId: "f1", recordedAt: 1_000 }),
+        fact({
+          factId: "f2",
+          factKind: "refund",
+          recordedAt: CLOSE_AT + 1,
+          netAmountMinor: 200,
+        }),
+        sale({ factId: "f3", recordedAt: CLOSE_AT + 2, netAmountMinor: 50 }),
+      ],
+      close,
+    );
+    expect(day.status).toBe("amended");
+    expect(day.netSalesMinor).toBe(750);
+    expect(day.postCloseNetSalesDeltaMinor).toBe(-150);
+    expect(day.closeVarianceMinor).toBe(-150);
+  });
+
+  it("empty day with no close is a zeroed provisional day", () => {
+    const result = foldDay("GHS", []);
+    expect(result.skuDays.size).toBe(0);
+    expect(result.day).toEqual({
+      grossSalesMinor: 0,
+      netSalesMinor: 0,
+      refundsMinor: 0,
+      unitsSold: 0,
+      unitsReturned: 0,
+      uncostedRevenueMinor: 0,
+      grossProfitMinor: 0,
+      paymentsCollectedMinor: 0,
+      paymentsRefundedMinor: 0,
+      paymentAllocatedMinor: 0,
+      status: "provisional",
+      flags: {
+        mixedCurrency: false,
+        hasUncostedRevenue: false,
+        quarantinedFactCount: 0,
+      },
+      factCount: 0,
+      lastFactRecordedAt: 0,
+    });
+  });
+
+  it("empty day with a close reconciles with the close's own value as variance", () => {
+    const { day } = foldDay("GHS", [], close);
+    expect(day.status).toBe("reconciled");
+    expect(day.closeVarianceMinor).toBe(-900);
+    expect(day.factCount).toBe(0);
+  });
+
+  it("tracks factCount and lastFactRecordedAt across excluded facts too", () => {
+    const { day } = foldDay("GHS", [
+      sale({ factId: "f1", recordedAt: 1_000 }),
+      sale({ factId: "f2", recordedAt: 9_000, quarantined: true }),
+      sale({ factId: "f3", recordedAt: 5_000, currency: "USD" }),
+    ]);
+    expect(day.factCount).toBe(3);
+    expect(day.lastFactRecordedAt).toBe(9_000);
+  });
+});
+
+describe("foldDay — determinism", () => {
+  const close: CloseRef = {
+    closeId: "close-1",
+    acceptedAt: CLOSE_AT,
+    closeNetSalesMinor: 1_234,
+  };
+
+  const corpus: FoldFact[] = [
+    sale({ factId: "a", occurredAt: 100, productSkuId: "sku-1", unitCostMinor: 300 }),
+    sale({
+      factId: "b",
+      occurredAt: 100,
+      sourceId: "src-0",
+      lineId: "L2",
+      productSkuId: "sku-2",
+      netAmountMinor: 450,
+    }),
+    fact({
+      factId: "c",
+      factKind: "return",
+      occurredAt: 200,
+      productSkuId: "sku-1",
+      netAmountMinor: 300,
+      quantity: 1,
+      unitCostMinor: 300,
+    }),
+    fact({
+      factId: "d",
+      factKind: "refund",
+      occurredAt: 200,
+      sourceId: "src-2",
+      netAmountMinor: 120,
+      recordedAt: CLOSE_AT + 10,
+    }),
+    fact({
+      factId: "e",
+      factKind: "payment",
+      occurredAt: 150,
+      sourceDomain: "payments",
+      netAmountMinor: 3_000,
+    }),
+    fact({
+      factId: "f",
+      factKind: "payment_refund",
+      occurredAt: 150,
+      sourceDomain: "payments",
+      netAmountMinor: -120,
+    }),
+    fact({
+      factId: "g",
+      factKind: "void",
+      occurredAt: 250,
+      grossAmountMinor: -1_000,
+      netAmountMinor: -900,
+      quantity: -1,
+      productSkuId: "sku-2",
+    }),
+    fact({
+      factId: "h",
+      factKind: "close_snapshot",
+      sourceDomain: "daily_close",
+      occurredAt: 300,
+    }),
+    sale({ factId: "i", occurredAt: 100, currency: "USD", netAmountMinor: 77 }),
+    sale({ factId: "j", occurredAt: 100, quarantined: true, netAmountMinor: 88 }),
+  ];
+
+  it("produces a deep-equal result for any input order", () => {
+    const baseline = foldDay("GHS", corpus, close);
+    for (const seed of [1, 7, 42, 1_337, 99_991]) {
+      const shuffled = foldDay("GHS", shuffle(corpus, seed), close);
+      expect(shuffled).toEqual(baseline);
+      expect([...shuffled.skuDays.keys()]).toEqual([...baseline.skuDays.keys()]);
+    }
+  });
+
+  it("does not mutate or reorder the caller's array", () => {
+    const input = [...corpus];
+    const snapshot = input.map((f) => f.factId);
+    foldDay("GHS", input, close);
+    expect(input.map((f) => f.factId)).toEqual(snapshot);
+  });
+
+  it("orders facts by (occurredAt, sourceId, lineId, factKind) — ties fold identically", () => {
+    const tied = [
+      fact({ factId: "x", factKind: "sale", netAmountMinor: 10, quantity: 1 }),
+      fact({ factId: "y", factKind: "refund", netAmountMinor: 4 }),
+      fact({ factId: "z", factKind: "correction", netAmountMinor: 1 }),
+    ];
+    const forward = foldDay("GHS", tied);
+    const backward = foldDay("GHS", [...tied].reverse());
+    expect(forward).toEqual(backward);
+    expect(forward.day.netSalesMinor).toBe(7);
+  });
+});

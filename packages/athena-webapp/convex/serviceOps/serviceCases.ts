@@ -21,14 +21,11 @@ import {
   SERVICE_CASE_LOOKUP_TYPE,
   SERVICE_CASE_WORKFLOW_TYPE,
 } from "../workflowTraces/adapters/serviceCase";
-import { applyInventoryEffectWithCtx } from "../reporting/inventory/effects";
-import type { OutboundValuationBasisSnapshot } from "../reporting/inventory/types";
-import { resolveReportingOperatingPeriodWithCtx } from "../reporting/operatingPeriods";
-import {
-  appendReportingIngressWithCtx,
-  type ReportingIngressLineInput,
-} from "../reporting/ingress";
-import { canonicalReportingBusinessEventKey } from "../reporting/factIdentity";
+import { applyInventoryEffectWithCtx } from "../inventoryLedger/effects";
+import type { OutboundValuationBasisSnapshot } from "../inventoryLedger/types";
+import { resolveReportingOperatingPeriodWithCtx } from "../storeTime/operatingPeriods";
+import { recordFacts } from "../reports/ingest";
+import type { NewReportFact } from "../../shared/reportsContract";
 import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
 export const SERVICE_CASE_STATUSES = [
@@ -1107,74 +1104,37 @@ export const updateServiceCaseStatus = mutation({
         )
         .first();
       if (!posServiceLine) {
-        const lines: ReportingIngressLineInput[] =
+        const saleFacts: NewReportFact[] =
           lineItems.length > 0
             ? lineItems.map((lineItem) => ({
-                costStatus: "not_applicable",
-                discountAmountMinor: 0,
+                sourceDomain: "service" as const,
+                sourceId: String(serviceCase._id),
+                lineId: String(lineItem._id),
+                factKind: "sale" as const,
+                occurredAt: now,
+                currency: store.currency,
                 grossAmountMinor: lineItem.amount,
-                lineKey: String(lineItem._id),
-                lineKind: "service",
                 netAmountMinor: lineItem.amount,
+                taxAmountMinor: 0,
+                discountAmountMinor: 0,
                 quantity: lineItem.quantity,
-                serviceCaseId: serviceCase._id,
               }))
             : [
                 {
-                  costStatus: "not_applicable",
-                  discountAmountMinor: 0,
+                  sourceDomain: "service" as const,
+                  sourceId: String(serviceCase._id),
+                  lineId: "service",
+                  factKind: "sale" as const,
+                  occurredAt: now,
+                  currency: store.currency,
                   grossAmountMinor: totalAmount,
-                  lineKey: "service",
-                  lineKind: "service",
                   netAmountMinor: totalAmount,
+                  taxAmountMinor: 0,
+                  discountAmountMinor: 0,
                   quantity: 1,
-                  serviceCaseId: serviceCase._id,
                 },
               ];
-        const currencyCode = store.currency?.trim().toUpperCase();
-        await appendReportingIngressWithCtx(ctx, {
-          acceptedAt: now,
-          adapterVersion: 1,
-          businessEventKey: canonicalReportingBusinessEventKey({
-            kind: "service_completion",
-            serviceCaseId: String(serviceCase._id),
-          }),
-          contentFingerprint: [
-            "service-complete-v1",
-            String(serviceCase._id),
-            String(totalAmount),
-            ...lines.flatMap((line) => [
-              line.lineKey,
-              String(line.quantity),
-              String(line.netAmountMinor),
-            ]),
-          ].join(":"),
-          ...(currencyCode
-            ? { currencyCode, currencyMinorUnitScale: 2 }
-            : {}),
-          grossAmountMinor: totalAmount,
-          lines,
-          materialFields: [
-            "amountMinor",
-            "occurrenceAt",
-            "quantity",
-            "storeId",
-          ],
-          netAmountMinor: totalAmount,
-          occurredAt: now,
-          organizationId: serviceCase.organizationId ?? store.organizationId,
-          quantity: lines.reduce((sum, line) => sum + line.quantity, 0),
-          sourceDomain: "service",
-          sourceEventType: "service_completed",
-          sourceReferences: [
-            {
-              relation: "owns",
-              sourceId: String(serviceCase._id),
-              sourceType: "service_case",
-            },
-          ],
-          storeId: serviceCase.storeId,
-        });
+        await recordFacts(ctx, serviceCase.storeId, saleFacts);
       }
     }
 

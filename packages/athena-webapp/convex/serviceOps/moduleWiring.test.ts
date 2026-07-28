@@ -39,9 +39,8 @@ describe("service ops module wiring", () => {
     expect(serviceCasesSource).toContain("applyInventoryEffectWithCtx");
     expect(serviceCasesSource).toContain('usageType !== "planned"');
     expect(serviceCasesSource).toContain('disposition: "service_consumption"');
-    expect(serviceCasesSource).toContain(
-      'sourceEventType: "service_completed"',
-    );
+    expect(serviceCasesSource).toContain('factKind: "sale"');
+    expect(serviceCasesSource).toContain("recordFacts(ctx, serviceCase.storeId");
     expect(serviceCasesSource).toContain(
       '.query("posTransactionServiceLine")',
     );

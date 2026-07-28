@@ -407,30 +407,17 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
   },
   {
     wave: "reporting",
-    capability: "exports.generate",
-    owner: "V26-1094",
-    reason: LEGACY_REASON,
-    functions: ["reporting/export:requestExport"],
-  },
-  {
-    wave: "reporting",
     capability: "reporting.generate",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: ["reporting/customRangeRequests:requestCustomRange"],
+    functions: ["reports/customRange:requestRange"],
   },
   {
     wave: "reporting",
     capability: "reporting.maintain",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "reporting/evidence:resolvePendingCheckoutSkuAttributionConflictForStore",
-      "reporting/inventory/corrections:correctSkuValuation",
-      "reporting/maintenance/authorizedPosBackfill:authorizePosReportingBackfill",
-      "reporting/maintenance/legacyCompatibility:approveDraft",
-      "reporting/maintenance/legacyCompatibility:createDraft",
-    ],
+    functions: ["inventoryLedger/corrections:correctSkuValuation"],
   },
   {
     wave: "service-ops",

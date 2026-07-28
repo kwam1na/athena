@@ -44,11 +44,11 @@ import {
   completeCatalogTaxonomySetupWorkForProductWithCtx,
   completeFinalizedLegacyImportRowsForProductTaxonomyWithCtx,
 } from "./catalogImport";
-import { applyInventoryEffectWithCtx } from "../reporting/inventory/effects";
+import { applyInventoryEffectWithCtx } from "../inventoryLedger/effects";
 import {
   knownUnitCostBasis,
   uncostedBasis,
-} from "../reporting/inventory/valuation";
+} from "../inventoryLedger/valuation";
 import { advanceRegisterCatalogRevision } from "../pos/application/sync/registerCatalogRevision";
 
 const entity = "product";

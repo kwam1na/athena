@@ -1,5 +1,5 @@
 import { Doc, Id } from "../../_generated/dataModel";
-import type { InventoryReturnDisposition } from "../../reporting/inventory/types";
+import type { InventoryReturnDisposition } from "../../inventoryLedger/types";
 import { getRemainingRefundableBalance } from "./paymentHelpers";
 
 type ReturnExchangeOrder = Pick<

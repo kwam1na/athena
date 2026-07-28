@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
-import * as reportingAccess from "../reporting/access";
+import * as reportsAccess from "../reports/access";
 import { getWorkspaceSummary } from "./analytics";
 
-vi.mock("../reporting/access", () => ({
-  requireReportingStoreAccess: vi.fn(),
+vi.mock("../reports/access", () => ({
+  requireReportsStoreAccess: vi.fn(),
 }));
 
 function handler<TArgs, TResult>(definition: unknown) {
@@ -34,7 +34,7 @@ describe("storefront Analytics workspace authorization", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("denies before reading analytics when backend store access fails", async () => {
-    vi.mocked(reportingAccess.requireReportingStoreAccess).mockRejectedValue(
+    vi.mocked(reportsAccess.requireReportsStoreAccess).mockRejectedValue(
       new Error("Reports access unavailable."),
     );
     const ctx = emptyContext();
@@ -52,7 +52,7 @@ describe("storefront Analytics workspace authorization", () => {
   });
 
   it("preserves the summary response for an authorized full admin", async () => {
-    vi.mocked(reportingAccess.requireReportingStoreAccess).mockResolvedValue({
+    vi.mocked(reportsAccess.requireReportsStoreAccess).mockResolvedValue({
       athenaUser: { _id: "user-1" },
       membership: { role: "full_admin" },
       store: { _id: "store-1", organizationId: "org-1" },
@@ -78,7 +78,7 @@ describe("storefront Analytics workspace authorization", () => {
       topProducts: [],
       topUsers: [],
     });
-    expect(reportingAccess.requireReportingStoreAccess).toHaveBeenCalledWith(
+    expect(reportsAccess.requireReportsStoreAccess).toHaveBeenCalledWith(
       ctx,
       "store-1",
     );

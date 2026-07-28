@@ -48,7 +48,7 @@ vi.mock("../pos/application/sync/registerCatalogRevision", () => ({
   advanceRegisterCatalogRevision: mocks.advanceRegisterCatalogRevision,
 }));
 
-vi.mock("../reporting/inventory/effects", () => ({
+vi.mock("../inventoryLedger/effects", () => ({
   applyInventoryEffectWithCtx: mocks.applyInventoryEffectWithCtx,
 }));
 

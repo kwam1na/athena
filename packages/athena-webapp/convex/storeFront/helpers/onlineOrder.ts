@@ -16,7 +16,7 @@ import { recordOnlineOrderTraceBestEffort } from "../onlineOrderTracing";
 import {
   applyCommerceInventoryEffectWithCtx,
   outboundBasisFromEffect,
-} from "../../reporting/inventory/commerceEffects";
+} from "../../inventoryLedger/commerceEffects";
 
 const MAX_BAG_ITEMS = 200;
 const MAX_CHECKOUT_SESSION_ITEMS = 200;

@@ -15,7 +15,7 @@ vi.mock("../pos/application/sync/registerCatalogRevision", () => ({
     mockedSkuSearch.advanceRegisterCatalogRevision,
 }));
 
-vi.mock("../reporting/inventory/effects", () => ({
+vi.mock("../inventoryLedger/effects", () => ({
   applyInventoryEffectWithCtx: mockedSkuSearch.applyInventoryEffectWithCtx,
 }));
 

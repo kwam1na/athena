@@ -35,8 +35,8 @@ import type {
   PosSyncOperationalRole,
   SyncProjectionRepository,
 } from "./types";
-import type { ReportingIngressLineInput } from "../../../reporting/ingress";
-import { reportingLineCostFromEffect } from "../../../reporting/inventory/commerceEffects";
+import type { ReportingIngressLineInput } from "./localSyncReportingTypes";
+import { reportingLineCostFromEffect } from "../../../inventoryLedger/commerceEffects";
 
 type ProjectionStatus = "projected" | "conflicted";
 

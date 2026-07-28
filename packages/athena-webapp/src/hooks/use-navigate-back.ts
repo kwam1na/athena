@@ -23,7 +23,7 @@ export const useNavigateBack = ({
     } else if (url) {
       navigate({
         to: url,
-        params: (prev) => ({
+        params: (prev: Record<string, string | undefined>) => ({
           ...prev,
           storeUrlSlug: activeStore?.slug,
           orgUrlSlug: activeOrganization?.slug,

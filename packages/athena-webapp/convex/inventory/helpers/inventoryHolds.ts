@@ -8,7 +8,7 @@ import {
   recordSkuActivityEventWithDb,
   type RecordSkuActivityEventArgs,
 } from "../../operations/skuActivity";
-import { applyInventoryEffectWithCtx } from "../../reporting/inventory/effects";
+import { applyInventoryEffectWithCtx } from "../../inventoryLedger/effects";
 
 export type { RecordSkuActivityEventArgs } from "../../operations/skuActivity";
 

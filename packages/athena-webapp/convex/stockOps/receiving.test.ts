@@ -4,7 +4,6 @@ import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { ok, userError } from "../../shared/commandResult";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
-import { deriveFactMetricContributions } from "../reporting/projections/factContributions";
 
 const mockedAuthServer = vi.hoisted(() => ({
   getAuthUserId: vi.fn(),
@@ -112,46 +111,20 @@ function createReceivingMutationCtx(args?: {
     reportingSkuEvidence: new Map<string, Record<string, unknown>>(),
     receivingBatch: new Map<string, Record<string, unknown>>(),
     skuActivityEvent: new Map<string, Record<string, unknown>>(),
+    reportFact: new Map<string, Record<string, unknown>>(),
+    reportDay: new Map<string, Record<string, unknown>>(),
+    reportSkuDay: new Map<string, Record<string, unknown>>(),
+    reportDirtyDay: new Map<string, Record<string, unknown>>(),
+    storeTimezoneVersion: new Map<string, Record<string, unknown>>(),
     store: new Map<string, Record<string, unknown>>([
-      ["store-1", { _id: "store-1", organizationId: "org-1" }],
+      ["store-1", { _id: "store-1", currency: "GHS", organizationId: "org-1" }],
     ]),
     storeSchedule: new Map<string, Record<string, unknown>>(),
     users: new Map<string, Record<string, unknown>>([
       ["auth-user-1", { _id: "auth-user-1", email: "manager@example.com" }],
     ]),
   };
-  const insertCounters: Record<
-    | "catalogSummary"
-    | "receivingBatch"
-    | "inventoryMovement"
-    | "reportingInventoryDeficitLedger"
-    | "reportingInventoryDeficitLot"
-    | "reportingInventoryEffect"
-    | "reportingInventoryEffectSourceReference"
-    | "reportingInventoryPosition"
-    | "reportingInventoryPositionRevision"
-    | "reportingIngress"
-    | "reportingIngressLine"
-    | "reportingIngressSourceReference"
-    | "reportingSkuEvidence"
-    | "skuActivityEvent",
-    number
-  > = {
-    catalogSummary: 0,
-    inventoryMovement: 0,
-    reportingInventoryDeficitLedger: 0,
-    reportingInventoryDeficitLot: 0,
-    reportingInventoryEffect: 0,
-    reportingInventoryEffectSourceReference: 0,
-    reportingInventoryPosition: 0,
-    reportingInventoryPositionRevision: 0,
-    reportingIngress: 0,
-    reportingIngressLine: 0,
-    reportingIngressSourceReference: 0,
-    reportingSkuEvidence: 0,
-    receivingBatch: 0,
-    skuActivityEvent: 0,
-  };
+  const insertCounters: Record<string, number> = {};
 
   const ctx = {
     db: {
@@ -159,24 +132,10 @@ function createReceivingMutationCtx(args?: {
         return tables[table].get(id) ?? null;
       },
       async insert(
-        table:
-          | "catalogSummary"
-          | "inventoryMovement"
-          | "reportingInventoryDeficitLedger"
-          | "reportingInventoryDeficitLot"
-          | "reportingInventoryEffect"
-          | "reportingInventoryEffectSourceReference"
-          | "reportingInventoryPosition"
-          | "reportingInventoryPositionRevision"
-          | "reportingIngress"
-          | "reportingIngressLine"
-          | "reportingIngressSourceReference"
-          | "reportingSkuEvidence"
-          | "receivingBatch"
-          | "skuActivityEvent",
+        table: keyof typeof tables,
         value: Record<string, unknown>,
       ) {
-        insertCounters[table] += 1;
+        insertCounters[table] = (insertCounters[table] ?? 0) + 1;
         const id = `${table}-${insertCounters[table]}`;
         tables[table].set(id, { _id: id, ...value });
         return id;
@@ -321,6 +280,14 @@ function createReceivingMutationCtx(args?: {
               first: async () => results[0] ?? null,
               take: async (limit: number) => results.slice(0, limit),
               order: () => chain,
+              unique: async () => {
+                if (results.length > 1) {
+                  throw new Error(
+                    `Expected at most one ${String(table)} record, found ${results.length}.`,
+                  );
+                }
+                return results[0] ?? null;
+              },
             };
             return chain;
           },
@@ -648,22 +615,23 @@ describe("stock ops receiving", () => {
     });
     expect(tables.inventoryMovement.size).toBe(1);
     expect(tables.skuActivityEvent.size).toBe(1);
-    expect(tables.reportingIngress.get("reportingIngress-1")).toMatchObject({
-      currencyCode: "GHS",
-      grossAmountMinor: 2_000,
-      netAmountMinor: 2_000,
-    });
-    expect(
-      tables.reportingIngressLine.get("reportingIngressLine-1"),
-    ).toMatchObject({
-      cogsKnownMinor: 2_500,
-      grossAmountMinor: 2_000,
-      netAmountMinor: 2_000,
-      valuationCurrencyCode: "GHS",
+
+    const [reportFact] = Array.from(tables.reportFact.values());
+    expect(reportFact).toMatchObject({
+      currency: "GHS",
+      factKind: "procurement_receipt",
+      grossAmountMinor: 2_500,
+      lineId: "line-item-1",
+      netAmountMinor: 2_500,
+      productSkuId: "sku-1",
+      quantity: 1,
+      sourceDomain: "inventory",
+      sourceId: "receivingBatch-1",
+      unitCostMinor: 2_500,
     });
   });
 
-  it("reverses planned commitment value while preserving divergent confirmed cost", async () => {
+  it("records the confirmed received cost on the procurement_receipt fact, not the planned PO cost", async () => {
     const { ctx, tables } = createReceivingMutationCtx({
       purchaseOrderCurrency: "GHS",
       purchaseOrderUnitCost: 2_000,
@@ -683,36 +651,17 @@ describe("stock ops receiving", () => {
       submissionKey: "receive-divergent-cost",
     });
 
-    const receiptLine = tables.reportingIngressLine.get(
-      "reportingIngressLine-1",
-    )!;
-    const contributions = [
-      ...deriveFactMetricContributions({
-        amountMinor: 2_000,
-        factType: "procurement_commitment",
-        quantity: 1,
-      }),
-      ...deriveFactMetricContributions({
-        amountMinor: receiptLine.netAmountMinor as number,
-        factType: "procurement_receipt",
-        quantity: receiptLine.quantity as number,
-      }),
-    ];
-    const metricTotal = (metric: string) =>
-      contributions
-        .filter((row) => row.metric === metric)
-        .reduce((total, row) => total + row.value, 0);
-
-    expect(metricTotal("purchase_commitment_units")).toBe(0);
-    expect(metricTotal("purchase_commitment_value")).toBe(0);
-    expect(receiptLine).toMatchObject({
-      cogsKnownMinor: 2_500,
-      netAmountMinor: 2_000,
-      valuationCurrencyCode: "GHS",
+    const [reportFact] = Array.from(tables.reportFact.values());
+    expect(reportFact).toMatchObject({
+      currency: "GHS",
+      factKind: "procurement_receipt",
+      netAmountMinor: 2_500,
+      quantity: 1,
+      unitCostMinor: 2_500,
     });
   });
 
-  it("keeps PO and confirmed valuation currencies in separate receipt lanes", async () => {
+  it("records the confirmed line currency on the receipt fact, independent of the PO commitment currency", async () => {
     const { ctx, tables } = createReceivingMutationCtx({
       purchaseOrderCurrency: "GHS",
       purchaseOrderUnitCost: 2_000,
@@ -732,33 +681,46 @@ describe("stock ops receiving", () => {
       submissionKey: "receive-divergent-currency",
     });
 
-    const receiptIngress = tables.reportingIngress.get("reportingIngress-1")!;
-    const receiptLine = tables.reportingIngressLine.get(
-      "reportingIngressLine-1",
-    )!;
-    const commitmentValue = deriveFactMetricContributions({
-      amountMinor: 2_000,
-      factType: "procurement_commitment",
+    const [reportFact] = Array.from(tables.reportFact.values());
+    expect(reportFact).toMatchObject({
+      currency: "USD",
+      factKind: "procurement_receipt",
+      netAmountMinor: 2_500,
       quantity: 1,
-    }).find((row) => row.metric === "purchase_commitment_value")!.value;
-    const receiptValue = deriveFactMetricContributions({
-      amountMinor: receiptLine.netAmountMinor as number,
-      factType: "procurement_receipt",
-      quantity: receiptLine.quantity as number,
-    }).find((row) => row.metric === "purchase_commitment_value")!.value;
-
-    expect(commitmentValue + receiptValue).toBe(0);
-    expect(receiptIngress).toMatchObject({
-      currencyCode: "GHS",
-      netAmountMinor: 2_000,
-    });
-    expect(receiptLine).toMatchObject({
-      cogsKnownMinor: 2_500,
-      netAmountMinor: 2_000,
-      valuationCurrencyCode: "USD",
+      unitCostMinor: 2_500,
     });
     expect(
       tables.reportingInventoryPosition.get("reportingInventoryPosition-1"),
     ).toMatchObject({ currencyCode: "USD", knownCostPoolMinor: 2_500 });
+  });
+
+  it("falls back to the planned PO cost on the receipt fact when the received cost is unconfirmed", async () => {
+    const { ctx, tables } = createReceivingMutationCtx({
+      purchaseOrderCurrency: "GHS",
+      purchaseOrderUnitCost: 2_000,
+    });
+
+    await receivePurchaseOrderBatchCommandWithCtx(ctx, {
+      lineItems: [
+        {
+          purchaseOrderLineItemId: "line-item-1" as Id<"purchaseOrderLineItem">,
+          receivedQuantity: 1,
+        },
+      ],
+      purchaseOrderId: "purchase-order-1" as Id<"purchaseOrder">,
+      storeId: "store-1" as Id<"store">,
+      submissionKey: "receive-uncosted",
+    });
+
+    const [reportFact] = Array.from(tables.reportFact.values());
+    expect(reportFact).toMatchObject({
+      currency: "GHS",
+      factKind: "procurement_receipt",
+      grossAmountMinor: 2_000,
+      netAmountMinor: 2_000,
+      quantity: 1,
+      sourceDomain: "inventory",
+    });
+    expect(reportFact!.unitCostMinor).toBeUndefined();
   });
 });

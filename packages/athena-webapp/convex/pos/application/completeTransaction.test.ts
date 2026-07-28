@@ -45,19 +45,19 @@ import { updateCustomerStats } from "../infrastructure/repositories/customerRepo
 import { consumeCommandApprovalProofWithCtx } from "../../operations/approvalActions";
 import { createApprovalRequesterChallengeWithCtx } from "../../operations/approvalRequesterChallenges";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
-import { appendReportingIngressWithCtx } from "../../reporting/ingress";
-import { applyCommerceInventoryEffectWithCtx } from "../../reporting/inventory/commerceEffects";
+import { recordFacts } from "../../reports/ingest";
+import { applyCommerceInventoryEffectWithCtx } from "../../inventoryLedger/commerceEffects";
 import { appendPosLifecycleJournalWithCtx } from "../infrastructure/posLifecycleJournal";
 
 vi.mock("../infrastructure/posLifecycleJournal", () => ({
   appendPosLifecycleJournalWithCtx: vi.fn(),
 }));
 
-vi.mock("../../reporting/ingress", () => ({
-  appendReportingIngressWithCtx: vi.fn(),
+vi.mock("../../reports/ingest", () => ({
+  recordFacts: vi.fn(),
 }));
 
-vi.mock("../../reporting/inventory/commerceEffects", () => ({
+vi.mock("../../inventoryLedger/commerceEffects", () => ({
   applyCommerceInventoryEffectWithCtx: vi.fn(),
   outboundBasisFromEffect: vi.fn(() => null),
   reportingLineCostFromEffect: vi.fn(() => ({ costStatus: "unknown" })),
@@ -698,19 +698,19 @@ describe("voidTransaction", () => {
         sourceType: "posTransaction",
       }),
     );
-    expect(appendReportingIngressWithCtx).toHaveBeenCalledWith(
+    expect(recordFacts).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({
-        lines: [
-          expect.objectContaining({
-            costStatus: "not_applicable",
-            productSkuId: "sku-1",
-            quantity: 0,
-          }),
-        ],
-        quantity: 0,
-        sourceEventType: "pos_transaction_voided",
-      }),
+      "store-1",
+      expect.arrayContaining([
+        expect.objectContaining({
+          factKind: "void",
+          productSkuId: "sku-1",
+          // Voids are emitted NEGATED — the fold trusts void signs as carried.
+          quantity: -1,
+          sourceDomain: "pos",
+          sourceId: "txn-1",
+        }),
+      ]),
     );
     expect(patchPosTransaction).toHaveBeenCalledWith(
       expect.anything(),
@@ -1652,22 +1652,20 @@ describe("completeTransaction checkout side effects", () => {
         reasonCode: "pos_sale",
       }),
     );
-    expect(appendReportingIngressWithCtx).toHaveBeenCalledWith(
+    expect(recordFacts).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({
-        businessEventKey: "pos:txn-1:complete",
-        lines: [
-          expect.objectContaining({
-            costStatus: "unknown",
-            lineKey: "txn-item-1",
-            lineKind: "merchandise",
-            productSkuId: "sku-1",
-            quantity: 1,
-          }),
-        ],
-        occurredAt: expect.any(Number),
-        sourceEventType: "pos_completed",
-      }),
+      "store-1",
+      expect.arrayContaining([
+        expect.objectContaining({
+          factKind: "sale",
+          lineId: "txn-item-1",
+          occurredAt: expect.any(Number),
+          productSkuId: "sku-1",
+          quantity: 1,
+          sourceDomain: "pos",
+          sourceId: "txn-1",
+        }),
+      ]),
     );
   });
 
@@ -4892,13 +4890,15 @@ describe("completeTransaction re-pricing (U7)", () => {
       expect.objectContaining({ unitPrice: 10.004, totalPrice: 10.004 }),
     );
     // Reporting *Minor fields reflect the server-derived price.
-    expect(appendReportingIngressWithCtx).toHaveBeenCalledWith(
+    expect(recordFacts).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({
-        lines: expect.arrayContaining([
-          expect.objectContaining({ unitPriceMinor: 10.004 }),
-        ]),
-      }),
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({
+          grossAmountMinor: 10.004,
+          netAmountMinor: 10.004,
+        }),
+      ]),
     );
   });
 

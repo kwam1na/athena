@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   applyInventoryEffectWithCtx: vi.fn(),
 }));
 
-vi.mock("../../reporting/inventory/effects", () => ({
+vi.mock("../../inventoryLedger/effects", () => ({
   applyInventoryEffectWithCtx: mocks.applyInventoryEffectWithCtx,
 }));
 import {

@@ -5,10 +5,10 @@ const reportingMocks = vi.hoisted(() => ({
   resolveReportingOperatingPeriodWithCtx: vi.fn(),
 }));
 
-vi.mock("../reporting/inventory/effects", () => ({
+vi.mock("../inventoryLedger/effects", () => ({
   applyInventoryEffectWithCtx: reportingMocks.applyInventoryEffectWithCtx,
 }));
-vi.mock("../reporting/operatingPeriods", () => ({
+vi.mock("../storeTime/operatingPeriods", () => ({
   resolveReportingOperatingPeriodWithCtx:
     reportingMocks.resolveReportingOperatingPeriodWithCtx,
 }));
