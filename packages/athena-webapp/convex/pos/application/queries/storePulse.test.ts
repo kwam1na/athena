@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Id } from "../../../_generated/dataModel";
 import type { QueryCtx } from "../../../_generated/server";
-import { getStorePulseSummariesForOperatingDateRanges } from "./storePulse";
+import {
+  getStorePulseSummariesForOperatingDateRanges,
+  getStorePulseSummaryForWindow,
+} from "./storePulse";
 
 type TableName = "posTransaction" | "posTransactionItem";
 type Row = Record<string, unknown> & { _id: string };
@@ -311,5 +314,76 @@ describe("getStorePulseSummariesForOperatingDateRanges", () => {
         .flatMap((summary) => summary.operatorSnapshot.topItems)
         .map((topItem) => topItem.name),
     ).not.toContain("Outside item");
+  });
+});
+
+describe("getStorePulseSummaryForWindow", () => {
+  it("counts every sale in a bounded window, including months busier than the open-ended history limit", async () => {
+    // A month whose sale count runs past the open-ended history limit. The
+    // earliest days are the ones a newest-first cap would silently drop, so the
+    // first of the month is the day worth asserting on.
+    const monthStart = Date.UTC(2026, 6, 1);
+    const currentDayStart = Date.UTC(2026, 6, 28);
+    const transactionsPerDay = 20;
+    const dayCount = 28;
+    const transactions: ReturnType<typeof transaction>[] = [];
+    const items: ReturnType<typeof item>[] = [];
+
+    for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
+      for (let saleIndex = 0; saleIndex < transactionsPerDay; saleIndex += 1) {
+        const id = `txn-${dayIndex}-${saleIndex}`;
+        transactions.push(
+          transaction({
+            completedAt:
+              monthStart +
+              dayIndex * 24 * 60 * 60 * 1000 +
+              (9 + (saleIndex % 8)) * 60 * 60 * 1000,
+            id,
+            payments: [{ amount: 100, method: "cash" }],
+            total: 100,
+          }),
+        );
+        items.push(
+          item({
+            id: `item-${dayIndex}-${saleIndex}`,
+            productName: "Stocking cap",
+            quantity: 2,
+            totalPrice: 100,
+            transactionId: id,
+          }),
+        );
+      }
+    }
+
+    expect(transactions.length).toBeGreaterThan(400);
+
+    const summary = await getStorePulseSummaryForWindow(
+      createDb({ posTransaction: transactions, posTransactionItem: items }),
+      {
+        currentDayEnd: currentDayStart + 24 * 60 * 60 * 1000 - 1,
+        currentDayStart,
+        currentOperatingDate: "2026-07-28",
+        pulseWindow: "this_month",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    const firstOfMonth = summary.operatorSnapshot.trend.find(
+      (day) => day.date === "2026-07-01",
+    );
+
+    expect(firstOfMonth).toMatchObject({
+      totalItemsSold: transactionsPerDay * 2,
+      totalSales: transactionsPerDay * 100,
+      transactionCount: transactionsPerDay,
+    });
+    expect(
+      summary.operatorSnapshot.trend.reduce(
+        (total, day) => total + day.transactionCount,
+        0,
+      ),
+    ).toBe(transactions.length);
+    expect(summary.totalTransactions).toBe(transactions.length);
+    expect(summary.operatorSnapshot.isLimited).toBe(false);
   });
 });

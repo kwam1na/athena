@@ -377,9 +377,11 @@ export async function buildPosOperatorSnapshot(
     args.historyStart ?? currentDayStart - (historyDays - 1) * DAY_MS;
   const historyEnd = args.historyEnd ?? currentDayStart + DAY_MS - 1;
   const queryStart = args.comparisonStart ?? historyStart;
-  const appliesHistoryLimit =
-    args.historyEnd === undefined ||
-    args.historyBucketMode !== "transaction_dates";
+  // A bounded window is already read in full by listCompletedTransactionsForRange,
+  // so capping it here would drop real sales out of the day buckets without saving
+  // any query work. Only the open-ended path takes a limit, because that one asks
+  // the database for "everything since" and has to stop somewhere.
+  const appliesHistoryLimit = args.historyEnd === undefined;
   const loadedTransactions =
     args.historyEnd === undefined
       ? await listCompletedTransactionsSince(ctx, {
@@ -393,14 +395,7 @@ export async function buildPosOperatorSnapshot(
             completedTo: historyEnd,
             storeId: args.storeId,
           })
-        )
-          .sort((first, second) => second.completedAt - first.completedAt)
-          .slice(
-            0,
-            args.historyBucketMode === "transaction_dates"
-              ? undefined
-              : POS_OPERATOR_HISTORY_LIMIT,
-          );
+        ).sort((first, second) => second.completedAt - first.completedAt);
   const transactions = args.comparisonStart
     ? loadedTransactions.filter(
         (transaction) =>

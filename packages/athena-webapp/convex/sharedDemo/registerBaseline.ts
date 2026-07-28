@@ -1,4 +1,10 @@
+import { ConvexError } from "convex/values";
+
 import type { Doc, Id } from "../_generated/dataModel";
+import {
+  SHARED_DEMO_REGISTER_UNAVAILABLE_CODE,
+  SHARED_DEMO_REGISTER_UNAVAILABLE_MESSAGE,
+} from "../../shared/sharedDemoRegisterError";
 import type { MutationCtx } from "../_generated/server";
 import {
   insertRegisterSessionWithAuthority,
@@ -190,7 +196,10 @@ export async function bindSharedDemoRegisterBaselineWithCtx(
     args.terminal.status !== "active" ||
     !args.terminal.registerNumber
   ) {
-    throw new Error("The demo register is unavailable on this browser.");
+    throw new ConvexError({
+      code: SHARED_DEMO_REGISTER_UNAVAILABLE_CODE,
+      message: SHARED_DEMO_REGISTER_UNAVAILABLE_MESSAGE,
+    });
   }
 
   const [staffProfiles, terminalSessions] = await Promise.all([

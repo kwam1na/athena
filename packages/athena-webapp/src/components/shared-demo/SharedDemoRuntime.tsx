@@ -40,6 +40,7 @@ import {
 import { SharedDemoRestoreOverlay } from "./sharedDemoRestoreOverlay";
 import { resolveSharedDemoRestoreOverlayPhase } from "./sharedDemoRestoreOverlayModel";
 import { resolveSharedDemoProvidedBootstrapStatus } from "./sharedDemoProviderStatus";
+import { isSharedDemoRegisterUnavailableError } from "~/shared/sharedDemoRegisterError";
 
 export type SharedDemoRegisterBootstrapStatus =
   "idle" | "provisioning" | "projecting" | "ready" | "failed";
@@ -165,7 +166,7 @@ export function SharedDemoRuntime({
           if (reset && !reset.ok) throw new Error(reset.error.message);
         }
 
-        if (plan.provisionTerminal) {
+        const provisionTerminalForBrowser = async () => {
           const fingerprint =
             readStoredTerminalFingerprint() ??
             (await generateBrowserFingerprint());
@@ -199,6 +200,9 @@ export function SharedDemoRuntime({
           if (result.kind === "user_error") {
             throw new Error(result.error.message);
           }
+        };
+        if (plan.provisionTerminal) {
+          await provisionTerminalForBrowser();
         }
         let boundBootstrap: RegisterSessionAuthorityBootstrap | null = null;
         const seedBeforeBinding =
@@ -231,13 +235,38 @@ export function SharedDemoRuntime({
             hasUsableLocalSession,
           });
         if (registerBootstrapAction === "bind") {
-          const baseline = await bindRegisterBaseline({
-            expectedEpoch: restoreEpoch,
-            terminalId: seedBeforeBinding.value
-              .cloudTerminalId as Id<"posTerminal">,
-          });
-          assertCurrentEpoch();
-          boundBootstrap = baseline.bootstrap;
+          try {
+            const baseline = await bindRegisterBaseline({
+              expectedEpoch: restoreEpoch,
+              terminalId: seedBeforeBinding.value
+                .cloudTerminalId as Id<"posTerminal">,
+            });
+            assertCurrentEpoch();
+            boundBootstrap = baseline.bootstrap;
+          } catch (error) {
+            if (!isSharedDemoRegisterUnavailableError(error)) throw error;
+            assertCurrentEpoch();
+            // The cloud terminal behind the stored seed is gone — a demo
+            // reset deletes this browser's posTerminal row while the local
+            // seed survives on purpose. Provision a fresh terminal and bind
+            // once more with its id.
+            await provisionTerminalForBrowser();
+            const reprovisionedSeed =
+              await localStore.readProvisionedTerminalSeed();
+            assertCurrentEpoch();
+            if (!reprovisionedSeed.ok || !reprovisionedSeed.value) {
+              throw new Error(
+                "The demo register could not be linked to this browser.",
+              );
+            }
+            const baseline = await bindRegisterBaseline({
+              expectedEpoch: restoreEpoch,
+              terminalId: reprovisionedSeed.value
+                .cloudTerminalId as Id<"posTerminal">,
+            });
+            assertCurrentEpoch();
+            boundBootstrap = baseline.bootstrap;
+          }
         }
         const currentSeed = await localStore.readProvisionedTerminalSeed();
         assertCurrentEpoch();

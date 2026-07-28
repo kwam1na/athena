@@ -1,4 +1,9 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
+
+import {
+  SHARED_DEMO_REGISTER_UNAVAILABLE_CODE,
+  SHARED_DEMO_REGISTER_UNAVAILABLE_MESSAGE,
+} from "../../shared/sharedDemoRegisterError";
 
 import type { Id } from "../_generated/dataModel";
 import { mutation, query } from "../_generated/server";
@@ -356,7 +361,10 @@ export const bindRegisterBaselineToTerminal = mutation({
       );
       const terminal = await ctx.db.get("posTerminal", args.terminalId);
       if (!terminal || terminal.storeId !== actor.storeId) {
-        throw new Error("The demo register is unavailable on this browser.");
+        throw new ConvexError({
+          code: SHARED_DEMO_REGISTER_UNAVAILABLE_CODE,
+          message: SHARED_DEMO_REGISTER_UNAVAILABLE_MESSAGE,
+        });
       }
       return bindSharedDemoRegisterBaselineWithCtx(ctx, {
         actorUserId: actor.athenaUserId,
