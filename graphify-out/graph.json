@@ -99911,7 +99911,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_shared_demo_shareddemorestrictedsurface_test_tsx",
       "source_file": "packages/athena-webapp/src/components/shared-demo/SharedDemoRestrictedSurface.test.tsx",
-      "source_location": "L30",
+      "source_location": "L34",
       "target": "shareddemorestrictedsurface_test_routefiletotemplate",
       "weight": 1
     },
@@ -99923,7 +99923,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_shared_demo_shareddemorestrictedsurface_test_tsx",
       "source_file": "packages/athena-webapp/src/components/shared-demo/SharedDemoRestrictedSurface.test.tsx",
-      "source_location": "L44",
+      "source_location": "L48",
       "target": "shareddemorestrictedsurface_test_routetemplatetopathname",
       "weight": 1
     },
@@ -249865,7 +249865,7 @@
       "label": "routeFileToTemplate()",
       "norm_label": "routefiletotemplate()",
       "source_file": "packages/athena-webapp/src/components/shared-demo/SharedDemoRestrictedSurface.test.tsx",
-      "source_location": "L30"
+      "source_location": "L34"
     },
     {
       "community": 694,
@@ -249874,7 +249874,7 @@
       "label": "routeTemplateToPathname()",
       "norm_label": "routetemplatetopathname()",
       "source_file": "packages/athena-webapp/src/components/shared-demo/SharedDemoRestrictedSurface.test.tsx",
-      "source_location": "L44"
+      "source_location": "L48"
     },
     {
       "community": 695,

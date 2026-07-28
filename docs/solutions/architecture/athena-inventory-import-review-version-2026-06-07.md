@@ -8,7 +8,7 @@ problem_type: legacy_inventory_import
 component: operations
 resolution_type: durable_review_boundary
 severity: medium
-delivery_diff_fingerprint: b57b93139a1409c1557d444847fa663afe4573d23d88836e0a7758c439ed8100
+delivery_diff_fingerprint: b67a1ace168034092050f778d19c84f562790411bb776e7a5e670f2aaa6211a0
 tags:
   - inventory
   - imports
