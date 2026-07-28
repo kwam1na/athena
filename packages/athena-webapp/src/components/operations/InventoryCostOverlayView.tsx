@@ -3,6 +3,8 @@ import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import {
   ArrowRight,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   CircleDollarSign,
   FileSpreadsheet,
   History,
@@ -75,12 +77,7 @@ export type InventoryCostOverlayRun = Pick<
   | "undoExceptionCount"
 > & {
   retryableWork?:
-    | "bulk decision"
-    | "construction"
-    | "preparation"
-    | "apply"
-    | "undo"
-    | null;
+    "bulk decision" | "construction" | "preparation" | "apply" | "undo" | null;
 };
 
 export type InventoryCostOverlayRow = Pick<
@@ -118,7 +115,12 @@ type SavedReviewVersion = {
   versionNumber: number;
 };
 
-type OverlayRowFilter = "all" | "eligible" | "selected" | "exceptions";
+type OverlayRowFilter =
+  | "all"
+  | "eligible"
+  | "selected"
+  | "different"
+  | "exceptions";
 
 const STATUS_COPY: Record<
   CostOverlayStatus,
@@ -183,8 +185,11 @@ const COST_OUTCOME_COPY: Record<
   out_of_range: "Source cost outside supported range",
 };
 
-const INVENTORY_COST_OVERLAY_PAGE_SIZE = 50;
-const INVENTORY_COST_OVERLAY_MAX_RESTORED_PAGE = 10;
+const INVENTORY_COST_OVERLAY_PAGE_SIZE = 15;
+const INVENTORY_COST_OVERLAY_MAX_ROWS = 5_000;
+const INVENTORY_COST_OVERLAY_MAX_RESTORED_PAGE = Math.ceil(
+  INVENTORY_COST_OVERLAY_MAX_ROWS / INVENTORY_COST_OVERLAY_PAGE_SIZE,
+);
 
 function getCostOverlayRunDescription(run: InventoryCostOverlayRun) {
   if (
@@ -528,9 +533,9 @@ function CostOverlayRows({
         className="hidden overflow-hidden rounded-md border border-border md:block"
         data-testid="cost-overlay-desktop-table"
       >
-        <div className="overflow-x-auto">
+        <div className="max-h-[min(68vh,48rem)] overflow-auto">
           <table className="w-full min-w-[840px] text-left text-sm">
-            <thead className="border-b bg-surface text-xs uppercase text-muted-foreground">
+            <thead className="sticky top-0 z-10 border-b bg-surface/95 text-xs uppercase text-muted-foreground backdrop-blur">
               <tr>
                 <th className="py-2 pl-3 pr-3">SKU</th>
                 <th className="py-2 pr-3">Lifecycle</th>
@@ -761,6 +766,7 @@ export function InventoryCostOverlayRunLifecycleControls({
 }
 
 export function InventoryCostOverlayWorkspaceContent({
+  canGoNext = false,
   filter = "all",
   isBulkUpdating = false,
   isLoadingRows,
@@ -768,16 +774,18 @@ export function InventoryCostOverlayWorkspaceContent({
   onBulkDecision,
   onDecisionChange,
   onFilterChange,
-  onLoadMore,
+  onNextPage,
   onPrepare,
+  onPreviousPage,
   onQueryChange,
+  page = 1,
   query = "",
   rows,
   run,
   savingRowId,
-  canLoadMore = false,
+  totalRowCount,
 }: {
-  canLoadMore?: boolean;
+  canGoNext?: boolean;
   filter?: OverlayRowFilter;
   isBulkUpdating?: boolean;
   isLoadingRows: boolean;
@@ -787,14 +795,17 @@ export function InventoryCostOverlayWorkspaceContent({
     row: InventoryCostOverlayRow,
     decision: UserCostOverlayDecision,
   ) => void;
-  onLoadMore: () => void;
+  onNextPage?: () => void;
   onFilterChange?: (filter: OverlayRowFilter) => void;
   onPrepare: () => void;
+  onPreviousPage?: () => void;
   onQueryChange?: (query: string) => void;
+  page?: number;
   query?: string;
   rows: InventoryCostOverlayRow[];
   run: InventoryCostOverlayRun;
   savingRowId?: string;
+  totalRowCount?: number;
 }) {
   const status = STATUS_COPY[run.status];
   const impactDelta =
@@ -807,6 +818,15 @@ export function InventoryCostOverlayWorkspaceContent({
     run.status === "undone_with_exceptions"
       ? (run.undoExceptionCount ?? 0)
       : (run.applyExceptionCount ?? 0);
+  const totalPageCount =
+    totalRowCount === undefined
+      ? undefined
+      : Math.max(
+          1,
+          Math.ceil(totalRowCount / INVENTORY_COST_OVERLAY_PAGE_SIZE),
+        );
+  const hasConsistentPageUpperBound =
+    totalPageCount !== undefined && page <= totalPageCount;
 
   return (
     <>
@@ -917,6 +937,7 @@ export function InventoryCostOverlayWorkspaceContent({
               <SelectItem value="all">All rows</SelectItem>
               <SelectItem value="eligible">Eligible</SelectItem>
               <SelectItem value="selected">Selected</SelectItem>
+              <SelectItem value="different">Costs differ</SelectItem>
               <SelectItem value="exceptions">Exceptions</SelectItem>
             </SelectContent>
           </Select>
@@ -945,6 +966,52 @@ export function InventoryCostOverlayWorkspaceContent({
             </div>
           ) : null}
         </div>
+        {rows.length > 0 || page > 1 || canGoNext ? (
+          <nav
+            aria-label="Table pages"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-surface/60 px-3 py-2"
+          >
+            <div aria-live="polite" className="text-sm text-muted-foreground">
+              <p>
+                Showing {rows.length.toLocaleString()}{" "}
+                {rows.length === 1 ? "row" : "rows"}
+                {totalRowCount === undefined
+                  ? ""
+                  : ` · ${totalRowCount.toLocaleString()} total`}
+              </p>
+              <p className="mt-0.5 text-xs">
+                Page {page.toLocaleString()}
+                {!hasConsistentPageUpperBound
+                  ? ""
+                  : ` of ${totalPageCount!.toLocaleString()}`}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                aria-label="Previous page"
+                disabled={page === 1 || isLoadingRows}
+                onClick={onPreviousPage}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+                Previous
+              </Button>
+              <Button
+                aria-label="Next page"
+                disabled={!canGoNext || isLoadingRows}
+                onClick={onNextPage}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                Next
+                <ChevronRight aria-hidden="true" className="h-4 w-4" />
+              </Button>
+            </div>
+          </nav>
+        ) : null}
         <CostOverlayRows
           canEdit={
             run.status === "ready" && run.bulkDecisionStatus !== "processing"
@@ -954,18 +1021,6 @@ export function InventoryCostOverlayWorkspaceContent({
           rows={rows}
           savingRowId={savingRowId}
         />
-        {canLoadMore ? (
-          <div className="flex justify-center">
-            <Button
-              disabled={isLoadingRows}
-              onClick={onLoadMore}
-              type="button"
-              variant="outline"
-            >
-              {isLoadingRows ? "Loading rows" : "Load more rows"}
-            </Button>
-          </div>
-        ) : null}
       </section>
 
       {run.status === "ready" ? (
@@ -1011,6 +1066,7 @@ export function InventoryCostOverlayView() {
   const filter: OverlayRowFilter =
     search.filter === "eligible" ||
     search.filter === "selected" ||
+    search.filter === "different" ||
     search.filter === "exceptions"
       ? search.filter
       : "all";
@@ -1063,7 +1119,11 @@ export function InventoryCostOverlayView() {
       : "skip",
     { initialNumItems: INVENTORY_COST_OVERLAY_PAGE_SIZE },
   );
-  const restoredRowTarget = page * INVENTORY_COST_OVERLAY_PAGE_SIZE;
+  const restoredRowTarget = Math.min(
+    INVENTORY_COST_OVERLAY_MAX_ROWS,
+    Math.min(page + 1, INVENTORY_COST_OVERLAY_MAX_RESTORED_PAGE) *
+      INVENTORY_COST_OVERLAY_PAGE_SIZE,
+  );
   const loadMoreRows = rowPage.loadMore;
   const loadedRowCount = rowPage.results.length;
   const rowPageStatus = rowPage.status;
@@ -1438,14 +1498,27 @@ export function InventoryCostOverlayView() {
 
   const visibleRowStart = (page - 1) * INVENTORY_COST_OVERLAY_PAGE_SIZE;
   const rows = rowPage.results
-    .slice(
-      visibleRowStart,
-      visibleRowStart + INVENTORY_COST_OVERLAY_PAGE_SIZE,
-    )
+    .slice(visibleRowStart, visibleRowStart + INVENTORY_COST_OVERLAY_PAGE_SIZE)
     .map((row) => ({
       ...row,
       decision: draftDecisions[row._id] ?? row.decision,
     }));
+  const exactFilteredRowCount =
+    normalizedSearch.length > 0
+      ? undefined
+      : filter === "all"
+        ? run?.totalRowCount
+        : filter === "eligible"
+          ? run?.eligibleRowCount
+          : filter === "selected"
+            ? run?.selectedRowCount
+            : undefined;
+  const canGoNext =
+    rowPage.results.length >
+      visibleRowStart + INVENTORY_COST_OVERLAY_PAGE_SIZE ||
+    rowPage.status === "CanLoadMore" ||
+    (exactFilteredRowCount !== undefined &&
+      visibleRowStart + rows.length < exactFilteredRowCount);
   const updateRouteReviewState = (patch: {
     q?: string;
     filter?: OverlayRowFilter;
@@ -1539,9 +1612,8 @@ export function InventoryCostOverlayView() {
               />
             ) : (
               <InventoryCostOverlayWorkspaceContent
-                canLoadMore={
-                  rowPage.status === "CanLoadMore" &&
-                  page < INVENTORY_COST_OVERLAY_MAX_RESTORED_PAGE
+                canGoNext={
+                  canGoNext && page < INVENTORY_COST_OVERLAY_MAX_RESTORED_PAGE
                 }
                 filter={filter}
                 isBulkUpdating={isBulkUpdating}
@@ -1554,20 +1626,25 @@ export function InventoryCostOverlayView() {
                 onFilterChange={(nextFilter) =>
                   updateRouteReviewState({ filter: nextFilter })
                 }
-                onLoadMore={() => {
-                  rowPage.loadMore(INVENTORY_COST_OVERLAY_PAGE_SIZE);
+                onNextPage={() => {
                   void navigate({
                     replace: true,
                     search: ((current: Record<string, unknown>) => ({
                       ...current,
-                      page: Math.min(
-                        INVENTORY_COST_OVERLAY_MAX_RESTORED_PAGE,
-                        page + 1,
-                      ),
+                      page: page + 1,
                     })) as never,
                   });
                 }}
                 onPrepare={() => void handlePrepare()}
+                onPreviousPage={() => {
+                  void navigate({
+                    replace: true,
+                    search: ((current: Record<string, unknown>) => ({
+                      ...current,
+                      page: Math.max(1, page - 1),
+                    })) as never,
+                  });
+                }}
                 onQueryChange={(nextQuery) =>
                   updateRouteReviewState({ q: nextQuery || undefined })
                 }
@@ -1575,6 +1652,8 @@ export function InventoryCostOverlayView() {
                 rows={rows}
                 run={run}
                 savingRowId={savingRowId}
+                page={page}
+                totalRowCount={exactFilteredRowCount}
               />
             )}
           </PageWorkspaceMain>

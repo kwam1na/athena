@@ -3,6 +3,14 @@ import { describe, expect, it } from "vitest";
 import { inventoryCostOverlaySearchSchema } from "./-cost-overlay-search";
 
 describe("inventory cost overlay route search state", () => {
+  it("preserves the differing-cost filter", () => {
+    expect(
+      inventoryCostOverlaySearchSchema.parse({
+        filter: "different",
+      }),
+    ).toMatchObject({ filter: "different" });
+  });
+
   it("restores bounded review filters and page depth", () => {
     expect(
       inventoryCostOverlaySearchSchema.parse({
@@ -37,7 +45,7 @@ describe("inventory cost overlay route search state", () => {
         page: "999999999",
       }),
     ).toEqual({
-      page: 10,
+      page: 334,
     });
   });
 

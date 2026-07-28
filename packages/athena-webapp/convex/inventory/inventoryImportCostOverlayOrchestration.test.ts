@@ -36,7 +36,7 @@ function constructionAnchor(index: number) {
   return {
     provisionalSkuId: `provisional-${suffix}`,
     productSkuId: `sku-${suffix}`,
-    rowKey: `${index + 2}:SKU-${suffix}::Product ${suffix}`,
+    rowKey: `${index + 2}:SKU-${suffix}::SKU-${suffix}`,
     rowNumber: index + 2,
     status: "active" as const,
     provisionalUpdatedAt: 100 + index,

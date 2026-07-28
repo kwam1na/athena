@@ -8,8 +8,10 @@ import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import { internalAction, type ActionCtx } from "../_generated/server";
 import {
+  buildInventoryImportSourceRowIdentity,
   interpretInventoryImportCost,
   INVENTORY_IMPORT_SOURCE_PROJECTION_VERSION,
+  inventoryImportSourceRowToRecord,
   projectInventoryImportSource,
   type InventoryImportSourceCell,
   type InventoryImportSourceColumn,
@@ -21,9 +23,10 @@ import {
   INVENTORY_IMPORT_REVIEW_PAYLOAD_MAX_CHUNKS,
 } from "../../shared/inventoryImportReviewPayload";
 import {
+  canonicalizeCostOverlayLineages,
   MAX_FROZEN_LINEAGES_PER_SKU,
   type FrozenInventoryImportLineage,
-} from "./inventoryImportCostOverlayDomain";
+} from "./inventoryImportCostOverlayLineage";
 
 type ConstructionState = {
   cursor: number;
@@ -241,8 +244,7 @@ const abandonStaleConstruction = makeFunctionReference<
     expectedCursor: number;
     expectedEpoch: number;
     failureReason?:
-      | "construction_prefix_changed"
-      | "construction_scope_too_large";
+      "construction_prefix_changed" | "construction_scope_too_large";
   },
   { disposition: "abandoned" | "stale" }
 >(
@@ -255,9 +257,7 @@ const continueCostOverlayConstruction = makeFunctionReference<
     runId: Id<"inventoryImportCostOverlayRun">;
     expectedEpoch: number;
   }
->(
-  "inventory/inventoryImportCostOverlayConstruction:constructCostOverlayRun",
-);
+>("inventory/inventoryImportCostOverlayConstruction:constructCostOverlayRun");
 
 async function heartbeatConstructionOrThrow(
   ctx: ActionCtx,
@@ -351,14 +351,10 @@ function truncateUtf8(value: string, maxBytes: number) {
 
 function serializeRawValue(value: unknown): string | undefined {
   if (value === undefined) return undefined;
-  const serialized =
-    typeof value === "string" ? value : JSON.stringify(value);
+  const serialized = typeof value === "string" ? value : JSON.stringify(value);
   return serialized === undefined
     ? undefined
-    : truncateUtf8(
-        serialized,
-        COST_OVERLAY_SOURCE_RAW_VALUE_PREVIEW_MAX_BYTES,
-      );
+    : truncateUtf8(serialized, COST_OVERLAY_SOURCE_RAW_VALUE_PREVIEW_MAX_BYTES);
 }
 
 function normalizeOutcome(
@@ -388,8 +384,17 @@ export function materializeCostOverlayRows(args: {
   const column = selectedColumnFor(projection.columns, args.selectedColumn);
   if (!column) throw new Error("Selected cost source column is unavailable.");
 
-  const sourceByRowNumber = new Map(
-    projection.rows.map((row) => [row.rowNumber, row]),
+  const sourceByRowKey = new Map(
+    projection.rows.map((row) => [
+      buildInventoryImportSourceRowIdentity(
+        inventoryImportSourceRowToRecord(projection, row),
+        row.rowNumber,
+      ).rowKey,
+      row,
+    ]),
+  );
+  const matchingAnchors = args.anchors.filter((anchor) =>
+    sourceByRowKey.has(anchor.rowKey),
   );
   const candidatesBySku = new Map<
     string,
@@ -401,10 +406,7 @@ export function materializeCostOverlayRows(args: {
     }>
   >();
 
-  const frozenLineagesBySku = new Map<
-    string,
-    FrozenInventoryImportLineage[]
-  >();
+  const frozenLineagesBySku = new Map<string, FrozenInventoryImportLineage[]>();
   for (const anchor of args.anchors) {
     if (!anchor.productSkuId) continue;
     const skuKey = String(anchor.productSkuId);
@@ -418,15 +420,11 @@ export function materializeCostOverlayRows(args: {
       },
     ]);
   }
-  for (const lineages of frozenLineagesBySku.values()) {
-    lineages.sort((left, right) =>
-      String(left.provisionalSkuId).localeCompare(
-        String(right.provisionalSkuId),
-      ),
-    );
+  for (const [skuKey, lineages] of frozenLineagesBySku) {
+    frozenLineagesBySku.set(skuKey, canonicalizeCostOverlayLineages(lineages));
   }
 
-  for (const anchor of args.anchors) {
+  for (const anchor of matchingAnchors) {
     if (
       !anchor.productSkuId ||
       !anchor.sku ||
@@ -434,10 +432,8 @@ export function materializeCostOverlayRows(args: {
     ) {
       continue;
     }
-    const sourceRow = sourceByRowNumber.get(anchor.rowNumber);
-    const rawValue = sourceRow
-      ? rawValueFor(sourceRow.cells, column.id)
-      : undefined;
+    const sourceRow = sourceByRowKey.get(anchor.rowKey)!;
+    const rawValue = rawValueFor(sourceRow.cells, column.id);
     const outcome = normalizeOutcome(
       interpretInventoryImportCost(rawValue, {
         currencyScale: args.currencyMinorUnitScale,
@@ -514,8 +510,7 @@ export function materializeCostOverlayRows(args: {
       const eligibilityReason =
         frozenLineages.length > MAX_FROZEN_LINEAGES_PER_SKU
           ? "lineage_limit_exceeded"
-          : !preKnownCostPoolIsSafe ||
-              postKnownCostPoolMinor === null
+          : !preKnownCostPoolIsSafe || postKnownCostPoolMinor === null
             ? "safe_integer_overflow"
             : hasConflict
               ? "conflicting_source_costs"
@@ -609,8 +604,7 @@ async function loadSource(
     return { content: source.rawContent, fileName: source.fileName };
   }
   if (
-    (source.payloadChunkCount ?? 0) >
-    INVENTORY_IMPORT_REVIEW_PAYLOAD_MAX_CHUNKS
+    (source.payloadChunkCount ?? 0) > INVENTORY_IMPORT_REVIEW_PAYLOAD_MAX_CHUNKS
   ) {
     throw new ConstructionScopeError();
   }
@@ -674,10 +668,7 @@ async function loadAnchors(
       throw new ConstructionScopeError();
     }
     pageCount += 1;
-    if (
-      pageCount % COST_OVERLAY_CONSTRUCTION_HEARTBEAT_PAGE_INTERVAL ===
-      0
-    ) {
+    if (pageCount % COST_OVERLAY_CONSTRUCTION_HEARTBEAT_PAGE_INTERVAL === 0) {
       await heartbeatConstructionOrThrow(ctx, {
         runId,
         expectedEpoch,

@@ -238,6 +238,65 @@ function renderWorkspace(run: InventoryCostOverlayRun, overlayRows = rows) {
 }
 
 describe("InventoryCostOverlayWorkspaceContent", () => {
+  it("shows the visible row range and complete page navigation", async () => {
+    const user = userEvent.setup();
+    const onNextPage = vi.fn();
+    const onPreviousPage = vi.fn();
+
+    render(
+      <InventoryCostOverlayWorkspaceContent
+        canGoNext
+        isLoadingRows={false}
+        isPreparing={false}
+        onDecisionChange={vi.fn()}
+        onNextPage={onNextPage}
+        onPrepare={vi.fn()}
+        onPreviousPage={onPreviousPage}
+        page={2}
+        rows={rows}
+        run={{ ...baseRun, totalRowCount: 1_082 }}
+        totalRowCount={1_082}
+      />,
+    );
+
+    expect(
+      screen.getByText("Showing 2 rows · 1,082 total"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Page 2 of 73")).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "Table pages" }),
+    ).toBeVisible();
+    expect(screen.getByText("Previous")).toBeVisible();
+    expect(screen.getByText("Next")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Previous page" }));
+    await user.click(screen.getByRole("button", { name: "Next page" }));
+
+    expect(onPreviousPage).toHaveBeenCalledTimes(1);
+    expect(onNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not claim an unknown or inconsistent page upper bound", () => {
+    render(
+      <InventoryCostOverlayWorkspaceContent
+        canGoNext
+        isLoadingRows={false}
+        isPreparing={false}
+        onDecisionChange={vi.fn()}
+        onNextPage={vi.fn()}
+        onPrepare={vi.fn()}
+        onPreviousPage={vi.fn()}
+        page={31}
+        rows={rows}
+        run={baseRun}
+      />,
+    );
+
+    expect(screen.getByText("Showing 2 rows")).toBeInTheDocument();
+    expect(screen.getByText("Page 31")).toBeInTheDocument();
+    expect(screen.queryByText(/Page 31 of/)).not.toBeInTheDocument();
+  });
+
   it("shows durable row evidence and explicit review guidance", () => {
     renderWorkspace(baseRun);
 
@@ -266,6 +325,19 @@ describe("InventoryCostOverlayWorkspaceContent", () => {
       "hidden",
       "md:block",
     );
+  });
+
+  it("offers a differing-cost review filter", async () => {
+    const user = userEvent.setup();
+    renderWorkspace(baseRun);
+
+    await user.click(
+      screen.getByRole("combobox", { name: "Filter overlay rows" }),
+    );
+
+    expect(
+      await screen.findByRole("option", { name: "Costs differ" }),
+    ).toBeVisible();
   });
 
   it("shows the sealed financial checkpoint before apply", () => {
@@ -458,7 +530,7 @@ describe("InventoryCostOverlayView behavior", () => {
         runId: "overlay-run",
         storeId: "store-1",
       },
-      { initialNumItems: 50 },
+      { initialNumItems: 15 },
     );
     expect(
       screen.getByRole("textbox", { name: "Search overlay rows" }),
@@ -478,24 +550,24 @@ describe("InventoryCostOverlayView behavior", () => {
     expect(mockedHooks.usePaginatedQuery).toHaveBeenCalledWith(
       expect.anything(),
       "skip",
-      { initialNumItems: 50 },
+      { initialNumItems: 15 },
     );
   });
 
-  it("updates the restored page when more server rows are loaded", async () => {
+  it("moves between loaded server-backed pages", async () => {
     const user = userEvent.setup();
     mockedHooks.search = { run: "overlay-run", page: 2 };
     mockedHooks.run = baseRun;
-    mockedHooks.paginated.results = Array.from({ length: 100 }, (_, index) => ({
+    mockedHooks.paginated.results = Array.from({ length: 30 }, (_, index) => ({
       ...rows[0],
       _id: `row-${index}`,
     }));
     mockedHooks.paginated.status = "CanLoadMore";
     render(<InventoryCostOverlayView />);
 
-    await user.click(screen.getByRole("button", { name: "Load more rows" }));
+    await user.click(screen.getByRole("button", { name: "Next page" }));
 
-    expect(mockedHooks.paginated.loadMore).toHaveBeenCalledWith(50);
+    expect(mockedHooks.paginated.loadMore).toHaveBeenCalledWith(15);
     const searchUpdater = mockedHooks.navigate.mock.calls.at(-1)?.[0]?.search;
     expect(searchUpdater({ run: "overlay-run", page: 2 })).toEqual({
       run: "overlay-run",
@@ -506,7 +578,7 @@ describe("InventoryCostOverlayView behavior", () => {
   it("restores deeper URL pages through bounded server loads", async () => {
     mockedHooks.search = { run: "overlay-run", page: 3 };
     mockedHooks.run = baseRun;
-    mockedHooks.paginated.results = Array.from({ length: 50 }, (_, index) => ({
+    mockedHooks.paginated.results = Array.from({ length: 15 }, (_, index) => ({
       ...rows[0],
       _id: `restored-row-${index}`,
     }));
@@ -514,9 +586,9 @@ describe("InventoryCostOverlayView behavior", () => {
     const { rerender } = render(<InventoryCostOverlayView />);
 
     await waitFor(() =>
-      expect(mockedHooks.paginated.loadMore).toHaveBeenCalledWith(50),
+      expect(mockedHooks.paginated.loadMore).toHaveBeenCalledWith(15),
     );
-    mockedHooks.paginated.results = Array.from({ length: 100 }, (_, index) => ({
+    mockedHooks.paginated.results = Array.from({ length: 30 }, (_, index) => ({
       ...rows[0],
       _id: `restored-row-${index}`,
     }));
@@ -527,24 +599,26 @@ describe("InventoryCostOverlayView behavior", () => {
     );
   });
 
-  it("clamps huge page input and renders only the visible 50-row slice", async () => {
+  it("clamps huge page input to the final supported viewport-sized slice", async () => {
     mockedHooks.search = { run: "overlay-run", page: 999_999 };
     mockedHooks.run = baseRun;
-    mockedHooks.paginated.results = Array.from({ length: 500 }, (_, index) => ({
-      ...rows[0],
-      _id: `bounded-row-${index}`,
-      productName: `Bounded product ${index}`,
-      rowOrdinal: index,
-    }));
+    mockedHooks.paginated.results = Array.from(
+      { length: 5_000 },
+      (_, index) => ({
+        ...rows[0],
+        _id: `bounded-row-${index}`,
+        productName: `Bounded product ${index}`,
+        rowOrdinal: index,
+      }),
+    );
     mockedHooks.paginated.status = "CanLoadMore";
     render(<InventoryCostOverlayView />);
 
     expect(mockedHooks.paginated.loadMore).not.toHaveBeenCalled();
-    expect(screen.queryByText("Bounded product 448")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Bounded product 450")).toHaveLength(2);
-    expect(screen.getAllByText("Bounded product 499")).toHaveLength(2);
-    expect(screen.queryByText("Bounded product 500")).not.toBeInTheDocument();
-    expect(screen.getAllByText(/^Bounded product /)).toHaveLength(100);
+    expect(screen.queryByText("Bounded product 4948")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Bounded product 4995")).toHaveLength(2);
+    expect(screen.getAllByText("Bounded product 4999")).toHaveLength(2);
+    expect(screen.getAllByText(/^Bounded product /)).toHaveLength(10);
   });
 
   it("sends matching bulk decisions through one durable server request", async () => {

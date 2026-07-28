@@ -13,9 +13,12 @@ import {
   applySkuValuationCorrectionWithCtx,
 } from "../reporting/inventory/effects";
 import {
+  canonicalizeCostOverlayLineages,
+  frozenCostOverlayLineagesMatch,
   MAX_FROZEN_LINEAGES_PER_SKU,
+  readCostOverlaySkuLineagesWithCtx,
   type FrozenInventoryImportLineage,
-} from "./inventoryImportCostOverlayDomain";
+} from "./inventoryImportCostOverlayLineage";
 import { upsertProductSkuSearchProjection } from "./skuSearch";
 
 const WORK_BATCH_SIZE = 1;
@@ -77,40 +80,10 @@ function rowFrozenLineages(
   );
 }
 
-function canonicalLineages(
-  lineages: Array<{
-    _id: Id<"inventoryImportProvisionalSku">;
-    productSkuId?: Id<"productSku">;
-    status: "active" | "finalized" | "rejected" | "closed";
-    updatedAt: number;
-  }>,
-): FrozenInventoryImportLineage[] {
-  return lineages
-    .map((lineage) => ({
-      provisionalSkuId: lineage._id,
-      productSkuId: lineage.productSkuId,
-      status: lineage.status,
-      updatedAt: lineage.updatedAt,
-    }))
-    .sort((left, right) =>
-      String(left.provisionalSkuId).localeCompare(
-        String(right.provisionalSkuId),
-      ),
-    );
-}
-
 function lineageDigest(lineages: FrozenInventoryImportLineage[]) {
-  return rollCostOverlayManifestDigest("", JSON.stringify(lineages));
-}
-
-export function frozenCostOverlayLineagesMatch(
-  frozen: FrozenInventoryImportLineage[],
-  current: FrozenInventoryImportLineage[],
-) {
-  return (
-    frozen.length <= MAX_FROZEN_LINEAGES_PER_SKU &&
-    current.length <= MAX_FROZEN_LINEAGES_PER_SKU &&
-    JSON.stringify(frozen) === JSON.stringify(current)
+  return rollCostOverlayManifestDigest(
+    "",
+    JSON.stringify(canonicalizeCostOverlayLineages(lineages)),
   );
 }
 
@@ -246,36 +219,6 @@ async function getPosition(
     .unique();
 }
 
-async function getOverlayLineages(
-  ctx: WorkReadCtx,
-  args: {
-    reviewVersionId: Id<"inventoryImportReviewVersion">;
-    productSkuId: Id<"productSku">;
-    storeId: Id<"store">;
-  },
-) {
-  const matchingLineages: Doc<"inventoryImportProvisionalSku">[] = [];
-  for (const status of ["active", "finalized", "rejected", "closed"] as const) {
-    const lineages = await ctx.db
-      .query("inventoryImportProvisionalSku")
-      .withIndex(
-        "by_storeId_reviewVersionId_productSkuId_status",
-        (q) =>
-          q
-            .eq("storeId", args.storeId)
-            .eq("reviewVersionId", args.reviewVersionId)
-            .eq("productSkuId", args.productSkuId)
-            .eq("status", status),
-      )
-      .take(MAX_FROZEN_LINEAGES_PER_SKU + 1);
-    matchingLineages.push(...lineages);
-    if (matchingLineages.length > MAX_FROZEN_LINEAGES_PER_SKU) {
-      return matchingLineages.slice(0, MAX_FROZEN_LINEAGES_PER_SKU + 1);
-    }
-  }
-  return matchingLineages;
-}
-
 function valuationPositionQuantityMatchesInventoryCount(
   position: Doc<"reportingInventoryPosition">,
   inventoryCount: number,
@@ -338,17 +281,17 @@ export async function classifyCostOverlayUndoRowWithCtx(
   ) {
     return { kind: "stale", reason: "apply_evidence_missing" };
   }
-  const [sku, provisional, position, lineages] = await Promise.all([
+  const [sku, provisional, position, lineageSet] = await Promise.all([
     ctx.db.get("productSku", row.productSkuId),
     ctx.db.get("inventoryImportProvisionalSku", row.provisionalSkuId),
     getPosition(ctx, run.storeId, row.productSkuId),
-    getOverlayLineages(ctx, {
+    readCostOverlaySkuLineagesWithCtx(ctx, {
       productSkuId: row.productSkuId,
-      reviewVersionId: run.reviewVersionId,
       storeId: run.storeId,
     }),
   ]);
-  const currentLineages = canonicalLineages(lineages);
+  const lineages = lineageSet.records;
+  const currentLineages = lineageSet.snapshot;
   if (row.workStatus === "undone") {
     const restoredLineagesMatch = lineages
       .filter(
@@ -364,12 +307,12 @@ export async function classifyCostOverlayUndoRowWithCtx(
       );
     const restoredPositionMatches = Boolean(
       position &&
-        position.costedQuantity === row.preCostedQuantity &&
-        position.uncostedQuantity === row.preUncostedQuantity &&
-        position.knownCostPoolMinor === row.preKnownCostPoolMinor &&
-        position.currencyCode === row.preCurrencyCode &&
-        position.currencyMinorUnitScale === row.preCurrencyMinorUnitScale &&
-        position.unresolvedDeficitQuantity === 0,
+      position.costedQuantity === row.preCostedQuantity &&
+      position.uncostedQuantity === row.preUncostedQuantity &&
+      position.knownCostPoolMinor === row.preKnownCostPoolMinor &&
+      position.currencyCode === row.preCurrencyCode &&
+      position.currencyMinorUnitScale === row.preCurrencyMinorUnitScale &&
+      position.unresolvedDeficitQuantity === 0,
     );
     return sku &&
       sku.storeId === run.storeId &&
@@ -460,18 +403,18 @@ export async function applyCostOverlayRowWithCtx(
     await markApplyException(ctx, run, row, "row_authority_missing");
     return;
   }
-  const [sku, provisional, position, lineages] = await Promise.all([
+  const [sku, provisional, position, lineageSet] = await Promise.all([
     ctx.db.get("productSku", row.productSkuId),
     ctx.db.get("inventoryImportProvisionalSku", row.provisionalSkuId),
     getPosition(ctx, run.storeId, row.productSkuId),
-    getOverlayLineages(ctx, {
+    readCostOverlaySkuLineagesWithCtx(ctx, {
       productSkuId: row.productSkuId,
-      reviewVersionId: run.reviewVersionId,
       storeId: run.storeId,
     }),
   ]);
+  const lineages = lineageSet.records;
   const frozenLineages = rowFrozenLineages(row);
-  const currentLineages = canonicalLineages(lineages);
+  const currentLineages = lineageSet.snapshot;
   const frozenMembershipIsValid = frozenCostOverlayLineagesMatch(
     frozenLineages,
     currentLineages,
@@ -503,12 +446,7 @@ export async function applyCostOverlayRowWithCtx(
       sku.inventoryCount,
     )
   ) {
-    await markApplyException(
-      ctx,
-      run,
-      row,
-      "valuation_quantity_mismatch",
-    );
+    await markApplyException(ctx, run, row, "valuation_quantity_mismatch");
     return;
   }
 
@@ -624,16 +562,16 @@ export async function undoCostOverlayRowWithCtx(
     return;
   }
   const productSkuId = row.productSkuId!;
-  const [sku, provisional, position, lineages] = await Promise.all([
+  const [sku, provisional, position, lineageSet] = await Promise.all([
     ctx.db.get("productSku", productSkuId),
     ctx.db.get("inventoryImportProvisionalSku", row.provisionalSkuId!),
     getPosition(ctx, run.storeId, productSkuId),
-    getOverlayLineages(ctx, {
+    readCostOverlaySkuLineagesWithCtx(ctx, {
       productSkuId,
-      reviewVersionId: run.reviewVersionId,
       storeId: run.storeId,
     }),
   ]);
+  const lineages = lineageSet.records;
   if (!sku || !provisional || !position) {
     throw new Error("Cost overlay undo evidence changed during execution.");
   }
@@ -1059,9 +997,7 @@ export const processCostOverlayUndoPreviewBatch = internalMutation({
     const rows = await ctx.db
       .query("inventoryImportCostOverlayRow")
       .withIndex("by_runId_rowOrdinal", (q) =>
-        q
-          .eq("runId", run._id)
-          .gte("rowOrdinal", run.undoPreviewCursor ?? 0),
+        q.eq("runId", run._id).gte("rowOrdinal", run.undoPreviewCursor ?? 0),
       )
       .take(10);
     let compensableCount = run.undoPreviewCompensableCount ?? 0;
@@ -1107,7 +1043,10 @@ export const processCostOverlayUndoPreviewBatch = internalMutation({
       undoPreviewCursor: nextCursor,
       undoPreviewGeneratedAt: completed ? now : undefined,
       undoPreviewReasons: [...reasonCounts.entries()]
-        .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+        .sort(
+          (left, right) =>
+            right[1] - left[1] || left[0].localeCompare(right[0]),
+        )
         .slice(0, 5)
         .map(([reason, count]) => ({ reason, count })),
       undoPreviewRestoredCount: restoredCount,

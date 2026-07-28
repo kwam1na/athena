@@ -132,7 +132,7 @@ import type * as inventory_helpers_sessionExpiration from "../inventory/helpers/
 import type * as inventory_helpers_sessionValidation from "../inventory/helpers/sessionValidation.js";
 import type * as inventory_inventoryImportCostOverlay from "../inventory/inventoryImportCostOverlay.js";
 import type * as inventory_inventoryImportCostOverlayConstruction from "../inventory/inventoryImportCostOverlayConstruction.js";
-import type * as inventory_inventoryImportCostOverlayDomain from "../inventory/inventoryImportCostOverlayDomain.js";
+import type * as inventory_inventoryImportCostOverlayLineage from "../inventory/inventoryImportCostOverlayLineage.js";
 import type * as inventory_inventoryImportCostOverlayWork from "../inventory/inventoryImportCostOverlayWork.js";
 import type * as inventory_inviteCode from "../inventory/inviteCode.js";
 import type * as inventory_organizationMembers from "../inventory/organizationMembers.js";
@@ -743,7 +743,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/helpers/sessionValidation": typeof inventory_helpers_sessionValidation;
   "inventory/inventoryImportCostOverlay": typeof inventory_inventoryImportCostOverlay;
   "inventory/inventoryImportCostOverlayConstruction": typeof inventory_inventoryImportCostOverlayConstruction;
-  "inventory/inventoryImportCostOverlayDomain": typeof inventory_inventoryImportCostOverlayDomain;
+  "inventory/inventoryImportCostOverlayLineage": typeof inventory_inventoryImportCostOverlayLineage;
   "inventory/inventoryImportCostOverlayWork": typeof inventory_inventoryImportCostOverlayWork;
   "inventory/inviteCode": typeof inventory_inviteCode;
   "inventory/organizationMembers": typeof inventory_organizationMembers;

@@ -737,6 +737,7 @@ const schema = defineSchema({
   inventoryImportProvisionalSku: defineTable(
     inventoryImportProvisionalSkuSchema,
   )
+    .index("by_storeId", ["storeId"])
     .index("by_storeId_status", ["storeId", "status"])
     .index("by_storeId_status_finalizedAt", [
       "storeId",

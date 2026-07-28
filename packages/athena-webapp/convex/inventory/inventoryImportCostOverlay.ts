@@ -68,15 +68,13 @@ type CostOverlayDecision =
 type CostOverlayCommandDecision = Exclude<CostOverlayDecision, "ineligible">;
 
 export type CostOverlayRowFilter =
-  | "all"
-  | "eligible"
-  | "selected"
-  | "exceptions";
+  "all" | "eligible" | "selected" | "different" | "exceptions";
 
 const costOverlayRowFilterValidator = v.union(
   v.literal("all"),
   v.literal("eligible"),
   v.literal("selected"),
+  v.literal("different"),
   v.literal("exceptions"),
 );
 
@@ -84,8 +82,10 @@ export function costOverlayRowMatchesScope(
   row: Pick<
     Doc<"inventoryImportCostOverlayRow">,
     | "barcode"
+    | "currentUnitCostMinor"
     | "decision"
     | "eligibility"
+    | "normalizedCostMinor"
     | "productName"
     | "sku"
     | "sourceRowKey"
@@ -104,6 +104,10 @@ export function costOverlayRowMatchesScope(
     filter === "all" ||
     (filter === "eligible" && row.eligibility === "eligible") ||
     (filter === "selected" && isSelectedDecision(row.decision)) ||
+    (filter === "different" &&
+      row.currentUnitCostMinor !== undefined &&
+      row.normalizedCostMinor !== undefined &&
+      row.currentUnitCostMinor !== row.normalizedCostMinor) ||
     (filter === "exceptions" &&
       (row.eligibility === "ineligible" ||
         row.workStatus === "apply_exception" ||
@@ -187,7 +191,8 @@ export function buildCostOverlaySourceDescriptor(
         ...column,
         sampleValidity: column.costValidity ?? {
           valid: outcomes.filter((outcome) => outcome.kind === "valid").length,
-          invalid: outcomes.filter((outcome) => outcome.kind !== "valid").length,
+          invalid: outcomes.filter((outcome) => outcome.kind !== "valid")
+            .length,
         },
       };
     }),
@@ -222,15 +227,13 @@ export function classifyCostOverlayRetryableWork(
   >,
   now: number,
 ) {
-  if (
-    run.status === "ready" &&
-    run.bulkDecisionStatus === "processing"
-  ) {
+  if (run.status === "ready" && run.bulkDecisionStatus === "processing") {
     return now - run.updatedAt >= COST_OVERLAY_RETRY_AFTER_MS
       ? ("bulk decision" as const)
       : null;
   }
-  if (now - costOverlayHeartbeat(run) < COST_OVERLAY_RETRY_AFTER_MS) return null;
+  if (now - costOverlayHeartbeat(run) < COST_OVERLAY_RETRY_AFTER_MS)
+    return null;
   if (run.status === "draft" && !run.constructionComplete) {
     return "construction" as const;
   }
@@ -662,10 +665,7 @@ export async function listRecentCostOverlayRunsWithActive(
     listActiveCostOverlayRuns(ctx, storeId),
   ]);
   const runsById = new Map(
-    [...recentRuns, ...activeRuns].map((run) => [
-      run._id,
-      run,
-    ]),
+    [...recentRuns, ...activeRuns].map((run) => [run._id, run]),
   );
   return [...runsById.values()].sort(
     (left, right) => right.createdAt - left.createdAt,
@@ -681,23 +681,51 @@ export async function listCostOverlayRowsPageWithScope(
     filter?: CostOverlayRowFilter;
   },
 ) {
-  const requested = Math.min(args.paginationOpts.numItems, 100);
-  const page: Doc<"inventoryImportCostOverlayRow">[] = [];
-  let cursor = args.paginationOpts.cursor;
-  let isDone = false;
-  for (let scan = 0; scan < 10 && page.length < requested; scan += 1) {
-    const batch = await ctx.db
-      .query("inventoryImportCostOverlayRow")
-      .withIndex("by_runId_rowOrdinal", (q) => q.eq("runId", args.runId))
-      .paginate({ cursor, numItems: requested - page.length });
-    page.push(
-      ...batch.page.filter((row) => costOverlayRowMatchesScope(row, args)),
-    );
-    cursor = batch.continueCursor;
-    isDone = batch.isDone;
-    if (isDone) break;
+  const requested = Math.max(1, Math.min(args.paginationOpts.numItems, 100));
+  const cursorPrefix = "inventory-cost-overlay-row:";
+  const parsedCursor = args.paginationOpts.cursor?.startsWith(cursorPrefix)
+    ? Number(args.paginationOpts.cursor.slice(cursorPrefix.length))
+    : -1;
+  const hasValidCursor =
+    args.paginationOpts.cursor === null ||
+    (args.paginationOpts.cursor.startsWith(cursorPrefix) &&
+      Number.isSafeInteger(parsedCursor) &&
+      parsedCursor >= -1);
+  if (!hasValidCursor) {
+    return {
+      page: [],
+      continueCursor: args.paginationOpts.cursor!,
+      isDone: true,
+    };
   }
-  return { page, continueCursor: cursor!, isDone };
+  const afterRowOrdinal = parsedCursor;
+  const scanLimit = Math.min(1_000, requested * 10);
+  const scannedRows = await ctx.db
+    .query("inventoryImportCostOverlayRow")
+    .withIndex("by_runId_rowOrdinal", (q) => {
+      const runRows = q.eq("runId", args.runId);
+      return afterRowOrdinal >= 0
+        ? runRows.gt("rowOrdinal", afterRowOrdinal)
+        : runRows;
+    })
+    .take(scanLimit);
+  const page: Doc<"inventoryImportCostOverlayRow">[] = [];
+  let consumedCount = 0;
+  let lastScannedRowOrdinal = afterRowOrdinal;
+  for (const row of scannedRows) {
+    consumedCount += 1;
+    lastScannedRowOrdinal = row.rowOrdinal;
+    if (costOverlayRowMatchesScope(row, args)) {
+      page.push(row);
+      if (page.length === requested) break;
+    }
+  }
+  return {
+    page,
+    continueCursor: `${cursorPrefix}${lastScannedRowOrdinal}`,
+    isDone:
+      consumedCount === scannedRows.length && scannedRows.length < scanLimit,
+  };
 }
 
 export const listCostOverlayRows = query({
@@ -907,7 +935,9 @@ export const updateCostOverlayDecisionsBulk = mutation({
             runId: Id<"inventoryImportCostOverlayRun">;
             requestKey: string;
           }
-        >("inventory/inventoryImportCostOverlay:processCostOverlayBulkDecision"),
+        >(
+          "inventory/inventoryImportCostOverlay:processCostOverlayBulkDecision",
+        ),
         { generation: 1, runId: run._id, requestKey: args.requestKey },
       );
       return { status: "processing" as const, updatedCount: 0 };
@@ -945,9 +975,7 @@ export const processCostOverlayBulkDecision = internalMutation({
     const rows = await ctx.db
       .query("inventoryImportCostOverlayRow")
       .withIndex("by_runId_rowOrdinal", (q) =>
-        q
-          .eq("runId", run._id)
-          .gte("rowOrdinal", run.bulkDecisionCursor ?? 0),
+        q.eq("runId", run._id).gte("rowOrdinal", run.bulkDecisionCursor ?? 0),
       )
       .take(50);
     let selectedDelta = 0;
@@ -1013,7 +1041,9 @@ export const processCostOverlayBulkDecision = internalMutation({
             runId: Id<"inventoryImportCostOverlayRun">;
             requestKey: string;
           }
-        >("inventory/inventoryImportCostOverlay:processCostOverlayBulkDecision"),
+        >(
+          "inventory/inventoryImportCostOverlay:processCostOverlayBulkDecision",
+        ),
         args,
       );
     }
@@ -1192,8 +1222,7 @@ export const refreshCostOverlayUndoPreview = mutation({
       if (run.undoPreviewRequestKey === args.requestKey) {
         if (
           run.undoPreviewStatus === "processing" &&
-          Date.now() -
-            (run.undoPreviewHeartbeatAt ?? run.updatedAt) >=
+          Date.now() - (run.undoPreviewHeartbeatAt ?? run.updatedAt) >=
             COST_OVERLAY_RETRY_AFTER_MS
         ) {
           const now = Date.now();
@@ -1346,7 +1375,9 @@ export const retryCostOverlayWork = mutation({
       const run = await requireRunForStore(ctx, args.storeId, args.runId);
       const retryableWork = classifyCostOverlayRetryableWork(run, Date.now());
       if (!retryableWork) {
-        throw new Error("Cost overlay work is still active or cannot be retried.");
+        throw new Error(
+          "Cost overlay work is still active or cannot be retried.",
+        );
       }
       const now = Date.now();
       if (retryableWork === "bulk decision") {
@@ -1597,9 +1628,7 @@ export const readCostOverlayConstructionAnchors = internalQuery({
     }
     const page = await ctx.db
       .query("inventoryImportProvisionalSku")
-      .withIndex("by_storeId_reviewVersionId", (q) =>
-        q.eq("storeId", run.storeId).eq("reviewVersionId", run.reviewVersionId),
-      )
+      .withIndex("by_storeId", (q) => q.eq("storeId", run.storeId))
       .paginate({
         ...args.paginationOpts,
         numItems: Math.min(args.paginationOpts.numItems, 100),

@@ -1962,7 +1962,11 @@ export async function applySkuValuationCorrectionWithCtx(
     actorId: String(args.actorUserId),
     costedQuantity:
       args.correctedUnitCostMinor === null ? 0 : args.correctedInventoryCount,
-    currency: args.correctedUnitCostMinor === null ? null : args.currencyCode,
+    currency:
+      args.correctedUnitCostMinor === null ||
+      args.correctedInventoryCount === 0
+        ? null
+        : args.currencyCode,
     effectId: correctionBusinessEventKey,
     knownCostPool: correctedKnownCostPoolMinor,
     occurredAt: args.occurrenceAt,

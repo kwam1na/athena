@@ -1,6 +1,7 @@
 import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
 
 import {
+  buildInventoryImportSourceRowIdentity,
   inventoryImportSourceRowToRecord,
   normalizeInventoryImportSourceKey,
   projectInventoryImportSource,
@@ -34,31 +35,8 @@ export type InventoryImportParseResult = {
 
 type LegacyRow = Record<string, unknown>;
 
-const PRODUCT_NAME_KEYS = [
-  "product_name",
-  "product",
-  "name",
-  "item_name",
-  "pname",
-  "title",
-  "item",
-  "description",
-  "notes",
-  "note",
-  "productname",
-];
 const CATEGORY_KEYS = ["category", "category_name", "department"];
 const SUBCATEGORY_KEYS = ["subcategory", "subcategory_name", "type"];
-const SKU_KEYS = ["sku", "product_sku", "item_code", "code", "stock_code"];
-const PRODUCT_ID_KEYS = ["product_id", "legacy_id", "item_id", "id"];
-const BARCODE_KEYS = [
-  "barcode",
-  "bar_code",
-  "bcode",
-  "upc",
-  "ean",
-  "lookup_code",
-];
 const PRICE_KEYS = [
   "price",
   "selling_price",
@@ -132,16 +110,7 @@ function normalizeLegacyRow(
   rowNumber: number,
 ): { errors: string[]; row: InventoryImportRow } {
   const errors: string[] = [];
-  const sku =
-    readString(legacyRow, SKU_KEYS) || readString(legacyRow, PRODUCT_ID_KEYS);
-  const barcode = readString(legacyRow, BARCODE_KEYS);
-  const productName =
-    readLabelString(legacyRow, PRODUCT_NAME_KEYS) ||
-    inferProductName(legacyRow, {
-      barcode,
-      rowNumber,
-      sku,
-    });
+  const identity = buildInventoryImportSourceRowIdentity(legacyRow, rowNumber);
   const price = readMoney(legacyRow, PRICE_KEYS) ?? 0;
   const unitCost = readOptionalMoney(legacyRow, COST_KEYS);
   const quantity = readInteger(legacyRow, QUANTITY_KEYS) ?? 0;
@@ -152,11 +121,11 @@ function normalizeLegacyRow(
     errors,
     row: {
       rowNumber,
-      productName,
+      productName: identity.productName,
       category: readString(legacyRow, CATEGORY_KEYS) || undefined,
       subcategory: readString(legacyRow, SUBCATEGORY_KEYS) || undefined,
-      sku: sku || undefined,
-      barcode: barcode || undefined,
+      sku: identity.sku,
+      barcode: identity.barcode,
       price,
       unitCost,
       quantity,
@@ -173,41 +142,6 @@ function readString(row: LegacyRow, keys: string[]) {
   const value = readValue(row, keys);
   if (value === undefined || value === null) return "";
   return String(value).trim();
-}
-
-function readLabelString(row: LegacyRow, keys: string[]) {
-  for (const key of keys) {
-    const value = readString(row, [key]);
-    if (looksLikeLabel(value)) return value;
-  }
-
-  return "";
-}
-
-function inferProductName(
-  row: LegacyRow,
-  args: {
-    barcode: string;
-    rowNumber: number;
-    sku: string;
-  },
-) {
-  const preferredCandidates = [
-    readString(row, ["code"]),
-    readString(row, ["description"]),
-    readString(row, ["notes", "note"]),
-    args.sku,
-    args.barcode,
-  ];
-  const labelCandidate = preferredCandidates.find(looksLikeLabel);
-  if (labelCandidate) return labelCandidate;
-
-  const anyLabel = Object.values(row)
-    .map((value) => String(value ?? "").trim())
-    .find(looksLikeLabel);
-  if (anyLabel) return anyLabel;
-
-  return args.sku || args.barcode || `Imported row ${args.rowNumber}`;
 }
 
 function readValue(row: LegacyRow, keys: string[]) {
@@ -277,8 +211,4 @@ function readStatus(
 
 function normalizeKey(key: string) {
   return normalizeInventoryImportSourceKey(key);
-}
-
-function looksLikeLabel(value: string) {
-  return /[A-Za-z]/.test(value);
 }

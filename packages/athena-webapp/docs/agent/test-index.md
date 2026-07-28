@@ -668,6 +668,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/routes/_authed-shell.test.tsx`](../../src/routes/_authed-shell.test.tsx)
 - [`src/routes/_authed.route.test.tsx`](../../src/routes/_authed.route.test.tsx)
 - [`src/routes/_authed.test.tsx`](../../src/routes/_authed.test.tsx)
+- [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import.test.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import.test.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay.test.ts`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay.test.ts)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity.test.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity.test.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense.index.test.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense.index.test.tsx)
@@ -701,4 +702,5 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/tests/pos/usePrint.test.ts`](../../src/tests/pos/usePrint.test.ts)
 - [`src/tests/prod/posFlow.prod.spec.ts`](../../src/tests/prod/posFlow.prod.spec.ts)
 - [`src/utils/versionChecker.test.ts`](../../src/utils/versionChecker.test.ts)
+- [`src/viteConfig.test.ts`](../../src/viteConfig.test.ts)
 

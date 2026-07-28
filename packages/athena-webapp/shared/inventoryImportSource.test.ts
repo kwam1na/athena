@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildInventoryImportSourceRowIdentity,
+  inventoryImportSourceRowToRecord,
   interpretInventoryImportCost,
   projectInventoryImportSource,
 } from "./inventoryImportSource";
@@ -139,6 +141,30 @@ describe("inventory import source projection", () => {
     expect(projection.rows[1].cells.at(-1)).toEqual({
       columnId: "json:$.products[].variants[].landed_cost",
       rawValue: null,
+    });
+  });
+
+  it("reconstructs the immutable onboarding row key from a saved source", () => {
+    const projection = projectInventoryImportSource({
+      fileName: "products.csv",
+      content: [
+        "product_id,cid,pname,o_price",
+        "7,185,S  CURL ACTIVATOR,30",
+      ].join("\n"),
+    });
+    const row = projection.rows[0];
+
+    expect(
+      buildInventoryImportSourceRowIdentity(
+        inventoryImportSourceRowToRecord(projection, row),
+        row.rowNumber,
+      ),
+    ).toEqual({
+      barcode: undefined,
+      productName: "S  CURL ACTIVATOR",
+      rowKey: "2:7::S CURL ACTIVATOR",
+      rowNumber: 2,
+      sku: "7",
     });
   });
 });

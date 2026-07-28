@@ -688,6 +688,50 @@ describe("atomic inventory effects", () => {
     ).rejects.toThrow(/conflicts with existing content/i);
   });
 
+  it("sets a future SKU cost without assigning valuation currency to zero stock", async () => {
+    const { ctx, tables } = createEffectCtx({
+      product: new Map([
+        [
+          "product-1",
+          {
+            _id: "product-1",
+            organizationId: "organization-1",
+            storeId: "store-1",
+          },
+        ],
+      ]),
+      productSku: productSkuSeed(0, 0),
+    });
+
+    await applySkuValuationCorrectionWithCtx(ctx, {
+      actorUserId: "user-1" as Id<"athenaUser">,
+      correctedInventoryCount: 0,
+      correctedQuantityAvailable: 0,
+      correctedUnitCostMinor: 5_000,
+      currencyCode: "GHS",
+      currencyMinorUnitScale: 2,
+      occurrenceAt: 1_000,
+      organizationId: "organization-1" as Id<"organization">,
+      productSkuId: "sku-1" as Id<"productSku">,
+      reason: "Legacy inventory import cost overlay",
+      requestKey: "inventory-cost-overlay:run-1:row-1:apply",
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(tables.productSku.get("sku-1")).toMatchObject({ unitCost: 5_000 });
+    const position = Array.from(
+      tables.reportingInventoryPosition.values(),
+    )[0];
+    expect(position).toMatchObject({
+      costedQuantity: 0,
+      knownCostPoolMinor: 0,
+      uncostedQuantity: 0,
+      valuationStatus: "current",
+    });
+    expect(position.currencyCode).toBeUndefined();
+    expect(position.currencyMinorUnitScale).toBeUndefined();
+  });
+
   it("restores an exact mixed basis with missing SKU cost and preserves all counts", async () => {
     const { ctx, scheduler, tables } = createEffectCtx({
       product: new Map([

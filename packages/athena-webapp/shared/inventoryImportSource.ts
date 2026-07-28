@@ -58,6 +58,41 @@ export type InventoryImportCostOutcome =
 
 type JsonRecord = Record<string, unknown>;
 
+const INVENTORY_IMPORT_PRODUCT_NAME_KEYS = [
+  "product_name",
+  "product",
+  "name",
+  "item_name",
+  "pname",
+  "title",
+  "item",
+  "description",
+  "notes",
+  "note",
+  "productname",
+];
+const INVENTORY_IMPORT_SKU_KEYS = [
+  "sku",
+  "product_sku",
+  "item_code",
+  "code",
+  "stock_code",
+];
+const INVENTORY_IMPORT_PRODUCT_ID_KEYS = [
+  "product_id",
+  "legacy_id",
+  "item_id",
+  "id",
+];
+const INVENTORY_IMPORT_BARCODE_KEYS = [
+  "barcode",
+  "bar_code",
+  "bcode",
+  "upc",
+  "ean",
+  "lookup_code",
+];
+
 type JsonSourceRow = {
   actualPath: string;
   fields: JsonSourceField[];
@@ -106,6 +141,106 @@ export function inventoryImportSourceRowToRecord(
   }
 
   return record;
+}
+
+export function buildInventoryImportSourceRowIdentity(
+  record: Record<string, unknown>,
+  rowNumber: number,
+) {
+  const sku =
+    readInventoryImportIdentityString(record, INVENTORY_IMPORT_SKU_KEYS) ||
+    readInventoryImportIdentityString(record, INVENTORY_IMPORT_PRODUCT_ID_KEYS);
+  const barcode = readInventoryImportIdentityString(
+    record,
+    INVENTORY_IMPORT_BARCODE_KEYS,
+  );
+  const productName =
+    readInventoryImportIdentityLabel(
+      record,
+      INVENTORY_IMPORT_PRODUCT_NAME_KEYS,
+    ) ||
+    inferInventoryImportIdentityName(record, {
+      barcode,
+      rowNumber,
+      sku,
+    });
+
+  return {
+    rowNumber,
+    productName,
+    sku: sku || undefined,
+    barcode: barcode || undefined,
+    rowKey: [rowNumber, sku, barcode, productName]
+      .join(":")
+      .trim()
+      .replace(/\s+/g, " "),
+  };
+}
+
+function readInventoryImportIdentityValue(
+  record: Record<string, unknown>,
+  keys: string[],
+) {
+  const normalizedEntries = new Map(
+    Object.entries(record).map(([key, value]) => [
+      normalizeInventoryImportSourceKey(key),
+      value,
+    ]),
+  );
+  for (const key of keys) {
+    const value = normalizedEntries.get(normalizeInventoryImportSourceKey(key));
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function readInventoryImportIdentityString(
+  record: Record<string, unknown>,
+  keys: string[],
+) {
+  const value = readInventoryImportIdentityValue(record, keys);
+  return value === undefined ? "" : String(value).trim();
+}
+
+function readInventoryImportIdentityLabel(
+  record: Record<string, unknown>,
+  keys: string[],
+) {
+  for (const key of keys) {
+    const value = readInventoryImportIdentityString(record, [key]);
+    if (looksLikeInventoryImportLabel(value)) return value;
+  }
+  return "";
+}
+
+function inferInventoryImportIdentityName(
+  record: Record<string, unknown>,
+  args: { barcode: string; rowNumber: number; sku: string },
+) {
+  const preferredCandidates = [
+    readInventoryImportIdentityString(record, ["code"]),
+    readInventoryImportIdentityString(record, ["description"]),
+    readInventoryImportIdentityString(record, ["notes", "note"]),
+    args.sku,
+    args.barcode,
+  ];
+  const labelCandidate = preferredCandidates.find(
+    looksLikeInventoryImportLabel,
+  );
+  if (labelCandidate) return labelCandidate;
+
+  const anyLabel = Object.values(record)
+    .map((value) => String(value ?? "").trim())
+    .find(looksLikeInventoryImportLabel);
+  if (anyLabel) return anyLabel;
+
+  return args.sku || args.barcode || `Imported row ${args.rowNumber}`;
+}
+
+function looksLikeInventoryImportLabel(value: string) {
+  return /[A-Za-z]/.test(value);
 }
 
 export function interpretInventoryImportCost(

@@ -17,13 +17,13 @@ import {
   costOverlayConstructionIdentity,
   materializeCostOverlayRows,
 } from "./inventoryImportCostOverlayConstruction";
+import { frozenCostOverlayLineagesMatch } from "./inventoryImportCostOverlayLineage";
 import {
   abandonStaleCostOverlayConstruction,
   assertCostOverlayWorkFence,
   applyCostOverlayRowWithCtx,
   classifyCostOverlayUndoRowWithCtx,
   costOverlayPreparedImpact,
-  frozenCostOverlayLineagesMatch,
   mergeLargestCostOverlayImpacts,
   nextCostOverlayTerminalStatus,
   rollCostOverlayManifestDigest,
@@ -481,7 +481,7 @@ describe("inventory import cost overlay work", () => {
         {
           provisionalSkuId: "provisional-a" as never,
           productSkuId: "sku-a" as never,
-          rowKey: "2:A::Wig",
+          rowKey: "2:A::A",
           rowNumber: 2,
           status: "active",
           provisionalUpdatedAt: 101,
@@ -496,7 +496,7 @@ describe("inventory import cost overlay work", () => {
         {
           provisionalSkuId: "provisional-b" as never,
           productSkuId: "sku-a" as never,
-          rowKey: "3:A::Wig",
+          rowKey: "3:A::A",
           rowNumber: 3,
           status: "active",
           provisionalUpdatedAt: 102,
@@ -538,13 +538,117 @@ describe("inventory import cost overlay work", () => {
     });
   });
 
+  it("matches onboarded lineage by immutable source identity across review versions", () => {
+    const rows = materializeCostOverlayRows({
+      anchors: [
+        {
+          provisionalSkuId: "matching-lineage" as never,
+          productSkuId: "matching-sku" as never,
+          rowKey: "2:SKU-1::Body Wave",
+          rowNumber: 2,
+          status: "active",
+          provisionalUpdatedAt: 101,
+          sku: {
+            inventoryCount: 3,
+            productName: "Body Wave",
+            quantityAvailable: 3,
+            sku: "ATHENA-1",
+          },
+        },
+        {
+          provisionalSkuId: "other-import-lineage" as never,
+          productSkuId: "other-sku" as never,
+          rowKey: "2:OLD-1::Unrelated item",
+          rowNumber: 2,
+          status: "finalized",
+          provisionalUpdatedAt: 102,
+          sku: {
+            inventoryCount: 1,
+            productName: "Unrelated item",
+            quantityAvailable: 1,
+            sku: "ATHENA-2",
+          },
+        },
+      ],
+      content: ["product_name,sku,Legacy Cost", "Body Wave,SKU-1,4.25"].join(
+        "\n",
+      ),
+      fileName: "legacy.csv",
+      selectedColumn: {
+        kind: "csv",
+        label: "Legacy Cost",
+        ordinal: 1,
+      },
+      currencyMinorUnitScale: 2,
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      normalizedCostMinor: 425,
+      productSkuId: "matching-sku",
+      sourceRowKey: "2:SKU-1::Body Wave",
+    });
+  });
+
+  it("freezes every store lineage for the matched SKU across review sources", () => {
+    const rows = materializeCostOverlayRows({
+      anchors: [
+        {
+          provisionalSkuId: "source-lineage" as never,
+          productSkuId: "sku-a" as never,
+          rowKey: "2:A::Body Wave",
+          rowNumber: 2,
+          status: "active",
+          provisionalUpdatedAt: 101,
+          sku: {
+            inventoryCount: 3,
+            productName: "Body Wave",
+            quantityAvailable: 3,
+            sku: "ATHENA-A",
+          },
+        },
+        {
+          provisionalSkuId: "prior-review-lineage" as never,
+          productSkuId: "sku-a" as never,
+          rowKey: "27:OLD-A::Prior source row",
+          rowNumber: 27,
+          status: "closed",
+          provisionalUpdatedAt: 88,
+        },
+      ],
+      content: ["product_name,sku,Legacy Cost", "Body Wave,A,4.25"].join("\n"),
+      fileName: "legacy.csv",
+      selectedColumn: {
+        kind: "csv",
+        label: "Legacy Cost",
+        ordinal: 1,
+      },
+      currencyMinorUnitScale: 2,
+    });
+
+    expect(rows[0].frozenLineages).toEqual([
+      {
+        productSkuId: "sku-a",
+        provisionalSkuId: "prior-review-lineage",
+        status: "closed",
+        updatedAt: 88,
+      },
+      {
+        productSkuId: "sku-a",
+        provisionalSkuId: "source-lineage",
+        status: "active",
+        updatedAt: 101,
+      },
+    ]);
+  });
+
   it("blocks conflicting duplicate source costs for one SKU", () => {
     const rows = materializeCostOverlayRows({
       anchors: [
         {
           provisionalSkuId: "provisional-a" as never,
           productSkuId: "sku-a" as never,
-          rowKey: "2:A::Wig",
+          rowKey: "2:A::A",
           rowNumber: 2,
           status: "active",
           provisionalUpdatedAt: 101,
@@ -553,7 +657,7 @@ describe("inventory import cost overlay work", () => {
         {
           provisionalSkuId: "provisional-b" as never,
           productSkuId: "sku-a" as never,
-          rowKey: "3:A::Wig",
+          rowKey: "3:A::A",
           rowNumber: 3,
           status: "finalized",
           provisionalUpdatedAt: 102,
@@ -581,7 +685,7 @@ describe("inventory import cost overlay work", () => {
       {
         provisionalSkuId: "provisional-a" as never,
         productSkuId: "sku-a" as never,
-        rowKey: "2:A::Wig",
+        rowKey: "2:A::A",
         rowNumber: 2,
         status: "active" as const,
         provisionalUpdatedAt: 101,
@@ -590,7 +694,7 @@ describe("inventory import cost overlay work", () => {
       {
         provisionalSkuId: "provisional-closed" as never,
         productSkuId: "sku-a" as never,
-        rowKey: "3:A::Wig",
+        rowKey: "3:A::A",
         rowNumber: 3,
         status: "closed" as const,
         provisionalUpdatedAt: 102,
@@ -598,7 +702,7 @@ describe("inventory import cost overlay work", () => {
       {
         provisionalSkuId: "provisional-rejected" as never,
         productSkuId: "sku-a" as never,
-        rowKey: "4:A::Wig",
+        rowKey: "4:A::A",
         rowNumber: 4,
         status: "rejected" as const,
         provisionalUpdatedAt: 103,
@@ -621,7 +725,7 @@ describe("inventory import cost overlay work", () => {
         {
           provisionalSkuId: "inserted" as never,
           productSkuId: "sku-0" as never,
-          rowKey: "5:Z::Wig",
+          rowKey: "5:Z::Z",
           rowNumber: 5,
           status: "active",
           provisionalUpdatedAt: 104,
@@ -647,7 +751,7 @@ describe("inventory import cost overlay work", () => {
       anchors: Array.from({ length: 101 }, (_, index) => ({
         provisionalSkuId: `provisional-${index}` as never,
         productSkuId: "sku-a" as never,
-        rowKey: `${index + 2}:A::Wig`,
+        rowKey: `${index + 2}:A::A`,
         rowNumber: index + 2,
         status: "active" as const,
         provisionalUpdatedAt: 100 + index,
@@ -684,7 +788,7 @@ describe("inventory import cost overlay work", () => {
         {
           provisionalSkuId: "provisional-a" as never,
           productSkuId: "sku-a" as never,
-          rowKey: "2:A::Wig",
+          rowKey: "2:A::A",
           rowNumber: 2,
           status: "active",
           provisionalUpdatedAt: 101,
@@ -744,11 +848,9 @@ describe("inventory import cost overlay work", () => {
     expect(fixture.tables.productSkuSearch.get("search-1")).toMatchObject({
       unitCost: 425,
     });
-    expect(mockedSkuSearch.upsertProductSkuSearchProjection).toHaveBeenNthCalledWith(
-      1,
-      fixture.ctx,
-      "sku-1",
-    );
+    expect(
+      mockedSkuSearch.upsertProductSkuSearchProjection,
+    ).toHaveBeenNthCalledWith(1, fixture.ctx, "sku-1");
     expect(
       fixture.tables.posRegisterCatalogRevision.get("revision-1"),
     ).toMatchObject({ revision: 7 });
@@ -786,11 +888,9 @@ describe("inventory import cost overlay work", () => {
     expect(fixture.tables.productSkuSearch.get("search-1")).toMatchObject({
       unitCost: undefined,
     });
-    expect(mockedSkuSearch.upsertProductSkuSearchProjection).toHaveBeenNthCalledWith(
-      2,
-      fixture.ctx,
-      "sku-1",
-    );
+    expect(
+      mockedSkuSearch.upsertProductSkuSearchProjection,
+    ).toHaveBeenNthCalledWith(2, fixture.ctx, "sku-1");
     expect(
       fixture.tables.posRegisterCatalogRevision.get("revision-1"),
     ).toMatchObject({ revision: 7 });
@@ -935,20 +1035,30 @@ describe("inventory import cost overlay work", () => {
     });
   });
 
-  it("uses the review-scoped compound lineage index with bounded reads", async () => {
+  it("applies and undoes across review versions using the store SKU lineage index", async () => {
     const fixture = createWorkContext();
+    fixture.run.reviewVersionId = "review-30";
 
     await applyCostOverlayRowWithCtx(
       fixture.ctx,
       fixture.run as never,
       fixture.row as never,
     );
+    expect(
+      fixture.tables.inventoryImportCostOverlayRow.get("row-1"),
+    ).toMatchObject({ workStatus: "applied" });
+
+    await undoCostOverlayRowWithCtx(
+      fixture.ctx,
+      fixture.tables.inventoryImportCostOverlayRun.get("run-1") as never,
+      fixture.tables.inventoryImportCostOverlayRow.get("row-1") as never,
+    );
+    expect(
+      fixture.tables.inventoryImportCostOverlayRow.get("row-1"),
+    ).toMatchObject({ workStatus: "undone" });
 
     expect(fixture.lineageQueryIndexes).toEqual(
-      Array.from(
-        { length: 4 },
-        () => "by_storeId_reviewVersionId_productSkuId_status",
-      ),
+      Array.from({ length: 12 }, () => "by_storeId_productSkuId_status"),
     );
     expect(fixture.lineagePaginateCount).toBe(0);
   });
@@ -1064,6 +1174,9 @@ describe("inventory import cost overlay work", () => {
       },
     ];
     expect(frozenCostOverlayLineagesMatch(frozen, frozen)).toBe(true);
+    expect(frozenCostOverlayLineagesMatch(frozen, [frozen[1], frozen[0]])).toBe(
+      true,
+    );
     expect(
       frozenCostOverlayLineagesMatch(frozen, [
         frozen[0],

@@ -33,6 +33,7 @@ import {
   buildCostOverlayDecisionTransition,
   classifyCostOverlayRetryableWork,
   confirmCostOverlayApply,
+  costOverlayRowMatchesScope,
   createCostOverlayRun,
   resolveCostOverlayRunFromUrl,
   getCostOverlaySourceProjectionVersion,
@@ -47,6 +48,7 @@ import {
   listCostOverlayRowsPageWithScope,
   listRecentCostOverlayRunsWithActive,
   processCostOverlayBulkDecision,
+  readCostOverlayConstructionAnchors,
   appendCostOverlayConstructionBatch,
   updateCostOverlayDecision,
   updateCostOverlayDecisionsBulk,
@@ -56,6 +58,38 @@ import schema from "../schema";
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
+
+describe("cost overlay row filters", () => {
+  it("matches only rows with known unequal legacy and Athena costs", () => {
+    const row = {
+      barcode: undefined,
+      currentUnitCostMinor: 1_000,
+      decision: "not_selected" as const,
+      eligibility: "eligible" as const,
+      normalizedCostMinor: 1_250,
+      productName: "Straight bob",
+      sku: "BOB-12",
+      sourceRowKey: "source-1",
+      workStatus: undefined,
+    };
+
+    expect(
+      costOverlayRowMatchesScope(row, { filter: "different" }),
+    ).toBe(true);
+    expect(
+      costOverlayRowMatchesScope(
+        { ...row, normalizedCostMinor: 1_000 },
+        { filter: "different" },
+      ),
+    ).toBe(false);
+    expect(
+      costOverlayRowMatchesScope(
+        { ...row, currentUnitCostMinor: undefined },
+        { filter: "different" },
+      ),
+    ).toBe(false);
+  });
+});
 
 type OverlayTestRow = Record<string, unknown> & { _id: string };
 
@@ -210,6 +244,47 @@ describe("inventory import cost overlay contract", () => {
     expect(getCostOverlaySourceProjectionVersion()).toBe("1");
   });
 
+  it("loads onboarded lineage for the store instead of the selected review version", async () => {
+    const withIndex = vi.fn(
+      (
+        _name: string,
+        applyIndex: (q: {
+          eq: (field: string, value: unknown) => unknown;
+        }) => unknown,
+      ) => {
+        const q = { eq: vi.fn(() => q) };
+        applyIndex(q);
+        return {
+          paginate: vi.fn(async () => ({
+            continueCursor: "",
+            isDone: true,
+            page: [],
+          })),
+        };
+      },
+    );
+
+    await getHandler(readCostOverlayConstructionAnchors)(
+      {
+        db: {
+          get: vi.fn(async () => ({
+            _id: "run-1",
+            reviewVersionId: "review-30",
+            status: "draft",
+            storeId: "store-1",
+          })),
+          query: vi.fn(() => ({ withIndex })),
+        },
+      },
+      {
+        paginationOpts: { cursor: null, numItems: 100 },
+        runId: "run-1",
+      },
+    );
+
+    expect(withIndex).toHaveBeenCalledWith("by_storeId", expect.any(Function));
+  });
+
   it("resolves URL run ids without admitting malformed values to typed queries", async () => {
     const harness = createPublicMutationHarness({
       inventoryImportCostOverlayRun: [
@@ -343,49 +418,90 @@ describe("inventory import cost overlay contract", () => {
     ).toBeNull();
   });
 
-  it("fills a filtered page from matches beyond the first raw page", async () => {
-    const paginate = vi
+  it("continues sparse filtered scans without multiple database paginations", async () => {
+    const nonMatches = Array.from({ length: 10 }, (_, rowOrdinal) => ({
+      _id: `row-${rowOrdinal}`,
+      rowOrdinal,
+      productName: `Alpha ${rowOrdinal}`,
+      sourceRowKey: String(rowOrdinal),
+      eligibility: "eligible",
+      decision: "not_selected",
+    }));
+    const take = vi
       .fn()
-      .mockResolvedValueOnce({
-        continueCursor: "next",
-        isDone: false,
-        page: [
-          {
-            _id: "row-1",
-            productName: "Alpha",
-            sourceRowKey: "1",
-            eligibility: "eligible",
-            decision: "not_selected",
+      .mockResolvedValueOnce(nonMatches)
+      .mockResolvedValueOnce([
+        {
+          _id: "row-needle",
+          rowOrdinal: 10,
+          productName: "Needle Product",
+          sourceRowKey: "10",
+          eligibility: "eligible",
+          decision: "not_selected",
+        },
+      ]);
+    const range = {
+      eq: vi.fn().mockReturnThis(),
+      gt: vi.fn().mockReturnThis(),
+    };
+    const ctx = {
+      db: {
+        query: () => ({
+          withIndex: (
+            _index: string,
+            buildRange: (query: typeof range) => unknown,
+          ) => {
+            buildRange(range);
+            return { take };
           },
-        ],
-      })
-      .mockResolvedValueOnce({
-        continueCursor: "done",
-        isDone: true,
-        page: [
-          {
-            _id: "row-2",
-            productName: "Needle Product",
-            sourceRowKey: "2",
-            eligibility: "eligible",
-            decision: "not_selected",
-          },
-        ],
-      });
+        }),
+      },
+    } as never;
+
+    const firstPage = await listCostOverlayRowsPageWithScope(ctx, {
+      runId: "run-1" as never,
+      paginationOpts: { cursor: null, numItems: 1 },
+      search: "needle",
+    });
+    expect(firstPage.page).toEqual([]);
+    expect(firstPage.isDone).toBe(false);
+
+    const secondPage = await listCostOverlayRowsPageWithScope(ctx, {
+      runId: "run-1" as never,
+      paginationOpts: {
+        cursor: firstPage.continueCursor,
+        numItems: 1,
+      },
+      search: "needle",
+    });
+    expect(secondPage.page.map((row) => row._id)).toEqual(["row-needle"]);
+    expect(secondPage.isDone).toBe(true);
+    expect(take).toHaveBeenCalledTimes(2);
+    expect(range.gt).toHaveBeenCalledWith("rowOrdinal", 9);
+  });
+
+  it("expires incompatible pagination cursors without replaying earlier rows", async () => {
+    const take = vi.fn();
     const result = await listCostOverlayRowsPageWithScope(
       {
         db: {
-          query: () => ({ withIndex: () => ({ paginate }) }),
+          query: () => ({
+            withIndex: () => ({ take }),
+          }),
         },
       } as never,
       {
         runId: "run-1" as never,
-        paginationOpts: { cursor: null, numItems: 1 },
-        search: "needle",
+        paginationOpts: { cursor: "legacy-native-cursor", numItems: 15 },
       },
     );
-    expect(result.page.map((row) => row._id)).toEqual(["row-2"]);
-    expect(paginate).toHaveBeenCalledTimes(2);
+
+    expect(result).toEqual({
+      continueCursor: "legacy-native-cursor",
+      isDone: true,
+      page: [],
+    });
+    expect(take).not.toHaveBeenCalled();
   });
 
   it("processes bulk decisions in bounded continuation batches", async () => {
@@ -426,7 +542,9 @@ describe("inventory import cost overlay contract", () => {
         {
           db: {
             get: vi.fn(async () => run),
-            query: () => ({ withIndex: () => ({ first: async () => request }) }),
+            query: () => ({
+              withIndex: () => ({ first: async () => request }),
+            }),
           },
           scheduler: { runAfter },
         },
@@ -442,11 +560,13 @@ describe("inventory import cost overlay contract", () => {
           patch: vi.fn(async (table, id, value) => {
             if (table === "inventoryImportCostOverlayRun")
               Object.assign(run, value);
-            else if (
-              table === "inventoryImportCostOverlayBulkDecisionRequest"
-            )
+            else if (table === "inventoryImportCostOverlayBulkDecisionRequest")
               Object.assign(request, value);
-            else Object.assign(rows.find((row) => row._id === id)!, value);
+            else
+              Object.assign(
+                rows.find((row) => row._id === id)!,
+                value,
+              );
           }),
           query: (table: string) => ({
             withIndex: () =>
@@ -486,7 +606,11 @@ describe("inventory import cost overlay contract", () => {
                 table === "inventoryImportCostOverlayBulkDecisionRequest"
               )
                 Object.assign(request, value);
-              else Object.assign(rows.find((row) => row._id === id)!, value);
+              else
+                Object.assign(
+                  rows.find((row) => row._id === id)!,
+                  value,
+                );
             }),
             query: (table: string) => ({
               withIndex: () =>
@@ -587,7 +711,10 @@ describe("inventory import cost overlay contract", () => {
             ) {
               Object.assign(request, value);
             } else {
-              Object.assign(rows.find((row) => row._id === id)!, value);
+              Object.assign(
+                rows.find((row) => row._id === id)!,
+                value,
+              );
             }
           }),
           query: (table: string) => ({
@@ -1230,10 +1357,12 @@ describe("inventory import cost overlay public mutation handlers", () => {
     expect(
       harness.row("inventoryImportCostOverlayRow", "known-row"),
     ).toMatchObject({ decision: "not_selected" });
-    expect(harness.row("inventoryImportCostOverlayRun", "run-1")).toMatchObject({
-      decisionRevision: 2,
-      selectedRowCount: 0,
-    });
+    expect(harness.row("inventoryImportCostOverlayRun", "run-1")).toMatchObject(
+      {
+        decisionRevision: 2,
+        selectedRowCount: 0,
+      },
+    );
   });
 
   it("allows the explicit overwrite path for a known current cost", async () => {
@@ -1264,10 +1393,12 @@ describe("inventory import cost overlay public mutation handlers", () => {
       decision: "overwrite_selected",
       decisionRevision: 3,
     });
-    expect(harness.row("inventoryImportCostOverlayRun", "run-1")).toMatchObject({
-      decisionRevision: 3,
-      selectedRowCount: 1,
-    });
+    expect(harness.row("inventoryImportCostOverlayRun", "run-1")).toMatchObject(
+      {
+        decisionRevision: 3,
+        selectedRowCount: 1,
+      },
+    );
   });
 
   it("starts a normalized bulk request with a durable ledger and exact continuation", async () => {
@@ -1305,16 +1436,18 @@ describe("inventory import cost overlay public mutation handlers", () => {
       updatedAt: Date.now(),
       updatedCount: 0,
     });
-    expect(harness.row("inventoryImportCostOverlayRun", "run-1")).toMatchObject({
-      bulkDecision: "selected_missing_cost",
-      bulkDecisionCursor: 0,
-      bulkDecisionFilter: "eligible",
-      bulkDecisionRequestKey: "bulk-a",
-      bulkDecisionSearch: "Rice",
-      bulkDecisionStatus: "processing",
-      manifestDigest: undefined,
-      preparedDecisionRevision: undefined,
-    });
+    expect(harness.row("inventoryImportCostOverlayRun", "run-1")).toMatchObject(
+      {
+        bulkDecision: "selected_missing_cost",
+        bulkDecisionCursor: 0,
+        bulkDecisionFilter: "eligible",
+        bulkDecisionRequestKey: "bulk-a",
+        bulkDecisionSearch: "Rice",
+        bulkDecisionStatus: "processing",
+        manifestDigest: undefined,
+        preparedDecisionRevision: undefined,
+      },
+    );
     expect(harness.scheduled).toEqual([
       {
         args: { generation: 1, requestKey: "bulk-a", runId: "run-1" },
@@ -1405,14 +1538,18 @@ describe("inventory import cost overlay public mutation handlers", () => {
         storeId: "store-1",
       }),
     ).resolves.toEqual({ status: "completed", updatedCount: 1 });
-    expect(harness.row("inventoryImportCostOverlayRow", "row-1")).toMatchObject({
-      decision: "not_selected",
-      decisionRevision: 6,
-    });
-    expect(harness.row("inventoryImportCostOverlayRun", "run-1")).toMatchObject({
-      bulkDecisionRequestKey: "bulk-b",
-      bulkDecisionStatus: "completed",
-    });
+    expect(harness.row("inventoryImportCostOverlayRow", "row-1")).toMatchObject(
+      {
+        decision: "not_selected",
+        decisionRevision: 6,
+      },
+    );
+    expect(harness.row("inventoryImportCostOverlayRun", "run-1")).toMatchObject(
+      {
+        bulkDecisionRequestKey: "bulk-b",
+        bulkDecisionStatus: "completed",
+      },
+    );
     expect(harness.scheduled).toHaveLength(0);
   });
 
@@ -1565,11 +1702,13 @@ describe("inventory import cost overlay public mutation handlers", () => {
         name: "inventory/inventoryImportCostOverlayWork:processCostOverlayUndoPreviewBatch",
       },
     ]);
-    expect(harness.row("inventoryImportCostOverlayRun", "run-1")).toMatchObject({
-      undoPreviewCursor: 10,
-      undoPreviewGeneration: 3,
-      undoPreviewHeartbeatAt: Date.now(),
-    });
+    expect(harness.row("inventoryImportCostOverlayRun", "run-1")).toMatchObject(
+      {
+        undoPreviewCursor: 10,
+        undoPreviewGeneration: 3,
+        undoPreviewHeartbeatAt: Date.now(),
+      },
+    );
   });
 
   it("rejects stale and ineligible decision edits without persisting changes", async () => {
@@ -1835,7 +1974,9 @@ describe("inventory import cost overlay public mutation handlers", () => {
         runId: "run-1",
         storeId: "store-1",
       }),
-    ).rejects.toThrow("Cost overlay work is still active or cannot be retried.");
+    ).rejects.toThrow(
+      "Cost overlay work is still active or cannot be retried.",
+    );
     expect(harness.scheduled).toHaveLength(1);
   });
 
@@ -1877,7 +2018,9 @@ describe("inventory import cost overlay public mutation handlers", () => {
     });
     await expect(
       getHandler(retryCostOverlayWork)(harness.ctx, args),
-    ).rejects.toThrow("Cost overlay work is still active or cannot be retried.");
+    ).rejects.toThrow(
+      "Cost overlay work is still active or cannot be retried.",
+    );
 
     expect(harness.scheduled).toEqual([
       {
@@ -1894,10 +2037,7 @@ describe("inventory import cost overlay public mutation handlers", () => {
       },
     );
     expect(
-      harness.row(
-        "inventoryImportCostOverlayBulkDecisionRequest",
-        "request-a",
-      ),
+      harness.row("inventoryImportCostOverlayBulkDecisionRequest", "request-a"),
     ).toMatchObject({ generation: 4, updatedAt: Date.now() });
   });
 
@@ -1939,10 +2079,7 @@ describe("inventory import cost overlay public mutation handlers", () => {
     );
     expect(harness.scheduled).toEqual([]);
     expect(
-      harness.row(
-        "inventoryImportCostOverlayBulkDecisionRequest",
-        "request-a",
-      ),
+      harness.row("inventoryImportCostOverlayBulkDecisionRequest", "request-a"),
     ).toMatchObject({ generation: 3, updatedAt: Date.now() - 10 });
   });
 
