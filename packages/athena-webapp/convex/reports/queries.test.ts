@@ -473,7 +473,10 @@ describe("getSkuDetail", () => {
         endDate: "2026-07-28",
       }),
     );
-    expect(result).toEqual({ days: [], totals: null });
+    // Identity still resolves: the page must be able to name a SKU that
+    // simply had no activity in the selected window.
+    expect(result).toMatchObject({ days: [], totals: null });
+    expect(result?.identity?.displayName).toBeTruthy();
   });
 
   it("sums metrics across days, with operatingDate per row", async () => {

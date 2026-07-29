@@ -6,10 +6,11 @@ import { requireReportsStoreAccess } from "./access";
 import { dayPeriodKey } from "../../shared/reportsContract";
 import { REPORT_SKU_PAGE_SIZE } from "../../shared/reportsContract";
 import type {
-  ReportOverviewData,
   ReportDayRow,
-  ReportSkuPeriodRow,
+  ReportOverviewData,
   ReportRangeSummary,
+  ReportSkuIdentity,
+  ReportSkuPeriodRow,
   ReportSkuSortBy,
 } from "../../shared/reportsContract";
 
@@ -288,6 +289,21 @@ export const listPeriodSkus = query({
  * a reporting fact outlives its subject, and dropping the row would silently
  * understate the period.
  */
+/** Identity for one SKU — a single document read. */
+async function resolveSkuIdentity(
+  ctx: QueryCtx,
+  productSkuId: Id<"productSku">,
+): Promise<ReportSkuIdentity | undefined> {
+  const sku = await ctx.db.get(productSkuId);
+  if (!sku) return undefined;
+
+  return {
+    displayName: sku.productName ?? sku.sku ?? String(productSkuId),
+    ...(sku.sku ? { sku: sku.sku } : {}),
+    ...(sku.size ? { size: sku.size } : {}),
+  };
+}
+
 async function withSkuIdentity(
   ctx: QueryCtx,
   rows: ReportSkuPeriodRow[],
@@ -326,6 +342,7 @@ export const getSkuDetail = query({
   ): Promise<{
     days: (ReportSkuPeriodRow & { operatingDate: string })[];
     totals: ReportSkuPeriodRow | null;
+    identity?: ReportSkuIdentity;
   } | null> => {
     await requireReportsStoreAccess(ctx, args.storeId);
     requireValidDateRange(args.startDate, args.endDate);
@@ -343,8 +360,12 @@ export const getSkuDetail = query({
       )
       .take(RANGE_MAX_SPAN_DAYS);
 
+    // Resolved before the empty-range return so the page can still name the
+    // SKU when it simply had no activity in the selected window.
+    const identity = await resolveSkuIdentity(ctx, args.productSkuId);
+
     if (rows.length === 0) {
-      return { days: [], totals: null };
+      return { days: [], totals: null, identity };
     }
 
     const days = rows.map((row) => ({
@@ -373,7 +394,7 @@ export const getSkuDetail = query({
       grossProfitMinor: anyUncosted ? null : sum(rows, "grossProfitMinor"),
     };
 
-    return { days, totals };
+    return { days, totals, identity };
   },
 });
 

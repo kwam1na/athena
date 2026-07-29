@@ -20,6 +20,20 @@ const baseProps = {
 };
 
 describe("ReportsSkuDetailView", () => {
+  it("names the SKU in the header, normalized, with its code beneath", () => {
+    useQuery.mockReturnValue({
+      days: [],
+      totals: null,
+      identity: { displayName: "oshe", sku: "6N2Y-JY3-5G6", size: "500ml" },
+    });
+    render(<ReportsSkuDetailView {...baseProps} />);
+
+    expect(screen.getByTestId("reports-sku-detail-name")).toHaveTextContent(
+      "Oshe",
+    );
+    expect(screen.getByText("6N2Y-JY3-5G6 · 500ml")).toBeInTheDocument();
+  });
+
   it("renders day rows and totals", () => {
     useQuery.mockReturnValue({
       days: [

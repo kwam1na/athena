@@ -24,7 +24,14 @@ import {
 } from "@/lib/operations/operatingDate";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
-import { formatOperatingDate, formatOptionalMoney, formatReportProfit, formatUnits } from "./reportFormat";
+import {
+  formatOperatingDate,
+  formatOptionalMoney,
+  formatReportProfit,
+  formatSkuDisplayName,
+  formatSkuSubtitle,
+  formatUnits,
+} from "./reportFormat";
 
 /** Single-date popover trigger, same shape as `DailyOperationsView`'s operating-date picker. */
 function ReportDateField({
@@ -111,6 +118,18 @@ export function ReportsSkuDetailView({
 
   return (
     <div className="space-y-layout-md" data-testid="reports-sku-detail">
+      <div className="space-y-1">
+        <h2
+          className="text-xl font-medium text-foreground"
+          data-testid="reports-sku-detail-name"
+        >
+          {formatSkuDisplayName(detail?.identity, productSkuId)}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {formatSkuSubtitle(detail?.identity, productSkuId)}
+        </p>
+      </div>
+
       <div className="flex flex-wrap items-end gap-layout-sm">
         <ReportDateField
           boundary={endBoundary ? { after: endBoundary } : undefined}
