@@ -311,6 +311,11 @@ export type ReportSkuIdentity = {
   displayName: string;
   sku?: string;
   size?: string;
+  /**
+   * Owning product, for linking out to the product detail page. Already on
+   * the `productSku` document, so it costs no extra read.
+   */
+  productId?: string;
 };
 
 export type ReportSkuPeriodRow = ReportSkuDayMetrics & {

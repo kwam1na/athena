@@ -1,13 +1,25 @@
 import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
 import type { ReportTrustSummary } from "~/shared/reportsContract";
-import { formatOperatingDate } from "./reportFormat";
+import { reportOldestUnreconciledPresentation } from "./reportFormat";
 
 /**
  * Trust strip: reconciled/provisional/amended day counts and the oldest
  * unreconciled date, straight from `ReportOverviewData["trust"]` — same
  * metric-tile grid as `ReportPeriodMetrics`/`StorePulseSummaryView`.
  */
-export function ReportTrustStrip({ trust }: { trust: ReportTrustSummary }) {
+export function ReportTrustStrip({
+  trust,
+  today,
+}: {
+  trust: ReportTrustSummary;
+  /** Operating date to measure staleness against; defaults to the local day. */
+  today?: string;
+}) {
+  const oldestUnreconciled = reportOldestUnreconciledPresentation(
+    trust.oldestUnreconciledDate,
+    today ?? new Date().toISOString().slice(0, 10),
+  );
+
   return (
     <div
       className="grid grid-cols-2 gap-layout-sm xl:grid-cols-4"
@@ -26,12 +38,9 @@ export function ReportTrustStrip({ trust }: { trust: ReportTrustSummary }) {
         value={trust.amendedDays.toLocaleString()}
       />
       <OperationsSummaryMetric
+        helper={oldestUnreconciled.helper}
         label="Oldest unreconciled"
-        value={
-          trust.oldestUnreconciledDate
-            ? formatOperatingDate(trust.oldestUnreconciledDate)
-            : "None"
-        }
+        value={oldestUnreconciled.value}
       />
     </div>
   );

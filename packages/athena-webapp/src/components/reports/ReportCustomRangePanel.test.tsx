@@ -114,7 +114,8 @@ describe("ReportCustomRangePanel", () => {
     render(<ReportCustomRangePanel {...baseProps} requestKey="req-123" />);
 
     expect(screen.getByTestId("report-custom-range-completed")).toHaveTextContent("$90");
-    expect(screen.getByText("profit unavailable (uncosted)")).toBeInTheDocument();
+    // Value slot holds an em dash; the reason is not repeated per row.
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     expect(screen.getByText("sku-1")).toBeInTheDocument();
   });
 });

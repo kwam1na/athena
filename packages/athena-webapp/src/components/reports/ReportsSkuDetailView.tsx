@@ -1,4 +1,6 @@
 import { useQuery } from "convex/react";
+import { Link, useParams } from "@tanstack/react-router";
+import { ArrowUpRight } from "lucide-react";
 import { useState } from "react";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,6 +8,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getOrigin } from "@/lib/navigationUtils";
 import { ReportBackLink } from "./ReportBackLink";
 import { useStableReportQuery } from "./useStableReportQuery";
 import { cn } from "@/lib/utils";
@@ -32,6 +35,8 @@ import {
   formatSkuDisplayName,
   formatSkuSubtitle,
   formatUnits,
+  reportProfitHelper,
+  reportProfitUnavailableNote,
 } from "./reportFormat";
 
 /** Single-date popover trigger, same shape as `DailyOperationsView`'s operating-date picker. */
@@ -95,6 +100,7 @@ export function ReportsSkuDetailView({
   onEndDateChange: (value: string) => void;
 }) {
   const { activeStore } = useGetActiveStore();
+  const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
   const currency = activeStore?.currency ?? "USD";
   const startBoundary = getLocalDateFromOperatingDate(startDate);
   const endBoundary = getLocalDateFromOperatingDate(endDate);
@@ -128,12 +134,40 @@ export function ReportsSkuDetailView({
         <ReportBackLink label="Back to items" />
 
         <div className="space-y-1">
-          <h2
-            className="text-xl font-medium text-foreground"
-            data-testid="reports-sku-detail-name"
-          >
-            {formatSkuDisplayName(detail?.identity, productSkuId)}
-          </h2>
+          {/* Out to the product's detail page, carrying this page as the
+              origin so its back control returns here. The product id stands
+              in for the slug, matching how the products table links. */}
+          {detail?.identity?.productId ? (
+            <Link
+              className="group inline-flex items-center gap-1.5"
+              params={{
+                orgUrlSlug: orgUrlSlug!,
+                storeUrlSlug: storeUrlSlug!,
+                productSlug: detail.identity.productId,
+              }}
+              search={{ o: getOrigin() }}
+              to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+            >
+              <h2
+                className="text-xl font-medium text-foreground"
+                data-testid="reports-sku-detail-name"
+              >
+                {formatSkuDisplayName(detail?.identity, productSkuId)}
+              </h2>
+              <ArrowUpRight
+                aria-hidden="true"
+                className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
+              />
+              <span className="sr-only">Open product</span>
+            </Link>
+          ) : (
+            <h2
+              className="text-xl font-medium text-foreground"
+              data-testid="reports-sku-detail-name"
+            >
+              {formatSkuDisplayName(detail?.identity, productSkuId)}
+            </h2>
+          )}
           <p className="text-sm text-muted-foreground">
             {formatSkuSubtitle(detail?.identity, productSkuId)}
           </p>
@@ -180,6 +214,11 @@ export function ReportsSkuDetailView({
               value={formatUnits(detail.totals?.unitsSold)}
             />
             <OperationsSummaryMetric
+              helper={
+                detail.totals
+                  ? reportProfitHelper(detail.totals.grossProfitMinor)
+                  : undefined
+              }
               label="Gross profit"
               value={
                 detail.totals
@@ -219,6 +258,12 @@ export function ReportsSkuDetailView({
               </Table>
             </div>
           )}
+
+          {detail.days.some((day) => day.grossProfitMinor === null) ? (
+            <p className="text-xs text-muted-foreground">
+              {reportProfitUnavailableNote}
+            </p>
+          ) : null}
         </div>
       )}
     </div>

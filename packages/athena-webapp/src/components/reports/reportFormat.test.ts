@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  PROFIT_UNAVAILABLE_LABEL,
   formatBasisPoints,
   formatOptionalMoney,
   formatReportMoney,
@@ -9,6 +8,7 @@ import {
   formatSkuDisplayName,
   formatUnits,
   reportDayStatusPresentation,
+  reportProfitHelper,
 } from "./reportFormat";
 
 describe("reportFormat", () => {
@@ -16,9 +16,11 @@ describe("reportFormat", () => {
     expect(formatReportMoney(123456, "USD")).toContain("1,234.56");
   });
 
-  it("renders an explicit profit-unavailable label for null gross profit, not a dash", () => {
-    expect(formatReportProfit(null, "USD")).toBe(PROFIT_UNAVAILABLE_LABEL);
-    expect(formatReportProfit(null, "USD")).not.toBe("—");
+  it("puts an em dash in the value slot and the reason in a helper", () => {
+    // The reason lives in a helper line, not in the value slot.
+    expect(formatReportProfit(null, "USD")).toBe("—");
+    expect(reportProfitHelper(null)).toBe("No item cost recorded");
+    expect(reportProfitHelper(1234)).toBeUndefined();
   });
 
   it("formats a non-null gross profit as money", () => {

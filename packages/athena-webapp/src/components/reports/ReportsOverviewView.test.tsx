@@ -120,7 +120,7 @@ describe("ReportsOverviewView", () => {
     expect(screen.queryByText("-100.0%")).not.toBeInTheDocument();
   });
 
-  it("renders an explicit 'profit unavailable (uncosted)' treatment for null gross profit, not a bare dash", async () => {
+  it("explains a null gross profit in a helper line rather than the value", async () => {
     const user = userEvent.setup();
     useQuery.mockReturnValue(fixture);
     render(<ReportsOverviewView />);
@@ -128,7 +128,7 @@ describe("ReportsOverviewView", () => {
     // trailing30 is the snapshot with a null gross profit.
     await user.click(screen.getByRole("tab", { name: "Trailing 30 days" }));
 
-    expect(screen.getByText("profit unavailable (uncosted)")).toBeInTheDocument();
+    expect(screen.getByText("No item cost recorded")).toBeInTheDocument();
   });
 
   it("shows a loading state while the query is pending", () => {

@@ -5,6 +5,7 @@ import {
   formatReportMoney,
   formatReportProfit,
   formatUnits,
+  reportProfitHelper,
 } from "./reportFormat";
 
 /**
@@ -71,8 +72,8 @@ export function ReportPeriodMetrics({
       <OperationsSummaryMetric
         helper={
           snapshot.uncostedRevenueMinor > 0
-            ? `${formatReportMoney(snapshot.uncostedRevenueMinor, currency)} of revenue has no cost basis`
-            : undefined
+            ? `${formatReportMoney(snapshot.uncostedRevenueMinor, currency)} without item cost`
+            : reportProfitHelper(snapshot.grossProfitMinor)
         }
         label="Gross profit"
         value={formatReportProfit(snapshot.grossProfitMinor, currency)}

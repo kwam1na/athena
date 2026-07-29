@@ -317,6 +317,7 @@ async function resolveSkuIdentity(
     displayName: cleanMetadataValue(sku.productName) ?? code ?? String(productSkuId),
     ...(code ? { sku: code } : {}),
     ...(size ? { size } : {}),
+    productId: String(sku.productId),
   };
 }
 
@@ -339,6 +340,7 @@ async function withSkuIdentity(
             cleanMetadataValue(sku.productName) ?? code ?? row.productSkuId,
           ...(code ? { sku: code } : {}),
           ...(size ? { size } : {}),
+          productId: String(sku.productId),
         },
       };
     }),

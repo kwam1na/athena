@@ -18,7 +18,6 @@ export function formatReportMoney(amountMinor: number, currency: string) {
 }
 
 /** Explicit copy for the honest-uncosted-profit case — never a bare dash. */
-export const PROFIT_UNAVAILABLE_LABEL = "profit unavailable (uncosted)";
 
 /**
  * Renders a gross-profit-shaped metric. `null` means "no cost basis was
@@ -26,13 +25,32 @@ export const PROFIT_UNAVAILABLE_LABEL = "profit unavailable (uncosted)";
  * `grossProfitMinor` semantics) — that must never collapse to the same
  * treatment as "no data yet" ("—" for a missing/absent value).
  */
+/**
+ * Gross profit, or an em dash when it cannot be computed.
+ *
+ * The "why" deliberately does NOT ride in the value: a metric tile and a
+ * table cell both expect a figure, and a sentence in that slot overflows the
+ * tile and repeats down every row of a table. Callers pair this with
+ * `reportProfitUnavailableNote` — once, in a helper line or below a table.
+ */
 export function formatReportProfit(
   grossProfitMinor: number | null,
   currency: string,
 ): string {
-  if (grossProfitMinor === null) return PROFIT_UNAVAILABLE_LABEL;
+  if (grossProfitMinor === null) return "—";
   return formatReportMoney(grossProfitMinor, currency);
 }
+
+/** Helper line for a profit metric that has no cost basis. */
+export function reportProfitHelper(
+  grossProfitMinor: number | null,
+): string | undefined {
+  return grossProfitMinor === null ? "No item cost recorded" : undefined;
+}
+
+/** One-line explanation for a table where some rows have no cost basis. */
+export const reportProfitUnavailableNote =
+  "Gross profit needs a recorded item cost. Sales without one show —.";
 
 /** "—" is reserved for values that are genuinely null — never a missing key. */
 export function formatOptionalMoney(
@@ -236,4 +254,34 @@ export function formatSkuDisplayName(
   return isFallback
     ? identity.displayName
     : capitalizeWords(identity.displayName);
+}
+
+/**
+ * How stale the oldest unreconciled day is, split for a metric tile.
+ *
+ * A full date ("Jul 29, 2026") in the value slot sits oddly beside
+ * single-digit counts and says less than the reader wants to know, which is
+ * *how far back* the unsettled work goes. The age leads; the date supports.
+ */
+export function reportOldestUnreconciledPresentation(
+  operatingDate: string | undefined,
+  today: string,
+): { value: string; helper?: string } {
+  if (!operatingDate) {
+    return { value: "None", helper: "Every day reconciled" };
+  }
+
+  const days = Math.max(
+    0,
+    Math.round(
+      (Date.parse(`${today}T00:00:00.000Z`) -
+        Date.parse(`${operatingDate}T00:00:00.000Z`)) /
+        86_400_000,
+    ),
+  );
+
+  const value =
+    days === 0 ? "Today" : days === 1 ? "Yesterday" : `${days} days ago`;
+
+  return { value, helper: formatOperatingDate(operatingDate) };
 }

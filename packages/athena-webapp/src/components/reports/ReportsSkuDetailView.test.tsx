@@ -15,6 +15,16 @@ vi.mock("@/hooks/use-navigate-back", () => ({
 }));
 vi.mock("@tanstack/react-router", () => ({
   useSearch: () => search.current,
+  useParams: () => ({ orgUrlSlug: "acme", storeUrlSlug: "downtown" }),
+  Link: ({ children, to, ...props }: { children?: React.ReactNode; to: string }) => {
+    delete (props as Record<string, unknown>).params;
+    delete (props as Record<string, unknown>).search;
+    return (
+      <a href={to} {...props}>
+        {children}
+      </a>
+    );
+  },
 }));
 
 import { ReportsSkuDetailView } from "./ReportsSkuDetailView";
@@ -28,6 +38,37 @@ const baseProps = {
 };
 
 describe("ReportsSkuDetailView", () => {
+  it("links the product name out to its product page, carrying the origin", () => {
+    useQuery.mockReturnValue({
+      days: [],
+      totals: null,
+      identity: {
+        displayName: "oshe",
+        sku: "6N2Y-JY3-5G6",
+        productId: "product-9",
+      },
+    });
+    render(<ReportsSkuDetailView {...baseProps} />);
+
+    const link = screen.getByRole("link", { name: /oshe/i });
+    expect(link).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+    );
+  });
+
+  it("leaves the name unlinked when the owning product is unknown", () => {
+    useQuery.mockReturnValue({
+      days: [],
+      totals: null,
+      identity: { displayName: "oshe", sku: "6N2Y-JY3-5G6" },
+    });
+    render(<ReportsSkuDetailView {...baseProps} />);
+
+    expect(screen.queryByRole("link", { name: /oshe/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId("reports-sku-detail-name")).toHaveTextContent("Oshe");
+  });
+
   it("offers a way back only when the caller supplied an origin", () => {
     useQuery.mockReturnValue({ days: [], totals: null, identity: undefined });
 
@@ -92,7 +133,7 @@ describe("ReportsSkuDetailView", () => {
 
     render(<ReportsSkuDetailView {...baseProps} />);
 
-    expect(screen.getByText("profit unavailable (uncosted)")).toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     expect(screen.getByText("$28")).toBeInTheDocument();
   });
 
