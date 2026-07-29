@@ -157,6 +157,8 @@ export function ReportsSkuDetailView({
           aria-busy={isRefreshing}
           className={cn(
             "space-y-layout-md transition-opacity duration-150 motion-reduce:transition-none",
+            // Runs once when the detail first resolves (see ReportsItemsView).
+            "motion-safe:animate-[presence-lift_var(--motion-standard)_var(--ease-emphasized)_both]",
             isRefreshing && "opacity-60",
           )}
           data-refreshing={isRefreshing ? "true" : undefined}

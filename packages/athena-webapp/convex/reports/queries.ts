@@ -289,6 +289,19 @@ export const listPeriodSkus = query({
  * a reporting fact outlives its subject, and dropping the row would silently
  * understate the period.
  */
+/**
+ * Inventory metadata carries import placeholders — 1,078 of wigclub's 1,088
+ * non-empty `size` values are the literal string "NULL" — so a raw value
+ * would render as "6N2Y-GW8-2CB · NULL". Same rule the stock-adjustment
+ * workspace applies client-side, enforced here so the placeholder never
+ * leaves the server.
+ */
+function cleanMetadataValue(value?: string | null): string | undefined {
+  const next = value?.trim();
+  if (!next || next.toLowerCase() === "null") return undefined;
+  return next;
+}
+
 /** Identity for one SKU — a single document read. */
 async function resolveSkuIdentity(
   ctx: QueryCtx,
@@ -297,10 +310,13 @@ async function resolveSkuIdentity(
   const sku = await ctx.db.get(productSkuId);
   if (!sku) return undefined;
 
+  const code = cleanMetadataValue(sku.sku);
+  const size = cleanMetadataValue(sku.size);
+
   return {
-    displayName: sku.productName ?? sku.sku ?? String(productSkuId),
-    ...(sku.sku ? { sku: sku.sku } : {}),
-    ...(sku.size ? { size: sku.size } : {}),
+    displayName: cleanMetadataValue(sku.productName) ?? code ?? String(productSkuId),
+    ...(code ? { sku: code } : {}),
+    ...(size ? { size } : {}),
   };
 }
 
@@ -313,12 +329,16 @@ async function withSkuIdentity(
       const sku = await ctx.db.get(row.productSkuId as Id<"productSku">);
       if (!sku) return row;
 
+      const code = cleanMetadataValue(sku.sku);
+      const size = cleanMetadataValue(sku.size);
+
       return {
         ...row,
         identity: {
-          displayName: sku.productName ?? sku.sku ?? row.productSkuId,
-          ...(sku.sku ? { sku: sku.sku } : {}),
-          ...(sku.size ? { size: sku.size } : {}),
+          displayName:
+            cleanMetadataValue(sku.productName) ?? code ?? row.productSkuId,
+          ...(code ? { sku: code } : {}),
+          ...(size ? { size } : {}),
         },
       };
     }),

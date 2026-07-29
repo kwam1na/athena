@@ -8,6 +8,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { EmptyState } from "@/components/states/empty/empty-state";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { ReportTrendPoint } from "~/shared/reportsContract";
 import {
   formatCompactReportMoney,
@@ -23,7 +24,41 @@ const trendChartConfig = {
   },
 } satisfies ChartConfig;
 
-type TrendChartPoint = ReportTrendPoint & { label: string };
+type TrendChartPoint = ReportTrendPoint & {
+  label: string;
+  axisLabel: string;
+  chartIndex: number;
+};
+
+/**
+ * Axis labels: short weekday + short month + day, matching
+ * `StorePulseSummaryView`'s axis. The year is dropped — redundant inside a
+ * 30-day window and the main reason the ticks read crammed. The tooltip
+ * still carries the full date.
+ */
+const axisDateFormatter = new Intl.DateTimeFormat("en-US", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+  weekday: "short",
+});
+
+/**
+ * Evenly spaced tick positions across `length` points, mirroring
+ * `StorePulseSummaryView`'s helper. Only the LABELS are sampled — every data
+ * point is still plotted, the axis just stops trying to name all of them.
+ */
+function evenlySpacedTicks(length: number, count: number): number[] | undefined {
+  if (length === 0) return undefined;
+  if (length <= count) return Array.from({ length }, (_, index) => index);
+
+  return Array.from({ length: count }, (_, index) =>
+    Math.round((index * (length - 1)) / (count - 1)),
+  );
+}
+
+const DESKTOP_TICK_COUNT = 7;
+const MOBILE_TICK_COUNT = 3;
 
 /** Same AreaChart/gradient treatment as `StorePulseTimeline` — status stays available in the tooltip. */
 export function ReportTrendChart({
@@ -33,10 +68,24 @@ export function ReportTrendChart({
   dailyTrend: ReportTrendPoint[];
   currency: string;
 }) {
-  const chartData: TrendChartPoint[] = dailyTrend.map((point) => ({
+  const isMobile = useIsMobile();
+  const chartData: TrendChartPoint[] = dailyTrend.map((point, index) => ({
     ...point,
+    chartIndex: index,
     label: formatOperatingDate(point.operatingDate),
+    axisLabel: axisDateFormatter.format(
+      new Date(`${point.operatingDate}T00:00:00.000Z`),
+    ),
   }));
+
+  const xAxisTicks = useMemo(
+    () =>
+      evenlySpacedTicks(
+        chartData.length,
+        isMobile ? MOBILE_TICK_COUNT : DESKTOP_TICK_COUNT,
+      ),
+    [chartData.length, isMobile],
+  );
 
   // Remounts the Area whenever the plotted days change, so the CSS draw-in
   // replays on a period switch instead of only on first paint — same replay
@@ -91,9 +140,19 @@ export function ReportTrendChart({
               <CartesianGrid vertical={false} />
               <XAxis
                 axisLine={false}
-                dataKey="label"
+                // Plotted against the point INDEX so ticks can be placed
+                // explicitly; the line itself still uses every data point.
+                dataKey="chartIndex"
+                domain={[0, Math.max(0, chartData.length - 1)]}
+                interval="preserveStartEnd"
+                tickFormatter={(value: number | string) => {
+                  const index = Math.round(Number(value));
+                  return chartData[index]?.axisLabel ?? "";
+                }}
                 tickLine={false}
                 tickMargin={8}
+                ticks={xAxisTicks}
+                type="number"
               />
               <YAxis
                 axisLine={false}
