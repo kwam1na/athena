@@ -1,5 +1,5 @@
 import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
-import { currencyFormatter } from "@/lib/utils";
+import { capitalizeWords, currencyFormatter } from "@/lib/utils";
 import {
   REPORT_DAY_STATUSES,
   type ReportDayStatus,
@@ -212,4 +212,28 @@ export function formatSkuSubtitle(
   if (!identity?.sku) return productSkuId;
 
   return identity.size ? `${identity.sku} · ${identity.size}` : identity.sku;
+}
+
+/**
+ * Product name for a SKU row, normalized for display.
+ *
+ * `capitalizeWords` lower-cases before capitalizing, which is what we want
+ * for operator-entered names ("oshe" -> "Oshe", "DRYER COMB BIG" -> "Dryer
+ * Comb Big") but would corrupt the fallbacks: a SKU code would lose its case
+ * ("6N2Y-JY3-5G6" -> "6n2y-jy3-5g6") and a document id is not a name at all.
+ * So normalization applies only when a real product name was resolved.
+ */
+export function formatSkuDisplayName(
+  identity: { displayName: string; sku?: string } | undefined,
+  productSkuId: string,
+): string {
+  if (!identity) return productSkuId;
+
+  const isFallback =
+    identity.displayName === identity.sku ||
+    identity.displayName === productSkuId;
+
+  return isFallback
+    ? identity.displayName
+    : capitalizeWords(identity.displayName);
 }

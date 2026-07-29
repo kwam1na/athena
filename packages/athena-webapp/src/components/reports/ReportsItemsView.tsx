@@ -42,6 +42,7 @@ import {
   formatOperatingDate,
   formatOptionalMoney,
   formatReportProfit,
+  formatSkuDisplayName,
   formatSkuSubtitle,
   formatUnits,
 } from "./reportFormat";
@@ -196,7 +197,7 @@ export function ReportsItemsView({
                         to="/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId"
                       >
                         <span className="block truncate font-medium text-foreground">
-                          {row.identity?.displayName ?? row.productSkuId}
+                          {formatSkuDisplayName(row.identity, row.productSkuId)}
                         </span>
                         <span className="block truncate text-xs text-muted-foreground">
                           {formatSkuSubtitle(row.identity, row.productSkuId)}

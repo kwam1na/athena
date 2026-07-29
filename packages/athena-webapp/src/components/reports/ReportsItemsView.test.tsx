@@ -65,7 +65,8 @@ describe("ReportsItemsView", () => {
     });
     render(<ReportsItemsView {...baseProps} />);
 
-    expect(screen.getByText("bottle water")).toBeInTheDocument();
+    // Operator-entered names are normalized for display.
+    expect(screen.getByText("Bottle Water")).toBeInTheDocument();
     // The code disambiguates same-named SKUs, so it is always shown.
     expect(screen.getByText("6N2Y-Y4Q-95V · 500ml")).toBeInTheDocument();
     expect(

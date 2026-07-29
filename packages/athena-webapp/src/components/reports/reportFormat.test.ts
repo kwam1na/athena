@@ -6,6 +6,7 @@ import {
   formatOptionalMoney,
   formatReportMoney,
   formatReportProfit,
+  formatSkuDisplayName,
   formatUnits,
   reportDayStatusPresentation,
 } from "./reportFormat";
@@ -47,5 +48,35 @@ describe("reportFormat", () => {
     for (const status of ["open", "provisional", "reconciled", "amended"] as const) {
       expect(reportDayStatusPresentation(status).label).toBeTruthy();
     }
+  });
+});
+
+describe("formatSkuDisplayName", () => {
+  it("normalizes an operator-entered product name", () => {
+    expect(
+      formatSkuDisplayName({ displayName: "oshe", sku: "6N2Y-JY3-5G6" }, "sku-1"),
+    ).toBe("Oshe");
+    expect(
+      formatSkuDisplayName(
+        { displayName: "DRYER COMB BIG", sku: "6N2Y-AAA-111" },
+        "sku-1",
+      ),
+    ).toBe("Dryer Comb Big");
+  });
+
+  it("leaves a SKU-code fallback untouched, preserving its case", () => {
+    expect(
+      formatSkuDisplayName(
+        { displayName: "6N2Y-JY3-5G6", sku: "6N2Y-JY3-5G6" },
+        "sku-1",
+      ),
+    ).toBe("6N2Y-JY3-5G6");
+  });
+
+  it("leaves an id fallback untouched", () => {
+    expect(
+      formatSkuDisplayName({ displayName: "kx70hda5jszy", sku: undefined }, "kx70hda5jszy"),
+    ).toBe("kx70hda5jszy");
+    expect(formatSkuDisplayName(undefined, "kx70hda5jszy")).toBe("kx70hda5jszy");
   });
 });
