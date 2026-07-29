@@ -129,7 +129,7 @@ export async function requestRangeCore(
     if (existing.expiresAt > now) {
       return { requestKey };
     }
-    await ctx.db.delete(existing._id);
+    await ctx.db.delete("reportRangeResult", existing._id);
   }
 
   await ctx.db.insert("reportRangeResult", {
@@ -275,7 +275,7 @@ export async function computeRange(
       .slice(0, REPORT_RANGE_TOP_SKU_LIMIT)
       .map((sku) => ({ ...sku, periodKey }));
 
-    await ctx.db.patch(request._id, {
+    await ctx.db.patch("reportRangeResult", request._id, {
       status: "completed",
       totals,
       topSkus,
@@ -283,7 +283,7 @@ export async function computeRange(
       failureReason: undefined,
     });
   } catch (error) {
-    await ctx.db.patch(request._id, {
+    await ctx.db.patch("reportRangeResult", request._id, {
       status: "failed",
       failureReason: error instanceof Error ? error.message : String(error),
       computedAt: Date.now(),

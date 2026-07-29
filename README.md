@@ -19,15 +19,17 @@ Built and in use:
 | Inventory and procurement | Catalog, SKUs, stock movements, adjustments, purchase orders, receiving, replenishment, vendors |
 | Operations and accountability | Staff profiles and credentials, register sessions, cash controls, Daily Close, payment allocation, manager approvals, work items, workflow traces |
 | Services | Service intake, appointments, active cases, service catalog, service inventory usage |
-| Reporting and visibility | Reports workspace (overview, inventory exposure, item performance, revenue contribution, SKU evidence), storefront analytics, customer behavior timelines, health checks |
+| Reporting and visibility | Reports workspace (period overview with net sales trend, day-by-day settlement against Daily Close, item and SKU performance, custom ranges), storefront analytics, customer behavior timelines, health checks |
 
 Not there yet:
 
-- **A complete financial picture.** The Reports workspace covers revenue
-  contribution, inventory exposure, and item performance, and expenses are
-  tracked through the POS expense flows. Profit and margin, payouts, tax, and
-  bank reconciliation are still missing, so the owner cannot yet answer "did I
-  make money this month" inside Athena.
+- **A complete financial picture.** The Reports workspace covers sales, item
+  performance, and how each day settles against its Daily Close, and expenses
+  are tracked through the POS expense flows. Gross profit is reported only
+  where a sale carries a cost basis — sales without one are shown as unknown
+  rather than guessed — and payouts, tax, and bank reconciliation are still
+  missing, so the owner cannot yet answer "did I make money this month"
+  inside Athena.
 - **A cross-domain command center.** Work items, approvals, traces, services,
   stock, orders, and POS flows each have good individual surfaces. The owner
   still has to move between them instead of working one unified queue of
@@ -88,9 +90,9 @@ The primary backend lives in `packages/athena-webapp/convex`, with
 
 Business workflows sit behind those boundaries in domain folders including
 `convex/operations`, `convex/pos`, `convex/cashControls`, `convex/stockOps`,
-`convex/serviceOps`, `convex/storeFront`, `convex/reporting`,
-`convex/inventory`, `convex/intelligence`, `convex/automation`, and
-`convex/workflowTraces`.
+`convex/serviceOps`, `convex/storeFront`, `convex/reports`,
+`convex/inventoryLedger`, `convex/storeTime`, `convex/inventory`,
+`convex/intelligence`, `convex/automation`, and `convex/workflowTraces`.
 
 See the [architecture doc](./packages/athena-webapp/docs/agent/architecture.md)
 for how to choose a boundary before editing.

@@ -219,7 +219,7 @@ export async function rebuildPeriodRollup(
     const next = desired.get(key);
 
     if (!next) {
-      await ctx.db.delete(row._id);
+      await ctx.db.delete("reportPeriodSkuRollup", row._id);
       deleted += 1;
       continue;
     }
@@ -233,7 +233,7 @@ export async function rebuildPeriodRollup(
       continue;
     }
 
-    await ctx.db.patch(row._id, {
+    await ctx.db.patch("reportPeriodSkuRollup", row._id, {
       ...next,
       revenueSortKey: descendingSortKey(next.netSalesMinor),
       unitsSortKey: descendingSortKey(next.unitsSold),

@@ -1,3 +1,20 @@
+---
+title: "Athena Reporting Rebuild: Implementation Plan"
+date: 2026-07-28
+last_updated: 2026-07-29
+category: architecture
+module: athena-webapp
+problem_type: reporting_read_cost
+component: reports
+resolution_type: delivery_plan
+severity: high
+delivery_diff_fingerprint: PENDING
+tags:
+  - reporting
+  - delivery-plan
+  - fact-ledger
+---
+
 # Athena reporting rebuild — implementation plan (clean slate)
 
 **Date:** 2026-07-28 (rev 2 — no backward-compatibility constraints)

@@ -245,7 +245,7 @@ export async function rebuildStoreOverview(
     .unique();
 
   if (existing) {
-    await ctx.db.patch(existing._id, data);
+    await ctx.db.patch("reportOverview", existing._id, data);
     return;
   }
 

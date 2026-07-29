@@ -1,3 +1,21 @@
+---
+title: "Athena Reporting: Read-Optimized Redesign"
+date: 2026-07-28
+last_updated: 2026-07-29
+category: architecture
+module: athena-webapp
+problem_type: reporting_read_cost
+component: reports
+resolution_type: architecture_replacement
+severity: high
+delivery_diff_fingerprint: PENDING
+tags:
+  - reporting
+  - read-cost
+  - fact-ledger
+  - day-fold
+---
+
 # Athena reporting: read-optimized redesign
 
 **Date:** 2026-07-28

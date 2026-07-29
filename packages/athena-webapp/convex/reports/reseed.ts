@@ -196,7 +196,7 @@ async function purgeBatch(
     }
   })();
 
-  for (const row of rows) await ctx.db.delete(row._id);
+  for (const row of rows) await ctx.db.delete(table, row._id);
   return rows.length;
 }
 
@@ -1079,7 +1079,7 @@ async function markReseedDirty(
     .first();
   const markedAt = Date.now();
   if (existing) {
-    await ctx.db.patch(existing._id, { markedAt, reason: "reseed" });
+    await ctx.db.patch("reportDirtyDay", existing._id, { markedAt, reason: "reseed" });
     return;
   }
   await ctx.db.insert("reportDirtyDay", {

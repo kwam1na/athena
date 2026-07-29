@@ -257,7 +257,7 @@ export async function foldAndReplaceDay(
   };
 
   if (existingDay) {
-    await ctx.db.patch(existingDay._id, dayDoc);
+    await ctx.db.patch("reportDay", existingDay._id, dayDoc);
   } else {
     await ctx.db.insert("reportDay", dayDoc);
   }
@@ -278,12 +278,12 @@ export async function foldAndReplaceDay(
 
     if (!next) {
       // The SKU no longer has activity on this day (corrected/voided line).
-      await ctx.db.delete(row._id);
+      await ctx.db.delete("reportSkuDay", row._id);
       continue;
     }
 
     seen.add(key);
-    await ctx.db.patch(row._id, { ...next, foldedAt: now });
+    await ctx.db.patch("reportSkuDay", row._id, { ...next, foldedAt: now });
   }
 
   for (const [skuId, metrics] of result.skuDays) {
@@ -321,7 +321,7 @@ export async function markDayDirty(
     .unique();
 
   if (existing) {
-    await ctx.db.patch(existing._id, { reason, markedAt: now });
+    await ctx.db.patch("reportDirtyDay", existing._id, { reason, markedAt: now });
     return;
   }
 
@@ -376,7 +376,7 @@ async function computePendingRanges(
       // A range is a convenience read; one that cannot be computed is recorded
       // as failed rather than left pending forever (which would re-run it on
       // every tick). The requester sees the reason.
-      await ctx.db.patch(request._id, {
+      await ctx.db.patch("reportRangeResult", request._id, {
         status: "failed",
         failureReason: error instanceof Error ? error.message : String(error),
         computedAt: Date.now(),
@@ -396,7 +396,7 @@ async function expireRangeResults(
     .withIndex("by_expiresAt", (q) => q.lt("expiresAt", now))
     .take(RANGE_EXPIRY_BATCH);
 
-  for (const row of expired) await ctx.db.delete(row._id);
+  for (const row of expired) await ctx.db.delete("reportRangeResult", row._id);
   return expired.length;
 }
 
@@ -439,7 +439,7 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
     }
 
     // Delete first — see the at-least-once note at the top of this module.
-    await ctx.db.delete(mark._id);
+    await ctx.db.delete("reportDirtyDay", mark._id);
     touchedStores.set(storeKey, mark.storeId);
 
     try {
