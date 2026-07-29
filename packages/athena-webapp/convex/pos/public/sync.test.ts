@@ -1351,27 +1351,21 @@ describe("register closeout notification intents", () => {
     expect(await listIntents(t)).toHaveLength(0);
   });
 
-  it("finds the variance review behind a page of unrelated session approvals", async () => {
-    // Regression: the lookup used to page the session's approvals with a
-    // single bounded .take() on the index prefix and filter for
-    // "variance_review" in code. A busy register also accumulates void, item
-    // adjustment, and payment-method-correction approvals on the same
-    // registerSessionId, and every one of those requestTypes sorts BEFORE
-    // "variance_review" in the (registerSessionId, status, requestType)
-    // index — so enough of them push the variance review out of the window,
-    // the lookup returns undefined, and the closeout falls through to the
-    // all-clear branch, reporting "register closed" for a short drawer.
+  it("keeps unrelated session approvals out of the variance-review lookup window", async () => {
+    // The lookup pins all three index columns (registerSessionId, status,
+    // requestType), so a busy register's void / item-adjustment / payment-
+    // correction approvals live in a different index range entirely and can
+    // never occupy the page. This is the property that lets the bound stay
+    // small; the earlier single-take form filtered in code and could be
+    // crowded out, falling through to the all-clear branch for a short drawer.
     const t = convexTest(schema, modules);
     const world = await seedCloseoutWorld(t);
     await t.run(async (ctx) => {
-      // Sorts strictly before "variance_review" within each status group.
       const noisyRequestTypes = [
         "payment_method_correction",
         "pos_item_adjustment",
         "pos_transaction_void",
       ];
-      // All in the "approved" group, which sorts before the review's own
-      // status, so these fill any bounded page ahead of it deterministically.
       for (let index = 0; index < 26; index += 1) {
         await ctx.db.insert("approvalRequest", {
           storeId: world.storeId,
@@ -1384,22 +1378,6 @@ describe("register closeout notification intents", () => {
           createdAt: 2,
         });
       }
-      // Same-session noise in the other resolved statuses too.
-      for (const status of ["cancelled", "rejected"] as const) {
-        for (const requestType of noisyRequestTypes) {
-          await ctx.db.insert("approvalRequest", {
-            storeId: world.storeId,
-            organizationId: world.organizationId,
-            requestType,
-            subjectType: "posTransaction",
-            subjectId: `transaction-${status}-${requestType}`,
-            status,
-            registerSessionId: world.registerSessionId,
-            createdAt: 2,
-          });
-        }
-      }
-      // The drawer was short by GHS 42.18 and a manager already resolved it.
       await ctx.db.insert("approvalRequest", {
         storeId: world.storeId,
         organizationId: world.organizationId,
@@ -1416,12 +1394,82 @@ describe("register closeout notification intents", () => {
 
     await uploadCloseout(t, world, "event-closeout-1");
 
-    const intents = await listIntents(t);
+    expect(await listIntents(t)).toHaveLength(0);
+  });
+
+  it("refuses the all-clear when variance reviews overflow the lookup bound", async () => {
+    // .take returns oldest-first, so a breach drops the NEWEST rows — exactly
+    // the review a closeout is looking for. Rather than guess and send
+    // "register closed" for a possibly-short drawer, the closeout is skipped
+    // and the reason recorded. This is the assertion that actually pins the
+    // bound: it fails if the query stops reading one past the cap.
+    const t = convexTest(schema, modules);
+    const world = await seedCloseoutWorld(t);
+    await t.run(async (ctx) => {
+      // 12 variance reviews in one status. The query reads MAX + 1 (11) to
+      // detect a breach, so the 12th — the one matching this closeout, and
+      // the newest — falls outside the read and cannot be found.
+      for (let index = 0; index < 12; index += 1) {
+        await ctx.db.insert("approvalRequest", {
+          storeId: world.storeId,
+          organizationId: world.organizationId,
+          requestType: "variance_review",
+          subjectType: "registerSession",
+          subjectId: String(world.registerSessionId),
+          status: "approved",
+          registerSessionId: world.registerSessionId,
+          createdAt: 2 + index,
+          metadata: {
+            localEventId:
+              index === 11 ? "event-closeout-1" : `event-older-${index}`,
+            variance: -4218,
+          },
+        });
+      }
+    });
+    mockIngestWithCloseoutMapping(world, "event-closeout-1");
+
+    await uploadCloseout(t, world, "event-closeout-1");
+
+    // No all-clear, and the skip is on the record rather than silent.
+    expect(await listIntents(t)).toHaveLength(0);
+    const events = await t.run(async (ctx) =>
+      ctx.db.query("operationalEvent").take(20),
+    );
     expect(
-      intents.filter((intent) => intent.kind === "register.closeout_match"),
-    ).toHaveLength(0);
-    // The review is resolved, so nothing at all should be emitted.
-    expect(intents).toHaveLength(0);
+      events.filter(
+        (event) =>
+          event.eventType === "register_closeout_notification_skipped",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("still suppresses the all-clear for a review in any resolved status", async () => {
+    // Pins APPROVAL_REQUEST_STATUSES completeness: the list is derived from
+    // the approvalRequest schema union, and a status missing from it would
+    // stop matching reviews in that status and fall through to the all-clear.
+    for (const status of ["approved", "rejected", "cancelled"] as const) {
+      const t = convexTest(schema, modules);
+      const world = await seedCloseoutWorld(t);
+      await t.run(async (ctx) =>
+        ctx.db.insert("approvalRequest", {
+          storeId: world.storeId,
+          organizationId: world.organizationId,
+          requestType: "variance_review",
+          subjectType: "registerSession",
+          subjectId: String(world.registerSessionId),
+          status,
+          registerSessionId: world.registerSessionId,
+          createdAt: 2,
+          metadata: { localEventId: "event-closeout-1", variance: -4218 },
+        }),
+      );
+      mockIngestWithCloseoutMapping(world, "event-closeout-1");
+
+      await uploadCloseout(t, world, "event-closeout-1");
+
+      expect(await listIntents(t)).toHaveLength(0);
+    }
   });
 
   it("emits nothing when both pre-rail cutover markers are present", async () => {

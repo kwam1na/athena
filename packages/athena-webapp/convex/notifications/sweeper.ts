@@ -62,6 +62,9 @@ export const sweep = internalMutation({
         // delivery that fails once does not produce two differently-keyed
         // events depending on which path noticed. Scheduled rather than
         // inline: see recordNotificationFailureEvent.
+        // Guarded on the intent only because the scheduled recorder needs it
+        // to resolve the subject; nothing deletes intents today, so this is
+        // unreachable rather than a deliberate skip.
         if (intent) {
           await ctx.scheduler.runAfter(
             0,
@@ -148,6 +151,18 @@ export const sweep = internalMutation({
         0,
         internal.notifications.dispatch.dispatchIntent,
         { intentId },
+      );
+    }
+
+    if (
+      staleLeases.length >= limit ||
+      dueRetries.length >= limit ||
+      staleIntents.length >= limit
+    ) {
+      // The cron discards this mutation's return value, so a saturated phase
+      // is otherwise invisible until someone reads function logs on purpose.
+      console.warn(
+        `[notifications] sweep saturated a phase (staleLeases=${staleLeases.length}, dueRetries=${dueRetries.length}, pendingIntents=${staleIntents.length}, limit=${limit})`,
       );
     }
 

@@ -9,6 +9,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { ADMIN_EMAILS } from "../constants/email";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import {
+  MAX_DELIVERIES_PER_DISPATCH,
   MAX_DELIVERY_ATTEMPTS,
   computeDeliveryLeaseMs,
   deliveryDedupeKey,
@@ -38,6 +39,9 @@ type ReservedIntentBatch = {
     payload: Record<string, unknown>;
   };
   leased: LeasedDelivery[];
+  // True when the audience was larger than one dispatch's batch, so a
+  // follow-on dispatch is needed to reach the remaining recipients.
+  hasMore: boolean;
 };
 
 // The fallback is a PRE-SEED bridge, so it keys off "this org has no
@@ -218,9 +222,15 @@ export const reserveIntentDeliveries = internalMutation({
       });
     }
 
-    const leaseMs = computeDeliveryLeaseMs(recipients.length);
+    const batchSize = Math.min(recipients.length, MAX_DELIVERIES_PER_DISPATCH);
+    const leaseMs = computeDeliveryLeaseMs(batchSize);
     const leased: LeasedDelivery[] = [];
+    let hasMore = false;
     for (const recipient of recipients) {
+      if (leased.length >= MAX_DELIVERIES_PER_DISPATCH) {
+        hasMore = true;
+        break;
+      }
       const dedupeKey = deliveryDedupeKey({
         intentDedupeKey: intent.dedupeKey,
         channel: "email",
@@ -310,6 +320,7 @@ export const reserveIntentDeliveries = internalMutation({
         payload: intent.payload,
       },
       leased,
+      hasMore,
     };
   },
 });
@@ -382,6 +393,7 @@ export async function recordNotificationFailureEventWithCtx(
     message: args.message,
     metadata: {
       notificationKind: args.intent.kind,
+      notificationIntentId: String(args.intent._id),
       notificationSubjectKey: args.subjectKey,
       errorCode: args.errorCode,
     },
@@ -569,6 +581,14 @@ export const dispatchIntent = internalAction({
     if (earliestRetryAt !== null) {
       await ctx.scheduler.runAfter(
         Math.max(0, earliestRetryAt - Date.now()),
+        internal.notifications.dispatch.dispatchIntent,
+        { intentId: args.intentId },
+      );
+    } else if (reserved.hasMore) {
+      // Only continue when this pass actually leased something, so a batch
+      // that skipped every remaining recipient cannot re-schedule forever.
+      await ctx.scheduler.runAfter(
+        0,
         internal.notifications.dispatch.dispatchIntent,
         { intentId: args.intentId },
       );

@@ -10,6 +10,7 @@ import { ADMIN_EMAILS } from "../constants/email";
 import schema from "../schema";
 import {
   INTENT_ABANDON_AFTER_MS,
+  MAX_DELIVERIES_PER_DISPATCH,
   MAX_DELIVERY_ATTEMPTS,
   computeDeliveryLeaseMs,
 } from "./deliveryPolicy";
@@ -530,6 +531,69 @@ describe("reserveIntentDeliveries", () => {
     }
   });
 
+  it("reaches every recipient of a large audience across successive batches", async () => {
+    // Bounding the batch is only safe if the remainder is actually picked up.
+    // Each dispatch leases at most MAX_DELIVERIES_PER_DISPATCH so its serial
+    // send loop finishes inside the platform action limit, then re-schedules
+    // itself; repeated reserves must therefore keep making progress until the
+    // whole audience has a delivery row.
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    const terminalId = await t.run((ctx) => seedTerminal(ctx, fixture));
+    const intentId = await t.run((ctx) =>
+      insertTerminalHealthIntent(ctx, fixture, terminalId),
+    );
+
+    const audienceSize = MAX_DELIVERIES_PER_DISPATCH * 2 + 3;
+    await t.run(async (ctx) => {
+      for (let index = 0; index < audienceSize; index += 1) {
+        await ctx.db.insert("notificationSubscription", {
+          organizationId: fixture.organizationId,
+          category: "system_health",
+          channel: "email",
+          recipientEmail: `batched-${index}@example.com`,
+          enabled: true,
+          createdAt: NOW,
+          updatedAt: NOW,
+        });
+      }
+    });
+
+    // Simulate the dispatch chain: reserve, settle that batch, repeat.
+    const batches: number[] = [];
+    for (let pass = 0; pass < 5; pass += 1) {
+      const reserved = await t.mutation(
+        internal.notifications.dispatch.reserveIntentDeliveries,
+        { intentId },
+      );
+      if (!reserved || reserved.leased.length === 0) break;
+      batches.push(reserved.leased.length);
+      for (const lease of reserved.leased) {
+        await t.mutation(internal.notifications.dispatch.completeDelivery, {
+          deliveryId: lease.deliveryId,
+          leaseToken: lease.leaseToken,
+          state: "sent",
+          errorCode: "sent",
+        });
+      }
+      if (!reserved.hasMore) break;
+    }
+
+    expect(batches[0]).toBe(MAX_DELIVERIES_PER_DISPATCH);
+    expect(batches.length).toBeGreaterThan(1);
+
+    const deliveries = await t.run((ctx) =>
+      ctx.db
+        .query("notificationDelivery")
+        .withIndex("by_intentId", (q) => q.eq("intentId", intentId))
+        .take(500),
+    );
+    expect(deliveries).toHaveLength(audienceSize);
+    expect(deliveries.every((delivery) => delivery.status === "sent")).toBe(
+      true,
+    );
+  });
+
   it("records a subscription_cap_exceeded event rather than silently truncating", async () => {
     const t = convexTest(schema, modules);
     const fixture = await t.run(seedOrgStore);
@@ -557,7 +621,10 @@ describe("reserveIntentDeliveries", () => {
       { intentId },
     );
 
-    expect(reserved!.leased).toHaveLength(SUBSCRIPTION_RESOLUTION_CAP);
+    // The audience is truncated at the resolution cap, and each dispatch
+    // leases at most one batch of it — the rest follow via hasMore.
+    expect(reserved!.leased).toHaveLength(MAX_DELIVERIES_PER_DISPATCH);
+    expect(reserved!.hasMore).toBe(true);
 
     const failureEvents = (await listOperationalEvents(t)).filter(
       (event) => event.eventType === "notification_delivery_failed",
@@ -989,6 +1056,7 @@ describe("dispatchIntent", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   function stubProdTransport(status = 202) {
@@ -1004,6 +1072,69 @@ describe("dispatchIntent", () => {
     vi.stubGlobal("fetch", fetchMock);
     return fetchMock;
   }
+
+  it("continues through follow-on dispatches until the whole audience is sent", async () => {
+    // The batch bound keeps one dispatch inside the action time limit; the
+    // follow-on schedule is what makes that bound safe rather than a silent
+    // truncation of the audience.
+    const fetchMock = stubProdTransport();
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    const terminalId = await t.run((ctx) => seedTerminal(ctx, fixture));
+    const intentId = await t.run((ctx) =>
+      insertTerminalHealthIntent(ctx, fixture, terminalId),
+    );
+
+    const audienceSize = MAX_DELIVERIES_PER_DISPATCH + 4;
+    await t.run(async (ctx) => {
+      for (let index = 0; index < audienceSize; index += 1) {
+        await ctx.db.insert("notificationSubscription", {
+          organizationId: fixture.organizationId,
+          category: "system_health",
+          channel: "email",
+          recipientEmail: `chained-${index}@example.com`,
+          enabled: true,
+          createdAt: NOW,
+          updatedAt: NOW,
+        });
+      }
+    });
+
+    await t.action(internal.notifications.dispatch.dispatchIntent, {
+      intentId,
+    });
+
+    // First pass sends exactly one batch and leaves the tail unsent...
+    expect(fetchMock).toHaveBeenCalledTimes(MAX_DELIVERIES_PER_DISPATCH);
+    // ...and enqueues itself again to reach the remainder. Without this
+    // schedule the tail would never be contacted.
+    const scheduled = await t.run(async (ctx) =>
+      ctx.db.system.query("_scheduled_functions").take(50),
+    );
+    expect(
+      scheduled.filter(
+        (job) =>
+          job.name.includes("dispatchIntent") && job.state.kind === "pending",
+      ).length,
+    ).toBeGreaterThan(0);
+
+    // Draining that follow-on completes the audience.
+    await t.action(internal.notifications.dispatch.dispatchIntent, {
+      intentId,
+    });
+
+    const deliveries = await t.run((ctx) =>
+      ctx.db
+        .query("notificationDelivery")
+        .withIndex("by_intentId", (q) => q.eq("intentId", intentId))
+        .take(500),
+    );
+    expect(deliveries).toHaveLength(audienceSize);
+    expect(deliveries.every((delivery) => delivery.status === "sent")).toBe(
+      true,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(audienceSize);
+  });
 
   it("sends every delivery and marks the intent dispatched on the happy path", async () => {
     const fetchMock = stubProdTransport();

@@ -20,6 +20,8 @@ import {
   type SharedDemoCapability,
 } from "../../sharedDemo/policy";
 import { ingestLocalEventsWithCtx } from "../application/sync/ingestLocalEvents";
+import { approvalRequestSchema } from "../../schemas/operations/approvalRequest";
+import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
 import { posLocalSyncMappingKindValidator } from "../../schemas/pos/posLocalSyncMapping";
 import {
@@ -320,16 +322,44 @@ async function scheduleRegisterCloseoutNotifications(
             .withIndex("by_registerSessionId_status_requestType", (q) =>
               q
                 .eq("registerSessionId", registerSessionId)
-                .eq("status", status)
+                .eq("status", status.value)
                 .eq("requestType", "variance_review"),
             )
-            .take(MAX_VARIANCE_REVIEWS_PER_CLOSEOUT),
+            .take(MAX_VARIANCE_REVIEWS_PER_CLOSEOUT + 1),
         ),
       )
     ).flat();
     const approvalRequest = varianceReviews.find((request) =>
       isVarianceReviewForCloseout(request, mapping.localEventId),
     );
+
+    // A breach means the page could be hiding the very review being looked
+    // for — .take returns oldest-first, so the newest rows are the ones
+    // dropped. Refuse to take the all-clear branch on a guess.
+    if (
+      !approvalRequest &&
+      varianceReviews.length > MAX_VARIANCE_REVIEWS_PER_CLOSEOUT
+    ) {
+      const breachedSession = await ctx.db.get(
+        "registerSession",
+        registerSessionId,
+      );
+      if (!breachedSession) continue;
+      await recordOperationalEventWithCtx(ctx, {
+        storeId: breachedSession.storeId,
+        eventType: "register_closeout_notification_skipped",
+        subjectType: "registerSession",
+        subjectId: String(registerSessionId),
+        actorType: "automation",
+        message: `Register closeout notification skipped: more than ${MAX_VARIANCE_REVIEWS_PER_CLOSEOUT} variance reviews in one status, so the closeout's review could not be resolved.`,
+        metadata: {
+          localEventId: mapping.localEventId,
+          varianceReviewCount: varianceReviews.length,
+        },
+        metadataDedupeKeys: ["localEventId"],
+      });
+      continue;
+    }
 
     // A closeout under variance review is a variance notification and never
     // also a "closed cleanly" report — whatever the review's current status,
@@ -379,15 +409,19 @@ async function scheduleRegisterCloseoutNotifications(
 }
 
 // Per (session, status) — a single closeout has at most a handful of variance
-// reviews in any one status, so this bound is never reached in practice.
+// reviews in any one status, so this bound is never reached in practice. Read
+// one past it so a breach is reported rather than silently dropping the
+// newest rows, which are exactly the ones a closeout lookup wants.
 const MAX_VARIANCE_REVIEWS_PER_CLOSEOUT = 10;
 
-const APPROVAL_REQUEST_STATUSES = [
-  "pending",
-  "approved",
-  "rejected",
-  "cancelled",
-] as const;
+// Derived from the schema union rather than hand-listed: a status added to
+// approvalRequest but missed here would silently stop matching reviews in
+// that status, and this lookup falling through is what sends an all-clear
+// for a drawer that was short. Drift here has been a blocker twice.
+const APPROVAL_REQUEST_STATUSES = approvalRequestSchema.fields.status
+  .members as ReadonlyArray<{ value: ApprovalRequestStatus }>;
+
+type ApprovalRequestStatus = Doc<"approvalRequest">["status"];
 
 function isVarianceReviewForCloseout(
   approvalRequest: Doc<"approvalRequest">,

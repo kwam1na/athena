@@ -9,16 +9,24 @@
 // re-checking that window silently forfeits the no-double-send guarantee.
 export const MAX_DELIVERY_ATTEMPTS = 4;
 
-// A dispatch sends to its whole leased batch serially, so the lease has to
-// cover every recipient's send, not just one. Base + per-recipient allowance
-// keeps a slow provider from letting the sweeper reclaim leases mid-flight
-// (which would re-send to recipients that already succeeded).
+// A dispatch sends to its leased batch serially, so the lease has to cover
+// every recipient in that batch, not just one. The batch — not the lease — is
+// what is bounded: a lease long enough for a 200-recipient serial run would
+// outlive the platform's action time limit, so the action would be killed
+// mid-batch while every leased row had already burned an attempt, leaving the
+// tail uncontacted and eventually terminalized as failures that were never
+// actually attempted. Instead each dispatch takes at most
+// MAX_DELIVERIES_PER_DISPATCH and re-schedules itself for the remainder.
 export const DELIVERY_LEASE_BASE_MS = 2 * 60_000;
 export const DELIVERY_LEASE_PER_RECIPIENT_MS = 30_000;
-// Must exceed the worst-case serial batch: one send timeout per recipient for
-// a full audience. Below that ceiling the sweeper can reclaim a lease from a
-// live dispatch and inflate attemptCount for mail that was actually sent.
-export const DELIVERY_LEASE_MAX_MS = 55 * 60_000;
+// Comfortably under the platform action limit, and above the worst-case
+// serial time for one capped batch (MAX_DELIVERIES_PER_DISPATCH x the send
+// timeout in transport.ts).
+export const DELIVERY_LEASE_MAX_MS = 9 * 60_000;
+
+// Bounds one dispatch's serial send loop so it finishes inside the action
+// time limit. Remaining recipients are picked up by the follow-on dispatch.
+export const MAX_DELIVERIES_PER_DISPATCH = 25;
 export const SWEEPER_INTENT_PICKUP_DELAY_MS = 60_000;
 
 // Abandonment is wall-clock based, not pickup-count based: the sweep cadence

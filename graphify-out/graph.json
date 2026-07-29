@@ -13907,7 +13907,7 @@
       "relation": "calls",
       "source": "deliverypolicy_joinkeycomponents",
       "source_file": "packages/athena-webapp/convex/notifications/deliveryPolicy.ts",
-      "source_location": "L105",
+      "source_location": "L113",
       "target": "deliverypolicy_deliverydedupekey",
       "weight": 1
     },
@@ -13919,7 +13919,7 @@
       "relation": "calls",
       "source": "deliverypolicy_normalizerecipientemail",
       "source_file": "packages/athena-webapp/convex/notifications/deliveryPolicy.ts",
-      "source_location": "L108",
+      "source_location": "L116",
       "target": "deliverypolicy_deliverydedupekey",
       "weight": 1
     },
@@ -14111,7 +14111,7 @@
       "relation": "calls",
       "source": "dispatch_recordnotificationfailureeventwithctx",
       "source_file": "packages/athena-webapp/convex/notifications/dispatch.ts",
-      "source_location": "L399",
+      "source_location": "L411",
       "target": "dispatch_recordterminaldeliveryfailureevent",
       "weight": 1
     },
@@ -43355,7 +43355,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_deliverypolicy_ts",
       "source_file": "packages/athena-webapp/convex/notifications/deliveryPolicy.ts",
-      "source_location": "L59",
+      "source_location": "L67",
       "target": "deliverypolicy_classifydeliveryresult",
       "weight": 1
     },
@@ -43367,7 +43367,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_deliverypolicy_ts",
       "source_file": "packages/athena-webapp/convex/notifications/deliveryPolicy.ts",
-      "source_location": "L31",
+      "source_location": "L39",
       "target": "deliverypolicy_computedeliveryleasems",
       "weight": 1
     },
@@ -43379,7 +43379,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_deliverypolicy_ts",
       "source_file": "packages/athena-webapp/convex/notifications/deliveryPolicy.ts",
-      "source_location": "L100",
+      "source_location": "L108",
       "target": "deliverypolicy_deliverydedupekey",
       "weight": 1
     },
@@ -43391,7 +43391,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_deliverypolicy_ts",
       "source_file": "packages/athena-webapp/convex/notifications/deliveryPolicy.ts",
-      "source_location": "L92",
+      "source_location": "L100",
       "target": "deliverypolicy_encodekeycomponent",
       "weight": 1
     },
@@ -43403,7 +43403,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_deliverypolicy_ts",
       "source_file": "packages/athena-webapp/convex/notifications/deliveryPolicy.ts",
-      "source_location": "L96",
+      "source_location": "L104",
       "target": "deliverypolicy_joinkeycomponents",
       "weight": 1
     },
@@ -43415,7 +43415,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_deliverypolicy_ts",
       "source_file": "packages/athena-webapp/convex/notifications/deliveryPolicy.ts",
-      "source_location": "L54",
+      "source_location": "L62",
       "target": "deliverypolicy_nextbackoffms",
       "weight": 1
     },
@@ -43427,7 +43427,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_deliverypolicy_ts",
       "source_file": "packages/athena-webapp/convex/notifications/deliveryPolicy.ts",
-      "source_location": "L84",
+      "source_location": "L92",
       "target": "deliverypolicy_normalizerecipientemail",
       "weight": 1
     },
@@ -43439,7 +43439,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_dispatch_ts",
       "source_file": "packages/athena-webapp/convex/notifications/dispatch.ts",
-      "source_location": "L366",
+      "source_location": "L377",
       "target": "dispatch_recordnotificationfailureeventwithctx",
       "weight": 1
     },
@@ -43451,7 +43451,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_dispatch_ts",
       "source_file": "packages/athena-webapp/convex/notifications/dispatch.ts",
-      "source_location": "L392",
+      "source_location": "L404",
       "target": "dispatch_recordterminaldeliveryfailureevent",
       "weight": 1
     },
@@ -43463,7 +43463,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_dispatch_ts",
       "source_file": "packages/athena-webapp/convex/notifications/dispatch.ts",
-      "source_location": "L49",
+      "source_location": "L53",
       "target": "dispatch_resolverecipients",
       "weight": 1
     },
@@ -43475,7 +43475,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_dispatch_ts",
       "source_file": "packages/athena-webapp/convex/notifications/dispatch.ts",
-      "source_location": "L81",
+      "source_location": "L85",
       "target": "dispatch_suppressintentwithctx",
       "weight": 1
     },
@@ -43499,7 +43499,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L1320",
+      "source_location": "L1451",
       "target": "rail_test_insertdelivery",
       "weight": 1
     },
@@ -43511,7 +43511,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L96",
+      "source_location": "L97",
       "target": "rail_test_insertterminalhealthintent",
       "weight": 1
     },
@@ -43523,7 +43523,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L126",
+      "source_location": "L127",
       "target": "rail_test_listdeliveries",
       "weight": 1
     },
@@ -43535,7 +43535,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L130",
+      "source_location": "L131",
       "target": "rail_test_listoperationalevents",
       "weight": 1
     },
@@ -43547,7 +43547,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L804",
+      "source_location": "L871",
       "target": "rail_test_reserveone",
       "weight": 1
     },
@@ -43559,7 +43559,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L55",
+      "source_location": "L56",
       "target": "rail_test_seedorgstore",
       "weight": 1
     },
@@ -43571,7 +43571,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L1348",
+      "source_location": "L1479",
       "target": "rail_test_seedsweeperfixture",
       "weight": 1
     },
@@ -43583,7 +43583,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L75",
+      "source_location": "L76",
       "target": "rail_test_seedterminal",
       "weight": 1
     },
@@ -43595,7 +43595,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L994",
+      "source_location": "L1062",
       "target": "rail_test_stubprodtransport",
       "weight": 1
     },
@@ -65195,7 +65195,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_public_sync_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.test.ts",
-      "source_location": "L1729",
+      "source_location": "L1777",
       "target": "sync_test_basesalecompletedpayload",
       "weight": 1
     },
@@ -65207,7 +65207,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_public_sync_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.test.ts",
-      "source_location": "L1548",
+      "source_location": "L1596",
       "target": "sync_test_buildctx",
       "weight": 1
     },
@@ -65219,7 +65219,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_public_sync_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.test.ts",
-      "source_location": "L1661",
+      "source_location": "L1709",
       "target": "sync_test_buildevent",
       "weight": 1
     },
@@ -65231,7 +65231,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_public_sync_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.test.ts",
-      "source_location": "L1695",
+      "source_location": "L1743",
       "target": "sync_test_buildexpenserecordedevent",
       "weight": 1
     },
@@ -65243,7 +65243,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_public_sync_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.test.ts",
-      "source_location": "L1677",
+      "source_location": "L1725",
       "target": "sync_test_buildsalecompletedevent",
       "weight": 1
     },
@@ -65351,7 +65351,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_public_sync_ts",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.ts",
-      "source_location": "L392",
+      "source_location": "L426",
       "target": "sync_isvariancereviewforcloseout",
       "weight": 1
     },
@@ -65363,7 +65363,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_public_sync_ts",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.ts",
-      "source_location": "L277",
+      "source_location": "L279",
       "target": "sync_scheduleregistercloseoutnotifications",
       "weight": 1
     },
@@ -65375,7 +65375,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_public_sync_ts",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.ts",
-      "source_location": "L108",
+      "source_location": "L110",
       "target": "sync_shareddemocapabilityforsyncevent",
       "weight": 1
     },
@@ -65387,7 +65387,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_public_sync_ts",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.ts",
-      "source_location": "L408",
+      "source_location": "L442",
       "target": "sync_wasvariancenotifiedbeforerail",
       "weight": 1
     },
@@ -150287,7 +150287,7 @@
       "relation": "calls",
       "source": "sync_scheduleregistercloseoutnotifications",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.ts",
-      "source_location": "L342",
+      "source_location": "L372",
       "target": "sync_wasvariancenotifiedbeforerail",
       "weight": 1
     },
@@ -150299,7 +150299,7 @@
       "relation": "calls",
       "source": "sync_test_buildsalecompletedevent",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.test.ts",
-      "source_location": "L1689",
+      "source_location": "L1737",
       "target": "sync_test_basesalecompletedpayload",
       "weight": 1
     },
@@ -173257,7 +173257,7 @@
       "label": "baseSaleCompletedPayload()",
       "norm_label": "basesalecompletedpayload()",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.test.ts",
-      "source_location": "L1729"
+      "source_location": "L1777"
     },
     {
       "community": 133,
@@ -173266,7 +173266,7 @@
       "label": "buildCtx()",
       "norm_label": "buildctx()",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.test.ts",
-      "source_location": "L1548"
+      "source_location": "L1596"
     },
     {
       "community": 133,
@@ -173275,7 +173275,7 @@
       "label": "buildEvent()",
       "norm_label": "buildevent()",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.test.ts",
-      "source_location": "L1661"
+      "source_location": "L1709"
     },
     {
       "community": 133,
@@ -173284,7 +173284,7 @@
       "label": "buildExpenseRecordedEvent()",
       "norm_label": "buildexpenserecordedevent()",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.test.ts",
-      "source_location": "L1695"
+      "source_location": "L1743"
     },
     {
       "community": 133,
@@ -173293,7 +173293,7 @@
       "label": "buildSaleCompletedEvent()",
       "norm_label": "buildsalecompletedevent()",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.test.ts",
-      "source_location": "L1677"
+      "source_location": "L1725"
     },
     {
       "community": 133,
@@ -196144,7 +196144,7 @@
       "label": "insertDelivery()",
       "norm_label": "insertdelivery()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L1320"
+      "source_location": "L1451"
     },
     {
       "community": 216,
@@ -196153,7 +196153,7 @@
       "label": "insertTerminalHealthIntent()",
       "norm_label": "insertterminalhealthintent()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L96"
+      "source_location": "L97"
     },
     {
       "community": 216,
@@ -196162,7 +196162,7 @@
       "label": "listDeliveries()",
       "norm_label": "listdeliveries()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L126"
+      "source_location": "L127"
     },
     {
       "community": 216,
@@ -196171,7 +196171,7 @@
       "label": "listOperationalEvents()",
       "norm_label": "listoperationalevents()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L130"
+      "source_location": "L131"
     },
     {
       "community": 216,
@@ -196180,7 +196180,7 @@
       "label": "reserveOne()",
       "norm_label": "reserveone()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L804"
+      "source_location": "L871"
     },
     {
       "community": 216,
@@ -196189,7 +196189,7 @@
       "label": "seedOrgStore()",
       "norm_label": "seedorgstore()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L55"
+      "source_location": "L56"
     },
     {
       "community": 216,
@@ -196198,7 +196198,7 @@
       "label": "seedSweeperFixture()",
       "norm_label": "seedsweeperfixture()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L1348"
+      "source_location": "L1479"
     },
     {
       "community": 216,
@@ -196207,7 +196207,7 @@
       "label": "seedTerminal()",
       "norm_label": "seedterminal()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L75"
+      "source_location": "L76"
     },
     {
       "community": 216,
@@ -196216,7 +196216,7 @@
       "label": "stubProdTransport()",
       "norm_label": "stubprodtransport()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L994"
+      "source_location": "L1062"
     },
     {
       "community": 2160,
@@ -208096,7 +208096,7 @@
       "label": "classifyDeliveryResult()",
       "norm_label": "classifydeliveryresult()",
       "source_file": "packages/athena-webapp/convex/notifications/deliveryPolicy.ts",
-      "source_location": "L59"
+      "source_location": "L67"
     },
     {
       "community": 284,
@@ -208105,7 +208105,7 @@
       "label": "computeDeliveryLeaseMs()",
       "norm_label": "computedeliveryleasems()",
       "source_file": "packages/athena-webapp/convex/notifications/deliveryPolicy.ts",
-      "source_location": "L31"
+      "source_location": "L39"
     },
     {
       "community": 284,
@@ -208114,7 +208114,7 @@
       "label": "deliveryDedupeKey()",
       "norm_label": "deliverydedupekey()",
       "source_file": "packages/athena-webapp/convex/notifications/deliveryPolicy.ts",
-      "source_location": "L100"
+      "source_location": "L108"
     },
     {
       "community": 284,
@@ -208123,7 +208123,7 @@
       "label": "encodeKeyComponent()",
       "norm_label": "encodekeycomponent()",
       "source_file": "packages/athena-webapp/convex/notifications/deliveryPolicy.ts",
-      "source_location": "L92"
+      "source_location": "L100"
     },
     {
       "community": 284,
@@ -208132,7 +208132,7 @@
       "label": "joinKeyComponents()",
       "norm_label": "joinkeycomponents()",
       "source_file": "packages/athena-webapp/convex/notifications/deliveryPolicy.ts",
-      "source_location": "L96"
+      "source_location": "L104"
     },
     {
       "community": 284,
@@ -208141,7 +208141,7 @@
       "label": "nextBackoffMs()",
       "norm_label": "nextbackoffms()",
       "source_file": "packages/athena-webapp/convex/notifications/deliveryPolicy.ts",
-      "source_location": "L54"
+      "source_location": "L62"
     },
     {
       "community": 284,
@@ -208150,7 +208150,7 @@
       "label": "normalizeRecipientEmail()",
       "norm_label": "normalizerecipientemail()",
       "source_file": "packages/athena-webapp/convex/notifications/deliveryPolicy.ts",
-      "source_location": "L84"
+      "source_location": "L92"
     },
     {
       "community": 284,
@@ -226672,7 +226672,7 @@
       "label": "recordNotificationFailureEventWithCtx()",
       "norm_label": "recordnotificationfailureeventwithctx()",
       "source_file": "packages/athena-webapp/convex/notifications/dispatch.ts",
-      "source_location": "L366"
+      "source_location": "L377"
     },
     {
       "community": 481,
@@ -226681,7 +226681,7 @@
       "label": "recordTerminalDeliveryFailureEvent()",
       "norm_label": "recordterminaldeliveryfailureevent()",
       "source_file": "packages/athena-webapp/convex/notifications/dispatch.ts",
-      "source_location": "L392"
+      "source_location": "L404"
     },
     {
       "community": 481,
@@ -226690,7 +226690,7 @@
       "label": "resolveRecipients()",
       "norm_label": "resolverecipients()",
       "source_file": "packages/athena-webapp/convex/notifications/dispatch.ts",
-      "source_location": "L49"
+      "source_location": "L53"
     },
     {
       "community": 481,
@@ -226699,7 +226699,7 @@
       "label": "suppressIntentWithCtx()",
       "norm_label": "suppressintentwithctx()",
       "source_file": "packages/athena-webapp/convex/notifications/dispatch.ts",
-      "source_location": "L81"
+      "source_location": "L85"
     },
     {
       "community": 481,
@@ -227734,7 +227734,7 @@
       "label": "isVarianceReviewForCloseout()",
       "norm_label": "isvariancereviewforcloseout()",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.ts",
-      "source_location": "L392"
+      "source_location": "L426"
     },
     {
       "community": 499,
@@ -227743,7 +227743,7 @@
       "label": "scheduleRegisterCloseoutNotifications()",
       "norm_label": "scheduleregistercloseoutnotifications()",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.ts",
-      "source_location": "L277"
+      "source_location": "L279"
     },
     {
       "community": 499,
@@ -227752,7 +227752,7 @@
       "label": "sharedDemoCapabilityForSyncEvent()",
       "norm_label": "shareddemocapabilityforsyncevent()",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.ts",
-      "source_location": "L108"
+      "source_location": "L110"
     },
     {
       "community": 499,
@@ -227761,7 +227761,7 @@
       "label": "wasVarianceNotifiedBeforeRail()",
       "norm_label": "wasvariancenotifiedbeforerail()",
       "source_file": "packages/athena-webapp/convex/pos/public/sync.ts",
-      "source_location": "L408"
+      "source_location": "L442"
     },
     {
       "community": 5,

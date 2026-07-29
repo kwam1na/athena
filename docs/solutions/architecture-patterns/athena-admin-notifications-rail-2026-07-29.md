@@ -83,11 +83,17 @@ delivery mechanics.
   general-purpose, but at `MAX_DELIVERY_ATTEMPTS = 4` only the first three
   values are ever produced in practice — 1m, 2m, 4m; the 24h cap is only
   reachable at attempt ≥ 12, which the attempt cap never lets a real delivery
-  reach. The delivery lease duration scales with recipient count (a base plus
-  a per-recipient allowance, capped) rather than being fixed, because a
-  dispatch sends to its whole leased batch serially — a fixed short lease
-  could let the sweeper reclaim a lease mid-flight and re-send to recipients
-  who already succeeded. Delivery dedupe keys percent-encode their component
+  reach. A dispatch sends its leased batch serially, so the **batch** is what
+  is bounded (`MAX_DELIVERIES_PER_DISPATCH`), not the lease: a lease long
+  enough to cover a full 200-recipient serial run would outlive the platform's
+  action time limit, so the action would be killed mid-batch while every
+  leased row had already burned an attempt — leaving the tail uncontacted and
+  eventually terminalized as failures that were never actually attempted. Each
+  dispatch therefore takes at most one batch, re-schedules itself for the
+  remainder, and takes a lease sized to that batch (base plus a per-recipient
+  allowance) capped below the action limit, so the sweeper cannot reclaim a
+  lease from a live dispatch and re-send to recipients who already
+  succeeded. Delivery dedupe keys percent-encode their component
   strings before joining them, so a client-supplied component (POS
   `localEventId`) cannot contain the join separator and forge a collision
   with a different component tuple.
