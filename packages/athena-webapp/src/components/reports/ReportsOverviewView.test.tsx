@@ -131,10 +131,10 @@ describe("ReportsOverviewView", () => {
     expect(screen.getByText("No item cost recorded")).toBeInTheDocument();
   });
 
-  it("shows a loading state while the query is pending", () => {
+  it("renders nothing until the first result settles", () => {
     useQuery.mockReturnValue(undefined);
     render(<ReportsOverviewView />);
-    expect(screen.getByRole("status", { name: "Loading report overview" })).toBeInTheDocument();
+    expect(screen.queryByTestId("reports-overview")).not.toBeInTheDocument();
   });
 
   it("shows an empty state when there is no overview document yet", () => {

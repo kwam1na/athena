@@ -6,9 +6,13 @@ import { Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { getOrigin } from "@/lib/navigationUtils";
+import { FadeIn } from "@/components/common/FadeIn";
 import { ReportBackLink } from "./ReportBackLink";
 import { useStableReportQuery } from "./useStableReportQuery";
 import { cn } from "@/lib/utils";
@@ -126,146 +130,176 @@ export function ReportsSkuDetailView({
   return (
     /* Rhythm: tight inside a cluster, generous between sections, so the page
        reads as identity / controls / results rather than one flat stack. */
-    <div
-      className="space-y-layout-xl md:space-y-layout-2xl"
-      data-testid="reports-sku-detail"
-    >
-      <div className="space-y-layout-sm">
-        <ReportBackLink label="Back to items" />
+    <FadeIn>
+      <div
+        className="space-y-layout-xl md:space-y-layout-2xl"
+        data-testid="reports-sku-detail"
+      >
+        <div className="space-y-layout-sm">
+          <ReportBackLink label="Back to items" />
 
-        <div className="space-y-1">
-          {/* Out to the product's detail page, carrying this page as the
+          <div className="space-y-1">
+            {/* Out to the product's detail page, carrying this page as the
               origin so its back control returns here. The product id stands
               in for the slug, matching how the products table links. */}
-          {detail?.identity?.productId ? (
-            <Link
-              className="group inline-flex items-center gap-1.5"
-              params={{
-                orgUrlSlug: orgUrlSlug!,
-                storeUrlSlug: storeUrlSlug!,
-                productSlug: detail.identity.productId,
-              }}
-              search={{ o: getOrigin() }}
-              to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
-            >
+            {detail?.identity?.productId ? (
+              <Link
+                className="group inline-flex items-center gap-1.5"
+                params={{
+                  orgUrlSlug: orgUrlSlug!,
+                  storeUrlSlug: storeUrlSlug!,
+                  productSlug: detail.identity.productId,
+                }}
+                search={{ o: getOrigin() }}
+                to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+              >
+                <h2
+                  className="text-xl font-medium text-foreground"
+                  data-testid="reports-sku-detail-name"
+                >
+                  {formatSkuDisplayName(detail.identity, productSkuId)}
+                </h2>
+                <ArrowUpRight
+                  aria-hidden="true"
+                  className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
+                />
+                <span className="sr-only">Open product</span>
+              </Link>
+            ) : (
+              /* Until identity resolves, hold the lines blank rather than
+               showing the document id: it is not the SKU's name, and swapping
+               it out shifts the whole header once the real name lands. */
               <h2
                 className="text-xl font-medium text-foreground"
                 data-testid="reports-sku-detail-name"
               >
-                {formatSkuDisplayName(detail?.identity, productSkuId)}
+                {detail
+                  ? formatSkuDisplayName(detail.identity, productSkuId)
+                  : "\u00A0"}
               </h2>
-              <ArrowUpRight
-                aria-hidden="true"
-                className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
-              />
-              <span className="sr-only">Open product</span>
-            </Link>
-          ) : (
-            <h2
-              className="text-xl font-medium text-foreground"
-              data-testid="reports-sku-detail-name"
-            >
-              {formatSkuDisplayName(detail?.identity, productSkuId)}
-            </h2>
-          )}
-          <p className="text-sm text-muted-foreground">
-            {formatSkuSubtitle(detail?.identity, productSkuId)}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-end gap-layout-sm">
-        <ReportDateField
-          boundary={endBoundary ? { after: endBoundary } : undefined}
-          label="Start date"
-          onSelect={onStartDateChange}
-          operatingDate={startDate}
-        />
-        <ReportDateField
-          boundary={startBoundary ? { before: startBoundary } : undefined}
-          label="End date"
-          onSelect={onEndDateChange}
-          operatingDate={endDate}
-        />
-      </div>
-
-      {isInitialLoad || detail === undefined ? (
-        <Skeleton className="h-64 w-full" data-testid="reports-sku-detail-loading" />
-      ) : detail === null ? (
-        <EmptyState title="No activity" description="This SKU has no activity in the selected range." />
-      ) : (
-        <div
-          aria-busy={isRefreshing}
-          className={cn(
-            "space-y-layout-xl transition-opacity duration-150 motion-reduce:transition-none",
-            // Runs once when the detail first resolves (see ReportsItemsView).
-            "motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200",
-            isRefreshing && "opacity-60",
-          )}
-          data-refreshing={isRefreshing ? "true" : undefined}
-        >
-          <div className="grid grid-cols-2 gap-layout-sm sm:grid-cols-4">
-            <OperationsSummaryMetric
-              label="Net sales"
-              value={formatOptionalMoney(detail.totals?.netSalesMinor, currency)}
-            />
-            <OperationsSummaryMetric
-              label="Units sold"
-              value={formatUnits(detail.totals?.unitsSold)}
-            />
-            <OperationsSummaryMetric
-              helper={
-                detail.totals
-                  ? reportProfitHelper(detail.totals.grossProfitMinor)
-                  : undefined
-              }
-              label="Gross profit"
-              value={
-                detail.totals
-                  ? formatReportProfit(detail.totals.grossProfitMinor, currency)
-                  : "—"
-              }
-            />
-            <OperationsSummaryMetric
-              label="Refunds"
-              value={formatOptionalMoney(detail.totals?.refundsMinor, currency)}
-            />
-          </div>
-
-          {detail.days.length === 0 ? (
-            <EmptyState title="No days with activity" description="No days with activity in the selected range." />
-          ) : (
-            <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Net sales</TableHead>
-                    <TableHead>Units sold</TableHead>
-                    <TableHead>Gross profit</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {detail.days.map((day) => (
-                    <TableRow key={day.operatingDate}>
-                      <TableCell>{formatOperatingDate(day.operatingDate)}</TableCell>
-                      <TableCell>{formatOptionalMoney(day.netSalesMinor, currency)}</TableCell>
-                      <TableCell>{formatUnits(day.unitsSold)}</TableCell>
-                      <TableCell>{formatReportProfit(day.grossProfitMinor, currency)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-
-          {detail.days.some((day) => day.grossProfitMinor === null) ? (
-            <p className="text-xs text-muted-foreground">
-              {reportProfitUnavailableNote}
+            )}
+            <p className="text-sm text-muted-foreground">
+              {detail
+                ? formatSkuSubtitle(detail.identity, productSkuId)
+                : "\u00A0"}
             </p>
-          ) : null}
+          </div>
         </div>
-      )}
-    </div>
+
+        <div className="flex flex-wrap items-end gap-layout-sm">
+          <ReportDateField
+            boundary={endBoundary ? { after: endBoundary } : undefined}
+            label="Start date"
+            onSelect={onStartDateChange}
+            operatingDate={startDate}
+          />
+          <ReportDateField
+            boundary={startBoundary ? { before: startBoundary } : undefined}
+            label="End date"
+            onSelect={onEndDateChange}
+            operatingDate={endDate}
+          />
+        </div>
+
+        {/* Nothing until the first result settles: these queries resolve fast
+          enough that a skeleton appears and vanishes as a flash of its own.
+          Refreshes keep the previous data on screen (see useStableReportQuery),
+          so this branch is only ever the very first load. */}
+        {isInitialLoad || detail === undefined ? null : detail === null ? (
+          <EmptyState
+            title="No activity"
+            description="This SKU has no activity in the selected range."
+          />
+        ) : (
+          <div
+            aria-busy={isRefreshing}
+            className={cn(
+              "space-y-layout-xl transition-opacity duration-150 motion-reduce:transition-none",
+              isRefreshing && "opacity-60",
+            )}
+            data-refreshing={isRefreshing ? "true" : undefined}
+          >
+            <div className="grid grid-cols-2 gap-layout-sm sm:grid-cols-4">
+              <OperationsSummaryMetric
+                label="Net sales"
+                value={formatOptionalMoney(
+                  detail.totals?.netSalesMinor,
+                  currency,
+                )}
+              />
+              <OperationsSummaryMetric
+                label="Units sold"
+                value={formatUnits(detail.totals?.unitsSold)}
+              />
+              <OperationsSummaryMetric
+                helper={
+                  detail.totals
+                    ? reportProfitHelper(detail.totals.grossProfitMinor)
+                    : undefined
+                }
+                label="Gross profit"
+                value={
+                  detail.totals
+                    ? formatReportProfit(
+                        detail.totals.grossProfitMinor,
+                        currency,
+                      )
+                    : "—"
+                }
+              />
+              <OperationsSummaryMetric
+                label="Refunds"
+                value={formatOptionalMoney(
+                  detail.totals?.refundsMinor,
+                  currency,
+                )}
+              />
+            </div>
+
+            {detail.days.length === 0 ? (
+              <EmptyState
+                title="No days with activity"
+                description="No days with activity in the selected range."
+              />
+            ) : (
+              <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Net sales</TableHead>
+                      <TableHead>Units sold</TableHead>
+                      <TableHead>Gross profit</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {detail.days.map((day) => (
+                      <TableRow key={day.operatingDate}>
+                        <TableCell>
+                          {formatOperatingDate(day.operatingDate)}
+                        </TableCell>
+                        <TableCell>
+                          {formatOptionalMoney(day.netSalesMinor, currency)}
+                        </TableCell>
+                        <TableCell>{formatUnits(day.unitsSold)}</TableCell>
+                        <TableCell>
+                          {formatReportProfit(day.grossProfitMinor, currency)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+
+            {detail.days.some((day) => day.grossProfitMinor === null) ? (
+              <p className="text-xs text-muted-foreground">
+                {reportProfitUnavailableNote}
+              </p>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </FadeIn>
   );
 }

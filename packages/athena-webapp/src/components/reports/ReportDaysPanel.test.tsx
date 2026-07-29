@@ -120,9 +120,14 @@ describe("ReportDaysPanel", () => {
     expect(document.querySelector('[data-attention="true"]')).toBeNull();
   });
 
-  it("shows a loading state while pending", () => {
+  it("renders no results block until the first result settles", () => {
+    // A skeleton would appear and vanish as a flash of its own on these
+    // fast queries; refreshes keep prior data on screen instead.
     useQuery.mockReturnValue(undefined);
     render(<ReportDaysPanel {...baseProps} />);
-    expect(screen.getByTestId("report-days-loading")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("report-days-loading")).not.toBeInTheDocument();
+    // The panel's own controls stay put, so nothing jumps when data lands.
+    expect(screen.getByTestId("report-days-panel")).toBeInTheDocument();
   });
 });

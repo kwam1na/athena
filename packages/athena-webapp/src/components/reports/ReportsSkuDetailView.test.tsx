@@ -137,10 +137,13 @@ describe("ReportsSkuDetailView", () => {
     expect(screen.getByText("$28")).toBeInTheDocument();
   });
 
-  it("shows a loading skeleton while pending", () => {
+  it("renders nothing until the first result settles", () => {
     useQuery.mockReturnValue(undefined);
     render(<ReportsSkuDetailView {...baseProps} />);
-    expect(screen.getByTestId("reports-sku-detail-loading")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("reports-sku-detail-loading"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
   it("shows an empty state when the SKU has no activity in range", () => {

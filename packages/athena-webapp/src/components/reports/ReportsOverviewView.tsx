@@ -2,7 +2,7 @@ import { useQuery } from "convex/react";
 import { useState } from "react";
 
 import { EmptyState } from "@/components/states/empty/empty-state";
-import { Skeleton } from "@/components/ui/skeleton";
+import { FadeIn } from "@/components/common/FadeIn";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { cn } from "@/lib/utils";
@@ -56,23 +56,12 @@ export function ReportsOverviewView() {
     ),
   );
 
+  // Nothing until the first result settles: these queries resolve fast
+  // enough that a skeleton appears and vanishes as a flash of its own.
+  // Refreshes keep the previous data on screen (see useStableReportQuery),
+  // so this branch is only ever the very first load.
   if (activeStore === null || isInitialLoad || overview === undefined) {
-    return (
-      <div
-        aria-label="Loading report overview"
-        className="space-y-layout-xl md:space-y-layout-2xl"
-        role="status"
-      >
-        <Skeleton className="h-9 w-72" />
-        <div className="grid gap-layout-md [grid-template-columns:repeat(auto-fit,minmax(min(14rem,100%),1fr))] md:gap-layout-lg">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
-        </div>
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
+    return null;
   }
 
   if (overview === null) {
@@ -90,50 +79,55 @@ export function ReportsOverviewView() {
   )!;
 
   return (
-    <section
-      aria-busy={isRefreshing}
-      className={cn(
-        "space-y-layout-xl md:space-y-layout-2xl",
-        "transition-opacity duration-150 motion-reduce:transition-none",
-        isRefreshing && "opacity-60",
-      )}
-      data-refreshing={isRefreshing ? "true" : undefined}
-      data-testid="reports-overview"
-    >
-      <div className="space-y-layout-md">
-        <Tabs
-          onValueChange={(next) => setSelectedWindow(next as OverviewWindow)}
-          value={selectedWindow}
-        >
-          <TabsList
-            aria-label="Report period"
-            className="h-auto flex-wrap justify-start gap-1 border border-border bg-surface-raised p-1 text-muted-foreground shadow-surface"
-            size="sm"
+    <FadeIn>
+      <section
+        aria-busy={isRefreshing}
+        className={cn(
+          "space-y-layout-xl md:space-y-layout-2xl",
+          "transition-opacity duration-150 motion-reduce:transition-none",
+          isRefreshing && "opacity-60",
+        )}
+        data-refreshing={isRefreshing ? "true" : undefined}
+        data-testid="reports-overview"
+      >
+        <div className="space-y-layout-md">
+          <Tabs
+            onValueChange={(next) => setSelectedWindow(next as OverviewWindow)}
+            value={selectedWindow}
           >
-            {OVERVIEW_WINDOWS.map((option) => (
-              <TabsTrigger
-                className="min-h-8 px-3 data-[state=active]:bg-primary-soft data-[state=active]:text-primary data-[state=active]:shadow-none"
-                key={option.value}
-                size="sm"
-                value={option.value}
-              >
-                {option.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+            <TabsList
+              aria-label="Report period"
+              className="h-auto flex-wrap justify-start gap-1 border border-border bg-surface-raised p-1 text-muted-foreground shadow-surface"
+              size="sm"
+            >
+              {OVERVIEW_WINDOWS.map((option) => (
+                <TabsTrigger
+                  className="min-h-8 px-3 data-[state=active]:bg-primary-soft data-[state=active]:text-primary data-[state=active]:shadow-none"
+                  key={option.value}
+                  size="sm"
+                  value={option.value}
+                >
+                  {option.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
 
-        <ReportPeriodMetrics
-          comparison={comparisonFor(overview, selectedWindow)}
+          <ReportPeriodMetrics
+            comparison={comparisonFor(overview, selectedWindow)}
+            currency={currency}
+            periodLabel={activeWindow.label}
+            priorWindowLabel="prior week"
+            snapshot={overview[selectedWindow]}
+          />
+        </div>
+
+        <ReportTrendChart
           currency={currency}
-          periodLabel={activeWindow.label}
-          priorWindowLabel="prior week"
-          snapshot={overview[selectedWindow]}
+          dailyTrend={overview.dailyTrend}
         />
-      </div>
-
-      <ReportTrendChart currency={currency} dailyTrend={overview.dailyTrend} />
-      <ReportTrustStrip trust={overview.trust} />
-    </section>
+        <ReportTrustStrip trust={overview.trust} />
+      </section>
+    </FadeIn>
   );
 }

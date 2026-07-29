@@ -20,10 +20,13 @@ export function ReportBackLink({ label = "Back" }: { label?: string }) {
 
   return (
     <Button
-      className="-ml-2 h-auto gap-2 px-2 py-1 text-muted-foreground"
+      // `clear` defaults to primary; this is navigation chrome rather than a
+      // call to action, so it takes the foreground colour. The negative
+      // margin keeps the label optically flush with the content below.
+      className="-ml-2 h-auto gap-2 px-2 py-1 text-foreground"
       onClick={navigateBack}
       type="button"
-      variant="ghost"
+      variant="clear"
     >
       <ArrowLeftIcon className="h-4 w-4" />
       {label}

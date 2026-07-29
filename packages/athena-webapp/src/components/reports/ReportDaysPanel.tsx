@@ -13,7 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { getOrigin } from "@/lib/navigationUtils";
 import { useStableReportQuery } from "./useStableReportQuery";
@@ -129,9 +128,11 @@ export function ReportDaysPanel({
           />
         </div>
       </div>
-      {isInitialLoad || days === undefined ? (
-        <Skeleton className="h-48 w-full" data-testid="report-days-loading" />
-      ) : days.length === 0 ? (
+      {/* Nothing until the first result settles: these queries resolve fast
+          enough that a skeleton appears and vanishes as a flash of its own.
+          Refreshes keep the previous data on screen (see useStableReportQuery),
+          so this branch is only ever the very first load. */}
+      {isInitialLoad || days === undefined ? null : days.length === 0 ? (
         <EmptyState title="No days in range" description="Choose a different date range." />
       ) : (
         <div
