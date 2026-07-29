@@ -56,11 +56,36 @@ export type SweepResult = {
   marksExamined: number;
   daysFolded: number;
   foldFailures: number;
+  /** Days refused because they exceed a fold read cap (see DayCapExceeded). */
+  capExceeded: number;
   skippedNotAllowed: number;
   storesTouched: number;
   rangesComputed: number;
   rangesExpired: number;
 };
+
+/**
+ * A day holds more rows than a fold read is allowed to take.
+ *
+ * `.take(n)` truncates silently, so folding past the cap would write a
+ * confidently wrong total that is indistinguishable from a real one — the
+ * exact failure this layer exists to remove. The day is refused instead: no
+ * document is written, the mark is kept, and the sweep reports it separately
+ * from a transient failure. Raising the cap makes the next sweep succeed.
+ */
+export class DayCapExceeded extends Error {
+  constructor(
+    readonly operatingDate: string,
+    readonly cap: number,
+    readonly what: "facts" | "skuDays",
+  ) {
+    super(
+      `Operating day ${operatingDate} exceeds the ${what} fold cap of ${cap}; ` +
+        "refusing to fold a truncated day.",
+    );
+    this.name = "DayCapExceeded";
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Store allowlist
@@ -205,12 +230,34 @@ export async function foldAndReplaceDay(
   const store = await ctx.db.get("store", storeId);
   const storeCurrency = normalizeCurrencyCode(store?.currency);
 
+  // One past the cap, so a full page is distinguishable from a truncated one.
   const facts = await ctx.db
     .query("reportFact")
     .withIndex("by_storeId_operatingDate", (q) =>
       q.eq("storeId", storeId).eq("operatingDate", operatingDate),
     )
-    .take(MAX_FACTS_PER_DAY);
+    .take(MAX_FACTS_PER_DAY + 1);
+
+  if (facts.length > MAX_FACTS_PER_DAY) {
+    throw new DayCapExceeded(operatingDate, MAX_FACTS_PER_DAY, "facts");
+  }
+
+  // Read up front, and cap-check before anything is written: the sweep catches
+  // fold errors, and a caught error does NOT roll back writes already made in
+  // the same mutation. Throwing half-way through would commit a day document
+  // whose per-SKU rows were never reconciled.
+  const existingSkuDays = await ctx.db
+    .query("reportSkuDay")
+    .withIndex("by_storeId_operatingDate_productSkuId", (q) =>
+      q.eq("storeId", storeId).eq("operatingDate", operatingDate),
+    )
+    .take(MAX_SKU_DAY_ROWS_PER_DAY + 1);
+
+  // Past the cap, rows for SKUs that lost activity would never be deleted, so
+  // the day would keep stale per-SKU numbers. Refuse rather than half-reconcile.
+  if (existingSkuDays.length > MAX_SKU_DAY_ROWS_PER_DAY) {
+    throw new DayCapExceeded(operatingDate, MAX_SKU_DAY_ROWS_PER_DAY, "skuDays");
+  }
 
   const close = await loadAcceptedClose(ctx, storeId, operatingDate);
   const closeRef = close ? toCloseRef(close) : undefined;
@@ -263,12 +310,6 @@ export async function foldAndReplaceDay(
   }
 
   // --- reportSkuDay: replace the day's rows ---------------------------------
-  const existingSkuDays = await ctx.db
-    .query("reportSkuDay")
-    .withIndex("by_storeId_operatingDate_productSkuId", (q) =>
-      q.eq("storeId", storeId).eq("operatingDate", operatingDate),
-    )
-    .take(MAX_SKU_DAY_ROWS_PER_DAY);
 
   const seen = new Set<string>();
 
@@ -418,6 +459,7 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
     marksExamined: marks.length,
     daysFolded: 0,
     foldFailures: 0,
+    capExceeded: 0,
     skippedNotAllowed: 0,
     storesTouched: 0,
     rangesComputed: 0,
@@ -427,7 +469,12 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
   const touchedStores = new Map<string, Id<"store">>();
 
   for (const mark of marks) {
-    if (result.daysFolded + result.foldFailures >= SWEEP_DIRTY_BATCH) break;
+    if (
+      result.daysFolded + result.foldFailures + result.capExceeded >=
+      SWEEP_DIRTY_BATCH
+    ) {
+      break;
+    }
 
     const storeKey = String(mark.storeId);
 
@@ -451,15 +498,26 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
         preserveOpen: mark.reason === "day_open",
       });
       result.daysFolded += 1;
-    } catch {
+    } catch (error) {
       // Containment: a day that could not be folded goes back on the queue
       // under its own reason so the failure is visible and self-healing.
-      result.foldFailures += 1;
+      //
+      // An over-cap day is counted apart from a transient failure: nothing was
+      // written, and retrying will keep refusing until the cap is raised or the
+      // day's volume changes. It stays on the queue so the refusal is visible
+      // and so a raised cap heals it on the next sweep, but conflating it with
+      // a write failure would hide a structural limit behind a flaky-looking
+      // counter.
+      if (error instanceof DayCapExceeded) {
+        result.capExceeded += 1;
+      } else {
+        result.foldFailures += 1;
+      }
       await markDayDirty(
         ctx,
         mark.storeId,
         mark.operatingDate,
-        "write_failure",
+        error instanceof DayCapExceeded ? "fact_cap_exceeded" : "write_failure",
         now,
       );
     }

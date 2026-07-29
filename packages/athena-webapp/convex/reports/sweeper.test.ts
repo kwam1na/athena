@@ -27,6 +27,7 @@ vi.mock("./foldDay", async (importOriginal) => {
 });
 
 import {
+  MAX_FACTS_PER_DAY,
   REPORTS_SWEEP_STORE_ALLOWLIST_ENV,
   parseStoreAllowlist,
   selectAcceptedClose,
@@ -822,5 +823,112 @@ describe("fold integration", () => {
     expect(days[0].status).toBe("provisional");
     expect(days[0].closeId).toBeUndefined();
     expect(days[0].closeVarianceMinor).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Read caps
+// ---------------------------------------------------------------------------
+
+describe("fold read caps", () => {
+  it("refuses a day past the fact cap instead of folding a truncated total", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId, productSkuId } = await seedStore(t, "sweep-cap");
+    allow(storeId);
+
+    // One past the cap. Each fact is worth 100, so a truncated fold would
+    // still produce a large, plausible-looking number — which is exactly why
+    // silence here is dangerous.
+    const factCount = MAX_FACTS_PER_DAY + 1;
+    await t.run(async (ctx) => {
+      for (let i = 0; i < factCount; i += 1) {
+        await ctx.db.insert("reportFact", {
+          storeId,
+          sourceDomain: "pos",
+          sourceId: `txn-${i}`,
+          lineId: "1",
+          factKind: "sale",
+          fingerprint: `fp-${i}`,
+          fingerprintVersion: 1,
+          occurredAt: 1_000,
+          recordedAt: 1_000,
+          operatingDate: "2026-07-28",
+          currency: "GHS",
+          grossAmountMinor: 100,
+          netAmountMinor: 100,
+          taxAmountMinor: 0,
+          discountAmountMinor: 0,
+          quantity: 1,
+          productSkuId,
+        });
+      }
+    });
+    await mark(t, storeId, "2026-07-28");
+
+    const result = await sweep(t);
+
+    // Counted apart from a transient failure: this is a structural limit.
+    expect(result.capExceeded).toBe(1);
+    expect(result.foldFailures).toBe(0);
+    expect(result.daysFolded).toBe(0);
+
+    // Nothing written — no day document, no per-SKU rows. A wrong number is
+    // worse than an absent one, because it cannot be told apart from a real one.
+    const { days, skuDays } = await t.run(async (ctx) => ({
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      days: await ctx.db.query("reportDay").collect(),
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      skuDays: await ctx.db.query("reportSkuDay").collect(),
+    }));
+    expect(days).toHaveLength(0);
+    expect(skuDays).toHaveLength(0);
+
+    // The refusal stays on the queue under its own reason, so it is visible
+    // and so raising the cap heals it on a later sweep.
+    const marks = await marksOf(t);
+    expect(marks).toHaveLength(1);
+    expect(marks[0].reason).toBe("fact_cap_exceeded");
+  });
+
+  it("folds a day sitting exactly on the cap", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId, productSkuId } = await seedStore(t, "sweep-at-cap");
+    allow(storeId);
+
+    // Exactly at the cap must still fold: the guard reads cap+1 precisely so a
+    // full page is not mistaken for a truncated one.
+    await t.run(async (ctx) => {
+      for (let i = 0; i < MAX_FACTS_PER_DAY; i += 1) {
+        await ctx.db.insert("reportFact", {
+          storeId,
+          sourceDomain: "pos",
+          sourceId: `txn-${i}`,
+          lineId: "1",
+          factKind: "sale",
+          fingerprint: `fp-${i}`,
+          fingerprintVersion: 1,
+          occurredAt: 1_000,
+          recordedAt: 1_000,
+          operatingDate: "2026-07-28",
+          currency: "GHS",
+          grossAmountMinor: 100,
+          netAmountMinor: 100,
+          taxAmountMinor: 0,
+          discountAmountMinor: 0,
+          quantity: 1,
+          productSkuId,
+        });
+      }
+    });
+    await mark(t, storeId, "2026-07-28");
+
+    const result = await sweep(t);
+
+    expect(result.capExceeded).toBe(0);
+    expect(result.daysFolded).toBe(1);
+
+    const day = await t.run(async (ctx) => ctx.db.query("reportDay").unique());
+    expect(day?.netSalesMinor).toBe(MAX_FACTS_PER_DAY * 100);
+    expect(day?.factCount).toBe(MAX_FACTS_PER_DAY);
   });
 });
