@@ -264,19 +264,21 @@ describe("HARNESS_APP_REGISTRY", () => {
     const reportingScenario = athena?.validationScenarios.find(
       (scenario) =>
         scenario.title ===
-        "Reporting fact, valuation, projection, and activation edits"
+        "Reporting fact ledger, day fold, and read-model edits"
     );
 
     expect(reportingScenario).toMatchObject({
       touchedPaths: [
-        "convex/reporting",
-        "convex/schemas/reporting",
-        "shared/reportingContract.ts",
+        "convex/reports",
+        "convex/schemas/reports",
+        "convex/inventoryLedger",
+        "convex/storeTime",
+        "shared/reportsContract.ts",
       ],
       commands: [
         {
           kind: "raw",
-          command: "bun run --filter '@athena/webapp' test -- convex/reporting",
+          command: "bun run --filter '@athena/webapp' test -- convex/reports",
         },
         { kind: "script", script: "audit:convex" },
         { kind: "script", script: "lint:convex:changed" },
@@ -287,8 +289,13 @@ describe("HARNESS_APP_REGISTRY", () => {
         { kind: "script", script: "build" },
       ],
     });
+    // The fold, not the incremental open-day path, is the correctness
+    // authority — the note must keep saying so.
     expect(reportingScenario?.note).toContain(
-      "reporting projections remain replayable asynchronous work"
+      "The fold is the correctness authority"
+    );
+    expect(reportingScenario?.note).toContain(
+      "must never decide operational success"
     );
   });
 

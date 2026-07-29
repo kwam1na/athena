@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Empties the derived reporting tables on a development deployment.
+#
+# The fact ledger is included: reporting is fully derived from domain sources,
+# so the supported way back is `reports/reseed:reseedStoreReporting`, which
+# re-ingests facts and re-folds every day. That mutation is also the store-
+# scoped version of this script and is preferred — reach for this one only
+# when you want the tables empty across every store.
+
 deployment="${1:-dev}"
 case "$deployment" in
   dev|local) ;;
@@ -11,62 +19,13 @@ case "$deployment" in
 esac
 
 tables=(
-  reportingIngress
-  reportingIngressSourceReference
-  reportingIngressLine
-  reportingIngressConflict
-  reportingFact
-  reportingFactSourceReference
-  reportingFactProcessingAttempt
-  reportingSkuAttribution
-  reportingSkuAttributionCursor
-  reportingSkuAttributionAppliedSequence
-  reportingProjectionGeneration
-  reportingProjectionActivation
-  reportingStoreDayProjection
-  reportingStoreIntradayProjection
-  reportingStoreIntradayScheduleState
-  reportingSkuDayProjection
-  reportingCurrentValuationProjection
-  reportingRangeProjection
-  reportingAttentionProjection
-  reportingDailyCloseProjection
-  reportingSkuInsightProjection
-  reportingMetricCoverage
-  reportingStorePeriodSummary
-  reportingSkuPeriodSummary
-  reportingSkuPeriodClassification
-  reportingPeriodRollup
-  reportingPeriodFacet
-  reportingInventoryExposureSummary
-  reportingInventoryMovementSummary
-  reportingInventoryPeriodSummary
-  reportingDailyCloseTrust
-  reportingReadCursorContext
-  reportingWorkspaceMaterializationEpoch
-  reportingWorkspaceReadModelActivation
-  reportingReadBundle
-  reportingReadBundleActivation
-  reportingProjectionEvidence
-  reportingSkuEvidence
-  reportingRun
-  reportingRunEvent
-  reportingProjectionHealth
-  reportingHistoricalInterpretationPolicy
-  reportingHistoricalInterpretationEvidence
-  reportingPosSourceReconciliation
-  reportingExportChunk
-  reportingCutoverPreviewItem
-  reportingCutoverBaselineDeficitLot
-  reportingCutoverBaseline
-  reportingBackfillSourceAudit
-  reportingBackfillPreviewItem
-  reportingBackfillApplyManifest
-  reportingBackfillApplyManifestItem
-  reportingQuarantine
-  reportingReconciliationDiscrepancy
-  reportingReconciliationAccumulator
-  reportingBackfillAuthorizationGrant
+  reportFact
+  reportDay
+  reportSkuDay
+  reportPeriodSkuRollup
+  reportOverview
+  reportDirtyDay
+  reportRangeResult
 )
 
 for table in "${tables[@]}"; do

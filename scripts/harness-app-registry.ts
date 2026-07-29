@@ -264,9 +264,19 @@ export const HARNESS_APP_REGISTRY = [
               "Stock-adjustment, procurement, replenishment, receiving, and vendor flows layered over inventory state.",
           },
           {
-            path: "convex/reporting",
+            path: "convex/reports",
             description:
-              "Versioned facts, inventory valuation, replayable projections, activation, evidence, and store-scoped reporting reads.",
+              "Canonical fact ledger, the deterministic day fold, sweeper-maintained day/SKU/rollup read models, source-truth verification, and store-scoped reporting reads.",
+          },
+          {
+            path: "convex/inventoryLedger",
+            description:
+              "Inventory valuation and costing: weighted-average cost pools, deficit lots, position revisions, and SKU valuation corrections.",
+          },
+          {
+            path: "convex/storeTime",
+            description:
+              "Store timezone authority and operating-day resolution shared by reporting and operational surfaces.",
           },
           {
             path: "convex/serviceOps",
@@ -353,17 +363,18 @@ export const HARNESS_APP_REGISTRY = [
         note: "Run this for changed browser-facing TypeScript or TSX files so introduced ESLint failures are caught before PR handoff.",
       },
       {
-        title: "Reporting fact, valuation, projection, and activation edits",
+        title: "Reporting fact ledger, day fold, and read-model edits",
         touchedPaths: [
-          "convex/reporting",
-          "convex/schemas/reporting",
-          "shared/reportingContract.ts",
+          "convex/reports",
+          "convex/schemas/reports",
+          "convex/inventoryLedger",
+          "convex/storeTime",
+          "shared/reportsContract.ts",
         ],
         commands: [
           {
             kind: "raw",
-            command:
-              "bun run --filter '@athena/webapp' test -- convex/reporting",
+            command: "bun run --filter '@athena/webapp' test -- convex/reports",
           },
           { kind: "script", script: "audit:convex" },
           { kind: "script", script: "lint:convex:changed" },
@@ -374,7 +385,7 @@ export const HARNESS_APP_REGISTRY = [
           },
           { kind: "script", script: "build" },
         ],
-        note: "Use this for reporting contracts, source adapters, canonical facts, valuation, projections, maintenance, access, public reads, health, or activation. Pair it with the owning source-domain scenario when a POS, storefront, service, payment, inventory, procurement, or Daily Close command emits new evidence. Source state and inventory effects remain atomic with the command; reporting projections remain replayable asynchronous work and must not decide operational success.",
+        note: "Use this for the reporting contract, fact ingestion, the day fold, the sweeper and its read models, custom ranges, reseed, or source-truth verification. Pair it with the owning source-domain scenario when a POS, storefront, service, payment, inventory, or Daily Close command emits new facts. Source state and inventory effects remain atomic with the command; the fold is replayable asynchronous work and must never decide operational success. The fold is the correctness authority — the open-day incremental path is only a preview of it.",
       },
       {
         title: "Daily store operations lifecycle edits",

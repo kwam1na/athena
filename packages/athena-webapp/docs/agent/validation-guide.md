@@ -44,19 +44,19 @@ Run:
 
 Run this for changed browser-facing TypeScript or TSX files so introduced ESLint failures are caught before PR handoff.
 
-## Reporting fact, valuation, projection, and activation edits
+## Reporting fact ledger, day fold, and read-model edits
 
-Touched surfaces: `convex/reporting`, `convex/schemas/reporting`, `shared/reportingContract.ts`
+Touched surfaces: `convex/reports`, `convex/schemas/reports`, `convex/inventoryLedger`, `convex/storeTime`, `shared/reportsContract.ts`
 
 Run:
 
-- `bun run --filter '@athena/webapp' test -- convex/reporting`
+- `bun run --filter '@athena/webapp' test -- convex/reports`
 - `bun run --filter '@athena/webapp' audit:convex`
 - `bun run --filter '@athena/webapp' lint:convex:changed`
 - `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
 - `bun run --filter '@athena/webapp' build`
 
-Use this for reporting contracts, source adapters, canonical facts, valuation, projections, maintenance, access, public reads, health, or activation. Pair it with the owning source-domain scenario when a POS, storefront, service, payment, inventory, procurement, or Daily Close command emits new evidence. Source state and inventory effects remain atomic with the command; reporting projections remain replayable asynchronous work and must not decide operational success.
+Use this for the reporting contract, fact ingestion, the day fold, the sweeper and its read models, custom ranges, reseed, or source-truth verification. Pair it with the owning source-domain scenario when a POS, storefront, service, payment, inventory, or Daily Close command emits new facts. Source state and inventory effects remain atomic with the command; the fold is replayable asynchronous work and must never decide operational success. The fold is the correctness authority — the open-day incremental path is only a preview of it.
 
 ## Daily store operations lifecycle edits
 
