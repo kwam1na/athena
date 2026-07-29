@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ReportOverviewData } from "~/shared/reportsContract";
@@ -65,31 +66,66 @@ const fixture: ReportOverviewData = {
 };
 
 describe("ReportsOverviewView", () => {
-  it("renders all KPI and trust values from the overview fixture", () => {
+  it("shows the selected window's KPIs and the trust strip", async () => {
+    const user = userEvent.setup();
     useQuery.mockReturnValue(fixture);
     render(<ReportsOverviewView />);
 
-    // KPI cards: net sales for each snapshot.
-    expect(screen.getByText("$90")).toBeInTheDocument(); // today net sales
-    expect(screen.getByText("$400")).toBeInTheDocument(); // week to date net sales
-    expect(screen.getByText("$2,500")).toBeInTheDocument(); // trailing 30 net sales
+    // Today is the default window: one set of metrics, not all three at once.
+    expect(screen.getByText("$90")).toBeInTheDocument();
+    expect(screen.queryByText("$400")).not.toBeInTheDocument();
+    expect(screen.queryByText("$2,500")).not.toBeInTheDocument();
 
-    // Comparison chip: +12.5% (1250 bp).
-    expect(screen.getByText("+12.5%")).toBeInTheDocument();
-    // Missing comparison renders "—", not a blank or throw.
-    const dashes = screen.getAllByText("—");
-    expect(dashes.length).toBeGreaterThan(0);
-
-    // Trust strip.
+    // Trust strip is window-independent.
     expect(screen.getByTestId("report-trust-strip")).toHaveTextContent("25");
     expect(screen.getByTestId("report-trust-strip")).toHaveTextContent("3");
     expect(screen.getByTestId("report-trust-strip")).toHaveTextContent("2");
     expect(screen.getByTestId("report-trust-strip")).toHaveTextContent("Jul 1, 2026");
+
+    await user.click(screen.getByRole("tab", { name: "Week to date" }));
+    expect(screen.getByText("$400")).toBeInTheDocument();
+    expect(screen.queryByText("$90")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Trailing 30 days" }));
+    expect(screen.getByText("$2,500")).toBeInTheDocument();
   });
 
-  it("renders an explicit 'profit unavailable (uncosted)' treatment for null gross profit, not a bare dash", () => {
+  it("states the prior-week comparison in words rather than a bare percentage", async () => {
+    const user = userEvent.setup();
     useQuery.mockReturnValue(fixture);
     render(<ReportsOverviewView />);
+
+    await user.click(screen.getByRole("tab", { name: "Week to date" }));
+
+    // 400 vs prior week 350 => +14%, rendered with the prior-window named.
+    // Both comparable metrics (net sales, units sold) carry it.
+    expect(screen.getAllByText(/prior week/i).length).toBeGreaterThan(0);
+  });
+
+  it("names an empty prior window instead of rendering -100%", async () => {
+    const user = userEvent.setup();
+    useQuery.mockReturnValue({
+      ...fixture,
+      weekToDate: snapshot({ dayCount: 1, netSalesMinor: 0, unitsSold: 0 }),
+      priorWeek: snapshot({ dayCount: 7, netSalesMinor: 0, unitsSold: 0 }),
+    });
+    render(<ReportsOverviewView />);
+
+    await user.click(screen.getByRole("tab", { name: "Week to date" }));
+
+    expect(
+      screen.getAllByText(/No activity for prior week/i).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText("-100.0%")).not.toBeInTheDocument();
+  });
+
+  it("renders an explicit 'profit unavailable (uncosted)' treatment for null gross profit, not a bare dash", async () => {
+    const user = userEvent.setup();
+    useQuery.mockReturnValue(fixture);
+    render(<ReportsOverviewView />);
+
+    // trailing30 is the snapshot with a null gross profit.
+    await user.click(screen.getByRole("tab", { name: "Trailing 30 days" }));
 
     expect(screen.getByText("profit unavailable (uncosted)")).toBeInTheDocument();
   });

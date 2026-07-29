@@ -1,15 +1,42 @@
 import { useQuery } from "convex/react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useStableReportQuery } from "./useStableReportQuery";
-import { cn } from "@/lib/utils";
+import { useState } from "react";
+
 import { EmptyState } from "@/components/states/empty/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
+import { cn } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
-import { formatBasisPoints } from "./reportFormat";
-import { ReportComparisonChips } from "./ReportComparisonChips";
-import { ReportPeriodCard } from "./ReportPeriodCard";
+import type { ReportOverviewData } from "~/shared/reportsContract";
+import { ReportPeriodMetrics } from "./ReportPeriodMetrics";
 import { ReportTrendChart } from "./ReportTrendChart";
 import { ReportTrustStrip } from "./ReportTrustStrip";
+import { useStableReportQuery } from "./useStableReportQuery";
+
+const OVERVIEW_WINDOWS = [
+  { label: "Today", value: "today" },
+  { label: "Week to date", value: "weekToDate" },
+  { label: "Trailing 30 days", value: "trailing30" },
+] as const;
+
+type OverviewWindow = (typeof OVERVIEW_WINDOWS)[number]["value"];
+
+/**
+ * Prior-window values for the selected window. Only week-to-date has a
+ * like-for-like predecessor in the payload; today and trailing-30 show
+ * settlement context instead of an invented comparison.
+ */
+function comparisonFor(
+  overview: ReportOverviewData,
+  window: OverviewWindow,
+): { netSalesMinor?: number; unitsSold?: number } | undefined {
+  if (window !== "weekToDate") return undefined;
+
+  return {
+    netSalesMinor: overview.priorWeek.netSalesMinor,
+    unitsSold: overview.priorWeek.unitsSold,
+  };
+}
 
 /**
  * Overview tab. Subscribes to `reports.queries.getOverview` ONLY — one
@@ -17,6 +44,7 @@ import { ReportTrustStrip } from "./ReportTrustStrip";
  */
 export function ReportsOverviewView() {
   const { activeStore } = useGetActiveStore();
+  const [selectedWindow, setSelectedWindow] = useState<OverviewWindow>("today");
   const {
     data: overview,
     isInitialLoad,
@@ -31,14 +59,16 @@ export function ReportsOverviewView() {
   if (activeStore === null || isInitialLoad || overview === undefined) {
     return (
       <div
+        aria-label="Loading report overview"
         className="space-y-layout-xl md:space-y-layout-2xl"
         role="status"
-        aria-label="Loading report overview"
       >
-        <div className="grid grid-cols-1 gap-layout-md lg:grid-cols-3">
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-9 w-72" />
+        <div className="grid gap-layout-md [grid-template-columns:repeat(auto-fit,minmax(min(14rem,100%),1fr))] md:gap-layout-lg">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
         </div>
         <Skeleton className="h-64 w-full" />
       </div>
@@ -48,13 +78,16 @@ export function ReportsOverviewView() {
   if (overview === null) {
     return (
       <EmptyState
-        title="No report data yet"
         description="This store has no reporting data materialized yet. Check back once activity has been recorded."
+        title="No report data yet"
       />
     );
   }
 
   const { currency } = overview;
+  const activeWindow = OVERVIEW_WINDOWS.find(
+    (option) => option.value === selectedWindow,
+  )!;
 
   return (
     <section
@@ -67,25 +100,38 @@ export function ReportsOverviewView() {
       data-refreshing={isRefreshing ? "true" : undefined}
       data-testid="reports-overview"
     >
-      <ReportComparisonChips comparisons={overview.comparisons} />
-      <div className="grid grid-cols-1 gap-layout-lg lg:grid-cols-3">
-        <ReportPeriodCard
+      <div className="space-y-layout-md">
+        <Tabs
+          onValueChange={(next) => setSelectedWindow(next as OverviewWindow)}
+          value={selectedWindow}
+        >
+          <TabsList
+            aria-label="Report period"
+            className="h-auto flex-wrap justify-start gap-1 border border-border bg-surface-raised p-1 text-muted-foreground shadow-surface"
+            size="sm"
+          >
+            {OVERVIEW_WINDOWS.map((option) => (
+              <TabsTrigger
+                className="min-h-8 px-3 data-[state=active]:bg-primary-soft data-[state=active]:text-primary data-[state=active]:shadow-none"
+                key={option.value}
+                size="sm"
+                value={option.value}
+              >
+                {option.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+
+        <ReportPeriodMetrics
+          comparison={comparisonFor(overview, selectedWindow)}
           currency={currency}
-          snapshot={overview.today}
-          title="Today"
-        />
-        <ReportPeriodCard
-          comparisonHelper={`${formatBasisPoints(overview.comparisons.netSalesVsPriorWeekBp)} vs prior week`}
-          currency={currency}
-          snapshot={overview.weekToDate}
-          title="Week to date"
-        />
-        <ReportPeriodCard
-          currency={currency}
-          snapshot={overview.trailing30}
-          title="Trailing 30 days"
+          periodLabel={activeWindow.label}
+          priorWindowLabel="prior week"
+          snapshot={overview[selectedWindow]}
         />
       </div>
+
       <ReportTrendChart currency={currency} dailyTrend={overview.dailyTrend} />
       <ReportTrustStrip trust={overview.trust} />
     </section>

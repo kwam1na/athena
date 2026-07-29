@@ -5,7 +5,7 @@ import { formatOperatingDate } from "./reportFormat";
 /**
  * Trust strip: reconciled/provisional/amended day counts and the oldest
  * unreconciled date, straight from `ReportOverviewData["trust"]` — same
- * metric-tile grid as `ReportPeriodCard`/`StorePulseSummaryView`.
+ * metric-tile grid as `ReportPeriodMetrics`/`StorePulseSummaryView`.
  */
 export function ReportTrustStrip({ trust }: { trust: ReportTrustSummary }) {
   return (
