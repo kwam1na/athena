@@ -162,13 +162,10 @@ export function ReportDaysPanel({
 
                 return (
                   <TableRow
-                    // Only days with something to answer for are tinted, so a
-                    // long range stays scannable: quiet by default, marked
-                    // where the folded sales disagree with the accepted close
-                    // or the day moved after sign-off.
-                    className={cn(
-                      settlement.needsAttention && "bg-warning/5 hover:bg-warning/10",
-                    )}
+                    // `data-attention` marks days whose folded sales disagree
+                    // with the accepted close, or that moved after sign-off.
+                    // The signal is carried by the toned amount and caption in
+                    // the settlement cell, not by a row treatment.
                     data-attention={settlement.needsAttention ? "true" : undefined}
                     data-status={day.status}
                     key={day.operatingDate}
