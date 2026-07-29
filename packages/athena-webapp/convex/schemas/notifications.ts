@@ -40,6 +40,10 @@ export const notificationIntentSchema = v.object({
   // persistently unreservable intent be terminalized rather than block the
   // pending queue forever.
   sweepAttempts: v.optional(v.number()),
+  // Set when an abandoned intent is requeued for another attempt. The
+  // abandonment clock runs from max(emittedAt, requeuedAt) so recovery does
+  // not rewrite when the underlying domain moment actually occurred.
+  requeuedAt: v.optional(v.number()),
 });
 
 // Who receives which category over which channel. A row with no storeId

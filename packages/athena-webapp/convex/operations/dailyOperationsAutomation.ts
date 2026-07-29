@@ -2140,7 +2140,10 @@ export async function emitDailyManagerReportNotificationsForEodAutomationWithCtx
     // Cutover guard: a store-day the pre-rail implementation already alerted
     // has a legacy automationNotificationDelivery row but no intent, and this
     // automation re-runs hourly — so without this check the first post-deploy
-    // run would send a duplicate "Action required" email.
+    // run would send a duplicate "Action required" email. Safe to delete, with
+    // wasActionRequiredNotifiedBeforeRail, once no pre-deploy store-days remain
+    // open; operatingDate strings are never reused, so it can only ever match
+    // store-days from before the cutover.
     if (status === "skipped" || status === "failed") {
       const alreadyNotified: boolean = await ctx.runQuery(
         internal.operations.dailyManagerReportEmail

@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { internalMutation } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
-import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
+
 import {
   INTENT_ABANDON_AFTER_MS,
   MAX_DELIVERY_ATTEMPTS,
@@ -58,21 +58,22 @@ export const sweep = internalMutation({
           "notificationIntent",
           delivery.intentId,
         );
-        await recordOperationalEventWithCtx(ctx, {
-          storeId: delivery.storeId,
-          organizationId: delivery.organizationId,
-          eventType: "notification_delivery_failed",
-          subjectType: intent?.subjectType ?? "notificationIntent",
-          subjectId: intent?.subjectId ?? String(delivery.intentId),
-          actorType: "automation",
-          message: `Notification ${delivery.kind} could not be delivered after ${delivery.attemptCount} attempts.`,
-          metadata: {
-            notificationKind: delivery.kind,
-            deliveryId: String(delivery._id),
-            errorCode: "stale_delivery_lease",
-          },
-          metadataDedupeKeys: ["deliveryId"],
-        });
+        // Same subject key shape as completeDelivery's terminal path, so a
+        // delivery that fails once does not produce two differently-keyed
+        // events depending on which path noticed. Scheduled rather than
+        // inline: see recordNotificationFailureEvent.
+        if (intent) {
+          await ctx.scheduler.runAfter(
+            0,
+            internal.notifications.dispatch.recordNotificationFailureEvent,
+            {
+              intentId: intent._id,
+              errorCode: "stale_delivery_lease",
+              message: `Notification ${delivery.kind} could not be delivered after ${delivery.attemptCount} attempts.`,
+              subjectKey: String(delivery._id),
+            },
+          );
+        }
         terminaled += 1;
       } else {
         await ctx.db.patch("notificationDelivery", delivery._id, {
@@ -114,26 +115,28 @@ export const sweep = internalMutation({
       // abandonment is decided by age so the threshold does not shift with
       // the environment's sweep cadence.
       await ctx.db.patch("notificationIntent", intent._id, { sweepAttempts });
-      if (now - intent.emittedAt > INTENT_ABANDON_AFTER_MS) {
+      const eligibleFrom = Math.max(
+        intent.emittedAt,
+        intent.requeuedAt ?? 0,
+      );
+      if (now - eligibleFrom > INTENT_ABANDON_AFTER_MS) {
         await ctx.db.patch("notificationIntent", intent._id, {
           status: "suppressed",
           suppressedReason: "dispatch_unrecoverable",
         });
-        await recordOperationalEventWithCtx(ctx, {
-          storeId: intent.storeId,
-          organizationId: intent.organizationId,
-          eventType: "notification_delivery_failed",
-          subjectType: intent.subjectType,
-          subjectId: intent.subjectId,
-          actorType: "automation",
-          message: `Notification ${intent.kind} could not be dispatched within ${Math.round(INTENT_ABANDON_AFTER_MS / 3_600_000)}h (${sweepAttempts} attempts); intent abandoned. Requeue with notifications.sweeper.requeueAbandonedIntent once the cause is fixed.`,
-          metadata: {
-            notificationKind: intent.kind,
-            notificationSubjectKey: String(intent._id),
+        await ctx.scheduler.runAfter(
+          0,
+          internal.notifications.dispatch.recordNotificationFailureEvent,
+          {
+            intentId: intent._id,
             errorCode: "dispatch_unrecoverable",
+            message: `Notification ${intent.kind} could not be dispatched within ${Math.round(INTENT_ABANDON_AFTER_MS / 3_600_000)}h (${sweepAttempts} attempts); intent abandoned. Requeue with notifications.sweeper.requeueAbandonedIntent once the cause is fixed.`,
+            // Keyed on the attempt generation, not just the intent: a requeue
+            // starts a new generation, so a second abandonment after a failed
+            // recovery records its own event instead of being deduped away.
+            subjectKey: `${intent._id}:abandoned:${eligibleFrom}`,
           },
-          metadataDedupeKeys: ["notificationSubjectKey"],
-        });
+        );
         intentsAbandoned += 1;
         continue;
       }
@@ -182,7 +185,10 @@ export const requeueAbandonedIntent = internalMutation({
       status: "pending",
       suppressedReason: undefined,
       sweepAttempts: 0,
-      emittedAt: Date.now(),
+      // emittedAt is preserved: it is the audit record of when the domain
+      // moment happened. requeuedAt restarts the abandonment clock without
+      // rewriting that history.
+      requeuedAt: Date.now(),
     });
     await ctx.scheduler.runAfter(
       0,

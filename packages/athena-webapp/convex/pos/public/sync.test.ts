@@ -1351,6 +1351,79 @@ describe("register closeout notification intents", () => {
     expect(await listIntents(t)).toHaveLength(0);
   });
 
+  it("finds the variance review behind a page of unrelated session approvals", async () => {
+    // Regression: the lookup used to page the session's approvals with a
+    // single bounded .take() on the index prefix and filter for
+    // "variance_review" in code. A busy register also accumulates void, item
+    // adjustment, and payment-method-correction approvals on the same
+    // registerSessionId, and every one of those requestTypes sorts BEFORE
+    // "variance_review" in the (registerSessionId, status, requestType)
+    // index — so enough of them push the variance review out of the window,
+    // the lookup returns undefined, and the closeout falls through to the
+    // all-clear branch, reporting "register closed" for a short drawer.
+    const t = convexTest(schema, modules);
+    const world = await seedCloseoutWorld(t);
+    await t.run(async (ctx) => {
+      // Sorts strictly before "variance_review" within each status group.
+      const noisyRequestTypes = [
+        "payment_method_correction",
+        "pos_item_adjustment",
+        "pos_transaction_void",
+      ];
+      // All in the "approved" group, which sorts before the review's own
+      // status, so these fill any bounded page ahead of it deterministically.
+      for (let index = 0; index < 26; index += 1) {
+        await ctx.db.insert("approvalRequest", {
+          storeId: world.storeId,
+          organizationId: world.organizationId,
+          requestType: noisyRequestTypes[index % noisyRequestTypes.length],
+          subjectType: "posTransaction",
+          subjectId: `transaction-${index}`,
+          status: "approved",
+          registerSessionId: world.registerSessionId,
+          createdAt: 2,
+        });
+      }
+      // Same-session noise in the other resolved statuses too.
+      for (const status of ["cancelled", "rejected"] as const) {
+        for (const requestType of noisyRequestTypes) {
+          await ctx.db.insert("approvalRequest", {
+            storeId: world.storeId,
+            organizationId: world.organizationId,
+            requestType,
+            subjectType: "posTransaction",
+            subjectId: `transaction-${status}-${requestType}`,
+            status,
+            registerSessionId: world.registerSessionId,
+            createdAt: 2,
+          });
+        }
+      }
+      // The drawer was short by GHS 42.18 and a manager already resolved it.
+      await ctx.db.insert("approvalRequest", {
+        storeId: world.storeId,
+        organizationId: world.organizationId,
+        requestType: "variance_review",
+        subjectType: "registerSession",
+        subjectId: String(world.registerSessionId),
+        status: "approved",
+        registerSessionId: world.registerSessionId,
+        createdAt: 2,
+        metadata: { localEventId: "event-closeout-1", variance: -4218 },
+      });
+    });
+    mockIngestWithCloseoutMapping(world, "event-closeout-1");
+
+    await uploadCloseout(t, world, "event-closeout-1");
+
+    const intents = await listIntents(t);
+    expect(
+      intents.filter((intent) => intent.kind === "register.closeout_match"),
+    ).toHaveLength(0);
+    // The review is resolved, so nothing at all should be emitted.
+    expect(intents).toHaveLength(0);
+  });
+
   it("emits nothing when both pre-rail cutover markers are present", async () => {
     const t = convexTest(schema, modules);
     const world = await seedCloseoutWorld(t);

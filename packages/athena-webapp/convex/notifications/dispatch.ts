@@ -404,6 +404,32 @@ async function recordTerminalDeliveryFailureEvent(
   });
 }
 
+// Recording an operational event scans the subject's full event history, so
+// a caller that needs many of them (the sweeper, during a mass failure) must
+// schedule these individually rather than doing them inline — 25 stale leases
+// plus 25 abandoned intents in one transaction is enough scanning to blow the
+// read limit and roll back the entire sweep, permanently disabling the rail's
+// only safety net.
+export const recordNotificationFailureEvent = internalMutation({
+  args: {
+    intentId: v.id("notificationIntent"),
+    errorCode: v.string(),
+    message: v.string(),
+    subjectKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const intent = await ctx.db.get("notificationIntent", args.intentId);
+    if (!intent) return null;
+    await recordNotificationFailureEventWithCtx(ctx, {
+      intent,
+      errorCode: args.errorCode,
+      message: args.message,
+      subjectKey: args.subjectKey,
+    });
+    return null;
+  },
+});
+
 export const markIntentSuppressed = internalMutation({
   args: {
     intentId: v.id("notificationIntent"),

@@ -97,12 +97,40 @@ delivery mechanics.
   landed. The sweeper runs its three phases (stale leases, due retries, stale
   pending intents) against independent per-phase budgets, so a backlog in one
   phase can't starve the others, and surfaces a backlog flag per phase in its
-  return value when a phase saturates its cap. A pending intent that the
-  sweeper picks up repeatedly without it ever reserving (corrupt row,
-  unresolvable reference) is abandoned once it has been picked up more than 5 times
-  (`suppressedReason: "dispatch_unrecoverable"`) with an operational event,
-  instead of sitting at the head of the queue forever and consuming the
-  sweeper's budget on every tick.
+  return value when a phase saturates its cap. A pending intent that never
+  reserves (corrupt row, unresolvable reference) is abandoned once it has sat
+  unreserved for longer than `INTENT_ABANDON_AFTER_MS` (6h) —
+  wall-clock from the later of `emittedAt`/`requeuedAt`, not a pickup count,
+  because the sweep cadence differs per environment and a pickup count would
+  give each environment a different grace period. `sweepAttempts` still
+  increments on every sweep pass but is a diagnostic counter only; it no
+  longer decides abandonment. Abandonment sets
+  `suppressedReason: "dispatch_unrecoverable"` and records an operational
+  event, instead of sitting at the head of the queue forever and consuming
+  the sweeper's budget on every tick.
+- **Abandonment recovery** (`requeueAbandonedIntent` in `sweeper.ts`):
+  abandonment permanently occupies the intent's dedupeKey, so `emitNotificationWithCtx`
+  cannot recreate the same domain moment — an operator has to explicitly
+  requeue once the cause (bad deploy, unregistered kind) is fixed. This is a
+  dashboard-only internalMutation with no internal callers, scoped to intents
+  suppressed with reason `dispatch_unrecoverable`. It resets the intent to
+  `pending`, clears `suppressedReason`, zeroes `sweepAttempts`, and sets
+  `requeuedAt` to restart the abandonment clock — while preserving `emittedAt`
+  as the audit record of when the domain moment actually happened — then
+  schedules a fresh dispatch.
+- **Suppression tracing is asymmetric by design**: every intent-level
+  suppression (`no_recipients`, `no_deliverable_channel`, `unknown_kind`,
+  `subscription_cap_exceeded`, and any `markIntentSuppressed` reason including
+  `payload_unavailable`) records a `notification_delivery_failed` operational
+  event, because it means the whole notification silently died. A delivery
+  that completes as `suppressed` (a stranded recipient, a superseded
+  duplicate) deliberately does not get its own event — it is not the last
+  word on the intent. Sweeper-originated events go through a *scheduled*
+  mutation (`recordNotificationFailureEvent` in `dispatch.ts`) rather than
+  being written inline, because recording one scans the subject's full event
+  history, and a sweep that hits its 25-stale-lease and 25-abandoned-intent
+  caps in the same transaction could blow the read limit and roll back the
+  entire sweep — disabling the rail's only safety net.
 - **Transport owns the environment gate** (`transport.ts`): prod sends
   normally; non-prod redirects to `NOTIFICATIONS_DEV_RECIPIENT` when set, or
   otherwise records the delivery with status `suppressed` (never a false
@@ -111,13 +139,22 @@ delivery mechanics.
 - **Terminal failures are operational events**: a delivery that permanently
   fails records a `notification_delivery_failed` operational event, because an
   admin alert that could not be sent is itself an operational moment.
-- **Cutover guards in POS sync** (`convex/pos/public/sync.ts`): the legacy
-  marker fields `varianceNotificationScheduledAt` and
-  `closeoutNotificationLocalEventId` are no longer written, but are still
-  *read* for one release, to avoid re-notifying closeouts that were already
-  notified by the pre-rail implementation and therefore have no
-  `notificationIntent` row. These reads are safe to delete once no unnotified
-  pre-deploy closeout remains in the data.
+- **Cutover guards, three lanes**: the legacy marker fields
+  `varianceNotificationScheduledAt` and `closeoutNotificationLocalEventId` in
+  `convex/pos/public/sync.ts` are no longer written, but are still *read* for
+  one release, to avoid re-notifying closeouts that were already notified by
+  the pre-rail implementation and therefore have no `notificationIntent` row
+  to dedupe against. A third lane guards the EOD action-required path:
+  `dailyOperationsAutomation.ts` calls `wasActionRequiredNotifiedBeforeRail`
+  (an `internalQuery` in `dailyManagerReportEmail.ts`) to check the legacy
+  `automationNotificationDelivery` ledger before emitting, because that
+  automation re-runs hourly and would otherwise re-alert a store-day the
+  pre-rail path already sent. EOD `applied`/`prepared` sends are deliberately
+  left unguarded — the pre-rail implementation never ledgered those outcomes,
+  so there is nothing to cut over. All three lanes are safe to delete once no
+  unnotified pre-deploy moment remains in the data; the EOD lane in particular
+  can only ever match pre-cutover store-days, since `operatingDate` strings
+  are never reused.
 
 Ported callers: POS terminal health (heartbeat command), register closeout
 variance/match (POS sync ingestion), EOD daily manager reports (daily
@@ -139,6 +176,15 @@ stubbed pending an inbox UI.
   cleanly.
 - **Put environment gates in the transport, not call sites** — otherwise
   staging never exercises the pipeline and gate logic multiplies per flow.
+- **A bounded page over a filtered query can hide the row you're looking
+  for.** The register-closeout variance lookup in `sync.ts` queries once per
+  approval status on the full `(registerSessionId, status, requestType)`
+  index prefix rather than paging a session's approvals and filtering in
+  code: a session accrues void, adjustment, and correction approvals that can
+  sort ahead of `variance_review` in an unfiltered page, so any bounded page
+  of "all approvals for this session" could push the variance review out of
+  the window and resurrect a false "register closed" all-clear for a drawer
+  that was actually short.
 - **A fault classifier needs two failure shapes, not one**: collapsing
   "temporarily can't render" and "permanently not sendable" into a single
   suppress path is the easy version to ship, but it silences alerts on

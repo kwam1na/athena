@@ -304,20 +304,31 @@ async function scheduleRegisterCloseoutNotifications(
     }
 
     const registerSessionId = mapping.cloudId as Id<"registerSession">;
-    // Deliberately NOT scoped to status "pending": once a manager resolves the
+    // Every status is checked, not just "pending": once a manager resolves the
     // review, a pending-only lookup finds nothing and a replayed sync batch
     // would fall through to the all-clear match branch below, reporting
-    // "register closed" for a drawer that was short.
-    const varianceReviews = await ctx.db
-      .query("approvalRequest")
-      .withIndex("by_registerSessionId_status_requestType", (q) =>
-        q.eq("registerSessionId", registerSessionId),
+    // "register closed" for a drawer that was short. Each status is queried on
+    // the full index prefix rather than paging the session's approvals and
+    // filtering in code — a session accumulates adjustment, void, and
+    // correction approvals too, and any bounded page of those could push the
+    // variance review out of the window and resurrect that bug.
+    const varianceReviews = (
+      await Promise.all(
+        APPROVAL_REQUEST_STATUSES.map((status) =>
+          ctx.db
+            .query("approvalRequest")
+            .withIndex("by_registerSessionId_status_requestType", (q) =>
+              q
+                .eq("registerSessionId", registerSessionId)
+                .eq("status", status)
+                .eq("requestType", "variance_review"),
+            )
+            .take(MAX_VARIANCE_REVIEWS_PER_CLOSEOUT),
+        ),
       )
-      .take(MAX_VARIANCE_REVIEWS_PER_CLOSEOUT);
-    const approvalRequest = varianceReviews.find(
-      (request) =>
-        request.requestType === "variance_review" &&
-        isVarianceReviewForCloseout(request, mapping.localEventId),
+    ).flat();
+    const approvalRequest = varianceReviews.find((request) =>
+      isVarianceReviewForCloseout(request, mapping.localEventId),
     );
 
     // A closeout under variance review is a variance notification and never
@@ -367,7 +378,16 @@ async function scheduleRegisterCloseoutNotifications(
   }
 }
 
-const MAX_VARIANCE_REVIEWS_PER_CLOSEOUT = 20;
+// Per (session, status) — a single closeout has at most a handful of variance
+// reviews in any one status, so this bound is never reached in practice.
+const MAX_VARIANCE_REVIEWS_PER_CLOSEOUT = 10;
+
+const APPROVAL_REQUEST_STATUSES = [
+  "pending",
+  "approved",
+  "rejected",
+  "cancelled",
+] as const;
 
 function isVarianceReviewForCloseout(
   approvalRequest: Doc<"approvalRequest">,

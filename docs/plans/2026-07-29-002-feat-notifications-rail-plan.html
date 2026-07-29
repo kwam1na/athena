@@ -83,7 +83,7 @@
       <li><strong>R6</strong> Render at send time from fresh data; unsendable payloads suppress.</li>
       <li><strong>R7</strong> Environment gate lives in transport; full pipeline runs everywhere.</li>
       <li><strong>R8</strong> Terminal delivery failure records an <code>operationalEvent</code>.</li>
-      <li><strong>R9</strong> Three flows ported; legacy markers, admin loops, ledger writers retired.</li>
+      <li><strong>R9</strong> Three flows ported; legacy markers, admin loops, ledger writers retired. Cutover guards turned out to be three lanes, not two: POS closeout markers (U7) plus an EOD action-required read of the legacy <code>automationNotificationDelivery</code> ledger (U8); EOD applied/prepared stays unguarded.</li>
       <li><strong>R10</strong> In-app channel schema-supported but stubbed.</li>
     </ul>
   </section>
@@ -117,7 +117,7 @@
   <section id="design">
     <h2>Design Shape</h2>
     <p class="meta">Directional guidance for review, not implementation specification.</p>
-    <p><code>emit(kind, subject, payload)</code> inside the domain mutation &rarr; intent row (no-op on dedupeKey hit) &rarr; unconditional <code>runAfter(0)</code> dispatch &rarr; reserve mutation leases one delivery per recipient &times; channel (lease duration scaled to recipient count) &rarr; registry <code>prepareEmail</code> loads fresh payload and renders the existing template (null &rArr; suppress; throw &rArr; retry with backoff) &rarr; transport sends with <code>Idempotency-Key: deliveryId</code> and 15s timeout &rarr; lease-guarded completion (sent / retryable with backoff / terminal + operational event / suppressed). A sweeper (every 5 minutes in prod, 60 minutes elsewhere) recovers expired leases, due retries, and undispatched intents, with independent per-phase budgets and abandonment of intents that never reserve after 5 pickups.</p>
+    <p><code>emit(kind, subject, payload)</code> inside the domain mutation &rarr; intent row (no-op on dedupeKey hit) &rarr; unconditional <code>runAfter(0)</code> dispatch &rarr; reserve mutation leases one delivery per recipient &times; channel (lease duration scaled to recipient count) &rarr; registry <code>prepareEmail</code> loads fresh payload and renders the existing template (null &rArr; suppress; throw &rArr; retry with backoff) &rarr; transport sends with <code>Idempotency-Key: deliveryId</code> and 15s timeout &rarr; lease-guarded completion (sent / retryable with backoff / terminal + operational event / suppressed). A sweeper (every 5 minutes in prod, 60 minutes elsewhere) recovers expired leases, due retries, and undispatched intents, with independent per-phase budgets and abandonment of an intent once it has sat unreserved for longer than <code>INTENT_ABANDON_AFTER_MS</code> (6h, wall-clock &mdash; not a pickup count); <code>requeueAbandonedIntent</code> is the dashboard-only recovery path.</p>
     <p>New module: <code>packages/athena-webapp/convex/notifications/</code> &mdash; <code>deliveryPolicy</code> (pure), <code>registry</code> (4 kinds), <code>transport</code>, <code>emit</code>, <code>dispatch</code>, <code>sweeper</code>, <code>seed</code>; tables in <code>convex/schemas/notifications.ts</code>.</p>
   </section>
 

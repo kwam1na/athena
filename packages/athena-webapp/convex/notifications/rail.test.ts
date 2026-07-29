@@ -512,6 +512,19 @@ describe("reserveIntentDeliveries", () => {
       expect(stranded?.nextAttemptAt).toBeUndefined();
       expect(stranded?.terminalAt).toBeDefined();
       expect(await listDeliveries(t)).toHaveLength(1);
+
+      // A dropped alert must leave a trace on the subject's timeline, the
+      // same as no_recipients and unknown_kind. Recorded inline by reserve,
+      // so no scheduled-function flush is needed.
+      const failureEvents = (await listOperationalEvents(t)).filter(
+        (event) => event.eventType === "notification_delivery_failed",
+      );
+      expect(failureEvents).toHaveLength(1);
+      expect(failureEvents[0]?.metadata).toMatchObject({
+        notificationKind: "pos.terminal_health",
+        notificationSubjectKey: `${intentId}:no_deliverable_channel`,
+        errorCode: "no_deliverable_channel",
+      });
     } finally {
       channelOverrides.delete("pos.terminal_health");
     }
@@ -1418,13 +1431,16 @@ describe("sweeper", () => {
       terminalAt: NOW,
     });
 
+    // The failure event is recorded by a scheduled mutation so the sweep
+    // transaction stays small during a mass failure.
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
     const events = await listOperationalEvents(t);
     const failureEvents = events.filter(
       (event) => event.eventType === "notification_delivery_failed",
     );
     expect(failureEvents).toHaveLength(1);
     expect(failureEvents[0]?.metadata).toMatchObject({
-      deliveryId: String(deliveryId),
+      notificationSubjectKey: String(deliveryId),
       errorCode: "stale_delivery_lease",
     });
   });
@@ -1625,13 +1641,13 @@ describe("sweeper", () => {
       suppressedReason: "dispatch_unrecoverable",
     });
 
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
     const failureEvents = (await listOperationalEvents(t)).filter(
       (event) => event.eventType === "notification_delivery_failed",
     );
     expect(failureEvents).toHaveLength(1);
     expect(failureEvents[0]?.metadata).toMatchObject({
       notificationKind: "pos.terminal_health",
-      notificationSubjectKey: String(intentId),
       errorCode: "dispatch_unrecoverable",
     });
 
@@ -1688,12 +1704,15 @@ describe("sweeper", () => {
     expect(requeued).toMatchObject({
       status: "pending",
       sweepAttempts: 0,
-      emittedAt: requeueAt,
+      requeuedAt: requeueAt,
     });
+    // emittedAt is the audit record of when the domain moment happened and
+    // must survive recovery; requeuedAt is what restarts the clock.
+    expect(requeued?.emittedAt).toBe(NOW - INTENT_ABANDON_AFTER_MS - 120_000);
     expect(requeued?.suppressedReason).toBeUndefined();
 
     // Back in the pending queue: a later sweep dispatches it rather than
-    // abandoning it again on its refreshed emittedAt.
+    // abandoning it again on its restarted clock.
     const laterSweepAt = requeueAt + 120_000;
     expect(
       await t.mutation(internal.notifications.sweeper.sweep, {
@@ -1703,6 +1722,147 @@ describe("sweeper", () => {
     expect(
       await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
     ).toMatchObject({ sweepAttempts: 1 });
+  });
+
+  it("writes no operational event inline, keeping the sweep transaction small", async () => {
+    // Recording an operational event scans the subject's full event history.
+    // At the sweep's budget (25 stale leases plus 25 abandoned intents) doing
+    // that inline is enough scanning to blow the read limit and roll back the
+    // entire sweep, disabling the rail's only safety net. Both failure paths
+    // must therefore schedule their events instead of writing them.
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const t = convexTest(schema, modules);
+    const { fixture, terminalId } = await seedSweeperFixture(t);
+    const dispatchedIntentId = await t.run((ctx) =>
+      insertTerminalHealthIntent(ctx, fixture, terminalId, {
+        status: "dispatched",
+        dedupeKey: "intent:dispatched",
+      }),
+    );
+    // Path 1: an expired lease at the attempt cap.
+    await t.run((ctx) =>
+      insertDelivery(ctx, fixture, dispatchedIntentId, {
+        attemptCount: MAX_DELIVERY_ATTEMPTS,
+        leaseExpiresAt: NOW - 1,
+        dedupeKey: "delivery:capped",
+      }),
+    );
+    // Path 2: a pending intent past the abandonment window.
+    await t.run((ctx) =>
+      insertTerminalHealthIntent(ctx, fixture, terminalId, {
+        status: "pending",
+        emittedAt: NOW - INTENT_ABANDON_AFTER_MS - 120_000,
+        dedupeKey: "intent:abandoned",
+      }),
+    );
+
+    const result = await t.mutation(internal.notifications.sweeper.sweep, {
+      now: NOW,
+    });
+    expect(result).toMatchObject({ terminaled: 1, intentsAbandoned: 1 });
+
+    // Nothing written by the sweep transaction itself.
+    expect(await listOperationalEvents(t)).toHaveLength(0);
+
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    const failureEvents = (await listOperationalEvents(t)).filter(
+      (event) => event.eventType === "notification_delivery_failed",
+    );
+    expect(
+      failureEvents.map((event) => event.metadata?.errorCode).sort(),
+    ).toEqual(["dispatch_unrecoverable", "stale_delivery_lease"]);
+  });
+
+  it("gives a requeued intent a fresh abandonment window, not its original age", async () => {
+    // Abandonment uses max(emittedAt, requeuedAt). If it read emittedAt alone,
+    // a requeue would be pointless: the very next sweep would re-abandon an
+    // intent whose domain moment is older than the window before the fixed
+    // dispatch path ever got a chance to run.
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const t = convexTest(schema, modules);
+    const { fixture, terminalId } = await seedSweeperFixture(t);
+    const originalEmittedAt = NOW - INTENT_ABANDON_AFTER_MS * 3;
+    const intentId = await t.run((ctx) =>
+      insertTerminalHealthIntent(ctx, fixture, terminalId, {
+        status: "pending",
+        emittedAt: originalEmittedAt,
+        dedupeKey: "intent:requeued-fresh-window",
+      }),
+    );
+    expect(
+      await t.mutation(internal.notifications.sweeper.sweep, { now: NOW }),
+    ).toMatchObject({ intentsAbandoned: 1 });
+
+    const requeueAt = NOW + 60_000;
+    vi.setSystemTime(requeueAt);
+    expect(
+      await t.mutation(
+        internal.notifications.sweeper.requeueAbandonedIntent,
+        { intentId },
+      ),
+    ).toBe(true);
+
+    // Just inside the restarted clock, even though emittedAt is three windows
+    // old: the intent is dispatched again, not given up on.
+    const nearEdge = requeueAt + INTENT_ABANDON_AFTER_MS - 1;
+    expect(
+      await t.mutation(internal.notifications.sweeper.sweep, { now: nearEdge }),
+    ).toMatchObject({ dispatchesScheduled: 1, intentsAbandoned: 0 });
+    const intent = await t.run((ctx) =>
+      ctx.db.get("notificationIntent", intentId),
+    );
+    expect(intent).toMatchObject({ status: "pending" });
+    // The audit record of the domain moment is untouched by the recovery.
+    expect(intent?.emittedAt).toBe(originalEmittedAt);
+  });
+
+  it("re-abandons a requeued intent once the requeue window itself elapses", async () => {
+    // The fresh window is a window, not an exemption: an intent that stays
+    // undeliverable after recovery must leave the pending queue again.
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const t = convexTest(schema, modules);
+    const { fixture, terminalId } = await seedSweeperFixture(t);
+    const intentId = await t.run((ctx) =>
+      insertTerminalHealthIntent(ctx, fixture, terminalId, {
+        status: "pending",
+        emittedAt: NOW - INTENT_ABANDON_AFTER_MS * 3,
+        dedupeKey: "intent:requeued-re-abandoned",
+      }),
+    );
+    await t.mutation(internal.notifications.sweeper.sweep, { now: NOW });
+
+    const requeueAt = NOW + 60_000;
+    vi.setSystemTime(requeueAt);
+    await t.mutation(internal.notifications.sweeper.requeueAbandonedIntent, {
+      intentId,
+    });
+
+    const pastEdge = requeueAt + INTENT_ABANDON_AFTER_MS + 1;
+    expect(
+      await t.mutation(internal.notifications.sweeper.sweep, { now: pastEdge }),
+    ).toMatchObject({ dispatchesScheduled: 0, intentsAbandoned: 1 });
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+    ).toMatchObject({
+      status: "suppressed",
+      suppressedReason: "dispatch_unrecoverable",
+    });
+
+    // The second abandonment is keyed on the requeue generation, so it records
+    // its own event rather than being deduped against the first one.
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    const failureEvents = (await listOperationalEvents(t)).filter(
+      (event) => event.eventType === "notification_delivery_failed",
+    );
+    expect(failureEvents).toHaveLength(2);
+    expect(
+      new Set(
+        failureEvents.map((event) => event.metadata?.notificationSubjectKey),
+      ).size,
+    ).toBe(2);
   });
 
   it("refuses to requeue an intent that was not abandoned", async () => {
