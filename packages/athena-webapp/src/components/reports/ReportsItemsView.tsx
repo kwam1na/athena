@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useStableReportQuery } from "./useStableReportQuery";
 import {
   Table,
   TableBody,
@@ -64,11 +65,17 @@ export function ReportsItemsView({
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const selectedDate = getLocalDateFromOperatingDate(periodDate);
 
-  const result = useQuery(
-    api.reports.queries.listPeriodSkus,
-    activeStore?._id
-      ? { storeId: activeStore._id, periodKey, sortBy, cursor }
-      : "skip",
+  const {
+    data: result,
+    isInitialLoad,
+    isRefreshing,
+  } = useStableReportQuery(
+    useQuery(
+      api.reports.queries.listPeriodSkus,
+      activeStore?._id
+        ? { storeId: activeStore._id, periodKey, sortBy, cursor }
+        : "skip",
+    ),
   );
 
   return (
@@ -145,13 +152,21 @@ export function ReportsItemsView({
         </div>
       </div>
 
-      {result === undefined ? (
+      {isInitialLoad || result === undefined ? (
         <Skeleton className="h-64 w-full" data-testid="reports-items-loading" />
       ) : result.rows.length === 0 ? (
         <EmptyState title="No SKU activity" description="No SKUs sold in this period." />
       ) : (
         <>
-          <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
+          <div
+            aria-busy={isRefreshing}
+            className={cn(
+              "overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface",
+              "transition-opacity duration-150 motion-reduce:transition-none",
+              isRefreshing && "opacity-60",
+            )}
+            data-refreshing={isRefreshing ? "true" : undefined}
+          >
             <Table>
               <TableHeader>
                 <TableRow>

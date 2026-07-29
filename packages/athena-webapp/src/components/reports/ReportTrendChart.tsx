@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import {
@@ -36,6 +37,14 @@ export function ReportTrendChart({
     ...point,
     label: formatOperatingDate(point.operatingDate),
   }));
+
+  // Remounts the Area whenever the plotted days change, so the CSS draw-in
+  // replays on a period switch instead of only on first paint — same replay
+  // key idea as `StorePulseTimeline`.
+  const chartAnimationKey = useMemo(
+    () => chartData.map((point) => point.operatingDate).join("|"),
+    [chartData],
+  );
 
   return (
     <section className="space-y-layout-sm">
@@ -126,10 +135,18 @@ export function ReportTrendChart({
               <Area
                 activeDot={{ r: 4 }}
                 dataKey="netSalesMinor"
+                data-replay-key={chartAnimationKey}
                 dot={false}
                 fill="url(#report-net-sales-fill)"
                 fillOpacity={1}
+                // Recharts' own animation is off: the draw-in is CSS on
+                // .report-trend-chart (see index.css), which respects
+                // prefers-reduced-motion. `pathLength={1}` normalizes the
+                // curve so stroke-dashoffset can animate it.
+                isAnimationActive={false}
+                key={chartAnimationKey}
                 name="Net sales"
+                pathLength={1}
                 stroke="var(--color-netSalesMinor)"
                 strokeWidth={2}
                 type="monotone"

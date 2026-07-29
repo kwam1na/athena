@@ -14,6 +14,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+import { useStableReportQuery } from "./useStableReportQuery";
 import { EmptyState } from "@/components/states/empty/empty-state";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
@@ -88,11 +90,17 @@ export function ReportDaysPanel({
 }) {
   const { activeStore } = useGetActiveStore();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
-  const days = useQuery(
-    api.reports.queries.listDays,
-    activeStore?._id
-      ? { storeId: activeStore._id, startDate, endDate }
-      : "skip",
+  const {
+    data: days,
+    isInitialLoad,
+    isRefreshing,
+  } = useStableReportQuery(
+    useQuery(
+      api.reports.queries.listDays,
+      activeStore?._id
+        ? { storeId: activeStore._id, startDate, endDate }
+        : "skip",
+    ),
   );
   const startBoundary = getLocalDateFromOperatingDate(startDate);
   const endBoundary = getLocalDateFromOperatingDate(endDate);
@@ -116,12 +124,20 @@ export function ReportDaysPanel({
           />
         </div>
       </div>
-      {days === undefined ? (
+      {isInitialLoad || days === undefined ? (
         <Skeleton className="h-48 w-full" data-testid="report-days-loading" />
       ) : days.length === 0 ? (
         <EmptyState title="No days in range" description="Choose a different date range." />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
+        <div
+          aria-busy={isRefreshing}
+          className={cn(
+            "overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface",
+            "transition-opacity duration-150 motion-reduce:transition-none",
+            isRefreshing && "opacity-60",
+          )}
+          data-refreshing={isRefreshing ? "true" : undefined}
+        >
           <Table>
             <TableHeader>
               <TableRow>

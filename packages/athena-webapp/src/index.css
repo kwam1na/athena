@@ -464,13 +464,15 @@
     animation-name: athena-theme-fade-in;
   }
 
-  .store-pulse-sales-trend-chart .recharts-area-curve {
+  .store-pulse-sales-trend-chart .recharts-area-curve,
+  .report-trend-chart .recharts-area-curve {
     animation: store-pulse-sales-trend-draw 520ms var(--ease-emphasized) both;
     stroke-dasharray: 1;
     stroke-dashoffset: 0;
   }
 
-  .store-pulse-sales-trend-chart .recharts-area-area {
+  .store-pulse-sales-trend-chart .recharts-area-area,
+  .report-trend-chart .recharts-area-area {
     animation: store-pulse-sales-trend-fill 380ms var(--ease-standard) both;
     animation-delay: 120ms;
   }

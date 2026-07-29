@@ -1,5 +1,7 @@
 import { useQuery } from "convex/react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useStableReportQuery } from "./useStableReportQuery";
+import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/states/empty/empty-state";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
@@ -15,12 +17,18 @@ import { ReportTrustStrip } from "./ReportTrustStrip";
  */
 export function ReportsOverviewView() {
   const { activeStore } = useGetActiveStore();
-  const overview = useQuery(
-    api.reports.queries.getOverview,
-    activeStore?._id ? { storeId: activeStore._id } : "skip",
+  const {
+    data: overview,
+    isInitialLoad,
+    isRefreshing,
+  } = useStableReportQuery(
+    useQuery(
+      api.reports.queries.getOverview,
+      activeStore?._id ? { storeId: activeStore._id } : "skip",
+    ),
   );
 
-  if (activeStore === null || overview === undefined) {
+  if (activeStore === null || isInitialLoad || overview === undefined) {
     return (
       <div
         className="space-y-layout-xl md:space-y-layout-2xl"
@@ -50,7 +58,13 @@ export function ReportsOverviewView() {
 
   return (
     <section
-      className="space-y-layout-xl md:space-y-layout-2xl"
+      aria-busy={isRefreshing}
+      className={cn(
+        "space-y-layout-xl md:space-y-layout-2xl",
+        "transition-opacity duration-150 motion-reduce:transition-none",
+        isRefreshing && "opacity-60",
+      )}
+      data-refreshing={isRefreshing ? "true" : undefined}
       data-testid="reports-overview"
     >
       <ReportComparisonChips comparisons={overview.comparisons} />

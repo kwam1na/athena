@@ -6,6 +6,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useStableReportQuery } from "./useStableReportQuery";
+import { cn } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -89,16 +91,22 @@ export function ReportsSkuDetailView({
   const startBoundary = getLocalDateFromOperatingDate(startDate);
   const endBoundary = getLocalDateFromOperatingDate(endDate);
 
-  const detail = useQuery(
-    api.reports.queries.getSkuDetail,
-    activeStore?._id
-      ? {
-          storeId: activeStore._id,
-          productSkuId: productSkuId as Id<"productSku">,
-          startDate,
-          endDate,
-        }
-      : "skip",
+  const {
+    data: detail,
+    isInitialLoad,
+    isRefreshing,
+  } = useStableReportQuery(
+    useQuery(
+      api.reports.queries.getSkuDetail,
+      activeStore?._id
+        ? {
+            storeId: activeStore._id,
+            productSkuId: productSkuId as Id<"productSku">,
+            startDate,
+            endDate,
+          }
+        : "skip",
+    ),
   );
 
   return (
@@ -118,12 +126,19 @@ export function ReportsSkuDetailView({
         />
       </div>
 
-      {detail === undefined ? (
+      {isInitialLoad || detail === undefined ? (
         <Skeleton className="h-64 w-full" data-testid="reports-sku-detail-loading" />
       ) : detail === null ? (
         <EmptyState title="No activity" description="This SKU has no activity in the selected range." />
       ) : (
-        <>
+        <div
+          aria-busy={isRefreshing}
+          className={cn(
+            "space-y-layout-md transition-opacity duration-150 motion-reduce:transition-none",
+            isRefreshing && "opacity-60",
+          )}
+          data-refreshing={isRefreshing ? "true" : undefined}
+        >
           <div className="space-y-layout-sm">
             <h3 className="text-base font-medium text-foreground">Totals</h3>
             <div className="grid grid-cols-2 gap-layout-sm sm:grid-cols-4">
@@ -176,7 +191,7 @@ export function ReportsSkuDetailView({
               </Table>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
