@@ -29,7 +29,7 @@ Admin emails are bolted onto call sites: three flows each hand-roll recipient lo
 - R6. Content is rendered at send time from fresh data via the existing payload queries; an unsendable payload (deleted/resolved subject) suppresses the delivery instead of sending stale content.
 - R7. The environment gate lives in the transport: prod sends normally; non-prod redirects to `NOTIFICATIONS_DEV_RECIPIENT` or records the delivery as `suppressed` (never a false `sent`) — the full pipeline runs in every environment.
 - R8. A delivery that terminally fails records an `operationalEvent` (a permanently unsendable admin alert is itself an operational event).
-- R9. The three existing flows are ported with their current payload queries and templates unchanged; legacy per-flow dedupe markers, admin loops, and the `automationNotificationDelivery` writers are retired.
+- R9. The three existing flows are ported with their current payload queries and templates unchanged; legacy per-flow dedupe markers, admin loops, and the `automationNotificationDelivery` writers are retired. The legacy markers stay *readable* for one release as cutover guards (see U7) so batches replayed across the deploy boundary do not re-alert.
 - R10. The in-app channel is schema-supported (channel enum, `readAt`) but stubbed — no UI, no in-app deliveries created yet.
 
 ---
@@ -158,7 +158,7 @@ sequenceDiagram
 
 **Approach:**
 - Intent status `pending | dispatched | suppressed`; delivery status `in_flight | sent | retryable_failure | terminal_failure | outcome_unknown | suppressed`; channel enum includes `in_app` (stubbed) and delivery carries `readAt` for the future inbox.
-- Indexes: intent `by_dedupeKey` / `by_status_and_emittedAt`; delivery `by_dedupeKey` / `by_intentId` / `by_status_and_leaseExpiresAt` / `by_status_and_nextAttemptAt`; subscription `by_organizationId_and_category`.
+- Indexes: intent `by_dedupeKey` / `by_status_and_emittedAt` / `by_storeId_and_emittedAt`; delivery `by_dedupeKey` / `by_intentId` / `by_status_and_leaseExpiresAt` / `by_status_and_nextAttemptAt`; subscription `by_organizationId_and_category` / `by_recipientEmail`.
 
 **Patterns to follow:** `convex/schemas/automation.ts`, walkthrough attempt indexes in `convex/schema.ts`.
 
@@ -334,7 +334,7 @@ sequenceDiagram
 - Modify: `packages/athena-webapp/convex/operations/registerCloseoutVarianceEmail.ts`
 - Test: `packages/athena-webapp/convex/pos/public/sync` closeout-notification tests as affected
 
-**Approach:** Keep event-to-session matching; drop the `varianceNotificationScheduledAt` and `closeoutNotificationLocalEventId` patches (intent dedupe replaces them; schema fields remain for historic rows); delete `shouldScheduleRegisterCloseoutNotifications`; delete both admin-loop senders and internalActions; keep both payload queries and formatting helpers.
+**Approach:** Keep event-to-session matching; drop the `varianceNotificationScheduledAt` and `closeoutNotificationLocalEventId` *writes* (intent dedupe replaces them; schema fields remain for historic rows) while still *reading* both for one release as cutover guards, so a closeout the pre-rail path already reported is not re-alerted; a closeout under variance review must never fall through to the all-clear match branch; delete `shouldScheduleRegisterCloseoutNotifications`; delete both admin-loop senders and internalActions; keep both payload queries and formatting helpers.
 
 **Test scenarios:**
 - Happy path: closeout with a fresh variance review emits `register.closeout_variance` keyed by approvalRequestId.

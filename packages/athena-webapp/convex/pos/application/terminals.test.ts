@@ -705,7 +705,7 @@ describe("submitTerminalRuntimeStatus", () => {
       }),
     );
     expect(alertCtx.notificationIntents).toHaveLength(1);
-    // Immediate-urgency kinds also schedule their dispatch at emit time.
+    // Emitting also schedules the dispatch for the intent.
     expect(alertCtx.scheduler.runAfter).toHaveBeenCalledWith(
       0,
       expect.anything(),

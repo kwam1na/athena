@@ -304,26 +304,32 @@ async function scheduleRegisterCloseoutNotifications(
     }
 
     const registerSessionId = mapping.cloudId as Id<"registerSession">;
-    const pendingVarianceReviews = await ctx.db
+    // Deliberately NOT scoped to status "pending": once a manager resolves the
+    // review, a pending-only lookup finds nothing and a replayed sync batch
+    // would fall through to the all-clear match branch below, reporting
+    // "register closed" for a drawer that was short.
+    const varianceReviews = await ctx.db
       .query("approvalRequest")
       .withIndex("by_registerSessionId_status_requestType", (q) =>
-        q
-          .eq("registerSessionId", registerSessionId)
-          .eq("status", "pending")
-          .eq("requestType", "variance_review"),
+        q.eq("registerSessionId", registerSessionId),
       )
-      .take(2);
-    const approvalRequest = pendingVarianceReviews.find((request) =>
-      isVarianceReviewForCloseout(request, mapping.localEventId),
+      .take(MAX_VARIANCE_REVIEWS_PER_CLOSEOUT);
+    const approvalRequest = varianceReviews.find(
+      (request) =>
+        request.requestType === "variance_review" &&
+        isVarianceReviewForCloseout(request, mapping.localEventId),
     );
 
     // A closeout under variance review is a variance notification and never
-    // also a "closed cleanly" report — including when its emit is skipped
-    // because the pre-rail implementation already reported it. Falling through
-    // to the match branch here would send an all-clear for a session that
-    // actually had a variance.
+    // also a "closed cleanly" report — whatever the review's current status,
+    // and including when its emit is skipped because the pre-rail
+    // implementation already reported it. The alert itself is only for a
+    // review still awaiting a decision.
     if (approvalRequest) {
-      if (!wasVarianceNotifiedBeforeRail(approvalRequest)) {
+      if (
+        approvalRequest.status === "pending" &&
+        !wasVarianceNotifiedBeforeRail(approvalRequest)
+      ) {
         await emitNotificationWithCtx(ctx, {
           kind: "register.closeout_variance",
           storeId: approvalRequest.storeId,
@@ -360,6 +366,8 @@ async function scheduleRegisterCloseoutNotifications(
     });
   }
 }
+
+const MAX_VARIANCE_REVIEWS_PER_CLOSEOUT = 20;
 
 function isVarianceReviewForCloseout(
   approvalRequest: Doc<"approvalRequest">,

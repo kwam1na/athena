@@ -2125,7 +2125,7 @@ function dailyManagerReportStatusForEodAutoCompleteResult(
 }
 
 export async function emitDailyManagerReportNotificationsForEodAutomationWithCtx(
-  ctx: Pick<ActionCtx, "runMutation">,
+  ctx: Pick<ActionCtx, "runMutation" | "runQuery">,
   args: {
     results: DailyOperationsAutomationResult["eodAutoCompleteResults"];
   },
@@ -2137,6 +2137,22 @@ export async function emitDailyManagerReportNotificationsForEodAutomationWithCtx
   const emittedIntents: DailyManagerReportAutomationEmitResult[] = [];
 
   for (const { result, status } of reportableResults) {
+    // Cutover guard: a store-day the pre-rail implementation already alerted
+    // has a legacy automationNotificationDelivery row but no intent, and this
+    // automation re-runs hourly — so without this check the first post-deploy
+    // run would send a duplicate "Action required" email.
+    if (status === "skipped" || status === "failed") {
+      const alreadyNotified: boolean = await ctx.runQuery(
+        internal.operations.dailyManagerReportEmail
+          .wasActionRequiredNotifiedBeforeRail,
+        {
+          storeId: result.run.storeId,
+          operatingDate: result.run.operatingDate,
+        },
+      );
+      if (alreadyNotified) continue;
+    }
+
     const { created, intentId }: EmitNotificationResult =
       await ctx.runMutation(internal.notifications.emit.emitNotification, {
         kind: "eod.daily_manager_report",

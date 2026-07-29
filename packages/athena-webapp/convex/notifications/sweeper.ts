@@ -4,6 +4,7 @@ import { internalMutation } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import {
+  INTENT_ABANDON_AFTER_MS,
   MAX_DELIVERY_ATTEMPTS,
   SWEEPER_INTENT_PICKUP_DELAY_MS,
   nextBackoffMs,
@@ -15,10 +16,7 @@ import {
 // safety net the rail has.
 const DEFAULT_SWEEP_LIMIT = 25;
 
-// An intent the sweeper keeps picking up but that never reserves (corrupt
-// row, unresolvable reference) would otherwise sit at the head of the
-// oldest-first pending queue forever. Terminalize it after this many pickups.
-const MAX_INTENT_SWEEP_ATTEMPTS = 5;
+
 
 // The safety net that makes delivery eventual. Immediate dispatch via
 // runAfter(0) is the fast path; this sweep recovers everything that path can
@@ -112,9 +110,11 @@ export const sweep = internalMutation({
     for (const intent of staleIntents) {
       const sweepAttempts = (intent.sweepAttempts ?? 0) + 1;
       // Written in the sweeper's own transaction, so it survives a reserve
-      // that throws and rolls back its own writes.
+      // that throws and rolls back its own writes. Diagnostic only —
+      // abandonment is decided by age so the threshold does not shift with
+      // the environment's sweep cadence.
       await ctx.db.patch("notificationIntent", intent._id, { sweepAttempts });
-      if (sweepAttempts > MAX_INTENT_SWEEP_ATTEMPTS) {
+      if (now - intent.emittedAt > INTENT_ABANDON_AFTER_MS) {
         await ctx.db.patch("notificationIntent", intent._id, {
           status: "suppressed",
           suppressedReason: "dispatch_unrecoverable",
@@ -126,7 +126,7 @@ export const sweep = internalMutation({
           subjectType: intent.subjectType,
           subjectId: intent.subjectId,
           actorType: "automation",
-          message: `Notification ${intent.kind} could not be dispatched after ${MAX_INTENT_SWEEP_ATTEMPTS} sweeps; intent abandoned.`,
+          message: `Notification ${intent.kind} could not be dispatched within ${Math.round(INTENT_ABANDON_AFTER_MS / 3_600_000)}h (${sweepAttempts} attempts); intent abandoned. Requeue with notifications.sweeper.requeueAbandonedIntent once the cause is fixed.`,
           metadata: {
             notificationKind: intent.kind,
             notificationSubjectKey: String(intent._id),
@@ -159,5 +159,36 @@ export const sweep = internalMutation({
       retryBacklog: dueRetries.length >= limit,
       pendingIntentBacklog: staleIntents.length >= limit,
     };
+  },
+});
+
+// Recovery path for abandoned intents. Abandonment occupies the intent's
+// dedupeKey forever, so emit() will not re-create the same domain moment;
+// without this an operator would have to hand-edit rows. Run once the cause
+// (bad deploy, unregistered kind) is fixed.
+export const requeueAbandonedIntent = internalMutation({
+  args: { intentId: v.id("notificationIntent") },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const intent = await ctx.db.get("notificationIntent", args.intentId);
+    if (
+      !intent ||
+      intent.status !== "suppressed" ||
+      intent.suppressedReason !== "dispatch_unrecoverable"
+    ) {
+      return false;
+    }
+    await ctx.db.patch("notificationIntent", intent._id, {
+      status: "pending",
+      suppressedReason: undefined,
+      sweepAttempts: 0,
+      emittedAt: Date.now(),
+    });
+    await ctx.scheduler.runAfter(
+      0,
+      internal.notifications.dispatch.dispatchIntent,
+      { intentId: intent._id },
+    );
+    return true;
   },
 });

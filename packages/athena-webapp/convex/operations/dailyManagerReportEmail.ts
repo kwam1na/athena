@@ -219,6 +219,31 @@ export const getPreparedDailyManagerReportPayloadForDate = internalQuery({
   },
 });
 
+// Cutover guard: the pre-rail implementation recorded action-required sends
+// in automationNotificationDelivery, which the rail does not consult. The EOD
+// automation re-runs hourly and re-emits skipped/failed for the same store-day,
+// so without this a store-day already alerted before the deploy would be
+// alerted a second time. Safe to delete once no pre-deploy store-days remain.
+export const wasActionRequiredNotifiedBeforeRail = internalQuery({
+  args: {
+    storeId: v.id("store"),
+    operatingDate: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const legacyDeliveries = await ctx.db
+      .query("automationNotificationDelivery")
+      .withIndex("by_storeId_operatingDate_action", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("operatingDate", args.operatingDate)
+          .eq("action", "eod.auto_complete"),
+      )
+      .take(20);
+    return legacyDeliveries.some((delivery) => delivery.status === "sent");
+  },
+});
+
 export const getActionRequiredDailyManagerReportPayloadForRun = internalQuery({
   args: {
     automationRunId: v.id("automationRun"),

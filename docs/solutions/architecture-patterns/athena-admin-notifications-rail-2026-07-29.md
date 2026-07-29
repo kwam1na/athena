@@ -99,7 +99,7 @@ delivery mechanics.
   phase can't starve the others, and surfaces a backlog flag per phase in its
   return value when a phase saturates its cap. A pending intent that the
   sweeper picks up repeatedly without it ever reserving (corrupt row,
-  unresolvable reference) is abandoned after 5 pickups
+  unresolvable reference) is abandoned once it has been picked up more than 5 times
   (`suppressedReason: "dispatch_unrecoverable"`) with an operational event,
   instead of sitting at the head of the queue forever and consuming the
   sweeper's budget on every tick.

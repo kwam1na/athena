@@ -1133,6 +1133,11 @@ describe("daily operations automation adapter", () => {
           reference,
           args,
         ),
+      runQuery: (reference: unknown, args: unknown) =>
+        (t.query as (ref: unknown, a: unknown) => Promise<unknown>)(
+          reference,
+          args,
+        ),
     };
 
     const emitted = await emitDailyManagerReportNotificationsForEodAutomationWithCtx(
@@ -1317,6 +1322,11 @@ describe("daily operations automation adapter", () => {
           reference,
           args,
         ),
+      runQuery: (reference: unknown, args: unknown) =>
+        (t.query as (ref: unknown, a: unknown) => Promise<unknown>)(
+          reference,
+          args,
+        ),
     };
     const resultForRun = (
       runId: typeof seeded.firstRunId,
@@ -1366,6 +1376,247 @@ describe("daily operations automation adapter", () => {
       operatingDate: "2026-07-16",
       status: "skipped",
       storeId: seeded.storeId,
+    });
+  });
+
+  describe("legacy pre-rail cutover guard", () => {
+    async function seedCutoverFixture(t: ReturnType<typeof convexTest>) {
+      const seeded = await t.run(async (ctx) => {
+        const userId = await ctx.db.insert("athenaUser", {
+          email: "owner@example.com",
+          normalizedEmail: "owner@example.com",
+        });
+        const organizationId = await ctx.db.insert("organization", {
+          createdByUserId: userId,
+          name: "Accra",
+          slug: "accra",
+        });
+        const storeId = await ctx.db.insert("store", {
+          createdByUserId: userId,
+          currency: "GHS",
+          name: "Accra",
+          organizationId,
+          slug: "accra",
+        });
+        return { organizationId, storeId };
+      });
+
+      const insertRun = (
+        operatingDate: string,
+        outcome: "applied" | "prepared" | "skipped" | "failed",
+      ) =>
+        t.run((ctx) =>
+          ctx.db.insert("automationRun", {
+            action: "eod.auto_complete",
+            createdAt: 1,
+            domain: "daily_operations",
+            eventIds: [],
+            idempotencyKey: `daily_operations:eod.auto_complete:${seeded.storeId}:${operatingDate}:${outcome}`,
+            mutationBoundary: "daily_close",
+            operatingDate,
+            organizationId: seeded.organizationId,
+            outcome,
+            policyMode: "enabled" as const,
+            policyVersion: "daily-operations.v1",
+            snapshotCounts: {},
+            sourceSubjects: [],
+            storeId: seeded.storeId,
+            triggerType: "scheduled",
+            updatedAt: 1,
+          }),
+        );
+
+      return { ...seeded, insertRun };
+    }
+
+    async function insertLegacySentDelivery(
+      t: ReturnType<typeof convexTest>,
+      args: {
+        automationRunId: Id<"automationRun">;
+        operatingDate: string;
+        status?: "pending" | "sent" | "failed";
+        storeId: Id<"store">;
+      },
+    ) {
+      await t.run((ctx) =>
+        ctx.db.insert("automationNotificationDelivery", {
+          action: "eod.auto_complete",
+          attemptCount: 1,
+          automationRunId: args.automationRunId,
+          createdAt: 1,
+          dedupeKey: `legacy:${args.storeId}:${args.operatingDate}:${args.status ?? "sent"}`,
+          domain: "daily_operations",
+          notificationKind: "eod_action_required",
+          operatingDate: args.operatingDate,
+          recipientEmail: "admin@example.com",
+          status: args.status ?? "sent",
+          storeId: args.storeId,
+          updatedAt: 1,
+        }),
+      );
+    }
+
+    function makeEmitCtx(t: ReturnType<typeof convexTest>) {
+      return {
+        runMutation: (reference: unknown, args: unknown) =>
+          (t.mutation as (ref: unknown, a: unknown) => Promise<unknown>)(
+            reference,
+            args,
+          ),
+        runQuery: (reference: unknown, args: unknown) =>
+          (t.query as (ref: unknown, a: unknown) => Promise<unknown>)(
+            reference,
+            args,
+          ),
+      } as never;
+    }
+
+    it("skips an action-required emit for a store-day the pre-rail path already alerted", async () => {
+      const t = convexTest(schema, modules);
+      const seeded = await seedCutoverFixture(t);
+      const alertedRunId = await seeded.insertRun("2026-07-16", "skipped");
+      const freshRunId = await seeded.insertRun("2026-07-17", "failed");
+      await insertLegacySentDelivery(t, {
+        automationRunId: alertedRunId,
+        operatingDate: "2026-07-16",
+        storeId: seeded.storeId,
+      });
+
+      const emitted =
+        await emitDailyManagerReportNotificationsForEodAutomationWithCtx(
+          makeEmitCtx(t),
+          {
+            results: [
+              {
+                action: "recorded",
+                run: {
+                  _id: alertedRunId,
+                  operatingDate: "2026-07-16",
+                  outcome: "skipped",
+                  storeId: seeded.storeId,
+                },
+              },
+              {
+                action: "failed",
+                run: {
+                  _id: freshRunId,
+                  operatingDate: "2026-07-17",
+                  outcome: "failed",
+                  storeId: seeded.storeId,
+                },
+              },
+            ] as never,
+          },
+        );
+
+      // The legacy ledger is invisible to the rail's dedupe key, and this
+      // automation re-runs hourly, so without the guard the deploy would send
+      // a second "Action required" email for 2026-07-16.
+      expect(emitted).toHaveLength(1);
+      expect(emitted[0]).toMatchObject({
+        operatingDate: "2026-07-17",
+        status: "failed",
+      });
+      const intents = await t.run((ctx) =>
+        ctx.db.query("notificationIntent").take(10),
+      );
+      expect(intents.map((intent) => intent.dedupeKey)).toEqual([
+        `eod.daily_manager_report:${seeded.storeId}:2026-07-17:action_required`,
+      ]);
+    });
+
+    it("still emits when the legacy row for the store-day never sent", async () => {
+      const t = convexTest(schema, modules);
+      const seeded = await seedCutoverFixture(t);
+      const runId = await seeded.insertRun("2026-07-16", "skipped");
+      await insertLegacySentDelivery(t, {
+        automationRunId: runId,
+        operatingDate: "2026-07-16",
+        status: "failed",
+        storeId: seeded.storeId,
+      });
+
+      const emitted =
+        await emitDailyManagerReportNotificationsForEodAutomationWithCtx(
+          makeEmitCtx(t),
+          {
+            results: [
+              {
+                action: "recorded",
+                run: {
+                  _id: runId,
+                  operatingDate: "2026-07-16",
+                  outcome: "skipped",
+                  storeId: seeded.storeId,
+                },
+              },
+            ] as never,
+          },
+        );
+
+      expect(emitted).toHaveLength(1);
+      expect(emitted[0]).toMatchObject({ created: true, status: "skipped" });
+      expect(
+        await t.run((ctx) => ctx.db.query("notificationIntent").take(10)),
+      ).toHaveLength(1);
+    });
+
+    it("leaves applied and prepared emits untouched by legacy rows", async () => {
+      const t = convexTest(schema, modules);
+      const seeded = await seedCutoverFixture(t);
+      const appliedRunId = await seeded.insertRun("2026-07-16", "applied");
+      const preparedRunId = await seeded.insertRun("2026-07-17", "prepared");
+      for (const [automationRunId, operatingDate] of [
+        [appliedRunId, "2026-07-16"],
+        [preparedRunId, "2026-07-17"],
+      ] as const) {
+        await insertLegacySentDelivery(t, {
+          automationRunId,
+          operatingDate,
+          storeId: seeded.storeId,
+        });
+      }
+
+      const emitted =
+        await emitDailyManagerReportNotificationsForEodAutomationWithCtx(
+          makeEmitCtx(t),
+          {
+            results: [
+              {
+                action: "applied",
+                run: {
+                  _id: appliedRunId,
+                  operatingDate: "2026-07-16",
+                  outcome: "applied",
+                  storeId: seeded.storeId,
+                },
+              },
+              {
+                action: "recorded",
+                run: {
+                  _id: preparedRunId,
+                  operatingDate: "2026-07-17",
+                  outcome: "prepared",
+                  storeId: seeded.storeId,
+                },
+              },
+            ] as never,
+          },
+        );
+
+      // The legacy ledger only ever covered the action-required alert; the
+      // daily report itself must keep flowing.
+      expect(emitted.map((entry) => entry.status)).toEqual([
+        "applied",
+        "prepared",
+      ]);
+      const intents = await t.run((ctx) =>
+        ctx.db.query("notificationIntent").take(10),
+      );
+      expect(intents.map((intent) => intent.dedupeKey).sort()).toEqual([
+        `eod.daily_manager_report:${seeded.storeId}:2026-07-16:applied`,
+        `eod.daily_manager_report:${seeded.storeId}:2026-07-17:prepared`,
+      ]);
     });
   });
 

@@ -144,10 +144,15 @@ export const reserveIntentDeliveries = internalMutation({
 
     if (!definition.channels.includes("email")) {
       // In-app is schema-supported but stubbed; a kind with no email channel
-      // has nothing to deliver yet.
-      await ctx.db.patch("notificationIntent", intent._id, {
-        status: "dispatched",
-        dispatchedAt: intent.dispatchedAt ?? now,
+      // has nothing to deliver yet. Suppress rather than mark dispatched so a
+      // registry edit that drops the email channel cannot strand existing
+      // non-terminal deliveries in the sweeper's budget forever.
+      await suppressIntentWithCtx(ctx, intent, "no_deliverable_channel");
+      await recordNotificationFailureEventWithCtx(ctx, {
+        intent,
+        errorCode: "no_deliverable_channel",
+        message: `Notification ${intent.kind} has no deliverable channel and was not sent.`,
+        subjectKey: `${intent._id}:no_deliverable_channel`,
       });
       return null;
     }
@@ -178,6 +183,12 @@ export const reserveIntentDeliveries = internalMutation({
     if (recipients.length === 0) {
       // An explicitly empty audience is a real configuration, not a success.
       await suppressIntentWithCtx(ctx, intent, "no_recipients");
+      await recordNotificationFailureEventWithCtx(ctx, {
+        intent,
+        errorCode: "no_recipients",
+        message: `Notification ${intent.kind} had no ${intent.category} subscribers and was not sent.`,
+        subjectKey: `${intent._id}:no_recipients`,
+      });
       return null;
     }
 
@@ -402,6 +413,15 @@ export const markIntentSuppressed = internalMutation({
     const intent = await ctx.db.get("notificationIntent", args.intentId);
     if (!intent || intent.status === "suppressed") return null;
     await suppressIntentWithCtx(ctx, intent, args.reason);
+    // Suppression permanently occupies the intent's dedupeKey, so a dropped
+    // alert must leave a trace on the subject's operational timeline rather
+    // than only a row in a table nothing queries.
+    await recordNotificationFailureEventWithCtx(ctx, {
+      intent,
+      errorCode: args.reason,
+      message: `Notification ${intent.kind} was suppressed (${args.reason}) and will not be delivered.`,
+      subjectKey: `${intent._id}:${args.reason}`,
+    });
     return null;
   },
 });

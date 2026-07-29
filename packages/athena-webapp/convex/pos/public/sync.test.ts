@@ -1321,6 +1321,36 @@ describe("register closeout notification intents", () => {
     expect(await listIntents(t)).toHaveLength(0);
   });
 
+  it("never sends an all-clear once the variance review has been resolved", async () => {
+    // Regression: the approval lookup must not be scoped to status "pending".
+    // After a manager approves the review, a pending-only lookup finds nothing
+    // and a replayed sync batch falls through to the match branch — reporting
+    // "register closed" for a drawer that was actually short.
+    const t = convexTest(schema, modules);
+    const world = await seedCloseoutWorld(t);
+    await t.run(async (ctx) =>
+      ctx.db.insert("approvalRequest", {
+        storeId: world.storeId,
+        organizationId: world.organizationId,
+        requestType: "variance_review",
+        subjectType: "registerSession",
+        subjectId: String(world.registerSessionId),
+        status: "approved",
+        registerSessionId: world.registerSessionId,
+        createdAt: 2,
+        metadata: {
+          localEventId: "event-closeout-1",
+          variance: -4218,
+        },
+      }),
+    );
+    mockIngestWithCloseoutMapping(world, "event-closeout-1");
+
+    await uploadCloseout(t, world, "event-closeout-1");
+
+    expect(await listIntents(t)).toHaveLength(0);
+  });
+
   it("emits nothing when both pre-rail cutover markers are present", async () => {
     const t = convexTest(schema, modules);
     const world = await seedCloseoutWorld(t);

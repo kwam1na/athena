@@ -15,8 +15,18 @@ export const MAX_DELIVERY_ATTEMPTS = 4;
 // (which would re-send to recipients that already succeeded).
 export const DELIVERY_LEASE_BASE_MS = 2 * 60_000;
 export const DELIVERY_LEASE_PER_RECIPIENT_MS = 30_000;
-export const DELIVERY_LEASE_MAX_MS = 30 * 60_000;
+// Must exceed the worst-case serial batch: one send timeout per recipient for
+// a full audience. Below that ceiling the sweeper can reclaim a lease from a
+// live dispatch and inflate attemptCount for mail that was actually sent.
+export const DELIVERY_LEASE_MAX_MS = 55 * 60_000;
 export const SWEEPER_INTENT_PICKUP_DELAY_MS = 60_000;
+
+// Abandonment is wall-clock based, not pickup-count based: the sweep cadence
+// differs per environment (5 min in prod, 60 elsewhere), so a pickup count
+// would mean a different grace period in each. Six hours is comfortably longer
+// than a detect-and-roll-back cycle for a bad deploy, which is the realistic
+// way a batch of intents becomes temporarily unreservable.
+export const INTENT_ABANDON_AFTER_MS = 6 * 60 * 60_000;
 
 export function computeDeliveryLeaseMs(recipientCount: number) {
   return Math.min(

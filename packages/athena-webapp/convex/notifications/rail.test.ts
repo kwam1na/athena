@@ -8,7 +8,30 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { ADMIN_EMAILS } from "../constants/email";
 import schema from "../schema";
-import { MAX_DELIVERY_ATTEMPTS } from "./deliveryPolicy";
+import {
+  INTENT_ABANDON_AFTER_MS,
+  MAX_DELIVERY_ATTEMPTS,
+  computeDeliveryLeaseMs,
+} from "./deliveryPolicy";
+import type { NotificationChannel } from "./registry";
+
+// Every registered kind ships with an email channel today, so the only way to
+// exercise the no-email branch without editing the production catalog is to
+// override a kind's channel list at lookup time. The mock delegates to the
+// real registry for everything else.
+const channelOverrides = new Map<string, NotificationChannel[]>();
+vi.mock("./registry", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./registry")>();
+  return {
+    ...actual,
+    findNotificationKind: (kind: string) => {
+      const definition = actual.findNotificationKind(kind);
+      if (!definition) return null;
+      const override = channelOverrides.get(kind);
+      return override ? { ...definition, channels: override } : definition;
+    },
+  };
+});
 
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
@@ -330,6 +353,18 @@ describe("reserveIntentDeliveries", () => {
       status: "suppressed",
       suppressedReason: "no_recipients",
     });
+
+    // A dropped alert must leave a trace on the subject's timeline; this path
+    // used to suppress silently.
+    const failureEvents = (await listOperationalEvents(t)).filter(
+      (event) => event.eventType === "notification_delivery_failed",
+    );
+    expect(failureEvents).toHaveLength(1);
+    expect(failureEvents[0]?.metadata).toMatchObject({
+      notificationKind: "pos.terminal_health",
+      notificationSubjectKey: `${intentId}:no_recipients`,
+      errorCode: "no_recipients",
+    });
   });
 
   it("does not fall back to ADMIN_EMAILS when rows exist but are scoped to another store", async () => {
@@ -375,6 +410,111 @@ describe("reserveIntentDeliveries", () => {
       status: "suppressed",
       suppressedReason: "no_recipients",
     });
+  });
+
+  it("scales the stored lease with the resolved recipient count", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    try {
+      const t = convexTest(schema, modules);
+      const fixture = await t.run(seedOrgStore);
+      const terminalId = await t.run((ctx) => seedTerminal(ctx, fixture));
+      const intentId = await t.run((ctx) =>
+        insertTerminalHealthIntent(ctx, fixture, terminalId),
+      );
+
+      const recipientCount = 3;
+      await t.run(async (ctx) => {
+        for (let index = 0; index < recipientCount; index += 1) {
+          await ctx.db.insert("notificationSubscription", {
+            organizationId: fixture.organizationId,
+            category: "system_health",
+            channel: "email",
+            recipientEmail: `lease-${index}@example.com`,
+            enabled: true,
+            createdAt: NOW,
+            updatedAt: NOW,
+          });
+        }
+      });
+
+      const reserved = await t.mutation(
+        internal.notifications.dispatch.reserveIntentDeliveries,
+        { intentId },
+      );
+      expect(reserved!.leased).toHaveLength(recipientCount);
+
+      // The lease has to cover a serial send to the whole batch. A regression
+      // to a fixed constant would still leave every other assertion green.
+      const expected = NOW + computeDeliveryLeaseMs(recipientCount);
+      const deliveries = await listDeliveries(t);
+      expect(deliveries).toHaveLength(recipientCount);
+      for (const delivery of deliveries) {
+        expect(delivery.leaseExpiresAt).toBe(expected);
+      }
+      expect(computeDeliveryLeaseMs(recipientCount)).not.toBe(
+        computeDeliveryLeaseMs(recipientCount + 1),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("suppresses with no_deliverable_channel when the kind has no email channel", async () => {
+    channelOverrides.set("pos.terminal_health", ["in_app"]);
+    try {
+      const t = convexTest(schema, modules);
+      const fixture = await t.run(seedOrgStore);
+      const terminalId = await t.run((ctx) => seedTerminal(ctx, fixture));
+      const intentId = await t.run((ctx) =>
+        insertTerminalHealthIntent(ctx, fixture, terminalId),
+      );
+      // A delivery left over from before the registry dropped the channel.
+      const strandedId = await t.run((ctx) =>
+        ctx.db.insert("notificationDelivery", {
+          intentId,
+          kind: "pos.terminal_health",
+          category: "system_health",
+          channel: "email",
+          storeId: fixture.storeId,
+          organizationId: fixture.organizationId,
+          recipientEmail: "admin@example.com",
+          dedupeKey: "delivery:no-channel",
+          status: "retryable_failure",
+          attemptCount: 1,
+          nextAttemptAt: Date.now() - 1,
+          createdAt: NOW,
+          updatedAt: NOW,
+        }),
+      );
+
+      const reserved = await t.mutation(
+        internal.notifications.dispatch.reserveIntentDeliveries,
+        { intentId },
+      );
+
+      // Marking it dispatched instead would strand the leftover delivery in
+      // the sweeper's budget forever.
+      expect(reserved).toBeNull();
+      expect(
+        await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+      ).toMatchObject({
+        status: "suppressed",
+        suppressedReason: "no_deliverable_channel",
+      });
+      const stranded = await t.run((ctx) =>
+        ctx.db.get("notificationDelivery", strandedId),
+      );
+      expect(stranded).toMatchObject({
+        status: "suppressed",
+        errorCode: "no_deliverable_channel",
+      });
+      expect(stranded?.nextAttemptAt).toBeUndefined();
+      expect(stranded?.terminalAt).toBeDefined();
+      expect(await listDeliveries(t)).toHaveLength(1);
+    } finally {
+      channelOverrides.delete("pos.terminal_health");
+    }
   });
 
   it("records a subscription_cap_exceeded event rather than silently truncating", async () => {
@@ -779,6 +919,59 @@ describe("completeDelivery", () => {
   });
 });
 
+describe("markIntentSuppressed", () => {
+  it("records a failure event and terminalizes non-terminal deliveries", async () => {
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    const terminalId = await t.run((ctx) => seedTerminal(ctx, fixture));
+    const intentId = await t.run((ctx) =>
+      insertTerminalHealthIntent(ctx, fixture, terminalId),
+    );
+    const reserved = await t.mutation(
+      internal.notifications.dispatch.reserveIntentDeliveries,
+      { intentId },
+    );
+    expect(reserved!.leased.length).toBeGreaterThan(0);
+
+    await t.mutation(internal.notifications.dispatch.markIntentSuppressed, {
+      intentId,
+      reason: "payload_unavailable",
+    });
+
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+    ).toMatchObject({
+      status: "suppressed",
+      suppressedReason: "payload_unavailable",
+    });
+    for (const delivery of await listDeliveries(t)) {
+      expect(delivery.status).toBe("suppressed");
+      expect(delivery.errorCode).toBe("payload_unavailable");
+    }
+
+    const failureEvents = (await listOperationalEvents(t)).filter(
+      (event) => event.eventType === "notification_delivery_failed",
+    );
+    expect(failureEvents).toHaveLength(1);
+    expect(failureEvents[0]?.metadata).toMatchObject({
+      notificationKind: "pos.terminal_health",
+      notificationSubjectKey: `${intentId}:payload_unavailable`,
+      errorCode: "payload_unavailable",
+    });
+
+    // A second call is a no-op: no duplicate event, no re-suppression.
+    await t.mutation(internal.notifications.dispatch.markIntentSuppressed, {
+      intentId,
+      reason: "payload_unavailable",
+    });
+    expect(
+      (await listOperationalEvents(t)).filter(
+        (event) => event.eventType === "notification_delivery_failed",
+      ),
+    ).toHaveLength(1);
+  });
+});
+
 describe("dispatchIntent", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -999,6 +1192,25 @@ describe("dispatchIntent", () => {
       suppressedReason: "payload_unavailable",
     });
     expect(fetchMock).not.toHaveBeenCalled();
+
+    // Suppression permanently occupies the intent's dedupeKey, so the dropped
+    // alert has to surface as an operational event rather than only as a row.
+    const failureEvents = (await listOperationalEvents(t)).filter(
+      (event) => event.eventType === "notification_delivery_failed",
+    );
+    expect(failureEvents).toHaveLength(1);
+    expect(failureEvents[0]).toMatchObject({
+      storeId: fixture.storeId,
+      organizationId: fixture.organizationId,
+      subjectType: "store",
+      subjectId: String(fixture.storeId),
+      actorType: "automation",
+    });
+    expect(failureEvents[0]?.metadata).toMatchObject({
+      notificationKind: "eod.daily_manager_report",
+      notificationSubjectKey: `${intentId}:payload_unavailable`,
+      errorCode: "payload_unavailable",
+    });
   });
 
   it("marks deliveries retryable with a future nextAttemptAt on a 500", async () => {
@@ -1363,7 +1575,7 @@ describe("sweeper", () => {
     });
   });
 
-  it("counts sweep pickups of a pending intent and abandons it past the cap", async () => {
+  it("abandons a pending intent once it has outlived the abandonment window", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
     const t = convexTest(schema, modules);
@@ -1376,8 +1588,10 @@ describe("sweeper", () => {
       }),
     );
 
-    // MAX_INTENT_SWEEP_ATTEMPTS pickups: each bumps the counter and still
-    // schedules a dispatch.
+    // Inside the window the intent keeps being retried, and the diagnostic
+    // counter climbs. Abandonment is decided by age, not by pickup count, so
+    // the sweep cadence (5 min in prod, 60 elsewhere) cannot change when an
+    // intent is given up on.
     for (let sweepNumber = 1; sweepNumber <= 5; sweepNumber += 1) {
       const result = await t.mutation(internal.notifications.sweeper.sweep, {
         now: NOW,
@@ -1393,8 +1607,10 @@ describe("sweeper", () => {
       expect(intent?.status).toBe("pending");
     }
 
+    // Past the window the intent is abandoned on its next pickup.
+    const abandonAt = NOW + INTENT_ABANDON_AFTER_MS + 1;
     const result = await t.mutation(internal.notifications.sweeper.sweep, {
-      now: NOW,
+      now: abandonAt,
     });
     expect(result).toMatchObject({
       dispatchesScheduled: 0,
@@ -1407,7 +1623,6 @@ describe("sweeper", () => {
     expect(intent).toMatchObject({
       status: "suppressed",
       suppressedReason: "dispatch_unrecoverable",
-      sweepAttempts: 6,
     });
 
     const failureEvents = (await listOperationalEvents(t)).filter(
@@ -1429,6 +1644,108 @@ describe("sweeper", () => {
       dispatchesScheduled: 0,
       intentsAbandoned: 0,
     });
+  });
+
+  it("requeues an abandoned intent and lets a later sweep pick it up again", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const t = convexTest(schema, modules);
+    const { fixture, terminalId } = await seedSweeperFixture(t);
+    const intentId = await t.run((ctx) =>
+      insertTerminalHealthIntent(ctx, fixture, terminalId, {
+        status: "pending",
+        emittedAt: NOW - INTENT_ABANDON_AFTER_MS - 120_000,
+        dedupeKey: "intent:abandoned",
+      }),
+    );
+
+    expect(
+      await t.mutation(internal.notifications.sweeper.sweep, { now: NOW }),
+    ).toMatchObject({ intentsAbandoned: 1, dispatchesScheduled: 0 });
+    const abandoned = await t.run((ctx) =>
+      ctx.db.get("notificationIntent", intentId),
+    );
+    expect(abandoned).toMatchObject({
+      status: "suppressed",
+      suppressedReason: "dispatch_unrecoverable",
+    });
+    expect(abandoned?.sweepAttempts).toBe(1);
+
+    // Abandonment occupies the dedupeKey forever, so emit() cannot re-create
+    // the domain moment: requeue is the only way back.
+    const requeueAt = NOW + 60_000;
+    vi.setSystemTime(requeueAt);
+    expect(
+      await t.mutation(
+        internal.notifications.sweeper.requeueAbandonedIntent,
+        { intentId },
+      ),
+    ).toBe(true);
+
+    const requeued = await t.run((ctx) =>
+      ctx.db.get("notificationIntent", intentId),
+    );
+    expect(requeued).toMatchObject({
+      status: "pending",
+      sweepAttempts: 0,
+      emittedAt: requeueAt,
+    });
+    expect(requeued?.suppressedReason).toBeUndefined();
+
+    // Back in the pending queue: a later sweep dispatches it rather than
+    // abandoning it again on its refreshed emittedAt.
+    const laterSweepAt = requeueAt + 120_000;
+    expect(
+      await t.mutation(internal.notifications.sweeper.sweep, {
+        now: laterSweepAt,
+      }),
+    ).toMatchObject({ dispatchesScheduled: 1, intentsAbandoned: 0 });
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+    ).toMatchObject({ sweepAttempts: 1 });
+  });
+
+  it("refuses to requeue an intent that was not abandoned", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const t = convexTest(schema, modules);
+    const { fixture, terminalId } = await seedSweeperFixture(t);
+
+    // Pending: never abandoned, so requeueing would reset a live intent's age.
+    const pendingId = await t.run((ctx) =>
+      insertTerminalHealthIntent(ctx, fixture, terminalId, {
+        status: "pending",
+        emittedAt: NOW - 120_000,
+        dedupeKey: "intent:pending",
+      }),
+    );
+    // Suppressed for a different reason: requeueing would re-run a dispatch
+    // that already concluded the intent is undeliverable.
+    const noRecipientsId = await t.run(async (ctx) => {
+      const id = await insertTerminalHealthIntent(ctx, fixture, terminalId, {
+        status: "suppressed",
+        dedupeKey: "intent:no-recipients",
+      });
+      await ctx.db.patch("notificationIntent", id, {
+        suppressedReason: "no_recipients",
+      });
+      return id;
+    });
+
+    for (const intentId of [pendingId, noRecipientsId]) {
+      const before = await t.run((ctx) =>
+        ctx.db.get("notificationIntent", intentId),
+      );
+      expect(
+        await t.mutation(
+          internal.notifications.sweeper.requeueAbandonedIntent,
+          { intentId },
+        ),
+      ).toBe(false);
+      expect(
+        await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+      ).toEqual(before);
+    }
   });
 
   it("is a no-op when nothing is eligible", async () => {

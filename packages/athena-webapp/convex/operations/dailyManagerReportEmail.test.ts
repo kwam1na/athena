@@ -1,11 +1,27 @@
+/// <reference types="vite/client" />
+
+import { convexTest } from "convex-test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { internal } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
+import type { MutationCtx } from "../_generated/server";
+import schema from "../schema";
 import {
   buildCashMetrics,
   buildPaymentTotals,
   buildSummaryMetrics,
   resolveAppUrl,
 } from "./dailyManagerReportEmail";
+
+const modules = Object.fromEntries(
+  Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
+    path.startsWith("../")
+      ? path.replace(/^\.\.\//, "./")
+      : path.replace(/^\.\//, "./operations/"),
+    loader,
+  ]),
+);
 
 const originalEnv = {
   ATHENA_APP_URL: process.env.ATHENA_APP_URL,
@@ -230,5 +246,111 @@ describe("daily manager report email URLs", () => {
         transactionCountComparison: "50% higher vs prior day",
       },
     ]);
+  });
+});
+
+describe("wasActionRequiredNotifiedBeforeRail", () => {
+  const OPERATING_DATE = "2026-07-16";
+
+  async function seedStoreAndRun(ctx: MutationCtx) {
+    const userId = await ctx.db.insert("athenaUser", {
+      email: "owner@example.com",
+      normalizedEmail: "owner@example.com",
+    });
+    const organizationId = await ctx.db.insert("organization", {
+      createdByUserId: userId,
+      name: "Accra",
+      slug: "accra",
+    });
+    const storeId = await ctx.db.insert("store", {
+      createdByUserId: userId,
+      currency: "GHS",
+      name: "Accra",
+      organizationId,
+      slug: "accra",
+    });
+    const automationRunId = await ctx.db.insert("automationRun", {
+      action: "eod.auto_complete",
+      createdAt: 1,
+      domain: "daily_operations",
+      eventIds: [],
+      idempotencyKey: `daily_operations:eod.auto_complete:${storeId}:${OPERATING_DATE}`,
+      mutationBoundary: "daily_close",
+      operatingDate: OPERATING_DATE,
+      organizationId,
+      outcome: "skipped",
+      policyMode: "enabled",
+      policyVersion: "daily-operations.v1",
+      snapshotCounts: {},
+      sourceSubjects: [],
+      storeId,
+      triggerType: "scheduled",
+      updatedAt: 1,
+    });
+    return { automationRunId, organizationId, storeId };
+  }
+
+  async function insertLegacyDelivery(
+    ctx: MutationCtx,
+    seeded: { automationRunId: Id<"automationRun">; storeId: Id<"store"> },
+    overrides: Partial<{
+      action: string;
+      operatingDate: string;
+      status: "pending" | "sent" | "failed";
+      recipientEmail: string;
+    }> = {},
+  ) {
+    return ctx.db.insert("automationNotificationDelivery", {
+      action: overrides.action ?? "eod.auto_complete",
+      attemptCount: 1,
+      automationRunId: seeded.automationRunId,
+      createdAt: 1,
+      dedupeKey: `legacy:${overrides.recipientEmail ?? "admin@example.com"}:${overrides.status ?? "sent"}:${overrides.action ?? "eod.auto_complete"}:${overrides.operatingDate ?? OPERATING_DATE}`,
+      domain: "daily_operations",
+      notificationKind: "eod_action_required",
+      operatingDate: overrides.operatingDate ?? OPERATING_DATE,
+      recipientEmail: overrides.recipientEmail ?? "admin@example.com",
+      status: overrides.status ?? "sent",
+      storeId: seeded.storeId,
+      updatedAt: 1,
+    });
+  }
+
+  it("reports true only for a sent eod.auto_complete row on that store-day", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(seedStoreAndRun);
+    const ask = (operatingDate = OPERATING_DATE) =>
+      t.query(
+        internal.operations.dailyManagerReportEmail
+          .wasActionRequiredNotifiedBeforeRail,
+        { operatingDate, storeId: seeded.storeId },
+      );
+
+    expect(await ask()).toBe(false);
+
+    // Attempted but not delivered: the pre-rail send never reached anyone, so
+    // the rail must still alert.
+    await t.run((ctx) =>
+      insertLegacyDelivery(ctx, seeded, { status: "pending" }),
+    );
+    await t.run((ctx) =>
+      insertLegacyDelivery(ctx, seeded, { status: "failed" }),
+    );
+    expect(await ask()).toBe(false);
+
+    // A sent row for another action or another store-day is not this alert.
+    await t.run((ctx) =>
+      insertLegacyDelivery(ctx, seeded, { action: "opening.auto_start" }),
+    );
+    await t.run((ctx) =>
+      insertLegacyDelivery(ctx, seeded, { operatingDate: "2026-07-15" }),
+    );
+    expect(await ask()).toBe(false);
+    expect(await ask("2026-07-14")).toBe(false);
+
+    await t.run((ctx) => insertLegacyDelivery(ctx, seeded, { status: "sent" }));
+    expect(await ask()).toBe(true);
+    // Scoping stays intact: only the matching store-day flips.
+    expect(await ask("2026-07-13")).toBe(false);
   });
 });

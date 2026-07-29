@@ -98,6 +98,19 @@ describe("registry catalog", () => {
       "Unknown notification kind: not.a_kind",
     );
   });
+
+  it("does not resolve prototype members as notification kinds", () => {
+    // An intent kind is stored data, so a row reading "constructor" must not
+    // resolve Object.prototype.constructor and blow up downstream on
+    // .channels — a bare index lookup would return a function here.
+    for (const kind of ["constructor", "toString", "__proto__", "valueOf"]) {
+      expect(findNotificationKind(kind)).toBeNull();
+      expect(() => getNotificationKind(kind)).toThrow(
+        `Unknown notification kind: ${kind}`,
+      );
+    }
+    expect(listNotificationKinds()).not.toContain("constructor");
+  });
 });
 
 describe("registry subjects", () => {

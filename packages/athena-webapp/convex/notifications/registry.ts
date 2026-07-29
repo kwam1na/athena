@@ -208,11 +208,15 @@ const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
 export function findNotificationKind(
   kind: string,
 ): NotificationKindDefinition | null {
-  return NOTIFICATION_KINDS[kind] ?? null;
+  // hasOwn, not a bare index: a stored kind of "constructor" would otherwise
+  // resolve a prototype member and blow up downstream on .channels.
+  return Object.hasOwn(NOTIFICATION_KINDS, kind)
+    ? NOTIFICATION_KINDS[kind]
+    : null;
 }
 
 export function getNotificationKind(kind: string): NotificationKindDefinition {
-  const definition = NOTIFICATION_KINDS[kind];
+  const definition = findNotificationKind(kind);
   if (!definition) {
     throw new Error(`Unknown notification kind: ${kind}`);
   }
