@@ -8,7 +8,7 @@ problem_type: reporting_read_cost
 component: reports
 resolution_type: delivery_plan
 severity: high
-delivery_diff_fingerprint: 6c08f6b4e80530a000b894fd05567fcc5b08b52fba4cb7f22f16e6d0e2a9a6f2
+delivery_diff_fingerprint: 373219d310e87b14f51df92310b0407ff4aed1c7f147914996de2f6f8ecf6b56
 tags:
   - reporting
   - delivery-plan

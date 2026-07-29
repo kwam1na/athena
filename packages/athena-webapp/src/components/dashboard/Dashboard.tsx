@@ -14,7 +14,6 @@ import { currencyFormatter } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Link } from "@tanstack/react-router";
-import { getOrigin } from "~/src/lib/navigationUtils";
 
 // Helper functions moved to the top for better organization
 function getPeriodRange(interval: string, offset = 0): [Date, Date] {

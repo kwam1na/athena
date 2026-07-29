@@ -96791,7 +96791,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_hooks_use_navigate_back_ts",
       "source_file": "packages/athena-webapp/src/hooks/use-navigate-back.ts",
-      "source_location": "L5",
+      "source_location": "L7",
       "target": "use_navigate_back_usenavigateback",
       "weight": 1
     },
@@ -172348,7 +172348,7 @@
       "label": "useNavigateBack()",
       "norm_label": "usenavigateback()",
       "source_file": "packages/athena-webapp/src/hooks/use-navigate-back.ts",
-      "source_location": "L5"
+      "source_location": "L7"
     },
     {
       "community": 1318,
