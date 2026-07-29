@@ -15,7 +15,8 @@ import {
   getStoreById,
   patchPosTransaction,
 } from "../../infrastructure/repositories/transactionRepository";
-import { appendReportingIngressWithCtx } from "../../../reporting/ingress";
+import { recordFacts } from "../../../reports/ingest";
+import type { NewReportFact } from "../../../../shared/reportsContract";
 import { appendPosLifecycleJournalWithCtx } from "../../infrastructure/posLifecycleJournal";
 import { patchRegisterSessionWithAuthority } from "../../../operations/registerSessionAuthorityRevision";
 
@@ -447,48 +448,25 @@ async function applyPaymentMethodCorrection(
     origin: "cloud",
   });
   if (store?.organizationId && event?._id) {
-    const currencyCode = store.currency?.trim().toUpperCase();
-    await appendReportingIngressWithCtx(ctx, {
-      acceptedAt: event.createdAt,
-      adapterVersion: 1,
-      businessEventKey: `pos:${args.transaction._id}:correction:${event._id}`,
-      contentFingerprint: [
-        "pos-payment-method-correction-v1",
-        String(args.transaction._id),
-        String(event._id),
-        payment.method,
-        args.paymentMethod,
-        String(payment.amount),
-      ].join(":"),
-      correctedSettlementMethod: args.paymentMethod,
-      ...(currencyCode ? { currencyCode, currencyMinorUnitScale: 2 } : {}),
-      materialFields: ["amountMinor", "occurrenceAt", "storeId"],
+    // Payment method reclassification carries no revenue delta and the
+    // frozen reports contract has no settlement-method field — record a
+    // zero-magnitude correction fact purely so the reclassification leaves an
+    // audit trail in the fact log without moving any reported metric.
+    const currency = store.currency?.trim().toUpperCase() || "GHS";
+    const fact: NewReportFact = {
+      currency,
+      discountAmountMinor: 0,
+      factKind: "correction",
+      grossAmountMinor: 0,
+      lineId: String(event._id),
+      netAmountMinor: 0,
       occurredAt: event.createdAt,
-      organizationId: store.organizationId,
-      priorSettlementMethod: payment.method,
       quantity: 0,
-      settlementAmountMinor: 0,
       sourceDomain: "pos",
-      sourceEventType: "pos_settlement_method_reclassified",
-      sourceReferences: [
-        {
-          relation: "corrects",
-          sourceId: String(args.transaction._id),
-          sourceType: "pos_transaction",
-        },
-        {
-          relation: "supports",
-          sourceId: String(correctedAllocation._id),
-          sourceType: "payment_allocation",
-        },
-        {
-          relation: "supports",
-          sourceId: String(event._id),
-          sourceType: "operational_event",
-        },
-      ],
-      storeId: args.transaction.storeId,
-    });
+      sourceId: String(args.transaction._id),
+      taxAmountMinor: 0,
+    };
+    await recordFacts(ctx, args.transaction.storeId, [fact]);
   }
 
   return {

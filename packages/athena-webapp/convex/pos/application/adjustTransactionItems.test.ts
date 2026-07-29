@@ -17,12 +17,12 @@ import {
   getStoreById,
   listTransactionItems,
 } from "../infrastructure/repositories/transactionRepository";
-import { appendReportingIngressWithCtx } from "../../reporting/ingress";
+import { recordFacts } from "../../reports/ingest";
 import {
   applyCommerceInventoryEffectWithCtx,
   outboundBasisFromEffect,
   reportingLineCostFromEffect,
-} from "../../reporting/inventory/commerceEffects";
+} from "../../inventoryLedger/commerceEffects";
 import { appendPosLifecycleJournalWithCtx } from "../infrastructure/posLifecycleJournal";
 
 vi.mock("../infrastructure/posLifecycleJournal", () => ({
@@ -86,11 +86,11 @@ vi.mock("../../operations/registerSessionTracing", () => ({
   recordRegisterSessionTraceBestEffort: vi.fn(),
 }));
 
-vi.mock("../../reporting/ingress", () => ({
-  appendReportingIngressWithCtx: vi.fn(),
+vi.mock("../../reports/ingest", () => ({
+  recordFacts: vi.fn(),
 }));
 
-vi.mock("../../reporting/inventory/commerceEffects", () => ({
+vi.mock("../../inventoryLedger/commerceEffects", () => ({
   applyCommerceInventoryEffectWithCtx: vi.fn(),
   outboundBasisFromEffect: vi.fn(() => null),
   reportingLineCostFromEffect: vi.fn(() => ({ costStatus: "unknown" })),
@@ -647,21 +647,18 @@ describe("adjustTransactionItems", () => {
         }),
       }),
     );
-    expect(appendReportingIngressWithCtx).toHaveBeenCalledWith(
+    expect(recordFacts).toHaveBeenCalledWith(
       ctx,
-      expect.objectContaining({
-        businessEventKey:
-          "pos:txn-1:adjustment:posTransactionAdjustment-1",
-        lines: expect.arrayContaining([
-          expect.objectContaining({
-            costStatus: "not_applicable",
-            lineKind: "merchandise",
-            productSkuId: "sku-1",
-            quantity: 0,
-          }),
-        ]),
-        sourceEventType: "pos_item_correction",
-      }),
+      "store-1",
+      expect.arrayContaining([
+        expect.objectContaining({
+          factKind: "correction",
+          productSkuId: "sku-1",
+          quantity: -1,
+          sourceDomain: "pos",
+          sourceId: "txn-1",
+        }),
+      ]),
     );
     expect(recordRegisterSessionTraceBestEffort).toHaveBeenCalledWith(
       ctx as never,
@@ -817,19 +814,17 @@ describe("adjustTransactionItems", () => {
       expectedCash: 1500,
       variance: -300,
     });
-    expect(appendReportingIngressWithCtx).toHaveBeenCalledWith(
+    expect(recordFacts).toHaveBeenCalledWith(
       ctx,
-      expect.objectContaining({
-        lines: expect.arrayContaining([
-          expect.objectContaining({
-            cogsKnownMinor: 200,
-            costStatus: "known",
-            inventoryEffectId: "effect-1",
-            quantity: 1,
-            valuationCurrencyCode: "GHS",
-          }),
-        ]),
-      }),
+      "store-1",
+      expect.arrayContaining([
+        expect.objectContaining({
+          factKind: "correction",
+          productSkuId: "sku-1",
+          quantity: 1,
+          unitCostMinor: 200,
+        }),
+      ]),
     );
   });
 

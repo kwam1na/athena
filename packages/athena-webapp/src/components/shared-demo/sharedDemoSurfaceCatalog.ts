@@ -228,12 +228,10 @@ export const ATHENA_VIEW_SURFACE_CATALOG = {
     ],
   },
   reports: {
-    description: "Store, inventory, item, and storefront reporting",
+    description: "Store, item, and SKU reporting",
     presentation: "observational",
     routes: [
       "/:orgUrlSlug/store/:storeUrlSlug/reports",
-      "/:orgUrlSlug/store/:storeUrlSlug/reports/inventory",
-      "/:orgUrlSlug/store/:storeUrlSlug/reports/storefront",
       "/:orgUrlSlug/store/:storeUrlSlug/reports/items",
       "/:orgUrlSlug/store/:storeUrlSlug/reports/items/:productSkuId",
     ],

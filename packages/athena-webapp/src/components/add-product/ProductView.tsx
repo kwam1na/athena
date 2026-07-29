@@ -154,7 +154,7 @@ function ProductViewContent() {
   const deleteSku = useMutation(api.inventory.products.removeSku);
   const updateSku = useMutation(api.inventory.products.updateSku);
   const correctSkuValuation = useMutation(
-    api.reporting.inventory.corrections.correctSkuValuation,
+    api.inventoryLedger.corrections.correctSkuValuation,
   );
 
   const uploadProductSkuImages = useAction(

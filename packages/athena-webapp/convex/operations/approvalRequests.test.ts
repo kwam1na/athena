@@ -23,11 +23,11 @@ vi.mock("@convex-dev/auth/server", () => ({
   getAuthUserId: mockedAuthServer.getAuthUserId,
 }));
 
-vi.mock("../reporting/inventory/effects", () => ({
+vi.mock("../inventoryLedger/effects", () => ({
   applyInventoryEffectWithCtx: reportingMocks.applyInventoryEffectWithCtx,
 }));
 
-vi.mock("../reporting/operatingPeriods", () => ({
+vi.mock("../storeTime/operatingPeriods", () => ({
   resolveReportingOperatingPeriodWithCtx: vi.fn(async () => ({
     kind: "missing_schedule",
     occurrenceAt: 1,

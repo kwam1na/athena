@@ -86,16 +86,18 @@
       "behaviorScenarios": []
     },
     {
-      "name": "reporting-fact-valuation-projection-and-activation-edits",
+      "name": "reporting-fact-ledger-day-fold-and-read-model-edits",
       "pathPrefixes": [
-        "packages/athena-webapp/convex/reporting",
-        "packages/athena-webapp/convex/schemas/reporting",
-        "packages/athena-webapp/shared/reportingContract.ts"
+        "packages/athena-webapp/convex/reports",
+        "packages/athena-webapp/convex/schemas/reports",
+        "packages/athena-webapp/convex/inventoryLedger",
+        "packages/athena-webapp/convex/storeTime",
+        "packages/athena-webapp/shared/reportsContract.ts"
       ],
       "commands": [
         {
           "kind": "raw",
-          "command": "bun run --filter '@athena/webapp' test -- convex/reporting"
+          "command": "bun run --filter '@athena/webapp' test -- convex/reports"
         },
         {
           "kind": "script",

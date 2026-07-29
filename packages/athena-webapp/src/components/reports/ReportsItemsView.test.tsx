@@ -1,109 +1,159 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+
+const useQuery = vi.fn();
+const navigateBackMock = vi.fn();
+const search = { current: {} as Record<string, unknown> };
+vi.mock("convex/react", () => ({
+  useQuery: (...args: unknown[]) => useQuery(...args),
+}));
+vi.mock("@/hooks/useGetActiveStore", () => ({
+  default: () => ({ activeStore: { _id: "store-1", currency: "USD" }, isLoadingStores: false }),
+}));
+vi.mock("@/hooks/use-navigate-back", () => ({
+  useNavigateBack: () => navigateBackMock,
+}));
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ children, to, ...props }: { children?: React.ReactNode; to: string }) => {
+    delete (props as Record<string, unknown>).params;
+    return (
+      <a href={to} {...props}>
+        {children}
+      </a>
+    );
+  },
+  useParams: () => ({ orgUrlSlug: "acme", storeUrlSlug: "downtown" }),
+  useSearch: () => search.current,
+}));
+
 import { ReportsItemsView } from "./ReportsItemsView";
 
+const baseProps = {
+  periodType: "day" as const,
+  periodDate: "2026-07-28",
+  sortBy: "revenue" as const,
+  cursor: undefined,
+  onPeriodTypeChange: vi.fn(),
+  onPeriodDateChange: vi.fn(),
+  onSortByChange: vi.fn(),
+  onCursorChange: vi.fn(),
+};
+
 describe("ReportsItemsView", () => {
-  it("does not render an empty item result while the epoch materializes", () => {
-    render(
-      <ReportsItemsView
-        classification="all"
-        data={{
-          continueCursor: "",
-          isDone: true,
-          page: [],
-          status: "materializing",
-        }}
-        onClassificationChange={vi.fn()}
-        onOpenItem={vi.fn()}
-        onSortChange={vi.fn()}
-        sort="revenue"
-      />,
+  it("queries listPeriodSkus with a d: period key built via the contract helper", () => {
+    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+    render(<ReportsItemsView {...baseProps} />);
+
+    expect(useQuery).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ periodKey: "d:2026-07-28", sortBy: "revenue" }),
     );
-    expect(screen.getByText("Preparing reports")).toBeInTheDocument();
-    expect(
-      screen.queryByText("No item activity matches this view."),
-    ).not.toBeInTheDocument();
-  });
-  it("renders coverage, classifications, and mobile row summaries", () => {
-    const onClassificationChange = vi.fn();
-    render(
-      <ReportsItemsView
-        classification="all"
-        data={{
-          continueCursor: "",
-          facets: [{ value: "fast_mover", count: 1 }],
-          isDone: true,
-          page: [
-            {
-              productSkuId: "sku-1",
-              identity: {
-                product: { name: "Silk Press Wig", slug: "silk-press" },
-                sku: { sku: "SP-01" },
-              },
-              classifications: ["fast_mover"],
-              completeness: "complete",
-              metrics: {
-                netRevenueMinor: 12500,
-                netSoldUnits: 4,
-                knownGrossProfitMinor: 5000,
-                costCoverageBasisPoints: 8000,
-                onHandQuantity: 6,
-                projectedDaysOfCover: 5,
-              },
-              revenueCurrencyCode: "USD",
-              revenueCurrencyMinorUnitScale: 2,
-              revenueSort: 12500,
-              marginSort: 0,
-              unitsSort: 4,
-              coverSort: 5,
-              inventoryValueSort: 0,
-              attentionSort: 0,
-            },
-          ],
-          rollups: [],
-          status: "active",
-        }}
-        onClassificationChange={onClassificationChange}
-        onOpenItem={vi.fn()}
-        onSortChange={vi.fn()}
-        sort="revenue"
-      />,
-    );
-    expect(screen.getAllByText("Silk Press Wig").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/80% cost coverage/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("$125.00").length).toBeGreaterThan(0);
-    screen.getByRole("button", { name: /fast mover \(1\)/i }).click();
-    expect(onClassificationChange).toHaveBeenCalledWith("fast_mover");
-    expect(
-      screen.getByRole("button", { name: /sort by net sales, descending/i }),
-    ).toHaveAttribute("aria-pressed", "true");
-    expect(
-      screen.getByTestId("reports-items-table-mobile-cards"),
-    ).toBeInTheDocument();
   });
 
-  it("omits a count suffix when the server does not provide one", () => {
-    render(
-      <ReportsItemsView
-        classification="all"
-        data={{
-          continueCursor: "",
-          facets: [{ value: "slow_mover" }],
-          isDone: true,
-          page: [],
-          status: "verified",
-        }}
-        onClassificationChange={vi.fn()}
-        onOpenItem={vi.fn()}
-        onSortChange={vi.fn()}
-        sort="revenue"
-      />,
-    );
+  it("identifies a SKU by product name with its code beneath", () => {
+    useQuery.mockReturnValue({
+      rows: [
+        {
+          productSkuId: "kx70hda5jszy8a9c8eg04wb39188g5g6",
+          periodKey: "d:2026-07-28",
+          identity: { displayName: "bottle water", sku: "6N2Y-Y4Q-95V", size: "500ml" },
+          unitsSold: 3,
+          unitsReturned: 0,
+          grossSalesMinor: 3600,
+          netSalesMinor: 3600,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: null,
+        },
+      ],
+      continueCursor: null,
+    });
+    render(<ReportsItemsView {...baseProps} />);
+
+    // Operator-entered names are normalized for display.
+    expect(screen.getByText("Bottle Water")).toBeInTheDocument();
+    // The code disambiguates same-named SKUs, so it is always shown.
+    expect(screen.getByText("6N2Y-Y4Q-95V · 500ml")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "slow mover" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /slow mover \(/ }),
+      screen.queryByText("kx70hda5jszy8a9c8eg04wb39188g5g6"),
     ).not.toBeInTheDocument();
+  });
+
+  it("falls back to the id when the SKU record is gone", () => {
+    useQuery.mockReturnValue({
+      rows: [
+        {
+          productSkuId: "sku-deleted",
+          periodKey: "d:2026-07-28",
+          unitsSold: 1,
+          unitsReturned: 0,
+          grossSalesMinor: 100,
+          netSalesMinor: 100,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: null,
+        },
+      ],
+      continueCursor: null,
+    });
+    render(<ReportsItemsView {...baseProps} />);
+
+    // The row survives: a fact outlives its subject, and dropping it would
+    // understate the period.
+    expect(screen.getAllByText("sku-deleted").length).toBeGreaterThan(0);
+  });
+
+  it("offers a way back only when a caller supplied an origin", async () => {
+    const user = userEvent.setup();
+    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+
+    search.current = {};
+    const { unmount } = render(<ReportsItemsView {...baseProps} />);
+    expect(screen.queryByRole("button", { name: /back/i })).not.toBeInTheDocument();
+    unmount();
+
+    search.current = { o: encodeURIComponent("/acme/store/downtown/reports") };
+    render(<ReportsItemsView {...baseProps} />);
+    await user.click(screen.getByRole("button", { name: /back/i }));
+    expect(navigateBackMock).toHaveBeenCalled();
+
+    search.current = {};
+  });
+
+  it("requests the next cursor when paginating", async () => {
+    const onCursorChange = vi.fn();
+    useQuery.mockReturnValue({
+      rows: [
+        {
+          productSkuId: "sku-1",
+          periodKey: "d:2026-07-28",
+          unitsSold: 4,
+          unitsReturned: 0,
+          grossSalesMinor: 4000,
+          netSalesMinor: 3800,
+          refundsMinor: 200,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: 1200,
+        },
+      ],
+      continueCursor: "cursor-page-2",
+    });
+
+    render(<ReportsItemsView {...baseProps} onCursorChange={onCursorChange} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
+
+    expect(onCursorChange).toHaveBeenCalledWith("cursor-page-2");
+  });
+
+  it("switches sort mode via the revenue/units toggle", async () => {
+    const onSortByChange = vi.fn();
+    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+
+    render(<ReportsItemsView {...baseProps} onSortByChange={onSortByChange} />);
+    await userEvent.click(screen.getByRole("button", { name: "Units" }));
+
+    expect(onSortByChange).toHaveBeenCalledWith("units");
   });
 });

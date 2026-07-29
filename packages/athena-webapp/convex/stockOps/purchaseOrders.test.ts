@@ -8,15 +8,9 @@ import { assertConformsToExportedReturns } from "../lib/returnValidatorContract"
 const mockedAuthServer = vi.hoisted(() => ({
   getAuthUserId: vi.fn(),
 }));
-const reportingMocks = vi.hoisted(() => ({
-  appendReportingIngressWithCtx: vi.fn(),
-}));
 
 vi.mock("@convex-dev/auth/server", () => ({
   getAuthUserId: mockedAuthServer.getAuthUserId,
-}));
-vi.mock("../reporting/ingress", () => ({
-  appendReportingIngressWithCtx: reportingMocks.appendReportingIngressWithCtx,
 }));
 
 import {
@@ -297,21 +291,13 @@ describe("stock ops purchase orders", () => {
       status: "cancelled",
       workItemId: "work-item-1",
     });
-    expect(reportingMocks.appendReportingIngressWithCtx).toHaveBeenCalledWith(
-      ctx,
-      expect.objectContaining({
-        businessEventKey:
-          "purchase_order:purchase-order-1:commitment:cancelled:line:line-1",
-        lines: [
-          expect.objectContaining({
-            grossAmountMinor: -300,
-            lineKey: "line-1",
-            netAmountMinor: -300,
-            quantity: -3,
-          }),
-        ],
-        sourceEventType: "purchase_order_commitment_released",
-      }),
+    // PO-line commitment release no longer emits anything into the reports
+    // ledger — `shared/reportsContract.ts` has no "commitment" factKind, so
+    // the status transition writes only the purchase order patch and the
+    // linked work-item/operational-event trail asserted above.
+    expect(insert).not.toHaveBeenCalledWith(
+      "reportFact",
+      expect.anything(),
     );
   });
 

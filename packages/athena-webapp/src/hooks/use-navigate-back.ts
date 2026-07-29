@@ -2,12 +2,14 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import useGetActiveStore from "./useGetActiveStore";
 import { useGetActiveOrganization } from "./useGetOrganizations";
 
+type NavigateBackParams = Record<string, string | undefined>;
+
 export const useNavigateBack = ({
   url,
   params,
 }: {
   url?: string;
-  params?: any;
+  params?: NavigateBackParams;
 } = {}) => {
   const { o } = useSearch({ strict: false });
 
@@ -23,7 +25,7 @@ export const useNavigateBack = ({
     } else if (url) {
       navigate({
         to: url,
-        params: (prev) => ({
+        params: (prev: NavigateBackParams) => ({
           ...prev,
           storeUrlSlug: activeStore?.slug,
           orgUrlSlug: activeOrganization?.slug,

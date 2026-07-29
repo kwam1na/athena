@@ -3,7 +3,7 @@ import type { MutationCtx } from "../../../_generated/server";
 import { ok, userError, type CommandResult } from "../../../../shared/commandResult";
 import { isPosLocalSyncEventType } from "../../../../shared/posLocalSyncContract";
 import { createConvexLocalSyncRepository } from "../../infrastructure/repositories/localSyncRepository";
-import { resolveReportingCalendarReferenceWithCtx } from "../../../reporting/operatingPeriods";
+import { resolveReportingCalendarReferenceWithCtx } from "../../../storeTime/operatingPeriods";
 import { projectLocalSyncEvent } from "./projectLocalEvents";
 import { patchRegisterSessionActivityFromLocalSyncWithCtx } from "./posRegisterSessionActivity";
 import { recordSequenceGapObservation } from "./sequenceGapPolicy";

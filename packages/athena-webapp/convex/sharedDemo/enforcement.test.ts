@@ -39,7 +39,6 @@ import {
 } from "../inventory/stores";
 import { createStaffCredential } from "../operations/staffCredentials";
 import { decideApprovalRequest } from "../operations/approvalRequests";
-import { requestExport } from "../reporting/export";
 import { processReturnExchange } from "../storeFront/onlineOrder";
 import { createTransaction, refundPayment } from "../storeFront/payment";
 import {
@@ -62,7 +61,6 @@ describe("actual public shared-demo enforcement boundaries", () => {
   it.each([
     [createStaffCredential, "identity.manage", {}],
     [createInvite, "permissions.manage", {}],
-    [requestExport, "exports.generate", { storeId: "store" }],
     [removeStore, "administration.destructive", { id: "store" }],
     [patchConfigV2Command, "integrations.manage", { id: "store", patch: {} }],
     [createStaffProfile, "staff.manage", {}],

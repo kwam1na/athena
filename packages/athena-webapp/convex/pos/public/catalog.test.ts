@@ -30,7 +30,7 @@ vi.mock("../application/sync/registerCatalogRevision", () => ({
   readRegisterCatalogRevision: mocks.readRegisterCatalogRevision,
 }));
 
-vi.mock("../../reporting/inventory/effects", () => ({
+vi.mock("../../inventoryLedger/effects", () => ({
   applyInventoryEffectWithCtx: mocks.applyInventoryEffectWithCtx,
 }));
 

@@ -57,17 +57,14 @@ import {
   recordPendingCheckoutItemSaleEvidence,
 } from "./createOrReusePendingCheckoutItem";
 import { readActiveProvisionalImportSkuForStoreSku } from "../queries/listRegisterCatalog";
-import {
-  appendReportingIngressWithCtx,
-  type ReportingIngressLineInput,
-} from "../../../reporting/ingress";
-import { canonicalReportingBusinessEventKey } from "../../../reporting/factIdentity";
+import { recordFacts } from "../../../reports/ingest";
+import type { NewReportFact } from "../../../../shared/reportsContract";
 import {
   applyCommerceInventoryEffectWithCtx,
   outboundBasisFromEffect,
   reportingLineCostFromEffect,
   uncostedOutboundBasis,
-} from "../../../reporting/inventory/commerceEffects";
+} from "../../../inventoryLedger/commerceEffects";
 import { appendPosLifecycleJournalWithCtx } from "../../infrastructure/posLifecycleJournal";
 
 type InventoryImportProvisionalSkuId = Id<"inventoryImportProvisionalSku">;
@@ -142,14 +139,22 @@ async function appendCompletedPosLifecycleJournal(
   });
 }
 
-function reportingCurrency(currency: string | undefined) {
-  const currencyCode = currency?.trim().toUpperCase();
-  return currencyCode
-    ? { currencyCode, currencyMinorUnitScale: 2 }
-    : {};
+function reportingCurrencyCode(currency: string | undefined) {
+  return currency?.trim().toUpperCase() || "GHS";
 }
 
-async function appendCompletedPosSaleIngress(
+/** unitCostMinor is only set when the whole line's quantity has a known cost
+ * basis; a partially-costed line is recorded as uncosted rather than risk
+ * understating cost for the uncovered units. */
+function unitCostMinorFromLineCost(
+  cost: ReturnType<typeof reportingLineCostFromEffect>,
+  quantity: number,
+): number | undefined {
+  if (cost.costStatus !== "known" || quantity === 0) return undefined;
+  return Math.round((cost.cogsKnownMinor ?? 0) / Math.abs(quantity));
+}
+
+async function recordCompletedPosSaleFacts(
   ctx: MutationCtx,
   args: {
     acceptedAt: number;
@@ -166,168 +171,102 @@ async function appendCompletedPosSaleIngress(
     organizationId?: Id<"organization">;
     storeCurrency?: string;
     storeId: Id<"store">;
-    synchronizedAt?: number;
     totals: TransactionTotals;
     transactionId: Id<"posTransaction">;
   },
 ) {
-  if (!args.organizationId) return null;
+  if (!args.organizationId) return;
+  const currency = reportingCurrencyCode(args.storeCurrency);
   const inventoryEffects =
     ctx.db && typeof ctx.db.query === "function"
       ? await Promise.all(
           args.items.map((item) =>
             ctx.db
-        .query("reportingInventoryEffect")
-        .withIndex("by_storeId_sourceDomain_businessEventKey", (q) =>
-          q
-            .eq("storeId", args.storeId)
-            .eq("sourceDomain", "pos")
-            .eq(
-              "businessEventKey",
-              `pos:${args.transactionId}:line:${item.lineKey}:sale`,
-            ),
-        )
+              .query("reportingInventoryEffect")
+              .withIndex("by_storeId_sourceDomain_businessEventKey", (q) =>
+                q
+                  .eq("storeId", args.storeId)
+                  .eq("sourceDomain", "pos")
+                  .eq(
+                    "businessEventKey",
+                    `pos:${args.transactionId}:line:${item.lineKey}:sale`,
+                  ),
+              )
               .first(),
           ),
         )
       : args.items.map(() => null);
-  const [products, pendingCheckoutItems] =
-    ctx.db && typeof ctx.db.get === "function"
-      ? await Promise.all([
-          Promise.all(
-            args.items.map((item) => ctx.db.get("product", item.productId)),
-          ),
-          Promise.all(
-            args.items.map((item) =>
-              item.pendingCheckoutItemId
-                ? ctx.db.get("posPendingCheckoutItem", item.pendingCheckoutItemId)
-                : null,
-            ),
-          ),
-        ])
-      : [args.items.map(() => null), args.items.map(() => null)];
-  const lines: ReportingIngressLineInput[] = args.items.map((item, index) => {
-    const inventoryEffect = inventoryEffects[index];
-    const product = products[index];
-    const pendingCheckoutItem = pendingCheckoutItems[index];
-    const pendingCheckoutIsResolved =
-      pendingCheckoutItem &&
-      (pendingCheckoutItem.status === "approved" ||
-        pendingCheckoutItem.status === "linked_to_catalog") &&
-      pendingCheckoutItem.approvedProductSkuId;
+
+  const facts: NewReportFact[] = args.items.map((item, index) => {
+    const cost = reportingLineCostFromEffect(
+      inventoryEffects[index],
+      item.quantity,
+    );
+    const unitCostMinor = unitCostMinorFromLineCost(cost, item.quantity);
     return {
-      allocatedDiscountMinor: 0,
-      attributionKind: item.pendingCheckoutItemId
-        ? "pending_checkout"
-        : item.inventoryImportProvisionalSkuId
-          ? "inventory_import"
-          : "direct",
-      canonicalProductSkuId: pendingCheckoutIsResolved
-        ? pendingCheckoutItem.approvedProductSkuId
-        : item.pendingCheckoutItemId
-          ? undefined
-          : item.productSkuId,
-      categoryId: product?.categoryId,
-      channel: "pos",
-      ...reportingLineCostFromEffect(inventoryEffect, item.quantity),
+      currency,
       discountAmountMinor: 0,
+      factKind: "sale",
       grossAmountMinor: item.totalAmountMinor,
-      ...(inventoryEffect ? { inventoryEffectId: inventoryEffect._id } : {}),
-      inventoryImportProvisionalSkuId:
-        item.inventoryImportProvisionalSkuId,
-      lineKey: item.lineKey,
-      lineKind: "merchandise",
+      lineId: item.lineKey,
       netAmountMinor: item.totalAmountMinor,
-      originalProductSkuId:
-        pendingCheckoutItem?.provisionalProductSkuId ?? item.productSkuId,
-      originalQuantity: item.quantity,
-      pendingCheckoutItemId: item.pendingCheckoutItemId,
-      productId: item.productId,
-      productSkuId: item.productSkuId,
-      provisionalProductSkuId:
-        pendingCheckoutItem?.provisionalProductSkuId ??
-        (item.pendingCheckoutItemId ? item.productSkuId : undefined),
+      occurredAt: args.acceptedAt,
+      productSkuId: String(item.productSkuId),
       quantity: item.quantity,
-      recognizedNetAmountMinor: item.totalAmountMinor,
-      recognitionCategoryId: product?.categoryId,
-      recognitionProductId: item.productId,
-      recognitionProductSkuId: item.productSkuId,
-      unitPriceMinor: item.unitPriceMinor,
+      sourceDomain: "pos",
+      sourceId: String(args.transactionId),
+      taxAmountMinor: 0,
+      ...(unitCostMinor !== undefined ? { unitCostMinor } : {}),
     };
   });
   if (args.totals.tax !== 0) {
-    lines.push({
-      costStatus: "not_applicable",
+    facts.push({
+      currency,
       discountAmountMinor: 0,
+      factKind: "sale",
       grossAmountMinor: args.totals.tax,
-      lineKey: "tax",
-      lineKind: "tax",
+      lineId: "tax",
       netAmountMinor: args.totals.tax,
+      occurredAt: args.acceptedAt,
       quantity: 0,
+      sourceDomain: "pos",
+      sourceId: String(args.transactionId),
       taxAmountMinor: args.totals.tax,
     });
   }
-  const contentFingerprint = [
-    "pos-complete-v1",
-    args.transactionId,
-    args.totals.subtotal,
-    args.totals.tax,
-    args.totals.total,
-    ...args.items.flatMap((item) => [
-      item.lineKey,
-      item.productSkuId,
-      item.pendingCheckoutItemId,
-      item.inventoryImportProvisionalSkuId,
-      item.quantity,
-      item.unitPriceMinor,
-      item.totalAmountMinor,
-    ]),
-    ...lines.flatMap((line) => [
-      line.canonicalProductSkuId,
-      line.originalProductSkuId,
-      line.recognitionProductId,
-      line.recognitionCategoryId,
-      line.recognitionProductSkuId,
-      line.provisionalProductSkuId,
-      line.attributionKind,
-    ]),
-  ].join(":");
 
-  return appendReportingIngressWithCtx(ctx, {
-    acceptedAt: args.acceptedAt,
-    adapterVersion: 1,
-    businessEventKey: canonicalReportingBusinessEventKey({
-      kind: "pos_sale",
-      transactionId: String(args.transactionId),
-    }),
-    contentFingerprint,
-    discountAmountMinor: 0,
-    grossAmountMinor: args.totals.subtotal,
-    lines,
-    materialFields: ["amountMinor", "occurrenceAt", "quantity", "storeId"],
-    netAmountMinor: args.totals.total,
-    occurredAt: args.acceptedAt,
-    organizationId: args.organizationId,
-    quantity: args.items.reduce((sum, item) => sum + item.quantity, 0),
-    sourceDomain: "pos",
-    sourceEventType: args.synchronizedAt
-      ? "pos_completed_offline"
-      : "pos_completed",
-    sourceReferences: [
-      {
-        relation: "owns",
-        sourceId: String(args.transactionId),
-        sourceType: "pos_transaction",
-      },
-    ],
-    storeId: args.storeId,
-    synchronizedAt: args.synchronizedAt,
-    taxAmountMinor: args.totals.tax,
-    ...reportingCurrency(args.storeCurrency),
-  });
+  // Services billed through the till live in posTransactionServiceLine, not
+  // in the item list, but their revenue is part of the transaction total.
+  // One sale fact per service line — revenue only, zero merchandise units.
+  const serviceLines =
+    ctx.db && typeof ctx.db.query === "function"
+      ? await ctx.db
+          .query("posTransactionServiceLine")
+          .withIndex("by_transactionId", (q) =>
+            q.eq("transactionId", args.transactionId),
+          )
+          .take(100)
+      : [];
+  for (const line of serviceLines) {
+    facts.push({
+      currency,
+      discountAmountMinor: 0,
+      factKind: "sale",
+      grossAmountMinor: line.totalPrice,
+      lineId: String(line._id),
+      netAmountMinor: line.totalPrice,
+      occurredAt: args.acceptedAt,
+      quantity: 0,
+      sourceDomain: "pos",
+      sourceId: String(args.transactionId),
+      taxAmountMinor: 0,
+    });
+  }
+
+  await recordFacts(ctx, args.storeId, facts);
 }
 
-async function appendPosVoidIngress(
+async function recordPosVoidFacts(
   ctx: MutationCtx,
   args: {
     acceptedAt: number;
@@ -339,74 +278,93 @@ async function appendPosVoidIngress(
     transaction: NonNullable<Awaited<ReturnType<typeof getPosTransactionById>>>;
   },
 ) {
-  if (!args.organizationId) return null;
-  const lines: ReportingIngressLineInput[] = args.items.map(({ item }) => ({
-    allocatedDiscountMinor: item.discount ?? 0,
-    attributionKind: item.pendingCheckoutItemId
-      ? "pending_checkout"
-      : item.inventoryImportProvisionalSkuId
-        ? "inventory_import"
-        : "direct",
-    canonicalProductSkuId: item.pendingCheckoutItemId
-      ? undefined
-      : item.productSkuId,
-    channel: "pos",
-    costStatus: "not_applicable",
-    discountAmountMinor: item.discount ?? 0,
-    grossAmountMinor: item.totalPrice,
-    inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId,
-    lineKey: String(item._id),
-    lineKind: "merchandise",
-    netAmountMinor: item.totalPrice,
-    originalProductSkuId: item.productSkuId,
-    originalQuantity: item.quantity,
-    pendingCheckoutItemId: item.pendingCheckoutItemId,
-    productId: item.productId,
-    productSkuId: item.productSkuId,
-    provisionalProductSkuId: item.pendingCheckoutItemId
-      ? item.productSkuId
-      : undefined,
-    // The inventory return effect owns the unit reversal. This line owns only
-    // the voided revenue so units sold are not decremented twice.
-    quantity: 0,
-    recognizedNetAmountMinor: item.totalPrice,
-    recognitionProductId: item.productId,
-    recognitionProductSkuId: item.productSkuId,
-    unitPriceMinor: item.unitPrice,
-  }));
-  return appendReportingIngressWithCtx(ctx, {
-    acceptedAt: args.acceptedAt,
-    adapterVersion: 1,
-    businessEventKey: canonicalReportingBusinessEventKey({
-      kind: "pos_void",
-      transactionId: String(args.transaction._id),
-    }),
-    contentFingerprint: [
-      "pos-void-v1",
-      args.transaction._id,
-      args.transaction.total,
-      ...lines.flatMap((line) => [line.lineKey, line.quantity, line.netAmountMinor]),
-    ].join(":"),
-    grossAmountMinor: args.transaction.subtotal,
-    lines,
-    materialFields: ["amountMinor", "occurrenceAt", "quantity", "storeId"],
-    netAmountMinor: args.transaction.total,
-    occurredAt: args.acceptedAt,
-    organizationId: args.organizationId,
-    quantity: 0,
-    sourceDomain: "pos",
-    sourceEventType: "pos_transaction_voided",
-    sourceReferences: [
-      {
-        relation: "reverses",
-        sourceId: String(args.transaction._id),
-        sourceType: "pos_transaction",
-      },
-    ],
-    storeId: args.transaction.storeId,
-    taxAmountMinor: args.transaction.tax,
-    ...reportingCurrency(args.storeCurrency),
+  if (!args.organizationId) return;
+  const currency = reportingCurrencyCode(args.storeCurrency);
+  const inventoryEffects = await Promise.all(
+    args.items.map(({ item }) =>
+      ctx.db
+        .query("reportingInventoryEffect")
+        .withIndex("by_storeId_sourceDomain_businessEventKey", (q) =>
+          q
+            .eq("storeId", args.transaction.storeId)
+            .eq("sourceDomain", "pos")
+            .eq(
+              "businessEventKey",
+              `pos:${args.transaction._id}:line:${item._id}:sale`,
+            ),
+        )
+        .first(),
+    ),
+  );
+
+  const facts: NewReportFact[] = args.items.map(({ item }, index) => {
+    const cost = reportingLineCostFromEffect(
+      inventoryEffects[index],
+      item.quantity,
+    );
+    const unitCostMinor = unitCostMinorFromLineCost(cost, item.quantity);
+    // A void withdraws the sale in full. The fold trusts void signs as
+    // carried (`emitter sign is the meaning`), so amounts and quantity are
+    // emitted NEGATED — see convex/reports/foldDay.ts.
+    return {
+      currency,
+      discountAmountMinor: -(item.discount ?? 0),
+      factKind: "void",
+      grossAmountMinor: -item.totalPrice,
+      lineId: String(item._id),
+      netAmountMinor: -item.totalPrice,
+      occurredAt: args.acceptedAt,
+      productSkuId: String(item.productSkuId),
+      quantity: -item.quantity,
+      sourceDomain: "pos",
+      sourceId: String(args.transaction._id),
+      taxAmountMinor: 0,
+      ...(unitCostMinor !== undefined ? { unitCostMinor } : {}),
+    };
   });
+  if (args.transaction.tax !== 0) {
+    facts.push({
+      currency,
+      discountAmountMinor: 0,
+      factKind: "void",
+      grossAmountMinor: -args.transaction.tax,
+      lineId: "tax",
+      netAmountMinor: -args.transaction.tax,
+      occurredAt: args.acceptedAt,
+      quantity: 0,
+      sourceDomain: "pos",
+      sourceId: String(args.transaction._id),
+      taxAmountMinor: -args.transaction.tax,
+    });
+  }
+
+  // A void withdraws till-billed service revenue too (see the sale emitter).
+  const serviceLines =
+    ctx.db && typeof ctx.db.query === "function"
+      ? await ctx.db
+          .query("posTransactionServiceLine")
+          .withIndex("by_transactionId", (q) =>
+            q.eq("transactionId", args.transaction._id),
+          )
+          .take(100)
+      : [];
+  for (const line of serviceLines) {
+    facts.push({
+      currency,
+      discountAmountMinor: 0,
+      factKind: "void",
+      grossAmountMinor: -line.totalPrice,
+      lineId: String(line._id),
+      netAmountMinor: -line.totalPrice,
+      occurredAt: args.acceptedAt,
+      quantity: 0,
+      sourceDomain: "pos",
+      sourceId: String(args.transaction._id),
+      taxAmountMinor: 0,
+    });
+  }
+
+  await recordFacts(ctx, args.transaction.storeId, facts);
 }
 
 function hasReadableDb(ctx: MutationCtx): ctx is MutationCtx & {
@@ -1674,7 +1632,7 @@ export async function completeTransaction(
     transactionNumber,
   });
 
-  await appendCompletedPosSaleIngress(ctx, {
+  await recordCompletedPosSaleFacts(ctx, {
     acceptedAt: completedAt,
     items: args.items.map((item, index) => ({
       inventoryImportProvisionalSkuId:
@@ -2445,7 +2403,7 @@ async function applyApprovedTransactionVoid(
     origin: "cloud",
   });
 
-  await appendPosVoidIngress(ctx, {
+  await recordPosVoidFacts(ctx, {
     acceptedAt: voidedAt,
     items: args.items,
     organizationId: store?.organizationId,
@@ -3241,7 +3199,7 @@ export async function createTransactionFromSessionHandler(
     transactionNumber,
   });
 
-  await appendCompletedPosSaleIngress(ctx, {
+  await recordCompletedPosSaleFacts(ctx, {
     acceptedAt: completedAt,
     items: items.map((item, index) => ({
       inventoryImportProvisionalSkuId:

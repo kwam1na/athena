@@ -26,11 +26,11 @@ import {
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { createOperationalWorkItemWithCtx } from "../operations/operationalWorkItems";
 import { recordSkuActivityEventWithCtx } from "../operations/skuActivity";
-import { applyInventoryEffectWithCtx } from "../reporting/inventory/effects";
+import { applyInventoryEffectWithCtx } from "../inventoryLedger/effects";
 import {
   knownUnitCostBasis,
   uncostedBasis,
-} from "../reporting/inventory/valuation";
+} from "../inventoryLedger/valuation";
 import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { isPosCatalogVisible } from "../../shared/posCatalogVisibility";

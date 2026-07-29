@@ -242,12 +242,12 @@ describe("AppSidebar capability gates", () => {
     });
   });
 
-  it("hides Reports from the application menu", () => {
+  it("shows Reports in the application menu for a full admin", () => {
     mocks.usePermissions.mockReturnValue(fullAdminPermissions);
 
     render(<AppSidebar />);
 
-    expect(screen.queryByRole("link", { name: /reports/i })).toBeNull();
+    expect(screen.getByRole("link", { name: /reports/i })).toBeInTheDocument();
   });
 
   it("hides Storefront from the shared demo menu", () => {
@@ -427,7 +427,10 @@ describe("AppSidebar capability gates", () => {
       "aria-disabled",
       "true",
     );
-    expect(screen.queryByRole("link", { name: /reports/i })).toBeNull();
+    expect(screen.getByRole("link", { name: /reports/i })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     expect(screen.getByRole("link", { name: /bulk operations/i })).toHaveAttribute(
       "aria-disabled",
       "true",

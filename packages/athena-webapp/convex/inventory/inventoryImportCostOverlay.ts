@@ -33,7 +33,7 @@ import {
   listCostOverlayRowsReadDefinition,
   getCostOverlayUndoPreviewReadDefinition,
 } from "../operationAdmission/readDefinitions";
-import { requireReportingStoreAccess } from "../reporting/access";
+import { requireReportsStoreAccess } from "../reports/access";
 import {
   inventoryImportCostOverlayColumnValidator,
   inventoryImportCostOverlayCommandDecisionValidator,
@@ -494,7 +494,7 @@ export const createCostOverlayRun = mutation({
         selectedColumn: CostOverlayColumn;
       },
     ) => {
-      const { athenaUser, store } = await requireReportingStoreAccess(
+      const { athenaUser, store } = await requireReportsStoreAccess(
         ctx,
         args.storeId,
       );
@@ -584,7 +584,7 @@ export const getCostOverlayRun = query({
         runId: Id<"inventoryImportCostOverlayRun">;
       },
     ) => {
-      await requireReportingStoreAccess(ctx, args.storeId);
+      await requireReportsStoreAccess(ctx, args.storeId);
       const run = await requireRunForStore(ctx, args.storeId, args.runId);
       return {
         ...run,
@@ -608,7 +608,7 @@ export const resolveCostOverlayRunFromUrl = query({
         runId: string;
       },
     ) => {
-      await requireReportingStoreAccess(ctx, args.storeId);
+      await requireReportsStoreAccess(ctx, args.storeId);
       const runId = ctx.db.normalizeId(
         "inventoryImportCostOverlayRun",
         args.runId.trim(),
@@ -629,7 +629,7 @@ export const getLatestCostOverlaySourceDescriptor = query({
   handler: withOperationReadAdmission(
     getLatestCostOverlaySourceDescriptorReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
-      await requireReportingStoreAccess(ctx, args.storeId);
+      await requireReportsStoreAccess(ctx, args.storeId);
       const review = await ctx.db
         .query("inventoryImportReviewVersion")
         .withIndex("by_storeId_createdAt", (q) => q.eq("storeId", args.storeId))
@@ -646,7 +646,7 @@ export const listRecentCostOverlayRuns = query({
   handler: withOperationReadAdmission(
     listRecentCostOverlayRunsReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
-      await requireReportingStoreAccess(ctx, args.storeId);
+      await requireReportsStoreAccess(ctx, args.storeId);
       return await listRecentCostOverlayRunsWithActive(ctx, args.storeId);
     },
   ),
@@ -748,7 +748,7 @@ export const listCostOverlayRows = query({
         filter?: CostOverlayRowFilter;
       },
     ) => {
-      await requireReportingStoreAccess(ctx, args.storeId);
+      await requireReportsStoreAccess(ctx, args.storeId);
       await requireRunForStore(ctx, args.storeId, args.runId);
       return listCostOverlayRowsPageWithScope(ctx, args);
     },
@@ -773,7 +773,7 @@ export const updateCostOverlayDecision = mutation({
         decision: CostOverlayCommandDecision;
       },
     ) => {
-      await requireReportingStoreAccess(ctx, args.storeId);
+      await requireReportsStoreAccess(ctx, args.storeId);
       const run = await requireRunForStore(ctx, args.storeId, args.runId);
       if (run.status !== "ready" || run.bulkDecisionStatus === "processing") {
         throw new Error("Cost overlay decisions are not editable.");
@@ -840,7 +840,7 @@ export const updateCostOverlayDecisionsBulk = mutation({
         requestKey: string;
       },
     ) => {
-      await requireReportingStoreAccess(ctx, args.storeId);
+      await requireReportsStoreAccess(ctx, args.storeId);
       const run = await requireRunForStore(ctx, args.storeId, args.runId);
       const filter = args.filter ?? "all";
       const search = args.search?.trim() ?? "";
@@ -1070,7 +1070,7 @@ export const prepareCostOverlayRun = mutation({
         expectedDecisionRevision: number;
       },
     ) => {
-      await requireReportingStoreAccess(ctx, args.storeId);
+      await requireReportsStoreAccess(ctx, args.storeId);
       const run = await requireRunForStore(ctx, args.storeId, args.runId);
       if (
         run.status !== "ready" ||
@@ -1130,7 +1130,7 @@ export const confirmCostOverlayApply = mutation({
         expectedManifestDigest: string;
       },
     ) => {
-      await requireReportingStoreAccess(ctx, args.storeId);
+      await requireReportsStoreAccess(ctx, args.storeId);
       const run = await requireRunForStore(ctx, args.storeId, args.runId);
       if (
         run.status !== "prepared" ||
@@ -1187,7 +1187,7 @@ export const getCostOverlayUndoPreview = query({
         runId: Id<"inventoryImportCostOverlayRun">;
       },
     ) => {
-      await requireReportingStoreAccess(ctx, args.storeId);
+      await requireReportsStoreAccess(ctx, args.storeId);
       const run = await requireRunForStore(ctx, args.storeId, args.runId);
       return {
         status: run.undoPreviewStatus ?? ("unavailable" as const),
@@ -1211,7 +1211,7 @@ export const refreshCostOverlayUndoPreview = mutation({
   handler: withOperationMutationAdmission(
     refreshCostOverlayUndoPreviewOperationDefinition,
     async (ctx, args) => {
-      await requireReportingStoreAccess(ctx, args.storeId);
+      await requireReportsStoreAccess(ctx, args.storeId);
       const run = await requireRunForStore(ctx, args.storeId, args.runId);
       if (
         run.status !== "applied" &&
@@ -1299,7 +1299,7 @@ export const requestCostOverlayUndo = mutation({
         requestKey: string;
       },
     ) => {
-      await requireReportingStoreAccess(ctx, args.storeId);
+      await requireReportsStoreAccess(ctx, args.storeId);
       const run = await requireRunForStore(ctx, args.storeId, args.runId);
       const requestFingerprint = JSON.stringify({
         runId: run._id,
@@ -1371,7 +1371,7 @@ export const retryCostOverlayWork = mutation({
         runId: Id<"inventoryImportCostOverlayRun">;
       },
     ) => {
-      await requireReportingStoreAccess(ctx, args.storeId);
+      await requireReportsStoreAccess(ctx, args.storeId);
       const run = await requireRunForStore(ctx, args.storeId, args.runId);
       const retryableWork = classifyCostOverlayRetryableWork(run, Date.now());
       if (!retryableWork) {
@@ -1471,7 +1471,7 @@ export const reopenCostOverlayRun = mutation({
         runId: Id<"inventoryImportCostOverlayRun">;
       },
     ) => {
-      await requireReportingStoreAccess(ctx, args.storeId);
+      await requireReportsStoreAccess(ctx, args.storeId);
       const run = await requireRunForStore(ctx, args.storeId, args.runId);
       assertCostOverlayTransition(run.status, "ready");
       await ctx.db.patch("inventoryImportCostOverlayRun", args.runId, {
@@ -1505,7 +1505,7 @@ export const abandonCostOverlayRun = mutation({
         runId: Id<"inventoryImportCostOverlayRun">;
       },
     ) => {
-      await requireReportingStoreAccess(ctx, args.storeId);
+      await requireReportsStoreAccess(ctx, args.storeId);
       const run = await requireRunForStore(ctx, args.storeId, args.runId);
       if (run.bulkDecisionStatus === "processing") {
         throw new Error("Cost overlay bulk decision is still processing.");

@@ -15,13 +15,6 @@ crons.interval("landing-funnel-retention-cleanup", { hours: 24 }, internal.marke
 crons.interval("walkthrough-notification-recovery", { minutes: 10 }, internal.marketing.walkthroughRequestNotifications.scheduleEligibleBatch, {});
 
 crons.interval(
-  "resume Reports workspace materialization",
-  { hours: 1 },
-  internal.reporting.readModels.materialize.resumeReportsWorkspaceMaterialization,
-  {},
-);
-
-crons.interval(
   "release-checkout-items",
   { minutes: process.env.STAGE == "prod" ? 10 : 1440 },
   internal.storeFront.checkoutSession.releaseCheckoutItems,
@@ -111,5 +104,17 @@ if (process.env.STAGE == "prod") {
     {},
   );
 }
+
+// The ONE cron of the rebuilt reports layer. Work is queued as reportDirtyDay
+// marks; this is their only consumer, and a crashed sweep leaves the marks in
+// place for the next tick. Cadence trades overview freshness against
+// subscription re-runs linearly — 5 minutes is the design's starting point,
+// to be tuned on wigclub.
+crons.interval(
+  "reports sweep",
+  { minutes: 5 },
+  internal.reports.sweeper.sweep,
+  {},
+);
 
 export default crons;

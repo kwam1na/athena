@@ -10,7 +10,7 @@ const mockedSkuSearch = vi.hoisted(() => ({
   upsertProductSkuSearchProjection: vi.fn(),
 }));
 
-vi.mock("../reporting/inventory/effects", () => mockedEffects);
+vi.mock("../inventoryLedger/effects", () => mockedEffects);
 vi.mock("./skuSearch", () => mockedSkuSearch);
 
 import {

@@ -62,7 +62,9 @@ import {
 } from "../operationAdmission/readDefinitions";
 import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import type { AutomationDecisionEvidence } from "../automation/runLedger";
-import { appendReportingIngressWithCtx } from "../reporting/ingress";
+import { recordFacts } from "../reports/ingest";
+import { resolveOperatingDate } from "../reports/operatingDay";
+import type { NewReportFact } from "../../shared/reportsContract";
 
 export { buildAdjustmentReportTotals, listAppliedTransactionAdjustmentsForDay };
 
@@ -3792,104 +3794,84 @@ async function recordDailyCloseCompletedEvent(
   });
 }
 
-async function appendDailyCloseCompletedReportingIngress(
+/** Upsert the (store, day) dirty mark for a report-relevant business event. */
+async function markReportDayDirty(
+  ctx: MutationCtx,
+  storeId: Id<"store">,
+  operatingDate: string,
+  reason: Doc<"reportDirtyDay">["reason"],
+): Promise<void> {
+  const existing = await ctx.db
+    .query("reportDirtyDay")
+    .withIndex("by_storeId_operatingDate", (q) =>
+      q.eq("storeId", storeId).eq("operatingDate", operatingDate),
+    )
+    .first();
+  const markedAt = Date.now();
+
+  if (existing) {
+    await ctx.db.patch("reportDirtyDay", existing._id, { reason, markedAt });
+    return;
+  }
+
+  await ctx.db.insert("reportDirtyDay", {
+    storeId,
+    operatingDate,
+    reason,
+    markedAt,
+  });
+}
+
+/**
+ * On close acceptance: record the `close_snapshot` fact the fold uses to
+ * derive variance, and mark the close's operating day dirty so the
+ * authoritative fold runs (the incremental preview never re-derives a closed
+ * day's numbers on its own).
+ */
+async function recordDailyCloseCompletedReportFacts(
   ctx: MutationCtx,
   args: {
     dailyClose: Doc<"dailyClose">;
     store: Doc<"store">;
   },
-) {
+): Promise<void> {
   const { dailyClose, store } = args;
   const salesTotal =
     typeof dailyClose.summary.salesTotal === "number"
       ? dailyClose.summary.salesTotal
       : 0;
-  const sourceCompleteness = dailyClose.sourceCompleteness ?? {
-    complete: false,
-    entries: [],
-  };
-  const closeVersion =
-    dailyClose.reportingCloseVersion ??
-    (dailyClose.supersedesDailyCloseId ? 2 : 1);
-  const completedAt = dailyClose.completedAt ?? dailyClose.updatedAt;
-  const rangeEndAt = dailyClose.reportSnapshot?.closeMetadata.endAt;
-  const rangeStartAt = dailyClose.reportSnapshot?.closeMetadata.startAt;
-  const occurredAt =
-    typeof rangeEndAt === "number" && typeof rangeStartAt === "number"
-      ? Math.max(rangeStartAt, rangeEndAt - 1)
-      : completedAt;
-  const sourceReferences = [
-    {
-      relation: "owns" as const,
-      sourceId: String(dailyClose._id),
-      sourceType: "daily_close",
-    },
-    ...(dailyClose.supersedesDailyCloseId
-      ? [
-          {
-            relation: "supersedes" as const,
-            sourceId: String(dailyClose.supersedesDailyCloseId),
-            sourceType: "daily_close",
-          },
-        ]
-      : []),
-  ];
-  const closeSnapshot = {
-    acceptedDeficitAdjustmentMinor: 0,
-    acceptedNetSalesMinor:
-      typeof dailyClose.summary.adjustedSalesTotal === "number"
-        ? dailyClose.summary.adjustedSalesTotal
-        : salesTotal,
-    acceptedRefundsMinor:
-      typeof dailyClose.summary.adjustmentRefundTotal === "number"
-        ? dailyClose.summary.adjustmentRefundTotal
-        : 0,
-    completeness: sourceCompleteness.complete
-      ? ("complete" as const)
-      : ("partial" as const),
-    snapshotVersion: closeVersion,
-    ...(dailyClose.supersedesDailyCloseId
-      ? { supersedesCloseId: String(dailyClose.supersedesDailyCloseId) }
-      : {}),
-  };
-  const immutableSnapshot = {
-    closeId: String(dailyClose._id),
-    closeSnapshot,
-    closeVersion,
-    currencyCode: store.currency,
-    operatingDate: dailyClose.operatingDate,
-    salesTotal,
-    sourceCompleteness,
-    supersedesCloseId: dailyClose.supersedesDailyCloseId
-      ? String(dailyClose.supersedesDailyCloseId)
-      : null,
+  const acceptedNetSalesMinor =
+    typeof dailyClose.summary.adjustedSalesTotal === "number"
+      ? dailyClose.summary.adjustedSalesTotal
+      : salesTotal;
+  const occurredAt = dailyClose.completedAt ?? dailyClose.updatedAt;
+
+  const fact: NewReportFact = {
+    sourceDomain: "daily_close",
+    sourceId: String(dailyClose._id),
+    lineId: "",
+    factKind: "close_snapshot",
+    occurredAt,
+    currency: store.currency,
+    grossAmountMinor: 0,
+    netAmountMinor: acceptedNetSalesMinor,
+    taxAmountMinor: 0,
+    discountAmountMinor: 0,
+    quantity: 0,
   };
 
-  return appendReportingIngressWithCtx(ctx, {
-    acceptedAt: completedAt,
-    adapterVersion: closeVersion,
-    businessEventKey: `daily_close:${dailyClose._id}:completed:v${closeVersion}`,
-    closeSnapshot,
-    contentFingerprint: `daily-close:v${closeVersion}:${JSON.stringify(immutableSnapshot)}`,
-    currencyCode: store.currency,
-    currencyMinorUnitScale: 2,
-    materialFields: [
-      "closeId",
-      "closeVersion",
-      "currencyCode",
-      "operatingDate",
-      "salesTotal",
-      "sourceCompleteness",
-      "supersedesCloseId",
-    ],
-    netAmountMinor: salesTotal,
-    occurredAt,
-    organizationId: dailyClose.organizationId,
-    sourceDomain: "daily_close",
-    sourceEventType: "daily_close_completed",
-    sourceReferences,
-    storeId: dailyClose.storeId,
-  });
+  await recordFacts(ctx, dailyClose.storeId, [fact]);
+
+  const operatingDate =
+    dailyClose.operatingDate ||
+    (await resolveOperatingDate(ctx, dailyClose.storeId, occurredAt));
+
+  await markReportDayDirty(
+    ctx,
+    dailyClose.storeId,
+    operatingDate,
+    "close_accepted",
+  );
 }
 
 export async function completeDailyCloseWithCtx(
@@ -4152,7 +4134,7 @@ export async function completeDailyCloseWithCtx(
     });
   }
 
-  await appendDailyCloseCompletedReportingIngress(ctx, {
+  await recordDailyCloseCompletedReportFacts(ctx, {
     dailyClose,
     store,
   });
@@ -4478,7 +4460,7 @@ export async function completeDailyCloseForAutomationWithCtx(
     });
   }
 
-  await appendDailyCloseCompletedReportingIngress(ctx, {
+  await recordDailyCloseCompletedReportFacts(ctx, {
     dailyClose,
     store,
   });

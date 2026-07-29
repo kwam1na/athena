@@ -1625,12 +1625,22 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
-    "packages/athena-webapp/convex/reporting/public.ts",
+    "packages/athena-webapp/convex/reports/queries.ts",
     "export {};\n",
     rootDir
   );
   await write(
-    "packages/athena-webapp/convex/schemas/reporting/facts.ts",
+    "packages/athena-webapp/convex/schemas/reports/facts.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/inventoryLedger/valuation.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/storeTime/storeTimeAuthority.ts",
     "export {};\n",
     rootDir
   );
@@ -1640,7 +1650,7 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
-    "packages/athena-webapp/shared/reportingContract.ts",
+    "packages/athena-webapp/shared/reportsContract.ts",
     "export {};\n",
     rootDir
   );

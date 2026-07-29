@@ -4,18 +4,17 @@ import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { markCatalogSummaryNeedsRefresh } from "../inventory/catalogSummary";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
-import { REPORTING_FACT_CONTRACT_VERSION } from "../../shared/reportingContract";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { requireStoreFullAdminAccess } from "./access";
 import { bestEffortRecordPurchaseOrderReceivingTraceWithCtx } from "./purchaseOrderTracing";
-import { resolveReportingOperatingPeriodWithCtx } from "../reporting/operatingPeriods";
-import { applyInventoryEffectWithCtx } from "../reporting/inventory/effects";
+import { resolveReportingOperatingPeriodWithCtx } from "../storeTime/operatingPeriods";
+import { applyInventoryEffectWithCtx } from "../inventoryLedger/effects";
 import {
   knownUnitCostBasis,
   uncostedBasis,
-} from "../reporting/inventory/valuation";
-import { appendReportingIngressWithCtx } from "../reporting/ingress";
-import { canonicalReportingBusinessEventKey } from "../reporting/factIdentity";
+} from "../inventoryLedger/valuation";
+import { recordFacts } from "../reports/ingest";
+import type { NewReportFact } from "../../shared/reportsContract";
 
 type ReceivingLineItemInput = {
   orderedQuantity: number;
@@ -364,6 +363,7 @@ export async function receivePurchaseOrderBatchWithCtx(
     sourceId: string;
     sourceType: "purchase_order_receiving_batch";
   }> = [];
+  const receiptFacts: NewReportFact[] = [];
 
   for (const lineItem of normalizedLineItems) {
     const productSku = await ctx.db.get(
@@ -423,77 +423,30 @@ export async function receivePurchaseOrderBatchWithCtx(
         quantity: lineItem.receivedQuantity,
       },
     });
-    const confirmedLineTotal =
-      lineItem.confirmedUnitCost === undefined
-        ? undefined
-        : lineItem.confirmedUnitCost * lineItem.receivedQuantity;
-    const plannedCommitmentAmount =
-      lineItem.plannedUnitCost * lineItem.receivedQuantity;
-    await appendReportingIngressWithCtx(ctx, {
-      acceptedAt: now,
-      adapterVersion: 1,
-      businessEventKey: canonicalReportingBusinessEventKey({
-        kind: "purchase_receipt",
-        lineId: lineItem._id,
-        purchaseOrderId: String(args.purchaseOrderId),
-        receivingBatchId: String(receivingBatchId),
-      }),
-      ...(purchaseOrderCurrency
-        ? {
-            currencyCode: purchaseOrderCurrency,
-            currencyMinorUnitScale: 2,
-            grossAmountMinor: plannedCommitmentAmount,
-            netAmountMinor: plannedCommitmentAmount,
-          }
-        : {}),
-      contentFingerprint: `procurement-receipt:v2:${lineItem._id}:${lineItem.receivedQuantity}:${lineItem.plannedUnitCost}:${purchaseOrderCurrency ?? "unknown"}:${lineItem.confirmedUnitCost ?? "unknown"}:${lineItem.confirmedCurrency ?? "unknown"}`,
-      factContractVersion: REPORTING_FACT_CONTRACT_VERSION,
-      lines: [
-        {
-          grossAmountMinor: plannedCommitmentAmount,
-          netAmountMinor: plannedCommitmentAmount,
-          ...(confirmedLineTotal === undefined
-            ? {}
-            : {
-                cogsKnownMinor: confirmedLineTotal,
-                valuationCurrencyCode: lineItem.confirmedCurrency,
-                valuationCurrencyMinorUnitScale: 2,
-              }),
-          costStatus: confirmedLineTotal === undefined ? "unknown" : "known",
-          lineKey: lineItem._id,
-          lineKind: "merchandise",
-          productSkuId: lineItem.productSkuId as Id<"productSku">,
-          expectedInboundAt: purchaseOrder.expectedAt,
-          commitmentConfirmed: true,
-          procurementSignal: "receipt",
-          quantity: lineItem.receivedQuantity,
-        },
-      ],
-      materialFields: [
-        "currencyCode",
-        "occurrenceAt",
-        "quantity",
-        "sourceDomain",
-        "storeId",
-      ],
+    // The received cost is the confirmed unit cost when known; otherwise the
+    // planned PO cost stands in as a best-effort valuation until the receipt
+    // is costed. `unitCostMinor` on the fact itself only reflects a truly
+    // known received cost — the planned fallback lives in netAmountMinor.
+    const receivedUnitCostMinor = lineItem.confirmedUnitCost;
+    const receivedCurrency =
+      lineItem.confirmedCurrency ?? purchaseOrderCurrency ?? store.currency;
+    const receivedNetAmountMinor =
+      (receivedUnitCostMinor ?? lineItem.plannedUnitCost) *
+      lineItem.receivedQuantity;
+    receiptFacts.push({
+      currency: receivedCurrency,
+      discountAmountMinor: 0,
+      factKind: "procurement_receipt",
+      grossAmountMinor: receivedNetAmountMinor,
+      lineId: lineItem._id,
+      netAmountMinor: receivedNetAmountMinor,
       occurredAt: now,
-      organizationId: store.organizationId,
+      productSkuId: lineItem.productSkuId,
       quantity: lineItem.receivedQuantity,
-      sourceDomain: "procurement",
-      sourceEventType: "purchase_order_receipt",
-      sourceReferences: [
-        {
-          relation: "owns",
-          sourceId: String(receivingBatchId),
-          sourceType: "receiving_batch",
-        },
-        {
-          relation: "supports",
-          sourceId: String(args.purchaseOrderId),
-          sourceType: "purchase_order",
-        },
-      ],
-      storeId: args.storeId,
+      sourceDomain: "inventory",
+      sourceId: String(receivingBatchId),
+      taxAmountMinor: 0,
+      unitCostMinor: receivedUnitCostMinor,
     });
 
     inventoryMovements.push({
@@ -503,6 +456,8 @@ export async function receivePurchaseOrderBatchWithCtx(
       sourceType: "purchase_order_receiving_batch",
     });
   }
+
+  await recordFacts(ctx, args.storeId, receiptFacts);
 
   await markCatalogSummaryNeedsRefresh(ctx, args.storeId);
 

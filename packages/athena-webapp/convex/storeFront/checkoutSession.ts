@@ -36,7 +36,7 @@ import {
   deriveScheduledRunOutcome,
   type ScheduledCronFamily,
 } from "../automation/scheduledRunLedger";
-import { applyCommerceInventoryEffectWithCtx } from "../reporting/inventory/commerceEffects";
+import { applyCommerceInventoryEffectWithCtx } from "../inventoryLedger/commerceEffects";
 
 const entity = "checkoutSession";
 

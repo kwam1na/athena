@@ -2,19 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 
 const reportingMocks = vi.hoisted(() => ({
-  appendReportingIngressWithCtx: vi.fn(async (..._args: unknown[]) => ({
-    kind: "appended" as const,
-    ingressId: "ingress-1",
-  })),
-  recordPaymentAllocationSkuEvidenceWithCtx: vi.fn(async () => undefined),
+  recordFacts: vi.fn(async (..._args: unknown[]) => undefined),
 }));
 
-vi.mock("../reporting/ingress", () => ({
-  appendReportingIngressWithCtx: reportingMocks.appendReportingIngressWithCtx,
-}));
-vi.mock("../reporting/evidence", () => ({
-  recordPaymentAllocationSkuEvidenceWithCtx:
-    reportingMocks.recordPaymentAllocationSkuEvidenceWithCtx,
+vi.mock("../reports/ingest", () => ({
+  recordFacts: reportingMocks.recordFacts,
 }));
 import {
   buildPaymentAllocation,
@@ -299,15 +291,6 @@ describe("payment allocation helpers", () => {
     expect(rows[0]).toMatchObject({
       evidenceProductSkuIds: ["sku_1", "sku_2"],
     });
-    expect(
-      reportingMocks.recordPaymentAllocationSkuEvidenceWithCtx,
-    ).toHaveBeenLastCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        evidenceProductSkuIds: ["sku_1", "sku_2"],
-      }),
-      "organization_1",
-    );
   });
 
   it("rejects keyed replay that changes an established SKU evidence scope", async () => {
@@ -347,7 +330,7 @@ describe("payment allocation helpers", () => {
     expect(patch).not.toHaveBeenCalled();
   });
 
-  it("emits stable settlement ingress without classifying collection as revenue", async () => {
+  it("records a payment_refund report fact for an outgoing refund allocation", async () => {
     const { ctx } = paymentContext();
     await recordPaymentAllocationWithCtx(ctx as never, {
       amount: 2_500,
@@ -360,17 +343,52 @@ describe("payment allocation helpers", () => {
       allocationType: "retail_refund",
     });
 
-    expect(reportingMocks.appendReportingIngressWithCtx).toHaveBeenLastCalledWith(
+    expect(reportingMocks.recordFacts).toHaveBeenLastCalledWith(
       expect.anything(),
-      expect.objectContaining({
-        businessEventKey: "payment_allocation:allocation_1:recorded",
-        settlementAmountMinor: -2_500,
-        sourceDomain: "payments",
-        sourceEventType: "payment_refund_recorded",
-      }),
+      "store_1",
+      [
+        expect.objectContaining({
+          sourceDomain: "payments",
+          sourceId: "allocation_1",
+          lineId: "",
+          factKind: "payment_refund",
+          currency: "GHS",
+          grossAmountMinor: 2_500,
+          netAmountMinor: 2_500,
+          taxAmountMinor: 0,
+          discountAmountMinor: 0,
+          quantity: 0,
+        }),
+      ],
     );
-    expect(
-      reportingMocks.appendReportingIngressWithCtx.mock.calls.at(-1)?.[1],
-    ).not.toHaveProperty("netAmountMinor");
+  });
+
+  it("records a payment report fact for an incoming collection allocation", async () => {
+    const { ctx } = paymentContext();
+    await recordPaymentAllocationWithCtx(ctx as never, {
+      amount: 5_000,
+      businessEventKey: "pos:transaction_2:payment:0",
+      direction: "in",
+      method: "cash",
+      storeId: "store_1" as Id<"store">,
+      targetId: "transaction_2",
+      targetType: "pos_transaction",
+      allocationType: "retail_sale",
+    });
+
+    expect(reportingMocks.recordFacts).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "store_1",
+      [
+        expect.objectContaining({
+          sourceDomain: "payments",
+          sourceId: "allocation_1",
+          lineId: "",
+          factKind: "payment",
+          currency: "GHS",
+          netAmountMinor: 5_000,
+        }),
+      ],
+    );
   });
 });

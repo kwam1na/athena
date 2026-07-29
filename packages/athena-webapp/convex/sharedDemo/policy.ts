@@ -216,7 +216,7 @@ export const SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY = [
     capability: "expense.manage",
   },
   {
-    functionName: "reporting/public:getReportsOverview",
+    functionName: "reports/queries:getOverview",
     capability: "reports.read",
   },
   {
@@ -242,10 +242,6 @@ export const SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY = [
   {
     functionName: "inventory/stores:patchConfigV2Command",
     capability: "integrations.manage",
-  },
-  {
-    functionName: "reporting/export:requestExport",
-    capability: "exports.generate",
   },
   {
     functionName: "storeFront/onlineOrder:processReturnExchange",
@@ -289,10 +285,6 @@ export const SHARED_DEMO_GATEWAY_ENFORCEMENT_BINDINGS = [
   {
     moduleName: "storeFront/payment",
     binding: "enforceSharedDemoActionCapability",
-  },
-  {
-    moduleName: "reporting/export",
-    binding: "requireSharedDemoCapabilityIfApplicable",
   },
   {
     moduleName: "cloudflare/stream",

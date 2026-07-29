@@ -50,6 +50,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Workflow,
+  ChartNoAxesColumn,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import useGetActiveStore from "../hooks/useGetActiveStore";
@@ -610,6 +611,23 @@ export function AppSidebar({
                   >
                     <Truck className="w-4 h-4" />
                     <p className="font-medium">Procurement</p>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
+                  <Link
+                    to="/$orgUrlSlug/store/$storeUrlSlug/reports"
+                    params={(p) => ({
+                      ...p,
+                      orgUrlSlug: activeOrganization?.slug,
+                      storeUrlSlug: activeStore?.slug,
+                    })}
+                    className="flex items-center"
+                  >
+                    <ChartNoAxesColumn className="w-4 h-4" />
+                    <p className="font-medium">Reports</p>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

@@ -1,148 +1,289 @@
+import { useQuery } from "convex/react";
+import { useState } from "react";
+import { Link, useParams } from "@tanstack/react-router";
+import { Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ReportStatusBand } from "./ReportStatusBand";
-import { ReportsItemsTable, type ReportItemRow } from "./ReportsItemsTable";
-import { getReportStatusKind } from "./reportPresentation";
-
-export type ReportItemsSort =
-  "revenue" | "margin" | "units" | "cover" | "inventory_value" | "attention";
-export type ReportItemsClassification =
-  | "all"
-  | "fast_mover"
-  | "slow_mover"
-  | "nonmoving"
-  | "low_cover"
-  | "high_revenue_low_margin";
-export type ReportItemsResult = {
-  continueCursor: string;
-  facets?: Array<{ value: string; count?: number }>;
-  isDone: boolean;
-  completeness?: string | null;
-  limitingReason?: string | null;
-  page: ReportItemRow[];
-  rollups?: unknown[];
-  status: string;
-};
-
-const SORTS: Array<{ label: string; value: ReportItemsSort }> = [
-  { label: "Net sales", value: "revenue" },
-  { label: "Margin", value: "margin" },
-  { label: "Units", value: "units" },
-  { label: "Cover", value: "cover" },
-  { label: "Inventory value", value: "inventory_value" },
-  { label: "Attention", value: "attention" },
-];
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
+import { FadeIn } from "@/components/common/FadeIn";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useStableReportQuery } from "./useStableReportQuery";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { EmptyState } from "@/components/states/empty/empty-state";
+import { cn } from "@/lib/utils";
+import useGetActiveStore from "@/hooks/useGetActiveStore";
+import { getOrigin } from "@/lib/navigationUtils";
+import { ReportBackLink } from "./ReportBackLink";
+import {
+  getLocalDateFromOperatingDate,
+  getLocalOperatingDate,
+} from "@/lib/operations/operatingDate";
+import { api } from "~/convex/_generated/api";
+import type { ReportSkuSortBy } from "~/shared/reportsContract";
+import {
+  REPORT_PERIOD_TYPE_LABELS,
+  REPORT_PERIOD_TYPES,
+  periodKeyForSelection,
+  type ReportPeriodType,
+} from "./reportPeriodKeys";
+import {
+  formatOperatingDate,
+  formatOptionalMoney,
+  formatReportProfit,
+  formatSkuDisplayName,
+  formatSkuSubtitle,
+  formatUnits,
+} from "./reportFormat";
 
 export function ReportsItemsView({
-  classification,
-  controlsEnabled = true,
-  data,
-  onClassificationChange,
-  onLoadMore,
-  onOpenItem,
-  onSortChange,
-  sort,
+  periodType,
+  periodDate,
+  sortBy,
+  cursor,
+  onPeriodTypeChange,
+  onPeriodDateChange,
+  onSortByChange,
+  onCursorChange,
 }: {
-  classification: ReportItemsClassification;
-  controlsEnabled?: boolean;
-  data: ReportItemsResult | undefined;
-  onClassificationChange: (classification: ReportItemsClassification) => void;
-  onLoadMore?: () => void;
-  onOpenItem: (row: ReportItemRow) => void;
-  onSortChange: (sort: ReportItemsSort) => void;
-  sort: ReportItemsSort;
+  periodType: ReportPeriodType;
+  periodDate: string;
+  sortBy: ReportSkuSortBy;
+  cursor: string | undefined;
+  onPeriodTypeChange: (periodType: ReportPeriodType) => void;
+  onPeriodDateChange: (periodDate: string) => void;
+  onSortByChange: (sortBy: ReportSkuSortBy) => void;
+  onCursorChange: (cursor: string | undefined) => void;
 }) {
-  if (!data)
-    return (
-      <p aria-live="polite" role="status">
-        Loading item performance…
-      </p>
-    );
-  if (data.status === "pre_cutover")
-    return <ReportStatusBand kind="pre_cutover" />;
-  if (data.status === "materializing")
-    return <ReportStatusBand kind="materializing" />;
-  if (data.status === "failed" || data.status === "unavailable")
-    return <ReportStatusBand kind="failed" />;
+  const { activeStore } = useGetActiveStore();
+  const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
+  const periodKey = periodKeyForSelection(periodType, periodDate);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const selectedDate = getLocalDateFromOperatingDate(periodDate);
+
+  const {
+    data: result,
+    isInitialLoad,
+    isRefreshing,
+  } = useStableReportQuery(
+    useQuery(
+      api.reports.queries.listPeriodSkus,
+      activeStore?._id
+        ? { storeId: activeStore._id, periodKey, sortBy, cursor }
+        : "skip",
+    ),
+  );
+
   return (
-    <section
-      aria-labelledby="reports-items-heading"
-      className="space-y-layout-lg py-layout-lg"
-    >
-      <ReportStatusBand kind={getReportStatusKind(data)} />
-      <div>
-        <h2 className="font-display text-2xl" id="reports-items-heading">
-          Item performance
-        </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          SKU-first performance for the selected reporting period.
-        </p>
-      </div>
-      {controlsEnabled ? (
-        <>
-          <div
-            aria-label="Filter item performance"
-            className="flex flex-wrap gap-2"
-          >
-            <Button
-              aria-pressed={classification === "all"}
-              onClick={() => onClassificationChange("all")}
-              size="sm"
-              variant={classification === "all" ? "default" : "outline"}
-            >
-              All
-            </Button>
-            {data.facets?.map((facet) => (
-              <Button
-                aria-pressed={classification === facet.value}
-                key={facet.value}
-                onClick={() =>
-                  onClassificationChange(
-                    facet.value as ReportItemsClassification,
-                  )
+    /* Same rhythm as the SKU detail page: tight inside a cluster, generous
+       between sections. */
+    <FadeIn className="space-y-layout-xl md:space-y-layout-2xl">
+      <div
+        className="space-y-layout-xl md:space-y-layout-2xl"
+        data-testid="reports-items"
+      >
+        <div className="space-y-layout-sm">
+          <ReportBackLink />
+
+          <div className="flex flex-wrap items-end gap-layout-sm">
+            <div className="space-y-1">
+              <Label htmlFor="items-period-type">Period</Label>
+              <Select
+                onValueChange={(value) =>
+                  onPeriodTypeChange(value as ReportPeriodType)
                 }
-                size="sm"
-                variant={classification === facet.value ? "default" : "outline"}
+                value={periodType}
               >
-                {facet.value.replaceAll("_", " ")}
-                {facet.count === undefined ? "" : ` (${facet.count})`}
-              </Button>
-            ))}
+                <SelectTrigger id="items-period-type" className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {REPORT_PERIOD_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {REPORT_PERIOD_TYPE_LABELS[type]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Popover onOpenChange={setIsDatePickerOpen} open={isDatePickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  aria-label={`Change anchor date, currently ${formatOperatingDate(periodDate)}`}
+                  className="h-auto justify-start gap-2 px-layout-sm py-layout-xs text-sm font-normal text-muted-foreground shadow-surface"
+                  variant="outline"
+                >
+                  <CalendarIcon
+                    aria-hidden="true"
+                    className="h-4 w-4 shrink-0"
+                  />
+                  <span className="shrink-0">Anchor date</span>
+                  <span className="font-medium text-foreground">
+                    {formatOperatingDate(periodDate)}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-auto p-0">
+                <Calendar
+                  defaultMonth={selectedDate}
+                  mode="single"
+                  onSelect={(date) => {
+                    if (!date) return;
+                    onPeriodDateChange(getLocalOperatingDate(date));
+                    setIsDatePickerOpen(false);
+                  }}
+                  selected={selectedDate}
+                />
+              </PopoverContent>
+            </Popover>
+            <div
+              className="flex gap-1 rounded-md border border-border p-1"
+              role="group"
+              aria-label="Sort SKUs"
+            >
+              {(
+                [
+                  "revenue",
+                  "units",
+                ] as const satisfies readonly ReportSkuSortBy[]
+              ).map((sort) => (
+                <Button
+                  aria-pressed={sortBy === sort}
+                  className={cn(
+                    "px-3",
+                    sortBy === sort
+                      ? ""
+                      : "bg-transparent text-muted-foreground",
+                  )}
+                  key={sort}
+                  onClick={() => onSortByChange(sort)}
+                  size="sm"
+                  type="button"
+                  variant={sortBy === sort ? "default" : "ghost"}
+                >
+                  {sort === "revenue" ? "Revenue" : "Units"}
+                </Button>
+              ))}
+            </div>
           </div>
-          <div
-            aria-label="Sort item performance"
-            className="flex flex-wrap gap-2"
-          >
-            {SORTS.map((option) => (
-              <Button
-                aria-label={`Sort by ${option.label}, descending`}
-                aria-pressed={sort === option.value}
-                key={option.value}
-                onClick={() => onSortChange(option.value)}
-                size="sm"
-                variant={sort === option.value ? "default" : "outline"}
-              >
-                {option.label}
-              </Button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          Custom results use a stable server order.
-        </p>
-      )}
-      {data.page.length ? (
-        <ReportsItemsTable onOpenItem={onOpenItem} rows={data.page} />
-      ) : (
-        <p className="rounded-lg border border-border p-layout-lg text-sm text-muted-foreground">
-          No item activity matches this view.
-        </p>
-      )}
-      {!data.isDone && onLoadMore ? (
-        <Button onClick={onLoadMore} variant="outline">
-          Next 25 items
-        </Button>
-      ) : null}
-    </section>
+        </div>
+
+        {/* Nothing until the first result settles: these queries resolve fast
+          enough that a skeleton appears and vanishes as a flash of its own.
+          Refreshes keep the previous data on screen (see useStableReportQuery),
+          so this branch is only ever the very first load. */}
+        {isInitialLoad || result === undefined ? null : result.rows.length ===
+          0 ? (
+          <EmptyState
+            title="No SKU activity"
+            description="No SKUs sold in this period."
+          />
+        ) : (
+          <>
+            <div
+              aria-busy={isRefreshing}
+              className={cn(
+                "overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface",
+                "transition-opacity duration-150 motion-reduce:transition-none",
+                isRefreshing && "opacity-60",
+              )}
+              data-refreshing={isRefreshing ? "true" : undefined}
+            >
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>SKU</TableHead>
+                    <TableHead>Net sales</TableHead>
+                    <TableHead>Units sold</TableHead>
+                    <TableHead>Gross profit</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {result.rows.map((row) => (
+                    <TableRow key={row.productSkuId}>
+                      <TableCell>
+                        <Link
+                          className="block min-w-0"
+                          params={{
+                            orgUrlSlug: orgUrlSlug!,
+                            storeUrlSlug: storeUrlSlug!,
+                            productSkuId: row.productSkuId,
+                          }}
+                          // Carries the current URL (period, sort, cursor) so
+                          // the detail page can return to this exact list.
+                          search={{ o: getOrigin() }}
+                          to="/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId"
+                        >
+                          <span className="block truncate font-medium text-foreground">
+                            {formatSkuDisplayName(
+                              row.identity,
+                              row.productSkuId,
+                            )}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {formatSkuSubtitle(row.identity, row.productSkuId)}
+                          </span>
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        {formatOptionalMoney(
+                          row.netSalesMinor,
+                          activeStore?.currency ?? "USD",
+                        )}
+                      </TableCell>
+                      <TableCell>{formatUnits(row.unitsSold)}</TableCell>
+                      <TableCell>
+                        {formatReportProfit(
+                          row.grossProfitMinor,
+                          activeStore?.currency ?? "USD",
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="flex justify-end gap-layout-sm">
+              {cursor ? (
+                <Button
+                  onClick={() => onCursorChange(undefined)}
+                  type="button"
+                  variant="outline"
+                >
+                  Back to start
+                </Button>
+              ) : null}
+              {result.continueCursor ? (
+                <Button
+                  onClick={() =>
+                    onCursorChange(result.continueCursor ?? undefined)
+                  }
+                  type="button"
+                >
+                  Next page
+                </Button>
+              ) : null}
+            </div>
+          </>
+        )}
+      </div>
+    </FadeIn>
   );
 }

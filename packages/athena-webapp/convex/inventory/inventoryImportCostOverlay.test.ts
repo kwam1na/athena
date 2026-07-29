@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const admissionMocks = vi.hoisted(() => ({
   getSharedDemoActorWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
-  requireReportingStoreAccess: vi.fn(),
+  requireReportsStoreAccess: vi.fn(),
 }));
 
 vi.mock("../sharedDemo/actor", async (importOriginal) => ({
@@ -17,9 +17,9 @@ vi.mock("../lib/athenaUserAuth", () => ({
     admissionMocks.requireAuthenticatedAthenaUserWithCtx,
 }));
 
-vi.mock("../reporting/access", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../reporting/access")>()),
-  requireReportingStoreAccess: admissionMocks.requireReportingStoreAccess,
+vi.mock("../reports/access", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../reports/access")>()),
+  requireReportsStoreAccess: admissionMocks.requireReportsStoreAccess,
 }));
 
 import {
@@ -225,8 +225,8 @@ describe("inventory import cost overlay contract", () => {
     admissionMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "operator-1",
     });
-    admissionMocks.requireReportingStoreAccess.mockReset();
-    admissionMocks.requireReportingStoreAccess.mockResolvedValue({
+    admissionMocks.requireReportsStoreAccess.mockReset();
+    admissionMocks.requireReportsStoreAccess.mockResolvedValue({
       athenaUser: { _id: "operator-1" },
       store: {
         _id: "store-1",
@@ -311,7 +311,7 @@ describe("inventory import cost overlay contract", () => {
       retryableWork: "bulk decision",
       status: "ready",
     });
-    expect(admissionMocks.requireReportingStoreAccess).toHaveBeenCalledWith(
+    expect(admissionMocks.requireReportsStoreAccess).toHaveBeenCalledWith(
       expect.anything(),
       "store-1",
     );
@@ -1106,8 +1106,8 @@ describe("inventory import cost overlay public mutation handlers", () => {
     admissionMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "operator-1",
     });
-    admissionMocks.requireReportingStoreAccess.mockReset();
-    admissionMocks.requireReportingStoreAccess.mockResolvedValue({
+    admissionMocks.requireReportsStoreAccess.mockReset();
+    admissionMocks.requireReportsStoreAccess.mockResolvedValue({
       athenaUser: { _id: "operator-1" },
       store: {
         _id: "store-1",

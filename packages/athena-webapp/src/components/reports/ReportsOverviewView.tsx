@@ -1,135 +1,133 @@
 import { useQuery } from "convex/react";
+import { useState } from "react";
 
+import { EmptyState } from "@/components/states/empty/empty-state";
+import { FadeIn } from "@/components/common/FadeIn";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
+import { cn } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
-import {
-  ReportAttentionList,
-  type ReportAttentionItem,
-} from "./ReportAttentionList";
-import { ReportStatusBand } from "./ReportStatusBand";
-import { ReportsMetricGrid } from "./ReportsMetricGrid";
-import { RevenueContribution } from "./RevenueContribution";
-import { getReportStatusKind } from "./reportPresentation";
+import type { ReportOverviewData } from "~/shared/reportsContract";
+import { ReportPeriodMetrics } from "./ReportPeriodMetrics";
+import { ReportTrendChart } from "./ReportTrendChart";
+import { ReportTrustStrip } from "./ReportTrustStrip";
+import { useStableReportQuery } from "./useStableReportQuery";
 
-type OverviewData = {
-  attention?: ReportAttentionItem[];
-  completeness:
-    "complete" | "partial" | "provisional" | "stale" | "unavailable";
-  limitingReason?: string;
-  metrics: Record<string, number | null | undefined>;
-  currencyCode?: string | null;
-  currencyMinorUnitScale?: number | null;
-};
+const OVERVIEW_WINDOWS = [
+  { label: "Today", value: "today" },
+  { label: "Week to date", value: "weekToDate" },
+  { label: "Trailing 30 days", value: "trailing30" },
+] as const;
 
-export function ReportsOverviewView({
-  periodKey,
-  runId,
-}: {
-  periodKey: "wtd" | "today" | "prior_week" | "trailing_30" | "custom";
-  runId?: string;
-}) {
-  const { activeStore, isLoadingStores } = useGetActiveStore();
-  const presetResult = useQuery(
-    api.reporting.public.getReportsOverview,
-    activeStore?._id && periodKey !== "custom"
-      ? { periodKey, storeId: activeStore._id }
-      : "skip",
-  ) as { data?: OverviewData | null; status: string } | undefined;
-  const customResult = useQuery(
-    api.reporting.public.getReportsCustomRangePresentation,
-    activeStore?._id && periodKey === "custom" && runId
-      ? {
-          paginationOpts: { cursor: null, numItems: 1 },
-          runId: runId as never,
-          storeId: activeStore._id,
-          surface: "overview",
-        }
-      : "skip",
-  ) as
-    | {
-        data?: {
-          completeness: OverviewData["completeness"];
-          currencyCode?: string | null;
-          currencyMinorUnitScale?: number | null;
-          limitingReason?: string | null;
-          metrics: Record<string, number | null>;
-          trust?: { completeness?: string; limitingReason?: string | null };
-        } | null;
-        status: string;
-      }
-    | undefined;
-  const result =
-    periodKey === "custom"
-      ? customResult && {
-          data: customResult.data
-            ? {
-                completeness: customResult.data.completeness,
-                currencyCode: customResult.data.currencyCode,
-                currencyMinorUnitScale:
-                  customResult.data.currencyMinorUnitScale,
-                limitingReason:
-                  customResult.data.trust?.limitingReason ??
-                  customResult.data.limitingReason ??
-                  undefined,
-                metrics: customResult.data.metrics,
-              }
-            : null,
-          status: customResult.status,
-        }
-      : presetResult;
+type OverviewWindow = (typeof OVERVIEW_WINDOWS)[number]["value"];
 
-  if (isLoadingStores || (activeStore && result === undefined)) {
-    return (
-      <p
-        aria-live="polite"
-        className="py-layout-xl text-sm text-muted-foreground"
-        role="status"
-      >
-        Loading report…
-      </p>
-    );
+/**
+ * Prior-window values for the selected window. Only week-to-date has a
+ * like-for-like predecessor in the payload; today and trailing-30 show
+ * settlement context instead of an invented comparison.
+ */
+function comparisonFor(
+  overview: ReportOverviewData,
+  window: OverviewWindow,
+): { netSalesMinor?: number; unitsSold?: number } | undefined {
+  if (window !== "weekToDate") return undefined;
+
+  return {
+    netSalesMinor: overview.priorWeek.netSalesMinor,
+    unitsSold: overview.priorWeek.unitsSold,
+  };
+}
+
+/**
+ * Overview tab. Subscribes to `reports.queries.getOverview` ONLY — one
+ * query, one document — per the contract's read budget.
+ */
+export function ReportsOverviewView() {
+  const { activeStore } = useGetActiveStore();
+  const [selectedWindow, setSelectedWindow] = useState<OverviewWindow>("today");
+  const {
+    data: overview,
+    isInitialLoad,
+    isRefreshing,
+  } = useStableReportQuery(
+    useQuery(
+      api.reports.queries.getOverview,
+      activeStore?._id ? { storeId: activeStore._id } : "skip",
+    ),
+  );
+
+  // Nothing until the first result settles: these queries resolve fast
+  // enough that a skeleton appears and vanishes as a flash of its own.
+  // Refreshes keep the previous data on screen (see useStableReportQuery),
+  // so this branch is only ever the very first load.
+  if (activeStore === null || isInitialLoad || overview === undefined) {
+    return null;
   }
-  if (!activeStore) {
-    return <ReportStatusBand kind="failed" />;
-  }
-  if (!result || !result.data) {
+
+  if (overview === null) {
     return (
-      <ReportStatusBand
-        kind={getReportStatusKind({ status: result?.status ?? "unavailable" })}
+      <EmptyState
+        description="This store has no reporting data materialized yet. Check back once activity has been recorded."
+        title="No report data yet"
       />
     );
   }
 
-  const currency =
-    result.data.currencyCode ??
-    (activeStore as { currency?: string }).currency ??
-    "USD";
-  const minorUnitScale = result.data.currencyMinorUnitScale ?? 2;
-  const withholdMoney = result.data.limitingReason === "mixed_currency";
+  const { currency } = overview;
+  const activeWindow = OVERVIEW_WINDOWS.find(
+    (option) => option.value === selectedWindow,
+  )!;
+
   return (
-    <div className="space-y-layout-lg py-layout-lg">
-      <ReportStatusBand
-        kind={getReportStatusKind({
-          completeness: result.data.completeness,
-          limitingReason: result.data.limitingReason,
-          status: result.status,
-        })}
-      />
-      <ReportsMetricGrid
-        currency={currency}
-        metrics={result.data.metrics}
-        minorUnitScale={minorUnitScale}
-        withholdMoney={withholdMoney}
-      />
-      <div className="grid grid-cols-1 gap-layout-md lg:grid-cols-2">
-        <RevenueContribution
+    <FadeIn>
+      <section
+        aria-busy={isRefreshing}
+        className={cn(
+          "space-y-layout-xl md:space-y-layout-2xl",
+          "transition-opacity duration-150 motion-reduce:transition-none",
+          isRefreshing && "opacity-60",
+        )}
+        data-refreshing={isRefreshing ? "true" : undefined}
+        data-testid="reports-overview"
+      >
+        <div className="space-y-layout-md">
+          <Tabs
+            onValueChange={(next) => setSelectedWindow(next as OverviewWindow)}
+            value={selectedWindow}
+          >
+            <TabsList
+              aria-label="Report period"
+              className="h-auto flex-wrap justify-start gap-1 border border-border bg-surface-raised p-1 text-muted-foreground shadow-surface"
+              size="sm"
+            >
+              {OVERVIEW_WINDOWS.map((option) => (
+                <TabsTrigger
+                  className="min-h-8 px-3 data-[state=active]:bg-primary-soft data-[state=active]:text-primary data-[state=active]:shadow-none"
+                  key={option.value}
+                  size="sm"
+                  value={option.value}
+                >
+                  {option.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+
+          <ReportPeriodMetrics
+            comparison={comparisonFor(overview, selectedWindow)}
+            currency={currency}
+            periodLabel={activeWindow.label}
+            priorWindowLabel="prior week"
+            snapshot={overview[selectedWindow]}
+          />
+        </div>
+
+        <ReportTrendChart
           currency={currency}
-          metrics={result.data.metrics}
-          minorUnitScale={minorUnitScale}
-          withholdMoney={withholdMoney}
+          dailyTrend={overview.dailyTrend}
         />
-        <ReportAttentionList items={result.data.attention ?? []} />
-      </div>
-    </div>
+        <ReportTrustStrip trust={overview.trust} />
+      </section>
+    </FadeIn>
   );
 }

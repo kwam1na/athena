@@ -45,9 +45,9 @@ import {
 } from "../../shared/stockAdjustment";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
-import { applyInventoryEffectWithCtx } from "../reporting/inventory/effects";
-import { uncostedBasis } from "../reporting/inventory/valuation";
-import { resolveReportingOperatingPeriodWithCtx } from "../reporting/operatingPeriods";
+import { applyInventoryEffectWithCtx } from "../inventoryLedger/effects";
+import { uncostedBasis } from "../inventoryLedger/valuation";
+import { resolveReportingOperatingPeriodWithCtx } from "../storeTime/operatingPeriods";
 
 export {
   CYCLE_COUNT_REASON_CODE,

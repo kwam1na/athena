@@ -11,7 +11,7 @@ import {
 import {
   applySkuValuationBasisCompensationWithCtx,
   applySkuValuationCorrectionWithCtx,
-} from "../reporting/inventory/effects";
+} from "../inventoryLedger/effects";
 import {
   canonicalizeCostOverlayLineages,
   frozenCostOverlayLineagesMatch,

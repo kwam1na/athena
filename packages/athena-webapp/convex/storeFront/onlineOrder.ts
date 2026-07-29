@@ -83,15 +83,12 @@ import {
   ORDER_RETURN_EXCHANGE_WORKFLOW_TYPE,
 } from "../workflowTraces/adapters/orderReturnExchange";
 import {
-  appendReportingIngressWithCtx,
-  type ReportingIngressLineInput,
-} from "../reporting/ingress";
-import { canonicalReportingBusinessEventKey } from "../reporting/factIdentity";
-import {
   applyCommerceInventoryEffectWithCtx,
   outboundBasisFromEffect,
   reportingLineCostFromEffect,
-} from "../reporting/inventory/commerceEffects";
+} from "../inventoryLedger/commerceEffects";
+import { recordFacts } from "../reports/ingest";
+import type { NewReportFact } from "../../shared/reportsContract";
 
 const entity = "onlineOrder";
 const MAX_ORDER_ITEMS = 200;
@@ -175,147 +172,161 @@ function allocateMinorAmounts(total: number, weights: number[]): number[] {
   });
 }
 
-function storefrontCurrency(currency: string | undefined) {
-  const currencyCode = currency?.trim().toUpperCase();
-  return currencyCode ? { currencyCode, currencyMinorUnitScale: 2 } : {};
-}
-
-function buildStorefrontFulfillmentLines(args: {
+/**
+ * One `sale` fact per fulfilled order item, plus an optional delivery-fee
+ * fact. `unitCostMinor` is only set when the inventory effect resolved a
+ * fully known cost basis for the line — a partial or unresolved basis is
+ * reported as uncosted rather than guessed, matching `factDeltas`'s binary
+ * costed/uncosted contract (see convex/reports/ingest.ts).
+ */
+function buildStorefrontFulfillmentSaleFacts(args: {
   costByItemId?: Map<
     string,
-    Pick<
-      ReportingIngressLineInput,
-      | "cogsKnownMinor"
-      | "cogsKnownQuantity"
-      | "cogsUncoveredQuantity"
-      | "costStatus"
-      | "inventoryEffectId"
-      | "valuationCurrencyCode"
-      | "valuationCurrencyMinorUnitScale"
-    >
+    { costStatus: "known" | "partial" | "unknown"; cogsKnownMinor?: number }
   >;
+  currency: string;
   deliveryFee: number;
   discountAmount: number;
   items: Doc<"onlineOrderItem">[];
-  productByItemId?: Map<string, Doc<"product">>;
-}): ReportingIngressLineInput[] {
+  occurredAt: number;
+  orderId: Id<"onlineOrder">;
+}): NewReportFact[] {
   const merchandiseGross = args.items.map((item) => item.price * item.quantity);
   const discounts = allocateMinorAmounts(args.discountAmount, merchandiseGross);
-  const lines: ReportingIngressLineInput[] = args.items.map((item, index) => {
-    const product = args.productByItemId?.get(String(item._id));
-    const recognizedNetAmountMinor = merchandiseGross[index] - discounts[index];
+  const facts: NewReportFact[] = args.items.map((item, index) => {
+    const cost = args.costByItemId?.get(String(item._id));
+    const unitCostMinor =
+      cost?.costStatus === "known" &&
+      cost.cogsKnownMinor !== undefined &&
+      item.quantity > 0
+        ? Math.round(cost.cogsKnownMinor / item.quantity)
+        : undefined;
     return {
-      ...(args.costByItemId?.get(String(item._id)) ?? {
-        costStatus: "unknown" as const,
-      }),
-      allocatedDiscountMinor: discounts[index],
-      attributionKind: "direct",
-      canonicalProductSkuId: item.productSkuId,
-      categoryId: product?.categoryId,
-      channel: "storefront",
-      discountAmountMinor: discounts[index],
+      sourceDomain: "storefront",
+      sourceId: String(args.orderId),
+      lineId: String(item._id),
+      factKind: "sale",
+      occurredAt: args.occurredAt,
+      currency: args.currency,
       grossAmountMinor: merchandiseGross[index],
-      lineKey: String(item._id),
-      lineKind: "merchandise",
-      netAmountMinor: recognizedNetAmountMinor,
-      originalProductSkuId: item.productSkuId,
-      originalQuantity: item.quantity,
-      productId: item.productId,
-      productSkuId: item.productSkuId,
+      netAmountMinor: merchandiseGross[index] - discounts[index],
+      taxAmountMinor: 0,
+      discountAmountMinor: discounts[index],
       quantity: item.quantity,
-      recognizedNetAmountMinor,
-      recognitionCategoryId: product?.categoryId,
-      recognitionProductId: item.productId,
-      recognitionProductSkuId: item.productSkuId,
-      unitPriceMinor: item.price,
+      productSkuId: item.productSkuId ? String(item.productSkuId) : undefined,
+      ...(unitCostMinor !== undefined ? { unitCostMinor } : {}),
     };
   });
   if (args.deliveryFee > 0) {
-    lines.push({
-      costStatus: "not_applicable",
-      allocatedDiscountMinor: 0,
-      channel: "storefront",
-      discountAmountMinor: 0,
+    facts.push({
+      sourceDomain: "storefront",
+      sourceId: String(args.orderId),
+      lineId: "delivery",
+      factKind: "sale",
+      occurredAt: args.occurredAt,
+      currency: args.currency,
       grossAmountMinor: args.deliveryFee,
-      lineKey: "delivery",
-      lineKind: "delivery",
       netAmountMinor: args.deliveryFee,
+      taxAmountMinor: 0,
+      discountAmountMinor: 0,
       quantity: 0,
-      originalQuantity: 0,
-      recognizedNetAmountMinor: args.deliveryFee,
+      // Delivery carries no COGS by definition, not an unknown one — record
+      // it as zero cost so it doesn't drag the day into "uncosted revenue".
+      unitCostMinor: 0,
     });
   }
-  return lines;
+  return facts;
 }
 
-function buildStorefrontRefundLines(args: {
+/**
+ * Money-only `refund` facts for a payment-side refund that does not move
+ * stock (e.g. a gateway refund). `refundEventId` disambiguates repeat
+ * refunds against the same order under fact identity
+ * (storeId, sourceDomain, sourceId, lineId, factKind).
+ */
+function buildStorefrontRefundFacts(args: {
+  currency: string;
   deliveryFee: number;
   items: Array<
-    Pick<
-      Doc<"onlineOrderItem">,
-      "_id" | "price" | "productId" | "productSkuId" | "quantity"
-    >
+    Pick<Doc<"onlineOrderItem">, "_id" | "price" | "productSkuId" | "quantity">
   >;
+  occurredAt: number;
+  orderId: Id<"onlineOrder">;
   refundAmount: number;
-}): ReportingIngressLineInput[] {
+  refundEventId: string;
+}): NewReportFact[] {
   const components: Array<{
     key: string;
-    kind: "delivery" | "merchandise";
-    productId?: Id<"product">;
     productSkuId?: Id<"productSku">;
     weight: number;
   }> = [
     ...args.items.map((item) => ({
       key: String(item._id),
-      kind: "merchandise" as const,
-      productId: item.productId,
       productSkuId: item.productSkuId,
       weight: item.price * item.quantity,
     })),
     ...(args.deliveryFee > 0
-      ? [
-          {
-            key: "delivery",
-            kind: "delivery" as const,
-            productId: undefined,
-            productSkuId: undefined,
-            weight: args.deliveryFee,
-          },
-        ]
+      ? [{ key: "delivery", productSkuId: undefined, weight: args.deliveryFee }]
       : []),
   ];
   if (components.length === 0) {
-    components.push({
-      key: "refund",
-      kind: "merchandise",
-      productId: undefined,
-      productSkuId: undefined,
-      weight: args.refundAmount,
-    });
+    components.push({ key: "refund", productSkuId: undefined, weight: args.refundAmount });
   }
   const allocations = allocateMinorAmounts(
     args.refundAmount,
     components.map((component) => component.weight),
   );
   return components.map((component, index) => ({
-    costStatus: component.kind === "merchandise" ? "unknown" : "not_applicable",
-    discountAmountMinor: 0,
-    allocatedDiscountMinor: 0,
-    attributionKind: component.productSkuId ? "direct" : undefined,
-    canonicalProductSkuId: component.productSkuId,
-    channel: "storefront",
+    sourceDomain: "storefront",
+    sourceId: String(args.orderId),
+    lineId: `${args.refundEventId}:${component.key}`,
+    factKind: "refund",
+    occurredAt: args.occurredAt,
+    currency: args.currency,
     grossAmountMinor: allocations[index],
-    lineKey: component.key,
-    lineKind: component.kind,
     netAmountMinor: allocations[index],
-    ...(component.productSkuId ? { productSkuId: component.productSkuId } : {}),
+    taxAmountMinor: 0,
+    discountAmountMinor: 0,
     quantity: 0,
-    originalProductSkuId: component.productSkuId,
-    originalQuantity: 0,
-    productId: component.productId,
-    recognizedNetAmountMinor: allocations[index],
-    recognitionProductId: component.productId,
-    recognitionProductSkuId: component.productSkuId,
+    productSkuId: component.productSkuId
+      ? String(component.productSkuId)
+      : undefined,
+  }));
+}
+
+/**
+ * `return` facts for goods physically returned to the merchant (as opposed
+ * to a money-only refund) — quantity reflects the units coming back so
+ * `unitsReturned`/`unitsSold` move with them. Cost basis is not tracked at
+ * return time, matching the legacy behavior of never attaching COGS to a
+ * reversal line.
+ */
+function buildStorefrontReturnFacts(args: {
+  currency: string;
+  items: Array<
+    Pick<Doc<"onlineOrderItem">, "_id" | "price" | "productSkuId" | "quantity">
+  >;
+  occurredAt: number;
+  orderId: Id<"onlineOrder">;
+  refundAmount: number;
+  refundEventId: string;
+}): NewReportFact[] {
+  if (args.items.length === 0) return [];
+  const weights = args.items.map((item) => item.price * item.quantity);
+  const allocations = allocateMinorAmounts(args.refundAmount, weights);
+  return args.items.map((item, index) => ({
+    sourceDomain: "storefront",
+    sourceId: String(args.orderId),
+    lineId: `${args.refundEventId}:${String(item._id)}`,
+    factKind: "return",
+    occurredAt: args.occurredAt,
+    currency: args.currency,
+    grossAmountMinor: allocations[index],
+    netAmountMinor: allocations[index],
+    taxAmountMinor: 0,
+    discountAmountMinor: 0,
+    quantity: item.quantity,
+    productSkuId: item.productSkuId ? String(item.productSkuId) : undefined,
   }));
 }
 
@@ -473,83 +484,22 @@ async function applyOnlineOrderUpdate(
               .first(),
           ),
         );
-        const products = await Promise.all(
-          items.map((item) => ctx.db.get("product", item.productId)),
-        );
         const costByItemId = new Map(
           items.map((item, index) => {
             const effect = inventoryEffects[index];
-            return [
-              String(item._id),
-              {
-                ...reportingLineCostFromEffect(effect, item.quantity),
-                ...(effect ? { inventoryEffectId: effect._id } : {}),
-              },
-            ];
+            return [String(item._id), reportingLineCostFromEffect(effect, item.quantity)];
           }),
         );
-        const lines = buildStorefrontFulfillmentLines({
+        const saleFacts = buildStorefrontFulfillmentSaleFacts({
           costByItemId,
+          currency: store.currency,
           deliveryFee,
           discountAmount,
           items,
-          productByItemId: new Map(
-            items.flatMap((item, index) => {
-              const product = products[index];
-              return product ? [[String(item._id), product] as const] : [];
-            }),
-          ),
-        });
-        await appendReportingIngressWithCtx(ctx, {
-          acceptedAt: now,
-          adapterVersion: 1,
-          businessEventKey: canonicalReportingBusinessEventKey({
-            kind: "storefront_fulfillment",
-            orderId: String(order._id),
-          }),
-          contentFingerprint: [
-            "storefront-fulfilled-v1",
-            String(order._id),
-            nextStatus!,
-            String(nextOrder.amount),
-            String(deliveryFee),
-            String(discountAmount),
-            ...lines.flatMap((line) => [
-              line.lineKey,
-              String(line.productId),
-              String(line.productSkuId),
-              String(line.recognitionCategoryId),
-              String(line.quantity),
-              String(line.unitPriceMinor),
-              String(line.allocatedDiscountMinor),
-              String(line.netAmountMinor),
-            ]),
-          ].join(":"),
-          discountAmountMinor: discountAmount,
-          grossAmountMinor: nextOrder.amount + deliveryFee,
-          lines,
-          materialFields: [
-            "amountMinor",
-            "occurrenceAt",
-            "quantity",
-            "storeId",
-          ],
-          netAmountMinor: getOnlineOrderPaymentAmount(nextOrder),
           occurredAt: now,
-          organizationId: store.organizationId,
-          quantity: items.reduce((sum, item) => sum + item.quantity, 0),
-          sourceDomain: "storefront",
-          sourceEventType: "storefront_fulfilled",
-          sourceReferences: [
-            {
-              relation: "owns",
-              sourceId: String(order._id),
-              sourceType: "online_order",
-            },
-          ],
-          storeId: order.storeId,
-          ...storefrontCurrency(store.currency),
+          orderId: order._id,
         });
+        await recordFacts(ctx, order.storeId, saleFacts);
       }
     }
   }
@@ -1445,64 +1395,19 @@ export const finalizeRefundInternal = internalMutation({
       targetType: "online_order",
     });
     if (store?.organizationId) {
-      const refundLines = buildStorefrontRefundLines({
+      const reportingNow = Date.now();
+      const refundFacts = buildStorefrontRefundFacts({
+        currency: store.currency,
         deliveryFee: args.didRefundDeliveryFee
           ? Math.max(0, Math.round(order.deliveryFee ?? 0))
           : 0,
         items: selectedRefundItems,
-        refundAmount: args.refundAmount,
-      });
-      const reportingNow = Date.now();
-      await appendReportingIngressWithCtx(ctx, {
-        acceptedAt: reportingNow,
-        adapterVersion: 1,
-        businessEventKey: canonicalReportingBusinessEventKey({
-          kind: "storefront_refund",
-          orderId: String(order._id),
-          refundId: args.refundId,
-        }),
-        contentFingerprint: [
-          "storefront-refund-v1",
-          String(order._id),
-          args.reservationId,
-          args.refundId,
-          String(args.refundAmount),
-          args.didRefundDeliveryFee ? "delivery" : "no-delivery",
-          ...(args.onlineOrderItemIds ?? []).map(String).sort(),
-        ].join(":"),
-        grossAmountMinor: args.refundAmount,
-        linkedBusinessEventKey: canonicalReportingBusinessEventKey({
-          kind: "storefront_fulfillment",
-          orderId: String(order._id),
-        }),
-        lines: refundLines,
-        materialFields: ["amountMinor", "occurrenceAt", "storeId"],
-        netAmountMinor: args.refundAmount,
         occurredAt: reportingNow,
-        organizationId: store.organizationId,
-        quantity: 0,
-        settlementAmountMinor: args.refundAmount,
-        sourceDomain: "storefront",
-        sourceEventType: "storefront_refund_finalized",
-        sourceReferences: [
-          {
-            relation: "reverses",
-            sourceId: String(order._id),
-            sourceType: "online_order",
-          },
-          ...(paymentAllocation?._id
-            ? [
-                {
-                  relation: "supports" as const,
-                  sourceId: String(paymentAllocation._id),
-                  sourceType: "payment_allocation",
-                },
-              ]
-            : []),
-        ],
-        storeId: order.storeId,
-        ...storefrontCurrency(store.currency),
+        orderId: order._id,
+        refundAmount: args.refundAmount,
+        refundEventId: args.refundId,
       });
+      await recordFacts(ctx, order.storeId, refundFacts);
     }
     await recordOnlineOrderReturnExchangeTraceBestEffort(ctx, {
       amount: args.refundAmount,
@@ -2074,68 +1979,18 @@ export const processReturnExchange = mutation({
           subjectType: "online_order",
         });
         if (plan.refundAmount > 0 && store?.organizationId) {
-          const refundLines = buildStorefrontRefundLines({
-            deliveryFee: 0,
+          // Goods physically come back here (plan.selectedItems), unlike the
+          // money-only gateway refund path above — so this emits `return`
+          // facts with real quantities, not `refund`.
+          const returnFacts = buildStorefrontReturnFacts({
+            currency: store.currency,
             items: plan.selectedItems,
-            refundAmount: plan.refundAmount,
-          });
-          await appendReportingIngressWithCtx(ctx, {
-            acceptedAt: now,
-            adapterVersion: 1,
-            businessEventKey: canonicalReportingBusinessEventKey({
-              kind: "storefront_refund",
-              orderId: String(order._id),
-              refundId: returnExchangeRefundId,
-            }),
-            contentFingerprint: [
-              "storefront-return-exchange-refund-v1",
-              String(order._id),
-              returnExchangeRefundId,
-              String(plan.refundAmount),
-              ...plan.selectedItems.map((item) => String(item._id)).sort(),
-            ].join(":"),
-            grossAmountMinor: plan.refundAmount,
-            linkedBusinessEventKey: canonicalReportingBusinessEventKey({
-              kind: "storefront_fulfillment",
-              orderId: String(order._id),
-            }),
-            lines: refundLines,
-            materialFields: ["amountMinor", "occurrenceAt", "storeId"],
-            netAmountMinor: plan.refundAmount,
             occurredAt: now,
-            organizationId: store.organizationId,
-            quantity: 0,
-            settlementAmountMinor: plan.refundAmount,
-            sourceDomain: "storefront",
-            sourceEventType: "storefront_return_exchange_refund",
-            sourceReferences: [
-              {
-                relation: "reverses",
-                sourceId: String(order._id),
-                sourceType: "online_order",
-              },
-              ...(operationalEvent?._id
-                ? [
-                    {
-                      relation: "supports" as const,
-                      sourceId: String(operationalEvent._id),
-                      sourceType: "operational_event",
-                    },
-                  ]
-                : []),
-              ...(paymentAllocation?._id
-                ? [
-                    {
-                      relation: "supports" as const,
-                      sourceId: String(paymentAllocation._id),
-                      sourceType: "payment_allocation",
-                    },
-                  ]
-                : []),
-            ],
-            storeId: order.storeId,
-            ...storefrontCurrency(store.currency),
+            orderId: order._id,
+            refundAmount: plan.refundAmount,
+            refundEventId: returnExchangeRefundId,
           });
+          await recordFacts(ctx, order.storeId, returnFacts);
         }
         const operationRef = String(
           operationalEvent?._id ?? `${order._id}:${now}`,

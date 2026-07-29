@@ -1,202 +1,69 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "convex/react";
-import type { FunctionReference } from "convex/server";
 import { z } from "zod";
 
-import useGetActiveStore from "@/hooks/useGetActiveStore";
+import { ReportsItemsView } from "@/components/reports/ReportsItemsView";
 import {
-  ReportsItemsView,
-  type ReportItemsClassification,
-  type ReportItemsResult,
-  type ReportItemsSort,
-} from "@/components/reports/ReportsItemsView";
-import { api } from "~/convex/_generated/api";
+  REPORT_PERIOD_TYPES,
+  todayOperatingDateGuess,
+} from "@/components/reports/reportPeriodKeys";
+import type { ReportSkuSortBy } from "~/shared/reportsContract";
 
-const itemsSearchSchema = z.object({
-  classification: z
-    .enum([
-      "all",
-      "fast_mover",
-      "slow_mover",
-      "nonmoving",
-      "low_cover",
-      "high_revenue_low_margin",
-    ])
-    .optional(),
+const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+export const reportsItemsSearchSchema = z.object({
+  periodType: z.enum(REPORT_PERIOD_TYPES).optional(),
+  periodDate: dateSchema.optional(),
+  sortBy: z.enum(["revenue", "units"]).optional(),
   cursor: z.string().optional(),
-  itemSort: z
-    .enum([
-      "revenue",
-      "margin",
-      "units",
-      "cover",
-      "inventory_value",
-      "attention",
-    ])
-    .optional(),
-  preset: z
-    .enum(["wtd", "today", "prior_week", "trailing_30", "custom"])
-    .optional(),
+  /**
+   * Encoded origin path for the shared back-navigation hook. Declared here
+   * because `validateSearch` strips keys it does not know, which would drop
+   * the caller's origin before `useNavigateBack` ever sees it.
+   */
+  o: z.string().optional(),
 });
-const reportingApi = (
-  api as unknown as {
-    reporting: { public: { listReportItems: FunctionReference<"query"> } };
-  }
-).reporting.public;
-const customReportingApi = (
-  api as unknown as {
-    reporting: {
-      public: { getReportsCustomRangePresentation: FunctionReference<"query"> };
-    };
-  }
-).reporting.public;
 
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items/",
-)({ component: ReportsItemsRoute, validateSearch: itemsSearchSchema });
+)({
+  component: ReportsItemsRoute,
+  validateSearch: reportsItemsSearchSchema,
+});
 
 function ReportsItemsRoute() {
-  const { activeStore } = useGetActiveStore();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  const sort = (search.itemSort ?? "revenue") as ReportItemsSort;
-  const classification = (search.classification ??
-    "all") as ReportItemsClassification;
-  const isCustom = search.preset === "custom";
-  const presetData = useQuery(
-    reportingApi.listReportItems,
-    activeStore?._id && !isCustom
-      ? {
-          classification,
-          paginationOpts: { cursor: search.cursor ?? null, numItems: 50 },
-          periodKey: search.preset ?? "wtd",
-          sort,
-          storeId: activeStore._id,
-        }
-      : "skip",
-  ) as ReportItemsResult | undefined;
-  const customData = useQuery(
-    customReportingApi.getReportsCustomRangePresentation,
-    activeStore?._id && isCustom && search.runId
-      ? {
-          paginationOpts: { cursor: search.cursor ?? null, numItems: 50 },
-          classification,
-          runId: search.runId,
-          sort,
-          storeId: activeStore._id,
-          surface: "items",
-        }
-      : "skip",
-  ) as
-    | {
-        continueCursor: string;
-        data?: {
-          completeness?: string | null;
-          limitingReason?: string | null;
-          trust?: {
-            completeness?: string | null;
-            limitingReason?: string | null;
-          };
-        } | null;
-        isDone: boolean;
-        page: Array<{
-          identity?: ReportItemsResult["page"][number]["identity"];
-          classifications: string[];
-          currencyCode?: string | null;
-          currencyMinorUnitScale?: number | null;
-          metrics: Record<string, number | null>;
-          productSkuId: string;
-          trust: { completeness: string };
-        }>;
-        status: string;
-      }
-    | undefined;
-  const data: ReportItemsResult | undefined = isCustom
-    ? customData && {
-        ...customData,
-        completeness:
-          customData.data?.trust?.completeness ?? customData.data?.completeness,
-        facets: [
-          "fast_mover",
-          "slow_mover",
-          "nonmoving",
-          "low_cover",
-          "high_revenue_low_margin",
-        ].map((value) => ({ value })),
-        limitingReason:
-          customData.data?.trust?.limitingReason ??
-          customData.data?.limitingReason,
-        page: customData.page.map((row) => ({
-          ...row,
-          attentionSort: 0,
-          completeness: row.trust.completeness,
-          coverSort: row.metrics.projectedDaysOfCover ?? 0,
-          inventoryValueSort: row.metrics.knownInventoryValueMinor ?? 0,
-          marginSort:
-            row.metrics.knownGrossProfitMinor ??
-            row.metrics.known_gross_profit ??
-            0,
-          metrics: {
-            ...row.metrics,
-            knownGrossProfitMinor:
-              row.metrics.knownGrossProfitMinor ??
-              row.metrics.known_gross_profit ??
-              null,
-            netRevenueMinor:
-              row.metrics.netRevenueMinor ?? row.metrics.net_sales ?? null,
-            netSoldUnits:
-              row.metrics.netSoldUnits ?? row.metrics.units_sold ?? null,
-          },
-          revenueCurrencyCode: row.currencyCode ?? null,
-          revenueCurrencyMinorUnitScale: row.currencyMinorUnitScale ?? null,
-          revenueSort:
-            row.metrics.netRevenueMinor ?? row.metrics.net_sales ?? 0,
-          unitsSort: row.metrics.netSoldUnits ?? row.metrics.units_sold ?? 0,
-        })),
-      }
-    : presetData;
+
   return (
     <ReportsItemsView
-      classification={classification}
-      controlsEnabled
-      data={data}
-      onClassificationChange={(nextClassification) => {
+      cursor={search.cursor}
+      onCursorChange={(cursor) =>
         void navigate({
           replace: true,
-          search: (current) => ({
-            ...current,
-            classification:
-              nextClassification === "all" ? undefined : nextClassification,
-            cursor: undefined,
-          }),
-        });
-      }}
-      onLoadMore={
-        data?.continueCursor
-          ? () => {
-              void navigate({
-                search: (current) => ({
-                  ...current,
-                  cursor: data.continueCursor,
-                }),
-              });
-            }
-          : undefined
+          search: (current) => ({ ...current, cursor }),
+        })
       }
-      onOpenItem={(row) => {
-        void navigate({
-          to: "/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId",
-          params: (current) => ({ ...current, productSkuId: row.productSkuId }),
-          search: true,
-        });
-      }}
-      onSortChange={(itemSort) => {
+      onPeriodDateChange={(periodDate) =>
         void navigate({
           replace: true,
-          search: (current) => ({ ...current, cursor: undefined, itemSort }),
-        });
-      }}
-      sort={sort}
+          search: (current) => ({ ...current, periodDate, cursor: undefined }),
+        })
+      }
+      onPeriodTypeChange={(periodType) =>
+        void navigate({
+          replace: true,
+          search: (current) => ({ ...current, periodType, cursor: undefined }),
+        })
+      }
+      onSortByChange={(sortBy) =>
+        void navigate({
+          replace: true,
+          search: (current) => ({ ...current, sortBy, cursor: undefined }),
+        })
+      }
+      periodDate={search.periodDate ?? todayOperatingDateGuess()}
+      periodType={search.periodType ?? "day"}
+      sortBy={(search.sortBy ?? "revenue") as ReportSkuSortBy}
     />
   );
 }

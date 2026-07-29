@@ -12,8 +12,8 @@ import {
   type ExpenseSessionTraceRecorder,
   type ExpenseSessionTraceStage,
 } from "./expenseSessionTracing";
-import { applyInventoryEffectWithCtx } from "../../../reporting/inventory/effects";
-import { resolveReportingOperatingPeriodWithCtx } from "../../../reporting/operatingPeriods";
+import { applyInventoryEffectWithCtx } from "../../../inventoryLedger/effects";
+import { resolveReportingOperatingPeriodWithCtx } from "../../../storeTime/operatingPeriods";
 
 type CommandFailureStatus =
   | "cashierMismatch"
