@@ -62,11 +62,14 @@ describe("sendNotificationEmail", () => {
 
     const result = await sendNotificationEmail(request);
 
+    // Reported as suppressed, never as sent: a delivery row claiming success
+    // for mail that was never transmitted is indistinguishable from a real
+    // send during an incident.
     expect(result).toEqual({
-      state: "sent",
+      state: "suppressed",
       code: "suppressed_non_prod",
-      providerMessageId: "suppressed:non-prod",
     });
+    expect(result.providerMessageId).toBeUndefined();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

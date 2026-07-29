@@ -9,7 +9,16 @@ import {
   nextBackoffMs,
 } from "./deliveryPolicy";
 
+// Each phase gets its own budget rather than sharing one. A shared budget lets
+// a backlog in an earlier phase (say, mass lease expiry after an outage)
+// starve the later phases to zero work on every tick, which disables the only
+// safety net the rail has.
 const DEFAULT_SWEEP_LIMIT = 25;
+
+// An intent the sweeper keeps picking up but that never reserves (corrupt
+// row, unresolvable reference) would otherwise sit at the head of the
+// oldest-first pending queue forever. Terminalize it after this many pickups.
+const MAX_INTENT_SWEEP_ATTEMPTS = 5;
 
 // The safety net that makes delivery eventual. Immediate dispatch via
 // runAfter(0) is the fast path; this sweep recovers everything that path can
@@ -81,33 +90,53 @@ export const sweep = internalMutation({
 
     const intentIdsToDispatch = new Set<Id<"notificationIntent">>();
 
-    const retryBudget = limit - staleLeases.length;
-    const dueRetries =
-      retryBudget > 0
-        ? await ctx.db
-            .query("notificationDelivery")
-            .withIndex("by_status_and_nextAttemptAt", (q) =>
-              q.eq("status", "retryable_failure").lte("nextAttemptAt", now),
-            )
-            .take(retryBudget)
-        : [];
+    const dueRetries = await ctx.db
+      .query("notificationDelivery")
+      .withIndex("by_status_and_nextAttemptAt", (q) =>
+        q.eq("status", "retryable_failure").lte("nextAttemptAt", now),
+      )
+      .take(limit);
     for (const delivery of dueRetries) {
       intentIdsToDispatch.add(delivery.intentId);
     }
 
-    const intentBudget = retryBudget - dueRetries.length;
-    const staleIntents =
-      intentBudget > 0
-        ? await ctx.db
-            .query("notificationIntent")
-            .withIndex("by_status_and_emittedAt", (q) =>
-              q
-                .eq("status", "pending")
-                .lte("emittedAt", now - SWEEPER_INTENT_PICKUP_DELAY_MS),
-            )
-            .take(intentBudget)
-        : [];
+    const staleIntents = await ctx.db
+      .query("notificationIntent")
+      .withIndex("by_status_and_emittedAt", (q) =>
+        q
+          .eq("status", "pending")
+          .lte("emittedAt", now - SWEEPER_INTENT_PICKUP_DELAY_MS),
+      )
+      .take(limit);
+    let intentsAbandoned = 0;
     for (const intent of staleIntents) {
+      const sweepAttempts = (intent.sweepAttempts ?? 0) + 1;
+      // Written in the sweeper's own transaction, so it survives a reserve
+      // that throws and rolls back its own writes.
+      await ctx.db.patch("notificationIntent", intent._id, { sweepAttempts });
+      if (sweepAttempts > MAX_INTENT_SWEEP_ATTEMPTS) {
+        await ctx.db.patch("notificationIntent", intent._id, {
+          status: "suppressed",
+          suppressedReason: "dispatch_unrecoverable",
+        });
+        await recordOperationalEventWithCtx(ctx, {
+          storeId: intent.storeId,
+          organizationId: intent.organizationId,
+          eventType: "notification_delivery_failed",
+          subjectType: intent.subjectType,
+          subjectId: intent.subjectId,
+          actorType: "automation",
+          message: `Notification ${intent.kind} could not be dispatched after ${MAX_INTENT_SWEEP_ATTEMPTS} sweeps; intent abandoned.`,
+          metadata: {
+            notificationKind: intent.kind,
+            notificationSubjectKey: String(intent._id),
+            errorCode: "dispatch_unrecoverable",
+          },
+          metadataDedupeKeys: ["notificationSubjectKey"],
+        });
+        intentsAbandoned += 1;
+        continue;
+      }
       intentIdsToDispatch.add(intent._id);
     }
 
@@ -123,6 +152,12 @@ export const sweep = internalMutation({
       staleLeasesRecovered: staleLeases.length - terminaled,
       terminaled,
       dispatchesScheduled: intentIdsToDispatch.size,
+      intentsAbandoned,
+      // Surfaced so a saturated phase is visible in cron output rather than
+      // silently truncated.
+      staleLeaseBacklog: staleLeases.length >= limit,
+      retryBacklog: dueRetries.length >= limit,
+      pendingIntentBacklog: staleIntents.length >= limit,
     };
   },
 });

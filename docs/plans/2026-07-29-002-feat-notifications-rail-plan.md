@@ -23,11 +23,11 @@ Admin emails are bolted onto call sites: three flows each hand-roll recipient lo
 
 - R1. Domain code emits a notification intent (kind + subject refs + dedupe key) and has no knowledge of channels, recipients, templates, or transport.
 - R2. Adding a new communication requires only a registry entry (and template); no dispatch/transport changes.
-- R3. Audience is resolved from data (`notificationSubscription`: org x optional store x category x channel), with `ADMIN_EMAILS` as fallback when no rows exist, so behavior is unchanged pre-seed.
+- R3. Audience is resolved from data (`notificationSubscription`: org x optional store x category x channel), with `ADMIN_EMAILS` as fallback only when the org has zero subscription rows for that category — so behavior is unchanged pre-seed. Once rows exist, an empty filtered match (all disabled, or all scoped to another store) is an intentionally empty audience, not a fallback trigger: the intent is suppressed (`no_recipients`). Disabling every subscription in a category therefore does silence it.
 - R4. Deliveries are individually ledgered with lease tokens, attempt caps, exponential backoff, and provider idempotency keys — no silent loss, no double-send.
-- R5. Dispatch is hybrid: immediate `runAfter(0)` on emit for urgent kinds, plus one sweeper cron that recovers stale leases, due retries, and undispatched intents.
+- R5. Dispatch is hybrid: immediate `runAfter(0)` on emit for every kind (no urgency tiering), plus one sweeper cron that recovers stale leases, due retries, and undispatched intents.
 - R6. Content is rendered at send time from fresh data via the existing payload queries; an unsendable payload (deleted/resolved subject) suppresses the delivery instead of sending stale content.
-- R7. The environment gate lives in the transport: prod sends normally; non-prod redirects to `NOTIFICATIONS_DEV_RECIPIENT` or marks sent-suppressed — the full pipeline runs in every environment.
+- R7. The environment gate lives in the transport: prod sends normally; non-prod redirects to `NOTIFICATIONS_DEV_RECIPIENT` or records the delivery as `suppressed` (never a false `sent`) — the full pipeline runs in every environment.
 - R8. A delivery that terminally fails records an `operationalEvent` (a permanently unsendable admin alert is itself an operational event).
 - R9. The three existing flows are ported with their current payload queries and templates unchanged; legacy per-flow dedupe markers, admin loops, and the `automationNotificationDelivery` writers are retired.
 - R10. The in-app channel is schema-supported (channel enum, `readAt`) but stubbed — no UI, no in-app deliveries created yet.
@@ -72,13 +72,13 @@ Admin emails are bolted onto call sites: three flows each hand-roll recipient lo
 ## Key Technical Decisions
 
 - Hybrid dispatch (immediate `runAfter(0)` + sweeper safety net) over sweeper-only: closeout variance alerts need near-real-time; the sweeper guarantees eventual delivery. (User-confirmed.)
-- Render-at-send over snapshot-at-emit: retries hours later reflect current data; payload queries double as "still sendable?" checks (null/throw → suppress). (User-confirmed.)
+- Render-at-send over snapshot-at-emit: retries hours later reflect current data; payload queries double as "still sendable?" checks — a null return means genuinely unsendable and suppresses, while a throw is treated as a transient fault and retried. (User-confirmed.)
 - Per-category subscriptions (`cash_controls`, `eod`, `system_health`) over per-kind: right configuration grain to start. (User-confirmed.)
 - Stage gate in transport, not call sites: staging exercises the entire pipeline. (User-confirmed.)
 - Terminal delivery failures record an `operationalEvent`; in-app channel stubbed at schema level. (User-confirmed.)
 - Reserving a delivery IS leasing it: rows are born `in_flight` with a lease token; no separate pending state. Retry eligibility lives in `retryable_failure` + `nextAttemptAt`.
 - Timeouts classify as `retryable_failure` rather than the walkthrough module's `outcome_unknown`: the provider call is idempotency-keyed by delivery id, so ambiguous outcomes are safe to retry without operator triage.
-- `ADMIN_EMAILS` fallback inside audience resolution removes any deploy-ordering dependency on seeding.
+- `ADMIN_EMAILS` fallback inside audience resolution removes any deploy-ordering dependency on seeding; it only fires when an org has no subscription rows at all for the category, not when a filtered match comes up empty.
 - Notification rail is separate from `operationalEvent` (not a projection of it); emitters may record both side by side.
 
 ---
@@ -125,14 +125,14 @@ sequenceDiagram
     participant A as dispatchIntent (action)
     participant T as transport (MailerSend)
     participant L as notificationDelivery
-    participant S as sweeper (cron 5m)
+    participant S as sweeper (cron 5m prod / 60m elsewhere)
 
     D->>I: emit(kind, subject, payload) — no-op on dedupeKey hit
-    D-->>A: scheduler.runAfter(0) when urgency=immediate
+    D-->>A: scheduler.runAfter(0), unconditionally (no urgency/batched split)
     A->>R: reserve
     R->>L: lease per recipient x channel (born in_flight, leaseToken)
     R-->>A: leased batch + payload
-    A->>A: registry.prepareEmail(fresh payload) — null/throw ⇒ suppress
+    A->>A: registry.prepareEmail(fresh payload) — null ⇒ suppress; throw ⇒ retry with backoff
     A->>T: send (Idempotency-Key: deliveryId, 15s timeout)
     T-->>A: classified result (stage gate applied)
     A->>L: complete(leaseToken) — sent | retryable(backoff) | terminal(+operationalEvent)
@@ -184,8 +184,9 @@ sequenceDiagram
 - Test: `packages/athena-webapp/convex/notifications/transport.test.ts`
 
 **Approach:**
-- Policy: MAX 4 attempts, 5-minute lease, exponential backoff capped at 24h, HTTP classification (2xx sent; 408/429/5xx/timeout retryable; other 4xx terminal), normalized-recipient dedupe-key recipes. No Convex imports.
-- Transport: bearer auth, `Idempotency-Key` from delivery id, 15s `AbortSignal.timeout`, returns a classified result (never a raw `Response`). Non-prod: redirect to `NOTIFICATIONS_DEV_RECIPIENT` when set, else return sent-suppressed without calling the provider.
+- Policy: MAX 4 attempts, a per-recipient scaled lease (base + per-recipient allowance, capped), exponential backoff capped at 24h (the cap is reachable in the general formula), HTTP classification (2xx sent; 408/429/5xx/timeout retryable; other 4xx terminal), normalized-recipient dedupe-key recipes with percent-encoded key components so client-supplied strings (POS `localEventId`) can't forge collisions. No Convex imports.
+- At `MAX_DELIVERY_ATTEMPTS = 4`, only the first three backoff values are ever produced in practice — 1m, 2m, 4m — since the attempt cap terminalizes the delivery before the exponent grows large enough to approach the 24h ceiling.
+- Transport: bearer auth, `Idempotency-Key` from delivery id, 15s `AbortSignal.timeout`, returns a classified result (never a raw `Response`). Non-prod: redirect to `NOTIFICATIONS_DEV_RECIPIENT` when set, else return a `suppressed` result without calling the provider.
 
 **Execution note:** Test-first — the classification table and gate branches are enumerable up front.
 
@@ -193,7 +194,7 @@ sequenceDiagram
 
 **Test scenarios:**
 - Happy path: 200 → sent; classification table covers 408/429/500/404/timeout.
-- Edge case: backoff caps at 24h; attempt 1 floor is 60s.
+- Edge case: backoff formula caps at 24h for large attempt inputs; attempt 1 floor is 60s; at `MAX_DELIVERY_ATTEMPTS` only 1m/2m/4m are ever exercised by the dispatch/sweeper paths.
 - Error path: non-prod without dev recipient → suppressed without fetch; non-prod with dev recipient → fetch targets the override, not the real recipient.
 - Happy path: prod sends to the real recipient with idempotency key present.
 
@@ -212,17 +213,18 @@ sequenceDiagram
 **Files:**
 - Create: `packages/athena-webapp/convex/notifications/registry.ts`
 - Create: `packages/athena-webapp/convex/notifications/emit.ts`
-- Test: `packages/athena-webapp/convex/notifications/emit.test.ts`
+- Test: `packages/athena-webapp/convex/notifications/registry.test.ts`
+- Test: `packages/athena-webapp/convex/notifications/rail.test.ts` (end-to-end suite; covers emit alongside dispatch and sweeper)
 
 **Approach:**
-- Registry entries: kind, category, channels, urgency (`immediate | batched`), `dedupeKey(payload)`, `prepareEmail(ctx, payload)` that calls the existing internal payload queries via `internal.*` references (no module imports — avoids cycles) and renders existing templates function-call style.
+- Registry entries: kind, category, channels, `dedupeKey(payload)`, `prepareEmail(ctx, payload)` that calls the existing internal payload queries via `internal.*` references (no module imports — avoids cycles) and renders existing templates function-call style. There is no urgency/batched split — every kind dispatches immediately; the sweeper is the only backstop for anything the immediate path drops.
 - Kinds: `pos.terminal_health` (system_health), `register.closeout_variance` / `register.closeout_match` (cash_controls), `eod.daily_manager_report` (eod; action-required dedupe = store+date only, preserving today's once-per-store-day guarantee).
-- `emitNotificationWithCtx(MutationCtx)`: registry lookup → dedupeKey → no-op on existing intent → resolve org from store when absent → insert → `runAfter(0, dispatchIntent)` when immediate. Plus an `emitNotification` internalMutation for callers in actions.
+- `emitNotificationWithCtx(MutationCtx)`: registry lookup → dedupeKey → no-op on existing intent → resolve org from store when absent → insert → unconditional `runAfter(0, dispatchIntent)`. Plus an `emitNotification` internalMutation for callers in actions.
+- Non-throwing lookup (`findNotificationKind`) is used on the dispatch/sweep side: a kind that was renamed or removed by a later deploy terminalizes the intent (`suppressedReason: "unknown_kind"`, plus an operational event) instead of throwing on every sweep forever. The throwing lookup (`getNotificationKind`) stays for emit time, where an unknown kind is a caller bug that should fail loudly.
 
 **Test scenarios:**
-- Happy path: emit inserts an intent and schedules dispatch for an immediate kind.
+- Happy path: emit inserts an intent and schedules dispatch.
 - Edge case: second emit with the same payload is a no-op (one intent row).
-- Edge case: batched-urgency kind emits without scheduling.
 - Error path: unknown kind throws at emit time.
 - Happy path: each kind's dedupeKey recipe produces the documented shape (unit-level, no db).
 
@@ -240,12 +242,12 @@ sequenceDiagram
 
 **Files:**
 - Create: `packages/athena-webapp/convex/notifications/dispatch.ts`
-- Test: `packages/athena-webapp/convex/notifications/dispatch.test.ts`
+- Test: `packages/athena-webapp/convex/notifications/rail.test.ts` (end-to-end suite; covers `reserveIntentDeliveries`, `completeDelivery`, and `dispatchIntent`)
 
 **Approach:**
-- `reserveIntentDeliveries` (internalMutation): resolve subscriptions for (org, category) via bounded `.take()`, filter enabled + email + store match; fall back to `ADMIN_EMAILS` when none; per recipient insert-or-release delivery to `in_flight` with fresh leaseToken and attemptCount+1; skip sent/terminal/suppressed, live leases, and at-cap rows; mark intent dispatched.
+- `reserveIntentDeliveries` (internalMutation): resolve subscriptions for (org, category) via bounded `.take()` (recording an operational event and truncating rather than silently dropping subscribers if the 200-row cap is exceeded), filter enabled + email + store match; fall back to `ADMIN_EMAILS` only when the org has zero subscription rows for the category — never when the filtered match is empty, which instead suppresses the intent (`no_recipients`); per recipient insert-or-release delivery to `in_flight` with fresh leaseToken and attemptCount+1, using a lease duration that scales with recipient count (base + per-recipient, capped) since a batch sends serially; skip sent/terminal/suppressed, live leases, and at-cap rows; terminalize any stranded delivery whose recipient dropped out of the current audience (`recipient_unsubscribed`); mark intent dispatched. An intent whose kind is unknown (renamed/removed) is suppressed (`unknown_kind`) with an operational event instead of throwing.
 - `completeDelivery` (internalMutation): leaseToken-guarded transitions; on `terminal_failure` record `operationalEvent` (`notification_delivery_failed`, subject from intent, actorType automation) via `recordOperationalEventWithCtx`.
-- `dispatchIntent` (internalAction): reserve → `prepareEmail` once (null or throw → suppress batch + intent) → send each via transport → complete; schedule one `runAfter(minBackoff)` re-dispatch when any result is retryable.
+- `dispatchIntent` (internalAction): reserve → `prepareEmail` once. A **null** return means the subject is genuinely no longer sendable and suppresses the batch + intent (`payload_unavailable`), no send attempted. A **throw** is treated as a transient fault (read limit, OCC, momentarily missing row) and stays retryable with backoff instead of suppressing — collapsing the two would let one flaky query permanently silence an alert. Then send each via transport → complete; schedule one `runAfter(minBackoff)` re-dispatch when any result is retryable.
 
 **Execution note:** Test-first for lease-guard and suppression behavior.
 
@@ -253,11 +255,12 @@ sequenceDiagram
 
 **Test scenarios:**
 - Happy path: intent + subscription rows → one delivery per recipient, sent, intent dispatched.
-- Happy path: no subscription rows → ADMIN_EMAILS fallback recipients.
+- Happy path: zero subscription rows for the category → ADMIN_EMAILS fallback recipients.
 - Edge case: org-level subscription (no storeId) matches any store; store-scoped row only matches its store; disabled rows excluded; duplicate emails collapse to one delivery.
+- Edge case: every subscription in the category disabled (rows exist, filtered match is empty) → intent suppressed `no_recipients`, no ADMIN_EMAILS fallback.
 - Edge case: re-dispatch after success creates no new deliveries (delivery dedupeKey).
 - Error path: `prepareEmail` returns null → deliveries and intent suppressed, no send.
-- Error path: `prepareEmail` throws → same suppression path.
+- Error path: `prepareEmail` throws → deliveries retried with backoff (not suppressed), up to the attempt cap.
 - Error path: complete with wrong leaseToken is a no-op.
 - Integration: retryable provider result → delivery `retryable_failure` with `nextAttemptAt`; terminal result → `terminal_failure` and an `operationalEvent` row exists.
 
@@ -277,17 +280,18 @@ sequenceDiagram
 - Create: `packages/athena-webapp/convex/notifications/sweeper.ts`
 - Create: `packages/athena-webapp/convex/notifications/seed.ts`
 - Modify: `packages/athena-webapp/convex/crons.ts`
-- Test: `packages/athena-webapp/convex/notifications/sweeper.test.ts`
+- Test: `packages/athena-webapp/convex/notifications/rail.test.ts` (end-to-end suite; covers `sweep` and `seedAdminSubscriptions`)
 
 **Approach:**
-- Batch-capped (25) mutation: expired `in_flight` → `retryable_failure` with backoff, or `terminal_failure` + operational event at cap; due `retryable_failure` → re-schedule `dispatchIntent` per distinct intent; `pending` intents older than 60s → dispatch. One 5-minute cron ("the ONE cron of the notifications layer").
-- Seed: idempotent internalMutation inserting email subscriptions for all three categories from `ADMIN_EMAILS` per organization.
+- Each of the sweeper's three phases (stale leases, due retries, stale pending intents) runs against its own batch-capped (25) budget rather than a shared one, so a backlog in one phase can't starve the others to zero work on a tick; the return value surfaces a backlog flag per phase (`staleLeaseBacklog`, `retryBacklog`, `pendingIntentBacklog`) when a phase hit its cap. Expired `in_flight` → `retryable_failure` with backoff, or `terminal_failure` + operational event at the attempt cap; due `retryable_failure` → re-schedule `dispatchIntent` per distinct intent; `pending` intents older than 60s → dispatch, tracked by a `sweepAttempts` counter on the intent (written in the sweeper's own transaction so it survives a reserve that throws and rolls back) — an intent that has been picked up more than 5 times without reserving is abandoned (`suppressedReason: "dispatch_unrecoverable"`) with an operational event, rather than sitting at the head of the pending queue forever. One cron ("the ONE cron of the notifications layer"), running every 5 minutes in prod and every 60 minutes in other environments.
+- Seed: idempotent internalMutation inserting email subscriptions for all three categories from `ADMIN_EMAILS` per organization. It must be invoked manually from the Convex dashboard — there is no cron or migration entry that runs it automatically.
 
 **Test scenarios:**
 - Happy path: expired lease under cap → retryable with future `nextAttemptAt`.
 - Edge case: expired lease at attempt cap → terminal + operational event.
-- Happy path: due retryable and stale pending intent each get a dispatch scheduled; batch cap respected.
+- Happy path: due retryable and stale pending intent each get a dispatch scheduled; per-phase batch cap respected.
 - Edge case: nothing eligible → no-op.
+- Edge case: a pending intent swept more than 5 times without reserving is abandoned with reason `dispatch_unrecoverable` and an operational event.
 - Happy path: seed run twice inserts each subscription once.
 
 **Verification:** convexTest suite passes; crons file registers the sweep.

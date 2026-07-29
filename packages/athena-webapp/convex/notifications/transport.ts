@@ -15,7 +15,11 @@ export type NotificationEmailRequest = {
 };
 
 export type NotificationEmailResult = {
-  state: DeliveryResultState;
+  // "suppressed" is reported when policy — not the provider — decided not to
+  // send. It must never be conflated with "sent": a delivery row claiming
+  // success for mail that was never transmitted is indistinguishable from a
+  // real send during an incident.
+  state: DeliveryResultState | "suppressed";
   code: string;
   providerMessageId?: string;
 };
@@ -35,11 +39,7 @@ export async function sendNotificationEmail(
   if (process.env.STAGE !== "prod") {
     const devRecipient = process.env.NOTIFICATIONS_DEV_RECIPIENT;
     if (!devRecipient) {
-      return {
-        state: "sent",
-        code: "suppressed_non_prod",
-        providerMessageId: "suppressed:non-prod",
-      };
+      return { state: "suppressed", code: "suppressed_non_prod" };
     }
     recipientEmail = devRecipient;
     recipientName = "Athena notifications (dev)";

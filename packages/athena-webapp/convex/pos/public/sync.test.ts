@@ -1227,6 +1227,160 @@ describe("register closeout notification intents", () => {
     );
   });
 
+  it("does not emit a duplicate variance intent for a replayed sync upload", async () => {
+    const t = convexTest(schema, modules);
+    const world = await seedCloseoutWorld(t);
+    const approvalRequestId = await t.run(async (ctx) =>
+      ctx.db.insert("approvalRequest", {
+        storeId: world.storeId,
+        organizationId: world.organizationId,
+        requestType: "variance_review",
+        subjectType: "registerSession",
+        subjectId: String(world.registerSessionId),
+        status: "pending",
+        registerSessionId: world.registerSessionId,
+        createdAt: 2,
+        metadata: { localEventId: "event-closeout-1", variance: -4218 },
+      }),
+    );
+    mockIngestWithCloseoutMapping(world, "event-closeout-1");
+
+    await uploadCloseout(t, world, "event-closeout-1");
+    await uploadCloseout(t, world, "event-closeout-1");
+
+    const intents = await listIntents(t);
+    expect(intents).toHaveLength(1);
+    expect(intents[0]).toMatchObject({
+      kind: "register.closeout_variance",
+      payload: { approvalRequestId },
+    });
+  });
+
+  it("skips a variance review already notified by the pre-rail implementation", async () => {
+    const t = convexTest(schema, modules);
+    const world = await seedCloseoutWorld(t);
+    await t.run(async (ctx) =>
+      ctx.db.insert("approvalRequest", {
+        storeId: world.storeId,
+        organizationId: world.organizationId,
+        requestType: "variance_review",
+        subjectType: "registerSession",
+        subjectId: String(world.registerSessionId),
+        status: "pending",
+        registerSessionId: world.registerSessionId,
+        createdAt: 2,
+        metadata: {
+          localEventId: "event-closeout-1",
+          variance: -4218,
+          // Cutover marker: the pre-rail path already sent this alert, and
+          // there is no notificationIntent to dedupe against.
+          varianceNotificationScheduledAt: 3,
+        },
+      }),
+    );
+    mockIngestWithCloseoutMapping(world, "event-closeout-1");
+
+    await uploadCloseout(t, world, "event-closeout-1");
+
+    expect(
+      (await listIntents(t)).filter(
+        (intent) => intent.kind === "register.closeout_variance",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("never sends an all-clear for a variance closeout the pre-rail path already reported", async () => {
+    // Regression: the two cutover markers live on different rows — the
+    // pre-rail variance path marked the approvalRequest, leaving the session
+    // marker unset. A variance review skipped by its marker must not fall
+    // through to the match branch, which checks only closed/countedCash and
+    // would report "register closed" for a session that had a variance.
+    const t = convexTest(schema, modules);
+    const world = await seedCloseoutWorld(t);
+    await t.run(async (ctx) =>
+      ctx.db.insert("approvalRequest", {
+        storeId: world.storeId,
+        organizationId: world.organizationId,
+        requestType: "variance_review",
+        subjectType: "registerSession",
+        subjectId: String(world.registerSessionId),
+        status: "pending",
+        registerSessionId: world.registerSessionId,
+        createdAt: 2,
+        metadata: {
+          localEventId: "event-closeout-1",
+          variance: -4218,
+          varianceNotificationScheduledAt: 3,
+        },
+      }),
+    );
+    mockIngestWithCloseoutMapping(world, "event-closeout-1");
+
+    await uploadCloseout(t, world, "event-closeout-1");
+
+    expect(await listIntents(t)).toHaveLength(0);
+  });
+
+  it("emits nothing when both pre-rail cutover markers are present", async () => {
+    const t = convexTest(schema, modules);
+    const world = await seedCloseoutWorld(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("approvalRequest", {
+        storeId: world.storeId,
+        organizationId: world.organizationId,
+        requestType: "variance_review",
+        subjectType: "registerSession",
+        subjectId: String(world.registerSessionId),
+        status: "pending",
+        registerSessionId: world.registerSessionId,
+        createdAt: 2,
+        metadata: {
+          localEventId: "event-closeout-1",
+          variance: -4218,
+          // Cutover marker: the pre-rail path already sent this alert, and
+          // there is no notificationIntent to dedupe against.
+          varianceNotificationScheduledAt: 3,
+        },
+      });
+      // Pre-rail closeouts also carry the session-level marker.
+      await ctx.db.patch("registerSession", world.registerSessionId, {
+        closeoutNotificationLocalEventId: "event-closeout-1",
+      });
+    });
+    mockIngestWithCloseoutMapping(world, "event-closeout-1");
+
+    await uploadCloseout(t, world, "event-closeout-1");
+
+    expect(await listIntents(t)).toHaveLength(0);
+  });
+
+  it("skips a session whose closeout was already notified by the pre-rail implementation", async () => {
+    const t = convexTest(schema, modules);
+    const world = await seedCloseoutWorld(t);
+    await t.run(async (ctx) =>
+      ctx.db.patch("registerSession", world.registerSessionId, {
+        closeoutNotificationLocalEventId: "event-closeout-1",
+      }),
+    );
+    mockIngestWithCloseoutMapping(world, "event-closeout-1");
+
+    await uploadCloseout(t, world, "event-closeout-1");
+
+    expect(await listIntents(t)).toHaveLength(0);
+
+    // The guard is scoped to the local event it marks: a later reclose under a
+    // new id still emits.
+    mockIngestWithCloseoutMapping(world, "event-closeout-2");
+    await uploadCloseout(t, world, "event-closeout-2");
+
+    const intents = await listIntents(t);
+    expect(intents).toHaveLength(1);
+    expect(intents[0]).toMatchObject({
+      kind: "register.closeout_match",
+      payload: { localEventId: "event-closeout-2" },
+    });
+  });
+
   it("emits one register.closeout_match intent for a clean close without marker writes", async () => {
     const t = convexTest(schema, modules);
     const world = await seedCloseoutWorld(t);

@@ -77,9 +77,9 @@
     <ul>
       <li><strong>R1</strong> Domain code emits intents; no knowledge of channels, recipients, templates, transport.</li>
       <li><strong>R2</strong> New communication = registry entry + template only.</li>
-      <li><strong>R3</strong> Audience from <code>notificationSubscription</code> data (org &times; optional store &times; category &times; channel), <code>ADMIN_EMAILS</code> fallback pre-seed.</li>
-      <li><strong>R4</strong> Ledgered deliveries: lease tokens, attempt caps, backoff, provider idempotency keys.</li>
-      <li><strong>R5</strong> Hybrid dispatch: immediate <code>runAfter(0)</code> + one sweeper cron.</li>
+      <li><strong>R3</strong> Audience from <code>notificationSubscription</code> data (org &times; optional store &times; category &times; channel); <code>ADMIN_EMAILS</code> fallback fires only when an org has zero subscription rows for the category &mdash; an empty filtered match (all disabled, or scoped to another store) suppresses the intent instead, so disabling every subscription in a category does silence it.</li>
+      <li><strong>R4</strong> Ledgered deliveries: lease tokens (scaled to recipient count), attempt caps, backoff, provider idempotency keys, percent-encoded dedupe-key components.</li>
+      <li><strong>R5</strong> Hybrid dispatch: immediate <code>runAfter(0)</code> for every kind (no urgency tiering) + one sweeper cron.</li>
       <li><strong>R6</strong> Render at send time from fresh data; unsendable payloads suppress.</li>
       <li><strong>R7</strong> Environment gate lives in transport; full pipeline runs everywhere.</li>
       <li><strong>R8</strong> Terminal delivery failure records an <code>operationalEvent</code>.</li>
@@ -106,7 +106,7 @@
       <li><strong>Hybrid dispatch</strong> (immediate + sweeper) over sweeper-only &mdash; variance alerts need near-real-time. <em>(user-confirmed)</em></li>
       <li><strong>Render-at-send</strong> over snapshot-at-emit &mdash; retries reflect current data; payload queries double as sendability checks. <em>(user-confirmed)</em></li>
       <li><strong>Per-category subscriptions</strong> (<code>cash_controls</code>, <code>eod</code>, <code>system_health</code>). <em>(user-confirmed)</em></li>
-      <li><strong>Stage gate in transport</strong> &mdash; staging exercises the pipeline; non-prod redirects to <code>NOTIFICATIONS_DEV_RECIPIENT</code> or marks sent-suppressed. <em>(user-confirmed)</em></li>
+      <li><strong>Stage gate in transport</strong> &mdash; staging exercises the pipeline; non-prod redirects to <code>NOTIFICATIONS_DEV_RECIPIENT</code> or records the delivery as <code>suppressed</code>, never a false <code>sent</code>. <em>(user-confirmed)</em></li>
       <li><strong>Terminal failures record operational events; in-app stubbed.</strong> <em>(user-confirmed)</em></li>
       <li>Reserving a delivery <em>is</em> leasing it: rows born <code>in_flight</code> with a lease token; no pending delivery state.</li>
       <li>Timeouts classify retryable (not <code>outcome_unknown</code>) because sends are idempotency-keyed by delivery id.</li>
@@ -117,7 +117,7 @@
   <section id="design">
     <h2>Design Shape</h2>
     <p class="meta">Directional guidance for review, not implementation specification.</p>
-    <p><code>emit(kind, subject, payload)</code> inside the domain mutation &rarr; intent row (no-op on dedupeKey hit) &rarr; <code>runAfter(0)</code> dispatch for immediate kinds &rarr; reserve mutation leases one delivery per recipient &times; channel &rarr; registry <code>prepareEmail</code> loads fresh payload and renders the existing template &rarr; transport sends with <code>Idempotency-Key: deliveryId</code> and 15s timeout &rarr; lease-guarded completion (sent / retryable with backoff / terminal + operational event). A 5-minute sweeper recovers expired leases, due retries, and undispatched intents.</p>
+    <p><code>emit(kind, subject, payload)</code> inside the domain mutation &rarr; intent row (no-op on dedupeKey hit) &rarr; unconditional <code>runAfter(0)</code> dispatch &rarr; reserve mutation leases one delivery per recipient &times; channel (lease duration scaled to recipient count) &rarr; registry <code>prepareEmail</code> loads fresh payload and renders the existing template (null &rArr; suppress; throw &rArr; retry with backoff) &rarr; transport sends with <code>Idempotency-Key: deliveryId</code> and 15s timeout &rarr; lease-guarded completion (sent / retryable with backoff / terminal + operational event / suppressed). A sweeper (every 5 minutes in prod, 60 minutes elsewhere) recovers expired leases, due retries, and undispatched intents, with independent per-phase budgets and abandonment of intents that never reserve after 5 pickups.</p>
     <p>New module: <code>packages/athena-webapp/convex/notifications/</code> &mdash; <code>deliveryPolicy</code> (pure), <code>registry</code> (4 kinds), <code>transport</code>, <code>emit</code>, <code>dispatch</code>, <code>sweeper</code>, <code>seed</code>; tables in <code>convex/schemas/notifications.ts</code>.</p>
   </section>
 
@@ -127,9 +127,9 @@
       <tr><th>Unit</th><th>Goal</th><th>Deps</th><th>Key files</th></tr>
       <tr><td>U1</td><td>Notification tables + schema registration</td><td>&mdash;</td><td><code>convex/schemas/notifications.ts</code>, <code>convex/schema.ts</code></td></tr>
       <tr><td>U2</td><td>Delivery policy (pure) + email transport with stage gate</td><td>&mdash;</td><td><code>notifications/deliveryPolicy.ts</code>, <code>notifications/transport.ts</code> + tests</td></tr>
-      <tr><td>U3</td><td>Kind registry (4 kinds) + emit API</td><td>U1, U2</td><td><code>notifications/registry.ts</code>, <code>notifications/emit.ts</code> + tests</td></tr>
-      <tr><td>U4</td><td>Dispatch pipeline: reserve/lease, prepare, send, complete, operational-event hook, ADMIN_EMAILS fallback</td><td>U1&ndash;U3</td><td><code>notifications/dispatch.ts</code> + tests</td></tr>
-      <tr><td>U5</td><td>Sweeper + cron + subscription seed</td><td>U4</td><td><code>notifications/sweeper.ts</code>, <code>notifications/seed.ts</code>, <code>convex/crons.ts</code> + tests</td></tr>
+      <tr><td>U3</td><td>Kind registry (4 kinds) + emit API</td><td>U1, U2</td><td><code>notifications/registry.ts</code>, <code>notifications/emit.ts</code> + <code>registry.test.ts</code>, <code>rail.test.ts</code></td></tr>
+      <tr><td>U4</td><td>Dispatch pipeline: reserve/lease, prepare, send, complete, operational-event hook, ADMIN_EMAILS fallback</td><td>U1&ndash;U3</td><td><code>notifications/dispatch.ts</code> + <code>rail.test.ts</code></td></tr>
+      <tr><td>U5</td><td>Sweeper + cron + subscription seed</td><td>U4</td><td><code>notifications/sweeper.ts</code>, <code>notifications/seed.ts</code>, <code>convex/crons.ts</code> + <code>rail.test.ts</code></td></tr>
       <tr><td>U6</td><td>Port POS terminal health alerts</td><td>U3, U4</td><td><code>pos/application/commands/terminals.ts</code>, <code>operations/posTerminalHealthAlertEmail.ts</code></td></tr>
       <tr><td>U7</td><td>Port register closeout variance/match (removes marker dedupe + lost-alert bug)</td><td>U3, U4</td><td><code>pos/public/sync.ts</code>, <code>operations/registerCloseoutVarianceEmail.ts</code></td></tr>
       <tr><td>U8</td><td>Port EOD report sends; retire legacy delivery-ledger writers</td><td>U3, U4</td><td><code>operations/dailyOperationsAutomation.ts</code>, <code>operations/dailyManagerReportEmail.ts</code></td></tr>

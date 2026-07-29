@@ -123,7 +123,7 @@ crons.interval(
 // dispatch never landed. A crashed sweep leaves the work for the next tick.
 crons.interval(
   "notifications sweep",
-  { minutes: 5 },
+  { minutes: process.env.STAGE == "prod" ? 5 : 60 },
   internal.notifications.sweeper.sweep,
   {},
 );

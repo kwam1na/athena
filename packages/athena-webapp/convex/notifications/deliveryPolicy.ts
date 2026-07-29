@@ -2,9 +2,29 @@
 // backoff, provider-result classification, and dedupe-key recipes. Kept free
 // of Convex imports so the policy is unit-testable in isolation.
 
+// Attempts must stay low enough that the total retry span sits inside the
+// email provider's idempotency-key retention window — the key is what makes a
+// re-send after an ambiguous outcome safe. At 4 attempts the span is
+// 1m + 2m + 4m, comfortably inside MailerSend's window. Raising this without
+// re-checking that window silently forfeits the no-double-send guarantee.
 export const MAX_DELIVERY_ATTEMPTS = 4;
-export const DELIVERY_LEASE_MS = 5 * 60_000;
+
+// A dispatch sends to its whole leased batch serially, so the lease has to
+// cover every recipient's send, not just one. Base + per-recipient allowance
+// keeps a slow provider from letting the sweeper reclaim leases mid-flight
+// (which would re-send to recipients that already succeeded).
+export const DELIVERY_LEASE_BASE_MS = 2 * 60_000;
+export const DELIVERY_LEASE_PER_RECIPIENT_MS = 30_000;
+export const DELIVERY_LEASE_MAX_MS = 30 * 60_000;
 export const SWEEPER_INTENT_PICKUP_DELAY_MS = 60_000;
+
+export function computeDeliveryLeaseMs(recipientCount: number) {
+  return Math.min(
+    DELIVERY_LEASE_MAX_MS,
+    DELIVERY_LEASE_BASE_MS +
+      Math.max(0, recipientCount) * DELIVERY_LEASE_PER_RECIPIENT_MS,
+  );
+}
 
 // "outcome_unknown" exists as a delivery status for operator triage but is
 // never produced by classification: idempotency-keyed sends make ambiguous
@@ -14,8 +34,16 @@ export type DeliveryResultState =
   | "retryable_failure"
   | "terminal_failure";
 
+const BACKOFF_BASE_MS = 60_000;
+const BACKOFF_CAP_MS = 86_400_000;
+
+// 60s doubling per attempt, capped at 24h. The exponent is bounded only to
+// keep the arithmetic finite for absurd inputs; the 24h cap is the real
+// ceiling and is reachable. At MAX_DELIVERY_ATTEMPTS the only values used are
+// 1m, 2m, and 4m.
 export function nextBackoffMs(attempt: number) {
-  return Math.min(86_400_000, 60_000 * 2 ** Math.max(0, Math.min(10, attempt - 1)));
+  const exponent = Math.max(0, Math.min(32, attempt - 1));
+  return Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * 2 ** exponent);
 }
 
 export function classifyDeliveryResult(
@@ -47,14 +75,26 @@ export function normalizeRecipientEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+// Key components can carry client-supplied text (POS localEventId, for one),
+// so a bare ":" join is ambiguous: two different component tuples could
+// concatenate to the same string and silently collapse two notifications into
+// one. Percent-encoding the separator makes the join injective.
+export function encodeKeyComponent(component: string) {
+  return component.replace(/%/g, "%25").replace(/:/g, "%3A");
+}
+
+export function joinKeyComponents(components: string[]) {
+  return components.map(encodeKeyComponent).join(":");
+}
+
 export function deliveryDedupeKey(args: {
   intentDedupeKey: string;
   channel: string;
   recipientEmail: string;
 }) {
-  return [
+  return joinKeyComponents([
     args.intentDedupeKey,
     args.channel,
     normalizeRecipientEmail(args.recipientEmail),
-  ].join(":");
+  ]);
 }

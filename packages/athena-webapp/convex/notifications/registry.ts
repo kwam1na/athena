@@ -2,31 +2,30 @@ import { render } from "@react-email/components";
 import { internal } from "../_generated/api";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
+import { joinKeyComponents } from "./deliveryPolicy";
 import DailyManagerReport from "../emails/DailyManagerReport";
 import PosTerminalHealthAlert from "../emails/PosTerminalHealthAlert";
 import RegisterCloseoutVarianceAlert from "../emails/RegisterCloseoutVarianceAlert";
 
 export type NotificationCategory = "cash_controls" | "eod" | "system_health";
 export type NotificationChannel = "email" | "in_app";
-export type NotificationUrgency = "immediate" | "batched";
 export type NotificationPayload = Record<string, unknown>;
 export type PreparedNotificationEmail = { subject: string; html: string };
 
 // The code-owned catalog. Every notification kind the platform can send is
-// declared here: its category (what subscriptions match), channels, urgency
-// (immediate kinds get a runAfter(0) dispatch at emit; batched kinds wait for
-// the sweeper), the structural dedupe recipe that makes emits idempotent, and
-// prepareEmail — which loads FRESH payload data via the kind's existing
-// internal query and renders the existing template at send time. Returning
-// null (or throwing) from prepareEmail means "no longer sendable" and
-// suppresses the delivery instead of sending stale content.
+// declared here: its category (what subscriptions match), channels, the
+// structural dedupe recipe that makes emits idempotent, and prepareEmail —
+// which loads FRESH payload data via the kind's existing internal query and
+// renders the existing template at send time. Returning null means the
+// subject is no longer sendable and suppresses the delivery rather than
+// sending stale content; throwing is treated as a transient fault and
+// retried.
 //
 // Adding a new communication = one entry here + one template. Call sites only
 // ever emit intents.
 export type NotificationKindDefinition = {
   category: NotificationCategory;
   channels: NotificationChannel[];
-  urgency: NotificationUrgency;
   dedupeKey: (payload: NotificationPayload) => string;
   prepareEmail: (
     ctx: Pick<ActionCtx, "runQuery">,
@@ -66,10 +65,13 @@ const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
   "pos.terminal_health": {
     category: "system_health",
     channels: ["email"],
-    urgency: "immediate",
     dedupeKey: (payload) => {
       const p = payload as TerminalHealthPayload;
-      return `pos.terminal_health:${p.terminalId}:${p.observedAt}`;
+      return joinKeyComponents([
+        "pos.terminal_health",
+        String(p.terminalId),
+        String(p.observedAt),
+      ]);
     },
     prepareEmail: async (ctx, payload) => {
       const p = payload as TerminalHealthPayload;
@@ -92,10 +94,12 @@ const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
   "register.closeout_variance": {
     category: "cash_controls",
     channels: ["email"],
-    urgency: "immediate",
     dedupeKey: (payload) => {
       const p = payload as CloseoutVariancePayload;
-      return `register.closeout_variance:${p.approvalRequestId}`;
+      return joinKeyComponents([
+        "register.closeout_variance",
+        String(p.approvalRequestId),
+      ]);
     },
     prepareEmail: async (ctx, payload) => {
       const p = payload as CloseoutVariancePayload;
@@ -113,10 +117,13 @@ const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
   "register.closeout_match": {
     category: "cash_controls",
     channels: ["email"],
-    urgency: "immediate",
     dedupeKey: (payload) => {
       const p = payload as CloseoutMatchPayload;
-      return `register.closeout_match:${p.registerSessionId}:${p.localEventId}`;
+      return joinKeyComponents([
+        "register.closeout_match",
+        String(p.registerSessionId),
+        p.localEventId,
+      ]);
     },
     prepareEmail: async (ctx, payload) => {
       const p = payload as CloseoutMatchPayload;
@@ -134,7 +141,6 @@ const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
   "eod.daily_manager_report": {
     category: "eod",
     channels: ["email"],
-    urgency: "immediate",
     dedupeKey: (payload) => {
       const p = payload as DailyManagerReportPayload;
       // Action-required (skipped/failed) collapses to one key per store-day,
@@ -144,7 +150,12 @@ const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
         p.status === "skipped" || p.status === "failed"
           ? "action_required"
           : p.status;
-      return `eod.daily_manager_report:${p.storeId}:${p.operatingDate}:${suffix}`;
+      return joinKeyComponents([
+        "eod.daily_manager_report",
+        String(p.storeId),
+        p.operatingDate,
+        suffix,
+      ]);
     },
     prepareEmail: async (ctx, payload) => {
       const p = payload as DailyManagerReportPayload;
@@ -190,6 +201,15 @@ const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
     },
   },
 };
+
+// Non-throwing lookup for dispatch-side code: an intent whose kind was
+// renamed or removed by a later deploy must be terminalized, not left to
+// throw on every sweep forever.
+export function findNotificationKind(
+  kind: string,
+): NotificationKindDefinition | null {
+  return NOTIFICATION_KINDS[kind] ?? null;
+}
 
 export function getNotificationKind(kind: string): NotificationKindDefinition {
   const definition = NOTIFICATION_KINDS[kind];

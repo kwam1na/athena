@@ -743,12 +743,31 @@ describe("submitTerminalRuntimeStatus", () => {
     expect(first.kind).toBe("ok");
     expect(alertCtx.notificationIntents).toHaveLength(1);
 
+    const operationalEventInserts = () =>
+      alertCtx.db.insert.mock.calls.filter(
+        ([table]) => table === "operationalEvent",
+      ).length;
+    const intentInserts = () =>
+      alertCtx.db.insert.mock.calls.filter(
+        ([table]) => table === "notificationIntent",
+      ).length;
+    expect(operationalEventInserts()).toBe(1);
+    expect(intentInserts()).toBe(1);
+
     // A replay with the exact same terminalId + observedAt (receivedAt is
     // fixed by the mocked clock in this suite) hits the same dedupe key and
     // must not create a second intent.
     const second = await submit();
     expect(second.kind).toBe("ok");
     expect(alertCtx.notificationIntents).toHaveLength(1);
+
+    // The second submit really did re-run the alert edge and reach emit — the
+    // intent count above is held down by the rail's dedupe key, not by the
+    // replay quietly short-circuiting before it ever got there.
+    expect(operationalEventInserts()).toBe(2);
+    expect(intentInserts()).toBe(1);
+    // Only the first emit scheduled a dispatch; the deduped one did not.
+    expect(alertCtx.scheduler.runAfter).toHaveBeenCalledTimes(1);
   });
 
   it("does not re-alert while a degraded condition persists", async () => {

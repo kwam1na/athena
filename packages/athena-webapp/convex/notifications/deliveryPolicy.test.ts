@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DELIVERY_LEASE_BASE_MS,
+  DELIVERY_LEASE_MAX_MS,
+  DELIVERY_LEASE_PER_RECIPIENT_MS,
   MAX_DELIVERY_ATTEMPTS,
   classifyDeliveryResult,
+  computeDeliveryLeaseMs,
   deliveryDedupeKey,
+  encodeKeyComponent,
+  joinKeyComponents,
   nextBackoffMs,
   normalizeRecipientEmail,
 } from "./deliveryPolicy";
@@ -71,8 +77,13 @@ describe("nextBackoffMs", () => {
     for (let attempt = 1; attempt <= 100; attempt += 1) {
       expect(nextBackoffMs(attempt)).toBeLessThanOrEqual(86_400_000);
     }
-    expect(nextBackoffMs(11)).toBe(nextBackoffMs(50));
-    expect(nextBackoffMs(50)).toBe(nextBackoffMs(1_000));
+    // The exponent clamp is 32, far above where the 24h cap bites, so the cap
+    // is the real ceiling: attempt 11 is still under it, attempt 12 onward is
+    // pinned to it.
+    expect(nextBackoffMs(11)).toBe(61_440_000);
+    expect(nextBackoffMs(12)).toBe(86_400_000);
+    expect(nextBackoffMs(50)).toBe(86_400_000);
+    expect(nextBackoffMs(1_000)).toBe(86_400_000);
   });
 
   it("is monotonically non-decreasing", () => {
@@ -81,6 +92,30 @@ describe("nextBackoffMs", () => {
         nextBackoffMs(attempt),
       );
     }
+  });
+});
+
+describe("computeDeliveryLeaseMs", () => {
+  it("grows with the recipient count", () => {
+    expect(computeDeliveryLeaseMs(0)).toBe(DELIVERY_LEASE_BASE_MS);
+    expect(computeDeliveryLeaseMs(1)).toBe(
+      DELIVERY_LEASE_BASE_MS + DELIVERY_LEASE_PER_RECIPIENT_MS,
+    );
+    expect(computeDeliveryLeaseMs(4)).toBe(
+      DELIVERY_LEASE_BASE_MS + 4 * DELIVERY_LEASE_PER_RECIPIENT_MS,
+    );
+    expect(computeDeliveryLeaseMs(10)).toBeGreaterThan(
+      computeDeliveryLeaseMs(3),
+    );
+  });
+
+  it("is capped so one enormous audience cannot hold a lease indefinitely", () => {
+    expect(computeDeliveryLeaseMs(10_000)).toBe(DELIVERY_LEASE_MAX_MS);
+    expect(computeDeliveryLeaseMs(200)).toBe(DELIVERY_LEASE_MAX_MS);
+  });
+
+  it("floors a nonsensical recipient count at the base lease", () => {
+    expect(computeDeliveryLeaseMs(-5)).toBe(DELIVERY_LEASE_BASE_MS);
   });
 });
 
@@ -94,14 +129,47 @@ describe("recipient normalization and dedupe keys", () => {
     );
   });
 
-  it("builds delivery dedupe keys as intentKey:channel:normalizedEmail", () => {
+  it("builds delivery dedupe keys as intentKey:channel:normalizedEmail with encoded components", () => {
     expect(
       deliveryDedupeKey({
         intentDedupeKey: "pos.terminal_health:t1:100",
         channel: "email",
         recipientEmail: " Admin@Example.com ",
       }),
-    ).toBe("pos.terminal_health:t1:100:email:admin@example.com");
+    ).toBe("pos.terminal_health%3At1%3A100:email:admin@example.com");
+  });
+
+  it("encodes the separator and the escape character in key components", () => {
+    expect(encodeKeyComponent("a:b")).toBe("a%3Ab");
+    expect(encodeKeyComponent("100%")).toBe("100%25");
+    // "%" must be escaped before ":" so "%3A" cannot be forged from literal
+    // text: a component that literally reads "%3A" encodes to "%253A".
+    expect(encodeKeyComponent("%3A")).toBe("%253A");
+    expect(joinKeyComponents(["a", "b:c"])).toBe("a:b%3Ac");
+  });
+
+  it("keeps the join injective for component tuples that would collide naively", () => {
+    // Under a bare ":" join both of these flatten to the same string:
+    //   "register.closeout_match:s1:evt:email:someone@x.com:email:admin@x.com"
+    const spoofed = deliveryDedupeKey({
+      intentDedupeKey: "register.closeout_match:s1:evt:email:someone@x.com",
+      channel: "email",
+      recipientEmail: "admin@x.com",
+    });
+    const genuine = deliveryDedupeKey({
+      intentDedupeKey: "register.closeout_match:s1:evt",
+      channel: "email",
+      recipientEmail: "someone@x.com",
+    });
+    expect(spoofed).not.toBe(genuine);
+
+    // Same shape at the joinKeyComponents level: a localEventId carrying the
+    // separator cannot impersonate extra components.
+    expect(
+      joinKeyComponents(["register.closeout_match", "s1", "evt:email:x"]),
+    ).not.toBe(
+      joinKeyComponents(["register.closeout_match", "s1", "evt", "email", "x"]),
+    );
   });
 
   it("produces identical keys for equivalent recipient spellings", () => {

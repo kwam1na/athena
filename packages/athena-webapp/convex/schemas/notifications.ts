@@ -34,6 +34,12 @@ export const notificationIntentSchema = v.object({
   emittedAt: v.number(),
   dispatchedAt: v.optional(v.number()),
   suppressedReason: v.optional(v.string()),
+  // Counts sweeper pickups of a still-pending intent. Reserving happens in a
+  // mutation, so a reserve that throws rolls back its own bookkeeping; this
+  // counter is written by the sweeper's own transaction instead, which lets a
+  // persistently unreservable intent be terminalized rather than block the
+  // pending queue forever.
+  sweepAttempts: v.optional(v.number()),
 });
 
 // Who receives which category over which channel. A row with no storeId

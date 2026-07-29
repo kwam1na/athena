@@ -314,17 +314,24 @@ async function scheduleRegisterCloseoutNotifications(
       )
       .take(2);
     const approvalRequest = pendingVarianceReviews.find((request) =>
-      isFreshVarianceReviewForCloseout(request, mapping.localEventId),
+      isVarianceReviewForCloseout(request, mapping.localEventId),
     );
 
+    // A closeout under variance review is a variance notification and never
+    // also a "closed cleanly" report — including when its emit is skipped
+    // because the pre-rail implementation already reported it. Falling through
+    // to the match branch here would send an all-clear for a session that
+    // actually had a variance.
     if (approvalRequest) {
-      await emitNotificationWithCtx(ctx, {
-        kind: "register.closeout_variance",
-        storeId: approvalRequest.storeId,
-        subjectType: "approvalRequest",
-        subjectId: String(approvalRequest._id),
-        payload: { approvalRequestId: approvalRequest._id },
-      });
+      if (!wasVarianceNotifiedBeforeRail(approvalRequest)) {
+        await emitNotificationWithCtx(ctx, {
+          kind: "register.closeout_variance",
+          storeId: approvalRequest.storeId,
+          subjectType: "approvalRequest",
+          subjectId: String(approvalRequest._id),
+          payload: { approvalRequestId: approvalRequest._id },
+        });
+      }
       continue;
     }
 
@@ -335,7 +342,11 @@ async function scheduleRegisterCloseoutNotifications(
     if (
       !registerSession ||
       registerSession.status !== "closed" ||
-      typeof registerSession.countedCash !== "number"
+      typeof registerSession.countedCash !== "number" ||
+      // Cutover guard: see isFreshVarianceReviewForCloseout. Sessions the
+      // pre-rail implementation already reported carry this marker and have no
+      // corresponding intent to dedupe against.
+      registerSession.closeoutNotificationLocalEventId === mapping.localEventId
     ) {
       continue;
     }
@@ -350,7 +361,7 @@ async function scheduleRegisterCloseoutNotifications(
   }
 }
 
-function isFreshVarianceReviewForCloseout(
+function isVarianceReviewForCloseout(
   approvalRequest: Doc<"approvalRequest">,
   localEventId: string,
 ) {
@@ -359,6 +370,17 @@ function isFreshVarianceReviewForCloseout(
     metadata?.localEventId === localEventId &&
     typeof metadata.variance === "number" &&
     metadata.variance !== 0
+  );
+}
+
+// Cutover guard: reviews notified by the pre-rail implementation carry only
+// this marker and have no notificationIntent to dedupe against, so a sync
+// batch replayed across the deploy boundary would otherwise re-alert. Safe to
+// delete once no unnotified pre-deploy closeouts remain.
+function wasVarianceNotifiedBeforeRail(approvalRequest: Doc<"approvalRequest">) {
+  return (
+    typeof approvalRequest.metadata?.varianceNotificationScheduledAt ===
+    "number"
   );
 }
 

@@ -20,9 +20,9 @@ export type EmitNotificationResult = {
 
 // The one function domain code calls. Runs inside the domain mutation's
 // transaction; idempotent by the kind's structural dedupe key, so replayed
-// domain mutations are no-ops. Immediate kinds schedule their dispatch here;
-// the sweeper is the safety net for everything else (and for crashes between
-// this insert and the scheduled dispatch landing).
+// domain mutations are no-ops. Dispatch is scheduled immediately here; the
+// sweeper is the safety net for crashes between this insert and the
+// scheduled dispatch landing.
 export async function emitNotificationWithCtx(
   ctx: MutationCtx,
   args: EmitNotificationArgs,
@@ -57,13 +57,11 @@ export async function emitNotificationWithCtx(
     emittedAt: Date.now(),
   });
 
-  if (definition.urgency === "immediate") {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.notifications.dispatch.dispatchIntent,
-      { intentId },
-    );
-  }
+  await ctx.scheduler.runAfter(
+    0,
+    internal.notifications.dispatch.dispatchIntent,
+    { intentId },
+  );
 
   return { intentId, created: true };
 }
