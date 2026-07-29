@@ -54,6 +54,7 @@ async function runGit(cwd: string, ...args: string[]) {
       `git ${args.join(" ")} failed\n${result.stderr.toString()}\n${result.stdout.toString()}`
     );
   }
+  return result.stdout.toString().trim();
 }
 
 function runWorktreeManager(
@@ -168,6 +169,15 @@ describe("worktree-manager", () => {
     await expect(readFile(worktreeEnv, "utf8")).resolves.toBe(
       "VITE_CONVEX_URL=https://local.override\n"
     );
+    const bootstrapMarker = await runGit(
+      path.join(rootDir, ".worktrees/codex/idempotent-env"),
+      "rev-parse",
+      "--git-path",
+      "codex/worktree-bootstrap.json"
+    );
+    await expect(
+      readFile(path.resolve(rootDir, bootstrapMarker), "utf8")
+    ).resolves.toContain('"version":1');
   });
 
   it("installs Bun dependencies from the lockfile during worktree setup", async () => {
