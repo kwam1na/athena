@@ -8,6 +8,11 @@ const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const reportsSkuDetailSearchSchema = z.object({
   startDate: dateSchema.optional(),
   endDate: dateSchema.optional(),
+  /**
+   * Encoded origin path for `useNavigateBack`. Declared because
+   * `validateSearch` strips unknown keys before the hook can read them.
+   */
+  o: z.string().optional(),
 });
 
 function isoDateOffset(days: number): string {

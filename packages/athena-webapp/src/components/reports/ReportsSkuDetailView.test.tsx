@@ -2,11 +2,19 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const useQuery = vi.fn();
+const navigateBackMock = vi.fn();
+const search = { current: {} as Record<string, unknown> };
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQuery(...args),
 }));
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => ({ activeStore: { _id: "store-1", currency: "USD" }, isLoadingStores: false }),
+}));
+vi.mock("@/hooks/use-navigate-back", () => ({
+  useNavigateBack: () => navigateBackMock,
+}));
+vi.mock("@tanstack/react-router", () => ({
+  useSearch: () => search.current,
 }));
 
 import { ReportsSkuDetailView } from "./ReportsSkuDetailView";
@@ -20,6 +28,25 @@ const baseProps = {
 };
 
 describe("ReportsSkuDetailView", () => {
+  it("offers a way back only when the caller supplied an origin", () => {
+    useQuery.mockReturnValue({ days: [], totals: null, identity: undefined });
+
+    search.current = {};
+    const { unmount } = render(<ReportsSkuDetailView {...baseProps} />);
+    expect(
+      screen.queryByRole("button", { name: /back to items/i }),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    search.current = { o: encodeURIComponent("/acme/store/downtown/reports/items") };
+    render(<ReportsSkuDetailView {...baseProps} />);
+    expect(
+      screen.getByRole("button", { name: /back to items/i }),
+    ).toBeInTheDocument();
+
+    search.current = {};
+  });
+
   it("names the SKU in the header, normalized, with its code beneath", () => {
     useQuery.mockReturnValue({
       days: [],

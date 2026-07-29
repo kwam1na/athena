@@ -3,11 +3,16 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 const useQuery = vi.fn();
+const navigateBackMock = vi.fn();
+const search = { current: {} as Record<string, unknown> };
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQuery(...args),
 }));
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => ({ activeStore: { _id: "store-1", currency: "USD" }, isLoadingStores: false }),
+}));
+vi.mock("@/hooks/use-navigate-back", () => ({
+  useNavigateBack: () => navigateBackMock,
 }));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children, to, ...props }: { children?: React.ReactNode; to: string }) => {
@@ -19,6 +24,7 @@ vi.mock("@tanstack/react-router", () => ({
     );
   },
   useParams: () => ({ orgUrlSlug: "acme", storeUrlSlug: "downtown" }),
+  useSearch: () => search.current,
 }));
 
 import { ReportsItemsView } from "./ReportsItemsView";
@@ -96,6 +102,23 @@ describe("ReportsItemsView", () => {
     // The row survives: a fact outlives its subject, and dropping it would
     // understate the period.
     expect(screen.getAllByText("sku-deleted").length).toBeGreaterThan(0);
+  });
+
+  it("offers a way back only when a caller supplied an origin", async () => {
+    const user = userEvent.setup();
+    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+
+    search.current = {};
+    const { unmount } = render(<ReportsItemsView {...baseProps} />);
+    expect(screen.queryByRole("button", { name: /back/i })).not.toBeInTheDocument();
+    unmount();
+
+    search.current = { o: encodeURIComponent("/acme/store/downtown/reports") };
+    render(<ReportsItemsView {...baseProps} />);
+    await user.click(screen.getByRole("button", { name: /back/i }));
+    expect(navigateBackMock).toHaveBeenCalled();
+
+    search.current = {};
   });
 
   it("requests the next cursor when paginating", async () => {

@@ -15,6 +15,12 @@ export const reportsItemsSearchSchema = z.object({
   periodDate: dateSchema.optional(),
   sortBy: z.enum(["revenue", "units"]).optional(),
   cursor: z.string().optional(),
+  /**
+   * Encoded origin path for the shared back-navigation hook. Declared here
+   * because `validateSearch` strips keys it does not know, which would drop
+   * the caller's origin before `useNavigateBack` ever sees it.
+   */
+  o: z.string().optional(),
 });
 
 export const Route = createFileRoute(

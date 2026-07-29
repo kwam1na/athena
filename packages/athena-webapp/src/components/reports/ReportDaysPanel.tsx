@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { getOrigin } from "@/lib/navigationUtils";
 import { useStableReportQuery } from "./useStableReportQuery";
 import { EmptyState } from "@/components/states/empty/empty-state";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
@@ -173,7 +174,13 @@ export function ReportDaysPanel({
                     <TableCell>
                       <Link
                         params={{ orgUrlSlug: orgUrlSlug!, storeUrlSlug: storeUrlSlug! }}
-                        search={{ periodType: "day", periodDate: day.operatingDate }}
+                        search={{
+                          periodType: "day",
+                          periodDate: day.operatingDate,
+                          // Carries the current URL so the items workspace
+                          // can offer a way back to this day list.
+                          o: getOrigin(),
+                        }}
                         to="/$orgUrlSlug/store/$storeUrlSlug/reports/items"
                       >
                         {formatOperatingDate(day.operatingDate)}

@@ -6,6 +6,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ReportBackLink } from "./ReportBackLink";
 import { useStableReportQuery } from "./useStableReportQuery";
 import { cn } from "@/lib/utils";
 import {
@@ -118,6 +119,8 @@ export function ReportsSkuDetailView({
 
   return (
     <div className="space-y-layout-md" data-testid="reports-sku-detail">
+      <ReportBackLink label="Back to items" />
+
       <div className="space-y-1">
         <h2
           className="text-xl font-medium text-foreground"

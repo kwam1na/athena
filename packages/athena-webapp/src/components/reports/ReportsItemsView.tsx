@@ -26,6 +26,8 @@ import {
 import { EmptyState } from "@/components/states/empty/empty-state";
 import { cn } from "@/lib/utils";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
+import { getOrigin } from "@/lib/navigationUtils";
+import { ReportBackLink } from "./ReportBackLink";
 import {
   getLocalDateFromOperatingDate,
   getLocalOperatingDate,
@@ -87,6 +89,8 @@ export function ReportsItemsView({
 
   return (
     <div className="space-y-layout-md" data-testid="reports-items">
+      <ReportBackLink />
+
       <div className="flex flex-wrap items-end gap-layout-sm">
         <div className="space-y-1">
           <Label htmlFor="items-period-type">Period</Label>
@@ -194,6 +198,9 @@ export function ReportsItemsView({
                           storeUrlSlug: storeUrlSlug!,
                           productSkuId: row.productSkuId,
                         }}
+                        // Carries the current URL (period, sort, cursor) so
+                        // the detail page can return to this exact list.
+                        search={{ o: getOrigin() }}
                         to="/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId"
                       >
                         <span className="block truncate font-medium text-foreground">
