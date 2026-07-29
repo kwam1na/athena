@@ -1,0 +1,122 @@
+import { v } from "convex/values";
+
+import { inventoryImportCostOverlayCommandDecisionValidator } from "./inventoryImportCostOverlayRow";
+
+export const inventoryImportCostOverlayStatusValidator = v.union(
+  v.literal("draft"),
+  v.literal("ready"),
+  v.literal("preparing"),
+  v.literal("prepared"),
+  v.literal("applying"),
+  v.literal("applied"),
+  v.literal("applied_with_exceptions"),
+  v.literal("undoing"),
+  v.literal("undone"),
+  v.literal("undone_with_exceptions"),
+  v.literal("abandoned"),
+);
+
+export const inventoryImportCostOverlayColumnValidator = v.union(
+  v.object({
+    kind: v.literal("csv"),
+    label: v.string(),
+    ordinal: v.number(),
+  }),
+  v.object({
+    kind: v.literal("json"),
+    path: v.string(),
+  }),
+);
+
+const inventoryImportCostOverlayImpactSampleValidator = v.object({
+  productName: v.string(),
+  sku: v.optional(v.string()),
+  beforeMinor: v.number(),
+  afterMinor: v.number(),
+  deltaMinor: v.number(),
+});
+
+export const inventoryImportCostOverlayRunSchema = v.object({
+  storeId: v.id("store"),
+  organizationId: v.id("organization"),
+  reviewVersionId: v.id("inventoryImportReviewVersion"),
+  reviewVersionNumber: v.number(),
+  createdByUserId: v.id("athenaUser"),
+  requestKey: v.string(),
+  requestFingerprint: v.string(),
+  selectedColumn: inventoryImportCostOverlayColumnValidator,
+  sourceProjectionVersion: v.string(),
+  sourceDigest: v.optional(v.string()),
+  constructionSnapshotDigest: v.optional(v.string()),
+  constructionSnapshotRowCount: v.optional(v.number()),
+  currencyCode: v.string(),
+  currencyMinorUnitScale: v.number(),
+  status: inventoryImportCostOverlayStatusValidator,
+  epoch: v.number(),
+  workHeartbeatAt: v.optional(v.number()),
+  constructionCursor: v.number(),
+  constructionComplete: v.boolean(),
+  constructionFailureReason: v.optional(v.string()),
+  preparationCursor: v.number(),
+  decisionRevision: v.number(),
+  preparedDecisionRevision: v.optional(v.number()),
+  totalRowCount: v.number(),
+  eligibleRowCount: v.number(),
+  ineligibleRowCount: v.number(),
+  selectedRowCount: v.number(),
+  manifestDigest: v.optional(v.string()),
+  impactBeforeMinor: v.optional(v.number()),
+  impactAfterMinor: v.optional(v.number()),
+  largestImpacts: v.optional(
+    v.array(inventoryImportCostOverlayImpactSampleValidator),
+  ),
+  applyCursor: v.optional(v.number()),
+  appliedRowCount: v.optional(v.number()),
+  applyExceptionCount: v.optional(v.number()),
+  undoCursor: v.optional(v.number()),
+  undoneRowCount: v.optional(v.number()),
+  undoExceptionCount: v.optional(v.number()),
+  applyRequestedAt: v.optional(v.number()),
+  applyConfirmedByUserId: v.optional(v.id("athenaUser")),
+  appliedAt: v.optional(v.number()),
+  undoRequestKey: v.optional(v.string()),
+  undoRequestFingerprint: v.optional(v.string()),
+  undoRequestedAt: v.optional(v.number()),
+  undoRequestedByUserId: v.optional(v.id("athenaUser")),
+  undoneAt: v.optional(v.number()),
+  preparedAt: v.optional(v.number()),
+  abandonedAt: v.optional(v.number()),
+  bulkDecisionRequestKey: v.optional(v.string()),
+  bulkDecisionGeneration: v.optional(v.number()),
+  bulkDecisionCursor: v.optional(v.number()),
+  bulkDecisionStatus: v.optional(
+    v.union(v.literal("processing"), v.literal("completed")),
+  ),
+  bulkDecision: v.optional(inventoryImportCostOverlayCommandDecisionValidator),
+  bulkDecisionFilter: v.optional(
+    v.union(
+      v.literal("all"),
+      v.literal("eligible"),
+      v.literal("selected"),
+      v.literal("different"),
+      v.literal("exceptions"),
+    ),
+  ),
+  bulkDecisionSearch: v.optional(v.string()),
+  undoPreviewRequestKey: v.optional(v.string()),
+  undoPreviewGeneration: v.optional(v.number()),
+  undoPreviewHeartbeatAt: v.optional(v.number()),
+  undoPreviewCursor: v.optional(v.number()),
+  undoPreviewStatus: v.optional(
+    v.union(v.literal("processing"), v.literal("ready")),
+  ),
+  undoPreviewCompensableCount: v.optional(v.number()),
+  undoPreviewStaleCount: v.optional(v.number()),
+  undoPreviewRestoredCount: v.optional(v.number()),
+  undoPreviewReasons: v.optional(
+    v.array(v.object({ reason: v.string(), count: v.number() })),
+  ),
+  undoPreviewGeneratedAt: v.optional(v.number()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+});

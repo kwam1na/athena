@@ -9,6 +9,11 @@ export default defineConfig(({ mode }) => ({
   server: {
     allowedHosts: ["athena-qa.wigclub.store"],
   },
+  optimizeDeps: {
+    // Generated Storybook output can coexist with the app in local worktrees.
+    // It is not a dev-server entry and must not seed a separate dependency graph.
+    entries: ["index.html"],
+  },
   build: {
     chunkSizeWarningLimit: 550,
     rollupOptions: {

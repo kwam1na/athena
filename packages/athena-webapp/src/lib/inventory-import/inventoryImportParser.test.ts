@@ -145,4 +145,19 @@ describe("inventory import parser", () => {
       },
     ]);
   });
+
+  it("keeps the last normalized value when legacy CSV headers are duplicated", () => {
+    const result = parseInventoryImportContent({
+      fileName: "legacy.csv",
+      content: ["name,cost,cost,price,qty", "Closure,20,25,40,3"].join("\n"),
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(result.rows).toMatchObject([
+      {
+        productName: "Closure",
+        unitCost: 2500,
+      },
+    ]);
+  });
 });

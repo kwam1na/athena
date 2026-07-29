@@ -5,6 +5,7 @@ import type { MutationCtx } from "../_generated/server";
 const mockedSkuSearch = vi.hoisted(() => ({
   advanceRegisterCatalogRevision: vi.fn(),
   applyInventoryEffectWithCtx: vi.fn(),
+  getSharedDemoActorWithCtx: vi.fn(),
   upsertProductSkuSearchProjection: vi.fn(),
   upsertProductSkuSearchProjections: vi.fn(),
 }));
@@ -18,6 +19,11 @@ vi.mock("../reporting/inventory/effects", () => ({
   applyInventoryEffectWithCtx: mockedSkuSearch.applyInventoryEffectWithCtx,
 }));
 
+vi.mock("../sharedDemo/actor", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../sharedDemo/actor")>()),
+  getSharedDemoActorWithCtx: mockedSkuSearch.getSharedDemoActorWithCtx,
+}));
+
 vi.mock("./skuSearch", () => ({
   upsertProductSkuSearchProjection:
     mockedSkuSearch.upsertProductSkuSearchProjection,
@@ -27,9 +33,18 @@ vi.mock("./skuSearch", () => ({
 
 import {
   completeFinalizedLegacyImportRowsForProductTaxonomyWithCtx,
+  finalizeInventoryImportReviewVersionPayloadWithCtx,
   finalizeTrustedInventoryFromProductPage,
   finalizeTrustedInventoryFromProductPageWithCtx,
+  finalizeInventoryImportReviewVersionPayload,
+  getLegacyInventoryImportReviewVersionInlineEnvelopeByteLength,
+  getInventoryImportReviewVersionByIdWithCtx,
+  getInventoryImportReviewVersionPayloadChunk,
+  getInventoryImportReviewVersionPayloadChunkWithCtx,
   getLatestInventoryImportReviewVersion,
+  getLatestInventoryImportReviewVersionMetadata,
+  getLatestInventoryImportReviewVersionMetadataWithCtx,
+  getLatestInventoryImportReviewVersionWithCtx,
   importInventory,
   importInventoryRowsWithCtx,
   listInventoryImportReviewSkuContext,
@@ -39,8 +54,12 @@ import {
   repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx,
   saveInventoryImportReviewVersion,
   saveInventoryImportReviewVersionWithCtx,
+  stageInventoryImportReviewVersionPayloadChunkWithCtx,
+  stageInventoryImportReviewVersionPayloadChunk,
+  expireInventoryImportReviewVersionPayloadUpload,
   stageInventoryImportReviewRowsForPos,
   stageInventoryImportReviewRowsForPosWithCtx,
+  LEGACY_INVENTORY_IMPORT_REVIEW_INLINE_ENVELOPE_MAX_BYTES,
   type ProductPageTrustedInventoryFinalizationArgs,
 } from "./catalogImport";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
@@ -52,8 +71,12 @@ type TableName =
   | "checkoutSession"
   | "checkoutSessionItem"
   | "inventoryHold"
+  | "inventoryImportCostOverlayRow"
+  | "inventoryImportCostOverlayRun"
   | "inventoryMovement"
   | "inventoryImportProvisionalSku"
+  | "inventoryImportReviewVersionPayloadChunk"
+  | "inventoryImportReviewVersionPayloadUpload"
   | "inventoryImportReviewVersion"
   | "operationalEvent"
   | "operationalWorkItem"
@@ -66,6 +89,8 @@ type TableName =
 type Row = Record<string, any> & { _id: string };
 
 beforeEach(() => {
+  mockedSkuSearch.getSharedDemoActorWithCtx.mockReset();
+  mockedSkuSearch.getSharedDemoActorWithCtx.mockResolvedValue(null);
   mockedSkuSearch.applyInventoryEffectWithCtx.mockReset();
   mockedSkuSearch.applyInventoryEffectWithCtx.mockImplementation(
     async (
@@ -112,6 +137,10 @@ beforeEach(() => {
   mockedSkuSearch.upsertProductSkuSearchProjections.mockReset();
 });
 
+function getHandler(definition: unknown) {
+  return (definition as { _handler: Function })._handler;
+}
+
 function createMutationCtx(seed: Partial<Record<TableName, Row[]>> = {}) {
   const tables: Record<TableName, Map<string, Row>> = {
     athenaUser: new Map(),
@@ -120,8 +149,12 @@ function createMutationCtx(seed: Partial<Record<TableName, Row[]>> = {}) {
     checkoutSession: new Map(),
     checkoutSessionItem: new Map(),
     inventoryHold: new Map(),
+    inventoryImportCostOverlayRow: new Map(),
+    inventoryImportCostOverlayRun: new Map(),
     inventoryMovement: new Map(),
     inventoryImportProvisionalSku: new Map(),
+    inventoryImportReviewVersionPayloadChunk: new Map(),
+    inventoryImportReviewVersionPayloadUpload: new Map(),
     inventoryImportReviewVersion: new Map(),
     operationalEvent: new Map(),
     operationalWorkItem: new Map(),
@@ -174,6 +207,12 @@ function createMutationCtx(seed: Partial<Record<TableName, Row[]>> = {}) {
       async first() {
         return api.take(1).then((rows) => rows[0] ?? null);
       },
+      async unique() {
+        const rows = await api.take(2);
+        if (rows.length > 1)
+          throw new Error("Query did not return a unique row");
+        return rows[0] ?? null;
+      },
       async take(limit: number) {
         return Array.from(tables[table].values())
           .filter((row) => {
@@ -225,6 +264,9 @@ function createMutationCtx(seed: Partial<Record<TableName, Row[]>> = {}) {
         tables[table].delete(id);
       },
       query,
+    },
+    scheduler: {
+      runAt: vi.fn(async () => undefined),
     },
   };
 
@@ -375,6 +417,40 @@ function buildTrustedConversionArgs(
 }
 
 describe("catalog import", () => {
+  it("denies shared-demo review payload staging and finalization at runtime", async () => {
+    mockedSkuSearch.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo-user",
+      kind: "shared_demo",
+      organizationId: "org-1",
+      storeId: "store-1",
+    });
+    const ctx = {
+      auth: { getUserIdentity: vi.fn(async () => ({ subject: "demo" })) },
+      db: {},
+    };
+
+    await expect(
+      getHandler(stageInventoryImportReviewVersionPayloadChunk)(ctx, {
+        chunk: { kind: "raw_content", rawContent: "sku,cost" },
+        chunkIndex: 0,
+        storeId: "store-1",
+        uploadKey: "upload-1",
+      }),
+    ).rejects.toThrow();
+    await expect(
+      getHandler(finalizeInventoryImportReviewVersionPayload)(ctx, {
+        importKey: "import-1",
+        issueCount: 0,
+        rawContentChunkCount: 1,
+        rowCount: 1,
+        rowDecisionChunkCount: 0,
+        sourceFormat: "csv",
+        storeId: "store-1",
+        uploadKey: "upload-1",
+      }),
+    ).rejects.toThrow();
+  });
+
   it("creates categories, products, skus, and a batch operational event", async () => {
     const { ctx, tables } = createMutationCtx();
 
@@ -718,13 +794,812 @@ describe("catalog import", () => {
           rowKey: "2:COMB-1::Comb",
         }),
       ],
+      sourceProjectionVersion: 1,
+      sourceColumns: expect.arrayContaining([
+        expect.objectContaining({
+          id: "csv:product_name:1",
+          label: "product_name",
+          ordinal: 1,
+        }),
+      ]),
       storeId: "store-1",
       versionNumber: 2,
     });
+    const loaded = await getLatestInventoryImportReviewVersionWithCtx(
+      ctx,
+      { storeId: "store-1" as Id<"store"> },
+      access,
+    );
+    expect(loaded).toMatchObject({
+      _id: saved._id,
+      rawContent: "product_name,sku,price,qty\nComb,COMB-1,25,4",
+      rowDecisions: [
+        expect.objectContaining({
+          priceSource: "athena",
+          quantitySource: "import",
+          rowKey: "2:COMB-1::Comb",
+        }),
+      ],
+    });
+    expect(tables.inventoryImportReviewVersionPayloadChunk.size).toBe(0);
     expect(Array.from(tables.operationalEvent.values())[0]).toMatchObject({
       eventType: "inventory_import_review_version_saved",
       subjectId: saved._id,
       subjectType: "inventory_import_review_version",
+    });
+  });
+
+  it("accepts the legacy inline envelope at its explicit byte limit", async () => {
+    const { ctx, tables } = createMutationCtx();
+    const baseArgs = {
+      fileName: "products.csv",
+      importKey: "inline-boundary",
+      issueCount: 0,
+      notes: "Legacy rolling-client compatibility.",
+      rawContent: "",
+      rowCount: 1,
+      rowDecisions: [],
+      sourceFormat: "csv" as const,
+      storeId: "store-1" as Id<"store">,
+    };
+    const baseBytes =
+      getLegacyInventoryImportReviewVersionInlineEnvelopeByteLength(baseArgs);
+    const rawContent = `column\n${"a".repeat(
+      LEGACY_INVENTORY_IMPORT_REVIEW_INLINE_ENVELOPE_MAX_BYTES -
+        baseBytes -
+        "column\n".length -
+        1,
+    )}`;
+    const args = { ...baseArgs, rawContent };
+
+    expect(
+      getLegacyInventoryImportReviewVersionInlineEnvelopeByteLength(args),
+    ).toBe(LEGACY_INVENTORY_IMPORT_REVIEW_INLINE_ENVELOPE_MAX_BYTES);
+
+    const saved = await saveInventoryImportReviewVersionWithCtx(
+      ctx,
+      args,
+      access,
+    );
+
+    expect(tables.inventoryImportReviewVersion.get(saved._id)).toMatchObject({
+      rawContent,
+      rowDecisions: [],
+    });
+  });
+
+  it("rejects the legacy inline envelope one byte above its explicit limit", async () => {
+    const { ctx } = createMutationCtx();
+    const baseArgs = {
+      fileName: "products.csv",
+      importKey: "inline-boundary",
+      issueCount: 0,
+      notes: "Legacy rolling-client compatibility.",
+      rawContent: "",
+      rowCount: 1,
+      rowDecisions: [],
+      sourceFormat: "csv" as const,
+      storeId: "store-1" as Id<"store">,
+    };
+    const baseBytes =
+      getLegacyInventoryImportReviewVersionInlineEnvelopeByteLength(baseArgs);
+    const rawContent = `column\n${"a".repeat(
+      LEGACY_INVENTORY_IMPORT_REVIEW_INLINE_ENVELOPE_MAX_BYTES +
+        1 -
+        baseBytes -
+        "column\n".length -
+        1,
+    )}`;
+    const args = { ...baseArgs, rawContent };
+
+    expect(
+      getLegacyInventoryImportReviewVersionInlineEnvelopeByteLength(args),
+    ).toBe(LEGACY_INVENTORY_IMPORT_REVIEW_INLINE_ENVELOPE_MAX_BYTES + 1);
+
+    await expect(
+      saveInventoryImportReviewVersionWithCtx(ctx, args, access),
+    ).rejects.toThrow(
+      "Large review payloads must be staged in bounded chunks before finalizing.",
+    );
+  });
+
+  it("keeps payloads above the Convex document limit off the legacy inline path", async () => {
+    const { ctx, tables } = createMutationCtx();
+    const rawContent = `product_name,sku,price,qty\n${"a".repeat(700_000)}`;
+    const rowDecisions = Array.from({ length: 2_000 }, (_, index) => ({
+      priceSource: "athena" as const,
+      productName: `Product ${index} ${"b".repeat(120)}`,
+      quantitySource: "import" as const,
+      rowKey: `${index + 2}:SKU-${index}::Product ${index}`,
+      rowNumber: index + 2,
+    }));
+
+    expect(
+      new TextEncoder().encode(JSON.stringify({ rawContent, rowDecisions }))
+        .byteLength,
+    ).toBeGreaterThan(1_048_576);
+
+    await expect(
+      saveInventoryImportReviewVersionWithCtx(
+        ctx,
+        {
+          importKey: "large-review",
+          issueCount: 0,
+          rawContent,
+          rowCount: rowDecisions.length,
+          rowDecisions,
+          sourceFormat: "csv",
+          storeId: "store-1" as Id<"store">,
+        },
+        access,
+      ),
+    ).rejects.toThrow(
+      "Large review payloads must be staged in bounded chunks before finalizing.",
+    );
+    expect(tables.inventoryImportReviewVersion.size).toBe(0);
+    expect(tables.inventoryImportReviewVersionPayloadChunk.size).toBe(0);
+  });
+
+  it("stages and finalizes a review source larger than 1 MiB through bounded public seams", async () => {
+    const { ctx, tables } = createMutationCtx();
+    const rawContent = `product_name,sku,price,qty\n${"a".repeat(1_200_000)}`;
+    const rawChunks = rawContent.match(/[\s\S]{1,240000}/g) ?? [];
+    const rowDecisions = Array.from({ length: 2_000 }, (_, index) => ({
+      productName: `Product ${index}`,
+      rowKey: `${index + 2}:SKU-${index}::Product ${index}`,
+      rowNumber: index + 2,
+    }));
+    const rowDecisionChunks = Array.from(
+      { length: Math.ceil(rowDecisions.length / 500) },
+      (_, index) => rowDecisions.slice(index * 500, (index + 1) * 500),
+    );
+    const chunks = [
+      ...rawChunks.map((content) => ({
+        kind: "raw_content" as const,
+        rawContent: content,
+      })),
+      ...rowDecisionChunks.map((decisions) => ({
+        kind: "row_decisions" as const,
+        rowDecisions: decisions,
+      })),
+    ];
+    const expectedByteLength = chunks.reduce(
+      (total, chunk) =>
+        total +
+        new TextEncoder().encode(
+          chunk.kind === "raw_content"
+            ? chunk.rawContent
+            : JSON.stringify(chunk.rowDecisions),
+        ).byteLength,
+      0,
+    );
+
+    for (const [chunkIndex, chunk] of chunks.entries()) {
+      expect(
+        new TextEncoder().encode(
+          chunk.kind === "raw_content"
+            ? chunk.rawContent
+            : JSON.stringify(chunk.rowDecisions),
+        ).byteLength,
+      ).toBeLessThanOrEqual(256 * 1024);
+      await expect(
+        stageInventoryImportReviewVersionPayloadChunkWithCtx(
+          ctx,
+          {
+            chunk,
+            chunkIndex,
+            expectedByteLength,
+            expectedChunkCount: chunks.length,
+            storeId: "store-1" as Id<"store">,
+            uploadKey: "large-public-review",
+          },
+          access,
+        ),
+      ).resolves.toMatchObject({ alreadyStaged: false, chunkIndex });
+    }
+    await expect(
+      stageInventoryImportReviewVersionPayloadChunkWithCtx(
+        ctx,
+        {
+          chunk: chunks[0],
+          chunkIndex: 0,
+          expectedByteLength,
+          expectedChunkCount: chunks.length,
+          storeId: "store-1" as Id<"store">,
+          uploadKey: "large-public-review",
+        },
+        access,
+      ),
+    ).resolves.toMatchObject({ alreadyStaged: true, chunkIndex: 0 });
+    await expect(
+      stageInventoryImportReviewVersionPayloadChunkWithCtx(
+        ctx,
+        {
+          chunk: chunks[0],
+          chunkIndex: 0,
+          expectedByteLength: expectedByteLength + 1,
+          expectedChunkCount: chunks.length,
+          storeId: "store-1" as Id<"store">,
+          uploadKey: "large-public-review",
+        },
+        access,
+      ),
+    ).rejects.toThrow(
+      "Review payload upload key was already used with different metadata.",
+    );
+    await expect(
+      stageInventoryImportReviewVersionPayloadChunkWithCtx(
+        ctx,
+        {
+          chunk: chunks[0],
+          chunkIndex: 0,
+          expectedByteLength,
+          expectedChunkCount: chunks.length - 1,
+          storeId: "store-1" as Id<"store">,
+          uploadKey: "large-public-review",
+        },
+        access,
+      ),
+    ).rejects.toThrow(
+      "Review payload upload key was already used with different metadata.",
+    );
+    await expect(
+      stageInventoryImportReviewVersionPayloadChunkWithCtx(
+        ctx,
+        {
+          chunk: {
+            kind: "raw_content",
+            rawContent: `${rawChunks[0]}changed`,
+          },
+          chunkIndex: 0,
+          expectedByteLength,
+          expectedChunkCount: chunks.length,
+          storeId: "store-1" as Id<"store">,
+          uploadKey: "large-public-review",
+        },
+        access,
+      ),
+    ).rejects.toThrow(
+      "Review payload upload key was already used with different content.",
+    );
+
+    const upload = Array.from(
+      tables.inventoryImportReviewVersionPayloadUpload.values(),
+    )[0];
+    await expect(
+      getHandler(expireInventoryImportReviewVersionPayloadUpload)(ctx, {
+        uploadId: upload._id,
+      }),
+    ).resolves.toEqual({ disposition: "unchanged" });
+
+    const saved = await finalizeInventoryImportReviewVersionPayloadWithCtx(
+      ctx,
+      {
+        importKey: "large-public-review",
+        issueCount: 0,
+        rawContentChunkCount: rawChunks.length,
+        rowCount: rowDecisions.length,
+        rowDecisionChunkCount: rowDecisionChunks.length,
+        sourceFormat: "csv",
+        storeId: "store-1" as Id<"store">,
+        uploadKey: "large-public-review",
+      },
+      access,
+    );
+
+    expect(tables.inventoryImportReviewVersion.get(saved._id)).toMatchObject({
+      payloadChunkCount: chunks.length,
+      payloadUploadKey: "large-public-review",
+      rawContentChunkCount: rawChunks.length,
+      rowDecisionChunkCount: rowDecisionChunks.length,
+    });
+    expect(
+      Array.from(
+        tables.inventoryImportReviewVersionPayloadChunk.values(),
+      ).every((chunk) => chunk.reviewVersionId === saved._id),
+    ).toBe(true);
+    await expect(
+      getLatestInventoryImportReviewVersionWithCtx(
+        ctx,
+        { storeId: "store-1" as Id<"store"> },
+        access,
+      ),
+    ).resolves.toBeNull();
+    await expect(
+      finalizeInventoryImportReviewVersionPayloadWithCtx(
+        ctx,
+        {
+          importKey: "large-public-review",
+          issueCount: 0,
+          rawContentChunkCount: rawChunks.length,
+          rowCount: rowDecisions.length,
+          rowDecisionChunkCount: rowDecisionChunks.length,
+          sourceFormat: "csv",
+          storeId: "store-1" as Id<"store">,
+          uploadKey: "large-public-review",
+        },
+        access,
+      ),
+    ).resolves.toEqual(saved);
+    await expect(
+      finalizeInventoryImportReviewVersionPayloadWithCtx(
+        ctx,
+        {
+          importKey: "large-public-review",
+          issueCount: 1,
+          rawContentChunkCount: rawChunks.length,
+          rowCount: rowDecisions.length,
+          rowDecisionChunkCount: rowDecisionChunks.length,
+          sourceFormat: "csv",
+          storeId: "store-1" as Id<"store">,
+          uploadKey: "large-public-review",
+        },
+        access,
+      ),
+    ).rejects.toThrow(
+      "Review payload upload key was already finalized with different metadata.",
+    );
+    const finalizedChunkCount =
+      tables.inventoryImportReviewVersionPayloadChunk.size;
+    await expect(
+      getHandler(expireInventoryImportReviewVersionPayloadUpload)(ctx, {
+        uploadId: upload._id,
+      }),
+    ).resolves.toEqual({ disposition: "unchanged" });
+    expect(tables.inventoryImportReviewVersionPayloadChunk.size).toBe(
+      finalizedChunkCount,
+    );
+    await expect(
+      stageInventoryImportReviewVersionPayloadChunkWithCtx(
+        ctx,
+        {
+          chunk: chunks[0],
+          chunkIndex: 0,
+          expectedByteLength,
+          expectedChunkCount: chunks.length,
+          storeId: "store-1" as Id<"store">,
+          uploadKey: "large-public-review",
+        },
+        access,
+      ),
+    ).resolves.toMatchObject({ alreadyStaged: true, chunkIndex: 0 });
+    await expect(
+      stageInventoryImportReviewVersionPayloadChunkWithCtx(
+        ctx,
+        {
+          chunk: {
+            kind: "raw_content",
+            rawContent: `${rawChunks[0]}changed`,
+          },
+          chunkIndex: 0,
+          expectedByteLength,
+          expectedChunkCount: chunks.length,
+          storeId: "store-1" as Id<"store">,
+          uploadKey: "large-public-review",
+        },
+        access,
+      ),
+    ).rejects.toThrow(
+      "Review payload upload key was already used with different content.",
+    );
+  });
+
+  it("admits the independently chunked boundary at eight MiB", async () => {
+    const { ctx } = createMutationCtx();
+    const chunk = { kind: "raw_content" as const, rawContent: "x" };
+
+    await expect(
+      stageInventoryImportReviewVersionPayloadChunkWithCtx(
+        ctx,
+        {
+          chunk,
+          chunkIndex: 35,
+          expectedByteLength: 8 * 1024 * 1024,
+          expectedChunkCount: 36,
+          storeId: "store-1" as Id<"store">,
+          uploadKey: "eight-mib-boundary",
+        },
+        access,
+      ),
+    ).resolves.toMatchObject({ alreadyStaged: false, chunkIndex: 35 });
+
+    await expect(
+      stageInventoryImportReviewVersionPayloadChunkWithCtx(
+        ctx,
+        {
+          chunk,
+          chunkIndex: 0,
+          expectedByteLength: 8 * 1024 * 1024,
+          expectedChunkCount: 37,
+          storeId: "store-1" as Id<"store">,
+          uploadKey: "above-eight-mib-boundary",
+        },
+        access,
+      ),
+    ).rejects.toThrow("Review payload chunk is invalid or too large.");
+  });
+
+  it("expires abandoned review uploads, removes their chunks, and rejects later writes", async () => {
+    const { ctx, tables } = createMutationCtx();
+    const chunk = { kind: "raw_content" as const, rawContent: "sku,cost\nA,4" };
+    const expectedByteLength = new TextEncoder().encode(
+      chunk.rawContent,
+    ).byteLength;
+    await stageInventoryImportReviewVersionPayloadChunkWithCtx(
+      ctx,
+      {
+        chunk,
+        chunkIndex: 0,
+        expectedByteLength,
+        expectedChunkCount: 1,
+        storeId: "store-1" as Id<"store">,
+        uploadKey: "abandoned-upload",
+      },
+      access,
+    );
+    const upload = Array.from(
+      tables.inventoryImportReviewVersionPayloadUpload.values(),
+    )[0];
+    await ctx.db.patch(
+      "inventoryImportReviewVersionPayloadUpload",
+      upload._id,
+      { expiresAt: Date.now() - 1 },
+    );
+    const expireHandler = (
+      expireInventoryImportReviewVersionPayloadUpload as unknown as {
+        _handler: (ctx: unknown, args: unknown) => Promise<unknown>;
+      }
+    )._handler;
+    await expect(
+      expireHandler(ctx, { uploadId: upload._id }),
+    ).resolves.toMatchObject({
+      deletedChunkCount: 1,
+      disposition: "expired",
+    });
+    expect(tables.inventoryImportReviewVersionPayloadChunk.size).toBe(0);
+    expect(
+      tables.inventoryImportReviewVersionPayloadUpload.get(upload._id),
+    ).toMatchObject({ status: "expired" });
+    await expect(
+      stageInventoryImportReviewVersionPayloadChunkWithCtx(
+        ctx,
+        {
+          chunk,
+          chunkIndex: 0,
+          expectedByteLength,
+          expectedChunkCount: 1,
+          storeId: "store-1" as Id<"store">,
+          uploadKey: "abandoned-upload",
+        },
+        access,
+      ),
+    ).rejects.toThrow("Review payload upload has expired");
+  });
+
+  it("caps concurrent review uploads per operator and store", async () => {
+    const { ctx } = createMutationCtx();
+    const chunk = { kind: "raw_content" as const, rawContent: "sku,cost\nA,4" };
+    const expectedByteLength = new TextEncoder().encode(
+      chunk.rawContent,
+    ).byteLength;
+    for (let index = 0; index < 5; index += 1) {
+      await stageInventoryImportReviewVersionPayloadChunkWithCtx(
+        ctx,
+        {
+          chunk,
+          chunkIndex: 0,
+          expectedByteLength,
+          expectedChunkCount: 1,
+          storeId: "store-1" as Id<"store">,
+          uploadKey: `active-${index}`,
+        },
+        access,
+      );
+    }
+    await expect(
+      stageInventoryImportReviewVersionPayloadChunkWithCtx(
+        ctx,
+        {
+          chunk,
+          chunkIndex: 0,
+          expectedByteLength,
+          expectedChunkCount: 1,
+          storeId: "store-1" as Id<"store">,
+          uploadKey: "active-over-limit",
+        },
+        access,
+      ),
+    ).rejects.toThrow("Too many review payload saves are active");
+  });
+
+  it("rejects pathological source-column counts before saving descriptors", async () => {
+    const { ctx } = createMutationCtx();
+    const headers = Array.from({ length: 257 }, (_, index) => `field_${index}`);
+    await expect(
+      saveInventoryImportReviewVersionWithCtx(
+        ctx,
+        {
+          importKey: "too-many-columns",
+          issueCount: 0,
+          rawContent: `${headers.join(",")}\n${headers.map(() => "1").join(",")}`,
+          rowCount: 1,
+          sourceFormat: "csv",
+          storeId: "store-1" as Id<"store">,
+        },
+        access,
+      ),
+    ).rejects.toThrow("Import source has too many columns (257 > 256).");
+  });
+
+  it("rejects oversized source-column identity descriptors", async () => {
+    const { ctx } = createMutationCtx();
+    await expect(
+      saveInventoryImportReviewVersionWithCtx(
+        ctx,
+        {
+          importKey: "oversized-header",
+          issueCount: 0,
+          rawContent: `${"h".repeat(140_000)}\n1`,
+          rowCount: 1,
+          sourceFormat: "csv",
+          storeId: "store-1" as Id<"store">,
+        },
+        access,
+      ),
+    ).rejects.toThrow(
+      "Import source column labels are too large to save safely.",
+    );
+  });
+
+  it("fails closed when a chunked review payload is incomplete", async () => {
+    const { ctx } = createMutationCtx({
+      inventoryImportReviewVersion: [
+        {
+          _id: "review-version-1",
+          createdAt: 100,
+          createdByUserId: "user-1",
+          importKey: "incomplete-review",
+          issueCount: 0,
+          organizationId: "org-1",
+          payloadChunkCount: 1,
+          rawContentChunkCount: 1,
+          rowCount: 1,
+          rowDecisionChunkCount: 0,
+          sourceFormat: "csv",
+          storeId: "store-1",
+          versionNumber: 1,
+        },
+      ],
+    });
+
+    await expect(
+      getInventoryImportReviewVersionPayloadChunkWithCtx(
+        ctx,
+        {
+          chunkIndex: 0,
+          reviewVersionId:
+            "review-version-1" as Id<"inventoryImportReviewVersion">,
+          storeId: "store-1" as Id<"store">,
+        },
+        access,
+      ),
+    ).rejects.toThrow("Saved review payload is incomplete.");
+  });
+
+  it("loads legacy review versions with embedded payloads", async () => {
+    const { ctx } = createMutationCtx({
+      inventoryImportReviewVersion: [
+        {
+          _id: "review-version-1",
+          createdAt: 100,
+          createdByUserId: "user-1",
+          importKey: "legacy-review",
+          issueCount: 0,
+          organizationId: "org-1",
+          rawContent: "product_name,sku,price,qty\nComb,COMB-1,25,4",
+          rowCount: 1,
+          rowDecisions: [
+            {
+              productName: "Comb",
+              rowKey: "2:COMB-1::Comb",
+              rowNumber: 2,
+            },
+          ],
+          sourceFormat: "csv",
+          storeId: "store-1",
+          versionNumber: 1,
+        },
+      ],
+    });
+
+    const loaded = await getLatestInventoryImportReviewVersionWithCtx(
+      ctx,
+      { storeId: "store-1" as Id<"store"> },
+      access,
+    );
+
+    expect(loaded).toMatchObject({
+      importKey: "legacy-review",
+      rawContent: "product_name,sku,price,qty\nComb,COMB-1,25,4",
+      rowDecisions: [
+        {
+          productName: "Comb",
+          rowKey: "2:COMB-1::Comb",
+          rowNumber: 2,
+        },
+      ],
+    });
+  });
+
+  it("reconstructs a small staged review for a rolling legacy client", async () => {
+    const { ctx } = createMutationCtx();
+    const rawContent = "product_name,sku,price,qty\nComb,COMB-1,25,4";
+    const rowDecisions = [
+      {
+        priceSource: "athena" as const,
+        productName: "Comb",
+        quantitySource: "import" as const,
+        rowKey: "2:COMB-1::Comb",
+        rowNumber: 2,
+      },
+    ];
+    const chunks = [
+      { kind: "raw_content" as const, rawContent },
+      { kind: "row_decisions" as const, rowDecisions },
+    ];
+    const expectedByteLength = chunks.reduce(
+      (total, chunk) =>
+        total +
+        new TextEncoder().encode(
+          chunk.kind === "raw_content"
+            ? chunk.rawContent
+            : JSON.stringify(chunk.rowDecisions),
+        ).byteLength,
+      0,
+    );
+
+    for (const [chunkIndex, chunk] of chunks.entries()) {
+      await stageInventoryImportReviewVersionPayloadChunkWithCtx(
+        ctx,
+        {
+          chunk,
+          chunkIndex,
+          expectedByteLength,
+          expectedChunkCount: chunks.length,
+          storeId: "store-1" as Id<"store">,
+          uploadKey: "rolling-client-review",
+        },
+        access,
+      );
+    }
+    const saved = await finalizeInventoryImportReviewVersionPayloadWithCtx(
+      ctx,
+      {
+        fileName: "products.csv",
+        importKey: "rolling-client-review",
+        issueCount: 0,
+        rawContentChunkCount: 1,
+        rowCount: 1,
+        rowDecisionChunkCount: 1,
+        sourceFormat: "csv",
+        storeId: "store-1" as Id<"store">,
+        uploadKey: "rolling-client-review",
+      },
+      access,
+    );
+
+    await expect(
+      getLatestInventoryImportReviewVersionWithCtx(
+        ctx,
+        { storeId: "store-1" as Id<"store"> },
+        access,
+      ),
+    ).resolves.toMatchObject({
+      _id: saved._id,
+      rawContent,
+      rowDecisions,
+    });
+  });
+
+  it("preserves the legacy latest-review contract when the latest version is chunk-backed", async () => {
+    const { ctx } = createMutationCtx({
+      inventoryImportReviewVersion: [
+        {
+          _id: "review-version-1",
+          createdAt: 100,
+          createdByUserId: "user-1",
+          importKey: "legacy-review",
+          issueCount: 0,
+          organizationId: "org-1",
+          rawContent: "product_name,sku,price,qty\nComb,COMB-1,25,4",
+          rowCount: 1,
+          sourceFormat: "csv",
+          storeId: "store-1",
+          versionNumber: 1,
+        },
+        {
+          _id: "review-version-2",
+          createdAt: 200,
+          createdByUserId: "user-1",
+          importKey: "chunked-review",
+          issueCount: 0,
+          organizationId: "org-1",
+          payloadChunkCount: 1,
+          rowCount: 1,
+          sourceFormat: "csv",
+          storeId: "store-1",
+          versionNumber: 2,
+        },
+      ],
+    });
+
+    await expect(
+      getLatestInventoryImportReviewVersionWithCtx(
+        ctx,
+        { storeId: "store-1" as Id<"store"> },
+        access,
+      ),
+    ).resolves.toBeNull();
+    await expect(
+      getLatestInventoryImportReviewVersionMetadataWithCtx(
+        ctx,
+        { storeId: "store-1" as Id<"store"> },
+        access,
+      ),
+    ).resolves.toMatchObject({
+      _id: "review-version-2",
+      payloadChunkCount: 1,
+      versionNumber: 2,
+    });
+  });
+
+  it("loads the requested saved review version instead of the latest version", async () => {
+    const { ctx } = createMutationCtx({
+      inventoryImportReviewVersion: [
+        {
+          _id: "review-version-1",
+          createdAt: 100,
+          createdByUserId: "user-1",
+          importKey: "selected-review",
+          issueCount: 0,
+          organizationId: "org-1",
+          rawContent: "product_name,sku,cost\nComb,COMB-1,12",
+          rowCount: 1,
+          sourceFormat: "csv",
+          storeId: "store-1",
+          versionNumber: 1,
+        },
+        {
+          _id: "review-version-2",
+          createdAt: 200,
+          createdByUserId: "user-1",
+          importKey: "latest-review",
+          issueCount: 0,
+          organizationId: "org-1",
+          rawContent: "product_name,sku,cost\nBrush,BRUSH-1,18",
+          rowCount: 1,
+          sourceFormat: "csv",
+          storeId: "store-1",
+          versionNumber: 2,
+        },
+      ],
+    });
+
+    const loaded = await getInventoryImportReviewVersionByIdWithCtx(
+      ctx,
+      {
+        reviewVersionId:
+          "review-version-1" as Id<"inventoryImportReviewVersion">,
+        storeId: "store-1" as Id<"store">,
+      },
+      access,
+    );
+
+    expect(loaded).toMatchObject({
+      _id: "review-version-1",
+      importKey: "selected-review",
+      rawContent: "product_name,sku,cost\nComb,COMB-1,12",
+      versionNumber: 1,
     });
   });
 
@@ -842,122 +1717,231 @@ describe("catalog import", () => {
     });
   });
 
-  it("finalizes staged provisional rows when the trusted import is applied", async () => {
-    const { ctx, tables } = createMutationCtx({
-      category: [
-        {
-          _id: "category-1",
-          name: "Hair",
-          slug: "hair",
-          storeId: "store-1",
-        },
-      ],
-      inventoryImportProvisionalSku: [
-        {
-          _id: "provisional-1",
-          createdAt: 100,
-          createdByUserId: "user-1",
-          importKey: "legacy-review-1",
-          importedPrice: 45000,
-          importedProductName: "Body Wave imported",
-          importedQuantity: 6,
-          normalizedImportedProductName: "body wave imported",
-          organizationId: "org-1",
-          posExposureStatus: "available",
-          productId: "product-1",
-          productSkuId: "sku-1",
-          reviewVersionId: "review-version-1",
-          reviewVersionNumber: 1,
-          rowKey: "2:BW-18:123456789012:Body Wave imported",
-          rowNumber: 2,
-          saleEvidence: {
-            saleCount: 1,
-            totalQuantitySold: 2,
-          },
-          sourceFormat: "csv",
-          status: "active",
-          storeId: "store-1",
-          updatedAt: 100,
-        },
-      ],
-      product: [
-        {
-          _id: "product-1",
-          availability: "live",
-          categoryId: "category-1",
-          createdByUserId: "user-1",
-          currency: "GHS",
-          inventoryCount: 2,
-          name: "Body Wave",
-          organizationId: "org-1",
-          quantityAvailable: 2,
-          slug: "body-wave",
-          storeId: "store-1",
-          subcategoryId: "subcategory-1",
-        },
-      ],
-      productSku: [
-        {
-          _id: "sku-1",
-          barcode: "123456789012",
-          images: [],
-          inventoryCount: 2,
-          price: 30000,
-          productId: "product-1",
-          productName: "Body Wave",
-          quantityAvailable: 2,
-          sku: "BW-18",
-          storeId: "store-1",
-        },
-      ],
-      subcategory: [
-        {
-          _id: "subcategory-1",
-          categoryId: "category-1",
-          name: "Wigs",
-          slug: "wigs",
-          storeId: "store-1",
-        },
-      ],
-    });
-
-    const summary = await importInventoryRowsWithCtx(
-      ctx,
-      {
-        importKey: "legacy-review-1",
-        rows: [
+  it.each([
+    {
+      expectedUnitCost: 425,
+      runStatus: "applying",
+      rowWorkStatus: "applied",
+    },
+    {
+      expectedUnitCost: 425,
+      runStatus: "undoing",
+      rowWorkStatus: "applied",
+    },
+    {
+      expectedUnitCost: 425,
+      runStatus: "undone_with_exceptions",
+      rowWorkStatus: "undo_exception",
+    },
+    {
+      expectedUnitCost: 999,
+      provisionalUndoneAt: 120,
+      runStatus: "undone",
+      rowUndoneAt: 120,
+      rowWorkStatus: "undone",
+    },
+  ] as const)(
+    "resolves batch trusted-finalization overlay authority from $runStatus/$rowWorkStatus row evidence",
+    async ({
+      expectedUnitCost,
+      provisionalUndoneAt,
+      runStatus,
+      rowUndoneAt,
+      rowWorkStatus,
+    }) => {
+      const { ctx, tables } = createMutationCtx({
+        category: [
           {
-            barcode: "123456789012",
-            category: "Hair",
-            price: 50000,
-            productName: "Body Wave",
-            quantity: 9,
-            rowNumber: 2,
-            sku: "BW-18",
-            subcategory: "Wigs",
+            _id: "category-1",
+            name: "Hair",
+            slug: "hair",
+            storeId: "store-1",
           },
         ],
-        sourceFormat: "csv",
-        storeId: "store-1" as Id<"store">,
-      },
-      access,
-    );
+        inventoryImportProvisionalSku: [
+          {
+            _id: "provisional-1",
+            createdAt: 100,
+            createdByUserId: "user-1",
+            costOverlayAppliedAt: 110,
+            costOverlayRunId: "overlay-run-1",
+            costOverlayRowId: "overlay-row-1",
+            costOverlaySourceDigest: "source-digest",
+            costOverlayUnitCost: 425,
+            costOverlayUndoneAt: provisionalUndoneAt,
+            importKey: "legacy-review-1",
+            importedPrice: 45000,
+            importedProductName: "Body Wave imported",
+            importedQuantity: 6,
+            normalizedImportedProductName: "body wave imported",
+            organizationId: "org-1",
+            posExposureStatus: "available",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            reviewVersionId: "review-version-1",
+            reviewVersionNumber: 1,
+            rowKey: "2:BW-18:123456789012:Body Wave imported",
+            rowNumber: 2,
+            saleEvidence: {
+              saleCount: 1,
+              totalQuantitySold: 2,
+            },
+            sourceFormat: "csv",
+            status: "active",
+            storeId: "store-1",
+            updatedAt: 100,
+          },
+          {
+            _id: "provisional-2",
+            createdAt: 101,
+            createdByUserId: "user-1",
+            costOverlayAppliedAt: 110,
+            costOverlayRunId: "overlay-run-1",
+            costOverlayRowId: "overlay-row-1",
+            costOverlaySourceDigest: "source-digest",
+            costOverlayUnitCost: 425,
+            costOverlayUndoneAt: provisionalUndoneAt,
+            importKey: "legacy-review-1",
+            importedPrice: 45000,
+            importedProductName: "Body Wave imported",
+            importedQuantity: 6,
+            normalizedImportedProductName: "body wave imported",
+            organizationId: "org-1",
+            posExposureStatus: "available",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            reviewVersionId: "review-version-1",
+            reviewVersionNumber: 1,
+            rowKey: "2:BW-18:123456789012:Body Wave imported duplicate",
+            rowNumber: 2,
+            saleEvidence: { saleCount: 0, totalQuantitySold: 0 },
+            sourceFormat: "csv",
+            status: "active",
+            storeId: "store-1",
+            updatedAt: 101,
+          },
+        ],
+        inventoryImportCostOverlayRun: [
+          {
+            _id: "overlay-run-1",
+            organizationId: "org-1",
+            reviewVersionId: "review-version-1",
+            sourceDigest: "source-digest",
+            status: runStatus,
+            storeId: "store-1",
+          },
+        ],
+        inventoryImportCostOverlayRow: [
+          {
+            _id: "overlay-row-1",
+            organizationId: "org-1",
+            postUnitCostMinor: 425,
+            productSkuId: "sku-1",
+            provisionalSkuId: "provisional-1",
+            runId: "overlay-run-1",
+            storeId: "store-1",
+            undoneAt: rowUndoneAt,
+            workStatus: rowWorkStatus,
+          },
+        ],
+        product: [
+          {
+            _id: "product-1",
+            availability: "live",
+            categoryId: "category-1",
+            createdByUserId: "user-1",
+            currency: "GHS",
+            inventoryCount: 2,
+            name: "Body Wave",
+            organizationId: "org-1",
+            quantityAvailable: 2,
+            slug: "body-wave",
+            storeId: "store-1",
+            subcategoryId: "subcategory-1",
+          },
+        ],
+        productSku: [
+          {
+            _id: "sku-1",
+            barcode: "123456789012",
+            images: [],
+            inventoryCount: 2,
+            price: 30000,
+            productId: "product-1",
+            productName: "Body Wave",
+            quantityAvailable: 2,
+            sku: "BW-18",
+            storeId: "store-1",
+            unitCost: 425,
+          },
+        ],
+        subcategory: [
+          {
+            _id: "subcategory-1",
+            categoryId: "category-1",
+            name: "Wigs",
+            slug: "wigs",
+            storeId: "store-1",
+          },
+        ],
+      });
 
-    expect(summary.skusUpdated).toBe(1);
-    expect(tables.productSku.get("sku-1")).toMatchObject({
-      inventoryCount: 7,
-      quantityAvailable: 7,
-    });
-    expect(
-      tables.inventoryImportProvisionalSku.get("provisional-1"),
-    ).toMatchObject({
-      finalTrustedQuantity: 7,
-      finalizedByUserId: "user-1",
-      posExposureStatus: "hidden",
-      provisionalSoldQuantityAtFinalization: 2,
-      status: "finalized",
-    });
-  });
+      const summary = await importInventoryRowsWithCtx(
+        ctx,
+        {
+          importKey: "legacy-review-1",
+          rows: [
+            {
+              barcode: "123456789012",
+              category: "Hair",
+              price: 50000,
+              productName: "Body Wave",
+              quantity: 9,
+              rowNumber: 2,
+              sku: "BW-18",
+              subcategory: "Wigs",
+              unitCost: 999,
+            },
+          ],
+          sourceFormat: "csv",
+          storeId: "store-1" as Id<"store">,
+        },
+        access,
+      );
+
+      expect(summary.skusUpdated).toBe(1);
+      expect(mockedSkuSearch.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          valuation: expect.objectContaining({
+            costBasis: expect.objectContaining({ unitCost: expectedUnitCost }),
+          }),
+        }),
+      );
+      expect(tables.productSku.get("sku-1")).toMatchObject({
+        inventoryCount: 7,
+        quantityAvailable: 7,
+      });
+      expect(
+        tables.inventoryImportProvisionalSku.get("provisional-1"),
+      ).toMatchObject({
+        finalTrustedQuantity: 7,
+        finalizedByUserId: "user-1",
+        costOverlayRunId: "overlay-run-1",
+        costOverlayUnitCost: 425,
+        posExposureStatus: "hidden",
+        provisionalSoldQuantityAtFinalization: 2,
+        status: "finalized",
+      });
+      expect(
+        tables.inventoryImportProvisionalSku.get("provisional-2"),
+      ).toMatchObject({
+        costOverlayRunId: "overlay-run-1",
+        costOverlayUnitCost: 425,
+        status: "finalized",
+      });
+    },
+  );
 
   it("returns product-page provisional binding fingerprints for exactly one active row", async () => {
     const { ctx } = seedTrustedConversionData();
@@ -1049,6 +2033,36 @@ describe("catalog import", () => {
         versionNumber: 1,
       },
     });
+    assertConformsToExportedReturns(
+      stageInventoryImportReviewVersionPayloadChunk,
+      {
+        kind: "ok",
+        data: { alreadyStaged: false, chunkIndex: 0 },
+      },
+    );
+    assertConformsToExportedReturns(
+      getInventoryImportReviewVersionPayloadChunk,
+      {
+        chunkIndex: 0,
+        kind: "raw_content",
+        rawContent: "sku,cost\nA,4",
+      },
+    );
+    assertConformsToExportedReturns(
+      finalizeInventoryImportReviewVersionPayload,
+      {
+        kind: "ok",
+        data: {
+          _id: "review-version-1",
+          createdAt: 100,
+          importKey: "legacy-review-1",
+          issueCount: 0,
+          rowCount: 1,
+          sourceFormat: "csv",
+          versionNumber: 1,
+        },
+      },
+    );
     assertConformsToExportedReturns(stageInventoryImportReviewRowsForPos, {
       kind: "ok",
       data: {
@@ -1064,6 +2078,29 @@ describe("catalog import", () => {
     assertConformsToExportedReturns(
       getLatestInventoryImportReviewVersion,
       null,
+    );
+    assertConformsToExportedReturns(getLatestInventoryImportReviewVersion, {
+      _id: "review-version-1",
+      createdAt: 100,
+      importKey: "legacy-review-1",
+      issueCount: 0,
+      rawContent: "sku,cost\nA,4",
+      rowCount: 1,
+      sourceFormat: "csv",
+      versionNumber: 1,
+    });
+    assertConformsToExportedReturns(
+      getLatestInventoryImportReviewVersionMetadata,
+      {
+        _id: "review-version-1",
+        createdAt: 100,
+        importKey: "legacy-review-1",
+        issueCount: 0,
+        payloadChunkCount: 1,
+        rowCount: 1,
+        sourceFormat: "csv",
+        versionNumber: 1,
+      },
     );
     assertConformsToExportedReturns(listInventoryImportReviewSkuContext, [
       {
@@ -1255,6 +2292,228 @@ describe("catalog import", () => {
           status: "committed",
         }),
       ]),
+    );
+  });
+
+  it("keeps an active cost overlay authoritative during product-page finalization", async () => {
+    const seeded = seedTrustedConversionData();
+    const provisional =
+      seeded.tables.inventoryImportProvisionalSku.get("provisional-1")!;
+    seeded.tables.inventoryImportProvisionalSku.set("provisional-1", {
+      ...provisional,
+      costOverlayAppliedAt: 140,
+      costOverlayRunId: "overlay-run-1",
+      costOverlayRowId: "overlay-row-1",
+      costOverlaySourceDigest: "source-digest",
+      costOverlayUnitCost: 425,
+    });
+    const sku = seeded.tables.productSku.get("sku-1")!;
+    seeded.tables.productSku.set("sku-1", { ...sku, unitCost: 425 });
+    seeded.tables.inventoryImportCostOverlayRun.set("overlay-run-1", {
+      _id: "overlay-run-1",
+      organizationId: "org-1",
+      reviewVersionId: "review-version-1",
+      sourceDigest: "source-digest",
+      status: "applied",
+      storeId: "store-1",
+    });
+    seeded.tables.inventoryImportCostOverlayRow.set("overlay-row-1", {
+      _id: "overlay-row-1",
+      organizationId: "org-1",
+      postUnitCostMinor: 425,
+      productSkuId: "sku-1",
+      provisionalSkuId: "representative-provisional",
+      runId: "overlay-run-1",
+      storeId: "store-1",
+      workStatus: "applied",
+    });
+    const binding = await readTrustedConversionBinding(seeded.ctx);
+
+    const submittedArgs = buildTrustedConversionArgs(binding, {
+      reviewedUnitCost: 999,
+    });
+    const result = await finalizeTrustedInventoryFromProductPageWithCtx(
+      seeded.ctx,
+      submittedArgs,
+      access,
+    );
+
+    expect(result.kind).toBe("ok");
+    expect(mockedSkuSearch.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        valuation: expect.objectContaining({
+          costBasis: expect.objectContaining({ unitCost: 425 }),
+        }),
+      }),
+    );
+    expect(
+      seeded.tables.inventoryImportProvisionalSku.get("provisional-1"),
+    ).toMatchObject({
+      costOverlayRunId: "overlay-run-1",
+      costOverlayUnitCost: 425,
+      status: "active",
+    });
+    seeded.tables.inventoryImportCostOverlayRun.set("overlay-run-1", {
+      ...seeded.tables.inventoryImportCostOverlayRun.get("overlay-run-1")!,
+      status: "undone",
+    });
+    seeded.tables.productSku.set("sku-1", {
+      ...seeded.tables.productSku.get("sku-1")!,
+      unitCost: 700,
+    });
+    const replay = await finalizeTrustedInventoryFromProductPageWithCtx(
+      seeded.ctx,
+      submittedArgs,
+      access,
+    );
+    expect(replay).toEqual(result);
+    expect(mockedSkuSearch.applyInventoryEffectWithCtx).toHaveBeenCalledTimes(
+      1,
+    );
+  });
+
+  it.each([
+    {
+      expectedUnitCost: 425,
+      runStatus: "undoing",
+      rowWorkStatus: "applied",
+    },
+    {
+      expectedUnitCost: 425,
+      runStatus: "undone_with_exceptions",
+      rowWorkStatus: "undo_exception",
+    },
+    {
+      expectedUnitCost: 700,
+      provisionalUndoneAt: 150,
+      runStatus: "undone",
+      rowUndoneAt: 150,
+      rowWorkStatus: "undone",
+    },
+    {
+      expectedUnitCost: 700,
+      overlayProductSkuId: "sku-2",
+      runStatus: "applied",
+      rowWorkStatus: "applied",
+    },
+  ] as const)(
+    "resolves product-page overlay authority from $runStatus/$rowWorkStatus row evidence",
+    async ({
+      expectedUnitCost,
+      overlayProductSkuId,
+      provisionalUndoneAt,
+      runStatus,
+      rowUndoneAt,
+      rowWorkStatus,
+    }) => {
+      const seeded = seedTrustedConversionData();
+      const provisional =
+        seeded.tables.inventoryImportProvisionalSku.get("provisional-1")!;
+      seeded.tables.inventoryImportProvisionalSku.set("provisional-1", {
+        ...provisional,
+        costOverlayAppliedAt: 140,
+        costOverlayRunId: "overlay-run-1",
+        costOverlayRowId: "overlay-row-1",
+        costOverlaySourceDigest: "source-digest",
+        costOverlayUndoneAt: provisionalUndoneAt,
+        costOverlayUnitCost: 425,
+      });
+      const sku = seeded.tables.productSku.get("sku-1")!;
+      seeded.tables.productSku.set("sku-1", {
+        ...sku,
+        unitCost: runStatus === "undone" ? 700 : 425,
+      });
+      seeded.tables.inventoryImportCostOverlayRun.set("overlay-run-1", {
+        _id: "overlay-run-1",
+        organizationId: "org-1",
+        reviewVersionId: "review-version-1",
+        sourceDigest: "source-digest",
+        status: runStatus,
+        storeId: "store-1",
+      });
+      seeded.tables.inventoryImportCostOverlayRow.set("overlay-row-1", {
+        _id: "overlay-row-1",
+        organizationId: "org-1",
+        postUnitCostMinor: 425,
+        productSkuId: overlayProductSkuId ?? "sku-1",
+        provisionalSkuId: "provisional-1",
+        runId: "overlay-run-1",
+        storeId: "store-1",
+        undoneAt: rowUndoneAt,
+        workStatus: rowWorkStatus,
+      });
+      const binding = await readTrustedConversionBinding(seeded.ctx);
+
+      const result = await finalizeTrustedInventoryFromProductPageWithCtx(
+        seeded.ctx,
+        buildTrustedConversionArgs(binding, { reviewedUnitCost: 700 }),
+        access,
+      );
+
+      expect(result.kind).toBe("ok");
+      expect(mockedSkuSearch.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          valuation: expect.objectContaining({
+            costBasis: expect.objectContaining({
+              unitCost: expectedUnitCost,
+            }),
+          }),
+        }),
+      );
+    },
+  );
+
+  it("lets a later SKU cost correction supersede stale overlay authority", async () => {
+    const seeded = seedTrustedConversionData();
+    const provisional =
+      seeded.tables.inventoryImportProvisionalSku.get("provisional-1")!;
+    seeded.tables.inventoryImportProvisionalSku.set("provisional-1", {
+      ...provisional,
+      costOverlayAppliedAt: 140,
+      costOverlayRunId: "overlay-run-1",
+      costOverlayRowId: "overlay-row-1",
+      costOverlaySourceDigest: "source-digest",
+      costOverlayUnitCost: 425,
+    });
+    seeded.tables.inventoryImportCostOverlayRun.set("overlay-run-1", {
+      _id: "overlay-run-1",
+      organizationId: "org-1",
+      reviewVersionId: "review-version-1",
+      sourceDigest: "source-digest",
+      status: "applied",
+      storeId: "store-1",
+    });
+    seeded.tables.inventoryImportCostOverlayRow.set("overlay-row-1", {
+      _id: "overlay-row-1",
+      organizationId: "org-1",
+      postUnitCostMinor: 425,
+      productSkuId: "sku-1",
+      runId: "overlay-run-1",
+      storeId: "store-1",
+      workStatus: "applied",
+    });
+    seeded.tables.productSku.set("sku-1", {
+      ...seeded.tables.productSku.get("sku-1")!,
+      unitCost: 700,
+    });
+    const binding = await readTrustedConversionBinding(seeded.ctx);
+
+    const result = await finalizeTrustedInventoryFromProductPageWithCtx(
+      seeded.ctx,
+      buildTrustedConversionArgs(binding, { reviewedUnitCost: 700 }),
+      access,
+    );
+
+    expect(result.kind).toBe("ok");
+    expect(mockedSkuSearch.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        valuation: expect.objectContaining({
+          costBasis: expect.objectContaining({ unitCost: 700 }),
+        }),
+      }),
     );
   });
 
@@ -1575,7 +2834,11 @@ describe("catalog import", () => {
     );
     expect(
       mockedSkuSearch.upsertProductSkuSearchProjections,
-    ).not.toHaveBeenCalledWith(ctx, expect.arrayContaining(["sku-visible-live"]), "store-1");
+    ).not.toHaveBeenCalledWith(
+      ctx,
+      expect.arrayContaining(["sku-visible-live"]),
+      "store-1",
+    );
     expect(Array.from(tables.operationalWorkItem.values())).toEqual([
       expect.objectContaining({
         metadata: expect.objectContaining({

@@ -100,6 +100,7 @@ import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdR
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdActivityRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers.$sessionId.activity'
 
@@ -651,6 +652,15 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRoute =
         AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRoute,
     } as any,
   )
+const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRouteImport.update(
+    {
+      id: '/cost-overlay',
+      path: '/cost-overlay',
+      getParentRoute: () =>
+        AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRoute,
+    } as any,
+  )
 const AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteImport.update(
     {
@@ -729,6 +739,7 @@ export interface FileRoutesByFullPath {
   '/$orgUrlSlug/store/$storeUrlSlug/reviews/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/services/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteWithChildren
+  '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRoute
   '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRoute
   '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute
   '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRoute
@@ -820,6 +831,7 @@ export interface FileRoutesByTo {
   '/$orgUrlSlug/store/$storeUrlSlug/reviews': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/services': typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteWithChildren
+  '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRoute
   '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRoute
   '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute
   '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRoute
@@ -916,6 +928,7 @@ export interface FileRoutesById {
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteWithChildren
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRoute
@@ -1012,6 +1025,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/reviews/'
     | '/$orgUrlSlug/store/$storeUrlSlug/services/'
     | '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
+    | '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay'
     | '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review'
     | '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
     | '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId'
@@ -1103,6 +1117,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/reviews'
     | '/$orgUrlSlug/store/$storeUrlSlug/services'
     | '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
+    | '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay'
     | '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review'
     | '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
     | '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId'
@@ -1198,6 +1213,7 @@ export interface FileRouteTypes {
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId'
@@ -1885,6 +1901,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRouteImport
       parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRoute
     }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay'
+      path: '/cost-overlay'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRouteImport
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRoute
+    }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
       path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
@@ -1945,11 +1968,14 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteWithChildren =
   )
 
 interface AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRouteChildren {
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRoute
 }
 
 const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRouteChildren: AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRouteChildren =
   {
+    AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRoute:
+      AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRoute,
     AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRoute:
       AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRoute,
   }

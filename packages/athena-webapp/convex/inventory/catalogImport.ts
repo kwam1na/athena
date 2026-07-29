@@ -7,8 +7,14 @@ import {
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import { makeFunctionReference } from "convex/server";
 
 import { commandResultValidator } from "../lib/commandResultValidators";
+import {
+  finalizeInventoryImportReviewVersionPayloadOperationDefinition,
+  stageInventoryImportReviewVersionPayloadChunkOperationDefinition,
+} from "../operationAdmission/definitions";
+import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
@@ -28,6 +34,17 @@ import {
 import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { isPosCatalogVisible } from "../../shared/posCatalogVisibility";
+import {
+  INVENTORY_IMPORT_SOURCE_PROJECTION_VERSION,
+  boundInventoryImportSourceColumns,
+  projectInventoryImportSource,
+} from "../../shared/inventoryImportSource";
+import {
+  INVENTORY_IMPORT_REVIEW_PAYLOAD_CHUNK_MAX_BYTES as REVIEW_PAYLOAD_CHUNK_MAX_BYTES,
+  INVENTORY_IMPORT_REVIEW_PAYLOAD_MAX_BYTES as REVIEW_PAYLOAD_MAX_BYTES,
+  INVENTORY_IMPORT_REVIEW_PAYLOAD_MAX_CHUNKS as REVIEW_PAYLOAD_MAX_CHUNKS,
+  getInventoryImportReviewPayloadChunkByteLength,
+} from "../../shared/inventoryImportReviewPayload";
 import { refreshCatalogSummaryWithCtx } from "./catalogSummary";
 import {
   upsertProductSkuSearchProjection,
@@ -53,6 +70,10 @@ const TRUSTED_FINALIZATION_ACTIVE_CHECKOUT_SESSION_LIMIT = 200;
 const DEFAULT_CATEGORY_SLUG = toSlug(DEFAULT_CATEGORY_NAME);
 const TRUSTED_FINALIZATION_CHECKOUT_SESSION_ITEM_LIMIT = 200;
 const LEGACY_IMPORT_TRUSTED_VISIBILITY_REPAIR_LIMIT = 200;
+const INVENTORY_IMPORT_SOURCE_COLUMN_LIMIT = 256;
+const INVENTORY_IMPORT_SOURCE_DESCRIPTOR_MAX_BYTES = 128 * 1024;
+const INVENTORY_IMPORT_SOURCE_DESCRIPTOR_TOO_LARGE_MESSAGE =
+  "Import source column labels are too large to save safely.";
 
 type ProvisionalImportIdentity = {
   productId: Id<"product">;
@@ -119,7 +140,32 @@ const importSourceFormatValidator = v.union(
   v.literal("json"),
 );
 
-const inventoryImportReviewVersionValidator = v.object({
+const inventoryImportReviewRowDecisionValidator = v.object({
+  action: v.optional(v.union(v.literal("create_item"), v.literal("skip_row"))),
+  nameSource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
+  priceSource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
+  productName: v.string(),
+  quantitySource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
+  rowKey: v.string(),
+  rowNumber: v.number(),
+});
+
+const inventoryImportReviewVersionMetadataValidator = v.object({
+  _id: v.id("inventoryImportReviewVersion"),
+  createdAt: v.number(),
+  fileName: v.optional(v.string()),
+  importKey: v.string(),
+  issueCount: v.number(),
+  notes: v.optional(v.string()),
+  payloadChunkCount: v.optional(v.number()),
+  rawContent: v.optional(v.string()),
+  rowDecisions: v.optional(v.array(inventoryImportReviewRowDecisionValidator)),
+  rowCount: v.number(),
+  sourceFormat: importSourceFormatValidator,
+  versionNumber: v.number(),
+});
+
+const legacyInventoryImportReviewVersionValidator = v.object({
   _id: v.id("inventoryImportReviewVersion"),
   createdAt: v.number(),
   fileName: v.optional(v.string()),
@@ -127,8 +173,38 @@ const inventoryImportReviewVersionValidator = v.object({
   issueCount: v.number(),
   notes: v.optional(v.string()),
   rawContent: v.string(),
-  rowDecisions: v.optional(
-    v.array(
+  rowDecisions: v.optional(v.array(inventoryImportReviewRowDecisionValidator)),
+  rowCount: v.number(),
+  sourceFormat: importSourceFormatValidator,
+  versionNumber: v.number(),
+});
+
+const inventoryImportReviewVersionSummaryValidator = v.object({
+  _id: v.id("inventoryImportReviewVersion"),
+  createdAt: v.number(),
+  fileName: v.optional(v.string()),
+  importKey: v.string(),
+  issueCount: v.number(),
+  rowCount: v.number(),
+  sourceFormat: importSourceFormatValidator,
+  versionNumber: v.number(),
+});
+
+const stagedInventoryImportReviewPayloadChunkValidator = v.object({
+  alreadyStaged: v.boolean(),
+  chunkIndex: v.number(),
+});
+
+const inventoryImportReviewVersionPayloadChunkValidator = v.union(
+  v.object({
+    chunkIndex: v.number(),
+    kind: v.literal("raw_content"),
+    rawContent: v.string(),
+  }),
+  v.object({
+    chunkIndex: v.number(),
+    kind: v.literal("row_decisions"),
+    rowDecisions: v.array(
       v.object({
         action: v.optional(
           v.union(v.literal("create_item"), v.literal("skip_row")),
@@ -147,11 +223,8 @@ const inventoryImportReviewVersionValidator = v.object({
         rowNumber: v.number(),
       }),
     ),
-  ),
-  rowCount: v.number(),
-  sourceFormat: importSourceFormatValidator,
-  versionNumber: v.number(),
-});
+  }),
+);
 
 const legacyImportTrustedVisibilityRepairSkuValidator = v.object({
   productId: v.id("product"),
@@ -357,6 +430,197 @@ export type InventoryImportReviewRowDecision = {
   rowNumber: number;
 };
 
+const REVIEW_PAYLOAD_TOO_LARGE_MESSAGE =
+  "Review payload is too large to save safely.";
+const REVIEW_PAYLOAD_REQUIRES_STAGING_MESSAGE =
+  "Large review payloads must be staged in bounded chunks before finalizing.";
+const REVIEW_PAYLOAD_CHUNK_INVALID_MESSAGE =
+  "Review payload chunk is invalid or too large.";
+const REVIEW_PAYLOAD_INCOMPLETE_MESSAGE = "Saved review payload is incomplete.";
+const REVIEW_PAYLOAD_UPLOAD_EXPIRED_MESSAGE =
+  "Review payload upload has expired. Start the save again.";
+const REVIEW_PAYLOAD_UPLOAD_CONFLICT_MESSAGE =
+  "Review payload upload key was already used with different metadata.";
+const REVIEW_PAYLOAD_UPLOAD_TTL_MS = 60 * 60 * 1000;
+const REVIEW_PAYLOAD_ACTIVE_UPLOAD_LIMIT = 5;
+export const LEGACY_INVENTORY_IMPORT_REVIEW_INLINE_ENVELOPE_MAX_BYTES =
+  896 * 1024;
+
+type LegacyInventoryImportReviewVersionInlineEnvelope = {
+  fileName?: string;
+  importKey: string;
+  issueCount: number;
+  notes?: string;
+  rawContent: string;
+  rowDecisions?: InventoryImportReviewRowDecision[];
+  rowCount: number;
+  sourceFormat: "csv" | "json";
+  storeId: Id<"store">;
+};
+
+export function getLegacyInventoryImportReviewVersionInlineEnvelopeByteLength(
+  args: LegacyInventoryImportReviewVersionInlineEnvelope,
+) {
+  return new TextEncoder().encode(
+    JSON.stringify({
+      fileName: args.fileName,
+      importKey: args.importKey,
+      issueCount: args.issueCount,
+      notes: args.notes,
+      rawContent: args.rawContent,
+      rowDecisions: args.rowDecisions ?? [],
+      rowCount: args.rowCount,
+      sourceFormat: args.sourceFormat,
+      storeId: args.storeId,
+    }),
+  ).byteLength;
+}
+
+type InventoryImportReviewPayloadChunk =
+  | {
+      kind: "raw_content";
+      rawContent: string;
+    }
+  | {
+      kind: "row_decisions";
+      rowDecisions: InventoryImportReviewRowDecision[];
+    };
+
+type InventoryImportReviewPayloadAccessArgs = {
+  managerElevationId?: Id<"managerElevation">;
+  storeId: Id<"store">;
+  terminalId?: Id<"posTerminal">;
+};
+
+function getReviewPayloadChunkByteLength(
+  chunk: InventoryImportReviewPayloadChunk,
+) {
+  return getInventoryImportReviewPayloadChunkByteLength(chunk);
+}
+
+function validateStagedReviewPayloadChunk(args: {
+  chunk: InventoryImportReviewPayloadChunk;
+  chunkIndex: number;
+  uploadKey: string;
+}) {
+  if (
+    !args.uploadKey.trim() ||
+    !Number.isInteger(args.chunkIndex) ||
+    args.chunkIndex < 0 ||
+    args.chunkIndex >= REVIEW_PAYLOAD_MAX_CHUNKS ||
+    getReviewPayloadChunkByteLength(args.chunk) >
+      REVIEW_PAYLOAD_CHUNK_MAX_BYTES ||
+    (args.chunk.kind === "raw_content" && args.chunk.rawContent.length === 0)
+  ) {
+    throw new Error(REVIEW_PAYLOAD_CHUNK_INVALID_MESSAGE);
+  }
+}
+
+async function resolveAuthoritativeCostOverlayUnitCost(
+  ctx: Pick<MutationCtx, "db">,
+  args: {
+    productSkuId?: Id<"productSku">;
+    provisionalSku: Doc<"inventoryImportProvisionalSku">;
+    storeId: Id<"store">;
+  },
+) {
+  const provisional = args.provisionalSku;
+  if (
+    !args.productSkuId ||
+    provisional.storeId !== args.storeId ||
+    provisional.productSkuId !== args.productSkuId ||
+    provisional.costOverlayUnitCost === undefined ||
+    provisional.costOverlayRunId === undefined ||
+    provisional.costOverlayRowId === undefined ||
+    provisional.costOverlayUndoneAt !== undefined
+  ) {
+    return undefined;
+  }
+
+  const [run, overlayRow, sku] = await Promise.all([
+    ctx.db.get("inventoryImportCostOverlayRun", provisional.costOverlayRunId),
+    ctx.db.get("inventoryImportCostOverlayRow", provisional.costOverlayRowId),
+    ctx.db.get("productSku", args.productSkuId),
+  ]);
+  const overlayRowIsStillApplied =
+    overlayRow?.workStatus === "applied" ||
+    overlayRow?.workStatus === "undo_exception";
+  if (
+    !run ||
+    run.storeId !== args.storeId ||
+    run.reviewVersionId !== provisional.reviewVersionId ||
+    run.sourceDigest !== provisional.costOverlaySourceDigest ||
+    overlayRow?.runId !== run._id ||
+    overlayRow.storeId !== args.storeId ||
+    overlayRow.productSkuId !== args.productSkuId ||
+    !overlayRowIsStillApplied ||
+    overlayRow.undoneAt !== undefined ||
+    overlayRow.undoCorrectionId !== undefined ||
+    overlayRow.undoInventoryEffectId !== undefined ||
+    overlayRow.postUnitCostMinor !== provisional.costOverlayUnitCost ||
+    sku?.storeId !== args.storeId ||
+    sku.unitCost !== overlayRow.postUnitCostMinor
+  ) {
+    return undefined;
+  }
+
+  return overlayRow.postUnitCostMinor;
+}
+
+function summarizeInventoryImportReviewVersion(
+  version: Doc<"inventoryImportReviewVersion">,
+): InventoryImportReviewVersionSummary {
+  return {
+    _id: version._id,
+    createdAt: version.createdAt,
+    fileName: version.fileName,
+    importKey: version.importKey,
+    issueCount: version.issueCount,
+    rowCount: version.rowCount,
+    sourceFormat: version.sourceFormat,
+    versionNumber: version.versionNumber,
+  };
+}
+
+async function recordInventoryImportReviewVersionSavedEvent(
+  ctx: MutationCtx,
+  args: {
+    access: ImportAccess;
+    fileName?: string;
+    importKey: string;
+    issueCount: number;
+    notes?: string;
+    rowCount: number;
+    rowDecisionCount: number;
+    sourceFormat: "csv" | "json";
+    storeId: Id<"store">;
+    versionId: Id<"inventoryImportReviewVersion">;
+    versionNumber: number;
+  },
+) {
+  await recordOperationalEventWithCtx(ctx, {
+    actorUserId: args.access.athenaUser._id,
+    eventType: REVIEW_VERSION_EVENT_TYPE,
+    message: `${getActorLabel(args.access.athenaUser)} saved inventory import review version ${args.versionNumber}.`,
+    metadata: {
+      fileName: args.fileName,
+      importKey: args.importKey,
+      issueCount: args.issueCount,
+      rowCount: args.rowCount,
+      rowDecisionCount: args.rowDecisionCount,
+      sourceFormat: args.sourceFormat,
+      versionId: args.versionId,
+      versionNumber: args.versionNumber,
+    },
+    organizationId: args.access.store.organizationId,
+    reason: args.notes,
+    storeId: args.storeId,
+    subjectId: String(args.versionId),
+    subjectLabel: `Inventory import review v${args.versionNumber}`,
+    subjectType: "inventory_import_review_version",
+  });
+}
+
 export async function importInventoryRowsWithCtx(
   ctx: MutationCtx,
   args: {
@@ -411,6 +675,23 @@ export async function importInventoryRowsWithCtx(
       importKey: args.importKey,
       storeId: args.storeId,
     });
+  const overlayCostByRowNumber = new Map<number, number>();
+  for (const row of activeProvisionalRows) {
+    const overlayUnitCost = await resolveAuthoritativeCostOverlayUnitCost(ctx, {
+      productSkuId: row.productSkuId,
+      provisionalSku: row,
+      storeId: args.storeId,
+    });
+    if (overlayUnitCost !== undefined) {
+      overlayCostByRowNumber.set(row.rowNumber, overlayUnitCost);
+    }
+  }
+  const effectiveImportRows = importRows.map((row) => {
+    const overlayUnitCost = overlayCostByRowNumber.get(row.rowNumber);
+    return overlayUnitCost === undefined
+      ? row
+      : { ...row, unitCost: overlayUnitCost };
+  });
 
   const summary: MutableSummary = {
     categoriesCreated: 0,
@@ -424,9 +705,12 @@ export async function importInventoryRowsWithCtx(
   const touchedProductIds = new Set<Id<"product">>();
   const touchedProductSkuIds = new Set<Id<"productSku">>();
   const finalTrustedQuantitiesByRowNumber =
-    buildFinalTrustedQuantitiesByRowNumber(importRows, activeProvisionalRows);
+    buildFinalTrustedQuantitiesByRowNumber(
+      effectiveImportRows,
+      activeProvisionalRows,
+    );
 
-  for (const row of importRows) {
+  for (const row of effectiveImportRows) {
     const finalTrustedQuantity =
       finalTrustedQuantitiesByRowNumber.get(row.rowNumber) ?? row.quantity;
     const category = await findOrCreateCategory(ctx, {
@@ -519,7 +803,7 @@ export async function importInventoryRowsWithCtx(
     importKey: args.importKey,
     finalTrustedQuantitiesByRowNumber,
     stagedRows: activeProvisionalRows,
-    rows: importRows,
+    rows: effectiveImportRows,
     storeId: args.storeId,
   });
   await upsertProductSkuSearchProjections(
@@ -612,6 +896,551 @@ export const importInventory = mutation({
   handler: importInventoryCommandWithCtx,
 });
 
+export async function stageInventoryImportReviewVersionPayloadChunkWithCtx(
+  ctx: MutationCtx,
+  args: InventoryImportReviewPayloadAccessArgs & {
+    chunk: InventoryImportReviewPayloadChunk;
+    chunkIndex: number;
+    expectedByteLength: number;
+    expectedChunkCount: number;
+    uploadKey: string;
+  },
+  resolvedAccess?: ImportAccess,
+) {
+  requireTerminalContextForManagerElevation(args);
+  const access =
+    resolvedAccess ?? (await requireInventoryImportAccess(ctx, args));
+  const uploadKey = args.uploadKey.trim();
+  validateStagedReviewPayloadChunk({ ...args, uploadKey });
+  if (
+    !Number.isInteger(args.expectedByteLength) ||
+    args.expectedByteLength < 1 ||
+    args.expectedByteLength > REVIEW_PAYLOAD_MAX_BYTES ||
+    !Number.isInteger(args.expectedChunkCount) ||
+    args.expectedChunkCount < 1 ||
+    args.expectedChunkCount > REVIEW_PAYLOAD_MAX_CHUNKS ||
+    args.chunkIndex >= args.expectedChunkCount
+  ) {
+    throw new Error(REVIEW_PAYLOAD_CHUNK_INVALID_MESSAGE);
+  }
+
+  const now = Date.now();
+  let upload = await ctx.db
+    .query("inventoryImportReviewVersionPayloadUpload")
+    .withIndex("by_storeId_uploadKey", (q) =>
+      q.eq("storeId", args.storeId).eq("uploadKey", uploadKey),
+    )
+    .unique();
+  if (!upload) {
+    const activeUploads = await ctx.db
+      .query("inventoryImportReviewVersionPayloadUpload")
+      .withIndex("by_storeId_createdByUserId_status_expiresAt", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("createdByUserId", access.athenaUser._id)
+          .eq("status", "active")
+          .gt("expiresAt", now),
+      )
+      .take(REVIEW_PAYLOAD_ACTIVE_UPLOAD_LIMIT);
+    if (activeUploads.length >= REVIEW_PAYLOAD_ACTIVE_UPLOAD_LIMIT) {
+      throw new Error(
+        "Too many review payload saves are active. Finish or retry an existing save.",
+      );
+    }
+    const uploadId = await ctx.db.insert(
+      "inventoryImportReviewVersionPayloadUpload",
+      {
+        createdAt: now,
+        createdByUserId: access.athenaUser._id,
+        expectedByteLength: args.expectedByteLength,
+        expectedChunkCount: args.expectedChunkCount,
+        expiresAt: now + REVIEW_PAYLOAD_UPLOAD_TTL_MS,
+        status: "active",
+        storeId: args.storeId,
+        updatedAt: now,
+        uploadKey,
+      },
+    );
+    upload = await ctx.db.get(
+      "inventoryImportReviewVersionPayloadUpload",
+      uploadId,
+    );
+    await ctx.scheduler.runAt(
+      now + REVIEW_PAYLOAD_UPLOAD_TTL_MS,
+      makeFunctionReference<
+        "mutation",
+        { uploadId: Id<"inventoryImportReviewVersionPayloadUpload"> }
+      >(
+        "inventory/catalogImport:expireInventoryImportReviewVersionPayloadUpload",
+      ),
+      { uploadId },
+    );
+  }
+  if (
+    !upload ||
+    upload.createdByUserId !== access.athenaUser._id ||
+    upload.expectedByteLength !== args.expectedByteLength ||
+    upload.expectedChunkCount !== args.expectedChunkCount
+  ) {
+    throw new Error(REVIEW_PAYLOAD_UPLOAD_CONFLICT_MESSAGE);
+  }
+  const existing = await ctx.db
+    .query("inventoryImportReviewVersionPayloadChunk")
+    .withIndex("by_storeId_uploadKey_chunkIndex", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("uploadKey", uploadKey)
+        .eq("chunkIndex", args.chunkIndex),
+    )
+    .unique();
+  if (existing) {
+    const matches =
+      existing.createdByUserId === access.athenaUser._id &&
+      existing.kind === args.chunk.kind &&
+      (existing.kind === "raw_content" && args.chunk.kind === "raw_content"
+        ? existing.rawContent === args.chunk.rawContent
+        : existing.kind === "row_decisions" &&
+          args.chunk.kind === "row_decisions" &&
+          JSON.stringify(existing.rowDecisions) ===
+            JSON.stringify(args.chunk.rowDecisions));
+    if (!matches) {
+      throw new Error(
+        "Review payload upload key was already used with different content.",
+      );
+    }
+    return { alreadyStaged: true, chunkIndex: args.chunkIndex };
+  }
+  if (upload.status !== "active" || upload.expiresAt <= now) {
+    throw new Error(REVIEW_PAYLOAD_UPLOAD_EXPIRED_MESSAGE);
+  }
+
+  await ctx.db.insert("inventoryImportReviewVersionPayloadChunk", {
+    ...args.chunk,
+    chunkIndex: args.chunkIndex,
+    createdByUserId: access.athenaUser._id,
+    storeId: args.storeId,
+    uploadKey,
+  });
+  return { alreadyStaged: false, chunkIndex: args.chunkIndex };
+}
+
+export async function stageInventoryImportReviewVersionPayloadChunkCommandWithCtx(
+  ctx: MutationCtx,
+  args: Parameters<
+    typeof stageInventoryImportReviewVersionPayloadChunkWithCtx
+  >[1],
+) {
+  try {
+    return ok(
+      await stageInventoryImportReviewVersionPayloadChunkWithCtx(ctx, args),
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Review payload could not be staged.";
+    if (
+      message === REVIEW_PAYLOAD_CHUNK_INVALID_MESSAGE ||
+      message ===
+        "Review payload upload key was already used with different content." ||
+      message === REVIEW_PAYLOAD_UPLOAD_CONFLICT_MESSAGE ||
+      message === REVIEW_PAYLOAD_UPLOAD_EXPIRED_MESSAGE ||
+      message ===
+        "Too many review payload saves are active. Finish or retry an existing save."
+    ) {
+      return userError({
+        code:
+          message === REVIEW_PAYLOAD_CHUNK_INVALID_MESSAGE
+            ? "validation_failed"
+            : message === REVIEW_PAYLOAD_UPLOAD_EXPIRED_MESSAGE
+              ? "validation_failed"
+              : "conflict",
+        message,
+      });
+    }
+    throw error;
+  }
+}
+
+export const stageInventoryImportReviewVersionPayloadChunk = mutation({
+  args: {
+    chunk: v.union(
+      v.object({
+        kind: v.literal("raw_content"),
+        rawContent: v.string(),
+      }),
+      v.object({
+        kind: v.literal("row_decisions"),
+        rowDecisions: v.array(
+          v.object({
+            action: v.optional(
+              v.union(v.literal("create_item"), v.literal("skip_row")),
+            ),
+            nameSource: v.optional(
+              v.union(v.literal("import"), v.literal("athena")),
+            ),
+            priceSource: v.optional(
+              v.union(v.literal("import"), v.literal("athena")),
+            ),
+            productName: v.string(),
+            quantitySource: v.optional(
+              v.union(v.literal("import"), v.literal("athena")),
+            ),
+            rowKey: v.string(),
+            rowNumber: v.number(),
+          }),
+        ),
+      }),
+    ),
+    chunkIndex: v.number(),
+    expectedByteLength: v.number(),
+    expectedChunkCount: v.number(),
+    managerElevationId: v.optional(v.id("managerElevation")),
+    storeId: v.id("store"),
+    terminalId: v.optional(v.id("posTerminal")),
+    uploadKey: v.string(),
+  },
+  returns: commandResultValidator(
+    stagedInventoryImportReviewPayloadChunkValidator,
+  ),
+  handler: withOperationMutationAdmission(
+    stageInventoryImportReviewVersionPayloadChunkOperationDefinition,
+    stageInventoryImportReviewVersionPayloadChunkCommandWithCtx,
+  ),
+});
+
+export const expireInventoryImportReviewVersionPayloadUpload = internalMutation(
+  {
+    args: {
+      uploadId: v.id("inventoryImportReviewVersionPayloadUpload"),
+    },
+    handler: async (ctx, args) => {
+      const upload = await ctx.db.get(
+        "inventoryImportReviewVersionPayloadUpload",
+        args.uploadId,
+      );
+      if (
+        !upload ||
+        upload.status !== "active" ||
+        upload.expiresAt > Date.now()
+      ) {
+        return { disposition: "unchanged" as const };
+      }
+      const chunks = await ctx.db
+        .query("inventoryImportReviewVersionPayloadChunk")
+        .withIndex("by_storeId_uploadKey_chunkIndex", (q) =>
+          q.eq("storeId", upload.storeId).eq("uploadKey", upload.uploadKey),
+        )
+        .take(REVIEW_PAYLOAD_MAX_CHUNKS);
+      for (const chunk of chunks) {
+        if (chunk.reviewVersionId === undefined) {
+          await ctx.db.delete(
+            "inventoryImportReviewVersionPayloadChunk",
+            chunk._id,
+          );
+        }
+      }
+      await ctx.db.patch(
+        "inventoryImportReviewVersionPayloadUpload",
+        upload._id,
+        { status: "expired", updatedAt: Date.now() },
+      );
+      return {
+        deletedChunkCount: chunks.length,
+        disposition: "expired" as const,
+      };
+    },
+  },
+);
+
+export async function finalizeInventoryImportReviewVersionPayloadWithCtx(
+  ctx: MutationCtx,
+  args: InventoryImportReviewPayloadAccessArgs & {
+    fileName?: string;
+    importKey: string;
+    issueCount: number;
+    notes?: string;
+    rawContentChunkCount: number;
+    rowCount: number;
+    rowDecisionChunkCount: number;
+    sourceFormat: "csv" | "json";
+    uploadKey: string;
+  },
+  resolvedAccess?: ImportAccess,
+): Promise<InventoryImportReviewVersionSummary> {
+  requireTerminalContextForManagerElevation(args);
+  const access =
+    resolvedAccess ?? (await requireInventoryImportAccess(ctx, args));
+  const uploadKey = args.uploadKey.trim();
+  const expectedChunkCount =
+    args.rawContentChunkCount + args.rowDecisionChunkCount;
+  if (
+    !uploadKey ||
+    !Number.isInteger(args.rawContentChunkCount) ||
+    args.rawContentChunkCount < 1 ||
+    !Number.isInteger(args.rowDecisionChunkCount) ||
+    args.rowDecisionChunkCount < 0 ||
+    expectedChunkCount > REVIEW_PAYLOAD_MAX_CHUNKS
+  ) {
+    throw new Error(REVIEW_PAYLOAD_INCOMPLETE_MESSAGE);
+  }
+
+  const existingVersion = await ctx.db
+    .query("inventoryImportReviewVersion")
+    .withIndex("by_storeId_payloadUploadKey", (q) =>
+      q.eq("storeId", args.storeId).eq("payloadUploadKey", uploadKey),
+    )
+    .unique();
+  if (existingVersion) {
+    if (
+      existingVersion.createdByUserId !== access.athenaUser._id ||
+      existingVersion.importKey !== args.importKey ||
+      existingVersion.payloadChunkCount !== expectedChunkCount ||
+      existingVersion.rawContentChunkCount !== args.rawContentChunkCount ||
+      existingVersion.rowDecisionChunkCount !== args.rowDecisionChunkCount ||
+      existingVersion.issueCount !== args.issueCount ||
+      existingVersion.rowCount !== args.rowCount ||
+      existingVersion.sourceFormat !== args.sourceFormat ||
+      existingVersion.fileName !== normalizeOptional(args.fileName) ||
+      existingVersion.notes !== normalizeOptional(args.notes)
+    ) {
+      throw new Error(
+        "Review payload upload key was already finalized with different metadata.",
+      );
+    }
+    return summarizeInventoryImportReviewVersion(existingVersion);
+  }
+
+  const upload = await ctx.db
+    .query("inventoryImportReviewVersionPayloadUpload")
+    .withIndex("by_storeId_uploadKey", (q) =>
+      q.eq("storeId", args.storeId).eq("uploadKey", uploadKey),
+    )
+    .unique();
+  if (
+    !upload ||
+    upload.createdByUserId !== access.athenaUser._id ||
+    upload.expectedChunkCount !== expectedChunkCount
+  ) {
+    throw new Error(REVIEW_PAYLOAD_UPLOAD_CONFLICT_MESSAGE);
+  }
+  if (upload.status !== "active" || upload.expiresAt <= Date.now()) {
+    throw new Error(REVIEW_PAYLOAD_UPLOAD_EXPIRED_MESSAGE);
+  }
+
+  const payloadChunks = await ctx.db
+    .query("inventoryImportReviewVersionPayloadChunk")
+    .withIndex("by_storeId_uploadKey_chunkIndex", (q) =>
+      q.eq("storeId", args.storeId).eq("uploadKey", uploadKey),
+    )
+    .take(REVIEW_PAYLOAD_MAX_CHUNKS + 1);
+  payloadChunks.sort((left, right) => left.chunkIndex - right.chunkIndex);
+  const hasExpectedSequence =
+    payloadChunks.length === expectedChunkCount &&
+    payloadChunks.every(
+      (chunk, index) =>
+        chunk.chunkIndex === index &&
+        chunk.createdByUserId === access.athenaUser._id &&
+        (index < args.rawContentChunkCount
+          ? chunk.kind === "raw_content"
+          : chunk.kind === "row_decisions"),
+    );
+  const payloadByteLength = payloadChunks.reduce(
+    (total, chunk) =>
+      total +
+      getReviewPayloadChunkByteLength(
+        chunk.kind === "raw_content"
+          ? { kind: "raw_content", rawContent: chunk.rawContent }
+          : { kind: "row_decisions", rowDecisions: chunk.rowDecisions },
+      ),
+    0,
+  );
+  if (!hasExpectedSequence || payloadByteLength > REVIEW_PAYLOAD_MAX_BYTES) {
+    throw new Error(REVIEW_PAYLOAD_INCOMPLETE_MESSAGE);
+  }
+  if (payloadByteLength !== upload.expectedByteLength) {
+    throw new Error(REVIEW_PAYLOAD_INCOMPLETE_MESSAGE);
+  }
+
+  const rawContent = payloadChunks
+    .filter(
+      (chunk): chunk is Extract<typeof chunk, { kind: "raw_content" }> =>
+        chunk.kind === "raw_content",
+    )
+    .map((chunk) => chunk.rawContent)
+    .join("")
+    .trim();
+  if (!rawContent) {
+    throw new Error(
+      "Import content is required before saving a review version.",
+    );
+  }
+  const rowDecisions = normalizeReviewRowDecisions(
+    payloadChunks
+      .filter(
+        (chunk): chunk is Extract<typeof chunk, { kind: "row_decisions" }> =>
+          chunk.kind === "row_decisions",
+      )
+      .flatMap((chunk) => chunk.rowDecisions),
+  );
+  const fileName = normalizeOptional(args.fileName);
+  const notes = normalizeOptional(args.notes);
+  const sourceProjection = projectInventoryImportSource({
+    content: rawContent,
+    fileName,
+  });
+  if (sourceProjection.columns.length > INVENTORY_IMPORT_SOURCE_COLUMN_LIMIT) {
+    throw new Error(
+      `Import source has too many columns (${sourceProjection.columns.length} > ${INVENTORY_IMPORT_SOURCE_COLUMN_LIMIT}).`,
+    );
+  }
+  const sourceColumns = boundInventoryImportSourceColumns(
+    sourceProjection.columns,
+  );
+  if (
+    new TextEncoder().encode(JSON.stringify(sourceColumns)).byteLength >
+    INVENTORY_IMPORT_SOURCE_DESCRIPTOR_MAX_BYTES
+  ) {
+    throw new Error(INVENTORY_IMPORT_SOURCE_DESCRIPTOR_TOO_LARGE_MESSAGE);
+  }
+
+  const latestVersion = await ctx.db
+    .query("inventoryImportReviewVersion")
+    .withIndex("by_storeId_createdAt", (q) => q.eq("storeId", args.storeId))
+    .order("desc")
+    .first();
+  const versionNumber = (latestVersion?.versionNumber ?? 0) + 1;
+  const createdAt = Date.now();
+  const versionId = await ctx.db.insert("inventoryImportReviewVersion", {
+    createdAt,
+    createdByUserId: access.athenaUser._id,
+    fileName,
+    importKey: args.importKey,
+    issueCount: args.issueCount,
+    notes,
+    organizationId: access.store.organizationId,
+    payloadChunkCount: expectedChunkCount,
+    payloadUploadKey: uploadKey,
+    rawContentChunkCount: args.rawContentChunkCount,
+    rowCount: args.rowCount,
+    rowDecisionChunkCount: args.rowDecisionChunkCount,
+    sourceColumns,
+    sourceProjectionVersion: INVENTORY_IMPORT_SOURCE_PROJECTION_VERSION,
+    sourceFormat: args.sourceFormat,
+    storeId: args.storeId,
+    versionNumber,
+  });
+  for (const chunk of payloadChunks) {
+    await ctx.db.patch("inventoryImportReviewVersionPayloadChunk", chunk._id, {
+      reviewVersionId: versionId,
+    });
+  }
+  await ctx.db.patch("inventoryImportReviewVersionPayloadUpload", upload._id, {
+    status: "finalized",
+    updatedAt: Date.now(),
+  });
+  await recordInventoryImportReviewVersionSavedEvent(ctx, {
+    access,
+    fileName,
+    importKey: args.importKey,
+    issueCount: args.issueCount,
+    notes,
+    rowCount: args.rowCount,
+    rowDecisionCount: rowDecisions.length,
+    sourceFormat: args.sourceFormat,
+    storeId: args.storeId,
+    versionId,
+    versionNumber,
+  });
+
+  return {
+    _id: versionId,
+    createdAt,
+    fileName,
+    importKey: args.importKey,
+    issueCount: args.issueCount,
+    rowCount: args.rowCount,
+    sourceFormat: args.sourceFormat,
+    versionNumber,
+  };
+}
+
+export async function finalizeInventoryImportReviewVersionPayloadCommandWithCtx(
+  ctx: MutationCtx,
+  args: Parameters<
+    typeof finalizeInventoryImportReviewVersionPayloadWithCtx
+  >[1],
+): Promise<CommandResult<InventoryImportReviewVersionSummary>> {
+  try {
+    return ok(
+      await finalizeInventoryImportReviewVersionPayloadWithCtx(ctx, args),
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Review version could not be saved.";
+    if (
+      message === REVIEW_PAYLOAD_INCOMPLETE_MESSAGE ||
+      message === REVIEW_PAYLOAD_TOO_LARGE_MESSAGE ||
+      message === REVIEW_PAYLOAD_UPLOAD_EXPIRED_MESSAGE ||
+      message === INVENTORY_IMPORT_SOURCE_DESCRIPTOR_TOO_LARGE_MESSAGE ||
+      message.startsWith("Import source has too many columns") ||
+      message === "Import content is required before saving a review version."
+    ) {
+      return userError({ code: "validation_failed", message });
+    }
+    if (
+      message === "Authentication required." ||
+      message === "Sign in again to continue."
+    ) {
+      return userError({ code: "authentication_failed", message });
+    }
+    if (
+      message === "Manager elevation is required before importing inventory." ||
+      message ===
+        "Terminal context is required before using manager elevation." ||
+      message === "You do not have permission to import inventory." ||
+      message === "Athena user not found."
+    ) {
+      return userError({ code: "authorization_failed", message });
+    }
+    if (message === "Store not found.") {
+      return userError({ code: "not_found", message });
+    }
+    if (
+      message ===
+        "Review payload upload key was already finalized with different metadata." ||
+      message === REVIEW_PAYLOAD_UPLOAD_CONFLICT_MESSAGE
+    ) {
+      return userError({ code: "conflict", message });
+    }
+    throw error;
+  }
+}
+
+export const finalizeInventoryImportReviewVersionPayload = mutation({
+  args: {
+    fileName: v.optional(v.string()),
+    importKey: v.string(),
+    issueCount: v.number(),
+    managerElevationId: v.optional(v.id("managerElevation")),
+    notes: v.optional(v.string()),
+    rawContentChunkCount: v.number(),
+    rowCount: v.number(),
+    rowDecisionChunkCount: v.number(),
+    sourceFormat: importSourceFormatValidator,
+    storeId: v.id("store"),
+    terminalId: v.optional(v.id("posTerminal")),
+    uploadKey: v.string(),
+  },
+  returns: commandResultValidator(inventoryImportReviewVersionSummaryValidator),
+  handler: withOperationMutationAdmission(
+    finalizeInventoryImportReviewVersionPayloadOperationDefinition,
+    finalizeInventoryImportReviewVersionPayloadCommandWithCtx,
+  ),
+});
+
 export async function saveInventoryImportReviewVersionWithCtx(
   ctx: MutationCtx,
   args: {
@@ -650,6 +1479,39 @@ export async function saveInventoryImportReviewVersionWithCtx(
   const fileName = normalizeOptional(args.fileName);
   const notes = normalizeOptional(args.notes);
   const rowDecisions = normalizeReviewRowDecisions(args.rowDecisions);
+  if (
+    getLegacyInventoryImportReviewVersionInlineEnvelopeByteLength({
+      fileName,
+      importKey: args.importKey,
+      issueCount: args.issueCount,
+      notes,
+      rawContent,
+      rowCount: args.rowCount,
+      rowDecisions,
+      sourceFormat: args.sourceFormat,
+      storeId: args.storeId,
+    }) > LEGACY_INVENTORY_IMPORT_REVIEW_INLINE_ENVELOPE_MAX_BYTES
+  ) {
+    throw new Error(REVIEW_PAYLOAD_REQUIRES_STAGING_MESSAGE);
+  }
+  const sourceProjection = projectInventoryImportSource({
+    content: rawContent,
+    fileName,
+  });
+  if (sourceProjection.columns.length > INVENTORY_IMPORT_SOURCE_COLUMN_LIMIT) {
+    throw new Error(
+      `Import source has too many columns (${sourceProjection.columns.length} > ${INVENTORY_IMPORT_SOURCE_COLUMN_LIMIT}).`,
+    );
+  }
+  const sourceColumns = boundInventoryImportSourceColumns(
+    sourceProjection.columns,
+  );
+  if (
+    new TextEncoder().encode(JSON.stringify(sourceColumns)).byteLength >
+    INVENTORY_IMPORT_SOURCE_DESCRIPTOR_MAX_BYTES
+  ) {
+    throw new Error(INVENTORY_IMPORT_SOURCE_DESCRIPTOR_TOO_LARGE_MESSAGE);
+  }
   const versionId = await ctx.db.insert("inventoryImportReviewVersion", {
     createdAt,
     createdByUserId: access.athenaUser._id,
@@ -659,8 +1521,10 @@ export async function saveInventoryImportReviewVersionWithCtx(
     notes,
     organizationId: access.store.organizationId,
     rawContent,
-    rowDecisions,
     rowCount: args.rowCount,
+    rowDecisions,
+    sourceColumns,
+    sourceProjectionVersion: INVENTORY_IMPORT_SOURCE_PROJECTION_VERSION,
     sourceFormat: args.sourceFormat,
     storeId: args.storeId,
     versionNumber,
@@ -734,7 +1598,12 @@ export async function saveInventoryImportReviewVersionCommandWithCtx(
     }
 
     if (
-      message === "Import content is required before saving a review version."
+      message ===
+        "Import content is required before saving a review version." ||
+      message === REVIEW_PAYLOAD_TOO_LARGE_MESSAGE ||
+      message === REVIEW_PAYLOAD_REQUIRES_STAGING_MESSAGE ||
+      message === INVENTORY_IMPORT_SOURCE_DESCRIPTOR_TOO_LARGE_MESSAGE ||
+      message.startsWith("Import source has too many columns")
     ) {
       return userError({ code: "validation_failed", message });
     }
@@ -1031,23 +1900,92 @@ export const stageInventoryImportReviewRowsForPos = mutation({
   handler: stageInventoryImportReviewRowsForPosCommandWithCtx,
 });
 
-export const getLatestInventoryImportReviewVersion = query({
+async function hydrateInventoryImportReviewVersionWithCtx(
+  ctx: QueryCtx,
+  version: Doc<"inventoryImportReviewVersion">,
+) {
+  return {
+    _id: version._id,
+    createdAt: version.createdAt,
+    fileName: version.fileName,
+    importKey: version.importKey,
+    issueCount: version.issueCount,
+    notes: version.notes,
+    ...(version.payloadChunkCount !== undefined
+      ? { payloadChunkCount: version.payloadChunkCount }
+      : {}),
+    ...(version.rawContent !== undefined
+      ? { rawContent: version.rawContent }
+      : {}),
+    ...(version.rowDecisions !== undefined
+      ? { rowDecisions: version.rowDecisions }
+      : {}),
+    rowCount: version.rowCount,
+    sourceFormat: version.sourceFormat,
+    versionNumber: version.versionNumber,
+  };
+}
+
+export async function getInventoryImportReviewVersionByIdWithCtx(
+  ctx: QueryCtx,
   args: {
-    storeId: v.id("store"),
-    managerElevationId: v.optional(v.id("managerElevation")),
-    terminalId: v.optional(v.id("posTerminal")),
+    reviewVersionId: Id<"inventoryImportReviewVersion">;
+    storeId: Id<"store">;
+    managerElevationId?: Id<"managerElevation">;
+    terminalId?: Id<"posTerminal">;
   },
-  returns: v.union(inventoryImportReviewVersionValidator, v.null()),
-  async handler(ctx, args) {
-    await requireInventoryImportAccess(ctx, args);
-    const version = await ctx.db
-      .query("inventoryImportReviewVersion")
-      .withIndex("by_storeId_createdAt", (q) => q.eq("storeId", args.storeId))
-      .order("desc")
-      .first();
+  resolvedAccess?: ImportAccess,
+) {
+  requireTerminalContextForManagerElevation(args);
+  if (!resolvedAccess) await requireInventoryImportAccess(ctx, args);
+  const version = await ctx.db.get(
+    "inventoryImportReviewVersion",
+    args.reviewVersionId,
+  );
+  if (!version || version.storeId !== args.storeId) return null;
+  return hydrateInventoryImportReviewVersionWithCtx(ctx, version);
+}
 
-    if (!version) return null;
+export async function getLatestInventoryImportReviewVersionWithCtx(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    managerElevationId?: Id<"managerElevation">;
+    terminalId?: Id<"posTerminal">;
+  },
+  resolvedAccess?: ImportAccess,
+) {
+  requireTerminalContextForManagerElevation(args);
+  if (!resolvedAccess) await requireInventoryImportAccess(ctx, args);
+  const version = await ctx.db
+    .query("inventoryImportReviewVersion")
+    .withIndex("by_storeId_createdAt", (q) => q.eq("storeId", args.storeId))
+    .order("desc")
+    .first();
 
+  if (!version) return null;
+  if (version.rawContent === undefined) {
+    const chunks = await getLegacyInventoryImportReviewVersionChunksWithCtx(
+      ctx,
+      version,
+    );
+    if (!chunks) return null;
+    const rawContent = chunks
+      .filter(
+        (chunk): chunk is Extract<typeof chunk, { kind: "raw_content" }> =>
+          chunk.kind === "raw_content",
+      )
+      .map((chunk) => chunk.rawContent)
+      .join("")
+      .trim();
+    const rowDecisions = normalizeReviewRowDecisions(
+      chunks
+        .filter(
+          (chunk): chunk is Extract<typeof chunk, { kind: "row_decisions" }> =>
+            chunk.kind === "row_decisions",
+        )
+        .flatMap((chunk) => chunk.rowDecisions),
+    );
     return {
       _id: version._id,
       createdAt: version.createdAt,
@@ -1055,13 +1993,219 @@ export const getLatestInventoryImportReviewVersion = query({
       importKey: version.importKey,
       issueCount: version.issueCount,
       notes: version.notes,
-      rawContent: version.rawContent,
-      rowDecisions: version.rowDecisions,
+      rawContent,
+      rowDecisions,
       rowCount: version.rowCount,
       sourceFormat: version.sourceFormat,
       versionNumber: version.versionNumber,
     };
+  }
+  return {
+    _id: version._id,
+    createdAt: version.createdAt,
+    fileName: version.fileName,
+    importKey: version.importKey,
+    issueCount: version.issueCount,
+    notes: version.notes,
+    rawContent: version.rawContent,
+    rowDecisions: version.rowDecisions,
+    rowCount: version.rowCount,
+    sourceFormat: version.sourceFormat,
+    versionNumber: version.versionNumber,
+  };
+}
+
+async function getLegacyInventoryImportReviewVersionChunksWithCtx(
+  ctx: QueryCtx,
+  version: Doc<"inventoryImportReviewVersion">,
+) {
+  const payloadChunkCount = version.payloadChunkCount;
+  const rawContentChunkCount = version.rawContentChunkCount;
+  const rowDecisionChunkCount = version.rowDecisionChunkCount;
+  if (
+    payloadChunkCount === undefined ||
+    rawContentChunkCount === undefined ||
+    rowDecisionChunkCount === undefined ||
+    !Number.isInteger(payloadChunkCount) ||
+    !Number.isInteger(rawContentChunkCount) ||
+    !Number.isInteger(rowDecisionChunkCount) ||
+    payloadChunkCount < 1 ||
+    payloadChunkCount > REVIEW_PAYLOAD_MAX_CHUNKS ||
+    rawContentChunkCount < 1 ||
+    rowDecisionChunkCount < 0 ||
+    rawContentChunkCount + rowDecisionChunkCount !== payloadChunkCount
+  ) {
+    return null;
+  }
+
+  const chunks = await ctx.db
+    .query("inventoryImportReviewVersionPayloadChunk")
+    .withIndex("by_reviewVersionId_chunkIndex", (q) =>
+      q.eq("reviewVersionId", version._id),
+    )
+    .take(REVIEW_PAYLOAD_MAX_CHUNKS);
+  chunks.sort((left, right) => left.chunkIndex - right.chunkIndex);
+  if (
+    chunks.length !== payloadChunkCount ||
+    chunks.some(
+      (chunk, index) =>
+        chunk.chunkIndex !== index ||
+        (index < rawContentChunkCount
+          ? chunk.kind !== "raw_content"
+          : chunk.kind !== "row_decisions"),
+    )
+  ) {
+    return null;
+  }
+
+  const emptyEnvelopeBytes =
+    getLegacyInventoryImportReviewVersionInlineEnvelopeByteLength({
+      fileName: version.fileName,
+      importKey: version.importKey,
+      issueCount: version.issueCount,
+      notes: version.notes,
+      rawContent: "",
+      rowCount: version.rowCount,
+      rowDecisions: [],
+      sourceFormat: version.sourceFormat,
+      storeId: version.storeId,
+    });
+  const rawContentJsonBytes = chunks.reduce(
+    (total, chunk) =>
+      chunk.kind === "raw_content"
+        ? total +
+          new TextEncoder().encode(JSON.stringify(chunk.rawContent))
+            .byteLength -
+          2
+        : total,
+    0,
+  );
+  const decisionChunks = chunks.filter(
+    (chunk): chunk is Extract<typeof chunk, { kind: "row_decisions" }> =>
+      chunk.kind === "row_decisions" && chunk.rowDecisions.length > 0,
+  );
+  const rowDecisionJsonBytes =
+    decisionChunks.reduce(
+      (total, chunk) =>
+        total +
+        new TextEncoder().encode(JSON.stringify(chunk.rowDecisions))
+          .byteLength -
+        2,
+      0,
+    ) + Math.max(0, decisionChunks.length - 1);
+  if (
+    emptyEnvelopeBytes + rawContentJsonBytes + rowDecisionJsonBytes >
+    LEGACY_INVENTORY_IMPORT_REVIEW_INLINE_ENVELOPE_MAX_BYTES
+  ) {
+    return null;
+  }
+
+  return chunks;
+}
+
+export async function getLatestInventoryImportReviewVersionMetadataWithCtx(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    managerElevationId?: Id<"managerElevation">;
+    terminalId?: Id<"posTerminal">;
   },
+  resolvedAccess?: ImportAccess,
+) {
+  requireTerminalContextForManagerElevation(args);
+  if (!resolvedAccess) await requireInventoryImportAccess(ctx, args);
+  const version = await ctx.db
+    .query("inventoryImportReviewVersion")
+    .withIndex("by_storeId_createdAt", (q) => q.eq("storeId", args.storeId))
+    .order("desc")
+    .first();
+
+  if (!version) return null;
+  return hydrateInventoryImportReviewVersionWithCtx(ctx, version);
+}
+
+export const getLatestInventoryImportReviewVersion = query({
+  args: {
+    storeId: v.id("store"),
+    managerElevationId: v.optional(v.id("managerElevation")),
+    terminalId: v.optional(v.id("posTerminal")),
+  },
+  returns: v.union(legacyInventoryImportReviewVersionValidator, v.null()),
+  handler: getLatestInventoryImportReviewVersionWithCtx,
+});
+
+export const getLatestInventoryImportReviewVersionMetadata = query({
+  args: {
+    storeId: v.id("store"),
+    managerElevationId: v.optional(v.id("managerElevation")),
+    terminalId: v.optional(v.id("posTerminal")),
+  },
+  returns: v.union(inventoryImportReviewVersionMetadataValidator, v.null()),
+  handler: getLatestInventoryImportReviewVersionMetadataWithCtx,
+});
+
+export async function getInventoryImportReviewVersionPayloadChunkWithCtx(
+  ctx: QueryCtx,
+  args: {
+    chunkIndex: number;
+    reviewVersionId: Id<"inventoryImportReviewVersion">;
+    storeId: Id<"store">;
+    managerElevationId?: Id<"managerElevation">;
+    terminalId?: Id<"posTerminal">;
+  },
+  resolvedAccess?: ImportAccess,
+) {
+  requireTerminalContextForManagerElevation(args);
+  if (!resolvedAccess) await requireInventoryImportAccess(ctx, args);
+  if (
+    !Number.isInteger(args.chunkIndex) ||
+    args.chunkIndex < 0 ||
+    args.chunkIndex >= REVIEW_PAYLOAD_MAX_CHUNKS
+  ) {
+    return null;
+  }
+  const version = await ctx.db.get(
+    "inventoryImportReviewVersion",
+    args.reviewVersionId,
+  );
+  if (
+    !version ||
+    version.storeId !== args.storeId ||
+    version.payloadChunkCount === undefined ||
+    args.chunkIndex >= version.payloadChunkCount
+  ) {
+    return null;
+  }
+  const chunk = await ctx.db
+    .query("inventoryImportReviewVersionPayloadChunk")
+    .withIndex("by_reviewVersionId_chunkIndex", (q) =>
+      q.eq("reviewVersionId", version._id).eq("chunkIndex", args.chunkIndex),
+    )
+    .unique();
+  if (!chunk) throw new Error(REVIEW_PAYLOAD_INCOMPLETE_MESSAGE);
+  return chunk.kind === "raw_content"
+    ? {
+        chunkIndex: chunk.chunkIndex,
+        kind: chunk.kind,
+        rawContent: chunk.rawContent,
+      }
+    : {
+        chunkIndex: chunk.chunkIndex,
+        kind: chunk.kind,
+        rowDecisions: chunk.rowDecisions,
+      };
+}
+
+export const getInventoryImportReviewVersionPayloadChunk = query({
+  args: {
+    chunkIndex: v.number(),
+    managerElevationId: v.optional(v.id("managerElevation")),
+    reviewVersionId: v.id("inventoryImportReviewVersion"),
+    storeId: v.id("store"),
+    terminalId: v.optional(v.id("posTerminal")),
+  },
+  returns: v.union(inventoryImportReviewVersionPayloadChunkValidator, v.null()),
+  handler: getInventoryImportReviewVersionPayloadChunkWithCtx,
 });
 
 export async function listInventoryImportReviewSkuContextWithCtx(
@@ -1522,13 +2666,13 @@ export async function finalizeTrustedInventoryFromProductPageWithCtx(
   args: ProductPageTrustedInventoryFinalizationArgs,
   access: ImportAccess,
 ): Promise<CommandResult<ProductPageTrustedInventoryFinalizationResult>> {
-  const normalizedArgs = {
+  const submittedArgs = {
     ...args,
     conversionRequestId: args.conversionRequestId.trim(),
   };
-  const payloadHash = buildProductPageFinalizationPayloadHash(normalizedArgs);
-
-  if (!normalizedArgs.conversionRequestId) {
+  const submittedPayloadHash =
+    buildProductPageFinalizationPayloadHash(submittedArgs);
+  if (!submittedArgs.conversionRequestId) {
     return userError({
       code: "validation_failed",
       message: "Finalization request id is required.",
@@ -1538,24 +2682,44 @@ export async function finalizeTrustedInventoryFromProductPageWithCtx(
   const existingFinalization = await findProvisionalRowByConversionRequestId(
     ctx,
     {
-      conversionRequestId: normalizedArgs.conversionRequestId,
-      storeId: normalizedArgs.storeId,
+      conversionRequestId: submittedArgs.conversionRequestId,
+      storeId: submittedArgs.storeId,
     },
   );
-
   if (existingFinalization) {
-    if (existingFinalization.finalizationRequestPayloadHash !== payloadHash) {
+    const expectedSubmittedHash =
+      existingFinalization.finalizationSubmittedRequestPayloadHash ??
+      existingFinalization.finalizationRequestPayloadHash;
+    if (expectedSubmittedHash !== submittedPayloadHash) {
       return userError({
         code: "conflict",
         message:
           "This trusted inventory finalization request was already used with different reviewed values.",
       });
     }
-
     const storedResult = existingFinalization.finalizationResult as
       ProductPageTrustedInventoryFinalizationResult | undefined;
     if (storedResult) return ok(storedResult);
   }
+
+  const provisionalOverlay = await ctx.db.get(
+    "inventoryImportProvisionalSku",
+    args.provisionalSkuId,
+  );
+  const authoritativeOverlayUnitCost = provisionalOverlay
+    ? await resolveAuthoritativeCostOverlayUnitCost(ctx, {
+        productSkuId: args.productSkuId,
+        provisionalSku: provisionalOverlay,
+        storeId: args.storeId,
+      })
+    : undefined;
+  const normalizedArgs = {
+    ...submittedArgs,
+    ...(authoritativeOverlayUnitCost !== undefined
+      ? { reviewedUnitCost: authoritativeOverlayUnitCost }
+      : {}),
+  };
+  const payloadHash = buildProductPageFinalizationPayloadHash(normalizedArgs);
 
   const validation = await validateProductPageTrustedInventoryFinalization(
     ctx,
@@ -1671,6 +2835,7 @@ export async function finalizeTrustedInventoryFromProductPageWithCtx(
     finalTrustedQuantity: normalizedArgs.reviewedInventoryCount,
     finalizationConversionRequestId: normalizedArgs.conversionRequestId,
     finalizationRequestPayloadHash: payloadHash,
+    finalizationSubmittedRequestPayloadHash: submittedPayloadHash,
     finalizationResult,
     finalizationSaleEvidenceFingerprint: normalizedArgs.saleEvidenceFingerprint,
     finalizationSourceSurface: normalizedArgs.sourceSurface,

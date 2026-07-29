@@ -172,6 +172,13 @@ export const ATHENA_VIEW_SURFACE_CATALOG = {
       "/:orgUrlSlug/store/:storeUrlSlug/operations/inventory-import/review",
     ],
   },
+  "inventory.cost_overlay": {
+    description: "Inventory import cost overlay",
+    presentation: "interactive",
+    routes: [
+      "/:orgUrlSlug/store/:storeUrlSlug/operations/inventory-import/cost-overlay",
+    ],
+  },
   "procurement.receiving": {
     description: "Procurement and receiving",
     presentation: "read_only",

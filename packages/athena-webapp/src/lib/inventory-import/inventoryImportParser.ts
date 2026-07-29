@@ -1,6 +1,14 @@
 import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
 
-export type InventoryImportSourceFormat = "csv" | "json";
+import {
+  buildInventoryImportSourceRowIdentity,
+  inventoryImportSourceRowToRecord,
+  normalizeInventoryImportSourceKey,
+  projectInventoryImportSource,
+} from "../../../shared/inventoryImportSource";
+import type { InventoryImportSourceFormat } from "../../../shared/inventoryImportSource";
+
+export type { InventoryImportSourceFormat } from "../../../shared/inventoryImportSource";
 
 export type InventoryImportRow = {
   rowNumber: number;
@@ -27,26 +35,22 @@ export type InventoryImportParseResult = {
 
 type LegacyRow = Record<string, unknown>;
 
-const PRODUCT_NAME_KEYS = [
-  "product_name",
-  "product",
-  "name",
-  "item_name",
-  "pname",
-  "title",
-  "item",
-  "description",
-  "notes",
-  "note",
-  "productname",
-];
 const CATEGORY_KEYS = ["category", "category_name", "department"];
 const SUBCATEGORY_KEYS = ["subcategory", "subcategory_name", "type"];
-const SKU_KEYS = ["sku", "product_sku", "item_code", "code", "stock_code"];
-const PRODUCT_ID_KEYS = ["product_id", "legacy_id", "item_id", "id"];
-const BARCODE_KEYS = ["barcode", "bar_code", "bcode", "upc", "ean", "lookup_code"];
-const PRICE_KEYS = ["price", "selling_price", "sale_price", "retail_price", "unit_price"];
-const COST_KEYS = ["cost", "unit_cost", "cost_price", "purchase_price", "o_price"];
+const PRICE_KEYS = [
+  "price",
+  "selling_price",
+  "sale_price",
+  "retail_price",
+  "unit_price",
+];
+const COST_KEYS = [
+  "cost",
+  "unit_cost",
+  "cost_price",
+  "purchase_price",
+  "o_price",
+];
 const QUANTITY_KEYS = [
   "quantity",
   "quantity_available",
@@ -68,126 +72,20 @@ export function parseInventoryImportContent(args: {
   content: string;
   fileName?: string;
 }): InventoryImportParseResult {
-  const content = args.content.trim();
-  const format = detectFormat(content, args.fileName);
-
-  if (!content) {
-    return { errors: ["Choose a CSV or JSON file with inventory rows."], format, rows: [] };
-  }
-
-  if (format === "json") {
-    return parseJsonInventory(content);
-  }
-
-  return parseCsvInventory(content);
-}
-
-function detectFormat(content: string, fileName?: string): InventoryImportSourceFormat {
-  const lowerName = fileName?.toLowerCase() ?? "";
-  if (lowerName.endsWith(".json")) return "json";
-  if (lowerName.endsWith(".csv")) return "csv";
-  return content.startsWith("{") || content.startsWith("[") ? "json" : "csv";
-}
-
-function parseJsonInventory(content: string): InventoryImportParseResult {
-  try {
-    const parsed = JSON.parse(content) as unknown;
-    const legacyRows = extractJsonRows(parsed);
-    return normalizeLegacyRows(legacyRows, "json");
-  } catch {
-    return { errors: ["JSON file could not be parsed."], format: "json", rows: [] };
-  }
-}
-
-function extractJsonRows(value: unknown): LegacyRow[] {
-  if (Array.isArray(value)) return flattenJsonRows(value);
-  if (!isRecord(value)) return [];
-
-  for (const key of ["rows", "items", "products", "inventory", "data"]) {
-    const nested = value[key];
-    if (Array.isArray(nested)) return flattenJsonRows(nested);
-  }
-
-  return flattenJsonRows([value]);
-}
-
-function flattenJsonRows(rows: unknown[]): LegacyRow[] {
-  return rows.flatMap((row) => {
-    if (!isRecord(row)) return [];
-
-    const nestedRows = ["skus", "variants", "items"]
-      .map((key) => row[key])
-      .find((value) => Array.isArray(value));
-
-    if (!Array.isArray(nestedRows)) return [row];
-
-    return nestedRows
-      .filter(isRecord)
-      .map((nestedRow) => ({ ...row, ...nestedRow }));
-  });
-}
-
-function parseCsvInventory(content: string): InventoryImportParseResult {
-  const rows = parseCsv(content);
-  if (rows.length < 2) {
+  const projection = projectInventoryImportSource(args);
+  if (projection.errors.length > 0) {
     return {
-      errors: ["CSV file must include a header row and at least one inventory row."],
-      format: "csv",
+      errors: projection.errors,
+      format: projection.format,
       rows: [],
     };
   }
 
-  const headers = rows[0].map(normalizeKey);
-  const legacyRows = rows.slice(1).map((row) =>
-    Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""]))
+  const legacyRows = projection.rows.map((row) =>
+    inventoryImportSourceRowToRecord(projection, row),
   );
 
-  return normalizeLegacyRows(legacyRows, "csv");
-}
-
-function parseCsv(content: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let field = "";
-  let inQuotes = false;
-
-  for (let index = 0; index < content.length; index += 1) {
-    const char = content[index];
-    const next = content[index + 1];
-
-    if (char === '"' && inQuotes && next === '"') {
-      field += '"';
-      index += 1;
-      continue;
-    }
-
-    if (char === '"') {
-      inQuotes = !inQuotes;
-      continue;
-    }
-
-    if (char === "," && !inQuotes) {
-      row.push(field.trim());
-      field = "";
-      continue;
-    }
-
-    if ((char === "\n" || char === "\r") && !inQuotes) {
-      if (char === "\r" && next === "\n") index += 1;
-      row.push(field.trim());
-      if (row.some((value) => value.length > 0)) rows.push(row);
-      row = [];
-      field = "";
-      continue;
-    }
-
-    field += char;
-  }
-
-  row.push(field.trim());
-  if (row.some((value) => value.length > 0)) rows.push(row);
-
-  return rows;
+  return normalizeLegacyRows(legacyRows, projection.format);
 }
 
 function normalizeLegacyRows(
@@ -212,13 +110,7 @@ function normalizeLegacyRow(
   rowNumber: number,
 ): { errors: string[]; row: InventoryImportRow } {
   const errors: string[] = [];
-  const sku = readString(legacyRow, SKU_KEYS) || readString(legacyRow, PRODUCT_ID_KEYS);
-  const barcode = readString(legacyRow, BARCODE_KEYS);
-  const productName = readLabelString(legacyRow, PRODUCT_NAME_KEYS) || inferProductName(legacyRow, {
-    barcode,
-    rowNumber,
-    sku,
-  });
+  const identity = buildInventoryImportSourceRowIdentity(legacyRow, rowNumber);
   const price = readMoney(legacyRow, PRICE_KEYS) ?? 0;
   const unitCost = readOptionalMoney(legacyRow, COST_KEYS);
   const quantity = readInteger(legacyRow, QUANTITY_KEYS) ?? 0;
@@ -229,11 +121,11 @@ function normalizeLegacyRow(
     errors,
     row: {
       rowNumber,
-      productName,
+      productName: identity.productName,
       category: readString(legacyRow, CATEGORY_KEYS) || undefined,
       subcategory: readString(legacyRow, SUBCATEGORY_KEYS) || undefined,
-      sku: sku || undefined,
-      barcode: barcode || undefined,
+      sku: identity.sku,
+      barcode: identity.barcode,
       price,
       unitCost,
       quantity,
@@ -252,42 +144,9 @@ function readString(row: LegacyRow, keys: string[]) {
   return String(value).trim();
 }
 
-function readLabelString(row: LegacyRow, keys: string[]) {
-  for (const key of keys) {
-    const value = readString(row, [key]);
-    if (looksLikeLabel(value)) return value;
-  }
-
-  return "";
-}
-
-function inferProductName(
-  row: LegacyRow,
-  args: {
-    barcode: string;
-    rowNumber: number;
-    sku: string;
-  },
-) {
-  const preferredCandidates = [
-    readString(row, ["code"]),
-    readString(row, ["description"]),
-    readString(row, ["notes", "note"]),
-    args.sku,
-    args.barcode,
-  ];
-  const labelCandidate = preferredCandidates.find(looksLikeLabel);
-  if (labelCandidate) return labelCandidate;
-
-  const anyLabel = Object.values(row).map((value) => String(value ?? "").trim()).find(looksLikeLabel);
-  if (anyLabel) return anyLabel;
-
-  return args.sku || args.barcode || `Imported row ${args.rowNumber}`;
-}
-
 function readValue(row: LegacyRow, keys: string[]) {
   const normalizedEntries = new Map(
-    Object.entries(row).map(([key, value]) => [normalizeKey(key), value])
+    Object.entries(row).map(([key, value]) => [normalizeKey(key), value]),
   );
 
   for (const key of keys) {
@@ -327,7 +186,10 @@ function readOptionalNumber(row: LegacyRow, keys: string[]) {
   return Number.isFinite(numeric) ? numeric : undefined;
 }
 
-function readStatus(row: LegacyRow, keys: string[]): InventoryImportRow["status"] {
+function readStatus(
+  row: LegacyRow,
+  keys: string[],
+): InventoryImportRow["status"] {
   const value = readValue(row, keys);
   if (value === undefined) return undefined;
   const normalized = String(value).trim().toLowerCase();
@@ -348,13 +210,5 @@ function readStatus(row: LegacyRow, keys: string[]): InventoryImportRow["status"
 }
 
 function normalizeKey(key: string) {
-  return key.trim().toLowerCase().replace(/[\s-]+/g, "_");
-}
-
-function looksLikeLabel(value: string) {
-  return /[A-Za-z]/.test(value);
-}
-
-function isRecord(value: unknown): value is LegacyRow {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return normalizeInventoryImportSourceKey(key);
 }

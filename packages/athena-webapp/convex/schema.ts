@@ -14,8 +14,13 @@ import {
   organizationMemberSchema,
   organizationSchema,
   inventoryHoldSchema,
+  inventoryImportCostOverlayBulkDecisionRequestSchema,
+  inventoryImportCostOverlayRowSchema,
+  inventoryImportCostOverlayRunSchema,
   inventoryImportProvisionalSkuSchema,
   inventoryImportReviewVersionSchema,
+  inventoryImportReviewVersionPayloadChunkSchema,
+  inventoryImportReviewVersionPayloadUploadSchema,
   posRegisterCatalogRevisionSchema,
   productSchema,
   productSkuSearchSchema,
@@ -250,9 +255,15 @@ const schema = defineSchema({
   sharedDemoBaselineDocument: defineTable(sharedDemoBaselineDocumentSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_tableName", ["storeId", "tableName"])
-    .index("by_storeId_tableName_documentId", ["storeId", "tableName", "documentId"]),
-  sharedDemoRestoreAudit: defineTable(sharedDemoRestoreAuditSchema)
-    .index("by_storeId_occurredAt", ["storeId", "occurredAt"]),
+    .index("by_storeId_tableName_documentId", [
+      "storeId",
+      "tableName",
+      "documentId",
+    ]),
+  sharedDemoRestoreAudit: defineTable(sharedDemoRestoreAuditSchema).index(
+    "by_storeId_occurredAt",
+    ["storeId", "occurredAt"],
+  ),
   sharedDemoPrincipal: defineTable({
     authUserId: v.id("users"),
     athenaUserId: v.id("athenaUser"),
@@ -675,10 +686,58 @@ const schema = defineSchema({
     ]),
   inventoryImportReviewVersion: defineTable(inventoryImportReviewVersionSchema)
     .index("by_storeId_createdAt", ["storeId", "createdAt"])
-    .index("by_storeId_importKey", ["storeId", "importKey"]),
+    .index("by_storeId_importKey", ["storeId", "importKey"])
+    .index("by_storeId_payloadUploadKey", ["storeId", "payloadUploadKey"]),
+  inventoryImportReviewVersionPayloadChunk: defineTable(
+    inventoryImportReviewVersionPayloadChunkSchema,
+  )
+    .index("by_reviewVersionId_chunkIndex", ["reviewVersionId", "chunkIndex"])
+    .index("by_storeId_uploadKey_chunkIndex", [
+      "storeId",
+      "uploadKey",
+      "chunkIndex",
+    ]),
+  inventoryImportReviewVersionPayloadUpload: defineTable(
+    inventoryImportReviewVersionPayloadUploadSchema,
+  )
+    .index("by_storeId_uploadKey", ["storeId", "uploadKey"])
+    .index("by_storeId_createdByUserId_status_expiresAt", [
+      "storeId",
+      "createdByUserId",
+      "status",
+      "expiresAt",
+    ])
+    .index("by_status_expiresAt", ["status", "expiresAt"]),
+  inventoryImportCostOverlayRun: defineTable(
+    inventoryImportCostOverlayRunSchema,
+  )
+    .index("by_storeId_createdAt", ["storeId", "createdAt"])
+    .index("by_storeId_status_updatedAt", ["storeId", "status", "updatedAt"])
+    .index("by_storeId_requestKey", ["storeId", "requestKey"])
+    .index("by_reviewVersionId_createdAt", ["reviewVersionId", "createdAt"]),
+  inventoryImportCostOverlayBulkDecisionRequest: defineTable(
+    inventoryImportCostOverlayBulkDecisionRequestSchema,
+  ).index("by_runId_requestKey", ["runId", "requestKey"]),
+  inventoryImportCostOverlayRow: defineTable(
+    inventoryImportCostOverlayRowSchema,
+  )
+    .index("by_runId_rowOrdinal", ["runId", "rowOrdinal"])
+    .index("by_runId_decision_rowOrdinal", ["runId", "decision", "rowOrdinal"])
+    .index("by_runId_eligibility_rowOrdinal", [
+      "runId",
+      "eligibility",
+      "rowOrdinal",
+    ])
+    .index("by_runId_productSkuId", ["runId", "productSkuId"])
+    .index("by_runId_workStatus_rowOrdinal", [
+      "runId",
+      "workStatus",
+      "rowOrdinal",
+    ]),
   inventoryImportProvisionalSku: defineTable(
     inventoryImportProvisionalSkuSchema,
   )
+    .index("by_storeId", ["storeId"])
     .index("by_storeId_status", ["storeId", "status"])
     .index("by_storeId_status_finalizedAt", [
       "storeId",
@@ -694,6 +753,12 @@ const schema = defineSchema({
     .index("by_storeId_importKey_status", ["storeId", "importKey", "status"])
     .index("by_storeId_productSkuId_status", [
       "storeId",
+      "productSkuId",
+      "status",
+    ])
+    .index("by_storeId_reviewVersionId_productSkuId_status", [
+      "storeId",
+      "reviewVersionId",
       "productSkuId",
       "status",
     ])
@@ -1014,8 +1079,10 @@ const schema = defineSchema({
       "recordedAt",
     ])
     .index("by_transactionId_recordedAt", ["transactionId", "recordedAt"]),
-  posLifecycleJournalCursor: defineTable(posLifecycleJournalCursorSchema)
-    .index("by_storeId", ["storeId"]),
+  posLifecycleJournalCursor: defineTable(posLifecycleJournalCursorSchema).index(
+    "by_storeId",
+    ["storeId"],
+  ),
   posLocalSyncCursor: defineTable(posLocalSyncCursorSchema)
     .index("by_store_terminal_scope_cursor", [
       "storeId",
@@ -1216,10 +1283,9 @@ const schema = defineSchema({
       searchField: "searchText",
       filterFields: ["storeId"],
     }),
-  posRegisterCatalogRevision: defineTable(posRegisterCatalogRevisionSchema).index(
-    "by_storeId",
-    ["storeId"],
-  ),
+  posRegisterCatalogRevision: defineTable(
+    posRegisterCatalogRevisionSchema,
+  ).index("by_storeId", ["storeId"]),
   purchaseOrder: defineTable(purchaseOrderSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_createdAt", ["storeId", "createdAt"])
@@ -1571,11 +1637,7 @@ const schema = defineSchema({
   }).index("by_storeId_sequence", ["storeId", "sequence"]),
   reportingInventoryPosition: defineTable(reportingInventoryPositionSchema)
     .index("by_storeId_productSkuId", ["storeId", "productSkuId"])
-    .index("by_storeId_productSkuId_mode", [
-      "storeId",
-      "productSkuId",
-      "mode",
-    ])
+    .index("by_storeId_productSkuId_mode", ["storeId", "productSkuId", "mode"])
     .index("by_storeId_mode", ["storeId", "mode"])
     .index("by_storeId_mode_lastEffectAt", ["storeId", "mode", "lastEffectAt"])
     .index("by_storeId_mode_updatedAt", ["storeId", "mode", "updatedAt"]),

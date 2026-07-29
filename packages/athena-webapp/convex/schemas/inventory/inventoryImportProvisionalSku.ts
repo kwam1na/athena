@@ -41,12 +41,25 @@ export const inventoryImportProvisionalSkuSchema = v.object({
   importedLength: v.optional(v.number()),
   importedWeight: v.optional(v.string()),
 
+  costOverlayUnitCost: v.optional(v.number()),
+  costOverlayRunId: v.optional(v.id("inventoryImportCostOverlayRun")),
+  costOverlayRowId: v.optional(v.id("inventoryImportCostOverlayRow")),
+  costOverlaySourceDigest: v.optional(v.string()),
+  costOverlayAppliedAt: v.optional(v.number()),
+  costOverlayUndoneAt: v.optional(v.number()),
+
   rowDecision: v.optional(
     v.object({
-      action: v.optional(v.union(v.literal("create_item"), v.literal("skip_row"))),
+      action: v.optional(
+        v.union(v.literal("create_item"), v.literal("skip_row")),
+      ),
       nameSource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
-      priceSource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
-      quantitySource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
+      priceSource: v.optional(
+        v.union(v.literal("import"), v.literal("athena")),
+      ),
+      quantitySource: v.optional(
+        v.union(v.literal("import"), v.literal("athena")),
+      ),
     }),
   ),
 
@@ -70,6 +83,7 @@ export const inventoryImportProvisionalSkuSchema = v.object({
   provisionalSoldQuantityAtFinalization: v.optional(v.number()),
   finalizationConversionRequestId: v.optional(v.string()),
   finalizationRequestPayloadHash: v.optional(v.string()),
+  finalizationSubmittedRequestPayloadHash: v.optional(v.string()),
   finalizationResult: v.optional(v.record(v.string(), v.any())),
   finalizationSaleEvidenceFingerprint: v.optional(v.string()),
   finalizationSourceSurface: v.optional(v.string()),
