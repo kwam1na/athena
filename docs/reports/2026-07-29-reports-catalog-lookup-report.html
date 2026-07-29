@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="24ab16e019af093bb8abf11d43f452bfcbd0f9af58dbba36ab8d08d7a294b871" data-athena-report-base="origin/main" data-athena-report-head="6584516c82521d876fdbec8581799bbab2de5f54">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="eb46cc20fb71ecd8559bb996495f36bbe7c9ed5daace8b4600f67033c5a9ca14" data-athena-report-base="origin/main" data-athena-report-head="4941c8fd">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -113,7 +113,7 @@ No new report search backend. No report filtering. No fact or rollup mutation.</
 <p>SKU detail and day views first fetch their bounded report range (at most 92 day documents) and then paginate that in memory for presentation; they do not introduce a new backend cursor. A known Items cursor-design caveat remains: a sort-key tie group larger than the fixed tie-boundary overfetch can make a later page appear terminal while tied rows remain. This delivery preserves that query shape; current coverage does not mitigate that case.</p>
 </section>
 <section class="panel"><h2>Validation and finish line</h2>
-<p>Focused regression coverage includes <code>cd packages/athena-webapp &amp;&amp; bun run test -- convex/reports/queries.test.ts</code> (18 passing tests for the canonical-name fallback) and <code>bun --bun ./node_modules/vitest/vitest.mjs run scripts/worktree-bootstrap-check.test.ts scripts/worktree-manager.test.ts</code> (9 passing bootstrap and manager tests). Generated Graphify and agent-index artifacts are included. The authoritative merge gate <code>bun run pr:athena</code> passed preparation and preflight, then stopped in validation because <code>docs/solutions/architecture/athena-reporting-read-optimized-implementation-plan-2026-07-28.md</code> had a stale fingerprint and no landed-change report existed; those artifacts are the repair now being revalidated.</p>
+<p>Focused regression coverage includes <code>cd packages/athena-webapp &amp;&amp; bun run test -- convex/reports/queries.test.ts</code> (18 passing tests for the canonical-name fallback), <code>bun --bun ./node_modules/vitest/vitest.mjs run scripts/worktree-bootstrap-check.test.ts scripts/worktree-manager.test.ts</code> (9 passing bootstrap and manager tests), and <code>bun test scripts/pre-push-hook.test.ts scripts/pre-push-review.test.ts scripts/worktree-bootstrap-check.test.ts</code> (42 passing hook-fixture and bootstrap checks). Generated Graphify and agent-index artifacts are included. The authoritative merge gate is being rerun against the refreshed delivery fingerprint.</p>
 <p>Existing overview documents without <code>yesterday</code> render an empty comparison until the sweeper refreshes them. PR creation, remote CI, merge, clean-root alignment, and any deploy decision are pending. This candidate changes Athena admin/report UI and Convex query code; deployment scope will be selected only after merge from the merged-file set.</p>
 </section>
 <section class="panel"><h2>Worktree bootstrap guard</h2>
