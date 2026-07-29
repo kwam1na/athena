@@ -34,11 +34,11 @@ export const notificationIntentSchema = v.object({
   emittedAt: v.number(),
   dispatchedAt: v.optional(v.number()),
   suppressedReason: v.optional(v.string()),
-  // Counts sweeper pickups of a still-pending intent. Reserving happens in a
-  // mutation, so a reserve that throws rolls back its own bookkeeping; this
-  // counter is written by the sweeper's own transaction instead, which lets a
-  // persistently unreservable intent be terminalized rather than block the
-  // pending queue forever.
+  // Counts sweeper pickups of a still-pending intent. Written by the sweeper's
+  // own transaction (a reserve that throws rolls back its own bookkeeping), and
+  // DIAGNOSTIC ONLY — abandonment is decided by wall clock against
+  // INTENT_ABANDON_AFTER_MS, not by this count. It appears in the abandonment
+  // event message to show how many attempts were made.
   sweepAttempts: v.optional(v.number()),
   // Set when an abandoned intent is requeued for another attempt. The
   // abandonment clock runs from max(emittedAt, requeuedAt) so recovery does

@@ -141,7 +141,7 @@
   <section id="impact">
     <h2>System-Wide Impact</h2>
     <ul>
-      <li>Three mutation call sites switch from scheduling send actions to emitting intents; one new cron; new <code>notification_delivery_failed</code> operational event type.</li>
+      <li>Three mutation call sites switch from scheduling send actions to emitting intents; one new cron; new <code>notification_delivery_failed</code> and <code>register_closeout_notification_skipped</code> operational event types.</li>
       <li>Send failures become ledgered delivery states with retries instead of throws inside fire-and-forget actions.</li>
       <li>Legacy marker fields stop being written but stay in schema; <code>automationNotificationDelivery</code> becomes read-only legacy.</li>
       <li>Unchanged: payload queries, templates, subjects, EOD outcome policy, POS sync ingestion semantics.</li>

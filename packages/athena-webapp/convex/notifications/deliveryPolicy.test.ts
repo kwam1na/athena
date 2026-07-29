@@ -12,6 +12,7 @@ import {
   joinKeyComponents,
   nextBackoffMs,
   normalizeRecipientEmail,
+  nextDispatchDelayMs,
   MAX_DELIVERIES_PER_DISPATCH,
 } from "./deliveryPolicy";
 import { SEND_TIMEOUT_MS } from "./transport";
@@ -206,5 +207,41 @@ describe("batch and lease invariants", () => {
     expect(computeDeliveryLeaseMs(MAX_DELIVERIES_PER_DISPATCH)).toBe(
       DELIVERY_LEASE_MAX_MS,
     );
+  });
+});
+
+describe("nextDispatchDelayMs", () => {
+  const now = 1_000_000;
+
+  it("continues immediately when the audience is unfinished", () => {
+    // Priority matters: the tail must not wait out the head batch's retry
+    // ladder for its FIRST attempt during a provider outage.
+    expect(
+      nextDispatchDelayMs({ hasMore: true, earliestRetryAt: now + 240_000, now }),
+    ).toBe(0);
+  });
+
+  it("continues immediately when unfinished and nothing is retryable", () => {
+    expect(
+      nextDispatchDelayMs({ hasMore: true, earliestRetryAt: null, now }),
+    ).toBe(0);
+  });
+
+  it("waits out the backoff when the audience is complete", () => {
+    expect(
+      nextDispatchDelayMs({ hasMore: false, earliestRetryAt: now + 60_000, now }),
+    ).toBe(60_000);
+  });
+
+  it("never schedules in the past", () => {
+    expect(
+      nextDispatchDelayMs({ hasMore: false, earliestRetryAt: now - 5_000, now }),
+    ).toBe(0);
+  });
+
+  it("stops the chain when nothing is left to do", () => {
+    expect(
+      nextDispatchDelayMs({ hasMore: false, earliestRetryAt: null, now }),
+    ).toBeNull();
   });
 });

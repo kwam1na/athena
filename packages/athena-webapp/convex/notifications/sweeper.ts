@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
-import { internalMutation } from "../_generated/server";
+import { internalMutation, type MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 
 import {
@@ -17,6 +17,30 @@ import {
 const DEFAULT_SWEEP_LIMIT = 25;
 
 
+
+// A delivery whose intent has been suppressed (abandoned mid-chain, or
+// suppressed for any other reason after its rows existed) must be terminalized
+// rather than left non-terminal: reserveIntentDeliveries returns early for a
+// suppressed intent without touching rows, so the row would otherwise be
+// re-selected by this sweep on every tick forever. Because nextAttemptAt never
+// advances for such a row and the retry index is ascending, a handful of them
+// would sort to the front and permanently consume the whole retry budget,
+// killing the retry backstop for every other notification.
+async function terminalizeOrphanedDelivery(
+  ctx: MutationCtx,
+  deliveryId: Id<"notificationDelivery">,
+  now: number,
+) {
+  await ctx.db.patch("notificationDelivery", deliveryId, {
+    status: "suppressed",
+    errorCode: "intent_suppressed",
+    leaseToken: undefined,
+    leaseExpiresAt: undefined,
+    nextAttemptAt: undefined,
+    terminalAt: now,
+    updatedAt: now,
+  });
+}
 
 // The safety net that makes delivery eventual. Immediate dispatch via
 // runAfter(0) is the fast path; this sweep recovers everything that path can
@@ -43,7 +67,20 @@ export const sweep = internalMutation({
       )
       .take(limit);
     let terminaled = 0;
+    // Tracked separately so staleLeasesRecovered stays honest: an orphan under
+    // a suppressed intent was terminalized, not recovered for another attempt.
+    let leaseOrphans = 0;
+    let retryOrphans = 0;
     for (const delivery of staleLeases) {
+      const leaseIntent = await ctx.db.get(
+        "notificationIntent",
+        delivery.intentId,
+      );
+      if (leaseIntent?.status === "suppressed") {
+        await terminalizeOrphanedDelivery(ctx, delivery._id, now);
+        leaseOrphans += 1;
+        continue;
+      }
       if (delivery.attemptCount >= MAX_DELIVERY_ATTEMPTS) {
         await ctx.db.patch("notificationDelivery", delivery._id, {
           status: "terminal_failure",
@@ -99,6 +136,15 @@ export const sweep = internalMutation({
       )
       .take(limit);
     for (const delivery of dueRetries) {
+      const retryIntent = await ctx.db.get(
+        "notificationIntent",
+        delivery.intentId,
+      );
+      if (retryIntent?.status === "suppressed") {
+        await terminalizeOrphanedDelivery(ctx, delivery._id, now);
+        retryOrphans += 1;
+        continue;
+      }
       intentIdsToDispatch.add(delivery.intentId);
     }
 
@@ -167,10 +213,11 @@ export const sweep = internalMutation({
     }
 
     return {
-      staleLeasesRecovered: staleLeases.length - terminaled,
+      staleLeasesRecovered: staleLeases.length - terminaled - leaseOrphans,
       terminaled,
       dispatchesScheduled: intentIdsToDispatch.size,
       intentsAbandoned,
+      orphansTerminalized: leaseOrphans + retryOrphans,
       // Surfaced so a saturated phase is visible in cron output rather than
       // silently truncated.
       staleLeaseBacklog: staleLeases.length >= limit,

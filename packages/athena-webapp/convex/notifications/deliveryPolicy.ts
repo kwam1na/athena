@@ -36,6 +36,21 @@ export const SWEEPER_INTENT_PICKUP_DELAY_MS = 60_000;
 // way a batch of intents becomes temporarily unreservable.
 export const INTENT_ABANDON_AFTER_MS = 6 * 60 * 60_000;
 
+// Chooses when the next dispatch pass should run. An unfinished audience wins
+// over the head batch's retry ladder: waiting out 1m+2m+4m before recipient 26
+// gets a FIRST attempt would delay the tail by the whole ladder during an
+// outage, and due retries are the sweeper's job regardless. Returns null when
+// no further pass is needed.
+export function nextDispatchDelayMs(args: {
+  hasMore: boolean;
+  earliestRetryAt: number | null;
+  now: number;
+}): number | null {
+  if (args.hasMore) return 0;
+  if (args.earliestRetryAt === null) return null;
+  return Math.max(0, args.earliestRetryAt - args.now);
+}
+
 export function computeDeliveryLeaseMs(recipientCount: number) {
   return Math.min(
     DELIVERY_LEASE_MAX_MS,

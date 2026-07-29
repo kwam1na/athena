@@ -12,6 +12,7 @@ import {
   MAX_DELIVERIES_PER_DISPATCH,
   MAX_DELIVERY_ATTEMPTS,
   computeDeliveryLeaseMs,
+  nextDispatchDelayMs,
   deliveryDedupeKey,
   nextBackoffMs,
   normalizeRecipientEmail,
@@ -225,12 +226,24 @@ export const reserveIntentDeliveries = internalMutation({
     const batchSize = Math.min(recipients.length, MAX_DELIVERIES_PER_DISPATCH);
     const leaseMs = computeDeliveryLeaseMs(batchSize);
     const leased: LeasedDelivery[] = [];
+    // hasMore drives SCHEDULING (another pass is needed); materialization
+    // drives the intent's STATUS. They are not the same: an intent whose whole
+    // audience already has rows can still fill a batch with due retries, and
+    // treating that as "un-materialized" would move the intent backwards from
+    // dispatched to pending, re-expose it to the abandonment clock, and label
+    // a partially-delivered notification "dispatch_unrecoverable".
+    const recipientsWithRows = new Set(
+      existingDeliveries.map((delivery) =>
+        normalizeRecipientEmail(delivery.recipientEmail),
+      ),
+    );
     let hasMore = false;
     for (const recipient of recipients) {
       if (leased.length >= MAX_DELIVERIES_PER_DISPATCH) {
         hasMore = true;
         break;
       }
+      recipientsWithRows.add(recipient.email);
       const dedupeKey = deliveryDedupeKey({
         intentDedupeKey: intent.dedupeKey,
         channel: "email",
@@ -316,8 +329,11 @@ export const reserveIntentDeliveries = internalMutation({
     // or the schedule never commits), the sweep re-dispatches, and the
     // abandonment clock eventually reports it. Marking it "dispatched" here
     // would make the tail invisible to every sweeper phase.
+    const audienceMaterialized = recipients.every((recipient) =>
+      recipientsWithRows.has(recipient.email),
+    );
     await ctx.db.patch("notificationIntent", intent._id, {
-      status: hasMore ? "pending" : "dispatched",
+      status: audienceMaterialized ? "dispatched" : "pending",
       dispatchedAt: intent.dispatchedAt ?? now,
     });
 
@@ -526,11 +542,14 @@ export const dispatchIntent = internalAction({
       }
       // Continue the chain even when the whole batch is at the attempt cap:
       // the tail recipients have no rows yet and are nobody else's job.
-      if (earliestPrepareRetryAt !== null || reserved.hasMore) {
+      const prepareDelay = nextDispatchDelayMs({
+        hasMore: reserved.hasMore,
+        earliestRetryAt: earliestPrepareRetryAt,
+        now: Date.now(),
+      });
+      if (prepareDelay !== null) {
         await ctx.scheduler.runAfter(
-          reserved.hasMore || earliestPrepareRetryAt === null
-            ? 0
-            : Math.max(0, earliestPrepareRetryAt - Date.now()),
+          prepareDelay,
           internal.notifications.dispatch.dispatchIntent,
           { intentId: args.intentId },
         );
@@ -590,19 +609,14 @@ export const dispatchIntent = internalAction({
       }
     }
 
-    // An unfinished audience takes priority over the head batch's retry
-    // ladder: waiting out 1m+2m+4m before recipient 26 gets a FIRST attempt
-    // would delay the tail by the full ladder during a provider outage. Due
-    // retries are the sweeper's job either way.
-    if (reserved.hasMore) {
+    const nextDelay = nextDispatchDelayMs({
+      hasMore: reserved.hasMore,
+      earliestRetryAt,
+      now: Date.now(),
+    });
+    if (nextDelay !== null) {
       await ctx.scheduler.runAfter(
-        0,
-        internal.notifications.dispatch.dispatchIntent,
-        { intentId: args.intentId },
-      );
-    } else if (earliestRetryAt !== null) {
-      await ctx.scheduler.runAfter(
-        Math.max(0, earliestRetryAt - Date.now()),
+        nextDelay,
         internal.notifications.dispatch.dispatchIntent,
         { intentId: args.intentId },
       );

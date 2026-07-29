@@ -103,8 +103,11 @@ delivery mechanics.
   landed. The sweeper runs its three phases (stale leases, due retries, stale
   pending intents) against independent per-phase budgets, so a backlog in one
   phase can't starve the others, and surfaces a backlog flag per phase in its
-  return value when a phase saturates its cap. A pending intent that never
-  reserves (corrupt row, unresolvable reference) is abandoned once it has sat
+  return value when a phase saturates its cap. The pending phase covers both an intent that never reserved (corrupt row,
+  unresolvable reference) and a mid-chain intent whose continuation was lost —
+  the intent stays `pending` until every resolved recipient has a delivery row,
+  so a dropped continuation is re-dispatched rather than silently truncating the
+  audience. Such an intent is abandoned once it has sat
   unreserved for longer than `INTENT_ABANDON_AFTER_MS` (6h) —
   wall-clock from the later of `emittedAt`/`requeuedAt`, not a pickup count,
   because the sweep cadence differs per environment and a pickup count would

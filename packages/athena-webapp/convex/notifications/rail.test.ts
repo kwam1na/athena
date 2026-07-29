@@ -14,6 +14,7 @@ import {
   MAX_DELIVERY_ATTEMPTS,
   SWEEPER_INTENT_PICKUP_DELAY_MS,
   computeDeliveryLeaseMs,
+  deliveryDedupeKey,
 } from "./deliveryPolicy";
 import type { NotificationChannel } from "./registry";
 
@@ -1551,6 +1552,7 @@ describe("sweeper", () => {
       terminaled: 0,
       dispatchesScheduled: 0,
       intentsAbandoned: 0,
+      orphansTerminalized: 0,
       staleLeaseBacklog: false,
       retryBacklog: false,
       pendingIntentBacklog: false,
@@ -1592,6 +1594,7 @@ describe("sweeper", () => {
       terminaled: 1,
       dispatchesScheduled: 0,
       intentsAbandoned: 0,
+      orphansTerminalized: 0,
       staleLeaseBacklog: false,
       retryBacklog: false,
       pendingIntentBacklog: false,
@@ -1663,6 +1666,7 @@ describe("sweeper", () => {
       terminaled: 0,
       dispatchesScheduled: 2,
       intentsAbandoned: 0,
+      orphansTerminalized: 0,
       staleLeaseBacklog: false,
       retryBacklog: false,
       pendingIntentBacklog: false,
@@ -1702,6 +1706,7 @@ describe("sweeper", () => {
       terminaled: 0,
       dispatchesScheduled: 0,
       intentsAbandoned: 0,
+      orphansTerminalized: 0,
       // Saturated phase: surfaced rather than silently truncated.
       staleLeaseBacklog: true,
       retryBacklog: false,
@@ -1759,6 +1764,7 @@ describe("sweeper", () => {
       // The due retry and the stale pending intent both got picked up.
       dispatchesScheduled: 2,
       intentsAbandoned: 0,
+      orphansTerminalized: 0,
       staleLeaseBacklog: true,
       retryBacklog: true,
       pendingIntentBacklog: true,
@@ -2039,6 +2045,173 @@ describe("sweeper", () => {
     ).toBe(2);
   });
 
+  it("keeps a fully materialized intent dispatched even when a batch fills with retries", async () => {
+    // hasMore means "the batch filled up", not "the audience is unfinished".
+    // An intent whose whole audience already has rows can fill a batch purely
+    // with due retries; treating that as un-materialized would move it BACK to
+    // pending, re-expose it to the 6h abandonment clock, and label a
+    // partially-delivered notification "dispatch_unrecoverable".
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const t = convexTest(schema, modules);
+    const { fixture, terminalId } = await seedSweeperFixture(t);
+    const audienceSize = MAX_DELIVERIES_PER_DISPATCH + 5;
+    const intentId = await t.run(async (ctx) => {
+      const id = await insertTerminalHealthIntent(ctx, fixture, terminalId, {
+        status: "dispatched",
+        dedupeKey: "intent:materialized-with-retries",
+      });
+      for (let index = 0; index < audienceSize; index += 1) {
+        await ctx.db.insert("notificationSubscription", {
+          organizationId: fixture.organizationId,
+          category: "system_health",
+          channel: "email",
+          recipientEmail: `materialized-${index}@example.com`,
+          enabled: true,
+          createdAt: NOW,
+          updatedAt: NOW,
+        });
+      }
+      return id;
+    });
+
+    // Give every recipient a row that is due for retry: the audience IS
+    // materialized, but a single pass cannot lease all of them.
+    await t.run(async (ctx) => {
+      for (let index = 0; index < audienceSize; index += 1) {
+        const email = `materialized-${index}@example.com`;
+        await ctx.db.insert("notificationDelivery", {
+          intentId,
+          kind: "pos.terminal_health",
+          category: "system_health",
+          channel: "email",
+          storeId: fixture.storeId,
+          organizationId: fixture.organizationId,
+          recipientEmail: email,
+          dedupeKey: deliveryDedupeKey({
+            intentDedupeKey: "intent:materialized-with-retries",
+            channel: "email",
+            recipientEmail: email,
+          }),
+          status: "retryable_failure",
+          attemptCount: 1,
+          nextAttemptAt: NOW - 1,
+          createdAt: NOW,
+          updatedAt: NOW,
+        });
+      }
+    });
+
+    const reserved = await t.mutation(
+      internal.notifications.dispatch.reserveIntentDeliveries,
+      { intentId },
+    );
+
+    expect(reserved!.hasMore).toBe(true);
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+    ).toMatchObject({ status: "dispatched" });
+  });
+
+  it("terminalizes orphan deliveries left behind by an abandoned intent", async () => {
+    // Abandonment patches only the intent, so a mid-chain intent's delivery
+    // rows survive it. reserveIntentDeliveries returns early for a suppressed
+    // intent without touching rows, so a surviving retryable_failure row would
+    // be re-selected on every sweep forever — and because nextAttemptAt never
+    // advances while the retry index is ascending, a few of them would sort to
+    // the front and permanently consume the entire retry budget, killing the
+    // backstop for every other notification.
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const t = convexTest(schema, modules);
+    const { fixture, terminalId } = await seedSweeperFixture(t);
+    const intentId = await t.run((ctx) =>
+      insertTerminalHealthIntent(ctx, fixture, terminalId, {
+        status: "suppressed",
+        dedupeKey: "intent:abandoned-with-rows",
+      }),
+    );
+    const orphanId = await t.run(async (ctx) => {
+      const id = await insertDelivery(ctx, fixture, intentId, {
+        attemptCount: 1,
+        nextAttemptAt: NOW - 1,
+      });
+      await ctx.db.patch("notificationIntent", intentId, {
+        suppressedReason: "dispatch_unrecoverable",
+      });
+      await ctx.db.patch("notificationDelivery", id, {
+        status: "retryable_failure",
+        leaseToken: undefined,
+        leaseExpiresAt: undefined,
+      });
+      return id;
+    });
+
+    const swept = await t.mutation(internal.notifications.sweeper.sweep, {
+      now: NOW,
+    });
+
+    // No pointless dispatch, and the row is terminal so it leaves the index.
+    expect(swept).toMatchObject({
+      dispatchesScheduled: 0,
+      orphansTerminalized: 1,
+    });
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationDelivery", orphanId)),
+    ).toMatchObject({
+      status: "suppressed",
+      errorCode: "intent_suppressed",
+      terminalAt: NOW,
+    });
+
+    // And it stays gone: a later sweep finds nothing to do.
+    expect(
+      await t.mutation(internal.notifications.sweeper.sweep, {
+        now: NOW + 60_000,
+      }),
+    ).toMatchObject({ dispatchesScheduled: 0, orphansTerminalized: 0 });
+  });
+
+  it("terminalizes an expired in_flight lease whose intent was suppressed", async () => {
+    // Same orphan class via the stale-lease phase: abandonment does not clear
+    // live leases, so an in-flight row can outlive its intent.
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const t = convexTest(schema, modules);
+    const { fixture, terminalId } = await seedSweeperFixture(t);
+    const intentId = await t.run((ctx) =>
+      insertTerminalHealthIntent(ctx, fixture, terminalId, {
+        status: "suppressed",
+        dedupeKey: "intent:suppressed-live-lease",
+      }),
+    );
+    const orphanId = await t.run(async (ctx) => {
+      await ctx.db.patch("notificationIntent", intentId, {
+        suppressedReason: "dispatch_unrecoverable",
+      });
+      return insertDelivery(ctx, fixture, intentId, {
+        attemptCount: 1,
+        leaseExpiresAt: NOW - 1,
+      });
+    });
+
+    const swept = await t.mutation(internal.notifications.sweeper.sweep, {
+      now: NOW,
+    });
+
+    expect(swept).toMatchObject({
+      staleLeasesRecovered: 0,
+      terminaled: 0,
+      orphansTerminalized: 1,
+    });
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationDelivery", orphanId)),
+    ).toMatchObject({
+      status: "suppressed",
+      errorCode: "intent_suppressed",
+    });
+  });
+
   it("refuses to requeue an intent that was not abandoned", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
@@ -2123,6 +2296,7 @@ describe("sweeper", () => {
       terminaled: 0,
       dispatchesScheduled: 0,
       intentsAbandoned: 0,
+      orphansTerminalized: 0,
       staleLeaseBacklog: false,
       retryBacklog: false,
       pendingIntentBacklog: false,
