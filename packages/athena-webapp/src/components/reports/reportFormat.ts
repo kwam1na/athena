@@ -1,4 +1,5 @@
 import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
+import { currencyFormatter } from "@/lib/utils";
 import {
   REPORT_DAY_STATUSES,
   type ReportDayStatus,
@@ -45,6 +46,32 @@ export function formatOptionalMoney(
 export function formatUnits(units: number | null | undefined): string {
   if (units === null || units === undefined) return "—";
   return units.toLocaleString();
+}
+
+/**
+ * Compact money for chart axis ticks (e.g. "$12k", "$1.2m") — wraps the
+ * repo's own currency formatter, same as `formatReportMoney`, just with a
+ * k/m suffix instead of full precision.
+ */
+export function formatCompactReportMoney(
+  amountMinor: number,
+  currency: string,
+): string {
+  const majorAmount = amountMinor / 100;
+  const absMajor = Math.abs(majorAmount);
+
+  if (absMajor >= 1_000_000) {
+    const formatter = currencyFormatter(currency, { maximumFractionDigits: 1 });
+    return `${formatter.format(majorAmount / 1_000_000)}m`;
+  }
+
+  if (absMajor >= 1_000) {
+    const formatter = currencyFormatter(currency, { maximumFractionDigits: 1 });
+    return `${formatter.format(majorAmount / 1_000)}k`;
+  }
+
+  const formatter = currencyFormatter(currency, { maximumFractionDigits: 0 });
+  return formatter.format(majorAmount);
 }
 
 /** Basis-point comparison (e.g. `netSalesVsPriorWeekBp`). Null renders "—". */

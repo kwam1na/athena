@@ -20,23 +20,29 @@ export function ReportComparisonChips({
   comparisons: ReportOverviewData["comparisons"];
 }) {
   return (
-    <dl className="flex flex-wrap gap-layout-md" data-testid="report-comparison-chips">
+    <dl className="flex flex-wrap gap-layout-lg" data-testid="report-comparison-chips">
       <div>
-        <dt className="text-xs font-medium uppercase text-muted-foreground">
+        <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Net sales vs prior week
         </dt>
         <dd
-          className={cn("text-sm font-semibold", chipTone(comparisons.netSalesVsPriorWeekBp))}
+          className={cn(
+            "mt-1 font-numeric text-sm font-semibold tabular-nums",
+            chipTone(comparisons.netSalesVsPriorWeekBp),
+          )}
         >
           {formatBasisPoints(comparisons.netSalesVsPriorWeekBp)}
         </dd>
       </div>
       <div>
-        <dt className="text-xs font-medium uppercase text-muted-foreground">
+        <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Units sold vs prior week
         </dt>
         <dd
-          className={cn("text-sm font-semibold", chipTone(comparisons.unitsSoldVsPriorWeekBp))}
+          className={cn(
+            "mt-1 font-numeric text-sm font-semibold tabular-nums",
+            chipTone(comparisons.unitsSoldVsPriorWeekBp),
+          )}
         >
           {formatBasisPoints(comparisons.unitsSoldVsPriorWeekBp)}
         </dd>

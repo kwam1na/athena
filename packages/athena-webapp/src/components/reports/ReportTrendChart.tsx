@@ -1,23 +1,30 @@
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
+
 import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import { EmptyState } from "@/components/states/empty/empty-state";
 import type { ReportTrendPoint } from "~/shared/reportsContract";
-import { formatOperatingDate, formatReportMoney } from "./reportFormat";
+import {
+  formatCompactReportMoney,
+  formatOperatingDate,
+  formatReportMoney,
+  reportDayStatusPresentation,
+} from "./reportFormat";
 
-const STATUS_DOT_COLOR: Record<ReportTrendPoint["status"], string> = {
-  open: "hsl(var(--muted-foreground))",
-  provisional: "hsl(var(--warning))",
-  reconciled: "hsl(var(--success))",
-  amended: "hsl(var(--destructive))",
-};
+const trendChartConfig = {
+  netSalesMinor: {
+    label: "Net sales",
+    color: "hsl(var(--primary))",
+  },
+} satisfies ChartConfig;
 
+type TrendChartPoint = ReportTrendPoint & { label: string };
+
+/** Same AreaChart/gradient treatment as `StorePulseTimeline` — status stays available in the tooltip. */
 export function ReportTrendChart({
   dailyTrend,
   currency,
@@ -25,63 +32,112 @@ export function ReportTrendChart({
   dailyTrend: ReportTrendPoint[];
   currency: string;
 }) {
-  const chartData = dailyTrend.map((point) => ({
+  const chartData: TrendChartPoint[] = dailyTrend.map((point) => ({
     ...point,
     label: formatOperatingDate(point.operatingDate),
   }));
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base font-semibold">
+    <section className="space-y-layout-sm">
+      <div>
+        <h3 className="text-base font-medium text-foreground">
           Net sales — last 30 days
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="h-64">
+        </h3>
+      </div>
+      <div className="overflow-hidden rounded-lg border border-border bg-surface-raised px-layout-sm py-8 shadow-surface sm:p-8">
         {chartData.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No trend data yet.</p>
+          <EmptyState
+            description="No trend data yet."
+            title="No trend data"
+          />
         ) : (
-          <ResponsiveContainer height="100%" width="100%">
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis axisLine={false} dataKey="label" tickLine={false} />
+          <ChartContainer
+            className="report-trend-chart h-64 w-full"
+            config={trendChartConfig}
+          >
+            <AreaChart
+              data={chartData}
+              margin={{ left: 0, right: 12, top: 8, bottom: 0 }}
+            >
+              <defs>
+                <linearGradient
+                  id="report-net-sales-fill"
+                  x1="0"
+                  x2="0"
+                  y1="0"
+                  y2="1"
+                >
+                  <stop
+                    offset="5%"
+                    stopColor="var(--color-netSalesMinor)"
+                    stopOpacity={0.2}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor="var(--color-netSalesMinor)"
+                    stopOpacity={0.03}
+                  />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} />
+              <XAxis
+                axisLine={false}
+                dataKey="label"
+                tickLine={false}
+                tickMargin={8}
+              />
               <YAxis
                 axisLine={false}
-                tickFormatter={(value: number) => formatReportMoney(value, currency)}
+                tickFormatter={(value: number) =>
+                  formatCompactReportMoney(value, currency)
+                }
                 tickLine={false}
-                width={90}
+                width={64}
               />
-              <Tooltip
-                formatter={(value: number) => [
-                  formatReportMoney(value, currency),
-                  "Net sales",
-                ]}
-                labelFormatter={(_label, payload) =>
-                  payload?.[0]?.payload?.operatingDate ?? ""
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    formatter={(value, _name, item) => {
+                      const point = item.payload as TrendChartPoint;
+                      const presentation = reportDayStatusPresentation(
+                        point.status,
+                      );
+                      return (
+                        <div className="grid gap-1">
+                          <span className="font-numeric text-foreground">
+                            {formatReportMoney(Number(value), currency)}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {presentation.label}
+                          </span>
+                        </div>
+                      );
+                    }}
+                    hideIndicator
+                    labelFormatter={(_label, payload) => {
+                      const point = payload?.[0]?.payload as
+                        | TrendChartPoint
+                        | undefined;
+                      return point ? formatOperatingDate(point.operatingDate) : "";
+                    }}
+                  />
                 }
               />
-              <Line
+              <Area
+                activeDot={{ r: 4 }}
                 dataKey="netSalesMinor"
-                dot={(props) => {
-                  const status = props.payload.status as ReportTrendPoint["status"];
-                  return (
-                    <circle
-                      cx={props.cx}
-                      cy={props.cy}
-                      fill={STATUS_DOT_COLOR[status]}
-                      key={`dot-${props.payload.operatingDate}`}
-                      r={3}
-                    />
-                  );
-                }}
-                stroke="hsl(var(--primary))"
+                dot={false}
+                fill="url(#report-net-sales-fill)"
+                fillOpacity={1}
+                name="Net sales"
+                stroke="var(--color-netSalesMinor)"
                 strokeWidth={2}
                 type="monotone"
               />
-            </LineChart>
-          </ResponsiveContainer>
+            </AreaChart>
+          </ChartContainer>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

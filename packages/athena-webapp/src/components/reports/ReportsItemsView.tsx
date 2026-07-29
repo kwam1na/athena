@@ -1,7 +1,10 @@
 import { useQuery } from "convex/react";
+import { useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
+import { Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -22,6 +25,10 @@ import {
 import { EmptyState } from "@/components/states/empty/empty-state";
 import { cn } from "@/lib/utils";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
+import {
+  getLocalDateFromOperatingDate,
+  getLocalOperatingDate,
+} from "@/lib/operations/operatingDate";
 import { api } from "~/convex/_generated/api";
 import type { ReportSkuSortBy } from "~/shared/reportsContract";
 import {
@@ -30,7 +37,7 @@ import {
   periodKeyForSelection,
   type ReportPeriodType,
 } from "./reportPeriodKeys";
-import { formatOptionalMoney, formatReportProfit, formatUnits } from "./reportFormat";
+import { formatOperatingDate, formatOptionalMoney, formatReportProfit, formatUnits } from "./reportFormat";
 
 export function ReportsItemsView({
   periodType,
@@ -54,6 +61,8 @@ export function ReportsItemsView({
   const { activeStore } = useGetActiveStore();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
   const periodKey = periodKeyForSelection(periodType, periodDate);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const selectedDate = getLocalDateFromOperatingDate(periodDate);
 
   const result = useQuery(
     api.reports.queries.listPeriodSkus,
@@ -83,15 +92,33 @@ export function ReportsItemsView({
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1">
-          <Label htmlFor="items-period-date">Anchor date</Label>
-          <Input
-            id="items-period-date"
-            onChange={(event) => onPeriodDateChange(event.target.value)}
-            type="date"
-            value={periodDate}
-          />
-        </div>
+        <Popover onOpenChange={setIsDatePickerOpen} open={isDatePickerOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              aria-label={`Change anchor date, currently ${formatOperatingDate(periodDate)}`}
+              className="h-auto justify-start gap-2 px-layout-sm py-layout-xs text-sm font-normal text-muted-foreground shadow-surface"
+              variant="outline"
+            >
+              <CalendarIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
+              <span className="shrink-0">Anchor date</span>
+              <span className="font-medium text-foreground">
+                {formatOperatingDate(periodDate)}
+              </span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-auto p-0">
+            <Calendar
+              defaultMonth={selectedDate}
+              mode="single"
+              onSelect={(date) => {
+                if (!date) return;
+                onPeriodDateChange(getLocalOperatingDate(date));
+                setIsDatePickerOpen(false);
+              }}
+              selected={selectedDate}
+            />
+          </PopoverContent>
+        </Popover>
         <div
           className="flex gap-1 rounded-md border border-border p-1"
           role="group"
@@ -124,41 +151,43 @@ export function ReportsItemsView({
         <EmptyState title="No SKU activity" description="No SKUs sold in this period." />
       ) : (
         <>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>SKU</TableHead>
-                <TableHead>Net sales</TableHead>
-                <TableHead>Units sold</TableHead>
-                <TableHead>Gross profit</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {result.rows.map((row) => (
-                <TableRow key={row.productSkuId}>
-                  <TableCell>
-                    <Link
-                      params={{
-                        orgUrlSlug: orgUrlSlug!,
-                        storeUrlSlug: storeUrlSlug!,
-                        productSkuId: row.productSkuId,
-                      }}
-                      to="/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId"
-                    >
-                      {row.productSkuId}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    {formatOptionalMoney(row.netSalesMinor, activeStore?.currency ?? "USD")}
-                  </TableCell>
-                  <TableCell>{formatUnits(row.unitsSold)}</TableCell>
-                  <TableCell>
-                    {formatReportProfit(row.grossProfitMinor, activeStore?.currency ?? "USD")}
-                  </TableCell>
+          <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Net sales</TableHead>
+                  <TableHead>Units sold</TableHead>
+                  <TableHead>Gross profit</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {result.rows.map((row) => (
+                  <TableRow key={row.productSkuId}>
+                    <TableCell>
+                      <Link
+                        params={{
+                          orgUrlSlug: orgUrlSlug!,
+                          storeUrlSlug: storeUrlSlug!,
+                          productSkuId: row.productSkuId,
+                        }}
+                        to="/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId"
+                      >
+                        {row.productSkuId}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      {formatOptionalMoney(row.netSalesMinor, activeStore?.currency ?? "USD")}
+                    </TableCell>
+                    <TableCell>{formatUnits(row.unitsSold)}</TableCell>
+                    <TableCell>
+                      {formatReportProfit(row.grossProfitMinor, activeStore?.currency ?? "USD")}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
           <div className="flex justify-end gap-layout-sm">
             {cursor ? (
               <Button

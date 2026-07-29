@@ -22,9 +22,16 @@ export function ReportsOverviewView() {
 
   if (activeStore === null || overview === undefined) {
     return (
-      <div className="space-y-layout-md" role="status" aria-label="Loading report overview">
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-32 w-full" />
+      <div
+        className="space-y-layout-xl md:space-y-layout-2xl"
+        role="status"
+        aria-label="Loading report overview"
+      >
+        <div className="grid grid-cols-1 gap-layout-md lg:grid-cols-3">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
         <Skeleton className="h-64 w-full" />
       </div>
     );
@@ -42,9 +49,12 @@ export function ReportsOverviewView() {
   const { currency } = overview;
 
   return (
-    <div className="space-y-layout-lg" data-testid="reports-overview">
+    <section
+      className="space-y-layout-xl md:space-y-layout-2xl"
+      data-testid="reports-overview"
+    >
       <ReportComparisonChips comparisons={overview.comparisons} />
-      <div className="grid grid-cols-1 gap-layout-md lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-layout-lg lg:grid-cols-3">
         <ReportPeriodCard
           currency={currency}
           snapshot={overview.today}
@@ -64,6 +74,6 @@ export function ReportsOverviewView() {
       </div>
       <ReportTrendChart currency={currency} dailyTrend={overview.dailyTrend} />
       <ReportTrustStrip trust={overview.trust} />
-    </div>
+    </section>
   );
 }

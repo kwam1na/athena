@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import { Link, useParams } from "@tanstack/react-router";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Calendar as CalendarIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Table,
   TableBody,
@@ -15,8 +17,59 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/states/empty/empty-state";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
+import {
+  getLocalDateFromOperatingDate,
+  getLocalOperatingDate,
+} from "@/lib/operations/operatingDate";
 import { ReportDayStatusBadge } from "./ReportStatusBadge";
 import { formatOperatingDate, formatOptionalMoney, formatReportMoney, formatUnits } from "./reportFormat";
+
+/** Single-date popover trigger, same shape as `DailyOperationsView`'s operating-date picker. */
+function ReportDateField({
+  boundary,
+  label,
+  onSelect,
+  operatingDate,
+}: {
+  boundary?: { after: Date } | { before: Date };
+  label: string;
+  onSelect: (operatingDate: string) => void;
+  operatingDate: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedDate = getLocalDateFromOperatingDate(operatingDate);
+
+  return (
+    <Popover onOpenChange={setIsOpen} open={isOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          aria-label={`Change ${label.toLowerCase()} date, currently ${formatOperatingDate(operatingDate)}`}
+          className="h-auto justify-start gap-2 px-layout-sm py-layout-xs text-sm font-normal text-muted-foreground shadow-surface"
+          variant="outline"
+        >
+          <CalendarIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
+          <span className="shrink-0">{label}</span>
+          <span className="font-medium text-foreground">
+            {formatOperatingDate(operatingDate)}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-auto p-0">
+        <Calendar
+          defaultMonth={selectedDate}
+          disabled={boundary}
+          mode="single"
+          onSelect={(date) => {
+            if (!date) return;
+            onSelect(getLocalOperatingDate(date));
+            setIsOpen(false);
+          }}
+          selected={selectedDate}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 /**
  * Day drill-down: `listDays` over a bounded range, per-day status badge and
@@ -41,44 +94,34 @@ export function ReportDaysPanel({
       ? { storeId: activeStore._id, startDate, endDate }
       : "skip",
   );
+  const startBoundary = getLocalDateFromOperatingDate(startDate);
+  const endBoundary = getLocalDateFromOperatingDate(endDate);
 
   return (
-    <Card data-testid="report-days-panel">
-      <CardHeader className="flex flex-col gap-layout-sm sm:flex-row sm:items-end sm:justify-between">
-        <CardTitle className="text-base font-semibold">Days</CardTitle>
+    <section className="space-y-layout-sm" data-testid="report-days-panel">
+      <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-end sm:justify-between">
+        <h3 className="text-base font-medium text-foreground">Days</h3>
         <div className="flex flex-wrap gap-layout-sm">
-          <div className="space-y-1">
-            <Label htmlFor="report-days-start">From</Label>
-            <Input
-              id="report-days-start"
-              max={endDate}
-              onChange={(event) =>
-                onRangeChange({ startDate: event.target.value, endDate })
-              }
-              type="date"
-              value={startDate}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="report-days-end">To</Label>
-            <Input
-              id="report-days-end"
-              min={startDate}
-              onChange={(event) =>
-                onRangeChange({ startDate, endDate: event.target.value })
-              }
-              type="date"
-              value={endDate}
-            />
-          </div>
+          <ReportDateField
+            boundary={endBoundary ? { after: endBoundary } : undefined}
+            label="From"
+            onSelect={(next) => onRangeChange({ startDate: next, endDate })}
+            operatingDate={startDate}
+          />
+          <ReportDateField
+            boundary={startBoundary ? { before: startBoundary } : undefined}
+            label="To"
+            onSelect={(next) => onRangeChange({ startDate, endDate: next })}
+            operatingDate={endDate}
+          />
         </div>
-      </CardHeader>
-      <CardContent>
-        {days === undefined ? (
-          <Skeleton className="h-48 w-full" data-testid="report-days-loading" />
-        ) : days.length === 0 ? (
-          <EmptyState title="No days in range" description="Choose a different date range." />
-        ) : (
+      </div>
+      {days === undefined ? (
+        <Skeleton className="h-48 w-full" data-testid="report-days-loading" />
+      ) : days.length === 0 ? (
+        <EmptyState title="No days in range" description="Choose a different date range." />
+      ) : (
+        <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
           <Table>
             <TableHeader>
               <TableRow>
@@ -113,8 +156,8 @@ export function ReportDaysPanel({
               ))}
             </TableBody>
           </Table>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </section>
   );
 }

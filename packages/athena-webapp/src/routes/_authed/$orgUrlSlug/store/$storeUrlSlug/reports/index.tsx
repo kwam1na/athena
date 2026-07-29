@@ -38,7 +38,7 @@ function ReportsOverviewRoute() {
   const rangeStart = search.rangeStart ?? isoDateOffset(-29);
 
   return (
-    <div className="space-y-layout-lg">
+    <div className="space-y-layout-xl md:space-y-layout-2xl">
       <ReportsOverviewView />
       <ReportDaysPanel
         endDate={daysEnd}

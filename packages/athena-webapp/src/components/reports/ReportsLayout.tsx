@@ -42,7 +42,7 @@ export function ReportsLayout() {
                     aria-current={active ? "page" : undefined}
                     className={cn(
                       "border-b-2 border-transparent px-1 py-3 text-sm font-medium text-muted-foreground",
-                      active && "border-foreground text-foreground",
+                      active && "border-primary text-primary",
                     )}
                     key={tab.label}
                     params={{ orgUrlSlug: orgUrlSlug!, storeUrlSlug: storeUrlSlug! }}

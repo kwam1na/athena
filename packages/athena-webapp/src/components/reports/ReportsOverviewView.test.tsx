@@ -11,9 +11,10 @@ vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => ({ activeStore: { _id: "store-1", currency: "USD" }, isLoadingStores: false }),
 }));
 vi.mock("recharts", () => ({
+  Area: () => null,
+  AreaChart: ({ children }: { children?: React.ReactNode }) => <svg>{children}</svg>,
   CartesianGrid: () => null,
-  Line: () => null,
-  LineChart: ({ children }: { children?: React.ReactNode }) => <svg>{children}</svg>,
+  Legend: () => null,
   ResponsiveContainer: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   Tooltip: () => null,
   XAxis: () => null,

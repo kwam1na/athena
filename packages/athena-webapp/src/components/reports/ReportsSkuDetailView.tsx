@@ -1,7 +1,10 @@
 import { useQuery } from "convex/react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useState } from "react";
+import { Calendar as CalendarIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -13,9 +16,60 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/states/empty/empty-state";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
+import {
+  getLocalDateFromOperatingDate,
+  getLocalOperatingDate,
+} from "@/lib/operations/operatingDate";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { formatOperatingDate, formatOptionalMoney, formatReportProfit, formatUnits } from "./reportFormat";
+
+/** Single-date popover trigger, same shape as `DailyOperationsView`'s operating-date picker. */
+function ReportDateField({
+  boundary,
+  label,
+  onSelect,
+  operatingDate,
+}: {
+  boundary?: { after: Date } | { before: Date };
+  label: string;
+  onSelect: (operatingDate: string) => void;
+  operatingDate: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedDate = getLocalDateFromOperatingDate(operatingDate);
+
+  return (
+    <Popover onOpenChange={setIsOpen} open={isOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          aria-label={`Change ${label.toLowerCase()}, currently ${formatOperatingDate(operatingDate)}`}
+          className="h-auto justify-start gap-2 px-layout-sm py-layout-xs text-sm font-normal text-muted-foreground shadow-surface"
+          variant="outline"
+        >
+          <CalendarIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
+          <span className="shrink-0">{label}</span>
+          <span className="font-medium text-foreground">
+            {formatOperatingDate(operatingDate)}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto p-0">
+        <Calendar
+          defaultMonth={selectedDate}
+          disabled={boundary}
+          mode="single"
+          onSelect={(date) => {
+            if (!date) return;
+            onSelect(getLocalOperatingDate(date));
+            setIsOpen(false);
+          }}
+          selected={selectedDate}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export function ReportsSkuDetailView({
   productSkuId,
@@ -32,6 +86,8 @@ export function ReportsSkuDetailView({
 }) {
   const { activeStore } = useGetActiveStore();
   const currency = activeStore?.currency ?? "USD";
+  const startBoundary = getLocalDateFromOperatingDate(startDate);
+  const endBoundary = getLocalDateFromOperatingDate(endDate);
 
   const detail = useQuery(
     api.reports.queries.getSkuDetail,
@@ -48,26 +104,18 @@ export function ReportsSkuDetailView({
   return (
     <div className="space-y-layout-md" data-testid="reports-sku-detail">
       <div className="flex flex-wrap items-end gap-layout-sm">
-        <div className="space-y-1">
-          <Label htmlFor="sku-detail-start">Start date</Label>
-          <Input
-            id="sku-detail-start"
-            max={endDate}
-            onChange={(event) => onStartDateChange(event.target.value)}
-            type="date"
-            value={startDate}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="sku-detail-end">End date</Label>
-          <Input
-            id="sku-detail-end"
-            min={startDate}
-            onChange={(event) => onEndDateChange(event.target.value)}
-            type="date"
-            value={endDate}
-          />
-        </div>
+        <ReportDateField
+          boundary={endBoundary ? { after: endBoundary } : undefined}
+          label="Start date"
+          onSelect={onStartDateChange}
+          operatingDate={startDate}
+        />
+        <ReportDateField
+          boundary={startBoundary ? { before: startBoundary } : undefined}
+          label="End date"
+          onSelect={onEndDateChange}
+          operatingDate={endDate}
+        />
       </div>
 
       {detail === undefined ? (
@@ -76,17 +124,18 @@ export function ReportsSkuDetailView({
         <EmptyState title="No activity" description="This SKU has no activity in the selected range." />
       ) : (
         <>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-semibold">Totals</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-layout-sm sm:grid-cols-4">
-              <Stat
+          <div className="space-y-layout-sm">
+            <h3 className="text-base font-medium text-foreground">Totals</h3>
+            <div className="grid grid-cols-2 gap-layout-sm sm:grid-cols-4">
+              <OperationsSummaryMetric
                 label="Net sales"
                 value={formatOptionalMoney(detail.totals?.netSalesMinor, currency)}
               />
-              <Stat label="Units sold" value={formatUnits(detail.totals?.unitsSold)} />
-              <Stat
+              <OperationsSummaryMetric
+                label="Units sold"
+                value={formatUnits(detail.totals?.unitsSold)}
+              />
+              <OperationsSummaryMetric
                 label="Gross profit"
                 value={
                   detail.totals
@@ -94,48 +143,41 @@ export function ReportsSkuDetailView({
                     : "—"
                 }
               />
-              <Stat
+              <OperationsSummaryMetric
                 label="Refunds"
                 value={formatOptionalMoney(detail.totals?.refundsMinor, currency)}
               />
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {detail.days.length === 0 ? (
             <EmptyState title="No days with activity" description="No days with activity in the selected range." />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Net sales</TableHead>
-                  <TableHead>Units sold</TableHead>
-                  <TableHead>Gross profit</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {detail.days.map((day) => (
-                  <TableRow key={day.operatingDate}>
-                    <TableCell>{formatOperatingDate(day.operatingDate)}</TableCell>
-                    <TableCell>{formatOptionalMoney(day.netSalesMinor, currency)}</TableCell>
-                    <TableCell>{formatUnits(day.unitsSold)}</TableCell>
-                    <TableCell>{formatReportProfit(day.grossProfitMinor, currency)}</TableCell>
+            <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Net sales</TableHead>
+                    <TableHead>Units sold</TableHead>
+                    <TableHead>Gross profit</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {detail.days.map((day) => (
+                    <TableRow key={day.operatingDate}>
+                      <TableCell>{formatOperatingDate(day.operatingDate)}</TableCell>
+                      <TableCell>{formatOptionalMoney(day.netSalesMinor, currency)}</TableCell>
+                      <TableCell>{formatUnits(day.unitsSold)}</TableCell>
+                      <TableCell>{formatReportProfit(day.grossProfitMinor, currency)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </>
       )}
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
-      <p className="text-sm font-semibold">{value}</p>
     </div>
   );
 }

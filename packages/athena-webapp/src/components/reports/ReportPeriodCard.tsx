@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
 import type { ReportPeriodSnapshot } from "~/shared/reportsContract";
 import {
@@ -7,7 +6,7 @@ import {
   formatUnits,
 } from "./reportFormat";
 
-/** One KPI card for a period snapshot (today / week-to-date / trailing-30). */
+/** One KPI section for a period snapshot (today / week-to-date / trailing-30) — metric tiles per `OperationsSummaryMetric`. */
 export function ReportPeriodCard({
   title,
   snapshot,
@@ -21,11 +20,9 @@ export function ReportPeriodCard({
   comparisonHelper?: string;
 }) {
   return (
-    <Card data-testid={`report-period-card-${title}`}>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base font-semibold">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-layout-sm">
+    <div className="space-y-layout-sm" data-testid={`report-period-card-${title}`}>
+      <h3 className="text-base font-medium text-foreground">{title}</h3>
+      <div className="grid grid-cols-2 gap-layout-sm">
         <OperationsSummaryMetric
           label="Net sales"
           value={formatReportMoney(snapshot.netSalesMinor, currency)}
@@ -53,7 +50,7 @@ export function ReportPeriodCard({
               : `${snapshot.dayCount} day(s)`
           }
         />
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
