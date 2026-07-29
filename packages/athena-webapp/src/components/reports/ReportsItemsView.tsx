@@ -38,7 +38,13 @@ import {
   periodKeyForSelection,
   type ReportPeriodType,
 } from "./reportPeriodKeys";
-import { formatOperatingDate, formatOptionalMoney, formatReportProfit, formatUnits } from "./reportFormat";
+import {
+  formatOperatingDate,
+  formatOptionalMoney,
+  formatReportProfit,
+  formatSkuSubtitle,
+  formatUnits,
+} from "./reportFormat";
 
 export function ReportsItemsView({
   periodType,
@@ -181,6 +187,7 @@ export function ReportsItemsView({
                   <TableRow key={row.productSkuId}>
                     <TableCell>
                       <Link
+                        className="block min-w-0"
                         params={{
                           orgUrlSlug: orgUrlSlug!,
                           storeUrlSlug: storeUrlSlug!,
@@ -188,7 +195,12 @@ export function ReportsItemsView({
                         }}
                         to="/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId"
                       >
-                        {row.productSkuId}
+                        <span className="block truncate font-medium text-foreground">
+                          {row.identity?.displayName ?? row.productSkuId}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {formatSkuSubtitle(row.identity, row.productSkuId)}
+                        </span>
                       </Link>
                     </TableCell>
                     <TableCell>

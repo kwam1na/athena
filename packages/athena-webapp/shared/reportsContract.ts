@@ -294,9 +294,29 @@ export type ReportDayRow = ReportDayMetrics & {
   postCloseNetSalesDeltaMinor?: number;
 };
 
+/**
+ * Enough to tell one SKU from another in a list.
+ *
+ * Resolved at read time from `productSku` (all fields denormalized there, so
+ * one document read per row and no joins). The `sku` code is what actually
+ * disambiguates: product names repeat — wigclub has 13 SKUs named "bottle
+ * water" identical on every other attribute — while the code is present on
+ * every SKU. `size` is carried when set (~86% of SKUs) as a human-readable
+ * hint; colour and length are too sparse to be worth a lookup.
+ *
+ * Absent when the SKU document is gone — a reporting fact outlives its
+ * subject, so the id remains the fallback rather than dropping the row.
+ */
+export type ReportSkuIdentity = {
+  displayName: string;
+  sku?: string;
+  size?: string;
+};
+
 export type ReportSkuPeriodRow = ReportSkuDayMetrics & {
   productSkuId: string;
   periodKey: ReportPeriodKey;
+  identity?: ReportSkuIdentity;
 };
 
 export type ReportSkuSortBy = "revenue" | "units";

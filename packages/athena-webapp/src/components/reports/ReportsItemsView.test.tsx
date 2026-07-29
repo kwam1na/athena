@@ -45,6 +45,58 @@ describe("ReportsItemsView", () => {
     );
   });
 
+  it("identifies a SKU by product name with its code beneath", () => {
+    useQuery.mockReturnValue({
+      rows: [
+        {
+          productSkuId: "kx70hda5jszy8a9c8eg04wb39188g5g6",
+          periodKey: "d:2026-07-28",
+          identity: { displayName: "bottle water", sku: "6N2Y-Y4Q-95V", size: "500ml" },
+          unitsSold: 3,
+          unitsReturned: 0,
+          grossSalesMinor: 3600,
+          netSalesMinor: 3600,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: null,
+        },
+      ],
+      continueCursor: null,
+    });
+    render(<ReportsItemsView {...baseProps} />);
+
+    expect(screen.getByText("bottle water")).toBeInTheDocument();
+    // The code disambiguates same-named SKUs, so it is always shown.
+    expect(screen.getByText("6N2Y-Y4Q-95V · 500ml")).toBeInTheDocument();
+    expect(
+      screen.queryByText("kx70hda5jszy8a9c8eg04wb39188g5g6"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("falls back to the id when the SKU record is gone", () => {
+    useQuery.mockReturnValue({
+      rows: [
+        {
+          productSkuId: "sku-deleted",
+          periodKey: "d:2026-07-28",
+          unitsSold: 1,
+          unitsReturned: 0,
+          grossSalesMinor: 100,
+          netSalesMinor: 100,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: null,
+        },
+      ],
+      continueCursor: null,
+    });
+    render(<ReportsItemsView {...baseProps} />);
+
+    // The row survives: a fact outlives its subject, and dropping it would
+    // understate the period.
+    expect(screen.getAllByText("sku-deleted").length).toBeGreaterThan(0);
+  });
+
   it("requests the next cursor when paginating", async () => {
     const onCursorChange = vi.fn();
     useQuery.mockReturnValue({

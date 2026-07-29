@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query } from "../_generated/server";
-import type { Doc } from "../_generated/dataModel";
+import type { QueryCtx } from "../_generated/server";
+import type { Doc, Id } from "../_generated/dataModel";
 import { requireReportsStoreAccess } from "./access";
 import { dayPeriodKey } from "../../shared/reportsContract";
 import { REPORT_SKU_PAGE_SIZE } from "../../shared/reportsContract";
@@ -271,9 +272,42 @@ export const listPeriodSkus = query({
           })
         : null;
 
-    return { rows: page.map(toSkuPeriodRow), continueCursor };
+    return {
+      rows: await withSkuIdentity(ctx, page.map(toSkuPeriodRow)),
+      continueCursor,
+    };
   },
 });
+
+/**
+ * Resolve display identity for a page of SKU rows.
+ *
+ * `productSku` denormalizes productName/sku/size, so this is one document
+ * read per row and no joins — bounded by the page size (25). Rows whose SKU
+ * document is gone resolve to `undefined` and fall back to the id in the UI:
+ * a reporting fact outlives its subject, and dropping the row would silently
+ * understate the period.
+ */
+async function withSkuIdentity(
+  ctx: QueryCtx,
+  rows: ReportSkuPeriodRow[],
+): Promise<ReportSkuPeriodRow[]> {
+  return Promise.all(
+    rows.map(async (row) => {
+      const sku = await ctx.db.get(row.productSkuId as Id<"productSku">);
+      if (!sku) return row;
+
+      return {
+        ...row,
+        identity: {
+          displayName: sku.productName ?? sku.sku ?? row.productSkuId,
+          ...(sku.sku ? { sku: sku.sku } : {}),
+          ...(sku.size ? { size: sku.size } : {}),
+        },
+      };
+    }),
+  );
+}
 
 // ---------------------------------------------------------------------------
 // getSkuDetail

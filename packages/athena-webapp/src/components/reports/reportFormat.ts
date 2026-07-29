@@ -197,3 +197,19 @@ export function reportDaySettlementPresentation({
     needsAttention: true,
   };
 }
+
+/**
+ * Secondary line under a SKU's name.
+ *
+ * The code is what actually separates same-named SKUs, so it always shows;
+ * size rides along when set. Falls back to the document id only when the SKU
+ * record itself is gone.
+ */
+export function formatSkuSubtitle(
+  identity: { sku?: string; size?: string } | undefined,
+  productSkuId: string,
+): string {
+  if (!identity?.sku) return productSkuId;
+
+  return identity.size ? `${identity.sku} · ${identity.size}` : identity.sku;
+}
