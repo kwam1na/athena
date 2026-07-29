@@ -137,6 +137,9 @@ export const reportDirtyDaySchema = v.object({
     v.literal("fold_version_bump"),
     v.literal("reseed"),
     v.literal("write_failure"),
+    // The day holds more rows than a fold read may take; folding it would
+    // write a silently truncated total. See DayCapExceeded in sweeper.ts.
+    v.literal("fact_cap_exceeded"),
   ),
   markedAt: v.number(),
 });
