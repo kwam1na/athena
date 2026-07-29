@@ -1,5 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "convex/react";
 import { z } from "zod";
+
+import useGetActiveStore from "@/hooks/useGetActiveStore";
+import { useStableReportQuery } from "@/components/reports/useStableReportQuery";
+import { api } from "~/convex/_generated/api";
 
 import { ReportCustomRangePanel } from "@/components/reports/ReportCustomRangePanel";
 import { ReportDaysPanel } from "@/components/reports/ReportDaysPanel";
@@ -31,11 +36,32 @@ export const Route = createFileRoute(
 function ReportsOverviewRoute() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
+  const { activeStore } = useGetActiveStore();
+
+  /**
+   * The page's three sections each own a query, and each renders nothing
+   * until its own data settles. Left alone they paint at different moments —
+   * the custom-range panel has nothing to wait for, so it appeared first, at
+   * the top of an empty page, and was then shoved ~1200px down when the
+   * overview and day list landed above it (measured layout shift: 0.165).
+   *
+   * Gating the whole page on the overview query — the same document the
+   * header content needs, deduplicated by the Convex client, so no extra
+   * read — collapses that into a single paint.
+   */
+  const { isInitialLoad } = useStableReportQuery(
+    useQuery(
+      api.reports.queries.getOverview,
+      activeStore?._id ? { storeId: activeStore._id } : "skip",
+    ),
+  );
 
   const daysEnd = search.daysEnd ?? isoDateOffset(0);
   const daysStart = search.daysStart ?? isoDateOffset(-13);
   const rangeEnd = search.rangeEnd ?? isoDateOffset(0);
   const rangeStart = search.rangeStart ?? isoDateOffset(-29);
+
+  if (activeStore === null || isInitialLoad) return null;
 
   return (
     <div className="space-y-layout-xl md:space-y-layout-2xl">
