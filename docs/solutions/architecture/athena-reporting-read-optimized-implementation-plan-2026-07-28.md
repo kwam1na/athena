@@ -8,7 +8,7 @@ problem_type: reporting_read_cost
 component: reports
 resolution_type: delivery_plan
 severity: high
-delivery_diff_fingerprint: PENDING
+delivery_diff_fingerprint: 4325f57e982abad89be9f9d7ccbb78ccc82d2c841d3fa3d1ad0e2f18c94929a0
 tags:
   - reporting
   - delivery-plan
@@ -27,6 +27,45 @@ tags:
 - **One fact model from day one:** enum'd `factKind`, business-time `occurredAt` on every source, one fingerprint module (versioned JSON), no substring classification, no vestigial adapter layer.
 - **Verification against truth, not against legacy:** the harness recomputes day totals independently from domain tables and compares to the fold. The legacy projections (known double-count/truncation bugs) are not a reference for anything.
 - **Backfill = ingestion:** historical facts are derived by running the same ingestion code over historical domain rows. One code path for live, backfill, and prod bootstrap — nothing to drift.
+
+## Problem
+
+The rebuild replaced a layer touching every commerce domain — POS,
+storefront, service, daily close, payments, stock — and deleted ~119 files
+and 62 tables. Sequencing that as one long edit risks two failures: an
+integration surprise discovered only at the end, and a half-migrated tree
+where the old and new layers both partially work.
+
+## Solution
+
+Freeze the contract first, then fan the work out.
+
+- **Wave 0 defines and freezes** the metric vocabulary, table schemas, and
+  every cross-slice signature, plus compiling stubs. Nothing downstream can
+  drift, because each slice compiles against the frozen shapes from its first
+  minute.
+- **Waves 1–2 run in parallel** on disjoint file ownership: fold, ingestion,
+  sweeper, queries, UI, ranges, then five domain emitters and the verifier.
+- **Wave 3 is a clean cutover, not a migration.** Legacy code and tables are
+  deleted outright and the store is reseeded from domain sources, because no
+  operator depended on the old surfaces.
+- **Verification gates the cutover:** an independent verifier recomputes each
+  day from domain tables; the diff must be adjudicated before prod.
+
+## Prevention
+
+- **Freeze the seam before parallelising.** Parallel work fails when slices
+  negotiate interfaces mid-flight. A frozen contract plus stubs converts that
+  negotiation into a compile step.
+- **Give every slice disjoint file ownership**, and let it escalate rather
+  than edit a shared contract. Every genuine conflict in this rebuild
+  surfaced as an escalation, not a merge conflict.
+- **Build the adversarial check as its own slice.** The verifier was written
+  independently of the emitters and reseed mappers; sharing their code would
+  have made it agree with them by construction.
+- **Treat "build beside" versus "replace" as an explicit decision.** Here,
+  clean replacement was available only because nothing depended on the old
+  surfaces — that fact is what licensed deleting instead of migrating.
 
 ## Ground rules for delegated slices
 

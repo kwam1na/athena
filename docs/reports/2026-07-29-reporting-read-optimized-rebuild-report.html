@@ -2,7 +2,7 @@
 <html
   lang="en"
   data-athena-landed-change-report="v1"
-  data-athena-report-diff-fingerprint="PENDING"
+  data-athena-report-diff-fingerprint="4325f57e982abad89be9f9d7ccbb78ccc82d2c841d3fa3d1ad0e2f18c94929a0"
 >
   <head>
     <meta charset="utf-8" />
@@ -480,6 +480,7 @@
           <li><a href="#deleted-extracted">Deleted vs extracted</a></li>
           <li><a href="#verification">Verification evidence</a></li>
           <li><a href="#read-cost">Read-cost outcome</a></li>
+          <li><a href="#subagents">Subagent Evidence</a></li>
           <li><a href="#quiz">Quiz</a></li>
         </ul>
       </header>
@@ -896,6 +897,36 @@
         </ol>
       </section>
 
+
+      <section class="section" id="subagents">
+        <p class="eyebrow">Delivery provenance</p>
+        <h2>Subagent Evidence</h2>
+        <p class="quiet">
+          The rebuild was fanned out across parallel subagents against a frozen
+          contract (<code>shared/reportsContract.ts</code>) and typed stubs, so
+          each slice compiled against the others from the start. Every slice
+          shipped its own tests; the integration issues they surfaced are
+          listed with their resolutions.
+        </p>
+        <ul>
+          <li><strong>Contract and schemas (in-session):</strong> froze the metric vocabulary, fact/derived table schemas, and fold/ingest/query signatures, plus a parity test making backend/frontend metric divergence a compile error.</li>
+          <li><strong>Fold engine:</strong> pure <code>foldDay</code> with 26 tests — determinism over shuffled input, close variance, amendment, quarantine and mixed-currency exclusion. Documented eight deliberate divergences from legacy sign conventions.</li>
+          <li><strong>Ingestion core:</strong> structural identity with quarantine-on-conflict, contained failures, bounded timezone resolution; 30 tests.</li>
+          <li><strong>Sweeper, overview, rollups:</strong> 5-minute cron over declarative dirty marks, at-least-once semantics, store allowlist; 49 tests, no skipped integrations.</li>
+          <li><strong>Read queries and access:</strong> five queries with access checks, cursor context binding, and a per-query read budget; 23 tests.</li>
+          <li><strong>Domain emitters (five parallel slices):</strong> POS, storefront, service, ops, and stock rewritten onto <code>recordFacts</code> with business-time <code>occurredAt</code>; POS domain alone re-verified at 1,235 tests.</li>
+          <li><strong>Verifier and reseed:</strong> independent recomputation from domain tables — deliberately not sharing the emitters' code — plus a resumable reseed. 29 tests. This slice escalated three integration defects (void sign convention, reseed <code>recordedAt</code> vs close, stale generated API), all fixed before cutover.</li>
+          <li><strong>Legacy deletion:</strong> import-closure analysis found 105 of 131 legacy files reachable only from other legacy files; the remaining 26 were inventory costing and time authority, which were extracted rather than deleted.</li>
+          <li><strong>UI alignment:</strong> restyled against the app's existing Store Pulse and Daily Operations patterns rather than new primitives.</li>
+        </ul>
+        <div class="callout">
+          <strong>Adversarial value:</strong> the source-truth verifier existed
+          precisely to distrust the pipeline that fed it, and it earned its
+          keep — the currency-normalization and till-billed-service defects
+          were both caught by it on real data, not by unit tests.
+        </div>
+      </section>
+
       <section class="section" id="quiz">
         <p class="eyebrow">Quiz: Pass Required</p>
         <h2>Score at least 8/10</h2>
@@ -1174,7 +1205,7 @@
 
       <footer>
         Generated 2026-07-29 for the reporting read-optimized rebuild.
-        Fingerprint <code>PENDING</code>.
+        Fingerprint <code>4325f57e982abad89be9f9d7ccbb78ccc82d2c841d3fa3d1ad0e2f18c94929a0</code>.
       </footer>
     </main>
 

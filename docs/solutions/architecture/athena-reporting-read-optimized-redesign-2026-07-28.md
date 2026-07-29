@@ -8,7 +8,7 @@ problem_type: reporting_read_cost
 component: reports
 resolution_type: architecture_replacement
 severity: high
-delivery_diff_fingerprint: PENDING
+delivery_diff_fingerprint: 4325f57e982abad89be9f9d7ccbb78ccc82d2c841d3fa3d1ad0e2f18c94929a0
 tags:
   - reporting
   - read-cost
@@ -21,6 +21,64 @@ tags:
 **Date:** 2026-07-28
 **Status:** Proposal — to be proven on the wigclub store in dev before prod.
 **Driving constraint:** minimize DB read cost (document reads per query execution, reactive re-executions, OCC retry re-reads) while keeping operator-facing numbers correct and trusted.
+
+## Problem
+
+Reporting read cost was unbounded and invisible. On the wigclub dev store,
+1,284 canonical facts over 64 operating days had fanned out into roughly
+35,800 derived and audit rows — about 28 rows per fact, with
+`reportingProjectionEvidence` alone at 21,546. Because projections stored one
+row per `(generation, date, metric)`, a trailing-30 overview read touched
+~340–440 documents, and it re-ran on every applied fact: on the order of
+6,000–19,000 reads per day for a single dashboard subscriber.
+
+The design underneath it was built for a scale and failure model Athena does
+not have. Generations, activation compare-and-swap, read bundles, coverage
+gates and census contracts are warehouse machinery; a store produces a few
+hundred facts a day. Worse, the verification half of that machinery never
+ran — the activation gate required zero reconciliation differences while no
+reconciliation job existed, and the coverage gate passed vacuously for three
+of seven projection kinds. The system carried the cost of a sophisticated
+design without its benefits.
+
+## Solution
+
+Keep the append-only fact ledger; replace everything downstream with a
+deterministic day fold.
+
+- **Metric-as-field, not metric-as-row.** One document per `(store,
+  operating day)` and one sparse document per `(store, SKU, day)`.
+- **The fold is the authority.** A pure function from a day's facts to that
+  day's totals. It is simultaneously the rebuild, the reconciliation, and the
+  backfill apply step, which is what removes whole bug classes: idempotency,
+  drift, and ordering stop being separate problems.
+- **Incremental is only a preview.** The open day is patched cheaply as facts
+  land and labelled `open`; the close-time fold replaces it wholesale.
+- **One singleton overview document** per store for the dashboard, so the
+  most-subscribed query reads one document.
+- **One sweeper cron** draining declarative dirty marks, so liveness never
+  depends on best-effort scheduling chains.
+- **Structural fact identity** — `(storeId, sourceDomain, sourceId, lineId,
+  factKind)` — designing out the escaping and forgery failures that
+  concatenated string keys invited.
+
+## Prevention
+
+- **Make the vocabulary a typed contract.** `shared/reportsContract.ts` is
+  imported by both the backend and the UI, with a parity test against the
+  Convex validators. The legacy layer's most user-visible failure was the
+  backend materializing keys the UI never read; that is now a compile error.
+- **Verify against sources, not against the pipeline.** `verify.ts`
+  recomputes each day directly from domain tables through deliberately
+  separate code. It caught two real defects on first contact with real data
+  (currency normalization, till-billed service revenue) that every unit test
+  had missed.
+- **Prefer recomputation to reconciliation.** If a derived value can be
+  rebuilt cheaply from its source, rebuild it rather than maintaining
+  machinery to detect when it has drifted.
+- **Never let a gate pass vacuously.** A check that cannot fail — an
+  `.every()` over an empty list, a threshold nothing computes — is worse than
+  no check, because it reads as safety.
 
 ## Measured baseline (wigclub, dev deployment `jovial-wildebeest-179`)
 
