@@ -896,6 +896,7 @@ describe("pre-push review wiring", () => {
         path.join(fixtureBin, "bun"),
         [
           "#!/bin/sh",
+          'if [ "$1" = "scripts/worktree-bootstrap-check.ts" ]; then exit 0; fi',
           "index=0",
           'while [ "$index" -lt 5000 ]; do',
           '  echo "noisy-validation-line-$index"',
