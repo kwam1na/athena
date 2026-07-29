@@ -299,6 +299,7 @@ describe("rebuildStoreOverview", () => {
     });
 
     const overviews = await t.run(async (ctx) =>
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       ctx.db.query("reportOverview").collect(),
     );
 

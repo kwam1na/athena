@@ -114,6 +114,7 @@ async function resumeReseed(
 /** Stable, id-free projection of the fact ledger for equality assertions. */
 async function factSignature(t: Harness): Promise<string[]> {
   return await t.run(async (ctx: MutationCtx) => {
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
     const facts = await ctx.db.query("reportFact").collect();
     return facts
       .map((fact) =>
@@ -190,6 +191,7 @@ describe("reseed — fact reconstruction", () => {
     await runReseed(t, seeded.storeId);
 
     await t.run(async (ctx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const facts = await ctx.db.query("reportFact").collect();
       const byKind = facts.reduce<Record<string, number>>((counts, fact) => {
         const key = `${fact.sourceDomain}:${fact.factKind}`;
@@ -240,6 +242,7 @@ describe("reseed — fact reconstruction", () => {
     await runReseed(t, seeded.storeId);
 
     await t.run(async (ctx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const facts = await ctx.db.query("reportFact").collect();
       expect(facts.find((fact) => fact.lineId === "tax")).toMatchObject({
         grossAmountMinor: 500,
@@ -274,6 +277,7 @@ describe("reseed — fact reconstruction", () => {
     await runReseed(t, seeded.storeId);
 
     await t.run(async (ctx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const facts = await ctx.db.query("reportFact").collect();
       const sale = facts.find((fact) => fact.factKind === "sale");
       const voided = facts.find((fact) => fact.factKind === "void");
@@ -306,6 +310,7 @@ describe("reseed — fact reconstruction", () => {
     await runReseed(t, seeded.storeId);
 
     await t.run(async (ctx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const correction = (await ctx.db.query("reportFact").collect()).find(
         (fact) => fact.factKind === "correction",
       );
@@ -347,6 +352,7 @@ describe("reseed — fact reconstruction", () => {
     await runReseed(t, seeded.storeId);
 
     await t.run(async (ctx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const facts = await ctx.db.query("reportFact").collect();
       // POS is the revenue authority for a till-billed case — counting the
       // service case too would double the sale.
@@ -378,12 +384,13 @@ describe("reseed — fact reconstruction", () => {
         orderNumber: "O-LEGACY",
       });
       // Older orders kept their lines inline. Move this one back to that shape.
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const stored = await ctx.db
         .query("onlineOrderItem")
         .withIndex("by_orderId", (q) => q.eq("orderId", orderId))
         .collect();
-      for (const item of stored) await ctx.db.delete(item._id);
-      await ctx.db.patch(orderId, {
+      for (const item of stored) await ctx.db.delete("onlineOrderItem", item._id);
+      await ctx.db.patch("onlineOrder", orderId, {
         items: stored.map(({ _creationTime, _id, ...rest }) => rest) as never,
       });
       return store;
@@ -391,6 +398,7 @@ describe("reseed — fact reconstruction", () => {
     await runReseed(t, seeded.storeId);
 
     await t.run(async (ctx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const facts = await ctx.db.query("reportFact").collect();
       expect(facts).toHaveLength(1);
       expect(facts[0]).toMatchObject({
@@ -425,6 +433,7 @@ describe("reseed — fact reconstruction", () => {
     await runReseed(t, seeded.storeId);
 
     await t.run(async (ctx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const facts = await ctx.db.query("reportFact").collect();
       expect(facts).toHaveLength(1);
       expect(facts[0].netAmountMinor).toBe(17_000);
@@ -489,7 +498,9 @@ describe("reseed — purge", () => {
 
     await t.run(async (ctx) => {
       // No sources exist, so a correct rebuild leaves nothing behind.
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       expect(await ctx.db.query("reportFact").collect()).toEqual([]);
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       expect(await ctx.db.query("reportDay").collect()).toEqual([]);
     });
   });
@@ -530,6 +541,7 @@ describe("reseed — purge", () => {
     await runReseed(t, stores.mine.storeId);
 
     await t.run(async (ctx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const survivors = await ctx.db.query("reportDay").collect();
       expect(survivors).toHaveLength(1);
       expect(survivors[0].storeId).toBe(stores.theirs.storeId);
@@ -577,6 +589,7 @@ describe("reseed — dirty marks", () => {
     await runReseed(t, seeded.storeId);
 
     await t.run(async (ctx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const marks = await ctx.db.query("reportDirtyDay").collect();
       const byDate = new Map(
         marks.map((mark) => [mark.operatingDate, mark.reason]),
@@ -604,6 +617,7 @@ describe("reseed — idempotence and resumption", () => {
 
     await t.run(async (ctx) => {
       // A second pass is a replay, not a conflict.
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const facts = await ctx.db.query("reportFact").collect();
       expect(facts.every((fact) => fact.quarantine === undefined)).toBe(true);
     });
@@ -667,8 +681,10 @@ describe("reseed — idempotence and resumption", () => {
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     await t.run(async (ctx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const facts = await ctx.db.query("reportFact").collect();
       expect(facts).toHaveLength(10);
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const marks = await ctx.db.query("reportDirtyDay").collect();
       expect(marks.map((mark) => mark.operatingDate)).toContain(DAY1);
     });
@@ -679,7 +695,7 @@ describe("reseed — idempotence and resumption", () => {
     const t = convexTest(schema, modules);
     const seeded = await t.run(seedStore);
     await t.run(async (ctx) => {
-      await ctx.db.delete(seeded.storeId);
+      await ctx.db.delete("store", seeded.storeId);
       await expect(
         reseedStep(ctx, seeded.storeId, normalizeReseedCursor(undefined)),
       ).rejects.toThrow(/unknown store/);

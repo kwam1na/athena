@@ -233,6 +233,7 @@ async function mark(
 const sweep = (t: Harness) => t.run(async (ctx) => sweepWithCtx(ctx));
 
 const marksOf = (t: Harness) =>
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
   t.run(async (ctx) => ctx.db.query("reportDirtyDay").collect());
 
 // ---------------------------------------------------------------------------
@@ -264,9 +265,13 @@ describe("dirty-mark lifecycle", () => {
     expect(await marksOf(t)).toHaveLength(0);
 
     const { days, skuDays, rollups, overviews } = await t.run(async (ctx) => ({
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       days: await ctx.db.query("reportDay").collect(),
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       skuDays: await ctx.db.query("reportSkuDay").collect(),
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       rollups: await ctx.db.query("reportPeriodSkuRollup").collect(),
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       overviews: await ctx.db.query("reportOverview").collect(),
     }));
 
@@ -345,16 +350,22 @@ describe("dirty-mark lifecycle", () => {
     await mark(t, storeId, "2026-07-28");
     await sweep(t);
     const first = await t.run(async (ctx) => ({
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       days: await ctx.db.query("reportDay").collect(),
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       skuDays: await ctx.db.query("reportSkuDay").collect(),
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       rollups: await ctx.db.query("reportPeriodSkuRollup").collect(),
     }));
 
     await mark(t, storeId, "2026-07-28", "late_fact", 2_000);
     await sweep(t);
     const second = await t.run(async (ctx) => ({
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       days: await ctx.db.query("reportDay").collect(),
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       skuDays: await ctx.db.query("reportSkuDay").collect(),
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       rollups: await ctx.db.query("reportPeriodSkuRollup").collect(),
     }));
 
@@ -397,6 +408,7 @@ describe("dirty-mark lifecycle", () => {
     await sweep(t);
 
     const skuDays = await t.run(async (ctx) =>
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       ctx.db.query("reportSkuDay").collect(),
     );
     expect(skuDays).toHaveLength(0);
@@ -480,6 +492,7 @@ describe("dirty-mark lifecycle", () => {
     const requeued = await marksOf(t);
     expect(requeued).toHaveLength(1);
     expect(requeued[0].reason).toBe("write_failure");
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
     expect(await t.run(async (ctx) => ctx.db.query("reportDay").collect())).toHaveLength(
       0,
     );
@@ -488,6 +501,7 @@ describe("dirty-mark lifecycle", () => {
     const healed = await sweep(t);
     expect(healed.daysFolded).toBe(1);
     expect(await marksOf(t)).toHaveLength(0);
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
     const days = await t.run(async (ctx) => ctx.db.query("reportDay").collect());
     expect(days[0].netSalesMinor).toBe(700);
   });
@@ -547,6 +561,7 @@ describe("allowlist gating", () => {
     expect(marks[0].reason).toBe("late_fact");
     expect(marks[0].markedAt).toBe(500);
 
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
     const days = await t.run(async (ctx) => ctx.db.query("reportDay").collect());
     expect(days).toHaveLength(1);
     expect(days[0].storeId).toBe(allowed.storeId);
@@ -592,6 +607,7 @@ describe("range results", () => {
     expect(result.rangesExpired).toBe(1);
 
     const remaining = await t.run(async (ctx) =>
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       ctx.db.query("reportRangeResult").collect(),
     );
     expect(remaining.map((row) => row.requestKey)).toEqual(["live"]);
@@ -628,6 +644,7 @@ describe("range results", () => {
     expect(result.rangesComputed).toBe(1);
 
     const stored = await t.run(async (ctx) =>
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       ctx.db.query("reportRangeResult").collect(),
     );
     expect(stored[0].status).toBe("completed");
@@ -687,6 +704,7 @@ describe("fold integration", () => {
     await mark(t, storeId, "2026-07-28", "close_accepted");
     await sweep(t);
 
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
     const days = await t.run(async (ctx) => ctx.db.query("reportDay").collect());
     expect(days[0].status).toBe("reconciled");
     expect(days[0].closeVarianceMinor).toBe(100); // 1000 folded vs 900 closed
@@ -748,6 +766,7 @@ describe("fold integration", () => {
     await mark(t, storeId, "2026-07-28", "late_fact");
     await sweep(t);
 
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
     const days = await t.run(async (ctx) => ctx.db.query("reportDay").collect());
     expect(days[0].status).toBe("amended");
     expect(days[0].postCloseNetSalesDeltaMinor).toBe(250);
@@ -798,6 +817,7 @@ describe("fold integration", () => {
     await mark(t, storeId, "2026-07-28");
     await sweep(t);
 
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
     const days = await t.run(async (ctx) => ctx.db.query("reportDay").collect());
     expect(days[0].status).toBe("provisional");
     expect(days[0].closeId).toBeUndefined();

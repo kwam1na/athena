@@ -230,6 +230,7 @@ describe("customRange.requestRangeCore", () => {
 
     expect(second.requestKey).toBe(first.requestKey);
     const rows = await t.run((ctx) =>
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       ctx.db.query("reportRangeResult").collect(),
     );
     expect(rows).toHaveLength(1);
@@ -249,7 +250,7 @@ describe("customRange.requestRangeCore", () => {
         )
         .unique();
       // Force expiry into the past.
-      await ctx.db.patch(row!._id, { expiresAt: Date.now() - 1 });
+      await ctx.db.patch("reportRangeResult", row!._id, { expiresAt: Date.now() - 1 });
       return row!._id;
     });
 
@@ -257,6 +258,7 @@ describe("customRange.requestRangeCore", () => {
     expect(second.requestKey).toBe(first.requestKey);
 
     const rows = await t.run((ctx) =>
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       ctx.db.query("reportRangeResult").collect(),
     );
     expect(rows).toHaveLength(1);
@@ -587,15 +589,24 @@ describe("customRange.computeRange", () => {
     // there is no data shape that reliably makes a real query throw. This
     // isolates exactly the behavior under test — the catch path patches the
     // row to "failed" with a reason and never rethrows.
-    const patchCalls: Array<{ id: unknown; fields: Record<string, unknown> }> =
-      [];
+    const patchCalls: Array<{
+      table: unknown;
+      id: unknown;
+      fields: Record<string, unknown>;
+    }> = [];
     const fakeCtx = {
       db: {
         query: () => {
           throw new Error("simulated read failure");
         },
-        patch: async (id: unknown, fields: Record<string, unknown>) => {
-          patchCalls.push({ id, fields });
+        // Writes name their table explicitly (@convex-dev/explicit-table-ids),
+        // so the fake mirrors the three-argument signature.
+        patch: async (
+          table: unknown,
+          id: unknown,
+          fields: Record<string, unknown>,
+        ) => {
+          patchCalls.push({ table, id, fields });
         },
       },
     } as unknown as MutationCtx;
@@ -615,6 +626,7 @@ describe("customRange.computeRange", () => {
     await expect(computeRange(fakeCtx, request)).resolves.toBeUndefined();
 
     expect(patchCalls).toHaveLength(1);
+    expect(patchCalls[0].table).toBe("reportRangeResult");
     expect(patchCalls[0].id).toBe("request-1");
     expect(patchCalls[0].fields).toMatchObject({
       status: "failed",

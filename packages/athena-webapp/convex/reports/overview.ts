@@ -231,7 +231,7 @@ export async function rebuildStoreOverview(
   now: number,
 ): Promise<void> {
   const days = await readRecentDays(ctx, storeId);
-  const store = await ctx.db.get(storeId);
+  const store = await ctx.db.get("store", storeId);
 
   const data = buildOverviewData({
     days,

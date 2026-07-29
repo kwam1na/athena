@@ -55,6 +55,7 @@ async function foldDirtyDays(
   storeId: Id<"store">,
 ): Promise<string[]> {
   const dates = await t.run(async (ctx: MutationCtx) => {
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
     const marks = await ctx.db
       .query("reportDirtyDay")
       .withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", storeId))
@@ -202,7 +203,7 @@ describe("verify — catching a corrupted fold", () => {
           q.eq("storeId", seeded.storeId).eq("operatingDate", DAY1),
         )
         .unique();
-      await ctx.db.patch(day!._id, { netSalesMinor: 1, unitsSold: 99 });
+      await ctx.db.patch("reportDay", day!._id, { netSalesMinor: 1, unitsSold: 99 });
     });
 
     await t.run(async (ctx: QueryCtx) => {
@@ -247,10 +248,11 @@ describe("verify — catching a corrupted fold", () => {
     // Lose the service sale, then refold. The fold is self-consistent with the
     // facts it can see; only a source-truth check notices the hole.
     await t.run(async (ctx: MutationCtx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const orphan = (await ctx.db.query("reportFact").collect()).find(
         (fact) => fact.sourceDomain === "service",
       );
-      await ctx.db.delete(orphan!._id);
+      await ctx.db.delete("reportFact", orphan!._id);
     });
     await foldDirtyDays(t, seeded.storeId);
 
@@ -301,7 +303,7 @@ describe("verifyStoreSummary", () => {
           q.eq("storeId", seeded.storeId).eq("operatingDate", "2026-03-07"),
         )
         .unique();
-      await ctx.db.patch(day!._id, { unitsSold: 0 });
+      await ctx.db.patch("reportDay", day!._id, { unitsSold: 0 });
     });
 
     const dirty = await t.run(async (ctx: QueryCtx) =>
@@ -328,8 +330,9 @@ describe("verify — independence from the fold", () => {
     // Wipe the ledger. A verifier that leaned on facts would now report zeros;
     // one that reads sources is unmoved.
     await t.run(async (ctx: MutationCtx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       for (const fact of await ctx.db.query("reportFact").collect()) {
-        await ctx.db.delete(fact._id);
+        await ctx.db.delete("reportFact", fact._id);
       }
     });
 

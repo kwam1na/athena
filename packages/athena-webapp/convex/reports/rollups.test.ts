@@ -264,6 +264,7 @@ describe("rebuildPeriodRollup", () => {
     });
 
     const rollups = await t.run(async (ctx) =>
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       ctx.db.query("reportPeriodSkuRollup").collect(),
     );
 
@@ -291,6 +292,7 @@ describe("rebuildPeriodRollup", () => {
       await rebuildRollupsForDates(ctx, storeId, ["2026-07-28"]);
     });
     const first = await t.run(async (ctx) =>
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       ctx.db.query("reportPeriodSkuRollup").collect(),
     );
 
@@ -298,6 +300,7 @@ describe("rebuildPeriodRollup", () => {
       await rebuildRollupsForDates(ctx, storeId, ["2026-07-28"]);
     });
     const second = await t.run(async (ctx) =>
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       ctx.db.query("reportPeriodSkuRollup").collect(),
     );
 
@@ -338,11 +341,12 @@ describe("rebuildPeriodRollup", () => {
         .query("reportSkuDay")
         .filter((q) => q.eq(q.field("productSkuId"), skuIds[1]))
         .unique();
-      await ctx.db.delete(stale!._id);
+      await ctx.db.delete("reportSkuDay", stale!._id);
       await rebuildPeriodRollup(ctx, storeId, "d:2026-07-28");
     });
 
     const rollups = await t.run(async (ctx) =>
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       ctx.db.query("reportPeriodSkuRollup").collect(),
     );
     expect(rollups).toHaveLength(1);

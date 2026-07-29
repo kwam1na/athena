@@ -239,6 +239,12 @@ function aggregateSkuDays(skuDays: Doc<"reportSkuDay">[]): SkuAgg[] {
 }
 
 /**
+ * Ceiling on SKU-day rows a single custom range may aggregate. Sized well
+ * above a realistic year for one store while still bounding the read.
+ */
+const MAX_RANGE_SKU_DAY_ROWS = 20_000;
+
+/**
  * Invoked by slice C's sweeper for each pending `reportRangeResult` row.
  * Reads ONLY `reportDay` / `reportSkuDay` (bounded by the validated range,
  * ≤ `REPORT_RANGE_MAX_DAYS` days) — never `reportFact`. Always patches the
@@ -249,6 +255,7 @@ export async function computeRange(
   request: Doc<"reportRangeResult">,
 ): Promise<void> {
   try {
+    // Bounded by the validated span, so this cannot outgrow the range check.
     const days = await ctx.db
       .query("reportDay")
       .withIndex("by_storeId_operatingDate", (q) =>
@@ -257,8 +264,12 @@ export async function computeRange(
           .gte("operatingDate", request.startDate)
           .lte("operatingDate", request.endDate),
       )
-      .collect();
+      .take(REPORT_RANGE_MAX_DAYS);
 
+    // SKU-days grow with range length TIMES catalogue breadth, so unlike the
+    // day read this one has no natural ceiling. It is capped, and hitting the
+    // cap fails the range rather than returning quietly understated totals —
+    // a wrong number here would be indistinguishable from a real one.
     const skuDays = await ctx.db
       .query("reportSkuDay")
       .withIndex("by_storeId_operatingDate_productSkuId", (q) =>
@@ -267,7 +278,17 @@ export async function computeRange(
           .gte("operatingDate", request.startDate)
           .lte("operatingDate", request.endDate),
       )
-      .collect();
+      .take(MAX_RANGE_SKU_DAY_ROWS + 1);
+
+    if (skuDays.length > MAX_RANGE_SKU_DAY_ROWS) {
+      await ctx.db.patch("reportRangeResult", request._id, {
+        status: "failed",
+        failureReason:
+          "Range covers too much SKU activity to total accurately. Choose a shorter range.",
+        computedAt: Date.now(),
+      });
+      return;
+    }
 
     const totals = sumDays(days);
     const periodKey = `custom:${request.startDate}:${request.endDate}`;

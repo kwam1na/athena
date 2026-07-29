@@ -307,7 +307,7 @@ async function resolveSkuIdentity(
   ctx: QueryCtx,
   productSkuId: Id<"productSku">,
 ): Promise<ReportSkuIdentity | undefined> {
-  const sku = await ctx.db.get(productSkuId);
+  const sku = await ctx.db.get("productSku", productSkuId);
   if (!sku) return undefined;
 
   const code = cleanMetadataValue(sku.sku);
@@ -327,7 +327,7 @@ async function withSkuIdentity(
 ): Promise<ReportSkuPeriodRow[]> {
   return Promise.all(
     rows.map(async (row) => {
-      const sku = await ctx.db.get(row.productSkuId as Id<"productSku">);
+      const sku = await ctx.db.get("productSku", row.productSkuId as Id<"productSku">);
       if (!sku) return row;
 
       const code = cleanMetadataValue(sku.sku);

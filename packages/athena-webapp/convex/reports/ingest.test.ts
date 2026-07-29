@@ -110,6 +110,7 @@ async function readDay(ctx: MutationCtx, storeId: Id<"store">, date: string) {
 }
 
 async function readDirty(ctx: MutationCtx, storeId: Id<"store">) {
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
   const rows = await ctx.db
     .query("reportDirtyDay")
     .withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", storeId))
@@ -132,6 +133,7 @@ describe("recordFacts — identity and replay", () => {
       const { skuId, storeId } = await seed(ctx);
       await recordFacts(ctx, storeId, [saleFact({ productSkuId: skuId })]);
 
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const facts = await ctx.db.query("reportFact").collect();
       expect(facts).toHaveLength(1);
       expect(facts[0]).toMatchObject({
@@ -158,6 +160,7 @@ describe("recordFacts — identity and replay", () => {
       await recordFacts(ctx, storeId, [fact]);
       await recordFacts(ctx, storeId, [fact]);
 
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       expect(await ctx.db.query("reportFact").collect()).toHaveLength(1);
       const day = await readDay(ctx, storeId, TODAY);
       // The replay must not double-count the open day either.
@@ -175,6 +178,7 @@ describe("recordFacts — identity and replay", () => {
         saleFact({ netAmountMinor: 4_000, productSkuId: skuId }),
       ]);
 
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const facts = await ctx.db.query("reportFact").collect();
       expect(facts).toHaveLength(1);
       // Original content survives; the conflict is parked, not applied.
@@ -198,6 +202,7 @@ describe("recordFacts — identity and replay", () => {
       await recordFacts(ctx, storeId, [late]);
       await recordFacts(ctx, storeId, [{ ...late, quantity: 5 }]);
 
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const facts = await ctx.db.query("reportFact").collect();
       expect(facts[0].quarantine?.reason).toBe("content_conflict");
       expect(await readDirty(ctx, storeId)).toEqual(
@@ -276,6 +281,7 @@ describe("recordFacts — open-day incremental math", () => {
         quarantinedFactCount: 0,
       });
 
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const skuDays = await ctx.db.query("reportSkuDay").collect();
       expect(skuDays).toHaveLength(1);
       expect(skuDays[0]).toMatchObject({
@@ -313,6 +319,7 @@ describe("recordFacts — open-day incremental math", () => {
         }),
       ]);
 
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const skuDays = await ctx.db.query("reportSkuDay").collect();
       expect(skuDays).toHaveLength(2);
       const bySku = new Map(skuDays.map((row) => [row.productSkuId, row]));
@@ -345,6 +352,7 @@ describe("recordFacts — open-day incremental math", () => {
       expect(day?.grossProfitMinor).toBeNull();
       expect(day?.uncostedRevenueMinor).toBe(9_000);
       expect(day?.flags.hasUncostedRevenue).toBe(true);
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const skuDays = await ctx.db.query("reportSkuDay").collect();
       expect(skuDays[0].grossProfitMinor).toBeNull();
       expect(skuDays[0].uncostedRevenueMinor).toBe(9_000);
@@ -388,6 +396,7 @@ describe("recordFacts — open-day incremental math", () => {
         grossSalesMinor: 0,
         netSalesMinor: 0,
       });
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       expect(await ctx.db.query("reportFact").collect()).toHaveLength(1);
     });
   });
@@ -407,6 +416,7 @@ describe("recordFacts — day routing", () => {
       ]);
 
       expect(await readDay(ctx, storeId, YESTERDAY)).toBeNull();
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       expect(await ctx.db.query("reportSkuDay").collect()).toHaveLength(0);
       expect(await readDirty(ctx, storeId)).toEqual(
         expect.arrayContaining([
@@ -415,6 +425,7 @@ describe("recordFacts — day routing", () => {
         ]),
       );
       // The fact itself is still stored, dated to its own operating day.
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const facts = await ctx.db.query("reportFact").collect();
       expect(facts[0].operatingDate).toBe(YESTERDAY);
     });
@@ -449,6 +460,7 @@ describe("recordFacts — day routing", () => {
       expect(await readDay(ctx, storeId, "2026-03-09")).toBeNull();
       expect(await readDay(ctx, storeId, "2026-03-11")).toBeNull();
 
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const facts = await ctx.db.query("reportFact").collect();
       expect(
         facts.map((row) => [row.lineId, row.operatingDate]).sort(),
@@ -486,6 +498,7 @@ describe("recordFacts — day routing", () => {
       const { storeId } = await seed(ctx);
       await recordFacts(ctx, storeId, []);
       expect(await readDirty(ctx, storeId)).toEqual([]);
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       expect(await ctx.db.query("reportDay").collect()).toHaveLength(0);
     });
   });
@@ -521,6 +534,7 @@ describe("recordFacts — containment", () => {
         recordFacts(brokenCtx(ctx, "reportFact"), storeId, [saleFact()]),
       ).resolves.toBeUndefined();
 
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       expect(await ctx.db.query("reportFact").collect()).toHaveLength(0);
       expect(await readDirty(ctx, storeId)).toEqual([
         { operatingDate: TODAY, reason: "write_failure" },
@@ -541,6 +555,7 @@ describe("recordFacts — containment", () => {
 
       // The fact landed; only the derived preview failed — exactly what the
       // dirty mark tells the sweeper to rebuild.
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       expect(await ctx.db.query("reportFact").collect()).toHaveLength(1);
       expect(await readDirty(ctx, storeId)).toEqual([
         { operatingDate: TODAY, reason: "write_failure" },

@@ -202,7 +202,7 @@ export async function foldAndReplaceDay(
     preserveOpen?: boolean;
   },
 ): Promise<void> {
-  const store = await ctx.db.get(storeId);
+  const store = await ctx.db.get("store", storeId);
   const storeCurrency = normalizeCurrencyCode(store?.currency);
 
   const facts = await ctx.db

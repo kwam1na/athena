@@ -793,11 +793,11 @@ async function receivingFacts(
   batch: Doc<"receivingBatch">,
   storeCurrency: string,
 ): Promise<NewReportFact[]> {
-  const purchaseOrder = await ctx.db.get(batch.purchaseOrderId);
+  const purchaseOrder = await ctx.db.get("purchaseOrder", batch.purchaseOrderId);
   const facts: NewReportFact[] = [];
 
   for (const lineItem of batch.lineItems) {
-    const poLine = await ctx.db.get(lineItem.purchaseOrderLineItemId);
+    const poLine = await ctx.db.get("purchaseOrderLineItem", lineItem.purchaseOrderLineItemId);
     const plannedUnitCost = poLine?.unitCost ?? 0;
     const receivedUnitCostMinor = lineItem.confirmedUnitCost;
     const receivedNetAmountMinor =
@@ -1106,7 +1106,7 @@ export async function reseedStep(
   storeId: Id<"store">,
   cursor: ReseedCursor,
 ): Promise<ReseedProgress> {
-  const store = await ctx.db.get(storeId);
+  const store = await ctx.db.get("store", storeId);
   if (!store) throw new Error(`reseedStoreReporting: unknown store ${storeId}`);
 
   if (cursor.phase === "done") {
