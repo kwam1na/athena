@@ -142643,7 +142643,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_hook_test_ts",
       "source_file": "scripts/pre-push-hook.test.ts",
-      "source_location": "L73",
+      "source_location": "L80",
       "target": "pre_push_hook_test_isprocessalive",
       "weight": 1
     },
@@ -142655,7 +142655,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_hook_test_ts",
       "source_file": "scripts/pre-push-hook.test.ts",
-      "source_location": "L65",
+      "source_location": "L72",
       "target": "pre_push_hook_test_retainedlogpath",
       "weight": 1
     },
@@ -142667,7 +142667,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_hook_test_ts",
       "source_file": "scripts/pre-push-hook.test.ts",
-      "source_location": "L52",
+      "source_location": "L59",
       "target": "pre_push_hook_test_waitforfile",
       "weight": 1
     },
@@ -232786,7 +232786,7 @@
       "label": "isProcessAlive()",
       "norm_label": "isprocessalive()",
       "source_file": "scripts/pre-push-hook.test.ts",
-      "source_location": "L73"
+      "source_location": "L80"
     },
     {
       "community": 563,
@@ -232795,7 +232795,7 @@
       "label": "retainedLogPath()",
       "norm_label": "retainedlogpath()",
       "source_file": "scripts/pre-push-hook.test.ts",
-      "source_location": "L65"
+      "source_location": "L72"
     },
     {
       "community": 563,
@@ -232804,7 +232804,7 @@
       "label": "waitForFile()",
       "norm_label": "waitforfile()",
       "source_file": "scripts/pre-push-hook.test.ts",
-      "source_location": "L52"
+      "source_location": "L59"
     },
     {
       "community": 563,

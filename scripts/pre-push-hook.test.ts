@@ -30,7 +30,14 @@ async function createHookFixture(fakeBunSource: string) {
     path.join(fixtureRoot, ".husky/pre-push"),
     await readFile(path.join(ROOT_DIR, ".husky/pre-push"), "utf8"),
   );
-  await writeFile(path.join(fixtureBin, "bun"), fakeBunSource);
+  await writeFile(
+    path.join(fixtureBin, "bun"),
+    [
+      "#!/bin/sh",
+      'if [ "$1" = "scripts/worktree-bootstrap-check.ts" ]; then exit 0; fi',
+      fakeBunSource.replace(/^#!\/bin\/sh\n?/, ""),
+    ].join("\n"),
+  );
   await chmod(path.join(fixtureBin, "bun"), 0o755);
 
   expect(
