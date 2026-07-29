@@ -1,12 +1,14 @@
 ---
 title: "Athena Inventory Import Review Versions"
 date: 2026-06-07
+last_updated: 2026-07-28
 category: architecture
 module: athena-webapp
 problem_type: legacy_inventory_import
 component: operations
 resolution_type: durable_review_boundary
 severity: medium
+delivery_diff_fingerprint: b67a1ace168034092050f778d19c84f562790411bb776e7a5e670f2aaa6211a0
 tags:
   - inventory
   - imports
@@ -49,11 +51,26 @@ Split import review from import execution:
 - Let each review row capture separate source choices for product name, quantity,
   and price. A row is ready for handoff only after every differing field has a
   source decision, or the row is explicitly skipped.
-- Save the current export as an `inventoryImportReviewVersion` record that
-  stores raw content, parsed row data, file metadata, notes, counts, and actor
-  context.
+- Save file metadata, notes, counts, and actor context on the
+  `inventoryImportReviewVersion` record. Store raw content and row decisions in
+  bounded `inventoryImportReviewVersionPayloadChunk` child records so realistic
+  review payloads cannot cross Convex's 1 MiB document limit.
+- Stage payload child records through resumable public mutations capped below
+  256 KiB per call, then finalize the version from at most 8 MiB of aggregate
+  payload. This leaves transaction headroom for document/query overhead and
+  keeps the original browser save path off oversized Convex arguments.
 - Load the latest saved review version for the store so review state survives a
   device refresh or handoff.
+- Treat a saved review version as immutable source evidence for later workflows,
+  not as the complete identity boundary for an onboarded SKU. Cost overlays
+  resolve store-scoped SKU lineage across saved review versions, canonicalize
+  duplicate anchors, and freeze the matched source evidence into the run.
+- Keep overlay construction bounded. A run may inspect at most 5,000
+  store-scoped anchors and freezes at most 100 source lineages for a SKU before
+  failing closed with an operator-visible scope reason.
+- Apply future unit cost independently from current valuation. A zero-stock SKU
+  receives its prospective cost, while an empty valuation position retains no
+  currency because there is no on-hand monetary value to denominate.
 - Keep the destructive import mutation available only for a future dedicated
   workflow. The review view should save server-backed evidence, not apply stock
   or catalog changes.
@@ -73,16 +90,25 @@ Do not add a one-click destructive import action to the review screen. Importing
 inventory can create products, update SKUs, and change stock state, so it needs
 a dedicated workflow with explicit review and confirmation steps.
 
+Do not duplicate onboarded-SKU matching inside downstream workflows. Reuse the
+store-and-SKU lineage boundary so provisional and finalized rows resolve
+consistently even when they originated in different saved review versions.
+
 ## Prevention
 
 - Keep legacy import parsing tolerant of alternate headers and missing optional
   fields.
-- Store raw export content with parsed rows so later reviewers can compare the
-  normalized preview against the source file.
+- Preserve raw export content with parsed rows so later reviewers can compare
+  the normalized preview against the source file, but chunk both payloads into
+  bounded child documents instead of embedding unbounded data on the review
+  version.
 - Store row-level draft decisions with separate name, quantity, price, and action
   fields. Do not flatten those decisions into notes only; notes are audit copy,
   while structured fields are what later import execution should consume.
 - Use Convex indexes by store and creation time for latest-review lookup.
+- Define a cost-difference row as one where both the legacy and Athena costs are
+  known and their minor-unit values differ. Missing costs belong to the
+  missing-cost decision path, not the difference filter.
 - Preserve manager elevation terminal context when operations mutations require
   elevated access outside the POS terminal surface.
 - Add focused tests for import parsing, product matching, review URL state,

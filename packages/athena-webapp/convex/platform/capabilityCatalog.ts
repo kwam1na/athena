@@ -127,6 +127,7 @@ const PUBLIC_WRITE_MODULE_CAPABILITIES = {
   "inventory/bannerMessage": "storefront.content.manage",
   "inventory/bestSeller": "storefront.content.manage",
   "inventory/catalogImport": "inventory.import",
+  "inventory/inventoryImportCostOverlay": "inventory.import",
   "inventory/categories": "catalog.manage",
   "inventory/colors": "catalog.manage",
   "inventory/complimentaryProduct": "storefront.content.manage",

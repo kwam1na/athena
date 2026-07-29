@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyExactValuationBasisCorrection,
   applyInboundValuation,
   applyOutboundValuation,
   applyReturnValuation,
@@ -158,12 +159,15 @@ describe("inventory valuation", () => {
   });
 
   it("allocates rounding deterministically and drains the final residue exactly", () => {
-    const first = applyOutboundValuation(knownPosition({ quantity: 3, pool: 100 }), {
-      disposition: "merchandise_sale",
-      occurredAt: 1,
-      outboundEffectId: "sale-round-1",
-      quantity: 1,
-    });
+    const first = applyOutboundValuation(
+      knownPosition({ quantity: 3, pool: 100 }),
+      {
+        disposition: "merchandise_sale",
+        occurredAt: 1,
+        outboundEffectId: "sale-round-1",
+        quantity: 1,
+      },
+    );
     const second = applyOutboundValuation(first.position, {
       disposition: "merchandise_sale",
       occurredAt: 2,
@@ -187,13 +191,24 @@ describe("inventory valuation", () => {
 
   it("preserves quantity and pool invariants across mixed outbound boundaries", () => {
     for (let costedQuantity = 1; costedQuantity <= 6; costedQuantity += 1) {
-      for (let uncostedQuantity = 0; uncostedQuantity <= 4; uncostedQuantity += 1) {
+      for (
+        let uncostedQuantity = 0;
+        uncostedQuantity <= 4;
+        uncostedQuantity += 1
+      ) {
         for (const knownCostPool of [0, 1, costedQuantity * 137 + 1]) {
           const availableQuantity = costedQuantity + uncostedQuantity;
-          for (let quantity = 1; quantity <= availableQuantity + 2; quantity += 1) {
+          for (
+            let quantity = 1;
+            quantity <= availableQuantity + 2;
+            quantity += 1
+          ) {
             const result = applyOutboundValuation(
               {
-                ...knownPosition({ quantity: costedQuantity, pool: knownCostPool }),
+                ...knownPosition({
+                  quantity: costedQuantity,
+                  pool: knownCostPool,
+                }),
                 uncostedQuantity,
               },
               {
@@ -210,17 +225,20 @@ describe("inventory valuation", () => {
                 result.consumed.deficitQuantity,
             ).toBe(quantity);
             expect(result.position.knownCostPool).toBeGreaterThanOrEqual(0);
-            expect(result.consumed.knownCost).toBeLessThanOrEqual(knownCostPool);
-            expect(result.position.knownCostPool + result.consumed.knownCost).toBe(
+            expect(result.consumed.knownCost).toBeLessThanOrEqual(
               knownCostPool,
             );
+            expect(
+              result.position.knownCostPool + result.consumed.knownCost,
+            ).toBe(knownCostPool);
             if (result.position.costedQuantity === 0) {
               expect(result.position.knownCostPool).toBe(0);
               expect(result.position.currency).toBeNull();
             }
             if (result.position.unresolvedDeficitQuantity > 0) {
               expect(
-                result.position.costedQuantity + result.position.uncostedQuantity,
+                result.position.costedQuantity +
+                  result.position.uncostedQuantity,
               ).toBe(0);
             }
           }
@@ -230,12 +248,15 @@ describe("inventory valuation", () => {
   });
 
   it("preserves outbound quantity beyond stock as an explicit uncosted deficit", () => {
-    const result = applyOutboundValuation(knownPosition({ quantity: 1, pool: 100 }), {
-      disposition: "merchandise_sale",
-      occurredAt: 200,
-      outboundEffectId: "oversold-line",
-      quantity: 3,
-    });
+    const result = applyOutboundValuation(
+      knownPosition({ quantity: 1, pool: 100 }),
+      {
+        disposition: "merchandise_sale",
+        occurredAt: 200,
+        outboundEffectId: "oversold-line",
+        quantity: 3,
+      },
+    );
 
     expect(result.consumed).toEqual({
       costedQuantity: 1,
@@ -378,10 +399,9 @@ describe("inventory valuation", () => {
       },
     );
 
-    expect(result.deficitResolutions.map((entry) => entry.outboundEffectId)).toEqual([
-      "a",
-      "b",
-    ]);
+    expect(
+      result.deficitResolutions.map((entry) => entry.outboundEffectId),
+    ).toEqual(["a", "b"]);
     expect(result.remainingDeficitLots).toEqual([
       deficitLot(1, { occurredAt: 200, outboundEffectId: "later" }),
     ]);
@@ -403,12 +423,15 @@ describe("inventory valuation", () => {
   });
 
   it("keeps outbound cost snapshots immutable after later receipts", () => {
-    const outbound = applyOutboundValuation(knownPosition({ quantity: 2, pool: 200 }), {
-      disposition: "merchandise_sale",
-      occurredAt: 100,
-      outboundEffectId: "sale-immutable",
-      quantity: 1,
-    });
+    const outbound = applyOutboundValuation(
+      knownPosition({ quantity: 2, pool: 200 }),
+      {
+        disposition: "merchandise_sale",
+        occurredAt: 100,
+        outboundEffectId: "sale-immutable",
+        quantity: 1,
+      },
+    );
     const snapshot = structuredClone(outbound.basis);
 
     applyInboundValuation(outbound.position, {
@@ -525,7 +548,10 @@ describe("inventory valuation", () => {
 
       expect(result.position).toEqual(position);
       expect(result.cogsReversalKnownCost).toBe(0);
-      expect(result.restored).toEqual({ costedQuantity: 0, uncostedQuantity: 0 });
+      expect(result.restored).toEqual({
+        costedQuantity: 0,
+        uncostedQuantity: 0,
+      });
       expect(result.treatment.restoresSellableInventory).toBe(false);
       expect(result.treatment.reversesCogs).toBe(false);
     },
@@ -547,7 +573,9 @@ describe("inventory valuation", () => {
       "inventory_consumed",
     );
     expect(getOutboundCostTreatment("damage").costLane).toBe("inventory_loss");
-    expect(getOutboundCostTreatment("writeoff").costLane).toBe("inventory_loss");
+    expect(getOutboundCostTreatment("writeoff").costLane).toBe(
+      "inventory_loss",
+    );
   });
 
   it("exposes return treatments without treating financial or damaged returns as restocks", () => {
@@ -556,7 +584,9 @@ describe("inventory valuation", () => {
       restoresSellableInventory: true,
       reversesCogs: true,
     });
-    expect(getReturnCostTreatment("financial_only").outcome).toBe("financial_only");
+    expect(getReturnCostTreatment("financial_only").outcome).toBe(
+      "financial_only",
+    );
     expect(getReturnCostTreatment("damaged").outcome).toBe("inventory_loss");
   });
 
@@ -590,6 +620,109 @@ describe("inventory valuation", () => {
       reason: "Confirmed opening valuation",
     });
     expect(result.evidence.priorBasis).toEqual(before);
+  });
+
+  it("restores a frozen mixed valuation basis without recomputing its known pool", () => {
+    const current: InventoryValuationPosition = {
+      ...knownPosition({ quantity: 3, pool: 600, basisVersion: 8 }),
+    };
+
+    const result = applyExactValuationBasisCorrection(current, {
+      actorId: "athena-user-1",
+      effectId: "cost-overlay:undo:row-1",
+      expectedCurrentBasis: current,
+      occurredAt: 700,
+      reason: "Undo inventory import cost overlay",
+      targetBasis: {
+        costedQuantity: 1,
+        currency: "GHS",
+        knownCostPool: 101,
+        uncostedQuantity: 2,
+      },
+    });
+
+    expect(result.position).toEqual({
+      basisVersion: 9,
+      costedQuantity: 1,
+      currency: "GHS",
+      knownCostPool: 101,
+      uncostedQuantity: 2,
+      unresolvedDeficitQuantity: 0,
+    });
+    expect(result.evidence).toMatchObject({
+      actorId: "athena-user-1",
+      effectId: "cost-overlay:undo:row-1",
+      priorBasis: current,
+      reason: "Undo inventory import cost overlay",
+    });
+  });
+
+  it("rejects stale, deficit, and invalid exact-basis compensation", () => {
+    const current: InventoryValuationPosition = {
+      ...knownPosition({ quantity: 3, pool: 600, basisVersion: 8 }),
+    };
+    const baseInput = {
+      actorId: "athena-user-1",
+      effectId: "cost-overlay:undo:row-1",
+      expectedCurrentBasis: current,
+      occurredAt: 700,
+      reason: "Undo inventory import cost overlay",
+      targetBasis: {
+        costedQuantity: 1,
+        currency: "GHS",
+        knownCostPool: 101,
+        uncostedQuantity: 2,
+      },
+    };
+
+    expect(() =>
+      applyExactValuationBasisCorrection(current, {
+        ...baseInput,
+        expectedCurrentBasis: { ...current, basisVersion: 7 },
+      }),
+    ).toThrow(/stale/i);
+
+    expect(() =>
+      applyExactValuationBasisCorrection(
+        {
+          basisVersion: 8,
+          costedQuantity: 0,
+          currency: null,
+          knownCostPool: 0,
+          uncostedQuantity: 0,
+          unresolvedDeficitQuantity: 1,
+        },
+        {
+          ...baseInput,
+          expectedCurrentBasis: {
+            basisVersion: 8,
+            costedQuantity: 0,
+            currency: null,
+            knownCostPool: 0,
+            uncostedQuantity: 0,
+            unresolvedDeficitQuantity: 1,
+          },
+          targetBasis: {
+            costedQuantity: 0,
+            currency: null,
+            knownCostPool: 0,
+            uncostedQuantity: 0,
+          },
+        },
+      ),
+    ).toThrow(/deficit/i);
+
+    expect(() =>
+      applyExactValuationBasisCorrection(current, {
+        ...baseInput,
+        targetBasis: {
+          costedQuantity: 1,
+          currency: "GHS",
+          knownCostPool: 101,
+          uncostedQuantity: 1,
+        },
+      }),
+    ).toThrow(/on-hand quantity/i);
   });
 
   it("rejects invalid quantities, pools, deficit coverage, and unsafe integer money", () => {

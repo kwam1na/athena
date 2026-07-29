@@ -6,7 +6,7 @@ import {
   useState,
   type ChangeEvent,
 } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQueries, useQuery } from "convex/react";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -22,6 +22,10 @@ import { toast } from "sonner";
 
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import {
+  buildInventoryImportReviewPayload,
+} from "~/shared/inventoryImportReviewPayload";
+import { buildInventoryImportReviewUploadKey } from "@/lib/inventory-import/inventoryImportReviewUploadKey";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
@@ -285,8 +289,11 @@ export function InventoryImportView({
   const overlayQueryFromSearch = parseInventoryOverlayQuery(search.q);
   const overlayPageFromSearch = parseInventoryOverlayPage(search.page);
   const isReviewRoute = mode === "review";
+  const stageReviewVersionPayloadChunk = useMutation(
+    api.inventory.catalogImport.stageInventoryImportReviewVersionPayloadChunk,
+  );
   const saveReviewVersion = useMutation(
-    api.inventory.catalogImport.saveInventoryImportReviewVersion,
+    api.inventory.catalogImport.finalizeInventoryImportReviewVersionPayload,
   );
   const stageReviewRowsForPos = useMutation(
     api.inventory.catalogImport.stageInventoryImportReviewRowsForPos,
@@ -299,8 +306,8 @@ export function InventoryImportView({
   const canImportInventory =
     adminState.hasFullAdminAccess ||
     (hasManagerElevation && Boolean(effectiveTerminalId));
-  const latestReviewVersion = useQuery(
-    api.inventory.catalogImport.getLatestInventoryImportReviewVersion,
+  const latestReviewVersionMetadata = useQuery(
+    api.inventory.catalogImport.getLatestInventoryImportReviewVersionMetadata,
     activeStore?._id && canImportInventory && !isSharedDemo
       ? {
           managerElevationId: effectiveManagerElevationId,
@@ -309,6 +316,74 @@ export function InventoryImportView({
         }
       : "skip",
   );
+  const latestReviewPayloadRequests = useMemo(() => {
+    if (
+      !latestReviewVersionMetadata?.payloadChunkCount ||
+      !activeStore?._id
+    ) {
+      return {};
+    }
+    return Object.fromEntries(
+      Array.from(
+        { length: latestReviewVersionMetadata.payloadChunkCount },
+        (_, chunkIndex) => [
+          `chunk${chunkIndex}`,
+          {
+            query:
+              api.inventory.catalogImport
+                .getInventoryImportReviewVersionPayloadChunk,
+            args: {
+              chunkIndex,
+              ...(effectiveManagerElevationId
+                ? { managerElevationId: effectiveManagerElevationId }
+                : {}),
+              reviewVersionId: latestReviewVersionMetadata._id,
+              storeId: activeStore._id as Id<"store">,
+              ...(effectiveTerminalId
+                ? { terminalId: effectiveTerminalId }
+                : {}),
+            },
+          },
+        ],
+      ),
+    );
+  }, [
+    activeStore?._id,
+    effectiveManagerElevationId,
+    effectiveTerminalId,
+    latestReviewVersionMetadata,
+  ]);
+  const latestReviewPayloadResults = useQueries(latestReviewPayloadRequests);
+  const latestReviewVersion = useMemo(() => {
+    if (!latestReviewVersionMetadata) return latestReviewVersionMetadata;
+    if (!latestReviewVersionMetadata.payloadChunkCount) {
+      return latestReviewVersionMetadata.rawContent === undefined
+        ? undefined
+        : latestReviewVersionMetadata;
+    }
+    const chunks = Array.from(
+      { length: latestReviewVersionMetadata.payloadChunkCount },
+      (_, chunkIndex) => latestReviewPayloadResults[`chunk${chunkIndex}`],
+    );
+    if (
+      chunks.some(
+        (chunk) =>
+          chunk === undefined || chunk === null || chunk instanceof Error,
+      )
+    ) {
+      return undefined;
+    }
+    return {
+      ...latestReviewVersionMetadata,
+      rawContent: chunks
+        .filter((chunk) => chunk.kind === "raw_content")
+        .map((chunk) => chunk.rawContent)
+        .join(""),
+      rowDecisions: chunks
+        .filter((chunk) => chunk.kind === "row_decisions")
+        .flatMap((chunk) => chunk.rowDecisions),
+    };
+  }, [latestReviewPayloadResults, latestReviewVersionMetadata]);
   const inventorySkuContextResult = useQuery(
     api.inventory.catalogImport.listInventoryImportReviewSkuContext,
     activeStore?._id && canImportInventory && !isSharedDemo
@@ -737,7 +812,7 @@ export function InventoryImportView({
       latestReviewVersion.fileName ||
         `inventory-import-review-v${latestReviewVersion.versionNumber}.${latestReviewVersion.sourceFormat}`,
     );
-    setRawContent(latestReviewVersion.rawContent);
+    setRawContent(latestReviewVersion.rawContent ?? "");
     setNotes(latestReviewVersion.notes ?? "");
     const loadedDraftDecisions = mapSavedRowDraftDecisions(
       latestReviewVersion.rowDecisions ?? [],
@@ -790,19 +865,57 @@ export function InventoryImportView({
       setIsSavingReviewVersion(true);
       if (mode === "auto") setDraftAutosaveStatus("saving");
       try {
+        const normalizedRawContent = rawContent.trim();
+        const payload = buildReviewPayloadChunks({
+          rawContent: normalizedRawContent,
+          rowDecisions,
+        });
+        const finalizeImportKey = importKey || reviewVersionKey;
+        const uploadKey = await buildInventoryImportReviewUploadKey({
+          fileName: fileName || undefined,
+          importKey: finalizeImportKey,
+          issueCount: parseResult.errors.length,
+          notes: reviewNotes || undefined,
+          rawContent: normalizedRawContent,
+          rawContentChunkCount: payload.rawContentChunkCount,
+          rowCount: parseResult.rows.length,
+          rowDecisionChunkCount: payload.rowDecisionChunkCount,
+          rowDecisions,
+          sourceFormat: parseResult.format,
+        });
+        for (const [chunkIndex, chunk] of payload.chunks.entries()) {
+          const staged = await runCommand(() =>
+            stageReviewVersionPayloadChunk({
+              chunk,
+              chunkIndex,
+              expectedByteLength: payload.payloadByteLength,
+              expectedChunkCount: payload.chunks.length,
+              managerElevationId: effectiveManagerElevationId,
+              storeId: activeStore._id as Id<"store">,
+              terminalId: effectiveTerminalId,
+              uploadKey,
+            }),
+          );
+          if (staged.kind !== "ok") {
+            if (mode === "auto") setDraftAutosaveStatus("error");
+            presentCommandToast(staged);
+            return null;
+          }
+        }
         const result = await runCommand(() =>
           saveReviewVersion({
             fileName: fileName || undefined,
-            importKey: importKey || reviewVersionKey,
+            importKey: finalizeImportKey,
             issueCount: parseResult.errors.length,
             notes: reviewNotes || undefined,
-            rawContent,
-            rowDecisions,
+            rawContentChunkCount: payload.rawContentChunkCount,
             rowCount: parseResult.rows.length,
+            rowDecisionChunkCount: payload.rowDecisionChunkCount,
             sourceFormat: parseResult.format,
             storeId: activeStore._id as Id<"store">,
             managerElevationId: effectiveManagerElevationId,
             terminalId: effectiveTerminalId,
+            uploadKey,
           }),
         );
 
@@ -825,6 +938,10 @@ export function InventoryImportView({
         if (mode === "auto") setDraftAutosaveStatus("error");
         presentCommandToast(result);
         return null;
+      } catch {
+        if (mode === "auto") setDraftAutosaveStatus("error");
+        toast.error("Review version could not be saved. Try again.");
+        return null;
       } finally {
         setIsSavingReviewVersion(false);
       }
@@ -842,6 +959,7 @@ export function InventoryImportView({
       reviewVersionKey,
       rowDraftDecisions,
       saveReviewVersion,
+      stageReviewVersionPayloadChunk,
       isSharedDemo,
     ],
   );
@@ -950,7 +1068,7 @@ export function InventoryImportView({
       latestReviewVersion.fileName ||
         `inventory-import-review-v${latestReviewVersion.versionNumber}.${latestReviewVersion.sourceFormat}`,
     );
-    setRawContent(latestReviewVersion.rawContent);
+    setRawContent(latestReviewVersion.rawContent ?? "");
     setNotes(latestReviewVersion.notes ?? "");
     const loadedDraftDecisions = mapSavedRowDraftDecisions(
       latestReviewVersion.rowDecisions ?? [],
@@ -1453,10 +1571,7 @@ export function InventoryImportView({
         />
 
         {isSharedDemo ? <InventoryImportDemoNotice /> : null}
-        <fieldset
-          className="m-0 min-w-0 border-0 p-0"
-          disabled={isSharedDemo}
-        >
+        <fieldset className="m-0 min-w-0 border-0 p-0" disabled={isSharedDemo}>
           <PageWorkspaceGrid>
             <PageWorkspaceMain>
               <section className="space-y-4 rounded-md border border-border bg-background p-4">
@@ -1830,6 +1945,38 @@ export function InventoryImportView({
                     </p>
                   ) : null}
                 </div>
+
+                {adminState.hasFullAdminAccess && latestReviewVersion ? (
+                  <div className="mt-layout-md border-t border-border pt-layout-md">
+                    <p className="text-sm font-medium">Legacy cost overlay</p>
+                    <p className="mt-layout-xs text-sm leading-6 text-muted-foreground">
+                      Apply one cost column from this saved review to its
+                      anchored Athena SKUs.
+                    </p>
+                    <Button
+                      asChild
+                      className="mt-layout-sm w-full"
+                      variant="outline"
+                    >
+                      <Link
+                        params={
+                          ((params: {
+                            orgUrlSlug?: string;
+                            storeUrlSlug?: string;
+                          }) => ({
+                            ...params,
+                            orgUrlSlug: params.orgUrlSlug!,
+                            storeUrlSlug: params.storeUrlSlug!,
+                          })) as never
+                        }
+                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay"
+                      >
+                        Open cost overlay
+                        <ArrowUpRight className="ml-2 h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </div>
+                ) : null}
               </aside>
             </PageWorkspaceRail>
           </PageWorkspaceGrid>
@@ -2178,6 +2325,17 @@ function InventoryReviewChangeSummary({ row }: { row: InventoryOverlayRow }) {
       </span>
     </p>
   );
+}
+
+function buildReviewPayloadChunks(args: {
+  rawContent: string;
+  rowDecisions: SavedImportRowDraftDecision[];
+}) {
+  try {
+    return buildInventoryImportReviewPayload(args);
+  } catch {
+    throw new Error("Review payload is too large.");
+  }
 }
 
 function hashString(value: string) {

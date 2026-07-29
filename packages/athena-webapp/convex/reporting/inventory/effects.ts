@@ -23,6 +23,7 @@ import type {
   ValuationCostLane,
 } from "./types";
 import {
+  applyExactValuationBasisCorrection,
   applyInboundValuation,
   applyOutboundValuation,
   applyReturnValuation,
@@ -1961,7 +1962,11 @@ export async function applySkuValuationCorrectionWithCtx(
     actorId: String(args.actorUserId),
     costedQuantity:
       args.correctedUnitCostMinor === null ? 0 : args.correctedInventoryCount,
-    currency: args.correctedUnitCostMinor === null ? null : args.currencyCode,
+    currency:
+      args.correctedUnitCostMinor === null ||
+      args.correctedInventoryCount === 0
+        ? null
+        : args.currencyCode,
     effectId: correctionBusinessEventKey,
     knownCostPool: correctedKnownCostPoolMinor,
     occurredAt: args.occurrenceAt,
@@ -2120,5 +2125,367 @@ export async function applySkuValuationCorrectionWithCtx(
     inventoryEffectId: correctionEffectId,
     replayed: false,
     stockEffectId,
+  };
+}
+
+export type ApplySkuValuationBasisCompensationArgs = {
+  actorUserId: Id<"athenaUser">;
+  compensatesCorrectionId?: Id<"reportingSkuValuationCorrection">;
+  currencyMinorUnitScale: number;
+  expectedCurrentBasis: {
+    costedQuantity: number;
+    currencyCode: string | null;
+    knownCostPoolMinor: number;
+    uncostedQuantity: number;
+    version: number;
+  };
+  expectedInventoryCount: number;
+  expectedQuantityAvailable: number;
+  expectedUnitCostMinor: number | null;
+  occurrenceAt: number;
+  operatingDate?: string;
+  organizationId: Id<"organization">;
+  productSkuId: Id<"productSku">;
+  reason: string;
+  requestKey: string;
+  scheduleVersionId?: Id<"storeSchedule">;
+  storeId: Id<"store">;
+  targetBasis: {
+    costedQuantity: number;
+    currencyCode: string | null;
+    knownCostPoolMinor: number;
+    uncostedQuantity: number;
+  };
+  targetUnitCostMinor: number | null;
+};
+
+function normalizeNullableCurrency(value: string | null): string | null {
+  return value === null
+    ? null
+    : assertNonempty(value, "Valuation currency").toUpperCase();
+}
+
+export async function applySkuValuationBasisCompensationWithCtx(
+  ctx: MutationCtx,
+  args: ApplySkuValuationBasisCompensationArgs,
+) {
+  const normalizedRequestKey = assertNonempty(
+    args.requestKey,
+    "Valuation compensation request key",
+  );
+  const normalizedReason = assertNonempty(
+    args.reason,
+    "Valuation compensation reason",
+  );
+  const expectedCurrencyCode = normalizeNullableCurrency(
+    args.expectedCurrentBasis.currencyCode,
+  );
+  const targetCurrencyCode = normalizeNullableCurrency(
+    args.targetBasis.currencyCode,
+  );
+
+  for (const [value, label] of [
+    [args.currencyMinorUnitScale, "Currency minor-unit scale"],
+    [args.expectedCurrentBasis.version, "Expected basis version"],
+    [args.expectedCurrentBasis.costedQuantity, "Expected costed quantity"],
+    [args.expectedCurrentBasis.knownCostPoolMinor, "Expected known cost pool"],
+    [args.expectedCurrentBasis.uncostedQuantity, "Expected uncosted quantity"],
+    [args.expectedInventoryCount, "Expected inventory count"],
+    [args.expectedQuantityAvailable, "Expected available quantity"],
+    [args.occurrenceAt, "Compensation occurrence time"],
+    [args.targetBasis.costedQuantity, "Target costed quantity"],
+    [args.targetBasis.knownCostPoolMinor, "Target known cost pool"],
+    [args.targetBasis.uncostedQuantity, "Target uncosted quantity"],
+  ] as const) {
+    assertInteger(value, label);
+    if (value < 0) {
+      throw new Error(`${label} must be nonnegative.`);
+    }
+  }
+  for (const [value, label] of [
+    [args.expectedUnitCostMinor, "Expected unit cost"],
+    [args.targetUnitCostMinor, "Target unit cost"],
+  ] as const) {
+    if (value !== null) {
+      assertInteger(value, label);
+      if (value < 0) throw new Error(`${label} must be nonnegative.`);
+    }
+  }
+  if (args.expectedQuantityAvailable > args.expectedInventoryCount) {
+    throw new Error(
+      "Expected available quantity cannot exceed expected inventory count.",
+    );
+  }
+
+  const priorCorrections = await ctx.db
+    .query("reportingSkuValuationCorrection")
+    .withIndex("by_storeId_requestKey", (q) =>
+      q.eq("storeId", args.storeId).eq("requestKey", normalizedRequestKey),
+    )
+    .take(2);
+  if (priorCorrections.length > 1) {
+    throw new Error("SKU valuation compensation identity is not unique.");
+  }
+  if (priorCorrections[0]) {
+    const prior = priorCorrections[0];
+    const replayMatches =
+      prior.correctionKind === "exact_basis_compensation" &&
+      prior.productSkuId === args.productSkuId &&
+      prior.actorUserId === args.actorUserId &&
+      prior.priorInventoryCount === args.expectedInventoryCount &&
+      prior.correctedInventoryCount === args.expectedInventoryCount &&
+      prior.priorQuantityAvailable === args.expectedQuantityAvailable &&
+      prior.correctedQuantityAvailable === args.expectedQuantityAvailable &&
+      (prior.priorUnitCostMinor ?? null) === args.expectedUnitCostMinor &&
+      (prior.correctedUnitCostMinor ?? null) === args.targetUnitCostMinor &&
+      prior.priorBasisVersion === args.expectedCurrentBasis.version &&
+      prior.priorCostedQuantity === args.expectedCurrentBasis.costedQuantity &&
+      prior.priorUncostedQuantity ===
+        args.expectedCurrentBasis.uncostedQuantity &&
+      prior.priorKnownCostPoolMinor ===
+        args.expectedCurrentBasis.knownCostPoolMinor &&
+      (prior.priorCurrencyCode ?? null) === expectedCurrencyCode &&
+      prior.correctedCostedQuantity === args.targetBasis.costedQuantity &&
+      prior.correctedUncostedQuantity === args.targetBasis.uncostedQuantity &&
+      prior.correctedKnownCostPoolMinor ===
+        args.targetBasis.knownCostPoolMinor &&
+      (prior.currencyCode ?? null) === targetCurrencyCode &&
+      prior.currencyMinorUnitScale === args.currencyMinorUnitScale &&
+      (prior.compensatesCorrectionId ?? undefined) ===
+        args.compensatesCorrectionId &&
+      prior.reason === normalizedReason;
+    if (!replayMatches) {
+      throw new Error(
+        "SKU valuation compensation request key conflicts with existing content.",
+      );
+    }
+    return {
+      correctionId: prior._id,
+      inventoryEffectId: prior.inventoryEffectId,
+      replayed: true,
+    };
+  }
+
+  const sku = await ctx.db.get("productSku", args.productSkuId);
+  if (!sku || sku.storeId !== args.storeId) {
+    throw new Error("Selected SKU could not be found for this store.");
+  }
+  const product = await ctx.db.get("product", sku.productId);
+  if (
+    !product ||
+    product.storeId !== args.storeId ||
+    product.organizationId !== args.organizationId
+  ) {
+    throw new Error("SKU product ownership does not match the selected store.");
+  }
+  if (
+    sku.inventoryCount !== args.expectedInventoryCount ||
+    sku.quantityAvailable !== args.expectedQuantityAvailable ||
+    (sku.unitCost ?? null) !== args.expectedUnitCostMinor
+  ) {
+    throw new Error(
+      "SKU valuation compensation is stale; SKU cost or quantity changed.",
+    );
+  }
+
+  const position = await readSinglePosition(ctx, {
+    productSkuId: args.productSkuId,
+    storeId: args.storeId,
+  });
+  if (!position) {
+    throw new Error("SKU valuation position could not be found.");
+  }
+  if (
+    position.onHandQuantity !== args.expectedInventoryCount ||
+    position.sellableQuantity !== args.expectedQuantityAvailable
+  ) {
+    throw new Error(
+      "SKU valuation compensation is stale; valuation balances changed.",
+    );
+  }
+
+  const priorValuation = positionToValuation(position);
+  const correctionBusinessEventKey = `${normalizedRequestKey}:valuation`;
+  const corrected = applyExactValuationBasisCorrection(priorValuation, {
+    actorId: String(args.actorUserId),
+    effectId: correctionBusinessEventKey,
+    expectedCurrentBasis: {
+      basisVersion: args.expectedCurrentBasis.version,
+      costedQuantity: args.expectedCurrentBasis.costedQuantity,
+      currency: expectedCurrencyCode,
+      knownCostPool: args.expectedCurrentBasis.knownCostPoolMinor,
+      uncostedQuantity: args.expectedCurrentBasis.uncostedQuantity,
+      unresolvedDeficitQuantity: 0,
+    },
+    occurredAt: args.occurrenceAt,
+    reason: normalizedReason,
+    targetBasis: {
+      costedQuantity: args.targetBasis.costedQuantity,
+      currency: targetCurrencyCode,
+      knownCostPool: args.targetBasis.knownCostPoolMinor,
+      uncostedQuantity: args.targetBasis.uncostedQuantity,
+    },
+  });
+
+  const committedAt = Date.now();
+  await ctx.db.patch("reportingInventoryPosition", position._id, {
+    costedQuantity: corrected.position.costedQuantity,
+    currencyCode: corrected.position.currency ?? undefined,
+    currencyMinorUnitScale:
+      corrected.position.currency === null
+        ? undefined
+        : args.currencyMinorUnitScale,
+    knownCostPoolMinor: corrected.position.knownCostPool,
+    lastEffectAt: Math.max(position.lastEffectAt, args.occurrenceAt),
+    uncostedQuantity: corrected.position.uncostedQuantity,
+    updatedAt: committedAt,
+    valuationPendingFrom: undefined,
+    valuationStatus: "current",
+    version: corrected.position.basisVersion,
+  });
+  const correctionEffectId = await ctx.db.insert("reportingInventoryEffect", {
+    businessEventKey: correctionBusinessEventKey,
+    completeness:
+      position.mode === "compatibility_shadow" ? "provisional" : "complete",
+    contentFingerprint: [
+      "sku-valuation-basis-compensation-v1",
+      args.productSkuId,
+      priorValuation.basisVersion,
+      priorValuation.costedQuantity,
+      priorValuation.uncostedQuantity,
+      priorValuation.knownCostPool,
+      corrected.position.costedQuantity,
+      corrected.position.uncostedQuantity,
+      corrected.position.knownCostPool,
+      targetCurrencyCode ?? "uncosted",
+      args.targetUnitCostMinor ?? "missing",
+    ].join(":"),
+    costLane: "inventory_adjustment",
+    costedQuantityDelta:
+      corrected.position.costedQuantity - priorValuation.costedQuantity,
+    ...(corrected.position.currency
+      ? {
+          currencyCode: corrected.position.currency,
+          currencyMinorUnitScale: args.currencyMinorUnitScale,
+        }
+      : {}),
+    effectType: "adjustment",
+    knownCostPoolDeltaMinor:
+      corrected.position.knownCostPool - priorValuation.knownCostPool,
+    occurrenceAt: args.occurrenceAt,
+    ...(args.operatingDate && args.scheduleVersionId
+      ? {
+          operatingDate: args.operatingDate,
+          scheduleVersionId: args.scheduleVersionId,
+        }
+      : {}),
+    organizationId: args.organizationId,
+    physicalQuantityDelta: 0,
+    positionId: position._id,
+    productSkuId: args.productSkuId,
+    sellableQuantityDelta: 0,
+    sourceDomain: "inventory",
+    storeId: args.storeId,
+    uncostedQuantityDelta:
+      corrected.position.uncostedQuantity - priorValuation.uncostedQuantity,
+    unresolvedDeficitDelta: 0,
+    replayValuation: {
+      costedQuantity: corrected.position.costedQuantity,
+      currency: corrected.position.currency ?? undefined,
+      kind: "valuation_correction",
+      knownCostPoolMinor: corrected.position.knownCostPool,
+      uncostedQuantity: corrected.position.uncostedQuantity,
+      unresolvedDeficitQuantity: 0,
+    },
+    valuationStatus: "current",
+    createdAt: args.occurrenceAt,
+  });
+  await insertSourceReference(ctx, {
+    createdAt: args.occurrenceAt,
+    effectId: correctionEffectId,
+    relation: "corrects",
+    sourceId: normalizedRequestKey,
+    sourceType: "reporting_inventory_effect",
+    storeId: args.storeId,
+  });
+  const correctionEffect = await ctx.db.get(
+    "reportingInventoryEffect",
+    correctionEffectId,
+  );
+  if (!correctionEffect) {
+    throw new Error("SKU valuation compensation effect was not persisted.");
+  }
+  await recordInventoryPositionRevisionWithCtx(ctx, {
+    effectId: correctionEffectId,
+    organizationId: args.organizationId,
+    positionId: position._id,
+    productSkuId: args.productSkuId,
+    recordedAt: committedAt,
+    revisionKind: "effect_applied",
+    storeId: args.storeId,
+  });
+  await recordInventoryEffectSkuEvidenceWithCtx(ctx, correctionEffect);
+  await ctx.db.patch("productSku", args.productSkuId, {
+    unitCost: args.targetUnitCostMinor ?? undefined,
+  });
+  const correctionId = await ctx.db.insert("reportingSkuValuationCorrection", {
+    actorUserId: args.actorUserId,
+    compensatesCorrectionId: args.compensatesCorrectionId,
+    correctedBasisVersion: corrected.position.basisVersion,
+    correctedCostedQuantity: corrected.position.costedQuantity,
+    correctedInventoryCount: args.expectedInventoryCount,
+    correctedKnownCostPoolMinor: corrected.position.knownCostPool,
+    correctedQuantityAvailable: args.expectedQuantityAvailable,
+    correctedUncostedQuantity: corrected.position.uncostedQuantity,
+    correctedUnitCostMinor: args.targetUnitCostMinor ?? undefined,
+    correctionKind: "exact_basis_compensation",
+    createdAt: args.occurrenceAt,
+    currencyCode: corrected.position.currency ?? undefined,
+    currencyMinorUnitScale: args.currencyMinorUnitScale,
+    inventoryEffectId: correctionEffectId,
+    occurredAt: args.occurrenceAt,
+    organizationId: args.organizationId,
+    priorBasisVersion: priorValuation.basisVersion,
+    priorCostedQuantity: priorValuation.costedQuantity,
+    priorCurrencyCode: priorValuation.currency ?? undefined,
+    priorInventoryCount: args.expectedInventoryCount,
+    priorKnownCostPoolMinor: priorValuation.knownCostPool,
+    priorQuantityAvailable: args.expectedQuantityAvailable,
+    priorUncostedQuantity: priorValuation.uncostedQuantity,
+    priorUnitCostMinor: args.expectedUnitCostMinor ?? undefined,
+    productSkuId: args.productSkuId,
+    reason: normalizedReason,
+    requestKey: normalizedRequestKey,
+    storeId: args.storeId,
+  });
+  await recordSkuActivityEventWithCtx(ctx, {
+    activityType: "sku_valuation_compensated",
+    actorUserId: args.actorUserId,
+    idempotencyKey: `reportingSkuValuationCorrection:${correctionId}`,
+    metadata: {
+      compensatedCorrectionId: args.compensatesCorrectionId,
+      hasUnitCost: args.targetUnitCostMinor !== null,
+      reason: normalizedReason,
+      reportingInventoryEffectId: correctionEffectId,
+      restoredCostedQuantity: corrected.position.costedQuantity,
+      restoredKnownCostPoolMinor: corrected.position.knownCostPool,
+      restoredUncostedQuantity: corrected.position.uncostedQuantity,
+    },
+    occurredAt: args.occurrenceAt,
+    organizationId: args.organizationId,
+    productId: sku.productId,
+    productSkuId: args.productSkuId,
+    quantityDelta: 0,
+    sourceId: String(correctionId),
+    sourceType: "reporting_inventory_effect",
+    status: "corrected",
+    storeId: args.storeId,
+  });
+  await scheduleInventoryEffectProjectionWithCtx(ctx, correctionEffectId);
+
+  return {
+    correctionId,
+    inventoryEffectId: correctionEffectId,
+    replayed: false,
   };
 }

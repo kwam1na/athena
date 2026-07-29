@@ -69,6 +69,70 @@ describe("operation admission definitions", () => {
     );
   });
 
+  it("admits cost-overlay commands only for normal full-admin flows", () => {
+    expect(OPERATION_ADMISSION_DEFINITIONS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actors: { normalUser: "admit", sharedDemo: "deny" },
+          capability: "inventory.import",
+          functionName:
+            "inventory/inventoryImportCostOverlay:createCostOverlayRun",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          actors: { normalUser: "admit", sharedDemo: "deny" },
+          capability: "inventory.import",
+          functionName:
+            "inventory/inventoryImportCostOverlay:prepareCostOverlayRun",
+        }),
+        expect.objectContaining({
+          actors: { normalUser: "admit", sharedDemo: "deny" },
+          capability: "inventory.import",
+          functionName:
+            "inventory/inventoryImportCostOverlay:abandonCostOverlayRun",
+        }),
+        expect.objectContaining({
+          actors: { normalUser: "admit", sharedDemo: "deny" },
+          functionName:
+            "inventory/inventoryImportCostOverlay:confirmCostOverlayApply",
+        }),
+        expect.objectContaining({
+          actors: { normalUser: "admit", sharedDemo: "deny" },
+          functionName:
+            "inventory/inventoryImportCostOverlay:requestCostOverlayUndo",
+        }),
+        expect.objectContaining({
+          actors: { normalUser: "admit", sharedDemo: "deny" },
+          functionName:
+            "inventory/inventoryImportCostOverlay:retryCostOverlayWork",
+        }),
+      ]),
+    );
+  });
+
+  it("admits review payload upload commands only for normal full-admin flows", () => {
+    expect(OPERATION_ADMISSION_DEFINITIONS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actors: { normalUser: "admit", sharedDemo: "deny" },
+          capability: "inventory.import",
+          functionName:
+            "inventory/catalogImport:stageInventoryImportReviewVersionPayloadChunk",
+          readiness: { kind: "store_write" },
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          actors: { normalUser: "admit", sharedDemo: "deny" },
+          capability: "inventory.import",
+          functionName:
+            "inventory/catalogImport:finalizeInventoryImportReviewVersionPayload",
+          readiness: { kind: "store_write" },
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+      ]),
+    );
+  });
+
   it("fails closed for unknown capabilities and incomplete scope declarations", () => {
     expect(
       validateOperationDefinition({

@@ -20,7 +20,11 @@ function listRouteFiles(directory: string): string[] {
     if (entry.isDirectory()) {
       return listRouteFiles(absolutePath);
     }
-    if (!entry.name.endsWith(".tsx") || entry.name.includes(".test.")) {
+    if (
+      entry.name.startsWith("-") ||
+      !entry.name.endsWith(".tsx") ||
+      entry.name.includes(".test.")
+    ) {
       return [];
     }
     return [path.relative(AUTHED_ROUTES_ROOT, absolutePath)];
@@ -51,6 +55,7 @@ describe("shared demo restricted surfaces", () => {
       "/demo/store/central/members",
       "/demo/store/central/configuration",
       "/demo/store/central/bulk-operations",
+      "/demo/store/central/operations/inventory-import/cost-overlay",
       "/demo/store/central/products/new",
       "/demo/store/central/products/complimentary/new",
       "/demo/settings/organization",

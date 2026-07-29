@@ -26,6 +26,45 @@ describe("operation read admission definitions", () => {
     );
   });
 
+  it("denies shared-demo access to cost-overlay evidence reads", () => {
+    expect(OPERATION_READ_ADMISSION_DEFINITIONS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          access: { kind: "read", intent: "inventory.cost_overlay.view" },
+          actors: { normalUser: "admit", sharedDemo: "deny" },
+          functionName:
+            "inventory/inventoryImportCostOverlay:getCostOverlayRun",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "inventory.cost_overlay.view" },
+          actors: { normalUser: "admit", sharedDemo: "deny" },
+          functionName:
+            "inventory/inventoryImportCostOverlay:resolveCostOverlayRunFromUrl",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "inventory.cost_overlay.view" },
+          actors: { normalUser: "admit", sharedDemo: "deny" },
+          functionName:
+            "inventory/inventoryImportCostOverlay:listCostOverlayRows",
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "inventory.cost_overlay.view" },
+          actors: { normalUser: "admit", sharedDemo: "deny" },
+          functionName:
+            "inventory/inventoryImportCostOverlay:listRecentCostOverlayRuns",
+        }),
+        expect.objectContaining({
+          access: { kind: "read", intent: "inventory.cost_overlay.view" },
+          actors: { normalUser: "admit", sharedDemo: "deny" },
+          functionName:
+            "inventory/inventoryImportCostOverlay:getLatestCostOverlaySourceDescriptor",
+        }),
+      ]),
+    );
+  });
+
   it("defines operations route count summaries on read intent instead of write capability", () => {
     expect(OPERATION_READ_ADMISSION_DEFINITIONS).toEqual(
       expect.arrayContaining([
