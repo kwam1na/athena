@@ -158,7 +158,7 @@ export function ReportsSkuDetailView({
           className={cn(
             "space-y-layout-md transition-opacity duration-150 motion-reduce:transition-none",
             // Runs once when the detail first resolves (see ReportsItemsView).
-            "motion-safe:animate-[presence-lift_var(--motion-standard)_var(--ease-emphasized)_both]",
+            "motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200",
             isRefreshing && "opacity-60",
           )}
           data-refreshing={isRefreshing ? "true" : undefined}

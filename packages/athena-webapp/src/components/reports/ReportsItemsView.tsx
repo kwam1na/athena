@@ -174,10 +174,10 @@ export function ReportsItemsView({
             className={cn(
               "overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface",
               "transition-opacity duration-150 motion-reduce:transition-none",
-              // Entry motion runs once, when results first replace the
+              // A plain fade, once, when results first replace the
               // skeleton: the container stays mounted across refreshes, so a
               // date change dims rather than re-animating.
-              "motion-safe:animate-[presence-lift_var(--motion-standard)_var(--ease-emphasized)_both]",
+              "motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200",
               isRefreshing && "opacity-60",
             )}
             data-refreshing={isRefreshing ? "true" : undefined}
