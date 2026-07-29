@@ -170,26 +170,35 @@ export function ReportsSkuDetailView({
           )}
           data-refreshing={isRefreshing ? "true" : undefined}
         >
+          {/* The totals are the headline: figures sit on the page, divided
+              rather than boxed, so the only framed object in view is the
+              table below. Four bordered tiles above a bordered table read as
+              one continuous field of panels. */}
           <div className="space-y-layout-sm">
             <h3 className="text-base font-medium text-foreground">Totals</h3>
-            <div className="grid grid-cols-2 gap-layout-sm sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-y-layout-md sm:grid-cols-4 sm:gap-y-0 sm:divide-x sm:divide-border/70">
               <OperationsSummaryMetric
+                className="border-0 bg-transparent px-0 shadow-none sm:px-layout-lg sm:first:pl-0"
                 label="Net sales"
                 value={formatOptionalMoney(detail.totals?.netSalesMinor, currency)}
               />
               <OperationsSummaryMetric
+                className="border-0 bg-transparent px-0 shadow-none sm:px-layout-lg"
                 label="Units sold"
                 value={formatUnits(detail.totals?.unitsSold)}
               />
               <OperationsSummaryMetric
+                className="border-0 bg-transparent px-0 shadow-none sm:px-layout-lg"
                 label="Gross profit"
                 value={
                   detail.totals
                     ? formatReportProfit(detail.totals.grossProfitMinor, currency)
                     : "—"
                 }
+                valueClassName="text-xl"
               />
               <OperationsSummaryMetric
+                className="border-0 bg-transparent px-0 shadow-none sm:px-layout-lg"
                 label="Refunds"
                 value={formatOptionalMoney(detail.totals?.refundsMinor, currency)}
               />
