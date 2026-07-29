@@ -294,6 +294,40 @@ describe("dirty-mark lifecycle", () => {
     ]);
   });
 
+  it("folds facts for a store whose configured currency is lowercase", async () => {
+    // Regression: wigclub's dev store carries currency "ghs" while emitters
+    // normalize fact currency to "GHS". The sweeper must normalize the store
+    // side too, or every fact is excluded as foreign currency and every day
+    // folds to zeros with mixedCurrency set (found by verify on dev).
+    const t = convexTest(schema, modules);
+    const { storeId, productSkuId } = await seedStore(t, "sweep-lowercase");
+    await t.run(async (ctx) => {
+      await ctx.db.patch("store", storeId, { currency: " ghs " });
+    });
+    allow(storeId);
+
+    await insertSaleFact(t, {
+      storeId,
+      productSkuId,
+      operatingDate: "2026-07-28",
+      sourceId: "txn-lc",
+      netAmountMinor: 2_000,
+      quantity: 2,
+      unitCostMinor: 100,
+    });
+    await mark(t, storeId, "2026-07-28");
+
+    await sweep(t);
+
+    const day = await t.run(async (ctx) =>
+      ctx.db.query("reportDay").unique(),
+    );
+    expect(day?.netSalesMinor).toBe(2_000);
+    expect(day?.unitsSold).toBe(2);
+    expect(day?.flags.mixedCurrency).toBe(false);
+    expect(day?.currency).toBe("GHS");
+  });
+
   it("is idempotent: sweeping the same day twice yields the same rollups and one day doc", async () => {
     const t = convexTest(schema, modules);
     const { storeId, productSkuId } = await seedStore(t, "sweep-idempotent");

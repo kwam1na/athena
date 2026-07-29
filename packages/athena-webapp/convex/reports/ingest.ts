@@ -5,6 +5,7 @@ import {
   type NewReportFact,
   type ReportDayMetrics,
   type ReportSkuDayMetrics,
+  normalizeCurrencyCode,
 } from "../../shared/reportsContract";
 import { factFingerprint, REPORTS_FINGERPRINT_VERSION } from "./fingerprint";
 import { resolveOperatingDate } from "./operatingDay";
@@ -551,7 +552,7 @@ export async function recordFacts(
       ctx,
       storeId,
       currentOperatingDate,
-      store.currency,
+      normalizeCurrencyCode(store.currency),
       appliedToCurrentDay,
     );
 

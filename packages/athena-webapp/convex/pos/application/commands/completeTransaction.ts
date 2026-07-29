@@ -235,6 +235,34 @@ async function recordCompletedPosSaleFacts(
     });
   }
 
+  // Services billed through the till live in posTransactionServiceLine, not
+  // in the item list, but their revenue is part of the transaction total.
+  // One sale fact per service line — revenue only, zero merchandise units.
+  const serviceLines =
+    ctx.db && typeof ctx.db.query === "function"
+      ? await ctx.db
+          .query("posTransactionServiceLine")
+          .withIndex("by_transactionId", (q) =>
+            q.eq("transactionId", args.transactionId),
+          )
+          .take(100)
+      : [];
+  for (const line of serviceLines) {
+    facts.push({
+      currency,
+      discountAmountMinor: 0,
+      factKind: "sale",
+      grossAmountMinor: line.totalPrice,
+      lineId: String(line._id),
+      netAmountMinor: line.totalPrice,
+      occurredAt: args.acceptedAt,
+      quantity: 0,
+      sourceDomain: "pos",
+      sourceId: String(args.transactionId),
+      taxAmountMinor: 0,
+    });
+  }
+
   await recordFacts(ctx, args.storeId, facts);
 }
 
@@ -307,6 +335,32 @@ async function recordPosVoidFacts(
       sourceDomain: "pos",
       sourceId: String(args.transaction._id),
       taxAmountMinor: -args.transaction.tax,
+    });
+  }
+
+  // A void withdraws till-billed service revenue too (see the sale emitter).
+  const serviceLines =
+    ctx.db && typeof ctx.db.query === "function"
+      ? await ctx.db
+          .query("posTransactionServiceLine")
+          .withIndex("by_transactionId", (q) =>
+            q.eq("transactionId", args.transaction._id),
+          )
+          .take(100)
+      : [];
+  for (const line of serviceLines) {
+    facts.push({
+      currency,
+      discountAmountMinor: 0,
+      factKind: "void",
+      grossAmountMinor: -line.totalPrice,
+      lineId: String(line._id),
+      netAmountMinor: -line.totalPrice,
+      occurredAt: args.acceptedAt,
+      quantity: 0,
+      sourceDomain: "pos",
+      sourceId: String(args.transaction._id),
+      taxAmountMinor: 0,
     });
   }
 

@@ -353,9 +353,17 @@ describe("reseed — fact reconstruction", () => {
       expect(facts.filter((fact) => fact.sourceDomain === "service")).toEqual(
         [],
       );
-      expect(facts.filter((fact) => fact.sourceDomain === "pos")).toHaveLength(
-        1,
-      );
+      // The POS walk carries the revenue exactly once: the merchandise line
+      // plus the till-billed service line (revenue only, zero units — found
+      // undercounted by verify on wigclub dev, 2026-07-28).
+      const posFacts = facts.filter((fact) => fact.sourceDomain === "pos");
+      expect(posFacts).toHaveLength(2);
+      const serviceLineFact = posFacts.find((fact) => fact.quantity === 0);
+      expect(serviceLineFact).toMatchObject({
+        factKind: "sale",
+        netAmountMinor: 4_000,
+        quantity: 0,
+      });
     });
   });
 

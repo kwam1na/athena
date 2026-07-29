@@ -4,6 +4,7 @@ import { internalMutation } from "../_generated/server";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { NewReportFact } from "../../shared/reportsContract";
+import { normalizeCurrencyCode } from "../../shared/reportsContract";
 import { reportingLineCostFromEffect } from "../inventoryLedger/commerceEffects";
 import { getDiscountValue } from "../inventory/utils";
 import { recordFacts } from "./ingest";
@@ -205,7 +206,7 @@ async function purgeBatch(
 
 /** Emitters upper-case and trim the store currency; reseed must match exactly. */
 function normalizeCurrency(currency: string | undefined): string {
-  return (currency ?? "").trim().toUpperCase() || "GHS";
+  return normalizeCurrencyCode(currency);
 }
 
 /**
@@ -299,6 +300,7 @@ async function posSaleFacts(
   ctx: MutationCtx,
   transaction: Doc<"posTransaction">,
   items: Doc<"posTransactionItem">[],
+  serviceLines: Doc<"posTransactionServiceLine">[],
   currency: string,
 ): Promise<NewReportFact[]> {
   const occurredAt = transaction.completedAt;
@@ -345,6 +347,24 @@ async function posSaleFacts(
     });
   }
 
+  // Till-billed services (posTransactionServiceLine) carry revenue that is in
+  // the transaction header but not in the item list — revenue only, no units.
+  for (const line of serviceLines) {
+    facts.push({
+      currency,
+      discountAmountMinor: 0,
+      factKind: "sale",
+      grossAmountMinor: line.totalPrice,
+      lineId: String(line._id),
+      netAmountMinor: line.totalPrice,
+      occurredAt,
+      quantity: 0,
+      sourceDomain: "pos",
+      sourceId: String(transaction._id),
+      taxAmountMinor: 0,
+    });
+  }
+
   return facts;
 }
 
@@ -362,6 +382,7 @@ async function posSaleFacts(
 function posVoidFacts(
   transaction: Doc<"posTransaction">,
   items: Doc<"posTransactionItem">[],
+  serviceLines: Doc<"posTransactionServiceLine">[],
   currency: string,
   unitCostByLineId: Map<string, number>,
 ): NewReportFact[] {
@@ -398,6 +419,23 @@ function posVoidFacts(
       sourceDomain: "pos",
       sourceId: String(transaction._id),
       taxAmountMinor: -transaction.tax,
+    });
+  }
+
+  // A void withdraws till-billed service revenue too (see posSaleFacts).
+  for (const line of serviceLines) {
+    facts.push({
+      currency,
+      discountAmountMinor: 0,
+      factKind: "void",
+      grossAmountMinor: -line.totalPrice,
+      lineId: String(line._id),
+      netAmountMinor: -line.totalPrice,
+      occurredAt,
+      quantity: 0,
+      sourceDomain: "pos",
+      sourceId: String(transaction._id),
+      taxAmountMinor: 0,
     });
   }
 
@@ -832,7 +870,19 @@ async function walkPhase(
         // A voided transaction still made its sale — both fact sets are
         // emitted here so the sale lands on its own day and the withdrawal
         // lands on the day it was authorised.
-        const saleFacts = await posSaleFacts(ctx, transaction, items, currency);
+        const serviceLines = await ctx.db
+          .query("posTransactionServiceLine")
+          .withIndex("by_transactionId", (q) =>
+            q.eq("transactionId", transaction._id),
+          )
+          .take(RESEED_MAX_LINES_PER_DOC);
+        const saleFacts = await posSaleFacts(
+          ctx,
+          transaction,
+          items,
+          serviceLines,
+          currency,
+        );
         facts.push(...saleFacts);
 
         if (phase === "pos_void") {
@@ -843,7 +893,13 @@ async function walkPhase(
             }
           }
           facts.push(
-            ...posVoidFacts(transaction, items, currency, unitCostByLineId),
+            ...posVoidFacts(
+              transaction,
+              items,
+              serviceLines,
+              currency,
+              unitCostByLineId,
+            ),
           );
         }
       }

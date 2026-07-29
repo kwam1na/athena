@@ -231,6 +231,16 @@ export function descendingSortKey(value: number): number {
   return -value;
 }
 
+/**
+ * Canonical currency-code form used on every fact and day doc. Store config
+ * carries codes in mixed case (dev stores have "ghs"); emitters, the fold's
+ * store-currency argument, and reseed must ALL normalize through this one
+ * helper — a raw comparison silently excludes every fact as foreign currency.
+ */
+export function normalizeCurrencyCode(currency: string | undefined): string {
+  return (currency ?? "").trim().toUpperCase() || "GHS";
+}
+
 // ---------------------------------------------------------------------------
 // Overview document (slice C materializes; the dashboard subscribes to it ONLY)
 // ---------------------------------------------------------------------------

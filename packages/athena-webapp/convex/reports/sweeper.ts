@@ -5,6 +5,7 @@ import {
   REPORTS_FOLD_VERSION,
   type CloseRef,
   type FoldFact,
+  normalizeCurrencyCode,
 } from "../../shared/reportsContract";
 import { foldDay } from "./foldDay";
 import { computeRange } from "./customRange";
@@ -202,7 +203,7 @@ export async function foldAndReplaceDay(
   },
 ): Promise<void> {
   const store = await ctx.db.get(storeId);
-  const storeCurrency = store?.currency ?? "";
+  const storeCurrency = normalizeCurrencyCode(store?.currency);
 
   const facts = await ctx.db
     .query("reportFact")

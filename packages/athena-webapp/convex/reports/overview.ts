@@ -7,6 +7,7 @@ import {
   type ReportPeriodSnapshot,
   type ReportTrendPoint,
   type ReportTrustSummary,
+  normalizeCurrencyCode,
 } from "../../shared/reportsContract";
 import { addDaysToDate } from "./rollups";
 
@@ -234,7 +235,7 @@ export async function rebuildStoreOverview(
 
   const data = buildOverviewData({
     days,
-    fallbackCurrency: store?.currency ?? "",
+    fallbackCurrency: normalizeCurrencyCode(store?.currency),
     now,
   });
 
