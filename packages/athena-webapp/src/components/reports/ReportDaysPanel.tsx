@@ -23,8 +23,12 @@ import {
   getLocalDateFromOperatingDate,
   getLocalOperatingDate,
 } from "@/lib/operations/operatingDate";
-import { ReportDayStatusBadge } from "./ReportStatusBadge";
-import { formatOperatingDate, formatOptionalMoney, formatReportMoney, formatUnits } from "./reportFormat";
+import {
+  formatOperatingDate,
+  formatReportMoney,
+  formatUnits,
+  reportDaySettlementPresentation,
+} from "./reportFormat";
 
 /** Single-date popover trigger, same shape as `DailyOperationsView`'s operating-date picker. */
 function ReportDateField({
@@ -142,34 +146,64 @@ export function ReportDaysPanel({
             <TableHeader>
               <TableRow>
                 <TableHead>Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Net sales</TableHead>
-                <TableHead>Units sold</TableHead>
-                <TableHead>Close variance</TableHead>
+                <TableHead className="text-right">Net sales</TableHead>
+                <TableHead className="text-right">Units sold</TableHead>
+                <TableHead className="text-right">Against close</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {days.map((day) => (
-                <TableRow key={day.operatingDate}>
-                  <TableCell>
-                    <Link
-                      params={{ orgUrlSlug: orgUrlSlug!, storeUrlSlug: storeUrlSlug! }}
-                      search={{ periodType: "day", periodDate: day.operatingDate }}
-                      to="/$orgUrlSlug/store/$storeUrlSlug/reports/items"
-                    >
-                      {formatOperatingDate(day.operatingDate)}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <ReportDayStatusBadge status={day.status} />
-                  </TableCell>
-                  <TableCell>{formatReportMoney(day.netSalesMinor, day.currency)}</TableCell>
-                  <TableCell>{formatUnits(day.unitsSold)}</TableCell>
-                  <TableCell>
-                    {formatOptionalMoney(day.closeVarianceMinor, day.currency)}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {days.map((day) => {
+                const settlement = reportDaySettlementPresentation({
+                  closeVarianceMinor: day.closeVarianceMinor,
+                  currency: day.currency,
+                  postCloseNetSalesDeltaMinor: day.postCloseNetSalesDeltaMinor,
+                  status: day.status,
+                });
+
+                return (
+                  <TableRow
+                    // Only days with something to answer for are tinted, so a
+                    // long range stays scannable: quiet by default, marked
+                    // where the folded sales disagree with the accepted close
+                    // or the day moved after sign-off.
+                    className={cn(
+                      settlement.needsAttention && "bg-warning/5 hover:bg-warning/10",
+                    )}
+                    data-attention={settlement.needsAttention ? "true" : undefined}
+                    data-status={day.status}
+                    key={day.operatingDate}
+                  >
+                    <TableCell>
+                      <Link
+                        params={{ orgUrlSlug: orgUrlSlug!, storeUrlSlug: storeUrlSlug! }}
+                        search={{ periodType: "day", periodDate: day.operatingDate }}
+                        to="/$orgUrlSlug/store/$storeUrlSlug/reports/items"
+                      >
+                        {formatOperatingDate(day.operatingDate)}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-right font-numeric tabular-nums">
+                      {formatReportMoney(day.netSalesMinor, day.currency)}
+                    </TableCell>
+                    <TableCell className="text-right font-numeric tabular-nums">
+                      {formatUnits(day.unitsSold)}
+                    </TableCell>
+                    <TableCell className="space-y-0.5 text-right">
+                      <span
+                        className={cn(
+                          "block font-numeric text-sm tabular-nums",
+                          settlement.tone,
+                        )}
+                      >
+                        {settlement.amount}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {settlement.caption}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>

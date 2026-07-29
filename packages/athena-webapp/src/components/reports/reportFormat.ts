@@ -112,3 +112,88 @@ export function formatOperatingDate(operatingDate: string): string {
     timeZone: "UTC",
   });
 }
+
+/**
+ * How a day's settlement reads in a table row.
+ *
+ * Replaces a per-row status badge. Ten coloured pills down a column make
+ * every day look equally noteworthy; what an operator actually needs to spot
+ * is the exception — a day whose folded sales disagree with the accepted
+ * close, or one that moved after sign-off. So the amount carries the tone
+ * (neutral unless there is something to answer for) and the caption carries
+ * the meaning, mirroring how cash controls presents register variance.
+ *
+ * Note `reconciled` describes TIMING — a close exists and nothing landed
+ * after it — not agreement. A reconciled day can still be off its close,
+ * and that is precisely the case worth surfacing.
+ */
+export function reportDaySettlementPresentation({
+  status,
+  closeVarianceMinor,
+  postCloseNetSalesDeltaMinor,
+  currency,
+}: {
+  status: ReportDayStatus;
+  closeVarianceMinor?: number;
+  postCloseNetSalesDeltaMinor?: number;
+  currency: string;
+}): {
+  /** Primary line: the variance amount, or an em dash when none applies. */
+  amount: string;
+  /** Secondary line: what the day's settlement state means. */
+  caption: string;
+  /** Tailwind tone class for the amount. */
+  tone: string;
+  /** True when the row deserves an operator's attention. */
+  needsAttention: boolean;
+} {
+  if (status === "open") {
+    return {
+      amount: "—",
+      caption: "Day in progress",
+      tone: "text-muted-foreground",
+      needsAttention: false,
+    };
+  }
+
+  if (status === "provisional") {
+    return {
+      amount: "—",
+      caption: "Not closed yet",
+      tone: "text-muted-foreground",
+      needsAttention: false,
+    };
+  }
+
+  const variance = closeVarianceMinor ?? 0;
+  const varianceLabel = formatReportMoney(variance, currency);
+
+  if (status === "amended") {
+    const delta = postCloseNetSalesDeltaMinor ?? 0;
+    return {
+      amount: varianceLabel,
+      caption:
+        delta === 0
+          ? "Changed after close"
+          : `${formatReportMoney(delta, currency)} after close`,
+      tone: "text-warning",
+      needsAttention: true,
+    };
+  }
+
+  if (variance === 0) {
+    return {
+      amount: varianceLabel,
+      caption: "Matches close",
+      tone: "text-foreground",
+      needsAttention: false,
+    };
+  }
+
+  return {
+    amount: varianceLabel,
+    caption: variance > 0 ? "Over close" : "Under close",
+    tone: variance > 0 ? "text-success" : "text-danger",
+    needsAttention: true,
+  };
+}
