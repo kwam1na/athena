@@ -79739,7 +79739,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_dashboard_dashboard_tsx",
       "source_file": "packages/athena-webapp/src/components/dashboard/Dashboard.tsx",
-      "source_location": "L20",
+      "source_location": "L19",
       "target": "dashboard_getperiodrange",
       "weight": 1
     },
@@ -79751,7 +79751,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_dashboard_dashboard_tsx",
       "source_file": "packages/athena-webapp/src/components/dashboard/Dashboard.tsx",
-      "source_location": "L50",
+      "source_location": "L49",
       "target": "dashboard_loadingsection",
       "weight": 1
     },
@@ -79763,7 +79763,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_dashboard_dashboard_tsx",
       "source_file": "packages/athena-webapp/src/components/dashboard/Dashboard.tsx",
-      "source_location": "L342",
+      "source_location": "L341",
       "target": "dashboard_renderproductssection",
       "weight": 1
     },
@@ -79775,7 +79775,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_dashboard_dashboard_tsx",
       "source_file": "packages/athena-webapp/src/components/dashboard/Dashboard.tsx",
-      "source_location": "L322",
+      "source_location": "L321",
       "target": "dashboard_rendersalessection",
       "weight": 1
     },
@@ -228256,7 +228256,7 @@
       "label": "getPeriodRange()",
       "norm_label": "getperiodrange()",
       "source_file": "packages/athena-webapp/src/components/dashboard/Dashboard.tsx",
-      "source_location": "L20"
+      "source_location": "L19"
     },
     {
       "community": 509,
@@ -228265,7 +228265,7 @@
       "label": "LoadingSection()",
       "norm_label": "loadingsection()",
       "source_file": "packages/athena-webapp/src/components/dashboard/Dashboard.tsx",
-      "source_location": "L50"
+      "source_location": "L49"
     },
     {
       "community": 509,
@@ -228274,7 +228274,7 @@
       "label": "renderProductsSection()",
       "norm_label": "renderproductssection()",
       "source_file": "packages/athena-webapp/src/components/dashboard/Dashboard.tsx",
-      "source_location": "L342"
+      "source_location": "L341"
     },
     {
       "community": 509,
@@ -228283,7 +228283,7 @@
       "label": "renderSalesSection()",
       "norm_label": "rendersalessection()",
       "source_file": "packages/athena-webapp/src/components/dashboard/Dashboard.tsx",
-      "source_location": "L322"
+      "source_location": "L321"
     },
     {
       "community": 509,

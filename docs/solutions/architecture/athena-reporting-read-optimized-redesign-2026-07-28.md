@@ -8,7 +8,7 @@ problem_type: reporting_read_cost
 component: reports
 resolution_type: architecture_replacement
 severity: high
-delivery_diff_fingerprint: 373219d310e87b14f51df92310b0407ff4aed1c7f147914996de2f6f8ecf6b56
+delivery_diff_fingerprint: 050a19bdb2f5dd4b9f797f49e4c254bd6bacbd3505bd2bbf536a4f9c64a2c73a
 tags:
   - reporting
   - read-cost
