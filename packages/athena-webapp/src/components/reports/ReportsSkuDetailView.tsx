@@ -118,19 +118,26 @@ export function ReportsSkuDetailView({
   );
 
   return (
-    <div className="space-y-layout-md" data-testid="reports-sku-detail">
-      <ReportBackLink label="Back to items" />
+    /* Rhythm: tight inside a cluster, generous between sections, so the page
+       reads as identity / controls / results rather than one flat stack. */
+    <div
+      className="space-y-layout-xl md:space-y-layout-2xl"
+      data-testid="reports-sku-detail"
+    >
+      <div className="space-y-layout-sm">
+        <ReportBackLink label="Back to items" />
 
-      <div className="space-y-1">
-        <h2
-          className="text-xl font-medium text-foreground"
-          data-testid="reports-sku-detail-name"
-        >
-          {formatSkuDisplayName(detail?.identity, productSkuId)}
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          {formatSkuSubtitle(detail?.identity, productSkuId)}
-        </p>
+        <div className="space-y-1">
+          <h2
+            className="text-xl font-medium text-foreground"
+            data-testid="reports-sku-detail-name"
+          >
+            {formatSkuDisplayName(detail?.identity, productSkuId)}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {formatSkuSubtitle(detail?.identity, productSkuId)}
+          </p>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-end gap-layout-sm">
@@ -156,7 +163,7 @@ export function ReportsSkuDetailView({
         <div
           aria-busy={isRefreshing}
           className={cn(
-            "space-y-layout-md transition-opacity duration-150 motion-reduce:transition-none",
+            "space-y-layout-xl transition-opacity duration-150 motion-reduce:transition-none",
             // Runs once when the detail first resolves (see ReportsItemsView).
             "motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200",
             isRefreshing && "opacity-60",
@@ -189,9 +196,13 @@ export function ReportsSkuDetailView({
             </div>
           </div>
 
-          {detail.days.length === 0 ? (
-            <EmptyState title="No days with activity" description="No days with activity in the selected range." />
-          ) : (
+          <div className="space-y-layout-sm">
+            <h3 className="text-base font-medium text-foreground">
+              Daily breakdown
+            </h3>
+            {detail.days.length === 0 ? (
+              <EmptyState title="No days with activity" description="No days with activity in the selected range." />
+            ) : (
             <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
               <Table>
                 <TableHeader>
@@ -214,7 +225,8 @@ export function ReportsSkuDetailView({
                 </TableBody>
               </Table>
             </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>

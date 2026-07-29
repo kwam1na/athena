@@ -88,10 +88,16 @@ export function ReportsItemsView({
   );
 
   return (
-    <div className="space-y-layout-md" data-testid="reports-items">
-      <ReportBackLink />
+    /* Same rhythm as the SKU detail page: tight inside a cluster, generous
+       between sections. */
+    <div
+      className="space-y-layout-xl md:space-y-layout-2xl"
+      data-testid="reports-items"
+    >
+      <div className="space-y-layout-sm">
+        <ReportBackLink />
 
-      <div className="flex flex-wrap items-end gap-layout-sm">
+        <div className="flex flex-wrap items-end gap-layout-sm">
         <div className="space-y-1">
           <Label htmlFor="items-period-type">Period</Label>
           <Select
@@ -160,6 +166,7 @@ export function ReportsItemsView({
               </Button>
             ),
           )}
+          </div>
         </div>
       </div>
 
