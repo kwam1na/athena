@@ -4,7 +4,9 @@ import { describe, expect, it } from "vitest";
 
 import schema from "../schema";
 import { SHARED_DEMO_REGISTER_NUMBER } from "./config";
+import { SHARED_DEMO_REGISTER_UNAVAILABLE_CODE } from "../../shared/sharedDemoRegisterError";
 import {
+  bindSharedDemoRegisterBaselineWithCtx,
   buildSharedDemoRegisterCashBaseline,
   buildSharedDemoRegisterNarrative,
   buildSharedDemoStoreSchedule,
@@ -236,6 +238,28 @@ describe("rollSharedDemoSeededRegisterWithCtx", () => {
     ]);
     expect(browser?.openedOperatingDate).toBe("2026-07-18");
     expect(closed?.openedOperatingDate).toBe("2026-07-18");
+  });
+});
+
+describe("bindSharedDemoRegisterBaselineWithCtx", () => {
+  it("throws the typed register-unavailable error for an unusable terminal", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await expect(
+        bindSharedDemoRegisterBaselineWithCtx(ctx as any, {
+          actorUserId: "user" as any,
+          now: 1_000,
+          storeId: "store-a" as any,
+          terminal: {
+            registerNumber: "05",
+            status: "active",
+            storeId: "store-b",
+          } as any,
+        }),
+      ).rejects.toMatchObject({
+        data: { code: SHARED_DEMO_REGISTER_UNAVAILABLE_CODE },
+      });
+    });
   });
 });
 
