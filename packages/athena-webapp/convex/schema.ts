@@ -144,6 +144,11 @@ import {
   scheduledRunLedgerSchema,
 } from "./schemas/automation";
 import {
+  notificationDeliverySchema,
+  notificationIntentSchema,
+  notificationSubscriptionSchema,
+} from "./schemas/notifications";
+import {
   contextEventImportRunSchema,
   contextEventSchema,
 } from "./schemas/contextTracking";
@@ -364,6 +369,18 @@ const schema = defineSchema({
       "operatingDate",
       "action",
     ]),
+  notificationIntent: defineTable(notificationIntentSchema)
+    .index("by_dedupeKey", ["dedupeKey"])
+    .index("by_status_and_emittedAt", ["status", "emittedAt"])
+    .index("by_storeId_and_emittedAt", ["storeId", "emittedAt"]),
+  notificationSubscription: defineTable(notificationSubscriptionSchema)
+    .index("by_organizationId_and_category", ["organizationId", "category"])
+    .index("by_recipientEmail", ["recipientEmail"]),
+  notificationDelivery: defineTable(notificationDeliverySchema)
+    .index("by_dedupeKey", ["dedupeKey"])
+    .index("by_intentId", ["intentId"])
+    .index("by_status_and_leaseExpiresAt", ["status", "leaseExpiresAt"])
+    .index("by_status_and_nextAttemptAt", ["status", "nextAttemptAt"]),
   scheduledRunLedger: defineTable(scheduledRunLedgerSchema)
     .index("by_runKey", ["runKey"])
     .index("by_storeId_cronFamily_window", [

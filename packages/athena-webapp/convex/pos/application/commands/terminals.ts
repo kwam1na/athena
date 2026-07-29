@@ -1,9 +1,9 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
-import { internal } from "../../../_generated/api";
 import { buildOperationalEvent } from "../../../operations/operationalEvents";
 import { redactSensitiveDiagnosticText } from "../diagnosticRedaction";
 import { resolveTerminalHealthAlertTransitions } from "../terminalRuntime/terminalHealthAlerts";
+import { emitNotificationWithCtx } from "../../../notifications/emit";
 import {
   ok,
   userError,
@@ -669,17 +669,18 @@ export async function submitTerminalRuntimeStatus(
         },
       }),
     );
-    await ctx.scheduler.runAfter(
-      0,
-      internal.operations.posTerminalHealthAlertEmail
-        .sendPosTerminalHealthAlertToAdmins,
-      {
+    await emitNotificationWithCtx(ctx, {
+      kind: "pos.terminal_health",
+      storeId: args.storeId,
+      subjectType: "posTerminal",
+      subjectId: String(args.terminalId),
+      payload: {
         storeId: args.storeId,
         terminalId: args.terminalId,
         conditions: healthAlertTransitions.conditionsToAlert,
         observedAt: receivedAt,
       },
-    );
+    });
   }
 
   const drawerAuthorityDirective = await buildRuntimeDrawerAuthorityDirective(

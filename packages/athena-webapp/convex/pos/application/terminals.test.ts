@@ -71,6 +71,68 @@ const newTerminal = {
   status: "active" as const,
 };
 
+// Minimal ctx stub for the notification rail's `emitNotificationWithCtx`:
+// a dedupe-aware `notificationIntent` table plus the `db.get`/`scheduler`
+// surface it touches. Mirrors the real dedupe path (query by `dedupeKey`
+// via `withIndex`) so replayed emits can be asserted to no-op.
+function createHealthAlertCtx() {
+  const notificationIntents: Array<Record<string, unknown> & { _id: string }> =
+    [];
+  const db = {
+    insert: vi.fn(async (table: string, doc: Record<string, unknown>) => {
+      if (table === "notificationIntent") {
+        const _id = `intent-${notificationIntents.length + 1}`;
+        notificationIntents.push({ _id, ...doc });
+        return _id;
+      }
+      return `${table}-1`;
+    }),
+    patch: vi.fn(),
+    get: vi.fn(async () => undefined),
+    query: vi.fn((table: string) => {
+      if (table === "notificationIntent") {
+        return {
+          withIndex: (
+            _indexName: string,
+            builder: (q: {
+              eq: (field: string, value: unknown) => unknown;
+            }) => unknown,
+          ) => {
+            let matched: (typeof notificationIntents)[number] | null = null;
+            builder({
+              eq: (field, value) => {
+                matched =
+                  notificationIntents.find((doc) => doc[field] === value) ??
+                  null;
+                return { eq: () => matched };
+              },
+            });
+            return { unique: async () => matched };
+          },
+        };
+      }
+      // Other tables (e.g. `registerSession`, reached later in
+      // submitTerminalRuntimeStatus while building drawer/register-session
+      // directives) aren't under test here — return an empty result set for
+      // whichever query shape is used against them.
+      const empty = {
+        withIndex: () => empty,
+        order: () => empty,
+        take: async () => [],
+        unique: async () => null,
+        collect: async () => [],
+        first: async () => null,
+      };
+      return empty;
+    }),
+  };
+  return {
+    db,
+    scheduler: { runAfter: vi.fn() },
+    notificationIntents,
+  };
+}
+
 vi.mock("../infrastructure/repositories/terminalRepository", () => ({
   getTerminalByFingerprint: vi.fn(),
   getTerminalById: vi.fn(),
@@ -535,10 +597,7 @@ describe("submitTerminalRuntimeStatus", () => {
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
     });
-    const alertCtx = {
-      db: { insert: vi.fn(), patch: vi.fn() },
-      scheduler: { runAfter: vi.fn() },
-    };
+    const alertCtx = createHealthAlertCtx();
 
     const base = buildRuntimeStatus();
     const result = await submitTerminalRuntimeStatus(
@@ -609,7 +668,7 @@ describe("submitTerminalRuntimeStatus", () => {
 
     // The degraded heartbeat (critical pressure + held-without-progress) is an
     // alert edge: alert timestamps stamped, operational event recorded, and
-    // one admin email scheduled.
+    // a `pos.terminal_health` notification intent emitted onto the rail.
     expect(alertCtx.db.patch).toHaveBeenCalledWith(
       "posTerminalRuntimeStatus",
       "runtime-status-1",
@@ -630,16 +689,66 @@ describe("submitTerminalRuntimeStatus", () => {
         storeId: "store-1",
       }),
     );
+    expect(alertCtx.db.insert).toHaveBeenCalledWith(
+      "notificationIntent",
+      expect.objectContaining({
+        kind: "pos.terminal_health",
+        storeId: "store-1",
+        subjectType: "posTerminal",
+        subjectId: "terminal-1",
+        payload: {
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          conditions: ["storage_critical", "sync_stuck"],
+          observedAt: 200,
+        },
+      }),
+    );
+    expect(alertCtx.notificationIntents).toHaveLength(1);
+    // Immediate-urgency kinds also schedule their dispatch at emit time.
     expect(alertCtx.scheduler.runAfter).toHaveBeenCalledWith(
       0,
       expect.anything(),
-      {
-        storeId: "store-1",
-        terminalId: "terminal-1",
-        conditions: ["storage_critical", "sync_stuck"],
-        observedAt: 200,
-      },
+      { intentId: alertCtx.notificationIntents[0]._id },
     );
+  });
+
+  it("does not create a second notification intent when an identical transition is replayed", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
+      didWrite: true,
+      materialChanged: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
+    const alertCtx = createHealthAlertCtx();
+    const base = buildRuntimeStatus();
+    const degradedStatus = {
+      ...base,
+      localStore: {
+        ...base.localStore,
+        pressure: "critical" as const,
+      },
+      sync: { ...base.sync, heldWithoutProgress: true },
+    };
+
+    const submit = () =>
+      submitTerminalRuntimeStatus(alertCtx as never, {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        status: degradedStatus,
+      });
+
+    const first = await submit();
+    expect(first.kind).toBe("ok");
+    expect(alertCtx.notificationIntents).toHaveLength(1);
+
+    // A replay with the exact same terminalId + observedAt (receivedAt is
+    // fixed by the mocked clock in this suite) hits the same dedupe key and
+    // must not create a second intent.
+    const second = await submit();
+    expect(second.kind).toBe("ok");
+    expect(alertCtx.notificationIntents).toHaveLength(1);
   });
 
   it("does not re-alert while a degraded condition persists", async () => {

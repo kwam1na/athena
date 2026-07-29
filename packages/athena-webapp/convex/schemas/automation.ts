@@ -106,6 +106,9 @@ export const automationRunSchema = v.object({
   appliedAt: v.optional(v.number()),
 });
 
+// DEPRECATED: legacy per-recipient delivery ledger for EOD action-required
+// emails. The notifications rail (convex/notifications) replaced it; the
+// table is retained only for historic rows and has no writers.
 export const automationNotificationDeliverySchema = v.object({
   storeId: v.id("store"),
   organizationId: v.optional(v.id("organization")),

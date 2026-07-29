@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Centralized admin notifications rail</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f7f5;
+      --surface: #ffffff;
+      --text: #202124;
+      --muted: #62666d;
+      --border: #dedfda;
+      --accent: #3949ab;
+      --accent-soft: #eef0ff;
+      --code: #f1f2ee;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #151616;
+        --surface: #1d1e1f;
+        --text: #ececea;
+        --muted: #b1b3b6;
+        --border: #36383a;
+        --accent: #aeb8ff;
+        --accent-soft: #252a46;
+        --code: #252627;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { width: min(1060px, calc(100% - 32px)); margin: 40px auto 72px; }
+    header, section, nav { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px; margin-bottom: 18px; }
+    .eyebrow { color: var(--accent); font-size: .75rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { margin: 6px 0 10px; font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.08; }
+    h2 { margin: 0 0 14px; font-size: 1.35rem; }
+    h3 { margin: 22px 0 8px; font-size: 1.05rem; }
+    p { margin: 8px 0; }
+    a { color: var(--accent); }
+    ul { margin: 8px 0; padding-left: 22px; }
+    li { margin: 4px 0; }
+    code { background: var(--code); border-radius: 5px; padding: 1px 6px; font-size: .88em; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+    th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; font-size: .93rem; }
+    th { background: var(--accent-soft); }
+    .meta { color: var(--muted); font-size: .9rem; }
+    .callout { background: var(--accent-soft); border-radius: 10px; padding: 12px 16px; margin: 12px 0; }
+    nav ul { columns: 2; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Implementation Plan</div>
+    <h1>Centralized admin notifications rail</h1>
+    <p class="meta">Type: feat &middot; Status: active &middot; Created: 2026-07-29 &middot; Source: <code>docs/plans/2026-07-29-002-feat-notifications-rail-plan.md</code> (canonical)</p>
+    <p>Build a platform notifications rail &mdash; intent ledger, code-owned kind registry, subscription-based audience resolution, and a leased delivery ledger drained by immediate dispatch plus a safety-net sweeper &mdash; then port the three ad hoc admin email flows (register closeout, EOD daily manager report, POS terminal health) onto it. Future communications become one registry entry plus one template.</p>
+  </header>
+
+  <nav>
+    <h2>Contents</h2>
+    <ul>
+      <li><a href="#problem">Problem &amp; Requirements</a></li>
+      <li><a href="#scope">Scope Boundaries</a></li>
+      <li><a href="#decisions">Key Technical Decisions</a></li>
+      <li><a href="#design">Design Shape</a></li>
+      <li><a href="#units">Implementation Units</a></li>
+      <li><a href="#impact">System-Wide Impact</a></li>
+      <li><a href="#risks">Risks</a></li>
+    </ul>
+  </nav>
+
+  <section id="problem">
+    <h2>Problem &amp; Requirements</h2>
+    <p>Admin emails are bolted onto call sites: three flows hand-roll recipient loops over a hardcoded <code>ADMIN_EMAILS</code> constant, duplicate the MailerSend fetch, and invent per-flow dedupe via marker fields patched onto domain rows. Register closeout alerts are lost forever on one failed send; nothing sends outside prod; there is no store- or role-based routing.</p>
+    <ul>
+      <li><strong>R1</strong> Domain code emits intents; no knowledge of channels, recipients, templates, transport.</li>
+      <li><strong>R2</strong> New communication = registry entry + template only.</li>
+      <li><strong>R3</strong> Audience from <code>notificationSubscription</code> data (org &times; optional store &times; category &times; channel), <code>ADMIN_EMAILS</code> fallback pre-seed.</li>
+      <li><strong>R4</strong> Ledgered deliveries: lease tokens, attempt caps, backoff, provider idempotency keys.</li>
+      <li><strong>R5</strong> Hybrid dispatch: immediate <code>runAfter(0)</code> + one sweeper cron.</li>
+      <li><strong>R6</strong> Render at send time from fresh data; unsendable payloads suppress.</li>
+      <li><strong>R7</strong> Environment gate lives in transport; full pipeline runs everywhere.</li>
+      <li><strong>R8</strong> Terminal delivery failure records an <code>operationalEvent</code>.</li>
+      <li><strong>R9</strong> Three flows ported; legacy markers, admin loops, ledger writers retired.</li>
+      <li><strong>R10</strong> In-app channel schema-supported but stubbed.</li>
+    </ul>
+  </section>
+
+  <section id="scope">
+    <h2>Scope Boundaries</h2>
+    <ul>
+      <li>No subscription-management UI (seeded via internal mutation).</li>
+      <li>No customer-facing email or WhatsApp porting.</li>
+      <li>Manual explicit-recipient report actions stay outside the rail.</li>
+      <li><code>ADMIN_EMAILS</code> is not deleted (fallback + new-order admin email).</li>
+      <li>Category granularity only; no per-kind overrides yet.</li>
+    </ul>
+    <div class="callout"><strong>Deferred follow-up:</strong> in-app inbox UI reading <code>readAt</code>; porting remaining admin-ish emails; subscriptions admin surface.</div>
+  </section>
+
+  <section id="decisions">
+    <h2>Key Technical Decisions</h2>
+    <ul>
+      <li><strong>Hybrid dispatch</strong> (immediate + sweeper) over sweeper-only &mdash; variance alerts need near-real-time. <em>(user-confirmed)</em></li>
+      <li><strong>Render-at-send</strong> over snapshot-at-emit &mdash; retries reflect current data; payload queries double as sendability checks. <em>(user-confirmed)</em></li>
+      <li><strong>Per-category subscriptions</strong> (<code>cash_controls</code>, <code>eod</code>, <code>system_health</code>). <em>(user-confirmed)</em></li>
+      <li><strong>Stage gate in transport</strong> &mdash; staging exercises the pipeline; non-prod redirects to <code>NOTIFICATIONS_DEV_RECIPIENT</code> or marks sent-suppressed. <em>(user-confirmed)</em></li>
+      <li><strong>Terminal failures record operational events; in-app stubbed.</strong> <em>(user-confirmed)</em></li>
+      <li>Reserving a delivery <em>is</em> leasing it: rows born <code>in_flight</code> with a lease token; no pending delivery state.</li>
+      <li>Timeouts classify retryable (not <code>outcome_unknown</code>) because sends are idempotency-keyed by delivery id.</li>
+      <li>Rail is separate from <code>operationalEvent</code>, not a projection of it.</li>
+    </ul>
+  </section>
+
+  <section id="design">
+    <h2>Design Shape</h2>
+    <p class="meta">Directional guidance for review, not implementation specification.</p>
+    <p><code>emit(kind, subject, payload)</code> inside the domain mutation &rarr; intent row (no-op on dedupeKey hit) &rarr; <code>runAfter(0)</code> dispatch for immediate kinds &rarr; reserve mutation leases one delivery per recipient &times; channel &rarr; registry <code>prepareEmail</code> loads fresh payload and renders the existing template &rarr; transport sends with <code>Idempotency-Key: deliveryId</code> and 15s timeout &rarr; lease-guarded completion (sent / retryable with backoff / terminal + operational event). A 5-minute sweeper recovers expired leases, due retries, and undispatched intents.</p>
+    <p>New module: <code>packages/athena-webapp/convex/notifications/</code> &mdash; <code>deliveryPolicy</code> (pure), <code>registry</code> (4 kinds), <code>transport</code>, <code>emit</code>, <code>dispatch</code>, <code>sweeper</code>, <code>seed</code>; tables in <code>convex/schemas/notifications.ts</code>.</p>
+  </section>
+
+  <section id="units">
+    <h2>Implementation Units</h2>
+    <table>
+      <tr><th>Unit</th><th>Goal</th><th>Deps</th><th>Key files</th></tr>
+      <tr><td>U1</td><td>Notification tables + schema registration</td><td>&mdash;</td><td><code>convex/schemas/notifications.ts</code>, <code>convex/schema.ts</code></td></tr>
+      <tr><td>U2</td><td>Delivery policy (pure) + email transport with stage gate</td><td>&mdash;</td><td><code>notifications/deliveryPolicy.ts</code>, <code>notifications/transport.ts</code> + tests</td></tr>
+      <tr><td>U3</td><td>Kind registry (4 kinds) + emit API</td><td>U1, U2</td><td><code>notifications/registry.ts</code>, <code>notifications/emit.ts</code> + tests</td></tr>
+      <tr><td>U4</td><td>Dispatch pipeline: reserve/lease, prepare, send, complete, operational-event hook, ADMIN_EMAILS fallback</td><td>U1&ndash;U3</td><td><code>notifications/dispatch.ts</code> + tests</td></tr>
+      <tr><td>U5</td><td>Sweeper + cron + subscription seed</td><td>U4</td><td><code>notifications/sweeper.ts</code>, <code>notifications/seed.ts</code>, <code>convex/crons.ts</code> + tests</td></tr>
+      <tr><td>U6</td><td>Port POS terminal health alerts</td><td>U3, U4</td><td><code>pos/application/commands/terminals.ts</code>, <code>operations/posTerminalHealthAlertEmail.ts</code></td></tr>
+      <tr><td>U7</td><td>Port register closeout variance/match (removes marker dedupe + lost-alert bug)</td><td>U3, U4</td><td><code>pos/public/sync.ts</code>, <code>operations/registerCloseoutVarianceEmail.ts</code></td></tr>
+      <tr><td>U8</td><td>Port EOD report sends; retire legacy delivery-ledger writers</td><td>U3, U4</td><td><code>operations/dailyOperationsAutomation.ts</code>, <code>operations/dailyManagerReportEmail.ts</code></td></tr>
+      <tr><td>U9</td><td>Docs + agent-docs refresh (delivery-gate solutions note)</td><td>U1&ndash;U8</td><td><code>packages/athena-webapp/docs/agent/architecture.md</code>, <code>docs/solutions/</code></td></tr>
+    </table>
+    <p class="meta">Full per-unit approach, test scenarios, and verification live in the canonical markdown plan.</p>
+  </section>
+
+  <section id="impact">
+    <h2>System-Wide Impact</h2>
+    <ul>
+      <li>Three mutation call sites switch from scheduling send actions to emitting intents; one new cron; new <code>notification_delivery_failed</code> operational event type.</li>
+      <li>Send failures become ledgered delivery states with retries instead of throws inside fire-and-forget actions.</li>
+      <li>Legacy marker fields stop being written but stay in schema; <code>automationNotificationDelivery</code> becomes read-only legacy.</li>
+      <li>Unchanged: payload queries, templates, subjects, EOD outcome policy, POS sync ingestion semantics.</li>
+    </ul>
+  </section>
+
+  <section id="risks">
+    <h2>Risks &amp; Mitigations</h2>
+    <table>
+      <tr><th>Risk</th><th>Mitigation</th></tr>
+      <tr><td>Non-prod now runs the pipeline</td><td>Transport suppresses provider calls unless <code>NOTIFICATIONS_DEV_RECIPIENT</code> is set; suppressed sends are marked.</td></tr>
+      <tr><td>Double-send during migration</td><td>Intent dedupe mirrors existing guards; per-delivery idempotency keys; action-required stays once per store-day.</td></tr>
+      <tr><td>Retry renders different content</td><td>Intended; payload queries suppress no-longer-valid alerts.</td></tr>
+      <tr><td>Sweeper/dispatch race</td><td>Lease tokens gate completion; reserve skips live leases.</td></tr>
+      <tr><td>Large branch vs delivery gate</td><td>U9 plans required docs; fingerprint stamped commit-first-then-amend.</td></tr>
+    </table>
+  </section>
+</main>
+</body>
+</html>

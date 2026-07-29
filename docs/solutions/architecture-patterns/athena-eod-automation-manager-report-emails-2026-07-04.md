@@ -22,6 +22,13 @@ delivery_diff_fingerprint: 0f3e6994d617f1b1a3a772ecfb438053d25592b79bb8dd8e68c23
 
 # Athena EOD Automation Manager Report Emails
 
+> **Update 2026-07-29:** the delivery mechanics described here (per-recipient
+> send loop, `automationNotificationDelivery` reservations, STAGE gating in the
+> automation) are superseded by the platform notifications rail — see
+> [Athena Admin Notifications Rail](athena-admin-notifications-rail-2026-07-29.md).
+> EOD automation now emits `eod.daily_manager_report` intents; payload assembly
+> guidance below still applies.
+
 ## Problem
 
 Athena needs to tell managers both when EOD automation completes a store day

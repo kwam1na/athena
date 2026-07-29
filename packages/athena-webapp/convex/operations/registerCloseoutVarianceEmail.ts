@@ -1,18 +1,10 @@
 import { v } from "convex/values";
-import {
-  internalAction,
-  internalQuery,
-  type ActionCtx,
-  type QueryCtx,
-} from "../_generated/server";
-import { internal } from "../_generated/api";
+import { internalQuery } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { ADMIN_EMAILS } from "../constants/email";
 import type { RegisterCloseoutVarianceAlertProps } from "../emails/RegisterCloseoutVarianceAlert";
 import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
 import { toDisplayAmount } from "../lib/currency";
 import type { StoreScheduleContext } from "../lib/storeScheduleTime";
-import { sendRegisterCloseoutVarianceAlertEmail } from "../mailersend";
 import { currencyFormatter } from "../utils";
 import { formatStoredReviewReason } from "../../shared/reviewReasonFormatter";
 import { resolveAppUrl } from "./dailyManagerReportEmail";
@@ -23,23 +15,9 @@ type RegisterCloseoutVariancePayload =
     storeId: Id<"store">;
   };
 
-type SentRegisterCloseoutVarianceAlert = {
-  approvalRequestId: Id<"approvalRequest">;
-  recipientEmail: string;
-  status: number;
-  storeName: string;
-};
-
 type RegisterCloseoutMatchPayload = RegisterCloseoutVarianceAlertProps & {
   registerSessionId: Id<"registerSession">;
   storeId: Id<"store">;
-};
-
-type SentRegisterCloseoutMatchReport = {
-  recipientEmail: string;
-  registerSessionId: Id<"registerSession">;
-  status: number;
-  storeName: string;
 };
 
 type CloseoutVarianceMetadata = {
@@ -237,92 +215,6 @@ export function formatRegisterCloseoutVarianceAlertOperatingDate(args: {
       args.closeoutScheduleContext.operatingDate,
   );
 }
-
-export async function sendRegisterCloseoutVarianceAlertToAdminsWithCtx(
-  ctx: Pick<ActionCtx, "runQuery">,
-  args: {
-    approvalRequestId: Id<"approvalRequest">;
-  },
-): Promise<SentRegisterCloseoutVarianceAlert[]> {
-  const payload: RegisterCloseoutVariancePayload = await ctx.runQuery(
-    internal.operations.registerCloseoutVarianceEmail
-      .getRegisterCloseoutVarianceAlertPayload,
-    {
-      approvalRequestId: args.approvalRequestId,
-    },
-  );
-  const sentAlerts: SentRegisterCloseoutVarianceAlert[] = [];
-
-  for (const recipient of ADMIN_EMAILS) {
-    const response = await sendRegisterCloseoutVarianceAlertEmail({
-      ...payload,
-      recipientEmail: recipient.email,
-      recipientName: recipient.name,
-      subject: `${payload.storeName} register variance - ${payload.registerLabel} - ${payload.operatingDate}`,
-    });
-
-    if (!response.ok) {
-      throw new Error(await response.text());
-    }
-
-    sentAlerts.push({
-      approvalRequestId: payload.approvalRequestId,
-      recipientEmail: recipient.email,
-      status: response.status,
-      storeName: payload.storeName,
-    });
-  }
-
-  return sentAlerts;
-}
-
-export const sendRegisterCloseoutVarianceAlertToAdmins = internalAction({
-  args: {
-    approvalRequestId: v.id("approvalRequest"),
-  },
-  handler: (ctx, args) =>
-    sendRegisterCloseoutVarianceAlertToAdminsWithCtx(ctx, args),
-});
-
-export async function sendRegisterCloseoutMatchReportToAdminsWithCtx(
-  ctx: Pick<ActionCtx, "runQuery">,
-  args: { registerSessionId: Id<"registerSession"> },
-): Promise<SentRegisterCloseoutMatchReport[]> {
-  const payload: RegisterCloseoutMatchPayload = await ctx.runQuery(
-    internal.operations.registerCloseoutVarianceEmail
-      .getRegisterCloseoutMatchReportPayload,
-    { registerSessionId: args.registerSessionId },
-  );
-  const sentReports: SentRegisterCloseoutMatchReport[] = [];
-
-  for (const recipient of ADMIN_EMAILS) {
-    const response = await sendRegisterCloseoutVarianceAlertEmail({
-      ...payload,
-      recipientEmail: recipient.email,
-      recipientName: recipient.name,
-      subject: `${payload.storeName} register closed - ${payload.registerLabel} - ${payload.operatingDate}`,
-    });
-
-    if (!response.ok) {
-      throw new Error(await response.text());
-    }
-
-    sentReports.push({
-      recipientEmail: recipient.email,
-      registerSessionId: payload.registerSessionId,
-      status: response.status,
-      storeName: payload.storeName,
-    });
-  }
-
-  return sentReports;
-}
-
-export const sendRegisterCloseoutMatchReportToAdmins = internalAction({
-  args: { registerSessionId: v.id("registerSession") },
-  handler: (ctx, args) =>
-    sendRegisterCloseoutMatchReportToAdminsWithCtx(ctx, args),
-});
 
 function readCloseoutVarianceMetadata(
   metadata: Doc<"approvalRequest">["metadata"],

@@ -117,4 +117,15 @@ crons.interval(
   {},
 );
 
+// The ONE cron of the notifications layer. Immediate kinds dispatch via
+// runAfter(0) at emit; this sweep is the safety net that recovers expired
+// delivery leases, fires due retries, and picks up intents whose scheduled
+// dispatch never landed. A crashed sweep leaves the work for the next tick.
+crons.interval(
+  "notifications sweep",
+  { minutes: 5 },
+  internal.notifications.sweeper.sweep,
+  {},
+);
+
 export default crons;

@@ -1,3 +1,6 @@
+/// <reference types="vite/client" />
+
+import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   assertConformsToExportedReturns,
@@ -39,10 +42,18 @@ import {
   ingestRegisterSessionActivity,
   resolveLocalSyncReview,
 } from "./sync";
+import schema from "../../schema";
+import type { Id } from "../../_generated/dataModel";
+
+const modules = Object.fromEntries(
+  Object.entries(import.meta.glob("../../**/*.ts")).map(([path, loader]) => [
+    path.replace(/^\.\.\/\.\.\//, "./"),
+    loader,
+  ]),
+);
 
 const SYNC_SECRET_HASH =
   "e3aaef72556405db4093f59a9aa8ee6539f8e6542e60d92f08e782faa0d246fa";
-const originalStage = process.env.STAGE;
 
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
@@ -57,10 +68,6 @@ function admittedCtx(ctx: { db: unknown; scheduler?: unknown }) {
 }
 
 describe("admitted POS local sync public mutation", () => {
-  afterEach(() => {
-    process.env.STAGE = originalStage;
-  });
-
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
@@ -150,429 +157,6 @@ describe("admitted POS local sync public mutation", () => {
         submittedAt: 123,
       }),
     );
-  });
-
-  it("schedules an admin email for a fresh register closeout variance review in prod", async () => {
-    process.env.STAGE = "prod";
-    const ctx = buildCtx({
-      approvalRequests: [
-        {
-          _id: "approval-variance-1",
-          metadata: {
-            localEventId: "event-closeout-1",
-            variance: -4218,
-          },
-          registerSessionId: "register-session-1",
-          requestType: "variance_review",
-          status: "pending",
-        },
-      ],
-    });
-    mocks.ingestLocalEventsWithCtx.mockResolvedValue({
-      kind: "ok",
-      data: {
-        accepted: [
-          {
-            localEventId: "event-closeout-1",
-            sequence: 2,
-            status: "projected",
-          },
-        ],
-        held: [],
-        mappings: [
-          {
-            _id: "mapping-closeout-1",
-            storeId: "store-1",
-            terminalId: "terminal-1",
-            localRegisterSessionId: "local-register-1",
-            localEventId: "event-closeout-1",
-            localIdKind: "closeout",
-            localId: "event-closeout-1",
-            cloudTable: "registerSession",
-            cloudId: "register-session-1",
-            createdAt: 124,
-          },
-        ],
-        conflicts: [],
-        syncCursor: {
-          localRegisterSessionId: "local-register-1",
-          acceptedThroughSequence: 2,
-        },
-      },
-    });
-
-    await getHandler(ingestLocalEvents)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      syncSecretHash: "sync-secret-1",
-      events: [
-        {
-          localEventId: "event-closeout-1",
-          localRegisterSessionId: "local-register-1",
-          sequence: 2,
-          eventType: "register_closed",
-          occurredAt: 123,
-          staffProfileId: "staff-1",
-          payload: {
-            countedCash: 120182,
-            notes: "Counted twice.",
-          },
-        },
-      ],
-    });
-
-    expect(ctx.db.patch).toHaveBeenCalledWith(
-      "approvalRequest",
-      "approval-variance-1",
-      {
-        metadata: expect.objectContaining({
-          localEventId: "event-closeout-1",
-          variance: -4218,
-          varianceNotificationScheduledAt: expect.any(Number),
-        }),
-      },
-    );
-    expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
-      0,
-      expect.anything(),
-      {
-        approvalRequestId: "approval-variance-1",
-      },
-    );
-  });
-
-  it("schedules an admin report for a fresh exact-match register closeout in prod", async () => {
-    process.env.STAGE = "prod";
-    const ctx = buildCtx({
-      registerSessions: [
-        {
-          _id: "register-session-1",
-          countedCash: 124400,
-          expectedCash: 124400,
-          status: "closed",
-          variance: 0,
-        },
-      ],
-    });
-    mocks.ingestLocalEventsWithCtx.mockResolvedValue({
-      kind: "ok",
-      data: {
-        accepted: [],
-        held: [],
-        mappings: [
-          {
-            cloudId: "register-session-1",
-            cloudTable: "registerSession",
-            localEventId: "event-closeout-1",
-            localIdKind: "closeout",
-          },
-        ],
-        conflicts: [],
-        syncCursor: {
-          localRegisterSessionId: "local-register-1",
-          acceptedThroughSequence: 2,
-        },
-      },
-    });
-
-    await getHandler(ingestLocalEvents)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      syncSecretHash: "sync-secret-1",
-      events: [
-        {
-          localEventId: "event-closeout-1",
-          localRegisterSessionId: "local-register-1",
-          sequence: 2,
-          eventType: "register_closed",
-          occurredAt: 123,
-          staffProfileId: "staff-1",
-          payload: { countedCash: 124400 },
-        },
-      ],
-    });
-
-    expect(ctx.db.patch).toHaveBeenCalledWith(
-      "registerSession",
-      "register-session-1",
-      {
-        closeoutNotificationLocalEventId: "event-closeout-1",
-        closeoutNotificationScheduledAt: expect.any(Number),
-      },
-    );
-    expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
-      0,
-      expect.anything(),
-      { registerSessionId: "register-session-1" },
-    );
-  });
-
-  it("schedules an admin report for a policy-allowed variance register closeout in prod", async () => {
-    process.env.STAGE = "prod";
-    const ctx = buildCtx({
-      registerSessions: [
-        {
-          _id: "register-session-1",
-          countedCash: 279000,
-          expectedCash: 279100,
-          status: "closed",
-          variance: -100,
-        },
-      ],
-    });
-    mocks.ingestLocalEventsWithCtx.mockResolvedValue({
-      kind: "ok",
-      data: {
-        accepted: [],
-        held: [],
-        mappings: [
-          {
-            cloudId: "register-session-1",
-            cloudTable: "registerSession",
-            localEventId: "event-closeout-1",
-            localIdKind: "closeout",
-          },
-        ],
-        conflicts: [],
-        syncCursor: {
-          localRegisterSessionId: "local-register-1",
-          acceptedThroughSequence: 2,
-        },
-      },
-    });
-
-    await getHandler(ingestLocalEvents)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      syncSecretHash: "sync-secret-1",
-      events: [
-        {
-          localEventId: "event-closeout-1",
-          localRegisterSessionId: "local-register-1",
-          sequence: 2,
-          eventType: "register_closed",
-          occurredAt: 123,
-          staffProfileId: "staff-1",
-          payload: { countedCash: 279000 },
-        },
-      ],
-    });
-
-    expect(ctx.db.patch).toHaveBeenCalledWith(
-      "registerSession",
-      "register-session-1",
-      {
-        closeoutNotificationLocalEventId: "event-closeout-1",
-        closeoutNotificationScheduledAt: expect.any(Number),
-      },
-    );
-    expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
-      0,
-      expect.anything(),
-      { registerSessionId: "register-session-1" },
-    );
-  });
-
-  it("does not reschedule an exact-match report for the same closeout event", async () => {
-    process.env.STAGE = "prod";
-    const ctx = buildCtx({
-      registerSessions: [
-        {
-          _id: "register-session-1",
-          closeoutNotificationLocalEventId: "event-closeout-1",
-          countedCash: 124400,
-          expectedCash: 124400,
-          status: "closed",
-          variance: 0,
-        },
-      ],
-    });
-    mocks.ingestLocalEventsWithCtx.mockResolvedValue({
-      kind: "ok",
-      data: {
-        accepted: [],
-        held: [],
-        mappings: [
-          {
-            cloudId: "register-session-1",
-            cloudTable: "registerSession",
-            localEventId: "event-closeout-1",
-            localIdKind: "closeout",
-          },
-        ],
-        conflicts: [],
-        syncCursor: {
-          localRegisterSessionId: "local-register-1",
-          acceptedThroughSequence: 2,
-        },
-      },
-    });
-
-    await getHandler(ingestLocalEvents)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      syncSecretHash: "sync-secret-1",
-      events: [
-        {
-          localEventId: "event-closeout-1",
-          localRegisterSessionId: "local-register-1",
-          sequence: 2,
-          eventType: "register_closed",
-          occurredAt: 123,
-          staffProfileId: "staff-1",
-          payload: { countedCash: 124400 },
-        },
-      ],
-    });
-
-    expect(ctx.db.patch).not.toHaveBeenCalled();
-    expect(ctx.scheduler.runAfter).not.toHaveBeenCalled();
-  });
-
-  it("does not schedule a variance alert outside prod", async () => {
-    process.env.STAGE = "dev";
-    const ctx = buildCtx({
-      approvalRequests: [
-        {
-          _id: "approval-variance-1",
-          metadata: {
-            localEventId: "event-closeout-1",
-            variance: -4218,
-          },
-          registerSessionId: "register-session-1",
-          requestType: "variance_review",
-          status: "pending",
-        },
-      ],
-    });
-    mocks.ingestLocalEventsWithCtx.mockResolvedValue({
-      kind: "ok",
-      data: {
-        accepted: [
-          {
-            localEventId: "event-closeout-1",
-            sequence: 2,
-            status: "projected",
-          },
-        ],
-        held: [],
-        mappings: [
-          {
-            _id: "mapping-closeout-1",
-            storeId: "store-1",
-            terminalId: "terminal-1",
-            localRegisterSessionId: "local-register-1",
-            localEventId: "event-closeout-1",
-            localIdKind: "closeout",
-            localId: "event-closeout-1",
-            cloudTable: "registerSession",
-            cloudId: "register-session-1",
-            createdAt: 124,
-          },
-        ],
-        conflicts: [],
-        syncCursor: {
-          localRegisterSessionId: "local-register-1",
-          acceptedThroughSequence: 2,
-        },
-      },
-    });
-
-    await getHandler(ingestLocalEvents)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      syncSecretHash: "sync-secret-1",
-      events: [
-        {
-          localEventId: "event-closeout-1",
-          localRegisterSessionId: "local-register-1",
-          sequence: 2,
-          eventType: "register_closed",
-          occurredAt: 123,
-          staffProfileId: "staff-1",
-          payload: {
-            countedCash: 120182,
-            notes: "Counted twice.",
-          },
-        },
-      ],
-    });
-
-    expect(ctx.db.patch).not.toHaveBeenCalled();
-    expect(ctx.scheduler.runAfter).not.toHaveBeenCalled();
-  });
-
-  it("does not reschedule a variance alert that was already marked", async () => {
-    process.env.STAGE = "prod";
-    const ctx = buildCtx({
-      approvalRequests: [
-        {
-          _id: "approval-variance-1",
-          metadata: {
-            localEventId: "event-closeout-1",
-            variance: -4218,
-            varianceNotificationScheduledAt: 123,
-          },
-          registerSessionId: "register-session-1",
-          requestType: "variance_review",
-          status: "pending",
-        },
-      ],
-    });
-    mocks.ingestLocalEventsWithCtx.mockResolvedValue({
-      kind: "ok",
-      data: {
-        accepted: [
-          {
-            localEventId: "event-closeout-1",
-            sequence: 2,
-            status: "projected",
-          },
-        ],
-        held: [],
-        mappings: [
-          {
-            _id: "mapping-closeout-1",
-            storeId: "store-1",
-            terminalId: "terminal-1",
-            localRegisterSessionId: "local-register-1",
-            localEventId: "event-closeout-1",
-            localIdKind: "closeout",
-            localId: "event-closeout-1",
-            cloudTable: "registerSession",
-            cloudId: "register-session-1",
-            createdAt: 124,
-          },
-        ],
-        conflicts: [],
-        syncCursor: {
-          localRegisterSessionId: "local-register-1",
-          acceptedThroughSequence: 2,
-        },
-      },
-    });
-
-    await getHandler(ingestLocalEvents)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      syncSecretHash: "sync-secret-1",
-      events: [
-        {
-          localEventId: "event-closeout-1",
-          localRegisterSessionId: "local-register-1",
-          sequence: 2,
-          eventType: "register_closed",
-          occurredAt: 123,
-          staffProfileId: "staff-1",
-          payload: {
-            countedCash: 120182,
-          },
-        },
-      ],
-    });
-
-    expect(ctx.db.patch).not.toHaveBeenCalled();
-    expect(ctx.scheduler.runAfter).not.toHaveBeenCalled();
   });
 
   it("accepts actor events without staff proof at the public sync boundary", async () => {
@@ -1477,6 +1061,230 @@ describe("resolveLocalSyncReview public mutation", () => {
       kind: "ok",
       data: { resolvedEventIds: ["event-review-1"], resolvedConflictCount: 1 },
     });
+  });
+});
+
+describe("register closeout notification intents", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    // Fake timers keep the emitted intents' runAfter(0) dispatch from firing
+    // in the background; these tests assert the transactional emit only.
+    vi.useFakeTimers();
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "athena-user-1",
+    });
+    mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  type CloseoutWorld = {
+    organizationId: Id<"organization">;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+    registerSessionId: Id<"registerSession">;
+  };
+
+  async function seedCloseoutWorld(
+    t: ReturnType<typeof convexTest>,
+  ): Promise<CloseoutWorld> {
+    return t.run(async (ctx) => {
+      const userId = await ctx.db.insert("athenaUser", {
+        email: "closeout-sync@example.test",
+      });
+      const organizationId = await ctx.db.insert("organization", {
+        createdByUserId: userId,
+        name: "Wigclub",
+        slug: "wigclub",
+      });
+      const storeId = await ctx.db.insert("store", {
+        createdByUserId: userId,
+        currency: "GHS",
+        name: "Wigclub",
+        organizationId,
+        slug: "wigclub",
+      });
+      const terminalId = await ctx.db.insert("posTerminal", {
+        storeId,
+        fingerprintHash: "fingerprint-1",
+        syncSecretHash: SYNC_SECRET_HASH,
+        displayName: "Front counter",
+        registeredByUserId: userId,
+        browserInfo: { userAgent: "vitest" },
+        registeredAt: 1,
+        status: "active",
+      });
+      const registerSessionId = await ctx.db.insert("registerSession", {
+        storeId,
+        terminalId,
+        status: "closed",
+        openedAt: 1,
+        closedAt: 2,
+        openingFloat: 20000,
+        expectedCash: 124400,
+        countedCash: 124400,
+        variance: 0,
+      });
+      return { organizationId, storeId, terminalId, registerSessionId };
+    });
+  }
+
+  function mockIngestWithCloseoutMapping(
+    world: CloseoutWorld,
+    localEventId: string,
+  ) {
+    mocks.ingestLocalEventsWithCtx.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [{ localEventId, sequence: 2, status: "projected" }],
+        held: [],
+        mappings: [
+          {
+            cloudId: world.registerSessionId,
+            cloudTable: "registerSession",
+            localEventId,
+            localIdKind: "closeout",
+          },
+        ],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "local-register-1",
+          acceptedThroughSequence: 2,
+        },
+      },
+    });
+  }
+
+  async function uploadCloseout(
+    t: ReturnType<typeof convexTest>,
+    world: CloseoutWorld,
+    localEventId: string,
+  ) {
+    return t.run(async (ctx) =>
+      getHandler(ingestLocalEvents)(ctx as never, {
+        storeId: world.storeId,
+        terminalId: world.terminalId,
+        syncSecretHash: "sync-secret-1",
+        events: [
+          {
+            localEventId,
+            localRegisterSessionId: "local-register-1",
+            sequence: 2,
+            eventType: "register_closed",
+            occurredAt: 123,
+            staffProfileId: "staff-1",
+            payload: { countedCash: 124400 },
+          },
+        ],
+      }),
+    );
+  }
+
+  async function listIntents(t: ReturnType<typeof convexTest>) {
+    return t.run(async (ctx) =>
+      ctx.db.query("notificationIntent").take(10),
+    );
+  }
+
+  it("emits one register.closeout_variance intent for a fresh variance review without marker writes", async () => {
+    const t = convexTest(schema, modules);
+    const world = await seedCloseoutWorld(t);
+    const approvalRequestId = await t.run(async (ctx) =>
+      ctx.db.insert("approvalRequest", {
+        storeId: world.storeId,
+        organizationId: world.organizationId,
+        requestType: "variance_review",
+        subjectType: "registerSession",
+        subjectId: String(world.registerSessionId),
+        status: "pending",
+        registerSessionId: world.registerSessionId,
+        createdAt: 2,
+        metadata: { localEventId: "event-closeout-1", variance: -4218 },
+      }),
+    );
+    mockIngestWithCloseoutMapping(world, "event-closeout-1");
+
+    await uploadCloseout(t, world, "event-closeout-1");
+
+    const intents = await listIntents(t);
+    expect(intents).toHaveLength(1);
+    expect(intents[0]).toMatchObject({
+      kind: "register.closeout_variance",
+      storeId: world.storeId,
+      organizationId: world.organizationId,
+      subjectType: "approvalRequest",
+      subjectId: String(approvalRequestId),
+      payload: { approvalRequestId },
+    });
+
+    const approvalRequest = await t.run(async (ctx) =>
+      ctx.db.get("approvalRequest", approvalRequestId),
+    );
+    expect(approvalRequest?.metadata).not.toHaveProperty(
+      "varianceNotificationScheduledAt",
+    );
+  });
+
+  it("emits one register.closeout_match intent for a clean close without marker writes", async () => {
+    const t = convexTest(schema, modules);
+    const world = await seedCloseoutWorld(t);
+    mockIngestWithCloseoutMapping(world, "event-closeout-1");
+
+    await uploadCloseout(t, world, "event-closeout-1");
+
+    const intents = await listIntents(t);
+    expect(intents).toHaveLength(1);
+    expect(intents[0]).toMatchObject({
+      kind: "register.closeout_match",
+      storeId: world.storeId,
+      organizationId: world.organizationId,
+      subjectType: "registerSession",
+      subjectId: String(world.registerSessionId),
+      payload: {
+        registerSessionId: world.registerSessionId,
+        localEventId: "event-closeout-1",
+      },
+    });
+
+    const registerSession = await t.run(async (ctx) =>
+      ctx.db.get("registerSession", world.registerSessionId),
+    );
+    expect(registerSession?.closeoutNotificationLocalEventId).toBeUndefined();
+    expect(registerSession?.closeoutNotificationScheduledAt).toBeUndefined();
+  });
+
+  it("does not emit a duplicate intent for a replayed sync upload", async () => {
+    const t = convexTest(schema, modules);
+    const world = await seedCloseoutWorld(t);
+    mockIngestWithCloseoutMapping(world, "event-closeout-1");
+
+    await uploadCloseout(t, world, "event-closeout-1");
+    await uploadCloseout(t, world, "event-closeout-1");
+
+    const intents = await listIntents(t);
+    expect(intents).toHaveLength(1);
+    expect(intents[0]).toMatchObject({ kind: "register.closeout_match" });
+  });
+
+  it("emits a new match intent when the session recloses under a new local event id", async () => {
+    const t = convexTest(schema, modules);
+    const world = await seedCloseoutWorld(t);
+
+    mockIngestWithCloseoutMapping(world, "event-closeout-1");
+    await uploadCloseout(t, world, "event-closeout-1");
+    mockIngestWithCloseoutMapping(world, "event-closeout-2");
+    await uploadCloseout(t, world, "event-closeout-2");
+
+    const intents = await listIntents(t);
+    expect(intents).toHaveLength(2);
+    expect(intents.map((intent) => intent.payload.localEventId).sort()).toEqual(
+      ["event-closeout-1", "event-closeout-2"],
+    );
+    expect(
+      new Set(intents.map((intent) => intent.kind)),
+    ).toEqual(new Set(["register.closeout_match"]));
   });
 });
 

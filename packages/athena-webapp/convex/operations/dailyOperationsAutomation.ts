@@ -49,6 +49,7 @@ import {
   getStoreScheduleContextForStoreAtWithCtx,
   resolveStoreOperatingRangeForDateWithCtx,
 } from "../inventory/storeSchedule";
+import type { EmitNotificationResult } from "../notifications/emit";
 
 export const DAILY_OPERATIONS_AUTOMATION_DOMAIN = "daily_operations";
 const OPENING_AUTO_START_ACTION = "opening.auto_start";
@@ -2093,16 +2094,12 @@ type DailyOperationsAutomationResult = Awaited<
   ReturnType<typeof runConfiguredDailyOperationsAutomationWithCtx>
 >;
 
-type DailyManagerReportAutomationSendResult = {
+type DailyManagerReportAutomationEmitResult = {
+  created: boolean;
+  intentId: Id<"notificationIntent">;
   operatingDate: string;
-  reports: Array<{
-    dailyCloseId?: Id<"dailyClose">;
-    operatingDate: string;
-    recipientEmail: string;
-    status: number;
-    storeName: string;
-  }>;
   runId: Id<"automationRun">;
+  status: "applied" | "prepared" | "skipped" | "failed";
   storeId: Id<"store">;
 };
 
@@ -2127,49 +2124,46 @@ function dailyManagerReportStatusForEodAutoCompleteResult(
   return classification === "completed" ? null : "skipped";
 }
 
-function shouldSendScheduledDailyManagerReports() {
-  return process.env.STAGE === "prod";
-}
-
-export async function sendDailyManagerReportsForEodAutomationWithCtx(
-  ctx: Pick<ActionCtx, "runAction">,
+export async function emitDailyManagerReportNotificationsForEodAutomationWithCtx(
+  ctx: Pick<ActionCtx, "runMutation">,
   args: {
     results: DailyOperationsAutomationResult["eodAutoCompleteResults"];
   },
-): Promise<DailyManagerReportAutomationSendResult[]> {
-  if (!shouldSendScheduledDailyManagerReports()) {
-    return [];
-  }
-
+): Promise<DailyManagerReportAutomationEmitResult[]> {
   const reportableResults = args.results.flatMap((result) => {
     const status = dailyManagerReportStatusForEodAutoCompleteResult(result);
     return result && status ? [{ result, status }] : [];
   });
-  const sentReports: DailyManagerReportAutomationSendResult[] = [];
+  const emittedIntents: DailyManagerReportAutomationEmitResult[] = [];
 
   for (const { result, status } of reportableResults) {
-    const reports = await ctx.runAction(
-      internal.operations.dailyManagerReportEmail
-        .sendDailyManagerReportToAdminsForDate,
-      {
-        ...(status === "skipped" || status === "failed"
-          ? { automationRunId: result.run._id }
-          : {}),
-        operatingDate: result.run.operatingDate,
-        status,
+    const { created, intentId }: EmitNotificationResult =
+      await ctx.runMutation(internal.notifications.emit.emitNotification, {
+        kind: "eod.daily_manager_report",
         storeId: result.run.storeId,
-      },
-    );
+        subjectType: "dailyClose",
+        subjectId: `${result.run.storeId}:${result.run.operatingDate}`,
+        payload: {
+          operatingDate: result.run.operatingDate,
+          status,
+          storeId: result.run.storeId,
+          ...(status === "skipped" || status === "failed"
+            ? { automationRunId: result.run._id }
+            : {}),
+        },
+      });
 
-    sentReports.push({
+    emittedIntents.push({
+      created,
+      intentId,
       operatingDate: result.run.operatingDate,
-      reports: reports as DailyManagerReportAutomationSendResult["reports"],
       runId: result.run._id,
+      status,
       storeId: result.run.storeId,
     });
   }
 
-  return sentReports;
+  return emittedIntents;
 }
 
 export const runScheduledDailyOperationsAutomation = internalMutation({
@@ -2194,7 +2188,7 @@ export const runConfiguredDailyOperationsAutomation = internalAction({
       {},
     );
     const dailyManagerReportResults =
-      await sendDailyManagerReportsForEodAutomationWithCtx(ctx, {
+      await emitDailyManagerReportNotificationsForEodAutomationWithCtx(ctx, {
         results: result.eodAutoCompleteResults,
       });
 

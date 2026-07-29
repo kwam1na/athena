@@ -1,14 +1,7 @@
 import { v } from "convex/values";
-import {
-  internalAction,
-  internalQuery,
-  type ActionCtx,
-} from "../_generated/server";
-import { internal } from "../_generated/api";
+import { internalQuery } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
-import { ADMIN_EMAILS } from "../constants/email";
 import type { PosTerminalHealthAlertProps } from "../emails/PosTerminalHealthAlert";
-import { sendPosTerminalHealthAlertEmail } from "../mailersend";
 import { resolveAppUrl } from "./dailyManagerReportEmail";
 import type { PosTerminalHealthAlertCondition } from "../pos/application/terminalRuntime/terminalHealthAlerts";
 
@@ -26,13 +19,6 @@ const CONDITION_SUMMARIES: Record<PosTerminalHealthAlertCondition, string> = {
 
 type PosTerminalHealthAlertPayload = PosTerminalHealthAlertProps & {
   storeId: Id<"store">;
-  terminalId: Id<"posTerminal">;
-};
-
-type SentPosTerminalHealthAlert = {
-  recipientEmail: string;
-  status: number;
-  storeName: string;
   terminalId: Id<"posTerminal">;
 };
 
@@ -72,52 +58,4 @@ export const getPosTerminalHealthAlertPayload = internalQuery({
       terminalLabel,
     };
   },
-});
-
-export async function sendPosTerminalHealthAlertToAdminsWithCtx(
-  ctx: Pick<ActionCtx, "runQuery">,
-  args: {
-    storeId: Id<"store">;
-    terminalId: Id<"posTerminal">;
-    conditions: PosTerminalHealthAlertCondition[];
-    observedAt: number;
-  },
-): Promise<SentPosTerminalHealthAlert[]> {
-  const payload: PosTerminalHealthAlertPayload = await ctx.runQuery(
-    internal.operations.posTerminalHealthAlertEmail
-      .getPosTerminalHealthAlertPayload,
-    args,
-  );
-  const sentAlerts: SentPosTerminalHealthAlert[] = [];
-
-  for (const recipient of ADMIN_EMAILS) {
-    const response = await sendPosTerminalHealthAlertEmail({
-      ...payload,
-      recipientEmail: recipient.email,
-      recipientName: recipient.name,
-    });
-
-    if (!response.ok) {
-      throw new Error(await response.text());
-    }
-
-    sentAlerts.push({
-      recipientEmail: recipient.email,
-      status: response.status,
-      storeName: payload.storeName,
-      terminalId: payload.terminalId,
-    });
-  }
-
-  return sentAlerts;
-}
-
-export const sendPosTerminalHealthAlertToAdmins = internalAction({
-  args: {
-    storeId: v.id("store"),
-    terminalId: v.id("posTerminal"),
-    conditions: v.array(conditionValidator),
-    observedAt: v.number(),
-  },
-  handler: (ctx, args) => sendPosTerminalHealthAlertToAdminsWithCtx(ctx, args),
 });

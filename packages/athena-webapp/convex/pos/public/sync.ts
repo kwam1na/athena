@@ -1,6 +1,5 @@
 import { v } from "convex/values";
 
-import { internal } from "../../_generated/api";
 import { mutation } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx } from "../../_generated/server";
@@ -35,7 +34,7 @@ import {
   posRegisterSessionActivitySkipCodeValidator,
 } from "../../schemas/pos/posRegisterSessionActivity";
 import { ingestRegisterSessionActivityWithCtx } from "../application/sync/posRegisterSessionActivity";
-import { patchRegisterSessionWithAuthority } from "../../operations/registerSessionAuthorityRevision";
+import { emitNotificationWithCtx } from "../../notifications/emit";
 import {
   MAX_LOCAL_SYNC_REVIEW_EVENTS,
   resolveLocalSyncReviewWithCtx,
@@ -263,10 +262,7 @@ export const ingestLocalEvents = mutation({
         submittedAt: args.submittedAt ?? Date.now(),
       });
 
-      if (
-        result.kind === "ok" &&
-        shouldScheduleRegisterCloseoutNotifications()
-      ) {
+      if (result.kind === "ok") {
         await scheduleRegisterCloseoutNotifications(ctx, {
           events: args.events,
           mappings: result.data.mappings,
@@ -277,10 +273,6 @@ export const ingestLocalEvents = mutation({
     },
   ),
 });
-
-function shouldScheduleRegisterCloseoutNotifications() {
-  return process.env.STAGE === "prod";
-}
 
 async function scheduleRegisterCloseoutNotifications(
   ctx: MutationCtx,
@@ -326,18 +318,13 @@ async function scheduleRegisterCloseoutNotifications(
     );
 
     if (approvalRequest) {
-      await ctx.db.patch("approvalRequest", approvalRequest._id, {
-        metadata: {
-          ...(approvalRequest.metadata ?? {}),
-          varianceNotificationScheduledAt: Date.now(),
-        },
+      await emitNotificationWithCtx(ctx, {
+        kind: "register.closeout_variance",
+        storeId: approvalRequest.storeId,
+        subjectType: "approvalRequest",
+        subjectId: String(approvalRequest._id),
+        payload: { approvalRequestId: approvalRequest._id },
       });
-      await ctx.scheduler.runAfter(
-        0,
-        internal.operations.registerCloseoutVarianceEmail
-          .sendRegisterCloseoutVarianceAlertToAdmins,
-        { approvalRequestId: approvalRequest._id },
-      );
       continue;
     }
 
@@ -348,22 +335,18 @@ async function scheduleRegisterCloseoutNotifications(
     if (
       !registerSession ||
       registerSession.status !== "closed" ||
-      typeof registerSession.countedCash !== "number" ||
-      registerSession.closeoutNotificationLocalEventId === mapping.localEventId
+      typeof registerSession.countedCash !== "number"
     ) {
       continue;
     }
 
-    await patchRegisterSessionWithAuthority(ctx, registerSessionId, {
-      closeoutNotificationLocalEventId: mapping.localEventId,
-      closeoutNotificationScheduledAt: Date.now(),
+    await emitNotificationWithCtx(ctx, {
+      kind: "register.closeout_match",
+      storeId: registerSession.storeId,
+      subjectType: "registerSession",
+      subjectId: String(registerSessionId),
+      payload: { registerSessionId, localEventId: mapping.localEventId },
     });
-    await ctx.scheduler.runAfter(
-      0,
-      internal.operations.registerCloseoutVarianceEmail
-        .sendRegisterCloseoutMatchReportToAdmins,
-      { registerSessionId },
-    );
   }
 }
 
@@ -375,8 +358,7 @@ function isFreshVarianceReviewForCloseout(
   return (
     metadata?.localEventId === localEventId &&
     typeof metadata.variance === "number" &&
-    metadata.variance !== 0 &&
-    typeof metadata.varianceNotificationScheduledAt !== "number"
+    metadata.variance !== 0
   );
 }
 
