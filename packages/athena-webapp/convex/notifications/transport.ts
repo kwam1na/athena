@@ -4,7 +4,11 @@ import {
 } from "./deliveryPolicy";
 
 const MAILERSEND_API_URL = "https://api.mailersend.com/v1/email";
-const SEND_TIMEOUT_MS = 15_000;
+// Exported so the batch/lease invariant can be asserted in tests: one
+// dispatch's serial batch (MAX_DELIVERIES_PER_DISPATCH x this timeout) must
+// fit inside DELIVERY_LEASE_MAX_MS, or the sweeper can reclaim a live
+// dispatch's lease.
+export const SEND_TIMEOUT_MS = 15_000;
 
 export type NotificationEmailRequest = {
   deliveryId: string;

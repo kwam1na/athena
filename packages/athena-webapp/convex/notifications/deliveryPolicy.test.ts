@@ -12,7 +12,9 @@ import {
   joinKeyComponents,
   nextBackoffMs,
   normalizeRecipientEmail,
+  MAX_DELIVERIES_PER_DISPATCH,
 } from "./deliveryPolicy";
+import { SEND_TIMEOUT_MS } from "./transport";
 
 describe("classifyDeliveryResult", () => {
   it("classifies 2xx as sent", () => {
@@ -180,5 +182,29 @@ describe("recipient normalization and dedupe keys", () => {
     expect(
       deliveryDedupeKey({ ...base, recipientEmail: "A@B.COM" }),
     ).toBe(deliveryDedupeKey({ ...base, recipientEmail: " a@b.com " }));
+  });
+});
+
+describe("batch and lease invariants", () => {
+  it("keeps one dispatch's worst-case serial batch inside the lease", () => {
+    // This inequality is the premise of the bounded-batch design: if a batch
+    // can outlive its lease, the sweeper reclaims rows from a live dispatch
+    // and inflates attemptCount for mail that was actually sent. Raising
+    // MAX_DELIVERIES_PER_DISPATCH without re-checking this reopens that.
+    const worstCaseBatchMs = MAX_DELIVERIES_PER_DISPATCH * SEND_TIMEOUT_MS;
+    expect(worstCaseBatchMs).toBeLessThan(DELIVERY_LEASE_MAX_MS);
+  });
+
+  it("keeps the lease ceiling inside the platform action time limit", () => {
+    // A lease longer than the action limit means a killed action's rows stay
+    // in_flight past the point anything could still be sending them.
+    const CONVEX_ACTION_LIMIT_MS = 10 * 60_000;
+    expect(DELIVERY_LEASE_MAX_MS).toBeLessThan(CONVEX_ACTION_LIMIT_MS);
+  });
+
+  it("sizes a full batch's lease at the ceiling", () => {
+    expect(computeDeliveryLeaseMs(MAX_DELIVERIES_PER_DISPATCH)).toBe(
+      DELIVERY_LEASE_MAX_MS,
+    );
   });
 });

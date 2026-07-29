@@ -421,10 +421,34 @@ const MAX_VARIANCE_REVIEWS_PER_CLOSEOUT = 10;
 // approvalRequest but missed here would silently stop matching reviews in
 // that status, and this lookup falling through is what sends an all-clear
 // for a drawer that was short. Drift here has been a blocker twice.
-const APPROVAL_REQUEST_STATUSES = approvalRequestSchema.fields.status
-  .members as ReadonlyArray<{ value: ApprovalRequestStatus }>;
+const APPROVAL_REQUEST_STATUSES = readApprovalRequestStatuses();
 
 type ApprovalRequestStatus = Doc<"approvalRequest">["status"];
+
+// The cast below is unavoidable (the validator's members are structurally
+// loose) but it also defeats type checking on the derivation, so verify the
+// shape at module load instead. A nested union — v.union(sharedStatuses,
+// v.literal("expired")) — yields members without a string `value`, which
+// would silently produce q.eq("status", undefined) and reintroduce the
+// missed-status fall-through that has been a blocker twice.
+function readApprovalRequestStatuses(): ReadonlyArray<{
+  value: ApprovalRequestStatus;
+}> {
+  const members = approvalRequestSchema.fields.status.members as ReadonlyArray<{
+    value?: unknown;
+  }>;
+  const statuses = members.filter(
+    (member): member is { value: ApprovalRequestStatus } =>
+      typeof member.value === "string",
+  );
+  if (statuses.length !== members.length || statuses.length === 0) {
+    throw new Error(
+      "approvalRequest status validator is not a flat union of string literals; " +
+        "the register closeout variance lookup cannot enumerate statuses safely.",
+    );
+  }
+  return statuses;
+}
 
 function isVarianceReviewForCloseout(
   approvalRequest: Doc<"approvalRequest">,
