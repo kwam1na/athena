@@ -86,6 +86,8 @@ export const reportOverviewSchema = v.object({
   updatedAt: v.number(),
   currency: v.string(),
   today: periodSnapshot,
+  // Optional while existing singleton documents are refreshed by the sweeper.
+  yesterday: v.optional(periodSnapshot),
   weekToDate: periodSnapshot,
   priorWeek: periodSnapshot,
   trailing30: periodSnapshot,

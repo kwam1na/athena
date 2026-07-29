@@ -197,6 +197,9 @@ describe("buildOverviewData", () => {
     expect(data.priorWeek.netSalesMinor).toBe(600);
     expect(data.priorWeek.dayCount).toBe(3);
     expect(data.today.netSalesMinor).toBe(500);
+    expect(data.yesterday.netSalesMinor).toBe(400);
+    expect(data.yesterday.unitsSold).toBe(4);
+    expect(data.yesterday.dayCount).toBe(1);
     expect(data.updatedAt).toBe(42);
     expect(data.currency).toBe("GHS");
   });
@@ -249,6 +252,7 @@ describe("buildOverviewData", () => {
       updatedAt: 7,
       currency: "GHS",
       today: emptySnapshot(),
+      yesterday: emptySnapshot(),
       weekToDate: emptySnapshot(),
       priorWeek: emptySnapshot(),
       trailing30: emptySnapshot(),

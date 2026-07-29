@@ -1,5 +1,4 @@
 import { useQuery } from "convex/react";
-import { useState } from "react";
 
 import { EmptyState } from "@/components/states/empty/empty-state";
 import { FadeIn } from "@/components/common/FadeIn";
@@ -9,32 +8,45 @@ import { cn } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
 import type { ReportOverviewData } from "~/shared/reportsContract";
 import { ReportPeriodMetrics } from "./ReportPeriodMetrics";
+import { ReportFreshness } from "./ReportFreshness";
 import { ReportTrendChart } from "./ReportTrendChart";
 import { ReportTrustStrip } from "./ReportTrustStrip";
 import { useStableReportQuery } from "./useStableReportQuery";
-
-const OVERVIEW_WINDOWS = [
-  { label: "Today", value: "today" },
-  { label: "Week to date", value: "weekToDate" },
-  { label: "Trailing 30 days", value: "trailing30" },
-] as const;
-
-type OverviewWindow = (typeof OVERVIEW_WINDOWS)[number]["value"];
+import {
+  REPORT_OVERVIEW_WINDOWS,
+  REPORT_OVERVIEW_WINDOW_LABELS,
+  type ReportOverviewWindow,
+} from "./reportPeriodKeys";
 
 /**
- * Prior-window values for the selected window. Only week-to-date has a
- * like-for-like predecessor in the payload; today and trailing-30 show
- * settlement context instead of an invented comparison.
+ * Prior-window values for comparable windows. Today compares with the
+ * previous calendar day, week-to-date with the prior week, and trailing-30
+ * remains context-only.
  */
 function comparisonFor(
   overview: ReportOverviewData,
-  window: OverviewWindow,
-): { netSalesMinor?: number; unitsSold?: number } | undefined {
+  window: ReportOverviewWindow,
+):
+  | {
+      netSalesMinor?: number;
+      unitsSold?: number;
+      priorWindowLabel: string;
+    }
+  | undefined {
+  if (window === "today") {
+    return {
+      netSalesMinor: overview.yesterday.netSalesMinor,
+      unitsSold: overview.yesterday.unitsSold,
+      priorWindowLabel: "yesterday",
+    };
+  }
+
   if (window !== "weekToDate") return undefined;
 
   return {
     netSalesMinor: overview.priorWeek.netSalesMinor,
     unitsSold: overview.priorWeek.unitsSold,
+    priorWindowLabel: "prior week",
   };
 }
 
@@ -42,9 +54,14 @@ function comparisonFor(
  * Overview tab. Subscribes to `reports.queries.getOverview` ONLY — one
  * query, one document — per the contract's read budget.
  */
-export function ReportsOverviewView() {
+export function ReportsOverviewView({
+  selectedWindow,
+  onSelectedWindowChange,
+}: {
+  selectedWindow: ReportOverviewWindow;
+  onSelectedWindowChange: (window: ReportOverviewWindow) => void;
+}) {
   const { activeStore } = useGetActiveStore();
-  const [selectedWindow, setSelectedWindow] = useState<OverviewWindow>("today");
   const {
     data: overview,
     isInitialLoad,
@@ -74,10 +91,7 @@ export function ReportsOverviewView() {
   }
 
   const { currency } = overview;
-  const activeWindow = OVERVIEW_WINDOWS.find(
-    (option) => option.value === selectedWindow,
-  )!;
-
+  const comparison = comparisonFor(overview, selectedWindow);
   return (
     <FadeIn>
       <section
@@ -91,42 +105,54 @@ export function ReportsOverviewView() {
         data-testid="reports-overview"
       >
         <div className="space-y-layout-md">
-          <Tabs
-            onValueChange={(next) => setSelectedWindow(next as OverviewWindow)}
-            value={selectedWindow}
-          >
-            <TabsList
-              aria-label="Report period"
-              className="h-auto flex-wrap justify-start gap-1 border border-border bg-surface-raised p-1 text-muted-foreground shadow-surface"
-              size="sm"
+          <div className="flex flex-wrap items-center justify-between gap-layout-sm">
+            <Tabs
+              onValueChange={(next) =>
+                onSelectedWindowChange(next as ReportOverviewWindow)
+              }
+              value={selectedWindow}
             >
-              {OVERVIEW_WINDOWS.map((option) => (
-                <TabsTrigger
-                  className="min-h-8 px-3 data-[state=active]:bg-primary-soft data-[state=active]:text-primary data-[state=active]:shadow-none"
-                  key={option.value}
-                  size="sm"
-                  value={option.value}
-                >
-                  {option.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+              <TabsList
+                aria-label="Report period"
+                className="h-auto flex-wrap justify-start gap-1 border border-border bg-surface-raised p-1 text-muted-foreground shadow-surface"
+                size="sm"
+              >
+                {REPORT_OVERVIEW_WINDOWS.map((window) => (
+                  <TabsTrigger
+                    className="min-h-8 px-3 data-[state=active]:bg-primary-soft data-[state=active]:text-primary data-[state=active]:shadow-none"
+                    key={window}
+                    size="sm"
+                    value={window}
+                  >
+                    {REPORT_OVERVIEW_WINDOW_LABELS[window]}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+
+            <ReportFreshness updatedAt={overview.updatedAt} />
+          </div>
 
           <ReportPeriodMetrics
-            comparison={comparisonFor(overview, selectedWindow)}
+            comparison={comparison}
             currency={currency}
-            periodLabel={activeWindow.label}
-            priorWindowLabel="prior week"
+            periodLabel={REPORT_OVERVIEW_WINDOW_LABELS[selectedWindow]}
+            priorWindowLabel={comparison?.priorWindowLabel ?? "prior period"}
             snapshot={overview[selectedWindow]}
           />
         </div>
 
-        <ReportTrendChart
-          currency={currency}
-          dailyTrend={overview.dailyTrend}
-        />
-        <ReportTrustStrip trust={overview.trust} />
+        <div className="space-y-layout-sm">
+          <ReportTrendChart
+            currency={currency}
+            dailyTrend={overview.dailyTrend}
+          />
+          <ReportTrustStrip
+            reportedDayCount={overview.trailing30.dayCount}
+            today={overview.dailyTrend.at(-1)?.operatingDate}
+            trust={overview.trust}
+          />
+        </div>
       </section>
     </FadeIn>
   );

@@ -13,6 +13,7 @@ import type {
   ReportSkuPeriodRow,
   ReportSkuSortBy,
 } from "../../shared/reportsContract";
+import { emptySnapshot } from "./overview";
 
 /**
  * Slice D — read queries for the rebuilt reports layer.
@@ -37,9 +38,7 @@ function requireValidDateRange(startDate: string, endDate: string): void {
   }
   const span = inclusiveDaySpan(startDate, endDate);
   if (!Number.isFinite(span) || span > RANGE_MAX_SPAN_DAYS) {
-    throw new Error(
-      `Date range must not exceed ${RANGE_MAX_SPAN_DAYS} days.`,
-    );
+    throw new Error(`Date range must not exceed ${RANGE_MAX_SPAN_DAYS} days.`);
   }
 }
 
@@ -65,9 +64,7 @@ function toReportDayRow(doc: Doc<"reportDay">): ReportDayRow {
   };
 }
 
-function toSkuPeriodRow(
-  doc: Doc<"reportPeriodSkuRollup">,
-): ReportSkuPeriodRow {
+function toSkuPeriodRow(doc: Doc<"reportPeriodSkuRollup">): ReportSkuPeriodRow {
   return {
     productSkuId: doc.productSkuId,
     periodKey: doc.periodKey,
@@ -101,6 +98,7 @@ export const getOverview = query({
       updatedAt: doc.updatedAt,
       currency: doc.currency,
       today: doc.today,
+      yesterday: doc.yesterday ?? emptySnapshot(),
       weekToDate: doc.weekToDate,
       priorWeek: doc.priorWeek,
       trailing30: doc.trailing30,
@@ -184,7 +182,7 @@ function decodeCursor(cursor: string): ListPeriodSkusCursor {
  * sortKey are disambiguated by productSkuId in application code rather
  * than by a compound index (the derived schema is frozen).
  */
-const TIE_BREAK_OVERFETCH = REPORT_SKU_PAGE_SIZE;
+const TIE_BREAK_OVERFETCH = 25;
 
 export const listPeriodSkus = query({
   args: {
@@ -199,6 +197,7 @@ export const listPeriodSkus = query({
   ): Promise<{
     rows: ReportSkuPeriodRow[];
     continueCursor: string | null;
+    updatedAt: number | null;
   }> => {
     await requireReportsStoreAccess(ctx, args.storeId);
 
@@ -223,14 +222,16 @@ export const listPeriodSkus = query({
         ? "by_storeId_periodKey_revenueSortKey"
         : "by_storeId_periodKey_unitsSortKey";
 
-    // Read budget: page size (25) + 1 lookahead row to detect continuation,
+    // Read budget: page size (10) + 1 lookahead row to detect continuation,
     // plus up to TIE_BREAK_OVERFETCH (25) extra rows to skip already-seen
-    // sort-key ties at the cursor boundary — bounded at 51 docs worst case.
+    // sort-key ties at the cursor boundary — bounded at 36 docs worst case.
     const takeCount = REPORT_SKU_PAGE_SIZE + 1 + TIE_BREAK_OVERFETCH;
     const candidates = await ctx.db
       .query("reportPeriodSkuRollup")
       .withIndex(indexName, (q) => {
-        const base = q.eq("storeId", args.storeId).eq("periodKey", args.periodKey);
+        const base = q
+          .eq("storeId", args.storeId)
+          .eq("periodKey", args.periodKey);
         return cursorCtx ? base.gte(sortField, cursorCtx.lastSortKey) : base;
       })
       .take(takeCount);
@@ -273,9 +274,20 @@ export const listPeriodSkus = query({
           })
         : null;
 
+    // One singleton read carries the same sweep timestamp shown on Overview,
+    // so Items can disclose rollup freshness without a second client query.
+    const [rows, overview] = await Promise.all([
+      withSkuIdentity(ctx, page.map(toSkuPeriodRow)),
+      ctx.db
+        .query("reportOverview")
+        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+        .first(),
+    ]);
+
     return {
-      rows: await withSkuIdentity(ctx, page.map(toSkuPeriodRow)),
+      rows,
       continueCursor,
+      updatedAt: overview?.updatedAt ?? null,
     };
   },
 });
@@ -283,11 +295,12 @@ export const listPeriodSkus = query({
 /**
  * Resolve display identity for a page of SKU rows.
  *
- * `productSku` denormalizes productName/sku/size, so this is one document
- * read per row and no joins — bounded by the page size (25). Rows whose SKU
- * document is gone resolve to `undefined` and fall back to the id in the UI:
- * a reporting fact outlives its subject, and dropping the row would silently
- * understate the period.
+ * Product is the canonical source for its name. Legacy `productSku` rows do
+ * not always carry the denormalized `productName`, so identity resolution
+ * reads the linked product as well — bounded at two reads per row and 50 reads
+ * for a full page. Rows whose SKU document is gone resolve to `undefined` and
+ * fall back to the id in the UI: a reporting fact outlives its subject, and
+ * dropping the row would silently understate the period.
  */
 /**
  * Inventory metadata carries import placeholders — 1,078 of wigclub's 1,088
@@ -302,7 +315,7 @@ function cleanMetadataValue(value?: string | null): string | undefined {
   return next;
 }
 
-/** Identity for one SKU — a single document read. */
+/** Identity for one SKU — at most two document reads. */
 async function resolveSkuIdentity(
   ctx: QueryCtx,
   productSkuId: Id<"productSku">,
@@ -310,11 +323,20 @@ async function resolveSkuIdentity(
   const sku = await ctx.db.get("productSku", productSkuId);
   if (!sku) return undefined;
 
+  const product = await ctx.db.get("product", sku.productId);
+  const productName =
+    product?.storeId === sku.storeId
+      ? cleanMetadataValue(product.name)
+      : undefined;
   const code = cleanMetadataValue(sku.sku);
   const size = cleanMetadataValue(sku.size);
 
   return {
-    displayName: cleanMetadataValue(sku.productName) ?? code ?? String(productSkuId),
+    displayName:
+      productName ??
+      cleanMetadataValue(sku.productName) ??
+      code ??
+      String(productSkuId),
     ...(code ? { sku: code } : {}),
     ...(size ? { size } : {}),
     productId: String(sku.productId),
@@ -327,22 +349,11 @@ async function withSkuIdentity(
 ): Promise<ReportSkuPeriodRow[]> {
   return Promise.all(
     rows.map(async (row) => {
-      const sku = await ctx.db.get("productSku", row.productSkuId as Id<"productSku">);
-      if (!sku) return row;
-
-      const code = cleanMetadataValue(sku.sku);
-      const size = cleanMetadataValue(sku.size);
-
-      return {
-        ...row,
-        identity: {
-          displayName:
-            cleanMetadataValue(sku.productName) ?? code ?? row.productSkuId,
-          ...(code ? { sku: code } : {}),
-          ...(size ? { size } : {}),
-          productId: String(sku.productId),
-        },
-      };
+      const identity = await resolveSkuIdentity(
+        ctx,
+        row.productSkuId as Id<"productSku">,
+      );
+      return identity ? { ...row, identity } : row;
     }),
   );
 }
@@ -422,8 +433,14 @@ export const getSkuDetail = query({
 
 function sum(
   rows: Doc<"reportSkuDay">[],
-  key: "unitsSold" | "unitsReturned" | "grossSalesMinor" | "netSalesMinor" |
-    "refundsMinor" | "uncostedRevenueMinor" | "grossProfitMinor",
+  key:
+    | "unitsSold"
+    | "unitsReturned"
+    | "grossSalesMinor"
+    | "netSalesMinor"
+    | "refundsMinor"
+    | "uncostedRevenueMinor"
+    | "grossProfitMinor",
 ): number {
   return rows.reduce((total, row) => {
     const value = row[key];

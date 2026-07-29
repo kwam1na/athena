@@ -7,14 +7,23 @@ import { useStableReportQuery } from "@/components/reports/useStableReportQuery"
 import { api } from "~/convex/_generated/api";
 
 import { ReportCustomRangePanel } from "@/components/reports/ReportCustomRangePanel";
+import { ReportsCatalogLookup } from "@/components/reports/ReportsCatalogLookup";
 import { ReportDaysPanel } from "@/components/reports/ReportDaysPanel";
 import { ReportsOverviewView } from "@/components/reports/ReportsOverviewView";
+import {
+  dateRangeForOverviewWindow,
+  REPORT_OVERVIEW_WINDOWS,
+  todayOperatingDateGuess,
+  type ReportOverviewWindow,
+} from "@/components/reports/reportPeriodKeys";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const reportsOverviewSearchSchema = z.object({
+  window: z.enum(REPORT_OVERVIEW_WINDOWS).optional(),
   daysStart: dateSchema.optional(),
   daysEnd: dateSchema.optional(),
+  daysPage: z.coerce.number().int().positive().optional(),
   rangeStart: dateSchema.optional(),
   rangeEnd: dateSchema.optional(),
   requestKey: z.string().min(1).optional(),
@@ -49,7 +58,7 @@ function ReportsOverviewRoute() {
    * header content needs, deduplicated by the Convex client, so no extra
    * read — collapses that into a single paint.
    */
-  const { isInitialLoad } = useStableReportQuery(
+  const { data: overview, isInitialLoad } = useStableReportQuery(
     useQuery(
       api.reports.queries.getOverview,
       activeStore?._id ? { storeId: activeStore._id } : "skip",
@@ -60,14 +69,45 @@ function ReportsOverviewRoute() {
   const daysStart = search.daysStart ?? isoDateOffset(-13);
   const rangeEnd = search.rangeEnd ?? isoDateOffset(0);
   const rangeStart = search.rangeStart ?? isoDateOffset(-29);
+  const selectedWindow = search.window ?? "today";
+  const overviewAnchorDate =
+    overview?.dailyTrend.at(-1)?.operatingDate ?? todayOperatingDateGuess();
+  const detailRange = dateRangeForOverviewWindow(
+    selectedWindow,
+    overviewAnchorDate,
+  );
 
   if (activeStore === null || isInitialLoad) return null;
 
   return (
     <div className="space-y-layout-xl md:space-y-layout-2xl">
-      <ReportsOverviewView />
+      <ReportsCatalogLookup
+        endDate={detailRange.endDate}
+        startDate={detailRange.startDate}
+      />
+      <ReportsOverviewView
+        onSelectedWindowChange={(window: ReportOverviewWindow) =>
+          void navigate({
+            replace: true,
+            search: (current) => ({
+              ...current,
+              window: window === "today" ? undefined : window,
+            }),
+          })
+        }
+        selectedWindow={selectedWindow}
+      />
       <ReportDaysPanel
         endDate={daysEnd}
+        onPageChange={(daysPage) =>
+          void navigate({
+            replace: true,
+            search: (current) => ({
+              ...current,
+              daysPage: daysPage === 1 ? undefined : daysPage,
+            }),
+          })
+        }
         onRangeChange={(next) =>
           void navigate({
             replace: true,
@@ -75,9 +115,11 @@ function ReportsOverviewRoute() {
               ...current,
               daysStart: next.startDate,
               daysEnd: next.endDate,
+              daysPage: undefined,
             }),
           })
         }
+        page={search.daysPage ?? 1}
         startDate={daysStart}
       />
       <ReportCustomRangePanel
@@ -85,7 +127,11 @@ function ReportsOverviewRoute() {
         onEndDateChange={(value) =>
           void navigate({
             replace: true,
-            search: (current) => ({ ...current, rangeEnd: value, requestKey: undefined }),
+            search: (current) => ({
+              ...current,
+              rangeEnd: value,
+              requestKey: undefined,
+            }),
           })
         }
         onRequestKeyChange={(requestKey) =>
@@ -97,7 +143,11 @@ function ReportsOverviewRoute() {
         onStartDateChange={(value) =>
           void navigate({
             replace: true,
-            search: (current) => ({ ...current, rangeStart: value, requestKey: undefined }),
+            search: (current) => ({
+              ...current,
+              rangeStart: value,
+              requestKey: undefined,
+            }),
           })
         }
         requestKey={search.requestKey}

@@ -75,6 +75,31 @@ describe("productSkuSearchAdapters", () => {
     expect(archived.matchKind).toBe("sku");
   });
 
+  it("omits literal null placeholders from presentation text", () => {
+    const option = buildAdminSkuSearchOption(
+      buildResult({
+        barcode: "NULL",
+        categoryName: " null ",
+        colorName: "Null",
+        length: null,
+        productAvailability: "draft",
+        productName: "NULL",
+        size: "NULL",
+        sku: " null ",
+        subcategoryName: "Hair dyes",
+      }),
+    );
+
+    expect(option.productName).toBe("Unnamed product");
+    expect(option.sku).toBeNull();
+    expect(option.barcode).toBeNull();
+    expect(option.label).toBe("Unnamed product / sku-1");
+    expect(option.sizeLabel).toBeNull();
+    expect(option.metadata).toBe("Hair dyes");
+    expect(option.subtitle).toBe("Draft · Hair dyes");
+    expect(option.subtitle.toLowerCase()).not.toContain("null");
+  });
+
   it("groups SKU options by product and sorts by best match rank", () => {
     const options = buildAdminSkuSearchOptions([
       buildResult({

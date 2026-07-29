@@ -13,15 +13,21 @@ describe("reports items search schema", () => {
       periodDate: "2026-07-28",
       sortBy: "units" as const,
       cursor: "opaque-cursor",
+      cursorTrail: ["prior-cursor"],
+      o: "encoded-origin",
     };
     expect(reportsItemsSearchSchema.parse(value)).toEqual(value);
   });
 
   it("rejects a periodType outside day/week/month", () => {
-    expect(() => reportsItemsSearchSchema.parse({ periodType: "quarter" })).toThrow();
+    expect(() =>
+      reportsItemsSearchSchema.parse({ periodType: "quarter" }),
+    ).toThrow();
   });
 
   it("rejects a sortBy outside revenue/units", () => {
-    expect(() => reportsItemsSearchSchema.parse({ sortBy: "margin" })).toThrow();
+    expect(() =>
+      reportsItemsSearchSchema.parse({ sortBy: "margin" }),
+    ).toThrow();
   });
 });

@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Add catalog lookup to Reports</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f7f5;
+      --surface: #ffffff;
+      --text: #202124;
+      --muted: #62666d;
+      --border: #dedfda;
+      --accent: #3949ab;
+      --accent-soft: #eef0ff;
+      --code: #f1f2ee;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #151616;
+        --surface: #1d1e1f;
+        --text: #ececea;
+        --muted: #b1b3b6;
+        --border: #36383a;
+        --accent: #aeb8ff;
+        --accent-soft: #252a46;
+        --code: #252627;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(1060px, calc(100% - 32px));
+      margin: 40px auto 72px;
+    }
+    header, section, nav {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 18px;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 6px 0 10px; font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.08; }
+    h2 { margin: 0 0 14px; font-size: 1.35rem; }
+    h3 { margin: 22px 0 8px; font-size: 1.05rem; }
+    p { margin: 8px 0; }
+    a { color: var(--accent); }
+    .meta, .muted { color: var(--muted); }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: .9rem; }
+    nav ul, .compact { margin: 0; padding-left: 20px; }
+    nav li { margin: 5px 0; }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 14px 16px;
+      border-radius: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: .94rem;
+    }
+    th, td {
+      border-bottom: 1px solid var(--border);
+      padding: 11px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-size: .8rem; letter-spacing: .04em; text-transform: uppercase; }
+    code {
+      background: var(--code);
+      border-radius: 5px;
+      padding: .1em .35em;
+      font-size: .9em;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      align-items: center;
+      gap: 8px;
+      margin: 18px 0 6px;
+    }
+    .node {
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 12px 9px;
+      text-align: center;
+      font-size: .88rem;
+    }
+    .arrow { color: var(--muted); text-align: center; }
+    article {
+      border-top: 1px solid var(--border);
+      padding-top: 18px;
+      margin-top: 18px;
+    }
+    article:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+    .unit-id { color: var(--accent); font-weight: 700; }
+    @media (max-width: 760px) {
+      main { width: min(100% - 20px, 1060px); margin-top: 18px; }
+      header, section, nav { padding: 18px; border-radius: 11px; }
+      .flow { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Feature plan · Completed</div>
+    <h1>Add catalog lookup to Reports</h1>
+    <p>Reuse Athena's generic SKU search and existing Reports drill-down so administrators can find any catalog variant by product name, SKU, or barcode without scanning period activity.</p>
+    <div class="meta">
+      <span>Created: July 29, 2026</span>
+      <span>Type: feat</span>
+      <span>Units: 3</span>
+      <span>Canonical source: <a href="2026-07-29-001-feat-reports-catalog-lookup-plan.md">Markdown plan</a></span>
+    </div>
+  </header>
+
+  <nav aria-label="Plan contents">
+    <h2>Contents</h2>
+    <ul>
+      <li><a href="#scope">Scope</a></li>
+      <li><a href="#design">Technical shape</a></li>
+      <li><a href="#decisions">Key decisions</a></li>
+      <li><a href="#units">Implementation units</a></li>
+      <li><a href="#risks">Risks</a></li>
+      <li><a href="#verification">Verification</a></li>
+    </ul>
+  </nav>
+
+  <section id="scope">
+    <h2>Scope</h2>
+    <p>The lookup appears at the top of Overview and Items, groups variants beneath their product, and opens the existing SKU detail with the selected reporting period. Origin navigation restores the tab and durable period state while transient search state clears.</p>
+    <div class="callout">
+      <strong>Deliberate boundary:</strong> this is navigation, not report filtering. It does not change metrics, materialization, freshness, the generic search backend, or the existing detail contract.
+    </div>
+    <h3>Acceptance focus</h3>
+    <ul class="compact">
+      <li>Product name, SKU, and barcode all reach the correct variant.</li>
+      <li>Exact SKU and barcode matches retain backend precedence.</li>
+      <li>Archived, inactive, and no-activity catalog variants remain selectable.</li>
+      <li>Overview and Items periods become inclusive detail ranges.</li>
+      <li>Back restores the originating route context with an empty lookup.</li>
+    </ul>
+  </section>
+
+  <section id="design">
+    <h2>Technical shape</h2>
+    <div class="flow" aria-label="Lookup flow">
+      <div class="node">Validated report period</div>
+      <div class="arrow">→</div>
+      <div class="node">Shared catalog lookup</div>
+      <div class="arrow">→</div>
+      <div class="node">Generic SKU search</div>
+    </div>
+    <div class="flow" aria-label="Navigation flow">
+      <div class="node">Product-grouped adapters</div>
+      <div class="arrow">→</div>
+      <div class="node">Existing SKU detail</div>
+      <div class="arrow">→</div>
+      <div class="node">Origin back-navigation</div>
+    </div>
+    <p class="muted">The route owns durable period state. The lookup owns only transient input and result presentation.</p>
+  </section>
+
+  <section id="decisions">
+    <h2>Key decisions</h2>
+    <table>
+      <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Reuse generic SKU search unchanged</td><td>It already supplies store-scoped identity, exact ranking, and catalog-wide discovery.</td></tr>
+        <tr><td>Mount one component in both index routes</td><td>It stays visually beneath the shared Reports navigation while receiving route-specific period context.</td></tr>
+        <tr><td>Put Overview window in URL state</td><td>Period and origin navigation become durable without persisting lookup text.</td></tr>
+        <tr><td>Use a pure period-to-range helper</td><td>The existing detail route already consumes inclusive dates; no report contract change is needed.</td></tr>
+        <tr><td>Preserve backend ordering</td><td>Client grouping must not undo exact SKU and barcode precedence.</td></tr>
+        <tr><td>Keep lookup transient and briefly debounced</td><td>Reduces query churn while keeping navigation URLs focused on durable report context.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="units">
+    <h2>Implementation units</h2>
+    <article>
+      <h3><span class="unit-id">U1</span> · Normalize Reports period context</h3>
+      <p>Add validated Overview window state and pure inclusive-range helpers for Overview and Items period modes.</p>
+      <p><strong>Primary files:</strong> <code>reportPeriodKeys.ts</code>, Overview route/view, and focused route/helper tests.</p>
+      <p><strong>Proof:</strong> Today, week-to-date, trailing 30, day, ISO week, calendar month, year boundary, and leap-year cases resolve correctly.</p>
+    </article>
+    <article>
+      <h3><span class="unit-id">U2</span> · Build the shared catalog lookup</h3>
+      <p>Create the accessible lookup UI, call generic SKU search after a short debounce, group through existing adapters, and preserve backend rank.</p>
+      <p><strong>Primary files:</strong> new <code>ReportsCatalogLookup.tsx</code> and its focused component test.</p>
+      <p><strong>Proof:</strong> grouped variants, exact ranking, optional metadata, lifecycle states, loading, empty, truncated, store-change, and keyboard cases.</p>
+    </article>
+    <article>
+      <h3><span class="unit-id">U3</span> · Integrate navigation on Overview and Items</h3>
+      <p>Mount the lookup in both index routes and navigate to existing SKU detail with inclusive dates and encoded origin.</p>
+      <p><strong>Primary files:</strong> Overview/Items routes and their focused tests, plus existing detail contract tests.</p>
+      <p><strong>Proof:</strong> both entry points preserve period context; no-activity variants open; back restores the source tab while lookup state clears.</p>
+    </article>
+  </section>
+
+  <section id="risks">
+    <h2>Risks and mitigations</h2>
+    <table>
+      <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td>Operating-day drift</td><td>Anchor Overview to its loaded trend date and test date-label arithmetic.</td></tr>
+        <tr><td>Client reordering breaks exact matches</td><td>Disable secondary relevance filtering and assert grouped rank order.</td></tr>
+        <tr><td>Stale lookup returns after detail</td><td>Mount only in index routes and clear on selection/store change.</td></tr>
+        <tr><td>Inactive SKU becomes ineligible</td><td>Keep lifecycle metadata presentational and test selection.</td></tr>
+        <tr><td>Origin loses report state</td><td>Use the existing encoded-origin contract and test complete round trips.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="verification">
+    <h2>Verification</h2>
+    <p>Run only the focused Vitest files covering period helpers, lookup presentation, Overview and Items route schemas/navigation, and existing SKU-detail no-activity behavior. Browser automation is deliberately excluded; the user will validate the rendered workflow.</p>
+    <p>After implementation code changes, rebuild Graphify as required by repository policy.</p>
+  </section>
+</main>
+</body>
+</html>

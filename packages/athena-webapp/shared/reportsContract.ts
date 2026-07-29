@@ -268,6 +268,7 @@ export type ReportOverviewData = {
   updatedAt: number;
   currency: string;
   today: ReportPeriodSnapshot;
+  yesterday: ReportPeriodSnapshot;
   weekToDate: ReportPeriodSnapshot;
   priorWeek: ReportPeriodSnapshot;
   trailing30: ReportPeriodSnapshot;
@@ -342,5 +343,5 @@ export type ReportRangeSummary = {
 
 export const REPORT_RANGE_MAX_DAYS = 366 as const;
 export const REPORT_RANGE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-export const REPORT_SKU_PAGE_SIZE = 25 as const;
+export const REPORT_SKU_PAGE_SIZE = 10 as const;
 export const REPORT_RANGE_TOP_SKU_LIMIT = 100 as const;

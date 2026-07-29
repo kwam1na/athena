@@ -8,7 +8,7 @@ problem_type: reporting_read_cost
 component: reports
 resolution_type: delivery_plan
 severity: high
-delivery_diff_fingerprint: 43eab2981ce42f502573861d89af13fa97c0b711fba6ca3bccdd1579a36c86fd
+delivery_diff_fingerprint: eb46cc20fb71ecd8559bb996495f36bbe7c9ed5daace8b4600f67033c5a9ca14
 tags:
   - reporting
   - delivery-plan
@@ -66,6 +66,24 @@ Freeze the contract first, then fan the work out.
 - **Treat "build beside" versus "replace" as an explicit decision.** Here,
   clean replacement was available only because nothing depended on the old
   surfaces — that fact is what licensed deleting instead of migrating.
+
+## Follow-on report-surface guidance
+
+The rebuilt query layer remains the authority for report-period activity, while
+the inventory search layer remains the authority for catalog discovery. A
+Reports lookup should reuse the generic, store-scoped SKU search and navigate
+to the existing SKU detail route with the exact `productSkuId`; it must not
+filter a report snapshot or add a Reports-specific search backend.
+
+Period context is route state. When a lookup begins from Overview or Items,
+translate the visible period into the SKU-detail date range and retain the
+origin tab and period for the return route. Catalog items without activity in
+that range stay selectable: the detail route's empty state is the truthful
+result.
+
+Keep the list query's read budget explicit. Pagination, canonical product-name
+resolution, and freshness disclosure belong at its existing query and UI seams;
+they should not widen the report fact or rollup contracts.
 
 ## Ground rules for delegated slices
 
@@ -191,7 +209,7 @@ As per design doc: 5-min cron, bounded dirty-day batches in `markedAt` order, re
 
 ### Slice D — read queries (M)
 **Files:** `convex/reports/queries.ts`, `access.ts` (ported `requireReportingStoreAccess`), tests.
-**Frozen names:** `reports.queries.getOverview` (1 doc) · `listDays({range})` (≤ 92 docs) · `listPeriodSkus({periodKey, sortBy, cursor})` (25-doc index page, context-bound opaque cursor) · `getSkuDetail({productSkuId, range})` (≤ 92 docs) · `getRangeResult({requestKey})` · `requestRange` mutation lives in H but its result shape is contract-frozen here.
+**Frozen names:** `reports.queries.getOverview` (1 doc) · `listDays({range})` (≤ 92 docs) · `listPeriodSkus({periodKey, sortBy, cursor})` (10-doc index page, context-bound opaque cursor) · `getSkuDetail({productSkuId, range})` (≤ 92 docs) · `getRangeResult({requestKey})` · `requestRange` mutation lives in H but its result shape is contract-frozen here.
 **Acceptance:** tests incl. access denial + cursor rejection; per-query worst-case read ledger in comments.
 
 ### Slice F — source-truth verifier + reseed (M/L)

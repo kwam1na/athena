@@ -13,6 +13,7 @@ import {
   getSkuDetail,
   getRangeResult,
 } from "./queries";
+import { emptySnapshot } from "./overview";
 
 const modules = import.meta.glob("../**/*.ts");
 
@@ -169,6 +170,7 @@ describe("getOverview", () => {
       storeId,
     );
     expect(result).toMatchObject({ updatedAt: 1000, currency: "GHS" });
+    expect(result?.yesterday).toEqual(emptySnapshot());
     expect(result).not.toHaveProperty("storeId");
   });
 
@@ -296,11 +298,59 @@ describe("listPeriodSkus", () => {
     );
   }
 
-  it("pages 25 at a time in descending revenue order, then exhausts with continueCursor null", async () => {
+  it("uses the linked product name when the SKU has no denormalized product name", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const skuId = await seedSku(t, storeId);
+    await seedRollup(t, storeId, skuId, "d:2026-07-28", 500);
+    const updatedAt = 1_700_000_000_000;
+    const overviewSnapshot = {
+      ...dayMetrics(),
+      dayCount: 1,
+      unsettledDayCount: 1,
+    };
+    await t.run((ctx) =>
+      ctx.db.insert("reportOverview", {
+        storeId,
+        updatedAt,
+        currency: "GHS",
+        today: overviewSnapshot,
+        weekToDate: overviewSnapshot,
+        priorWeek: overviewSnapshot,
+        trailing30: overviewSnapshot,
+        comparisons: {
+          netSalesVsPriorWeekBp: null,
+          unitsSoldVsPriorWeekBp: null,
+        },
+        dailyTrend: [],
+        trust: {
+          reconciledDays: 0,
+          provisionalDays: 1,
+          amendedDays: 0,
+        },
+      }),
+    );
+
+    const result = await t.run((ctx) =>
+      handlerOf(listPeriodSkus)(ctx, {
+        storeId,
+        periodKey: "d:2026-07-28",
+        sortBy: "revenue",
+      }),
+    );
+
+    expect(result.rows[0].identity).toMatchObject({
+      displayName: "Wig",
+      productId: expect.any(String),
+    });
+    expect(result.updatedAt).toBe(updatedAt);
+  });
+
+  it("pages 10 at a time in descending revenue order, then exhausts with continueCursor null", async () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
     const skuIds: Id<"productSku">[] = [];
-    for (let i = 0; i < 30; i += 1) {
+    for (let i = 0; i < 15; i += 1) {
       skuIds.push(await seedSku(t, storeId));
       await seedRollup(t, storeId, skuIds[i], "d:2026-07-28", 1000 - i);
     }
@@ -312,11 +362,11 @@ describe("listPeriodSkus", () => {
         sortBy: "revenue",
       }),
     );
-    expect(page1.rows).toHaveLength(25);
+    expect(page1.rows).toHaveLength(10);
     expect(page1.continueCursor).not.toBeNull();
     // Descending revenue: sku 0 (netSales 1000) first.
     expect(page1.rows[0].productSkuId).toBe(skuIds[0]);
-    expect(page1.rows[24].productSkuId).toBe(skuIds[24]);
+    expect(page1.rows[9].productSkuId).toBe(skuIds[9]);
 
     const page2 = await t.run((ctx) =>
       handlerOf(listPeriodSkus)(ctx, {
@@ -329,7 +379,7 @@ describe("listPeriodSkus", () => {
     expect(page2.rows).toHaveLength(5);
     expect(page2.continueCursor).toBeNull();
     expect(page2.rows.map((r: any) => r.productSkuId)).toEqual(
-      skuIds.slice(25, 30),
+      skuIds.slice(10, 15),
     );
   });
 
@@ -338,7 +388,7 @@ describe("listPeriodSkus", () => {
     const { storeId } = await seedStore(t);
     const skuIds: Id<"productSku">[] = [];
     // 27 SKUs tied at the same revenue -> same sortKey, forcing tie-break
-    // logic to page correctly at the 25/2 boundary.
+    // logic to page correctly across three 10-row pages.
     for (let i = 0; i < 27; i += 1) {
       skuIds.push(await seedSku(t, storeId));
       await seedRollup(t, storeId, skuIds[i], "d:2026-07-28", 500);
@@ -351,7 +401,7 @@ describe("listPeriodSkus", () => {
         sortBy: "revenue",
       }),
     );
-    expect(page1.rows).toHaveLength(25);
+    expect(page1.rows).toHaveLength(10);
     expect(page1.continueCursor).not.toBeNull();
 
     const page2 = await t.run((ctx) =>
@@ -362,12 +412,24 @@ describe("listPeriodSkus", () => {
         cursor: page1.continueCursor,
       }),
     );
-    expect(page2.rows).toHaveLength(2);
-    expect(page2.continueCursor).toBeNull();
+    expect(page2.rows).toHaveLength(10);
+    expect(page2.continueCursor).not.toBeNull();
+
+    const page3 = await t.run((ctx) =>
+      handlerOf(listPeriodSkus)(ctx, {
+        storeId,
+        periodKey: "d:2026-07-28",
+        sortBy: "revenue",
+        cursor: page2.continueCursor!,
+      }),
+    );
+    expect(page3.rows).toHaveLength(7);
+    expect(page3.continueCursor).toBeNull();
 
     const seenIds = new Set([
       ...page1.rows.map((r: any) => r.productSkuId),
       ...page2.rows.map((r: any) => r.productSkuId),
+      ...page3.rows.map((r: any) => r.productSkuId),
     ]);
     expect(seenIds.size).toBe(27); // no duplicates, none skipped
   });
@@ -476,7 +538,7 @@ describe("getSkuDetail", () => {
     // Identity still resolves: the page must be able to name a SKU that
     // simply had no activity in the selected window.
     expect(result).toMatchObject({ days: [], totals: null });
-    expect(result?.identity?.displayName).toBeTruthy();
+    expect(result?.identity?.displayName).toBe("Wig");
   });
 
   it("sums metrics across days, with operatingDate per row", async () => {

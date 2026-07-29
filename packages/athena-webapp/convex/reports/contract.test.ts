@@ -76,6 +76,7 @@ describe("reports contract ↔ schema parity", () => {
     const fields = fieldsOf(reportOverviewSchema);
     for (const period of [
       "today",
+      "yesterday",
       "weekToDate",
       "priorWeek",
       "trailing30",

@@ -128,6 +128,7 @@ export function formatOperatingDate(operatingDate: string): string {
     day: "numeric",
     year: "numeric",
     timeZone: "UTC",
+    weekday: "short",
   });
 }
 

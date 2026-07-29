@@ -7,7 +7,7 @@ topic: reports-workspace
 
 ## Summary
 
-Athena should add a store-scoped Reports workspace for full administrators. The workspace should provide a balanced, week-to-date view of business performance across POS products, POS services, storefront orders, and service cases, with SKU-first inventory and item analysis beneath the business totals.
+Athena should add a store-scoped Reports workspace for full administrators. The workspace should provide a balanced, week-to-date view of business performance across POS products, POS services, storefront orders, and service cases, with SKU-first inventory and item analysis beneath the business totals. A shared catalog lookup should let an administrator find a product by name, SKU, or barcode and open the relevant SKU report directly.
 
 Reports should explain what changed, disclose when data is incomplete, and route the administrator to the existing Athena workflow that owns corrective action. It should not become another work queue, a general ledger, or an accounting system.
 
@@ -20,6 +20,8 @@ Athena already records meaningful business and operational facts, but they are d
 The current Analytics route is narrower than its name suggests. It communicates storefront engagement such as known shoppers, product views, active checkouts, and recent activity. Store Pulse and Daily Operations carry stronger sales and operational reporting, while Procurement and SKU Activity carry inventory pressure and evidence. Reports must compose those existing truths through a canonical reporting contract rather than treating storefront analytics as the financial source of truth.
 
 The product must also avoid presenting false precision. SKU cost is optional today, POS and storefront sale lines do not preserve an immutable cost basis, receiving does not calculate moving weighted-average cost, ordinary trusted SKU sale history lacks the dedicated lookup path already available for provisional SKU evidence, and inventory movement history is not yet complete enough for every historical valuation claim. These are requirements-level foundations, not details that planning may silently omit.
+
+Administrators also have no direct way to start with a product they already have in mind. Finding one SKU's report currently depends on encountering it in the selected period's item results, which makes quiet, inactive, or historically relevant catalog items difficult to investigate.
 
 ---
 
@@ -38,6 +40,7 @@ The product must also avoid presenting false precision. SKU cost is optional tod
 | Services                   | Service cases preserve total amount, payment status, allocations, assigned staff, service lines, and consumed inventory.                                                                                         | Include service revenue, but do not claim service profit until service-delivery cost exists.                                                                 |
 | Data integrity             | Daily Close preserves source completeness; POS runtime and terminal state expose delayed or uncertain synchronization.                                                                                           | Every report must expose freshness, completeness, and omitted-value reasons.                                                                                 |
 | Expense data               | Expense transactions represent inventory items consumed at recorded item cost.                                                                                                                                   | Label this as inventory expense or inventory consumed, not general operating expense.                                                                        |
+| Catalog SKU lookup         | Athena can search the active store's product catalog by product name, SKU, and barcode and return variant identity.                                                                                               | Reports can use catalog identity to navigate to a SKU report even when that SKU has no activity in the selected period.                                       |
 
 ---
 
@@ -85,6 +88,13 @@ The product must also avoid presenting false precision. SKU cost is optional tod
   - **Steps:** Athena recognizes the financial refund when it occurs, attributes adjusted SKU performance to the original sale, distinguishes money returned from inventory restored, and preserves links between both events and the original transaction.
   - **Outcome:** Weekly money movement stays stable and reconcilable while item performance reflects the sale's final outcome.
   - **Covered by:** R47-R52
+
+- F6. Find a known product or SKU
+  - **Trigger:** The administrator wants to investigate a product that may not appear in the current report results.
+  - **Actors:** A1, A2
+  - **Steps:** From either primary Reports tab, the administrator searches by product name, SKU, or barcode, chooses a variant from product-grouped results, and opens that SKU's report for the currently selected period.
+  - **Outcome:** The administrator reaches the intended SKU report without scanning the item table or leaving Reports; returning restores the originating tab and period with the lookup cleared.
+  - **Covered by:** R64-R74
 
 ---
 
@@ -177,6 +187,20 @@ The product must also avoid presenting false precision. SKU cost is optional tod
 - R62. Service profitability may be added later without changing the original merchandise metric definitions.
 - R63. Historical service cost must remain unknown unless it is explicitly and audibly backfilled; future labor or service cost must not be applied retroactively by default.
 
+### Catalog Lookup and Navigation
+
+- R64. Reports must provide one shared product lookup that is available from both the Overview and Items tabs.
+- R65. The lookup must accept product name, SKU, and barcode queries.
+- R66. Lookup results must remain scoped to the active store and protected by the same access rules as Reports.
+- R67. Lookup results must come from the store's catalog rather than only from SKUs with activity in the selected report snapshot.
+- R68. Results must be grouped by product, with the matching SKU variants selectable beneath the product.
+- R69. Each selectable result must identify the product name and SKU; variant attributes such as size and color and the barcode should appear when they help distinguish otherwise similar results.
+- R70. An exact SKU or barcode match must rank ahead of broader product-name or partial-text matches.
+- R71. Selecting a result must open the existing SKU drill-down for that exact variant.
+- R72. The SKU drill-down must inherit the reporting period that was visible when the administrator searched.
+- R73. Returning from the drill-down must restore the originating Reports tab and reporting period while clearing the prior query and result list.
+- R74. A catalog SKU with no activity in the inherited period must still open successfully and show a clear no-activity state rather than being omitted or treated as an error.
+
 ---
 
 ## Metric Contract
@@ -213,6 +237,9 @@ The product must also avoid presenting false precision. SKU cost is optional tod
 - AE8. **Covers R31-R38.** Given a fast-moving SKU has low cover and no inbound purchase order, Reports explains the units and cover behind the signal and links to Procurement without creating or applying a purchase order itself.
 - AE9. **Covers R42, R46.** Given a local POS terminal has not finished syncing, Reports identifies the affected period or metrics as incomplete and links to terminal evidence rather than presenting the totals as final.
 - AE10. **Covers R59-R63.** Given Athena records SKU inventory consumed as an expense but has no rent or payroll records, Reports labels the amount as inventory consumed and does not present operating profit or net profit.
+- AE11. **Covers R64-R71.** Given an administrator is on Overview and searches a product name shared by several variants, Reports groups the results under the product, shows enough variant identity to distinguish them, and opens the selected SKU's existing drill-down.
+- AE12. **Covers R65, R67, R70, R74.** Given a catalog SKU has no activity in the selected period, an exact SKU or barcode query still places it ahead of broader matches, and selecting it opens a no-activity SKU report rather than returning no result.
+- AE13. **Covers R72, R73.** Given an administrator searches from the Items tab while viewing trailing 30 days, the selected SKU opens with trailing 30 days preserved; returning restores Items and trailing 30 days with the lookup cleared.
 
 ---
 
@@ -221,6 +248,7 @@ The product must also avoid presenting false precision. SKU cost is optional tod
 - A full administrator can understand current store direction from one balanced week-to-date overview.
 - Unified totals reconcile to POS, storefront, service, payment, and refund source evidence without duplication.
 - Every SKU aggregate can be investigated through attached transactions and full SKU Activity evidence.
+- A full administrator can reach the correct catalog SKU report by product name, SKU, or barcode without scanning period activity or leaving Reports.
 - Missing cost, delayed synchronization, and incomplete movement history reduce or withhold affected metrics instead of creating false precision.
 - Reports reliably routes attention to existing operational workspaces and does not duplicate their mutation behavior.
 - The metric contract is stable enough for later service-cost and organization-rollup work without changing the meaning of the initial merchandise metrics.
@@ -238,6 +266,8 @@ The product must also avoid presenting false precision. SKU cost is optional tod
 - True stock age and FIFO lot analysis are excluded from the moving weighted-average model.
 - Forecasting beyond transparent sales velocity and estimated days of cover is deferred.
 - Operator-configurable goals and thresholds are deferred; initial attention signals are deterministic and grounded in existing Athena facts or explicitly defined report rules.
+- Catalog lookup is a navigation aid, not a filter for overview cards or the Items table, and it does not add an inline analytics preview to search results.
+- Restoring a prior lookup query or result list after returning from SKU detail is excluded from the initial behavior.
 - Implementation-level schemas, indexes, query decomposition, backfill mechanics, component structure, and deployment sequencing belong to planning.
 
 ---
@@ -254,6 +284,9 @@ The product must also avoid presenting false precision. SKU cost is optional tod
 - Dual-basis refunds: Refund-period money movement and original-sale product performance answer different questions and remain separately named.
 - Evidence before abstraction: Every aggregate preserves a path to the underlying operational record.
 - Highlight and route: Reports interprets and prioritizes signals while existing workspaces retain action ownership.
+- Catalog lookup over snapshot filtering: Search starts from the full store catalog and routes to one SKU report, so inactive and no-activity variants remain discoverable without changing the meaning of the current report tables.
+- Product-grouped variant selection: Results lead with the product name while preserving exact SKU selection for report accuracy.
+- Period continuity without query persistence: The selected reporting context survives drill-down navigation, while the transient lookup clears on return.
 - Storefront Analytics becomes subordinate: Engagement remains useful context but no longer occupies the top-level business-reporting identity.
 
 ---
@@ -266,6 +299,7 @@ The product must also avoid presenting false precision. SKU cost is optional tod
 - Current store currency and operating-timezone rules remain authoritative for report formatting and period boundaries.
 - Historical data without a trustworthy cost basis will remain visibly incomplete rather than being silently estimated.
 - Product and category rollups can be derived from stable SKU identity even when display names or merchandising attributes change later.
+- Store catalog identity remains available independently of reporting-period activity, including for inactive or historically relevant SKUs.
 
 ---
 
@@ -283,6 +317,7 @@ The product must also avoid presenting false precision. SKU cost is optional tod
 - [Affects R31-R38][Product/technical] Define the initial deterministic signal thresholds and precedence when multiple signals apply to one SKU.
 - [Affects R39-R42][Technical] Define the durable trusted-SKU transaction lookup across POS and storefront sale lines.
 - [Affects R42, R46][Technical] Define how live partial-day facts and completed Daily Close snapshots combine without double counting or silently rewriting a closed day.
+- [Affects R64-R74][Technical] Define the URL and navigation-state contract that preserves the originating Reports tab and selected period without persisting the transient lookup.
 
 ---
 

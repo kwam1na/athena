@@ -64,6 +64,7 @@ ensure_gitignore() {
 }
 
 ATHENA_WEBAPP_ENV_DIR="packages/athena-webapp"
+WORKTREE_BOOTSTRAP_MARKER_PATH="codex/worktree-bootstrap.json"
 
 has_env_files_in_dir() {
   local relative_dir="$1"
@@ -162,6 +163,15 @@ install_worktree_dependencies() {
 
   echo "Dependencies:"
   (cd "$worktree_path" && bun install --frozen-lockfile)
+}
+
+record_worktree_bootstrap() {
+  local worktree_path="$1"
+  local marker_path
+  marker_path=$(git -C "$worktree_path" rev-parse --git-path "$WORKTREE_BOOTSTRAP_MARKER_PATH")
+  mkdir -p "$(dirname "$marker_path")"
+  printf '%s\n' '{"version":1,"createdBy":"scripts/worktree-manager.sh"}' > "$marker_path"
+  echo "Worktree bootstrap marker recorded"
 }
 
 get_default_branch() {
@@ -333,6 +343,7 @@ setup_env() {
   echo "Environment files:"
   copy_env_files "$worktree_path"
   install_worktree_dependencies "$worktree_path"
+  record_worktree_bootstrap "$worktree_path"
 }
 
 main() {

@@ -8,6 +8,7 @@ const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const reportsSkuDetailSearchSchema = z.object({
   startDate: dateSchema.optional(),
   endDate: dateSchema.optional(),
+  page: z.coerce.number().int().positive().optional(),
   /**
    * Encoded origin path for `useNavigateBack`. Declared because
    * `validateSearch` strips unknown keys before the hook can read them.
@@ -39,18 +40,27 @@ function ReportsItemDetailRoute() {
   return (
     <ReportsSkuDetailView
       endDate={endDate}
-      onEndDateChange={(value) =>
+      onRangeChange={(next) =>
         void navigate({
           replace: true,
-          search: (current) => ({ ...current, endDate: value }),
+          search: (current) => ({
+            ...current,
+            startDate: next.startDate,
+            endDate: next.endDate,
+            page: undefined,
+          }),
         })
       }
-      onStartDateChange={(value) =>
+      onPageChange={(page) =>
         void navigate({
           replace: true,
-          search: (current) => ({ ...current, startDate: value }),
+          search: (current) => ({
+            ...current,
+            page: page === 1 ? undefined : page,
+          }),
         })
       }
+      page={search.page ?? 1}
       productSkuId={productSkuId}
       startDate={startDate}
     />
