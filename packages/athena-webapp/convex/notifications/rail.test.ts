@@ -12,6 +12,7 @@ import {
   INTENT_ABANDON_AFTER_MS,
   MAX_DELIVERIES_PER_DISPATCH,
   MAX_DELIVERY_ATTEMPTS,
+  SWEEPER_INTENT_PICKUP_DELAY_MS,
   computeDeliveryLeaseMs,
 } from "./deliveryPolicy";
 import type { NotificationChannel } from "./registry";
@@ -1104,21 +1105,17 @@ describe("dispatchIntent", () => {
       intentId,
     });
 
-    // First pass sends exactly one batch and leaves the tail unsent...
+    // First pass sends exactly one batch and leaves the tail unsent, and the
+    // intent stays pending so a lost continuation is still sweeper-visible.
     expect(fetchMock).toHaveBeenCalledTimes(MAX_DELIVERIES_PER_DISPATCH);
-    // ...and enqueues itself again to reach the remainder. Without this
-    // schedule the tail would never be contacted.
-    const scheduled = await t.run(async (ctx) =>
-      ctx.db.system.query("_scheduled_functions").take(50),
-    );
     expect(
-      scheduled.filter(
-        (job) =>
-          job.name.includes("dispatchIntent") && job.state.kind === "pending",
-      ).length,
-    ).toBeGreaterThan(0);
+      await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+    ).toMatchObject({ status: "pending" });
 
-    // Draining that follow-on completes the audience.
+    // Running the continuation completes the audience. (Driving it directly
+    // rather than asserting a transient scheduler row keeps this
+    // deterministic; the schedule itself is pinned by the sweeper-recovery
+    // test below.)
     await t.action(internal.notifications.dispatch.dispatchIntent, {
       intentId,
     });
@@ -1134,6 +1131,52 @@ describe("dispatchIntent", () => {
       true,
     );
     expect(fetchMock).toHaveBeenCalledTimes(audienceSize);
+    // Audience complete: only now is the intent terminal.
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+    ).toMatchObject({ status: "dispatched" });
+  });
+
+  it("leaves an interrupted chain recoverable by the sweeper", async () => {
+    // The un-leased tail has no delivery rows, so it is invisible to the
+    // stale-lease and due-retry phases. Keeping the intent pending until the
+    // audience is materialized is what stops a lost continuation from
+    // becoming a silent partial send.
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    stubProdTransport();
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    const terminalId = await t.run((ctx) => seedTerminal(ctx, fixture));
+    const intentId = await t.run((ctx) =>
+      insertTerminalHealthIntent(ctx, fixture, terminalId, {
+        emittedAt: NOW - SWEEPER_INTENT_PICKUP_DELAY_MS - 1,
+      }),
+    );
+    await t.run(async (ctx) => {
+      for (let index = 0; index < MAX_DELIVERIES_PER_DISPATCH + 3; index += 1) {
+        await ctx.db.insert("notificationSubscription", {
+          organizationId: fixture.organizationId,
+          category: "system_health",
+          channel: "email",
+          recipientEmail: `interrupted-${index}@example.com`,
+          enabled: true,
+          createdAt: NOW,
+          updatedAt: NOW,
+        });
+      }
+    });
+
+    // One pass only — simulating an action that died before its follow-on.
+    await t.mutation(internal.notifications.dispatch.reserveIntentDeliveries, {
+      intentId,
+    });
+
+    // The sweeper's pending-intent phase still sees it.
+    const swept = await t.mutation(internal.notifications.sweeper.sweep, {
+      now: NOW,
+    });
+    expect(swept).toMatchObject({ dispatchesScheduled: 1 });
   });
 
   it("sends every delivery and marks the intent dispatched on the happy path", async () => {

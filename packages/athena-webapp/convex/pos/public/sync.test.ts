@@ -1378,13 +1378,18 @@ describe("register closeout notification intents", () => {
           createdAt: 2,
         });
       }
+      // Left PENDING so the good path has something positive to assert: if
+      // the review is found, a variance intent is emitted. A regression that
+      // collapses the four per-status queries back into one paged query would
+      // let the 26 noise rows crowd the page, find nothing, and take the skip
+      // branch — which a zero-intent assertion alone could not distinguish.
       await ctx.db.insert("approvalRequest", {
         storeId: world.storeId,
         organizationId: world.organizationId,
         requestType: "variance_review",
         subjectType: "registerSession",
         subjectId: String(world.registerSessionId),
-        status: "approved",
+        status: "pending",
         registerSessionId: world.registerSessionId,
         createdAt: 2,
         metadata: { localEventId: "event-closeout-1", variance: -4218 },
@@ -1394,7 +1399,62 @@ describe("register closeout notification intents", () => {
 
     await uploadCloseout(t, world, "event-closeout-1");
 
-    expect(await listIntents(t)).toHaveLength(0);
+    const intents = await listIntents(t);
+    expect(intents.map((intent) => intent.kind)).toEqual([
+      "register.closeout_variance",
+    ]);
+    const skipEvents = await t.run(async (ctx) =>
+      ctx.db.query("operationalEvent").take(20),
+    );
+    expect(
+      skipEvents.filter(
+        (event) =>
+          event.eventType === "register_closeout_notification_skipped",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("emits the all-clear when reviews are merely spread across statuses", async () => {
+    // Truncation is per query, so reviews spread across statuses are a
+    // COMPLETE result even when their total exceeds the per-page bound.
+    // Testing the flattened total instead would silently drop this
+    // legitimate "register closed" report.
+    const t = convexTest(schema, modules);
+    const world = await seedCloseoutWorld(t);
+    await t.run(async (ctx) => {
+      const statuses = ["pending", "approved", "rejected", "cancelled"] as const;
+      for (let index = 0; index < 11; index += 1) {
+        await ctx.db.insert("approvalRequest", {
+          storeId: world.storeId,
+          organizationId: world.organizationId,
+          requestType: "variance_review",
+          subjectType: "registerSession",
+          subjectId: String(world.registerSessionId),
+          status: statuses[index % statuses.length],
+          registerSessionId: world.registerSessionId,
+          createdAt: 2 + index,
+          // None match this closeout: it is a clean close.
+          metadata: { localEventId: `other-event-${index}`, variance: -100 },
+        });
+      }
+    });
+    mockIngestWithCloseoutMapping(world, "event-closeout-1");
+
+    await uploadCloseout(t, world, "event-closeout-1");
+
+    const intents = await listIntents(t);
+    expect(intents.map((intent) => intent.kind)).toEqual([
+      "register.closeout_match",
+    ]);
+    const events = await t.run(async (ctx) =>
+      ctx.db.query("operationalEvent").take(20),
+    );
+    expect(
+      events.filter(
+        (event) =>
+          event.eventType === "register_closeout_notification_skipped",
+      ),
+    ).toHaveLength(0);
   });
 
   it("refuses the all-clear when variance reviews overflow the lookup bound", async () => {

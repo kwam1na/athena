@@ -314,32 +314,35 @@ async function scheduleRegisterCloseoutNotifications(
     // filtering in code — a session accumulates adjustment, void, and
     // correction approvals too, and any bounded page of those could push the
     // variance review out of the window and resurrect that bug.
-    const varianceReviews = (
-      await Promise.all(
-        APPROVAL_REQUEST_STATUSES.map((status) =>
-          ctx.db
-            .query("approvalRequest")
-            .withIndex("by_registerSessionId_status_requestType", (q) =>
-              q
-                .eq("registerSessionId", registerSessionId)
-                .eq("status", status.value)
-                .eq("requestType", "variance_review"),
-            )
-            .take(MAX_VARIANCE_REVIEWS_PER_CLOSEOUT + 1),
-        ),
-      )
-    ).flat();
+    const varianceReviewPages = await Promise.all(
+      APPROVAL_REQUEST_STATUSES.map((status) =>
+        ctx.db
+          .query("approvalRequest")
+          .withIndex("by_registerSessionId_status_requestType", (q) =>
+            q
+              .eq("registerSessionId", registerSessionId)
+              .eq("status", status.value)
+              .eq("requestType", "variance_review"),
+          )
+          .take(MAX_VARIANCE_REVIEWS_PER_CLOSEOUT + 1),
+      ),
+    );
+    // Truncation is per query: each page has its own bound, so reviews merely
+    // spread across statuses are a complete result, not a breach. Testing the
+    // flattened total instead would suppress legitimate all-clears for any
+    // session whose reviews happen to sum past the bound.
+    const truncatedPage = varianceReviewPages.some(
+      (page) => page.length > MAX_VARIANCE_REVIEWS_PER_CLOSEOUT,
+    );
+    const varianceReviews = varianceReviewPages.flat();
     const approvalRequest = varianceReviews.find((request) =>
       isVarianceReviewForCloseout(request, mapping.localEventId),
     );
 
-    // A breach means the page could be hiding the very review being looked
-    // for — .take returns oldest-first, so the newest rows are the ones
-    // dropped. Refuse to take the all-clear branch on a guess.
-    if (
-      !approvalRequest &&
-      varianceReviews.length > MAX_VARIANCE_REVIEWS_PER_CLOSEOUT
-    ) {
+    // A truncated page could be hiding the very review being looked for —
+    // .take returns oldest-first, so the newest rows are the ones dropped.
+    // Refuse to take the all-clear branch on a guess.
+    if (!approvalRequest && truncatedPage) {
       const breachedSession = await ctx.db.get(
         "registerSession",
         registerSessionId,
@@ -351,7 +354,7 @@ async function scheduleRegisterCloseoutNotifications(
         subjectType: "registerSession",
         subjectId: String(registerSessionId),
         actorType: "automation",
-        message: `Register closeout notification skipped: more than ${MAX_VARIANCE_REVIEWS_PER_CLOSEOUT} variance reviews in one status, so the closeout's review could not be resolved.`,
+        message: `Register closeout notification skipped: a single status holds more than ${MAX_VARIANCE_REVIEWS_PER_CLOSEOUT} variance reviews, so the closeout's review could not be resolved.`,
         metadata: {
           localEventId: mapping.localEventId,
           varianceReviewCount: varianceReviews.length,

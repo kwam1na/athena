@@ -124,9 +124,18 @@ delivery mechanics.
   `requeuedAt` to restart the abandonment clock — while preserving `emittedAt`
   as the audit record of when the domain moment actually happened — then
   schedules a fresh dispatch.
+- **Refuse rather than guess** (`sync.ts`): the per-status variance lookup
+  reads one row past its bound, and a page that actually truncated means the
+  closeout's own review may be the row that was dropped (`.take` returns
+  oldest-first). Rather than fall through to the all-clear on an incomplete
+  read, the closeout is skipped and a `register_closeout_notification_skipped`
+  operational event records why. Breach detection is per page, not on the
+  flattened total across statuses — reviews merely spread across statuses are
+  a complete result, and testing the sum would silently drop legitimate
+  "register closed" reports.
 - **Suppression tracing is asymmetric by design**: every intent-level
   suppression (`no_recipients`, `no_deliverable_channel`, `unknown_kind`,
-  `subscription_cap_exceeded`, and any `markIntentSuppressed` reason including
+  and any `markIntentSuppressed` reason including
   `payload_unavailable`) records a `notification_delivery_failed` operational
   event, because it means the whole notification silently died. A delivery
   that completes as `suppressed` (a stranded recipient, a superseded

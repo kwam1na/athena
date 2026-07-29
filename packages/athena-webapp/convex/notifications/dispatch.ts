@@ -308,8 +308,16 @@ export const reserveIntentDeliveries = internalMutation({
       });
     }
 
+    // The un-leased tail of a large audience has no delivery rows yet, so it
+    // exists only in the in-memory hasMore flag and the action's follow-on
+    // schedule. Leaving the intent "pending" until the audience is fully
+    // materialized keeps the sweeper's pending-intent phase as the backstop:
+    // if the continuation is lost (action killed after the last completion,
+    // or the schedule never commits), the sweep re-dispatches, and the
+    // abandonment clock eventually reports it. Marking it "dispatched" here
+    // would make the tail invisible to every sweeper phase.
     await ctx.db.patch("notificationIntent", intent._id, {
-      status: "dispatched",
+      status: hasMore ? "pending" : "dispatched",
       dispatchedAt: intent.dispatchedAt ?? now,
     });
 
@@ -516,9 +524,13 @@ export const dispatchIntent = internalAction({
               : Math.min(earliestPrepareRetryAt, nextAttemptAt);
         }
       }
-      if (earliestPrepareRetryAt !== null) {
+      // Continue the chain even when the whole batch is at the attempt cap:
+      // the tail recipients have no rows yet and are nobody else's job.
+      if (earliestPrepareRetryAt !== null || reserved.hasMore) {
         await ctx.scheduler.runAfter(
-          Math.max(0, earliestPrepareRetryAt - Date.now()),
+          reserved.hasMore || earliestPrepareRetryAt === null
+            ? 0
+            : Math.max(0, earliestPrepareRetryAt - Date.now()),
           internal.notifications.dispatch.dispatchIntent,
           { intentId: args.intentId },
         );
@@ -578,17 +590,19 @@ export const dispatchIntent = internalAction({
       }
     }
 
-    if (earliestRetryAt !== null) {
+    // An unfinished audience takes priority over the head batch's retry
+    // ladder: waiting out 1m+2m+4m before recipient 26 gets a FIRST attempt
+    // would delay the tail by the full ladder during a provider outage. Due
+    // retries are the sweeper's job either way.
+    if (reserved.hasMore) {
       await ctx.scheduler.runAfter(
-        Math.max(0, earliestRetryAt - Date.now()),
+        0,
         internal.notifications.dispatch.dispatchIntent,
         { intentId: args.intentId },
       );
-    } else if (reserved.hasMore) {
-      // Only continue when this pass actually leased something, so a batch
-      // that skipped every remaining recipient cannot re-schedule forever.
+    } else if (earliestRetryAt !== null) {
       await ctx.scheduler.runAfter(
-        0,
+        Math.max(0, earliestRetryAt - Date.now()),
         internal.notifications.dispatch.dispatchIntent,
         { intentId: args.intentId },
       );
