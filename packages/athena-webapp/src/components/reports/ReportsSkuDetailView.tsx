@@ -1,19 +1,13 @@
 import { useQuery } from "convex/react";
 import { Link, useParams } from "@tanstack/react-router";
-import { ArrowUpRight } from "lucide-react";
-import { useState } from "react";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { ArrowDown, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { getOrigin } from "@/lib/navigationUtils";
 import { FadeIn } from "@/components/common/FadeIn";
+import { ListPagination } from "@/components/common/ListPagination";
 import { ReportBackLink } from "./ReportBackLink";
+import { ReportDateRangeField } from "./ReportDateRangeField";
 import { useStableReportQuery } from "./useStableReportQuery";
 import { cn } from "@/lib/utils";
 import {
@@ -26,10 +20,6 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/states/empty/empty-state";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
-import {
-  getLocalDateFromOperatingDate,
-  getLocalOperatingDate,
-} from "@/lib/operations/operatingDate";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import {
@@ -43,71 +33,26 @@ import {
   reportProfitUnavailableNote,
 } from "./reportFormat";
 
-/** Single-date popover trigger, same shape as `DailyOperationsView`'s operating-date picker. */
-function ReportDateField({
-  boundary,
-  label,
-  onSelect,
-  operatingDate,
-}: {
-  boundary?: { after: Date } | { before: Date };
-  label: string;
-  onSelect: (operatingDate: string) => void;
-  operatingDate: string;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const selectedDate = getLocalDateFromOperatingDate(operatingDate);
-
-  return (
-    <Popover onOpenChange={setIsOpen} open={isOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          aria-label={`Change ${label.toLowerCase()}, currently ${formatOperatingDate(operatingDate)}`}
-          className="h-auto justify-start gap-2 px-layout-sm py-layout-xs text-sm font-normal text-muted-foreground shadow-surface"
-          variant="outline"
-        >
-          <CalendarIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
-          <span className="shrink-0">{label}</span>
-          <span className="font-medium text-foreground">
-            {formatOperatingDate(operatingDate)}
-          </span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto p-0">
-        <Calendar
-          defaultMonth={selectedDate}
-          disabled={boundary}
-          mode="single"
-          onSelect={(date) => {
-            if (!date) return;
-            onSelect(getLocalOperatingDate(date));
-            setIsOpen(false);
-          }}
-          selected={selectedDate}
-        />
-      </PopoverContent>
-    </Popover>
-  );
-}
+const REPORT_SKU_DETAIL_PAGE_SIZE = 10;
 
 export function ReportsSkuDetailView({
   productSkuId,
   startDate,
   endDate,
-  onStartDateChange,
-  onEndDateChange,
+  onRangeChange,
+  onPageChange,
+  page,
 }: {
   productSkuId: string;
   startDate: string;
   endDate: string;
-  onStartDateChange: (value: string) => void;
-  onEndDateChange: (value: string) => void;
+  onRangeChange: (next: { startDate: string; endDate: string }) => void;
+  onPageChange: (page: number) => void;
+  page: number;
 }) {
   const { activeStore } = useGetActiveStore();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
   const currency = activeStore?.currency ?? "USD";
-  const startBoundary = getLocalDateFromOperatingDate(startDate);
-  const endBoundary = getLocalDateFromOperatingDate(endDate);
 
   const {
     data: detail,
@@ -126,6 +71,21 @@ export function ReportsSkuDetailView({
         : "skip",
     ),
   );
+  const daysNewestFirst = detail
+    ? [...detail.days].sort((left, right) =>
+        right.operatingDate.localeCompare(left.operatingDate),
+      )
+    : [];
+  const totalDays = daysNewestFirst.length;
+  const pageCount = Math.max(
+    1,
+    Math.ceil(totalDays / REPORT_SKU_DETAIL_PAGE_SIZE),
+  );
+  const currentPage = Math.min(page, pageCount);
+  const visibleDays = daysNewestFirst.slice(
+    (currentPage - 1) * REPORT_SKU_DETAIL_PAGE_SIZE,
+    currentPage * REPORT_SKU_DETAIL_PAGE_SIZE,
+  );
 
   return (
     /* Rhythm: tight inside a cluster, generous between sections, so the page
@@ -135,70 +95,66 @@ export function ReportsSkuDetailView({
         className="space-y-layout-xl md:space-y-layout-2xl"
         data-testid="reports-sku-detail"
       >
-        <div className="space-y-layout-sm">
+        <div className="space-y-layout-lg">
           <ReportBackLink label="Back to items" />
 
-          <div className="space-y-1">
-            {/* Out to the product's detail page, carrying this page as the
-              origin so its back control returns here. The product id stands
-              in for the slug, matching how the products table links. */}
-            {detail?.identity?.productId ? (
-              <Link
-                className="group inline-flex items-center gap-1.5"
-                params={{
-                  orgUrlSlug: orgUrlSlug!,
-                  storeUrlSlug: storeUrlSlug!,
-                  productSlug: detail.identity.productId,
-                }}
-                search={{ o: getOrigin() }}
-                to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
-              >
+          <header className="flex flex-col gap-layout-md sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 space-y-layout-xs">
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Product report
+              </p>
+              <div className="space-y-1">
                 <h2
-                  className="text-xl font-medium text-foreground"
+                  className="truncate text-2xl font-semibold tracking-tight text-foreground"
                   data-testid="reports-sku-detail-name"
                 >
-                  {formatSkuDisplayName(detail.identity, productSkuId)}
+                  {detail
+                    ? formatSkuDisplayName(detail.identity, productSkuId)
+                    : "\u00A0"}
                 </h2>
-                <ArrowUpRight
-                  aria-hidden="true"
-                  className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
-                />
-                <span className="sr-only">Open product</span>
-              </Link>
-            ) : (
-              /* Until identity resolves, hold the lines blank rather than
-               showing the document id: it is not the SKU's name, and swapping
-               it out shifts the whole header once the real name lands. */
-              <h2
-                className="text-xl font-medium text-foreground"
-                data-testid="reports-sku-detail-name"
-              >
-                {detail
-                  ? formatSkuDisplayName(detail.identity, productSkuId)
-                  : "\u00A0"}
-              </h2>
-            )}
-            <p className="text-sm text-muted-foreground">
-              {detail
-                ? formatSkuSubtitle(detail.identity, productSkuId)
-                : "\u00A0"}
-            </p>
-          </div>
-        </div>
+                <p className="truncate text-sm text-muted-foreground">
+                  {detail
+                    ? formatSkuSubtitle(detail.identity, productSkuId)
+                    : "\u00A0"}
+                </p>
+              </div>
+            </div>
 
-        <div className="flex flex-wrap items-end gap-layout-sm">
-          <ReportDateField
-            boundary={endBoundary ? { after: endBoundary } : undefined}
-            label="Start date"
-            onSelect={onStartDateChange}
-            operatingDate={startDate}
-          />
-          <ReportDateField
-            boundary={startBoundary ? { before: startBoundary } : undefined}
-            label="End date"
-            onSelect={onEndDateChange}
-            operatingDate={endDate}
-          />
+            {/* Product management is adjacent to, but distinct from, this
+                reporting identity. An explicit action keeps the heading from
+                doing double duty as navigation. */}
+            {detail?.identity?.productId ? (
+              <Button
+                asChild
+                className="shrink-0 self-start"
+                size="sm"
+                variant="utility"
+              >
+                <Link
+                  params={{
+                    orgUrlSlug: orgUrlSlug!,
+                    storeUrlSlug: storeUrlSlug!,
+                    productSlug: detail.identity.productId,
+                  }}
+                  search={{ o: getOrigin() }}
+                  to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+                >
+                  View product
+                  <ArrowUpRight aria-hidden="true" />
+                </Link>
+              </Button>
+            ) : null}
+          </header>
+
+          <div className="flex flex-wrap">
+            <ReportDateRangeField
+              align="start"
+              endDate={endDate}
+              label="Reporting period"
+              onSelect={onRangeChange}
+              startDate={startDate}
+            />
+          </div>
         </div>
 
         {/* Nothing until the first result settles: these queries resolve fast
@@ -266,14 +222,22 @@ export function ReportsSkuDetailView({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
+                      <TableHead aria-sort="descending">
+                        <span className="inline-flex items-center gap-1">
+                          Date
+                          <ArrowDown
+                            aria-hidden="true"
+                            className="h-3.5 w-3.5"
+                          />
+                        </span>
+                      </TableHead>
                       <TableHead>Net sales</TableHead>
                       <TableHead>Units sold</TableHead>
                       <TableHead>Gross profit</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {detail.days.map((day) => (
+                    {visibleDays.map((day) => (
                       <TableRow key={day.operatingDate}>
                         <TableCell>
                           {formatOperatingDate(day.operatingDate)}
@@ -289,6 +253,15 @@ export function ReportsSkuDetailView({
                     ))}
                   </TableBody>
                 </Table>
+                {totalDays > REPORT_SKU_DETAIL_PAGE_SIZE ? (
+                  <ListPagination
+                    onPageChange={onPageChange}
+                    page={currentPage}
+                    pageCount={pageCount}
+                    pageSize={REPORT_SKU_DETAIL_PAGE_SIZE}
+                    totalItems={totalDays}
+                  />
+                ) : null}
               </div>
             )}
 

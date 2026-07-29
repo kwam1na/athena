@@ -1,10 +1,6 @@
-import { useState } from "react";
 import { useQuery } from "convex/react";
 import { Link, useParams } from "@tanstack/react-router";
-import { Calendar as CalendarIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ArrowDown } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -15,14 +11,12 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { getOrigin } from "@/lib/navigationUtils";
+import { ListPagination } from "@/components/common/ListPagination";
 import { useStableReportQuery } from "./useStableReportQuery";
 import { EmptyState } from "@/components/states/empty/empty-state";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
-import {
-  getLocalDateFromOperatingDate,
-  getLocalOperatingDate,
-} from "@/lib/operations/operatingDate";
+import { ReportDateRangeField } from "./ReportDateRangeField";
 import {
   formatOperatingDate,
   formatReportMoney,
@@ -30,52 +24,7 @@ import {
   reportDaySettlementPresentation,
 } from "./reportFormat";
 
-/** Single-date popover trigger, same shape as `DailyOperationsView`'s operating-date picker. */
-function ReportDateField({
-  boundary,
-  label,
-  onSelect,
-  operatingDate,
-}: {
-  boundary?: { after: Date } | { before: Date };
-  label: string;
-  onSelect: (operatingDate: string) => void;
-  operatingDate: string;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const selectedDate = getLocalDateFromOperatingDate(operatingDate);
-
-  return (
-    <Popover onOpenChange={setIsOpen} open={isOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          aria-label={`Change ${label.toLowerCase()} date, currently ${formatOperatingDate(operatingDate)}`}
-          className="h-auto justify-start gap-2 px-layout-sm py-layout-xs text-sm font-normal text-muted-foreground shadow-surface"
-          variant="outline"
-        >
-          <CalendarIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
-          <span className="shrink-0">{label}</span>
-          <span className="font-medium text-foreground">
-            {formatOperatingDate(operatingDate)}
-          </span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-auto p-0">
-        <Calendar
-          defaultMonth={selectedDate}
-          disabled={boundary}
-          mode="single"
-          onSelect={(date) => {
-            if (!date) return;
-            onSelect(getLocalOperatingDate(date));
-            setIsOpen(false);
-          }}
-          selected={selectedDate}
-        />
-      </PopoverContent>
-    </Popover>
-  );
-}
+const REPORT_DAYS_PAGE_SIZE = 14;
 
 /**
  * Day drill-down: `listDays` over a bounded range, per-day status badge and
@@ -87,10 +36,14 @@ export function ReportDaysPanel({
   startDate,
   endDate,
   onRangeChange,
+  onPageChange,
+  page,
 }: {
   startDate: string;
   endDate: string;
   onRangeChange: (next: { startDate: string; endDate: string }) => void;
+  onPageChange: (page: number) => void;
+  page: number;
 }) {
   const { activeStore } = useGetActiveStore();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
@@ -106,25 +59,28 @@ export function ReportDaysPanel({
         : "skip",
     ),
   );
-  const startBoundary = getLocalDateFromOperatingDate(startDate);
-  const endBoundary = getLocalDateFromOperatingDate(endDate);
+  const daysNewestFirst = days
+    ? [...days].sort((left, right) =>
+        right.operatingDate.localeCompare(left.operatingDate),
+      )
+    : days;
+  const totalDays = daysNewestFirst?.length ?? 0;
+  const pageCount = Math.max(1, Math.ceil(totalDays / REPORT_DAYS_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const visibleDays = daysNewestFirst?.slice(
+    (currentPage - 1) * REPORT_DAYS_PAGE_SIZE,
+    currentPage * REPORT_DAYS_PAGE_SIZE,
+  );
 
   return (
     <section className="space-y-layout-sm" data-testid="report-days-panel">
       <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-end sm:justify-between">
         <h3 className="text-base font-medium text-foreground">Days</h3>
-        <div className="flex flex-wrap gap-layout-sm">
-          <ReportDateField
-            boundary={endBoundary ? { after: endBoundary } : undefined}
-            label="From"
-            onSelect={(next) => onRangeChange({ startDate: next, endDate })}
-            operatingDate={startDate}
-          />
-          <ReportDateField
-            boundary={startBoundary ? { before: startBoundary } : undefined}
-            label="To"
-            onSelect={(next) => onRangeChange({ startDate, endDate: next })}
-            operatingDate={endDate}
+        <div className="flex flex-wrap">
+          <ReportDateRangeField
+            endDate={endDate}
+            onSelect={onRangeChange}
+            startDate={startDate}
           />
         </div>
       </div>
@@ -132,8 +88,12 @@ export function ReportDaysPanel({
           enough that a skeleton appears and vanishes as a flash of its own.
           Refreshes keep the previous data on screen (see useStableReportQuery),
           so this branch is only ever the very first load. */}
-      {isInitialLoad || days === undefined ? null : days.length === 0 ? (
-        <EmptyState title="No days in range" description="Choose a different date range." />
+      {isInitialLoad ||
+      daysNewestFirst === undefined ? null : daysNewestFirst.length === 0 ? (
+        <EmptyState
+          title="No days in range"
+          description="Choose a different date range."
+        />
       ) : (
         <div
           aria-busy={isRefreshing}
@@ -147,14 +107,19 @@ export function ReportDaysPanel({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
+                <TableHead aria-sort="descending">
+                  <span className="inline-flex items-center gap-1">
+                    Date
+                    <ArrowDown aria-hidden="true" className="h-3.5 w-3.5" />
+                  </span>
+                </TableHead>
                 <TableHead className="text-right">Net sales</TableHead>
                 <TableHead className="text-right">Units sold</TableHead>
                 <TableHead className="text-right">Against close</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {days.map((day) => {
+              {visibleDays?.map((day) => {
                 const settlement = reportDaySettlementPresentation({
                   closeVarianceMinor: day.closeVarianceMinor,
                   currency: day.currency,
@@ -168,13 +133,18 @@ export function ReportDaysPanel({
                     // with the accepted close, or that moved after sign-off.
                     // The signal is carried by the toned amount and caption in
                     // the settlement cell, not by a row treatment.
-                    data-attention={settlement.needsAttention ? "true" : undefined}
+                    data-attention={
+                      settlement.needsAttention ? "true" : undefined
+                    }
                     data-status={day.status}
                     key={day.operatingDate}
                   >
                     <TableCell>
                       <Link
-                        params={{ orgUrlSlug: orgUrlSlug!, storeUrlSlug: storeUrlSlug! }}
+                        params={{
+                          orgUrlSlug: orgUrlSlug!,
+                          storeUrlSlug: storeUrlSlug!,
+                        }}
                         search={{
                           periodType: "day",
                           periodDate: day.operatingDate,
@@ -211,6 +181,15 @@ export function ReportDaysPanel({
               })}
             </TableBody>
           </Table>
+          {totalDays > REPORT_DAYS_PAGE_SIZE ? (
+            <ListPagination
+              onPageChange={onPageChange}
+              page={currentPage}
+              pageCount={pageCount}
+              pageSize={REPORT_DAYS_PAGE_SIZE}
+              totalItems={totalDays}
+            />
+          ) : null}
         </div>
       )}
     </section>

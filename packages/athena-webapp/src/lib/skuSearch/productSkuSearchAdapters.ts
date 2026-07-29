@@ -62,23 +62,41 @@ export type ProductGroupedSkuSearchResult = {
   skus: AdminSkuSearchOption[];
 };
 
+function presentationText(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed.toLowerCase() === "null") return null;
+
+  return trimmed;
+}
+
 function compactJoin(parts: Array<string | null | undefined>, separator = " · ") {
-  return parts.filter((part): part is string => Boolean(part?.trim())).join(separator);
+  return parts
+    .map(presentationText)
+    .filter((part): part is string => part !== null)
+    .join(separator);
 }
 
 export function buildAdminSkuSearchOption(
   result: ProductSkuSearchResultLike,
 ): AdminSkuSearchOption {
-  const skuLabel = result.sku?.trim() || String(result.productSkuId);
+  const barcode = presentationText(result.barcode);
+  const categoryName = presentationText(result.categoryName);
+  const colorName = presentationText(result.colorName);
+  const productName =
+    presentationText(result.productName) ?? "Unnamed product";
+  const size = presentationText(result.size);
+  const sku = presentationText(result.sku);
+  const subcategoryName = presentationText(result.subcategoryName);
+  const skuLabel = sku || String(result.productSkuId);
   const variantLabel = compactJoin([
-    result.size,
+    size,
     result.length === null ? null : `${result.length}"`,
-    result.colorName,
+    colorName,
   ]);
   const metadata = compactJoin([
-    result.categoryName,
-    result.subcategoryName,
-    result.barcode ? `Barcode ${result.barcode}` : null,
+    categoryName,
+    subcategoryName,
+    barcode ? `Barcode ${barcode}` : null,
   ]);
   const visibility =
     result.productAvailability === "live" && result.productIsVisible !== false
@@ -90,22 +108,22 @@ export function buildAdminSkuSearchOption(
         : "Draft";
 
   return {
-    barcode: result.barcode,
-    categoryName: result.categoryName,
-    colorName: result.colorName,
+    barcode,
+    categoryName,
+    colorName,
     disabled: false,
     imageUrl: result.images[0] ?? null,
-    label: compactJoin([result.productName, skuLabel], " / "),
+    label: compactJoin([productName, skuLabel], " / "),
     matchKind: result.match.kind,
     matchRank: result.match.rank,
     metadata,
     productId: result.productId,
-    productName: result.productName,
+    productName,
     productSkuId: result.productSkuId,
     quantityAvailable: result.quantityAvailable,
     searchResult: result,
     sizeLabel: variantLabel || null,
-    sku: result.sku,
+    sku,
     subtitle: compactJoin([variantLabel, visibility, metadata]),
   };
 }

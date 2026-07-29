@@ -191,7 +191,7 @@ As per design doc: 5-min cron, bounded dirty-day batches in `markedAt` order, re
 
 ### Slice D — read queries (M)
 **Files:** `convex/reports/queries.ts`, `access.ts` (ported `requireReportingStoreAccess`), tests.
-**Frozen names:** `reports.queries.getOverview` (1 doc) · `listDays({range})` (≤ 92 docs) · `listPeriodSkus({periodKey, sortBy, cursor})` (25-doc index page, context-bound opaque cursor) · `getSkuDetail({productSkuId, range})` (≤ 92 docs) · `getRangeResult({requestKey})` · `requestRange` mutation lives in H but its result shape is contract-frozen here.
+**Frozen names:** `reports.queries.getOverview` (1 doc) · `listDays({range})` (≤ 92 docs) · `listPeriodSkus({periodKey, sortBy, cursor})` (10-doc index page, context-bound opaque cursor) · `getSkuDetail({productSkuId, range})` (≤ 92 docs) · `getRangeResult({requestKey})` · `requestRange` mutation lives in H but its result shape is contract-frozen here.
 **Acceptance:** tests incl. access denial + cursor rejection; per-query worst-case read ledger in comments.
 
 ### Slice F — source-truth verifier + reseed (M/L)

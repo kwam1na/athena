@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -9,13 +9,23 @@ vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQuery(...args),
 }));
 vi.mock("@/hooks/useGetActiveStore", () => ({
-  default: () => ({ activeStore: { _id: "store-1", currency: "USD" }, isLoadingStores: false }),
+  default: () => ({
+    activeStore: { _id: "store-1", currency: "USD" },
+    isLoadingStores: false,
+  }),
 }));
 vi.mock("@/hooks/use-navigate-back", () => ({
   useNavigateBack: () => navigateBackMock,
 }));
 vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children, to, ...props }: { children?: React.ReactNode; to: string }) => {
+  Link: ({
+    children,
+    to,
+    ...props
+  }: {
+    children?: React.ReactNode;
+    to: string;
+  }) => {
     delete (props as Record<string, unknown>).params;
     return (
       <a href={to} {...props}>
@@ -34,6 +44,7 @@ const baseProps = {
   periodDate: "2026-07-28",
   sortBy: "revenue" as const,
   cursor: undefined,
+  cursorTrail: [],
   onPeriodTypeChange: vi.fn(),
   onPeriodDateChange: vi.fn(),
   onSortByChange: vi.fn(),
@@ -41,6 +52,26 @@ const baseProps = {
 };
 
 describe("ReportsItemsView", () => {
+  it("discloses the item rollup refresh cadence and snapshot time", () => {
+    const updatedAt = Date.UTC(2026, 6, 29, 15, 30);
+    useQuery.mockReturnValue({
+      rows: [],
+      continueCursor: null,
+      updatedAt,
+    });
+
+    render(<ReportsItemsView {...baseProps} />);
+
+    const freshness = screen.getByTestId("report-freshness");
+    expect(freshness).toHaveTextContent(
+      "Report totals update about every 5 minutes",
+    );
+    expect(freshness.querySelector("time")).toHaveAttribute(
+      "datetime",
+      new Date(updatedAt).toISOString(),
+    );
+  });
+
   it("queries listPeriodSkus with a d: period key built via the contract helper", () => {
     useQuery.mockReturnValue({ rows: [], continueCursor: null });
     render(<ReportsItemsView {...baseProps} />);
@@ -57,7 +88,11 @@ describe("ReportsItemsView", () => {
         {
           productSkuId: "kx70hda5jszy8a9c8eg04wb39188g5g6",
           periodKey: "d:2026-07-28",
-          identity: { displayName: "bottle water", sku: "6N2Y-Y4Q-95V", size: "500ml" },
+          identity: {
+            displayName: "bottle water",
+            sku: "6N2Y-Y4Q-95V",
+            size: "500ml",
+          },
           unitsSold: 3,
           unitsReturned: 0,
           grossSalesMinor: 3600,
@@ -110,7 +145,9 @@ describe("ReportsItemsView", () => {
 
     search.current = {};
     const { unmount } = render(<ReportsItemsView {...baseProps} />);
-    expect(screen.queryByRole("button", { name: /back/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /back/i }),
+    ).not.toBeInTheDocument();
     unmount();
 
     search.current = { o: encodeURIComponent("/acme/store/downtown/reports") };
@@ -142,9 +179,48 @@ describe("ReportsItemsView", () => {
 
     render(<ReportsItemsView {...baseProps} onCursorChange={onCursorChange} />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Go to next page" }),
+    );
 
-    expect(onCursorChange).toHaveBeenCalledWith("cursor-page-2");
+    expect(onCursorChange).toHaveBeenCalledWith("cursor-page-2", []);
+  });
+
+  it("uses the cursor trail to return to the previous page", async () => {
+    const onCursorChange = vi.fn();
+    useQuery.mockReturnValue({
+      rows: [
+        {
+          productSkuId: "sku-21",
+          periodKey: "d:2026-07-28",
+          unitsSold: 1,
+          unitsReturned: 0,
+          grossSalesMinor: 100,
+          netSalesMinor: 100,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: 50,
+        },
+      ],
+      continueCursor: null,
+    });
+
+    render(
+      <ReportsItemsView
+        {...baseProps}
+        cursor="cursor-page-3"
+        cursorTrail={["cursor-page-2"]}
+        onCursorChange={onCursorChange}
+      />,
+    );
+
+    expect(screen.getByText("Showing 21-21")).toBeInTheDocument();
+    expect(screen.getByText("Page 3")).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Go to previous page" }),
+    );
+
+    expect(onCursorChange).toHaveBeenCalledWith("cursor-page-2", []);
   });
 
   it("switches sort mode via the revenue/units toggle", async () => {
@@ -155,5 +231,39 @@ describe("ReportsItemsView", () => {
     await userEvent.click(screen.getByRole("button", { name: "Units" }));
 
     expect(onSortByChange).toHaveBeenCalledWith("units");
+  });
+
+  it("groups the period and ranking controls with clear labels", () => {
+    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+
+    render(<ReportsItemsView {...baseProps} />);
+
+    const reportControls = screen.getByTestId("items-report-controls");
+    expect(within(reportControls).getByText("Period")).toBeInTheDocument();
+    expect(within(reportControls).getByText("Anchor date")).toBeInTheDocument();
+    const periodControls = within(reportControls).getByRole("group", {
+      name: "Period",
+    });
+    expect(
+      within(periodControls).getByRole("combobox", { name: "Period type" }),
+    ).toBeInTheDocument();
+    expect(
+      within(periodControls).getByRole("button", {
+        name: /change anchor date/i,
+      }),
+    ).toBeInTheDocument();
+
+    const rankingControls = within(reportControls).getByRole("group", {
+      name: "Rank by",
+    });
+    const selectedRank = within(rankingControls).getByRole("button", {
+      name: "Revenue",
+    });
+    expect(selectedRank).toHaveAttribute("aria-pressed", "true");
+    expect(selectedRank).toHaveClass(
+      "border-primary-border",
+      "bg-primary-soft",
+      "text-primary",
+    );
   });
 });

@@ -150,6 +150,7 @@ export function buildOverviewData(args: {
       updatedAt: now,
       currency: args.fallbackCurrency,
       today: emptySnapshot(),
+      yesterday: emptySnapshot(),
       weekToDate: emptySnapshot(),
       priorWeek: emptySnapshot(),
       trailing30: emptySnapshot(),
@@ -160,6 +161,10 @@ export function buildOverviewData(args: {
   }
 
   const anchorDay = days.find((day) => day.operatingDate === anchor);
+  const yesterdayDate = addDaysToDate(anchor, -1);
+  const yesterdayDay = days.find(
+    (day) => day.operatingDate === yesterdayDate,
+  );
   const currency = anchorDay?.currency ?? args.fallbackCurrency;
 
   const trailingStart = addDaysToDate(anchor, -(OVERVIEW_TREND_DAYS - 1));
@@ -192,6 +197,9 @@ export function buildOverviewData(args: {
     updatedAt: now,
     currency,
     today: anchorDay ? snapshotForDays([anchorDay]) : emptySnapshot(),
+    yesterday: yesterdayDay
+      ? snapshotForDays([yesterdayDay])
+      : emptySnapshot(),
     weekToDate,
     priorWeek,
     trailing30: snapshotForDays(trailing30Days),

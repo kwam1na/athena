@@ -9,8 +9,10 @@ describe("reports overview search schema", () => {
 
   it("round-trips a fully populated search", () => {
     const value = {
+      window: "weekToDate" as const,
       daysStart: "2026-07-01",
       daysEnd: "2026-07-28",
+      daysPage: 2,
       rangeStart: "2026-06-01",
       rangeEnd: "2026-06-30",
       requestKey: "req-abc",
@@ -19,6 +21,21 @@ describe("reports overview search schema", () => {
   });
 
   it("rejects malformed dates", () => {
-    expect(() => reportsOverviewSearchSchema.parse({ daysStart: "07/01/2026" })).toThrow();
+    expect(() =>
+      reportsOverviewSearchSchema.parse({ daysStart: "07/01/2026" }),
+    ).toThrow();
+  });
+
+  it("rejects an unknown overview window", () => {
+    expect(() =>
+      reportsOverviewSearchSchema.parse({ window: "quarter" }),
+    ).toThrow();
+  });
+
+  it("rejects invalid day-list pages", () => {
+    expect(() => reportsOverviewSearchSchema.parse({ daysPage: 0 })).toThrow();
+    expect(() =>
+      reportsOverviewSearchSchema.parse({ daysPage: 1.5 }),
+    ).toThrow();
   });
 });

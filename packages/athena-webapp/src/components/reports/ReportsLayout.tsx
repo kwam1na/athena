@@ -2,7 +2,10 @@ import { Link, Outlet, useLocation, useParams } from "@tanstack/react-router";
 
 import View from "@/components/View";
 import { FadeIn } from "@/components/common/FadeIn";
-import { PageLevelHeader, PageWorkspace } from "@/components/common/PageLevelHeader";
+import {
+  PageLevelHeader,
+  PageWorkspace,
+} from "@/components/common/PageLevelHeader";
 import { cn } from "@/lib/utils";
 
 const REPORT_TABS = [
@@ -29,9 +32,12 @@ export function ReportsLayout() {
           <PageLevelHeader
             eyebrow="Store performance"
             title="Reports"
-            description="Track sales, item movement, and reconciliation status."
+            description="Review sales and product performance."
           />
-          <nav aria-label="Reports views" className="overflow-x-auto border-b border-border">
+          <nav
+            aria-label="Reports views"
+            className="overflow-x-auto border-b border-border"
+          >
             <div className="flex min-w-max gap-layout-lg" role="list">
               {REPORT_TABS.map((tab) => {
                 const active = tab.suffix
@@ -45,7 +51,10 @@ export function ReportsLayout() {
                       active && "border-primary text-primary",
                     )}
                     key={tab.label}
-                    params={{ orgUrlSlug: orgUrlSlug!, storeUrlSlug: storeUrlSlug! }}
+                    params={{
+                      orgUrlSlug: orgUrlSlug!,
+                      storeUrlSlug: storeUrlSlug!,
+                    }}
                     to={tab.to}
                   >
                     {tab.label}

@@ -99,7 +99,7 @@ export function ReportTrendChart({
     <section className="space-y-layout-sm">
       <div>
         <h3 className="text-base font-medium text-foreground">
-          Net sales — last 30 days
+          Net sales
         </h3>
       </div>
       <div className="overflow-hidden rounded-lg border border-border bg-surface-raised px-layout-sm py-8 shadow-surface sm:p-8">

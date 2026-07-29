@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatBasisPoints,
+  formatOperatingDate,
   formatOptionalMoney,
   formatReportMoney,
   formatReportProfit,
@@ -12,6 +13,10 @@ import {
 } from "./reportFormat";
 
 describe("reportFormat", () => {
+  it("includes the weekday in report dates", () => {
+    expect(formatOperatingDate("2026-07-17")).toBe("Fri, Jul 17, 2026");
+  });
+
   it("formats minor-unit money using the store currency", () => {
     expect(formatReportMoney(123456, "USD")).toContain("1,234.56");
   });
