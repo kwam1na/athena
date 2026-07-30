@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="d1850a19bce19149c02737929fa4889d8b3459e9a1fe2c6284398037ed94339b">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Athena reports: product mix and period intelligence</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f6f6f4;
+        --surface: #ffffff;
+        --surface-soft: #efefec;
+        --text: #1d1d1f;
+        --muted: #6e6e73;
+        --line: #deded9;
+        --accent: #315bd6;
+        --accent-soft: #e8edff;
+        --good: #197143;
+        --warn: #8a5a00;
+        --radius: 18px;
+        --shadow: 0 18px 50px rgb(0 0 0 / 0.06);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #111210;
+          --surface: #1c1d1b;
+          --surface-soft: #262724;
+          --text: #f5f5f2;
+          --muted: #aaa9a3;
+          --line: #373833;
+          --accent: #9aabff;
+          --accent-soft: #292f4d;
+          --good: #70d39d;
+          --warn: #efbe6b;
+          --shadow: 0 18px 50px rgb(0 0 0 / 0.22);
+        }
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.55 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 48px 0 80px; }
+      header.hero { display: grid; gap: 18px; padding: 34px; border: 1px solid var(--line); border-radius: 24px; background: var(--surface); box-shadow: var(--shadow); }
+      .eyebrow { margin: 0; color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+      h1 { max-width: 760px; margin: 0; font-size: clamp(34px, 6vw, 62px); line-height: .98; letter-spacing: -.045em; }
+      h2 { margin: 0 0 14px; font-size: 25px; letter-spacing: -.025em; }
+      h3 { margin: 0 0 8px; font-size: 17px; }
+      p { margin: 0; }
+      .lede { max-width: 800px; color: var(--muted); font-size: 18px; }
+      .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+      .pill { padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-soft); color: var(--muted); font-size: 12px; }
+      .pill.good { color: var(--good); }
+      .pill.pending { color: var(--warn); }
+      .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--line); }
+      .meta div { min-width: 0; padding: 14px; background: var(--surface-soft); }
+      .meta dt { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+      .meta dd { margin: 4px 0 0; overflow-wrap: anywhere; font-weight: 650; }
+      section { margin-top: 24px; padding: 28px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+      .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+      .card { padding: 18px; border-radius: 14px; background: var(--surface-soft); }
+      .card p, .muted { color: var(--muted); }
+      .flow { display: grid; grid-template-columns: 1fr auto 1fr; align-items: stretch; gap: 12px; }
+      .flow .arrow { align-self: center; color: var(--accent); font-size: 24px; }
+      ul { margin: 8px 0 0; padding-left: 20px; }
+      li + li { margin-top: 7px; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+      th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+      code { padding: 2px 5px; border-radius: 6px; background: var(--surface-soft); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
+      .callout { padding: 16px 18px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 4px 12px 12px 4px; }
+      .quiz-question { margin-top: 16px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; }
+      .quiz-question legend { padding: 0 6px; font-weight: 700; }
+      .option { display: flex; gap: 10px; align-items: flex-start; margin-top: 9px; cursor: pointer; }
+      .explanation { display: none; margin-top: 12px; color: var(--muted); }
+      .quiz-question.reviewed .explanation { display: block; }
+      .quiz-question.correct { border-color: var(--good); }
+      .quiz-question.incorrect { border-color: var(--warn); }
+      .quiz-actions { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
+      button { appearance: none; padding: 10px 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--text); color: var(--bg); font: inherit; font-weight: 700; cursor: pointer; transition: transform 140ms cubic-bezier(.23,1,.32,1), opacity 140ms cubic-bezier(.23,1,.32,1); }
+      button.secondary { background: var(--surface-soft); color: var(--text); }
+      button:active { transform: scale(.97); }
+      #quizResult { min-height: 24px; font-weight: 700; }
+      footer { margin-top: 28px; color: var(--muted); font-size: 13px; text-align: center; }
+      @media (max-width: 760px) {
+        main { width: min(100% - 20px, 1120px); padding-top: 16px; }
+        header.hero, section { padding: 20px; }
+        .meta, .grid-2, .flow { grid-template-columns: 1fr; }
+        .flow .arrow { transform: rotate(90deg); justify-self: center; }
+        .table-wrap { overflow-x: auto; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        button { transition: opacity 140ms cubic-bezier(.23,1,.32,1); }
+        button:active { transform: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="hero">
+        <p class="eyebrow">Delivery candidate · Athena reports</p>
+        <h1>Product mix and period intelligence</h1>
+        <p class="lede">This change turns Reports into a stable operator workspace: a day can be inspected without losing the active range, product mix motion remains coherent across empty states, and period totals are sourced independently of SKU pagination.</p>
+        <div class="pills">
+          <span class="pill good">Implementation recovered</span>
+          <span class="pill good">Focused tests added</span>
+          <span class="pill pending">PR pending</span>
+          <span class="pill pending">Production deploy pending</span>
+          <span class="pill pending">Root alignment pending</span>
+        </div>
+        <dl class="meta">
+          <div><dt>Branch</dt><dd>codex/reports-product-mix</dd></div>
+          <div><dt>Base</dt><dd>origin/main · 5e966ccb</dd></div>
+          <div><dt>Status</dt><dd>Delivery candidate</dd></div>
+          <div><dt>Source</dt><dd>Recovered session work + staged diff</dd></div>
+        </dl>
+      </header>
+
+      <section>
+        <h2>Executive summary</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Operator outcome</h3>
+            <p>The Overview keeps the full Days table visible while a selected day scopes only Products sold. Items adds period-wide units, transactions, range disclosure, and product economics.</p>
+          </div>
+          <div class="card">
+            <h3>System outcome</h3>
+            <p>Shared state-motion primitives coordinate populated and empty states. Backend totals no longer depend on the current SKU page, and bounded reads refuse to return partial transaction counts.</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Why this mattered</h2>
+        <p class="muted">The earlier interaction treated “inspect this day” as “replace the report range.” That destroyed table context, reset pagination, and caused flashes as data and page state settled. Motion fixes applied to one child at a time also left sibling totals or legends disappearing before the outgoing surface had finished.</p>
+        <div class="callout" style="margin-top:16px"><strong>Core model:</strong> range is the operator's working context; selected day is a temporary lens over the product mix. They must not be the same piece of state.</div>
+      </section>
+
+      <section>
+        <h2>Mental model</h2>
+        <div class="flow">
+          <div class="card">
+            <h3>Working range</h3>
+            <p>Owns Days rows, pagination, date-range label, and the remembered page.</p>
+          </div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="card">
+            <h3>Selection lens</h3>
+            <p><code>selectedDay</code> scopes only the product mix. Selecting the same row again clears it.</p>
+          </div>
+        </div>
+        <div class="flow" style="margin-top:12px">
+          <div class="card">
+            <h3>Data state owner</h3>
+            <p>Totals, freshness, and results leave together as one keyed populated state.</p>
+          </div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="card">
+            <h3>Stable surface boundary</h3>
+            <p>Intrinsic height retargets smoothly; responsive chart measurement stays mounted.</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Before and after</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Area</th><th>Before</th><th>After</th></tr></thead>
+            <tbody>
+              <tr><td>Day inspection</td><td>Row click replaced the range and forced page resets.</td><td>URL-backed <code>selectedDay</code> scopes only product mix; the range and page remain intact.</td></tr>
+              <tr><td>Product visualization</td><td>The existing mix could pop across empty/data transitions, lose coordinated legend motion, and consume entry animation during responsive measurement.</td><td>Recharts donut, normalized names, stable legend, theme-aware “Other SKUs,” and date-aware empty copy.</td></tr>
+              <tr><td>State transitions</td><td>Independent conditional siblings caused sharp layout removal.</td><td>One data-state owner coordinates exit, entry, and height changes with reduced-motion support.</td></tr>
+              <tr><td>Items totals</td><td>Page rows could not safely answer period totals.</td><td>Units and transactions are period-wide and independent of SKU pagination.</td></tr>
+              <tr><td>SKU economics</td><td>Net price was visible without unit cost context.</td><td>Unit cost and per-unit margin appear; unset cost renders an em dash.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2>Layer-by-layer mechanics</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+            <tbody>
+              <tr><td><code>convex/reports/queries.ts</code></td><td>Builds period-wide totals, resolves closed-day transaction summaries, bounds live POS fallback reads, and exposes unit cost.</td></tr>
+              <tr><td><code>ReportDaysPanel.tsx</code></td><td>Separates range context from selected-day behavior and preserves the Days table/page.</td></tr>
+              <tr><td><code>ReportSkuMixChart.tsx</code></td><td>Coordinates Recharts lifecycle, viewport entry, chart/legend exit, stable geometry, and the animated total.</td></tr>
+              <tr><td><code>ReportsItemsView.tsx</code></td><td>Shows period range, totals, freshness, and the populated/empty transition as one semantic state.</td></tr>
+              <tr><td><code>AnimatedDataState.tsx</code></td><td>Reusable keyed data/empty ownership with asymmetric motion.</td></tr>
+              <tr><td><code>AnimatedHeight.tsx</code></td><td>Observes intrinsic size and retargets height without fixing a screen-specific minimum height.</td></tr>
+              <tr><td><code>FlipNumber.tsx</code></td><td>Reusable Anime.js digit flip with reduced-motion and a clean empty-to-data start.</td></tr>
+              <tr><td><code>ReportsSkuDetailView.tsx</code></td><td>Adds unit cost and derives unit margin from current catalog values.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2>Failure boundaries and residual risk</h2>
+        <ul>
+          <li><strong>Backend must deploy first.</strong> The frontend consumes additive totals and SKU cost fields. Older clients safely ignore the additions.</li>
+          <li><strong>Unclosed-day reads are bounded.</strong> More than 2,000 report facts for one day fails the Items query instead of reporting a partial transaction count.</li>
+          <li><strong>Closed-day totals trust the linked summary.</strong> A missing or invalid <code>summary.transactionCount</code> resolves to 0 rather than falling back to live POS facts.</li>
+          <li><strong>Month fan-out is the main runtime risk.</strong> A range containing many unclosed, high-volume days can perform substantial bounded reads.</li>
+          <li><strong>Reporting remains asynchronous.</strong> Period totals and SKU rollups may briefly disagree while independent reporting materializations settle.</li>
+          <li><strong>Margin is current-catalog context.</strong> It is net price minus current unit cost, not historical realized margin for each sale.</li>
+          <li><strong>Browser motion remains worth observing.</strong> Recharts, ResizeObserver, IntersectionObserver, Framer Motion, and Anime.js meet at this boundary.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Intentionally unchanged</h2>
+        <ul>
+          <li>Revenue/units ranking, cursor pagination, table metrics, and SKU drill-down links.</li>
+          <li>Newest-first Days ordering and 14-row pagination.</li>
+          <li>The explicit date link still opens the day Items drill-down.</li>
+          <li>The mix remains the top five SKUs plus an “Other SKUs” aggregate.</li>
+          <li>Shared tables resize instantly by default; smooth resize is opt-in.</li>
+          <li>Reduced-motion paths avoid spatial animation or use immediate/fade-only changes.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Validation and finish line</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Evidence present</h3>
+            <ul>
+              <li>Backend tests cover pagination-independent totals and open-day transaction counting.</li>
+              <li>Component tests cover selection, stable context, empty/data motion, number accessibility, and height interruption.</li>
+              <li>Build-only TypeScript regressions in NodeList iteration and Anime cleanup were corrected.</li>
+              <li><code>git diff --cached --check</code> passes.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Pending delivery evidence</h3>
+            <ul>
+              <li><code>bun run pr:athena</code> must pass after this required report and solution note are staged.</li>
+              <li>Protected-main PR creation, CI, review, and merge are pending.</li>
+              <li>Convex and Athena production deployments are pending.</li>
+              <li>Local root alignment to the merged <code>main</code> is pending.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Operational next steps</h2>
+        <ol>
+          <li>Run the repository-owned merge gate and address only evidence-backed failures.</li>
+          <li>Commit, push, and merge through the protected-main PR workflow.</li>
+          <li>Fast-forward local <code>main</code> to the merge result and confirm a clean checkout.</li>
+          <li>Deploy Convex first, then build and deploy the Athena frontend from that exact merged checkout.</li>
+          <li>Verify deployment status and public health endpoints; retain the 2,000-fact boundary as an explicit operational signal.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Subagent Evidence</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Anscombe · session context</h3>
+            <p>Recovered the evolution of selected-day state, Recharts measurement debugging, flip-number decisions, build fixes, and the earlier delivery/reset failure.</p>
+          </div>
+          <div class="card">
+            <h3>Plato · delivered diff</h3>
+            <p>Mapped the staged backend-to-UI flow, preserved behavior, validation coverage, generated artifacts, and deployment/query-budget risks.</p>
+          </div>
+        </div>
+        <p class="muted" style="margin-top:12px"><strong>Independent coherence review completed.</strong> It corrected the pre-existing product-mix baseline, qualified transaction-count authority and its closed-summary zero boundary, clarified 14-row pagination, and made the delivery-status quiz question snapshot-specific.</p>
+      </section>
+
+      <section id="changeQuiz">
+        <p class="eyebrow">Quiz: Pass Required</p>
+        <h2>Comprehension check</h2>
+        <p class="muted">Answer all 10 questions. Passing score: 8/10.</p>
+        <form id="quizForm">
+          <fieldset class="quiz-question" data-answer="b"><legend>1. What should a day-row click change?</legend>
+            <label class="option"><input type="radio" name="q1" value="a" /> The entire working range</label>
+            <label class="option"><input type="radio" name="q1" value="b" /> Only the product-mix selection lens</label>
+            <label class="option"><input type="radio" name="q1" value="c" /> The Items ranking mode</label>
+            <p class="explanation">Range context stays stable; <code>selectedDay</code> scopes only product mix.</p>
+          </fieldset>
+          <fieldset class="quiz-question" data-answer="c"><legend>2. Why are period totals not computed from visible SKU rows?</legend>
+            <label class="option"><input type="radio" name="q2" value="a" /> Rows are untrusted browser data</label>
+            <label class="option"><input type="radio" name="q2" value="b" /> SKU rows exclude revenue</label>
+            <label class="option"><input type="radio" name="q2" value="c" /> The table is paginated and cannot represent the full period</label>
+            <p class="explanation">Headline totals must be independent of cursor pagination.</p>
+          </fieldset>
+          <fieldset class="quiz-question" data-answer="a"><legend>3. What owns the populated-to-empty exit?</legend>
+            <label class="option"><input type="radio" name="q3" value="a" /> One keyed state containing totals, freshness, and results</label>
+            <label class="option"><input type="radio" name="q3" value="b" /> Each table row independently</label>
+            <label class="option"><input type="radio" name="q3" value="c" /> The route loader only</label>
+            <p class="explanation">A shared owner prevents sibling elements from disappearing mid-exit.</p>
+          </fieldset>
+          <fieldset class="quiz-question" data-answer="b"><legend>4. Why does the chart measurement surface remain mounted?</legend>
+            <label class="option"><input type="radio" name="q4" value="a" /> To cache product names</label>
+            <label class="option"><input type="radio" name="q4" value="b" /> To prevent responsive zero-size measurement from consuming entry motion</label>
+            <label class="option"><input type="radio" name="q4" value="c" /> To keep tooltips visible in empty state</label>
+            <p class="explanation">Stable measurement lets only chart content participate in visibility transitions.</p>
+          </fieldset>
+          <fieldset class="quiz-question" data-answer="c"><legend>5. What happens above the live 2,000-fact daily boundary?</legend>
+            <label class="option"><input type="radio" name="q5" value="a" /> The query reports the first 2,000 facts</label>
+            <label class="option"><input type="radio" name="q5" value="b" /> It estimates from units sold</label>
+            <label class="option"><input type="radio" name="q5" value="c" /> The query fails rather than return a partial transaction count</label>
+            <p class="explanation">The boundary favors explicit failure over misleading totals.</p>
+          </fieldset>
+          <fieldset class="quiz-question" data-answer="a"><legend>6. Which deployment order is safest?</legend>
+            <label class="option"><input type="radio" name="q6" value="a" /> Convex backend, then Athena frontend</label>
+            <label class="option"><input type="radio" name="q6" value="b" /> Athena frontend, then Convex backend</label>
+            <label class="option"><input type="radio" name="q6" value="c" /> Order does not matter</label>
+            <p class="explanation">The frontend consumes additive response fields introduced by the backend.</p>
+          </fieldset>
+          <fieldset class="quiz-question" data-answer="b"><legend>7. What does an unset unit cost display?</legend>
+            <label class="option"><input type="radio" name="q7" value="a" /> GH₵0</label>
+            <label class="option"><input type="radio" name="q7" value="b" /> An em dash</label>
+            <label class="option"><input type="radio" name="q7" value="c" /> Hidden SKU details</label>
+            <p class="explanation">Missing cost is unknown, not zero, so cost and margin use an em dash.</p>
+          </fieldset>
+          <fieldset class="quiz-question" data-answer="c"><legend>8. What should a motion test verify for the pie?</legend>
+            <label class="option"><input type="radio" name="q8" value="a" /> Only that <code>isAnimationActive</code> is true</label>
+            <label class="option"><input type="radio" name="q8" value="b" /> Only the configured duration</label>
+            <label class="option"><input type="radio" name="q8" value="c" /> Observable sector lifecycle or rendered geometry</label>
+            <p class="explanation">Flags can be correct while responsive remount behavior prevents visible animation.</p>
+          </fieldset>
+          <fieldset class="quiz-question" data-answer="a"><legend>9. What should happen when the selected row is clicked again?</legend>
+            <label class="option"><input type="radio" name="q9" value="a" /> Clear the selection and show the full-range mix</label>
+            <label class="option"><input type="radio" name="q9" value="b" /> Navigate to Items</label>
+            <label class="option"><input type="radio" name="q9" value="c" /> Reset the table to page 1</label>
+            <p class="explanation">Repeated row activation toggles the temporary selection lens off.</p>
+          </fieldset>
+          <fieldset class="quiz-question" data-answer="b"><legend>10. At report preparation time, what was the delivery status?</legend>
+            <label class="option"><input type="radio" name="q10" value="a" /> Already merged and deployed</label>
+            <label class="option"><input type="radio" name="q10" value="b" /> Candidate branch; PR, merge, deploy, and root alignment are pending</label>
+            <label class="option"><input type="radio" name="q10" value="c" /> Deployed from a dirty feature branch</label>
+            <p class="explanation">Protected main requires the remaining PR workflow before production deployment.</p>
+          </fieldset>
+          <div class="quiz-actions">
+            <button type="submit">Grade quiz</button>
+            <button type="button" class="secondary" id="resetQuiz">Reset</button>
+            <output id="quizResult" aria-live="polite"></output>
+          </div>
+        </form>
+      </section>
+      <footer>Prepared from the staged delivery candidate on July 30, 2026. The chat handoff records final merge and deployment evidence.</footer>
+    </main>
+    <script>
+      const form = document.getElementById("quizForm");
+      const result = document.getElementById("quizResult");
+      const questions = [...document.querySelectorAll(".quiz-question")];
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = form.querySelector(`input[name="q${index + 1}"]:checked`);
+          const correct = selected && selected.value === question.dataset.answer;
+          if (correct) score += 1;
+          question.classList.add("reviewed");
+          question.classList.toggle("correct", Boolean(correct));
+          question.classList.toggle("incorrect", !correct);
+        });
+        result.textContent = score >= 8 ? `Passed · ${score}/10` : `Not yet · ${score}/10. Review the explanations and try again.`;
+        result.style.color = score >= 8 ? "var(--good)" : "var(--warn)";
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        questions.forEach((question) => question.classList.remove("reviewed", "correct", "incorrect"));
+        result.textContent = "";
+        result.removeAttribute("style");
+      });
+    </script>
+  </body>
+</html>

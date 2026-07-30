@@ -28,9 +28,9 @@ import { ReportSkuMixChart } from "./ReportSkuMixChart";
 const REPORT_DAYS_PAGE_SIZE = 14;
 
 /**
- * Day drill-down: `listDays` over a bounded range, paired with the unit mix
- * across product SKUs in that same range. Selecting a day links into the
- * Items view scoped to that day's `d:` period key (via
+ * Day overview: `listDays` stays scoped to the operator's bounded range while
+ * an optional day selection narrows only the product mix. The date link opens
+ * the Items view scoped to that day's `d:` period key (via
  * `periodType`/`periodDate`, see `reports/items/index.tsx`).
  */
 export function ReportDaysPanel({
@@ -39,21 +39,26 @@ export function ReportDaysPanel({
   endDate,
   onRangeChange,
   onRangeReset,
+  onSelectedDateChange,
   onPageChange,
   page,
+  selectedDate,
 }: {
   canResetRange: boolean;
   startDate: string;
   endDate: string;
   onRangeChange: (next: { startDate: string; endDate: string }) => void;
   onRangeReset: () => void;
+  onSelectedDateChange: (date: string | undefined) => void;
   onPageChange: (page: number) => void;
   page: number;
+  selectedDate?: string;
 }) {
   const { activeStore } = useGetActiveStore();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
   const {
     data: days,
+    dataContext: settledDaysPage,
     isInitialLoad,
     isRefreshing,
   } = useStableReportQuery(
@@ -63,17 +68,24 @@ export function ReportDaysPanel({
         ? { storeId: activeStore._id, startDate, endDate }
         : "skip",
     ),
+    page,
   );
   const {
     data: skuMix,
+    dataContext: settledSkuMixSelectedDate,
     isRefreshing: isSkuMixRefreshing,
   } = useStableReportQuery(
     useQuery(
       api.reports.queries.listRangeSkuMix,
       activeStore?._id
-        ? { storeId: activeStore._id, startDate, endDate }
+        ? {
+            storeId: activeStore._id,
+            startDate: selectedDate ?? startDate,
+            endDate: selectedDate ?? endDate,
+          }
         : "skip",
     ),
+    selectedDate,
   );
   const daysNewestFirst = days
     ? [...days].sort((left, right) =>
@@ -82,7 +94,8 @@ export function ReportDaysPanel({
     : days;
   const totalDays = daysNewestFirst?.length ?? 0;
   const pageCount = Math.max(1, Math.ceil(totalDays / REPORT_DAYS_PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount);
+  const displayPage = isRefreshing ? (settledDaysPage ?? page) : page;
+  const currentPage = Math.min(displayPage, pageCount);
   const visibleDays = daysNewestFirst?.slice(
     (currentPage - 1) * REPORT_DAYS_PAGE_SIZE,
     currentPage * REPORT_DAYS_PAGE_SIZE,
@@ -92,30 +105,35 @@ export function ReportDaysPanel({
     REPORT_DAYS_PAGE_SIZE - (visibleDays?.length ?? 0),
   );
   const isSelectedDay = (operatingDate: string) =>
-    startDate === operatingDate && endDate === operatingDate;
+    selectedDate === operatingDate;
   const selectDay = (operatingDate: string) => {
-    if (isSelectedDay(operatingDate)) {
-      onRangeReset();
-      return;
-    }
-    onRangeChange({
-      startDate: operatingDate,
-      endDate: operatingDate,
-    });
+    onSelectedDateChange(
+      isSelectedDay(operatingDate) ? undefined : operatingDate,
+    );
   };
 
   return (
     <section className="space-y-layout-sm" data-testid="report-days-panel">
       <div className="flex flex-wrap items-center justify-end gap-layout-xs">
-        {canResetRange ? (
+        {canResetRange || selectedDate !== undefined ? (
           <Button
-            aria-label="Reset date range to default"
+            aria-label={
+              selectedDate !== undefined
+                ? "Return to previous date range"
+                : "Reset date range to default"
+            }
             className="h-auto gap-2 px-layout-sm py-layout-xs text-sm font-normal text-muted-foreground"
-            onClick={onRangeReset}
+            onClick={() => {
+              if (selectedDate !== undefined) {
+                onSelectedDateChange(undefined);
+                return;
+              }
+              onRangeReset();
+            }}
             variant="ghost"
           >
             <RotateCcw aria-hidden="true" className="h-4 w-4" />
-            Reset range
+            {selectedDate !== undefined ? "Show full range" : "Reset range"}
           </Button>
         ) : null}
         <ReportDateRangeField
@@ -177,66 +195,82 @@ export function ReportDaysPanel({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {visibleDays?.map((day) => (
-                    <TableRow
-                      aria-label={`${isSelectedDay(day.operatingDate) ? "Reset date range from" : "Show reports for"} ${formatOperatingDate(day.operatingDate)}`}
-                      className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                      data-state={
-                        isSelectedDay(day.operatingDate)
-                          ? "selected"
-                          : undefined
-                      }
-                      data-status={day.status}
-                      key={day.operatingDate}
-                      onClick={(event) => {
-                        const target = event.target;
-                        if (
-                          target instanceof Element &&
-                          target.closest("a")
-                        ) {
-                          return;
+                  {visibleDays?.map((day) => {
+                    const isSelected = isSelectedDay(day.operatingDate);
+                    const isDeemphasized =
+                      selectedDate !== undefined && !isSelected;
+
+                    return (
+                      <TableRow
+                        aria-label={`${isSelected ? "Clear day selection for" : "Show products sold for"} ${formatOperatingDate(day.operatingDate)}`}
+                        aria-pressed={isSelected}
+                        className={cn(
+                          "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                          "transition-[background-color,color,opacity] duration-150 motion-reduce:transition-none",
+                          isDeemphasized &&
+                            "opacity-40 hover:opacity-70 focus-visible:opacity-100",
+                        )}
+                        data-deemphasized={
+                          isDeemphasized ? "true" : undefined
                         }
-                        selectDay(day.operatingDate);
-                      }}
-                      onKeyDown={(event) => {
-                        if (
-                          event.target !== event.currentTarget ||
-                          (event.key !== "Enter" && event.key !== " ")
-                        ) {
-                          return;
-                        }
-                        event.preventDefault();
-                        selectDay(day.operatingDate);
-                      }}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <TableCell>
-                        <Link
-                          params={{
-                            orgUrlSlug: orgUrlSlug!,
-                            storeUrlSlug: storeUrlSlug!,
-                          }}
-                          search={{
-                            periodType: "day",
-                            periodDate: day.operatingDate,
-                            // Carries the current URL so the items workspace
-                            // can offer a way back to this day list.
-                            o: getOrigin(),
-                          }}
-                          to="/$orgUrlSlug/store/$storeUrlSlug/reports/items"
-                        >
-                          {formatOperatingDate(day.operatingDate)}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-right font-numeric tabular-nums">
-                        {formatReportMoney(day.netSalesMinor, day.currency)}
-                      </TableCell>
-                      <TableCell className="text-right font-numeric tabular-nums">
-                        {formatUnits(day.unitsSold)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        data-status={day.status}
+                        key={day.operatingDate}
+                        onClick={(event) => {
+                          const target = event.target;
+                          if (
+                            target instanceof Element &&
+                            target.closest("a")
+                          ) {
+                            return;
+                          }
+                          selectDay(day.operatingDate);
+                        }}
+                        onKeyDown={(event) => {
+                          if (
+                            event.target !== event.currentTarget ||
+                            (event.key !== "Enter" && event.key !== " ")
+                          ) {
+                            return;
+                          }
+                          event.preventDefault();
+                          selectDay(day.operatingDate);
+                        }}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <TableCell>
+                          <Link
+                            className={cn(
+                              isSelected && "font-medium text-foreground",
+                            )}
+                            params={{
+                              orgUrlSlug: orgUrlSlug!,
+                              storeUrlSlug: storeUrlSlug!,
+                            }}
+                            search={{
+                              periodType: "day",
+                              periodDate: day.operatingDate,
+                              // Carries the current URL so the items workspace
+                              // can offer a way back to this day list.
+                              o: getOrigin(),
+                            }}
+                            to="/$orgUrlSlug/store/$storeUrlSlug/reports/items"
+                          >
+                            {formatOperatingDate(day.operatingDate)}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-right font-numeric tabular-nums">
+                          {formatReportMoney(
+                            day.netSalesMinor,
+                            day.currency,
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-numeric tabular-nums">
+                          {formatUnits(day.unitsSold)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                   {Array.from({ length: placeholderRowCount }, (_, index) => (
                     <TableRow
                       aria-hidden="true"
@@ -269,12 +303,15 @@ export function ReportDaysPanel({
                 Products sold
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Share of units sold by product in this date range
+                {selectedDate
+                  ? `Share of units sold on ${formatOperatingDate(selectedDate)}`
+                  : "Share of units sold by product in this date range"}
               </p>
             </div>
             <ReportSkuMixChart
               data={skuMix}
               isRefreshing={isSkuMixRefreshing}
+              selectedDate={settledSkuMixSelectedDate}
             />
           </div>
         </div>

@@ -65,6 +65,7 @@ describe("ReportsSkuDetailView", () => {
         displayName: "oshe",
         sku: "6N2Y-JY3-5G6",
         netPriceMinor: 12_500,
+        unitCostMinor: 7_250,
         productId: "product-9",
         imageUrl: "https://cdn.example.test/oshe.webp",
       },
@@ -94,6 +95,10 @@ describe("ReportsSkuDetailView", () => {
     expect(screen.getByText("SKU")).toBeInTheDocument();
     expect(screen.getByText("Net price")).toBeInTheDocument();
     expect(screen.getByText("$125")).toBeInTheDocument();
+    expect(screen.getByText("Unit cost")).toBeInTheDocument();
+    expect(screen.getByText("$72.50")).toBeInTheDocument();
+    expect(screen.getByText("Unit margin")).toBeInTheDocument();
+    expect(screen.getByText("$52.50")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Oshe" })).toHaveAttribute(
       "src",
       "https://cdn.example.test/oshe.webp",
@@ -155,6 +160,13 @@ describe("ReportsSkuDetailView", () => {
     expect(screen.getByTestId("reports-sku-detail-name")).toHaveTextContent(
       "Oshe",
     );
+    const identity = screen.getByTestId("reports-sku-identity");
+    const unitCost = within(identity).getByText("Unit cost").parentElement;
+    expect(unitCost).not.toBeNull();
+    expect(within(unitCost!).getByText("—")).toBeInTheDocument();
+    const unitMargin = within(identity).getByText("Unit margin").parentElement;
+    expect(unitMargin).not.toBeNull();
+    expect(within(unitMargin!).getByText("—")).toBeInTheDocument();
     expect(screen.getByLabelText("SKU image unavailable")).toBeInTheDocument();
   });
 

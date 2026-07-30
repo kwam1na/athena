@@ -13,21 +13,32 @@ import { useEffect, useRef } from "react";
  * swapping in a skeleton: a skeleton is correct only when there is nothing
  * to show yet, which is exactly `data === undefined && !isRefreshing`.
  */
-export function useStableReportQuery<T>(value: T | undefined): {
+export function useStableReportQuery<T, TContext = undefined>(
+  value: T | undefined,
+  context?: TContext,
+): {
   data: T | undefined;
+  dataContext: TContext | undefined;
   isInitialLoad: boolean;
   isRefreshing: boolean;
 } {
-  const settled = useRef<T | undefined>(undefined);
+  const settled = useRef<
+    { data: T; dataContext: TContext | undefined } | undefined
+  >(undefined);
 
   useEffect(() => {
     if (value !== undefined) {
-      settled.current = value;
+      settled.current = { data: value, dataContext: context };
     }
-  }, [value]);
+  }, [context, value]);
 
   if (value !== undefined) {
-    return { data: value, isInitialLoad: false, isRefreshing: false };
+    return {
+      data: value,
+      dataContext: context,
+      isInitialLoad: false,
+      isRefreshing: false,
+    };
   }
 
   // Ref updates land in an effect, so read through to the freshest value the
@@ -35,7 +46,8 @@ export function useStableReportQuery<T>(value: T | undefined): {
   const previous = settled.current;
 
   return {
-    data: previous,
+    data: previous?.data,
+    dataContext: previous?.dataContext,
     isInitialLoad: previous === undefined,
     isRefreshing: previous !== undefined,
   };

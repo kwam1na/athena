@@ -1,4 +1,5 @@
 import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
+import { getLocalDateFromOperatingDate } from "@/lib/operations/operatingDate";
 import { capitalizeWords, currencyFormatter } from "@/lib/utils";
 import {
   REPORT_DAY_STATUSES,
@@ -130,6 +131,37 @@ export function formatOperatingDate(operatingDate: string): string {
     timeZone: "UTC",
     weekday: "short",
   });
+}
+
+export function formatReportDateRange(
+  startDate: string,
+  endDate: string,
+): string {
+  const start = getLocalDateFromOperatingDate(startDate);
+  const end = getLocalDateFromOperatingDate(endDate);
+
+  if (!start || !end) return "Invalid date range";
+
+  if (startDate === endDate) {
+    return formatOperatingDate(startDate);
+  }
+
+  const sameYear = start.getFullYear() === end.getFullYear();
+  const sameMonth = sameYear && start.getMonth() === end.getMonth();
+  const startLabel = start.toLocaleDateString("en-US", {
+    day: "numeric",
+    month: "short",
+    year: sameYear ? undefined : "numeric",
+  });
+  const endLabel = sameMonth
+    ? `${end.getDate()}, ${end.getFullYear()}`
+    : end.toLocaleDateString("en-US", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+
+  return `${startLabel}–${endLabel}`;
 }
 
 /**

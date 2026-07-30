@@ -23,6 +23,7 @@ export const reportsOverviewSearchSchema = z.object({
   daysStart: dateSchema.optional(),
   daysEnd: dateSchema.optional(),
   daysPage: z.coerce.number().int().positive().optional(),
+  selectedDay: dateSchema.optional(),
 });
 
 function isoDateOffset(days: number): string {
@@ -109,6 +110,7 @@ function ReportsOverviewRoute() {
               daysStart: next.startDate,
               daysEnd: next.endDate,
               daysPage: undefined,
+              selectedDay: undefined,
             }),
           })
         }
@@ -120,10 +122,21 @@ function ReportsOverviewRoute() {
               daysStart: undefined,
               daysEnd: undefined,
               daysPage: undefined,
+              selectedDay: undefined,
+            }),
+          })
+        }
+        onSelectedDateChange={(selectedDay) =>
+          void navigate({
+            replace: true,
+            search: (current) => ({
+              ...current,
+              selectedDay,
             }),
           })
         }
         page={search.daysPage ?? 1}
+        selectedDate={search.selectedDay}
         startDate={daysStart}
       />
     </div>

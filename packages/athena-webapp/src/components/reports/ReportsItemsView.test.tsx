@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -56,6 +56,106 @@ const baseProps = {
 };
 
 describe("ReportsItemsView", () => {
+  it("shows total units sold for the selected period", () => {
+    useQuery.mockReturnValue({
+      rows: [
+        {
+          productSkuId: "sku-1",
+          periodKey: "d:2026-07-28",
+          unitsSold: 16,
+          unitsReturned: 0,
+          grossSalesMinor: 1600,
+          netSalesMinor: 1600,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: 800,
+        },
+      ],
+      continueCursor: null,
+      totalUnitsSold: 16,
+      totalTransactions: 7,
+      updatedAt: null,
+    });
+
+    render(<ReportsItemsView {...baseProps} />);
+
+    const total = screen.getByTestId("items-period-units-sold");
+    expect(within(total).getByText("Total units sold")).toBeInTheDocument();
+    expect(
+      within(total).getByTestId("items-period-units-number"),
+    ).toHaveAttribute("data-value", "16");
+    const transactions = screen.getByTestId("items-period-transactions");
+    expect(
+      within(transactions).getByText("Total transactions"),
+    ).toBeInTheDocument();
+    expect(
+      within(transactions).getByTestId("items-period-transactions-number"),
+    ).toHaveAttribute("data-value", "7");
+    expect(total.parentElement?.parentElement).toHaveClass("pt-layout-sm");
+  });
+
+  it("flips both period totals when refreshed values settle", () => {
+    let result = {
+      rows: [
+        {
+          productSkuId: "sku-1",
+          periodKey: "w:2026-W31",
+          unitsSold: 16,
+          unitsReturned: 0,
+          grossSalesMinor: 1600,
+          netSalesMinor: 1600,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: 800,
+        },
+      ],
+      continueCursor: null,
+      totalUnitsSold: 16,
+      totalTransactions: 7,
+      updatedAt: null,
+    };
+    useQuery.mockImplementation(() => result);
+
+    const { rerender } = render(
+      <ReportsItemsView {...baseProps} periodType="week" />,
+    );
+
+    result = {
+      ...result,
+      totalUnitsSold: 711,
+      totalTransactions: 248,
+    };
+    rerender(<ReportsItemsView {...baseProps} periodType="month" />);
+
+    expect(screen.getByTestId("items-period-units-number")).toHaveAttribute(
+      "data-value",
+      "711",
+    );
+    expect(
+      screen.getByTestId("items-period-transactions-number"),
+    ).toHaveAttribute("data-value", "248");
+  });
+
+  it("does not show the period summary when there is no SKU activity", () => {
+    useQuery.mockReturnValue({
+      rows: [],
+      continueCursor: null,
+      totalUnitsSold: 0,
+      totalTransactions: 0,
+      updatedAt: null,
+    });
+
+    render(<ReportsItemsView {...baseProps} />);
+
+    expect(
+      screen.queryByTestId("items-period-units-sold"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("items-period-transactions"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("No SKU activity")).toBeInTheDocument();
+  });
+
   it("discloses the item rollup refresh cadence and snapshot time", () => {
     const updatedAt = Date.UTC(2026, 6, 29, 15, 30);
     useQuery.mockReturnValue({
@@ -297,5 +397,142 @@ describe("ReportsItemsView", () => {
       "bg-primary-soft",
       "text-primary",
     );
+  });
+
+  it("uses the shared animated data surface for full and empty states", async () => {
+    let result = {
+      rows: [
+        {
+          productSkuId: "sku-1",
+          periodKey: "d:2026-07-28",
+          unitsSold: 1,
+          unitsReturned: 0,
+          grossSalesMinor: 100,
+          netSalesMinor: 100,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: 50,
+        },
+      ],
+      continueCursor: null,
+      totalUnitsSold: 1,
+      totalTransactions: 1,
+      updatedAt: null,
+    };
+    useQuery.mockImplementation(() => result);
+
+    const { rerender } = render(<ReportsItemsView {...baseProps} />);
+
+    const resultsState = screen.getByTestId("items-results-state");
+    expect(resultsState).toHaveAttribute("data-state", "data");
+    expect(resultsState).toHaveAttribute("data-motion", "data-state");
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    const dataMotionState = screen
+      .getByTestId("items-period-units-sold")
+      .closest<HTMLDivElement>('[data-state="data"]');
+    expect(dataMotionState).not.toBeNull();
+    expect(resultsState).toContainElement(dataMotionState);
+    expect(dataMotionState).toContainElement(screen.getByRole("table"));
+
+    result = {
+      ...result,
+      rows: [],
+      totalUnitsSold: 0,
+      totalTransactions: 0,
+    };
+    rerender(<ReportsItemsView {...baseProps} periodDate="2026-07-24" />);
+
+    expect(resultsState).toHaveAttribute("data-state", "empty");
+    await waitFor(() => {
+      expect(screen.getByText("No SKU activity")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("items-period-units-sold"),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    });
+
+    result = {
+      ...result,
+      rows: [
+        {
+          productSkuId: "sku-1",
+          periodKey: "d:2026-07-28",
+          unitsSold: 1,
+          unitsReturned: 0,
+          grossSalesMinor: 100,
+          netSalesMinor: 100,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: 50,
+        },
+      ],
+      totalUnitsSold: 1,
+      totalTransactions: 1,
+    };
+    rerender(<ReportsItemsView {...baseProps} />);
+
+    expect(resultsState).toHaveAttribute("data-state", "data");
+    await waitFor(() => {
+      expect(screen.getByRole("table")).toBeInTheDocument();
+      expect(screen.queryByText("No SKU activity")).not.toBeInTheDocument();
+    });
+  });
+
+  it("communicates the resolved month range near the period controls", () => {
+    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+
+    render(
+      <ReportsItemsView
+        {...baseProps}
+        periodDate="2026-07-18"
+        periodType="month"
+      />,
+    );
+
+    expect(screen.getByTestId("items-period-range")).toHaveTextContent(
+      "Reporting range Jul 1–31, 2026",
+    );
+  });
+
+  it("communicates the resolved ISO week range near the period controls", () => {
+    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+
+    render(
+      <ReportsItemsView
+        {...baseProps}
+        periodDate="2026-07-18"
+        periodType="week"
+      />,
+    );
+
+    expect(screen.getByTestId("items-period-range")).toHaveTextContent(
+      "Reporting range Jul 13–19, 2026",
+    );
+  });
+
+  it("smoothly reveals and collapses the range outside day periods", () => {
+    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+
+    const { rerender } = render(<ReportsItemsView {...baseProps} />);
+
+    const periodRange = screen.getByTestId("items-period-range");
+    expect(periodRange).toHaveAttribute("aria-hidden", "true");
+    expect(periodRange).toHaveClass("grid-rows-[0fr]", "opacity-0");
+
+    rerender(
+      <ReportsItemsView
+        {...baseProps}
+        periodDate="2026-07-18"
+        periodType="week"
+      />,
+    );
+
+    expect(periodRange).not.toHaveAttribute("aria-hidden");
+    expect(periodRange).toHaveClass("grid-rows-[1fr]", "opacity-100");
+
+    rerender(<ReportsItemsView {...baseProps} />);
+
+    expect(periodRange).toHaveAttribute("aria-hidden", "true");
+    expect(periodRange).toHaveClass("grid-rows-[0fr]", "opacity-0");
   });
 });
