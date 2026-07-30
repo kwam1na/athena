@@ -17,7 +17,7 @@ tags:
   - delivery-ledger
   - mailersend
   - subscriptions
-delivery_diff_fingerprint: PENDING
+delivery_diff_fingerprint: 55a1ca8b58336d1762c52b061d1cdbaab75c488aaf6f4603ba4fb43cc8bcb18b
 ---
 
 # Athena Admin Notifications Rail
@@ -208,6 +208,51 @@ stubbed pending an inbox UI.
   suppress path is the easy version to ship, but it silences alerts on
   transient faults. Splitting `prepareEmail` throw (retry) from `prepareEmail`
   null (suppress) keeps a flaky read from permanently killing a notification.
+
+## Prevention
+
+Rules distilled from six adversarial review rounds on this branch. Every one of
+them corresponds to a defect that actually shipped into a commit here and was
+caught downstream — twice, to a defect introduced by the previous round's fix.
+
+- **Emit inside the domain transaction; send outside it.** Network I/O belongs
+  in an action. A mutation records the intent to notify; the delivery machinery
+  owns everything after that.
+- **A fallback must key off "no configuration exists", never "no match found".**
+  Keying off an empty filtered result inverts the feature: disabling every
+  subscription re-broadcasts to the hardcoded list instead of silencing it.
+- **Never collapse a transient fault into a terminal one.** A throw (read
+  limit, OCC, momentarily missing row) must stay retryable; only an explicit
+  "this is no longer sendable" signal may suppress. Collapsing them lets one
+  flaky query permanently silence an alert.
+- **Never let a failed lookup fall through into a positive branch.** A "no
+  variance review found" result reaching an all-clear branch is how a short
+  drawer gets reported as balanced. Refuse and record instead of guessing.
+- **Detect truncation per query, not on a flattened total.** Each `.take()` page
+  has its own bound; summing across pages both misses real truncation and
+  fabricates it where the result was complete.
+- **Bound the batch, not the lease,** when a loop is serial and the platform
+  caps action runtime. Stretching the lease past that cap gets the action killed
+  mid-batch with every row already holding an attempt. Assert the inequality
+  (`batch x send timeout < lease < action limit`) in a test — a comment does not
+  survive a later constant bump.
+- **Derive enumerations from the schema; never hand-list validator members.** A
+  status added to the schema and missed in a hand-written list produces no type
+  error and no failing test, only a silently skipped branch.
+- **A row whose parent is terminal must itself be terminalized.** Otherwise the
+  sweeper re-selects it on every tick forever, and because index scans are
+  ascending, a handful of such rows can permanently consume a phase's whole
+  budget and disable the backstop for everything else.
+- **Every dropped notification leaves an operational event.** A suppression
+  that only writes a row in a table nothing queries is indistinguishable from a
+  successful send during an incident.
+- **Status must reflect the invariant it names.** "The batch filled up" is not
+  "the audience is complete"; conflating them moved intents backwards through
+  their lifecycle and mislabelled partial sends as total failures.
+- **Falsify every new test.** Break the production behavior it targets and
+  confirm that specific test fails. Several tests on this branch — including
+  ones written specifically as regression guards — passed against the broken
+  code until they were rewritten.
 
 ## Known follow-ups (deferred, not yet done)
 
