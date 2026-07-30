@@ -1,6 +1,5 @@
 import { v } from "convex/values";
 
-import { internal } from "../../_generated/api";
 import { mutation } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx } from "../../_generated/server";
@@ -21,6 +20,8 @@ import {
   type SharedDemoCapability,
 } from "../../sharedDemo/policy";
 import { ingestLocalEventsWithCtx } from "../application/sync/ingestLocalEvents";
+import { approvalRequestSchema } from "../../schemas/operations/approvalRequest";
+import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
 import { posLocalSyncMappingKindValidator } from "../../schemas/pos/posLocalSyncMapping";
 import {
@@ -35,7 +36,7 @@ import {
   posRegisterSessionActivitySkipCodeValidator,
 } from "../../schemas/pos/posRegisterSessionActivity";
 import { ingestRegisterSessionActivityWithCtx } from "../application/sync/posRegisterSessionActivity";
-import { patchRegisterSessionWithAuthority } from "../../operations/registerSessionAuthorityRevision";
+import { emitNotificationWithCtx } from "../../notifications/emit";
 import {
   MAX_LOCAL_SYNC_REVIEW_EVENTS,
   resolveLocalSyncReviewWithCtx,
@@ -263,10 +264,7 @@ export const ingestLocalEvents = mutation({
         submittedAt: args.submittedAt ?? Date.now(),
       });
 
-      if (
-        result.kind === "ok" &&
-        shouldScheduleRegisterCloseoutNotifications()
-      ) {
+      if (result.kind === "ok") {
         await scheduleRegisterCloseoutNotifications(ctx, {
           events: args.events,
           mappings: result.data.mappings,
@@ -277,10 +275,6 @@ export const ingestLocalEvents = mutation({
     },
   ),
 });
-
-function shouldScheduleRegisterCloseoutNotifications() {
-  return process.env.STAGE === "prod";
-}
 
 async function scheduleRegisterCloseoutNotifications(
   ctx: MutationCtx,
@@ -312,32 +306,82 @@ async function scheduleRegisterCloseoutNotifications(
     }
 
     const registerSessionId = mapping.cloudId as Id<"registerSession">;
-    const pendingVarianceReviews = await ctx.db
-      .query("approvalRequest")
-      .withIndex("by_registerSessionId_status_requestType", (q) =>
-        q
-          .eq("registerSessionId", registerSessionId)
-          .eq("status", "pending")
-          .eq("requestType", "variance_review"),
-      )
-      .take(2);
-    const approvalRequest = pendingVarianceReviews.find((request) =>
-      isFreshVarianceReviewForCloseout(request, mapping.localEventId),
+    // Every status is checked, not just "pending": once a manager resolves the
+    // review, a pending-only lookup finds nothing and a replayed sync batch
+    // would fall through to the all-clear match branch below, reporting
+    // "register closed" for a drawer that was short. Each status is queried on
+    // the full index prefix rather than paging the session's approvals and
+    // filtering in code — a session accumulates adjustment, void, and
+    // correction approvals too, and any bounded page of those could push the
+    // variance review out of the window and resurrect that bug.
+    const varianceReviewPages = await Promise.all(
+      APPROVAL_REQUEST_STATUSES.map((status) =>
+        ctx.db
+          .query("approvalRequest")
+          .withIndex("by_registerSessionId_status_requestType", (q) =>
+            q
+              .eq("registerSessionId", registerSessionId)
+              .eq("status", status.value)
+              .eq("requestType", "variance_review"),
+          )
+          .take(MAX_VARIANCE_REVIEWS_PER_CLOSEOUT + 1),
+      ),
+    );
+    // Truncation is per query: each page has its own bound, so reviews merely
+    // spread across statuses are a complete result, not a breach. Testing the
+    // flattened total instead would suppress legitimate all-clears for any
+    // session whose reviews happen to sum past the bound.
+    const truncatedPage = varianceReviewPages.some(
+      (page) => page.length > MAX_VARIANCE_REVIEWS_PER_CLOSEOUT,
+    );
+    const varianceReviews = varianceReviewPages.flat();
+    const approvalRequest = varianceReviews.find((request) =>
+      isVarianceReviewForCloseout(request, mapping.localEventId),
     );
 
-    if (approvalRequest) {
-      await ctx.db.patch("approvalRequest", approvalRequest._id, {
-        metadata: {
-          ...(approvalRequest.metadata ?? {}),
-          varianceNotificationScheduledAt: Date.now(),
-        },
-      });
-      await ctx.scheduler.runAfter(
-        0,
-        internal.operations.registerCloseoutVarianceEmail
-          .sendRegisterCloseoutVarianceAlertToAdmins,
-        { approvalRequestId: approvalRequest._id },
+    // A truncated page could be hiding the very review being looked for —
+    // .take returns oldest-first, so the newest rows are the ones dropped.
+    // Refuse to take the all-clear branch on a guess.
+    if (!approvalRequest && truncatedPage) {
+      const breachedSession = await ctx.db.get(
+        "registerSession",
+        registerSessionId,
       );
+      if (!breachedSession) continue;
+      await recordOperationalEventWithCtx(ctx, {
+        storeId: breachedSession.storeId,
+        eventType: "register_closeout_notification_skipped",
+        subjectType: "registerSession",
+        subjectId: String(registerSessionId),
+        actorType: "automation",
+        message: `Register closeout notification skipped: a single status holds more than ${MAX_VARIANCE_REVIEWS_PER_CLOSEOUT} variance reviews, so the closeout's review could not be resolved.`,
+        metadata: {
+          localEventId: mapping.localEventId,
+          varianceReviewCount: varianceReviews.length,
+        },
+        metadataDedupeKeys: ["localEventId"],
+      });
+      continue;
+    }
+
+    // A closeout under variance review is a variance notification and never
+    // also a "closed cleanly" report — whatever the review's current status,
+    // and including when its emit is skipped because the pre-rail
+    // implementation already reported it. The alert itself is only for a
+    // review still awaiting a decision.
+    if (approvalRequest) {
+      if (
+        approvalRequest.status === "pending" &&
+        !wasVarianceNotifiedBeforeRail(approvalRequest)
+      ) {
+        await emitNotificationWithCtx(ctx, {
+          kind: "register.closeout_variance",
+          storeId: approvalRequest.storeId,
+          subjectType: "approvalRequest",
+          subjectId: String(approvalRequest._id),
+          payload: { approvalRequestId: approvalRequest._id },
+        });
+      }
       continue;
     }
 
@@ -349,25 +393,64 @@ async function scheduleRegisterCloseoutNotifications(
       !registerSession ||
       registerSession.status !== "closed" ||
       typeof registerSession.countedCash !== "number" ||
+      // Cutover guard: see isFreshVarianceReviewForCloseout. Sessions the
+      // pre-rail implementation already reported carry this marker and have no
+      // corresponding intent to dedupe against.
       registerSession.closeoutNotificationLocalEventId === mapping.localEventId
     ) {
       continue;
     }
 
-    await patchRegisterSessionWithAuthority(ctx, registerSessionId, {
-      closeoutNotificationLocalEventId: mapping.localEventId,
-      closeoutNotificationScheduledAt: Date.now(),
+    await emitNotificationWithCtx(ctx, {
+      kind: "register.closeout_match",
+      storeId: registerSession.storeId,
+      subjectType: "registerSession",
+      subjectId: String(registerSessionId),
+      payload: { registerSessionId, localEventId: mapping.localEventId },
     });
-    await ctx.scheduler.runAfter(
-      0,
-      internal.operations.registerCloseoutVarianceEmail
-        .sendRegisterCloseoutMatchReportToAdmins,
-      { registerSessionId },
-    );
   }
 }
 
-function isFreshVarianceReviewForCloseout(
+// Per (session, status) — a single closeout has at most a handful of variance
+// reviews in any one status, so this bound is never reached in practice. Read
+// one past it so a breach is reported rather than silently dropping the
+// newest rows, which are exactly the ones a closeout lookup wants.
+const MAX_VARIANCE_REVIEWS_PER_CLOSEOUT = 10;
+
+// Derived from the schema union rather than hand-listed: a status added to
+// approvalRequest but missed here would silently stop matching reviews in
+// that status, and this lookup falling through is what sends an all-clear
+// for a drawer that was short. Drift here has been a blocker twice.
+const APPROVAL_REQUEST_STATUSES = readApprovalRequestStatuses();
+
+type ApprovalRequestStatus = Doc<"approvalRequest">["status"];
+
+// The cast below is unavoidable (the validator's members are structurally
+// loose) but it also defeats type checking on the derivation, so verify the
+// shape at module load instead. A nested union — v.union(sharedStatuses,
+// v.literal("expired")) — yields members without a string `value`, which
+// would silently produce q.eq("status", undefined) and reintroduce the
+// missed-status fall-through that has been a blocker twice.
+function readApprovalRequestStatuses(): ReadonlyArray<{
+  value: ApprovalRequestStatus;
+}> {
+  const members = approvalRequestSchema.fields.status.members as ReadonlyArray<{
+    value?: unknown;
+  }>;
+  const statuses = members.filter(
+    (member): member is { value: ApprovalRequestStatus } =>
+      typeof member.value === "string",
+  );
+  if (statuses.length !== members.length || statuses.length === 0) {
+    throw new Error(
+      "approvalRequest status validator is not a flat union of string literals; " +
+        "the register closeout variance lookup cannot enumerate statuses safely.",
+    );
+  }
+  return statuses;
+}
+
+function isVarianceReviewForCloseout(
   approvalRequest: Doc<"approvalRequest">,
   localEventId: string,
 ) {
@@ -375,8 +458,18 @@ function isFreshVarianceReviewForCloseout(
   return (
     metadata?.localEventId === localEventId &&
     typeof metadata.variance === "number" &&
-    metadata.variance !== 0 &&
-    typeof metadata.varianceNotificationScheduledAt !== "number"
+    metadata.variance !== 0
+  );
+}
+
+// Cutover guard: reviews notified by the pre-rail implementation carry only
+// this marker and have no notificationIntent to dedupe against, so a sync
+// batch replayed across the deploy boundary would otherwise re-alert. Safe to
+// delete once no unnotified pre-deploy closeouts remain.
+function wasVarianceNotifiedBeforeRail(approvalRequest: Doc<"approvalRequest">) {
+  return (
+    typeof approvalRequest.metadata?.varianceNotificationScheduledAt ===
+    "number"
   );
 }
 

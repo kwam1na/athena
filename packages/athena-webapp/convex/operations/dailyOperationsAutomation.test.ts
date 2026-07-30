@@ -1,6 +1,11 @@
+/// <reference types="vite/client" />
+
+import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
+import schema from "../schema";
 import {
   getEodAutoCompletePolicyConfigWithCtx,
   upsertEodAutoCompletePolicyConfigWithCtx,
@@ -15,11 +20,20 @@ import {
   runConfiguredDailyOperationsAutomationWithCtx,
   runDailyOpeningAutomationWithCtx,
   runScheduledDailyOperationsAutomationWithCtx,
-  sendDailyManagerReportsForEodAutomationWithCtx,
+  emitDailyManagerReportNotificationsForEodAutomationWithCtx,
   updateEodAutoCompletePolicy,
   updateOpeningAutoStartPolicy,
   updateRegisterCloseoutApprovalPolicy,
 } from "./dailyOperationsAutomation";
+
+const modules = Object.fromEntries(
+  Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
+    path.startsWith("../")
+      ? path.replace(/^\.\.\//, "./")
+      : path.replace(/^\.\//, "./operations/"),
+    loader,
+  ]),
+);
 
 const accessMocks = vi.hoisted(() => ({
   requireStoreFullAdminAccess: vi.fn(),
@@ -349,14 +363,6 @@ function completedDailyClose(overrides: Partial<Row> = {}): Row {
     updatedAt: Date.UTC(2026, 5, 7, 22),
     ...overrides,
   };
-}
-
-function restoreStageEnv(originalStage: string | undefined) {
-  if (originalStage === undefined) {
-    delete process.env.STAGE;
-  } else {
-    process.env.STAGE = originalStage;
-  }
 }
 
 describe("daily operations automation adapter", () => {
@@ -1067,238 +1073,551 @@ describe("daily operations automation adapter", () => {
     });
   });
 
-  it("sends manager reports for completed, prepared, and actionable EOD automation outcomes", async () => {
-    const originalStage = process.env.STAGE;
-    process.env.STAGE = "prod";
-    const runAction = vi.fn(async (_functionRef: unknown, args: unknown) => {
-      const operatingDate = (args as { operatingDate: string }).operatingDate;
-
-      return [
-        {
-          ...(operatingDate === "2026-06-08"
-            ? { dailyCloseId: "daily-close-1" }
-            : {}),
+  it("emits daily manager report intents for applied, prepared, skipped, and failed EOD outcomes", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("athenaUser", {
+        email: "owner@example.com",
+        normalizedEmail: "owner@example.com",
+      });
+      const organizationId = await ctx.db.insert("organization", {
+        createdByUserId: userId,
+        name: "Accra",
+        slug: "accra",
+      });
+      const storeId = await ctx.db.insert("store", {
+        createdByUserId: userId,
+        currency: "GHS",
+        name: "Accra",
+        organizationId,
+        slug: "accra",
+      });
+      const baseRun = {
+        action: "eod.auto_complete",
+        createdAt: 1,
+        domain: "daily_operations",
+        eventIds: [],
+        mutationBoundary: "daily_close",
+        organizationId,
+        policyMode: "enabled" as const,
+        policyVersion: "daily-operations.v1",
+        snapshotCounts: {},
+        sourceSubjects: [],
+        storeId,
+        triggerType: "scheduled",
+        updatedAt: 1,
+      };
+      const insertRun = (
+        operatingDate: string,
+        outcome: "applied" | "prepared" | "skipped" | "failed",
+      ) =>
+        ctx.db.insert("automationRun", {
+          ...baseRun,
+          idempotencyKey: `daily_operations:eod.auto_complete:${storeId}:${operatingDate}:${outcome}`,
           operatingDate,
-          recipientEmail: "manager@example.com",
-          status: 202,
-          storeName: "Accra",
-        },
-      ];
+          outcome,
+        });
+
+      return {
+        appliedRunId: await insertRun("2026-06-08", "applied"),
+        completedRunId: await insertRun("2026-06-04", "skipped"),
+        failedRunId: await insertRun("2026-06-05", "failed"),
+        preparedRunId: await insertRun("2026-06-07", "prepared"),
+        skippedRunId: await insertRun("2026-06-06", "skipped"),
+        storeId,
+      };
     });
+    const emitCtx = {
+      runMutation: (reference: unknown, args: unknown) =>
+        (t.mutation as (ref: unknown, a: unknown) => Promise<unknown>)(
+          reference,
+          args,
+        ),
+      runQuery: (reference: unknown, args: unknown) =>
+        (t.query as (ref: unknown, a: unknown) => Promise<unknown>)(
+          reference,
+          args,
+        ),
+    };
 
-    try {
-      const result = await sendDailyManagerReportsForEodAutomationWithCtx(
-        { runAction } as never,
-        {
-          results: [
-            {
-              action: "applied",
-              run: {
-                _id: "automation-run-applied",
-                operatingDate: "2026-06-08",
-                outcome: "applied",
-                storeId: "store-1",
-              },
-            },
-            {
-              action: "already_recorded",
-              run: {
-                _id: "automation-run-existing",
-                operatingDate: "2026-06-07",
-                outcome: "applied",
-                storeId: "store-1",
-              },
-            },
-            {
-              action: "recorded",
-              run: {
-                _id: "automation-run-skipped",
-                operatingDate: "2026-06-06",
-                outcome: "skipped",
-                storeId: "store-1",
-              },
-            },
-            {
-              action: "already_completed",
-              run: {
-                _id: "automation-run-already-completed",
-                decisionEvidence: { classification: "completed" },
-                operatingDate: "2026-06-05",
-                outcome: "skipped",
-                storeId: "store-1",
-              },
-            },
-            {
-              action: "recorded",
-              run: {
-                _id: "automation-run-prepared",
-                operatingDate: "2026-06-04",
-                outcome: "prepared",
-                storeId: "store-1",
-              },
-            },
-            {
-              action: "recorded",
-              run: {
-                _id: "automation-run-blocked",
-                decisionEvidence: { classification: "blocked" },
-                operatingDate: "2026-06-03",
-                outcome: "skipped",
-                storeId: "store-1",
-              },
-            },
-            {
-              action: "failed",
-              run: {
-                _id: "automation-run-failed",
-                operatingDate: "2026-06-02",
-                outcome: "failed",
-                storeId: "store-1",
-              },
-            },
-          ] as never,
-        },
-      );
-
-      expect(runAction).toHaveBeenCalledTimes(5);
-      expect(runAction.mock.calls[0]?.[1]).toEqual({
-        operatingDate: "2026-06-08",
-        status: "applied",
-        storeId: "store-1",
-      });
-      expect(runAction.mock.calls[1]?.[1]).toEqual({
-        automationRunId: "automation-run-skipped",
-        operatingDate: "2026-06-06",
-        status: "skipped",
-        storeId: "store-1",
-      });
-      expect(runAction.mock.calls[2]?.[1]).toEqual({
-        operatingDate: "2026-06-04",
-        status: "prepared",
-        storeId: "store-1",
-      });
-      expect(runAction.mock.calls[3]?.[1]).toEqual({
-        automationRunId: "automation-run-blocked",
-        operatingDate: "2026-06-03",
-        status: "skipped",
-        storeId: "store-1",
-      });
-      expect(runAction.mock.calls[4]?.[1]).toEqual({
-        automationRunId: "automation-run-failed",
-        operatingDate: "2026-06-02",
-        status: "failed",
-        storeId: "store-1",
-      });
-      expect(result).toEqual([
-        {
-          operatingDate: "2026-06-08",
-          reports: [
-            {
-              dailyCloseId: "daily-close-1",
+    const emitted = await emitDailyManagerReportNotificationsForEodAutomationWithCtx(
+      emitCtx as never,
+      {
+        results: [
+          {
+            action: "applied",
+            run: {
+              _id: seeded.appliedRunId,
               operatingDate: "2026-06-08",
-              recipientEmail: "manager@example.com",
-              status: 202,
-              storeName: "Accra",
+              outcome: "applied",
+              storeId: seeded.storeId,
             },
-          ],
-          runId: "automation-run-applied",
-          storeId: "store-1",
-        },
-        {
-          operatingDate: "2026-06-06",
-          reports: [
-            {
+          },
+          {
+            action: "recorded",
+            run: {
+              _id: seeded.preparedRunId,
+              operatingDate: "2026-06-07",
+              outcome: "prepared",
+              storeId: seeded.storeId,
+            },
+          },
+          {
+            action: "recorded",
+            run: {
+              _id: seeded.skippedRunId,
+              decisionEvidence: { classification: "blocked" },
               operatingDate: "2026-06-06",
-              recipientEmail: "manager@example.com",
-              status: 202,
-              storeName: "Accra",
+              outcome: "skipped",
+              storeId: seeded.storeId,
             },
-          ],
-          runId: "automation-run-skipped",
-          storeId: "store-1",
-        },
-        {
-          operatingDate: "2026-06-04",
-          reports: [
-            {
+          },
+          {
+            action: "failed",
+            run: {
+              _id: seeded.failedRunId,
+              operatingDate: "2026-06-05",
+              outcome: "failed",
+              storeId: seeded.storeId,
+            },
+          },
+          {
+            action: "already_completed",
+            run: {
+              _id: seeded.completedRunId,
+              decisionEvidence: { classification: "completed" },
               operatingDate: "2026-06-04",
-              recipientEmail: "manager@example.com",
-              status: 202,
-              storeName: "Accra",
+              outcome: "skipped",
+              storeId: seeded.storeId,
             },
-          ],
-          runId: "automation-run-prepared",
-          storeId: "store-1",
-        },
-        {
-          operatingDate: "2026-06-03",
-          reports: [
-            {
-              operatingDate: "2026-06-03",
-              recipientEmail: "manager@example.com",
-              status: 202,
-              storeName: "Accra",
-            },
-          ],
-          runId: "automation-run-blocked",
-          storeId: "store-1",
-        },
-        {
-          operatingDate: "2026-06-02",
-          reports: [
-            {
-              operatingDate: "2026-06-02",
-              recipientEmail: "manager@example.com",
-              status: 202,
-              storeName: "Accra",
-            },
-          ],
-          runId: "automation-run-failed",
-          storeId: "store-1",
-        },
-      ]);
-    } finally {
-      restoreStageEnv(originalStage);
-    }
+          },
+        ] as never,
+      },
+    );
+
+    expect(
+      emitted.map(({ created, operatingDate, runId, status, storeId }) => ({
+        created,
+        operatingDate,
+        runId,
+        status,
+        storeId,
+      })),
+    ).toEqual([
+      {
+        created: true,
+        operatingDate: "2026-06-08",
+        runId: seeded.appliedRunId,
+        status: "applied",
+        storeId: seeded.storeId,
+      },
+      {
+        created: true,
+        operatingDate: "2026-06-07",
+        runId: seeded.preparedRunId,
+        status: "prepared",
+        storeId: seeded.storeId,
+      },
+      {
+        created: true,
+        operatingDate: "2026-06-06",
+        runId: seeded.skippedRunId,
+        status: "skipped",
+        storeId: seeded.storeId,
+      },
+      {
+        created: true,
+        operatingDate: "2026-06-05",
+        runId: seeded.failedRunId,
+        status: "failed",
+        storeId: seeded.storeId,
+      },
+    ]);
+
+    const intents = await t.run((ctx) =>
+      ctx.db.query("notificationIntent").take(10),
+    );
+    expect(intents.map((intent) => intent.dedupeKey).sort()).toEqual(
+      [
+        `eod.daily_manager_report:${seeded.storeId}:2026-06-05:action_required`,
+        `eod.daily_manager_report:${seeded.storeId}:2026-06-06:action_required`,
+        `eod.daily_manager_report:${seeded.storeId}:2026-06-07:prepared`,
+        `eod.daily_manager_report:${seeded.storeId}:2026-06-08:applied`,
+      ].sort(),
+    );
+    const appliedIntent = intents.find(
+      (intent) => intent.payload.status === "applied",
+    );
+    expect(appliedIntent?.payload).toEqual({
+      operatingDate: "2026-06-08",
+      status: "applied",
+      storeId: seeded.storeId,
+    });
+    const skippedIntent = intents.find(
+      (intent) => intent.payload.status === "skipped",
+    );
+    expect(skippedIntent?.payload).toEqual({
+      automationRunId: seeded.skippedRunId,
+      operatingDate: "2026-06-06",
+      status: "skipped",
+      storeId: seeded.storeId,
+    });
+    expect(
+      intents.find((intent) => intent.payload.operatingDate === "2026-06-04"),
+    ).toBeUndefined();
   });
 
-  it("skips scheduled manager report sends outside production", async () => {
-    const originalStage = process.env.STAGE;
-    process.env.STAGE = "";
-    const runAction = vi.fn();
-
-    try {
-      const result = await sendDailyManagerReportsForEodAutomationWithCtx(
-        { runAction } as never,
+  it("keeps one action-required intent per store and date across automation re-runs", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("athenaUser", {
+        email: "owner@example.com",
+        normalizedEmail: "owner@example.com",
+      });
+      const organizationId = await ctx.db.insert("organization", {
+        createdByUserId: userId,
+        name: "Accra",
+        slug: "accra",
+      });
+      const storeId = await ctx.db.insert("store", {
+        createdByUserId: userId,
+        currency: "GHS",
+        name: "Accra",
+        organizationId,
+        slug: "accra",
+      });
+      const baseRun = {
+        action: "eod.auto_complete",
+        createdAt: 1,
+        domain: "daily_operations",
+        eventIds: [],
+        idempotencyKey: `daily_operations:eod.auto_complete:${storeId}:2026-07-16`,
+        mutationBoundary: "daily_close",
+        operatingDate: "2026-07-16",
+        organizationId,
+        policyMode: "enabled" as const,
+        policyVersion: "daily-operations.v1",
+        snapshotCounts: {},
+        sourceSubjects: [],
+        storeId,
+        triggerType: "scheduled",
+        updatedAt: 1,
+      };
+      const firstRunId = await ctx.db.insert("automationRun", {
+        ...baseRun,
+        outcome: "skipped",
+      });
+      const secondRunId = await ctx.db.insert("automationRun", {
+        ...baseRun,
+        createdAt: 2,
+        idempotencyKey: `${baseRun.idempotencyKey}:retry`,
+        outcome: "failed",
+        updatedAt: 2,
+      });
+      return { firstRunId, secondRunId, storeId };
+    });
+    const emitCtx = {
+      runMutation: (reference: unknown, args: unknown) =>
+        (t.mutation as (ref: unknown, a: unknown) => Promise<unknown>)(
+          reference,
+          args,
+        ),
+      runQuery: (reference: unknown, args: unknown) =>
+        (t.query as (ref: unknown, a: unknown) => Promise<unknown>)(
+          reference,
+          args,
+        ),
+    };
+    const resultForRun = (
+      runId: typeof seeded.firstRunId,
+      outcome: "skipped" | "failed",
+    ) =>
+      [
         {
-          results: [
-            {
-              action: "applied",
-              run: {
-                _id: "automation-run-applied",
-                operatingDate: "2026-06-08",
-                outcome: "applied",
-                storeId: "store-1",
-              },
-            },
-            {
-              action: "recorded",
-              run: {
-                _id: "automation-run-prepared",
-                operatingDate: "2026-06-05",
-                outcome: "prepared",
-                storeId: "store-1",
-              },
-            },
-          ] as never,
+          action: "recorded",
+          run: {
+            _id: runId,
+            operatingDate: "2026-07-16",
+            outcome,
+            storeId: seeded.storeId,
+          },
         },
+      ] as never;
+
+    const firstEmit =
+      await emitDailyManagerReportNotificationsForEodAutomationWithCtx(
+        emitCtx as never,
+        { results: resultForRun(seeded.firstRunId, "skipped") },
+      );
+    const secondEmit =
+      await emitDailyManagerReportNotificationsForEodAutomationWithCtx(
+        emitCtx as never,
+        { results: resultForRun(seeded.secondRunId, "failed") },
       );
 
-      expect(runAction).not.toHaveBeenCalled();
-      expect(result).toEqual([]);
-    } finally {
-      restoreStageEnv(originalStage);
+    expect(firstEmit).toHaveLength(1);
+    expect(firstEmit[0]).toMatchObject({ created: true, status: "skipped" });
+    expect(secondEmit).toHaveLength(1);
+    expect(secondEmit[0]).toMatchObject({
+      created: false,
+      intentId: firstEmit[0].intentId,
+      status: "failed",
+    });
+
+    const intents = await t.run((ctx) =>
+      ctx.db.query("notificationIntent").take(10),
+    );
+    expect(intents).toHaveLength(1);
+    expect(intents[0].dedupeKey).toBe(
+      `eod.daily_manager_report:${seeded.storeId}:2026-07-16:action_required`,
+    );
+    expect(intents[0].payload).toEqual({
+      automationRunId: seeded.firstRunId,
+      operatingDate: "2026-07-16",
+      status: "skipped",
+      storeId: seeded.storeId,
+    });
+  });
+
+  describe("legacy pre-rail cutover guard", () => {
+    async function seedCutoverFixture(t: ReturnType<typeof convexTest>) {
+      const seeded = await t.run(async (ctx) => {
+        const userId = await ctx.db.insert("athenaUser", {
+          email: "owner@example.com",
+          normalizedEmail: "owner@example.com",
+        });
+        const organizationId = await ctx.db.insert("organization", {
+          createdByUserId: userId,
+          name: "Accra",
+          slug: "accra",
+        });
+        const storeId = await ctx.db.insert("store", {
+          createdByUserId: userId,
+          currency: "GHS",
+          name: "Accra",
+          organizationId,
+          slug: "accra",
+        });
+        return { organizationId, storeId };
+      });
+
+      const insertRun = (
+        operatingDate: string,
+        outcome: "applied" | "prepared" | "skipped" | "failed",
+      ) =>
+        t.run((ctx) =>
+          ctx.db.insert("automationRun", {
+            action: "eod.auto_complete",
+            createdAt: 1,
+            domain: "daily_operations",
+            eventIds: [],
+            idempotencyKey: `daily_operations:eod.auto_complete:${seeded.storeId}:${operatingDate}:${outcome}`,
+            mutationBoundary: "daily_close",
+            operatingDate,
+            organizationId: seeded.organizationId,
+            outcome,
+            policyMode: "enabled" as const,
+            policyVersion: "daily-operations.v1",
+            snapshotCounts: {},
+            sourceSubjects: [],
+            storeId: seeded.storeId,
+            triggerType: "scheduled",
+            updatedAt: 1,
+          }),
+        );
+
+      return { ...seeded, insertRun };
     }
+
+    async function insertLegacySentDelivery(
+      t: ReturnType<typeof convexTest>,
+      args: {
+        automationRunId: Id<"automationRun">;
+        operatingDate: string;
+        status?: "pending" | "sent" | "failed";
+        storeId: Id<"store">;
+      },
+    ) {
+      await t.run((ctx) =>
+        ctx.db.insert("automationNotificationDelivery", {
+          action: "eod.auto_complete",
+          attemptCount: 1,
+          automationRunId: args.automationRunId,
+          createdAt: 1,
+          dedupeKey: `legacy:${args.storeId}:${args.operatingDate}:${args.status ?? "sent"}`,
+          domain: "daily_operations",
+          notificationKind: "eod_action_required",
+          operatingDate: args.operatingDate,
+          recipientEmail: "admin@example.com",
+          status: args.status ?? "sent",
+          storeId: args.storeId,
+          updatedAt: 1,
+        }),
+      );
+    }
+
+    function makeEmitCtx(t: ReturnType<typeof convexTest>) {
+      return {
+        runMutation: (reference: unknown, args: unknown) =>
+          (t.mutation as (ref: unknown, a: unknown) => Promise<unknown>)(
+            reference,
+            args,
+          ),
+        runQuery: (reference: unknown, args: unknown) =>
+          (t.query as (ref: unknown, a: unknown) => Promise<unknown>)(
+            reference,
+            args,
+          ),
+      } as never;
+    }
+
+    it("skips an action-required emit for a store-day the pre-rail path already alerted", async () => {
+      const t = convexTest(schema, modules);
+      const seeded = await seedCutoverFixture(t);
+      const alertedRunId = await seeded.insertRun("2026-07-16", "skipped");
+      const freshRunId = await seeded.insertRun("2026-07-17", "failed");
+      await insertLegacySentDelivery(t, {
+        automationRunId: alertedRunId,
+        operatingDate: "2026-07-16",
+        storeId: seeded.storeId,
+      });
+
+      const emitted =
+        await emitDailyManagerReportNotificationsForEodAutomationWithCtx(
+          makeEmitCtx(t),
+          {
+            results: [
+              {
+                action: "recorded",
+                run: {
+                  _id: alertedRunId,
+                  operatingDate: "2026-07-16",
+                  outcome: "skipped",
+                  storeId: seeded.storeId,
+                },
+              },
+              {
+                action: "failed",
+                run: {
+                  _id: freshRunId,
+                  operatingDate: "2026-07-17",
+                  outcome: "failed",
+                  storeId: seeded.storeId,
+                },
+              },
+            ] as never,
+          },
+        );
+
+      // The legacy ledger is invisible to the rail's dedupe key, and this
+      // automation re-runs hourly, so without the guard the deploy would send
+      // a second "Action required" email for 2026-07-16.
+      expect(emitted).toHaveLength(1);
+      expect(emitted[0]).toMatchObject({
+        operatingDate: "2026-07-17",
+        status: "failed",
+      });
+      const intents = await t.run((ctx) =>
+        ctx.db.query("notificationIntent").take(10),
+      );
+      expect(intents.map((intent) => intent.dedupeKey)).toEqual([
+        `eod.daily_manager_report:${seeded.storeId}:2026-07-17:action_required`,
+      ]);
+    });
+
+    it("still emits when the legacy row for the store-day never sent", async () => {
+      const t = convexTest(schema, modules);
+      const seeded = await seedCutoverFixture(t);
+      const runId = await seeded.insertRun("2026-07-16", "skipped");
+      await insertLegacySentDelivery(t, {
+        automationRunId: runId,
+        operatingDate: "2026-07-16",
+        status: "failed",
+        storeId: seeded.storeId,
+      });
+
+      const emitted =
+        await emitDailyManagerReportNotificationsForEodAutomationWithCtx(
+          makeEmitCtx(t),
+          {
+            results: [
+              {
+                action: "recorded",
+                run: {
+                  _id: runId,
+                  operatingDate: "2026-07-16",
+                  outcome: "skipped",
+                  storeId: seeded.storeId,
+                },
+              },
+            ] as never,
+          },
+        );
+
+      expect(emitted).toHaveLength(1);
+      expect(emitted[0]).toMatchObject({ created: true, status: "skipped" });
+      expect(
+        await t.run((ctx) => ctx.db.query("notificationIntent").take(10)),
+      ).toHaveLength(1);
+    });
+
+    it("leaves applied and prepared emits untouched by legacy rows", async () => {
+      const t = convexTest(schema, modules);
+      const seeded = await seedCutoverFixture(t);
+      const appliedRunId = await seeded.insertRun("2026-07-16", "applied");
+      const preparedRunId = await seeded.insertRun("2026-07-17", "prepared");
+      for (const [automationRunId, operatingDate] of [
+        [appliedRunId, "2026-07-16"],
+        [preparedRunId, "2026-07-17"],
+      ] as const) {
+        await insertLegacySentDelivery(t, {
+          automationRunId,
+          operatingDate,
+          storeId: seeded.storeId,
+        });
+      }
+
+      const emitted =
+        await emitDailyManagerReportNotificationsForEodAutomationWithCtx(
+          makeEmitCtx(t),
+          {
+            results: [
+              {
+                action: "applied",
+                run: {
+                  _id: appliedRunId,
+                  operatingDate: "2026-07-16",
+                  outcome: "applied",
+                  storeId: seeded.storeId,
+                },
+              },
+              {
+                action: "recorded",
+                run: {
+                  _id: preparedRunId,
+                  operatingDate: "2026-07-17",
+                  outcome: "prepared",
+                  storeId: seeded.storeId,
+                },
+              },
+            ] as never,
+          },
+        );
+
+      // The legacy ledger only ever covered the action-required alert; the
+      // daily report itself must keep flowing.
+      expect(emitted.map((entry) => entry.status)).toEqual([
+        "applied",
+        "prepared",
+      ]);
+      const intents = await t.run((ctx) =>
+        ctx.db.query("notificationIntent").take(10),
+      );
+      expect(intents.map((intent) => intent.dedupeKey).sort()).toEqual([
+        `eod.daily_manager_report:${seeded.storeId}:2026-07-16:applied`,
+        `eod.daily_manager_report:${seeded.storeId}:2026-07-17:prepared`,
+      ]);
+    });
   });
 
   it("persists canonical store schedule context in EOD auto-complete evidence", async () => {
