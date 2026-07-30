@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="2915e68aba3c4cd6e1c2e315153b022d6a5d963551fa4c95343d31c5dc8d966f" data-athena-report-base="35655a16c55fc9de08c14612a6bd48fd994c4d6a" data-athena-report-head="4b814c758a6ba26ec3fe981568c150412b997210">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Daily Operations: Frozen Close Metrics</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
+      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
+      h2 { font-size: 28px; margin: 0 0 16px; }
+      p { margin: 0 0 14px; }
+      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
+      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
+      @media (hover: hover) and (pointer: fine) {
+        label:hover { border-color: #b6c5d8; }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 700;
+        padding: 11px 16px;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:active { transform: scale(0.97); }
+      button.secondary { background: #475569; }
+      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      #quizResult { font-weight: 700; }
+      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
+      .answer-detail.visible { display: block; }
+      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
+      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
+      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
+      @media (max-width: 820px) { h1 { font-size: 32px; } main { padding: 32px 16px 56px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Daily Operations: Frozen Close Metrics</h1>
+        <p class="lede">Delivery-candidate guide to the authority boundary, bounded read model, fallback behavior, and preserved refresh contract.</p>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">PR #712</span><span class="pill">Head 4b814c75</span><span class="pill">Base 35655a16</span><span class="pill">V26-1129</span><span class="pill">V26-1130</span><span class="pill">Deploy pending</span><span class="pill">Root alignment pending</span></div>
+      </header>
+      <section class="panel"><h2>Executive Summary</h2>
+<p>PR #712 changes where Daily Operations gets financial metrics for finalized operating days. A trustworthy completed Daily Close v2 report snapshot becomes the close-time authority; today and any date without trustworthy close evidence continue using live transactions, adjustments, and expenses.</p>
+<p>The normal weekly read shape changes from four per-date metric-source reads across seven displayed days plus the prior Saturday (32 total) to one bounded close-range read plus three live financial reads for each fallback date: 1 + 3k. A fully finalized window therefore uses one metric-source query.</p>
+<p>This report describes an open delivery candidate. It is not merged or deployed. Linear issues V26-1129 and V26-1130 are In Review; production deploy and root alignment are pending.</p>
+</section>
+<section class="panel"><h2>Why This Mattered</h2>
+<p>Daily Close already freezes the financial summary an operator closed against. Reconstructing finalized days from mutable source tables wastes Convex database I/O and can make historical Daily Operations metrics drift away from close-time truth.</p>
+<p>The safe optimization is not to trust every snapshot. It is to establish a narrow authority boundary: only one unambiguous, date-local, completed close with internally consistent v2 evidence may replace live reconstruction.</p>
+</section>
+<section class="panel"><h2>Mental Model: One Gate, Two Paths</h2>
+<p>Think of the close snapshot as a sealed daily ledger. The resolver first asks whether the seal and its evidence are trustworthy. If yes, it reads the frozen summary. If not, it does not partially trust the close; it follows the established live path for that date.</p>
+<pre><code>8 operating dates -&gt; 1 bounded close-range probe
+  eligible date  -&gt; frozen close summary -&gt; existing metric response
+  fallback date  -&gt; POS + adjustments + expenses -&gt; existing metric response
+normal financial-source cost = 1 + 3k</code></pre>
+</section>
+<section class="panel"><h2>Before and After</h2>
+
+<ul>
+<li>Before: each of eight dates read Daily Close, POS transactions, adjustments, and expenses, for 32 metric-source queries.</li>
+<li>After: one indexed Daily Close candidate range covers all eight dates, and only fallback dates read the three mutable financial sources.</li>
+<li>Before: finalized historical metrics were reconstructed from tables that may change later.</li>
+<li>After: a valid close-time report summary remains frozen until lifecycle evidence says the day is open or reopened.</li>
+<li>Unchanged: public query arguments, response keys, financial redaction, ordering, prior-week comparison, selected-day decoration, and client stale-response protection.</li>
+</ul>
+</section>
+<section class="panel"><h2>Authority and Failure Boundaries</h2>
+
+<ul>
+<li>The snapshot must be contract v2, match store and operating date, and carry complete aggregate and source evidence.</li>
+<li>Financial source ranges must match frozen close metadata; 23–25 hour operating-day ranges and up to one hour of request-boundary drift are accepted for DST transitions.</li>
+<li>Required source lanes are POS completed, adjustment applied, and expense completed. POS void evidence may coexist without disqualifying the snapshot.</li>
+<li>Money must be finite; counts must be nonnegative integers; payment methods must be unique; source counts must reconcile with the summary.</li>
+<li>The date-local reciprocal replacement chain must resolve to one completed terminal close. Open, reopened, broken, ambiguous, or competing terminals use live calculation.</li>
+<li>A 201st close candidate proves the 200-row authority budget was truncated. The whole eight-date window then uses bounded live recovery so truncated history can never select financial truth.</li>
+</ul>
+</section>
+<section class="panel"><h2>Refresh and Client Contracts</h2>
+<p>The narrow current-day refresh uses the same frozen-or-live resolver for the selected date and prior date. It does not widen or rename the payload.</p>
+<p>The browser still replaces only the selected row, preserves its six sibling week rows and prior boundary, and rejects an older response when refreshRequestedAt no longer matches. Shared-demo analytics remain client-provided. No production UI component changed.</p>
+</section>
+<section class="panel"><h2>Validation and Review Evidence</h2>
+
+<ul>
+<li>Daily Operations backend suite: 126 of 126 tests passed.</li>
+<li>Daily Operations view-contract suite: 90 of 90 tests passed.</li>
+<li>TypeScript strict-mode check and changed-Convex lint/validator checks passed.</li>
+<li>Plan HTML, solution frontmatter, compound learning, generated artifacts, Graphify, and diff whitespace checks passed.</li>
+<li>Correctness, adversarial, reliability, performance, maintainability, testing, API-contract, TypeScript, agent-native, learnings, and project-standards lenses reached approval after fixes for DST boundaries, repeated reclose chains, source reconciliation, reopen decoration, response parity, and capped-range recovery.</li>
+<li>Residual operational risk: the rare overflow recovery is bounded at 33 reads and has no dedicated production telemetry. Aggregate Convex Usage/function telemetry can measure overall read reduction, but identifying the overflow cohort is deferred until dedicated instrumentation exists.</li>
+<li>The repository-wide pr:athena gate is pending this required report and will be rerun against the final candidate.</li>
+</ul>
+</section>
+<section class="panel"><h2>What Did Not Change</h2>
+
+<ul>
+<li>No Convex schema, backfill, close mutation, Reports projection, cache invalidation, or production UI change.</li>
+<li>Daily Close History keeps its existing no-reconstruction behavior; only Daily Operations uses live fallback for unusable snapshots.</li>
+<li>POS-only callers remain redacted and short-circuit before snapshot-summary or financial-source work.</li>
+<li>Existing client cache lifetime remains unchanged, so a mounted historical row updates at its existing remount, refetch, or current-day refresh boundary.</li>
+</ul>
+</section>
+<section class="panel"><h2>Next-Time Operational Guidance</h2>
+
+<ul>
+<li>When adding a new frozen metric, update snapshot validation, projection, live calculation, response-parity tests, and source-count reconciliation together.</li>
+<li>Treat malformed or lifecycle-ambiguous evidence as a fallback signal, never as permission to use a partial snapshot.</li>
+<li>Keep the candidate range bounded with one-row lookahead, and preserve whole-window recovery when truncation is detected.</li>
+<li>Use aggregate Convex Usage/function telemetry to measure overall read reduction. Add dedicated instrumentation before attempting to measure the rare 201-row overflow cohort separately.</li>
+<li>For regressions, begin with the query observer tests: they expose tables, indexes, bounds, terminal operations, limits, and exact read counts.</li>
+</ul>
+</section>
+
+<section class="panel">
+  <h2>Key Files</h2>
+  <table>
+    <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
+    <tbody><tr><td><code>packages/athena-webapp/convex/operations/dailyOperations.ts</code></td><td>Orchestrates one range probe, per-date frozen/live selection, public week and today-refresh responses, authorization, redaction, and decoration.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/operations/dailyOperations/frozenMetricAuthority.ts</code></td><td>Owns strict snapshot validation, date-local replacement-chain resolution, DST-compatible range checks, source reconciliation, and frozen metric projection.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/operations/dailyOperations.test.ts</code></td><td>Characterizes response parity, lifecycle transitions, malformed evidence, DST days, exact 200/201 caps, POS-only access, and the 1 + 3k read model.</td></tr>
+<tr><td><code>packages/athena-webapp/src/components/operations/DailyOperationsView.test.tsx</code></td><td>Locks selected-row replacement, sibling and prior-boundary preservation, timestamps, stale-response rejection, and shared-demo behavior.</td></tr>
+<tr><td><code>docs/solutions/performance/athena-convex-read-amplification-2026-06-29.md</code></td><td>Records the reusable snapshot-authority and bounded-read pattern for later work.</td></tr></tbody>
+  </table>
+</section>
+
+
+<section class="panel">
+  <h2>Subagent Evidence</h2>
+  <ul><li><strong>Session context — report_session_context:</strong> Collected plan, Linear, delivery-conversation, reviewer-loop, and finish-line context for the open candidate.</li>
+<li><strong>Delivered diff — report_delivered_diff:</strong> Mapped the code and documentation diff, before/after flow, failure boundaries, tests, and intentionally unchanged contracts.</li>
+<li><strong>Quiz and report review — report_review:</strong> Checked evidence fidelity, reader comprehension, quiz quality, accessibility, and telemetry claims; required explicit answer feedback and clearer monitoring limits.</li></ul>
+</section>
+
+
+<section id="quiz" class="panel">
+  <h2>Quiz: Pass Required</h2>
+  <p>You must score at least 8 out of 10 to pass.</p>
+  <form id="changeQuiz" data-threshold="8">
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>1. When may Daily Operations use a close snapshot as financial authority?</legend>
+    <label><input type="radio" name="q1" value="0" /> Whenever any completed close exists for the store</label>
+<label><input type="radio" name="q1" value="1" /> Only when one date-local terminal completed close has a strictly valid, internally consistent v2 snapshot</label>
+<label><input type="radio" name="q1" value="2" /> Whenever isCurrent is true</label>
+<label><input type="radio" name="q1" value="3" /> Only for the current operating day</label>
+  </fieldset>
+  <div class="answer-detail">Authority requires one unambiguous date-local terminal completion plus strict v2 identity, range, source, money, count, and reconciliation checks.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>2. What is the normal metric-source query model for the eight-date window?</legend>
+    <label><input type="radio" name="q2" value="0" /> 8 + k</label>
+<label><input type="radio" name="q2" value="1" /> 1 + 4k</label>
+<label><input type="radio" name="q2" value="2" /> 1 + 3k</label>
+<label><input type="radio" name="q2" value="3" /> Always 32</label>
+  </fieldset>
+  <div class="answer-detail">One bounded close-range read is shared, then each fallback date reads POS transactions, adjustments, and expenses.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>3. What happens when a completed day&#x27;s source tables change after close?</legend>
+    <label><input type="radio" name="q3" value="0" /> A valid frozen metric remains at close-time truth</label>
+<label><input type="radio" name="q3" value="1" /> The snapshot is automatically rewritten</label>
+<label><input type="radio" name="q3" value="2" /> Daily Operations always switches back to live data</label>
+<label><input type="radio" name="q3" value="3" /> The client merges both values</label>
+  </fieldset>
+  <div class="answer-detail">The optimization intentionally preserves valid close-time truth instead of reconstructing finalized history from mutable sources.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>4. How does the resolver handle malformed snapshot evidence?</legend>
+    <label><input type="radio" name="q4" value="0" /> It returns a partial frozen metric</label>
+<label><input type="radio" name="q4" value="1" /> It throws an operator-facing error</label>
+<label><input type="radio" name="q4" value="2" /> It uses the existing live calculation for that date</label>
+<label><input type="radio" name="q4" value="3" /> It treats missing values as zero</label>
+  </fieldset>
+  <div class="answer-detail">Malformed or incomplete evidence is a conservative live-fallback signal, not partial authority or an operator failure.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>5. Why does a 201st candidate trigger whole-window recovery?</legend>
+    <label><input type="radio" name="q5" value="0" /> It proves the 200-row authority candidate set was truncated</label>
+<label><input type="radio" name="q5" value="1" /> Convex cannot return 201 rows</label>
+<label><input type="radio" name="q5" value="2" /> It marks every close as reopened</label>
+<label><input type="radio" name="q5" value="3" /> It is the weekly metrics response limit</label>
+  </fieldset>
+  <div class="answer-detail">The one-row lookahead proves candidate history exceeded the authority budget, so no date may select truth from a truncated set.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>6. What happens across completion, reopen, and reclose?</legend>
+    <label><input type="radio" name="q6" value="0" /> Frozen, frozen, frozen</label>
+<label><input type="radio" name="q6" value="1" /> Live, frozen, live</label>
+<label><input type="radio" name="q6" value="2" /> Frozen, live, replacement-frozen</label>
+<label><input type="radio" name="q6" value="3" /> Live, live, live</label>
+  </fieldset>
+  <div class="answer-detail">Completion establishes valid frozen authority, reopen returns to live truth, and a valid replacement close becomes the new frozen authority.</div>
+</div>
+
+<div class="quiz-question" data-answer="3">
+  <fieldset>
+    <legend>7. Which client behavior changed?</legend>
+    <label><input type="radio" name="q7" value="0" /> All seven rows are replaced on refresh</label>
+<label><input type="radio" name="q7" value="1" /> Stale refresh responses now win</label>
+<label><input type="radio" name="q7" value="2" /> The prior boundary is removed</label>
+<label><input type="radio" name="q7" value="3" /> None; existing selected-row merge and stale-response protections remain</label>
+  </fieldset>
+  <div class="answer-detail">The server authority changed without changing the public response or browser merge contract.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>8. What should a future new frozen metric update together?</legend>
+    <label><input type="radio" name="q8" value="0" /> Only the report snapshot type</label>
+<label><input type="radio" name="q8" value="1" /> Validation, frozen projection, live calculation, response parity, and reconciliation tests</label>
+<label><input type="radio" name="q8" value="2" /> Only the React component</label>
+<label><input type="radio" name="q8" value="3" /> Only Graphify artifacts</label>
+  </fieldset>
+  <div class="answer-detail">A frozen metric crosses the persistence-validation-projection-live-parity boundary and must remain consistent across all of it.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>9. What can the current telemetry establish about the optimization?</legend>
+    <label><input type="radio" name="q9" value="0" /> Aggregate Convex usage can show overall read reduction, but the 201-candidate cohort needs dedicated instrumentation</label>
+<label><input type="radio" name="q9" value="1" /> It already identifies every 201-candidate recovery</label>
+<label><input type="radio" name="q9" value="2" /> It reports which individual snapshots failed validation</label>
+<label><input type="radio" name="q9" value="3" /> It proves every historical date used frozen authority</label>
+  </fieldset>
+  <div class="answer-detail">Current telemetry is aggregate. Cohort-specific overflow detection is deferred until dedicated instrumentation exists.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>10. What is the current delivery status?</legend>
+    <label><input type="radio" name="q10" value="0" /> Merged and deployed</label>
+<label><input type="radio" name="q10" value="1" /> Merged but not deployed</label>
+<label><input type="radio" name="q10" value="2" /> Open delivery candidate; merge, deploy, and root alignment are pending</label>
+<label><input type="radio" name="q10" value="3" /> Linear Done with no PR</label>
+  </fieldset>
+  <div class="answer-detail">This report belongs to open PR #712. It must not claim merge, deployment, or root alignment before those events occur.</div>
+</div>
+
+    <div class="quiz-actions">
+      <button type="button" id="gradeQuiz">Grade quiz</button>
+      <button type="button" class="secondary" id="resetQuiz">Reset</button>
+      <span id="quizResult" aria-live="polite"></span>
+    </div>
+  </form>
+</section>
+
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      questions.forEach((question) => {
+        const detail = question.querySelector(".answer-detail");
+        detail.dataset.explanation = detail.textContent;
+        detail.setAttribute("role", "status");
+        detail.setAttribute("aria-live", "polite");
+      });
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          const detail = question.querySelector(".answer-detail");
+          detail.classList.remove("visible");
+          detail.textContent = detail.dataset.explanation;
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
+          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
+          const correctOption = question.querySelector(
+            `input[value="${question.dataset.answer}"]`,
+          ).closest("label").textContent.trim();
+          const detail = question.querySelector(".answer-detail");
+          if (isCorrect) score += 1;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          detail.textContent = isCorrect
+            ? `Correct — ${detail.dataset.explanation}`
+            : `Incorrect — Correct answer: ${correctOption}. ${detail.dataset.explanation}`;
+          detail.classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>

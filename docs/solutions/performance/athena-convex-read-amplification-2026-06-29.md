@@ -1,7 +1,7 @@
 ---
 title: Athena Convex Posture Queries Stay Separate From Detail Reads
 date: 2026-06-29
-last_updated: 2026-07-16
+last_updated: 2026-07-30
 category: performance
 module: athena-webapp
 problem_type: performance_issue
@@ -12,7 +12,7 @@ symptoms:
 root_cause: logic_error
 resolution_type: code_fix
 severity: high
-delivery_diff_fingerprint: ffb12e1d12285dae5654d92f8999a0c202f2cd0344eb74f96f29a4d8177bb9a0
+delivery_diff_fingerprint: 2915e68aba3c4cd6e1c2e315153b022d6a5d963551fa4c95343d31c5dc8d966f
 tags:
   - convex
   - performance
@@ -176,10 +176,70 @@ Daily Opening carry-forward membership, Daily Close evidence, and command-side
 validation remain on their existing source-owned paths. The compact contracts
 only answer whether attention exists and whether that answer is exact.
 
+## July 30, 2026 Follow-up: Completed Closes Bound Historical Analytics Reads
+
+Daily Operations week analytics should not reconstruct finalized store days
+from mutable transaction, adjustment, and expense tables. A completed Daily
+Close already carries the close-time report summary needed by the weekly
+contract, so that frozen snapshot becomes the financial authority when its
+evidence is usable.
+
+Snapshot authority is deliberately strict and date-local:
+
+- The effective close must be the one unambiguous terminal candidate for the
+  requested operating date. Open, reopened, superseded, broken replacement
+  chains, and competing terminal candidates fall back to live calculation.
+- The report snapshot must use contract version 2, declare aggregate
+  completeness, and include valid complete evidence for POS transactions, POS
+  adjustments, and expense transactions over the exact store-day range.
+- Snapshot store, operating date, DST-compatible 23–25 hour local-day bounds,
+  finite allowlisted totals, nonnegative integer counts, and unique payment
+  totals must all validate. Financial source ranges must exactly match the
+  frozen close metadata. Daily Operations metrics for legacy or malformed
+  snapshots remain available through the existing live fallback; Daily Close
+  History keeps its existing no-reconstruction behavior.
+
+The week and prior-boundary dates share one bounded Daily Close range read.
+With a complete candidate range, the financial-source cost is `1 + 3k`, where
+`k` is the number of dates that require live fallback across the seven displayed
+days plus the prior Saturday. A fully finalized window falls from 32
+metric-source queries to one close-range query.
+
+The range read takes 201 rows against a 200-row authority budget. Zero through
+200 rows are complete. A 201st row proves the candidate set was truncated, so
+the entire eight-date window discards frozen financial authority and uses the
+established live path. This recovery costs the attempted range read plus the
+existing 32 metric-source queries, but never lets a truncated revision history
+choose financial truth.
+
+The current-day refresh uses the same frozen-or-live resolver for its selected
+and prior-day metrics without changing its response shape. Client merge rules
+remain unchanged: only the selected date is replaced, sibling week rows and the
+prior-week boundary remain intact, and `refreshRequestedAt` prevents an older
+response from overwriting a newer request. Shared-demo week analytics still
+stay client-provided and use only the narrow current-day refresh.
+
+This optimization changes server authority on a fresh read, not browser cache
+lifecycle. A mounted client may continue displaying a cached historical metric
+until the existing remount, week refetch, or current-day refresh boundary.
+Reopening and reclosing therefore become visible according to those established
+cache rules; no new invalidation or subscription contract is introduced.
+
 ## Prevention
 
 - Do not add detail evidence, full history, or analytics payloads back to default
   route/register/roster subscriptions.
+- Do not reconstruct finalized Daily Operations metrics from mutable financial
+  sources when one unambiguous completed close has a strictly valid frozen
+  report snapshot.
+- Treat snapshot validation or lifecycle ambiguity as a live-fallback signal,
+  not an operator-facing failure and not permission to use partial close
+  evidence.
+- Keep close-range authority reads bounded with a one-row lookahead. When the
+  lookahead proves truncation, recover the whole window through the established
+  live path.
+- Report normal-path `1 + 3k` query cost separately from the 201-row
+  cap-recovery cohort.
 - Add characterization tests that assert targeted paths do not call broad
   store-status indexes such as `by_store_status` when a target id is available.
 - For Convex performance fixes, prefer index names that spell out every indexed
@@ -233,12 +293,15 @@ only answer whether attention exists and whether that answer is exact.
   `bun run test -- convex/operations/dailyClose.test.ts convex/operations/dailyOperations.test.ts convex/pos/application/terminals.test.ts convex/pos/infrastructure/repositories/terminalRepository.test.ts convex/inventory/sessionQueryIndexes.test.ts convex/storeFront/commerceQueryIndexes.test.ts convex/contextTracking/contextEvents.test.ts convex/pos/public/posRecoveryCodes.test.ts convex/remoteAssist/transportInternal.test.ts`
 - July 16 bounded-count follow-up:
   `bun run test -- convex/operations/dailyClose.test.ts convex/operations/dailyOpening.test.ts convex/operations/operationalWorkItems.test.ts src/components/app-sidebar.test.tsx src/components/operations/DailyOpeningView.test.tsx`
+- July 30 frozen-close follow-up:
+  `bun run test -- convex/operations/dailyOperations.test.ts src/components/operations/DailyOperationsView.test.tsx`
 
 ## Related Issues
 
 - Linear: V26-905, V26-906, V26-907, V26-908, V26-909, V26-910, V26-911.
 - July 13 containment: V26-1041, V26-1042, V26-1043, V26-1044,
   V26-1045, V26-1046, V26-1048.
+- July 30 completed-close authority: V26-1129, V26-1130.
 
 ## Related Guidance
 

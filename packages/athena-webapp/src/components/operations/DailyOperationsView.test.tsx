@@ -3825,6 +3825,73 @@ describe("DailyOperationsView", () => {
     }
   });
 
+  it("does not apply a current-day refresh response from an older request", async () => {
+    vi.useFakeTimers();
+    const refreshNow = new Date(2026, 4, 8, 12).getTime();
+    vi.setSystemTime(refreshNow);
+
+    try {
+      mockedHooks.useQuery.mockImplementation((query, args) => {
+        if (args === "skip") return undefined;
+        if (query === mockedApi.getDailyOperationsDetailSnapshot) {
+          return {
+            ...operatingSnapshot,
+            weekSnapshots: buildWeekSnapshots(),
+          };
+        }
+        if (query === mockedApi.getDailyOperationsTodayRefreshSnapshot) {
+          return {
+            attentionItems: operatingSnapshot.attentionItems,
+            closeSummary: {
+              ...operatingSnapshot.closeSummary,
+              salesTotal: 9_999_900,
+              transactionCount: 99,
+            },
+            completedClose: undefined,
+            currency: operatingSnapshot.currency,
+            endAt: Date.UTC(2026, 4, 9),
+            lanes: operatingSnapshot.lanes,
+            lifecycle: operatingSnapshot.lifecycle,
+            operatingDate: "2026-05-08",
+            primaryAction: operatingSnapshot.primaryAction,
+            priorDayMetric: weekMetrics[4],
+            refreshedAt: refreshNow - 1,
+            refreshRequestedAt: refreshNow - 1,
+            startAt: Date.UTC(2026, 4, 8),
+            storeId: operatingSnapshot.storeId,
+            storePulse: null,
+            weekMetric: {
+              ...weekMetrics[5],
+              isSelected: true,
+              salesTotal: 9_999_900,
+              transactionCount: 99,
+            },
+          };
+        }
+
+        return operatingSnapshot;
+      });
+
+      render(<DailyOperationsView />);
+      fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+        mockedApi.getDailyOperationsTodayRefreshSnapshot,
+        expect.objectContaining({
+          refreshRequestedAt: refreshNow,
+        }),
+      );
+      expect(screen.queryByText("GH₵99,999")).not.toBeInTheDocument();
+      expect(screen.queryByText("99 transactions")).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("auto-refreshes current-day operations after the displayed data is stale", async () => {
     vi.useFakeTimers();
     const initialFetchAt = new Date(2026, 4, 8, 12).getTime();

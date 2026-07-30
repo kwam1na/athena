@@ -226,6 +226,7 @@ import type * as operations_dailyClose_automationPolicy from "../operations/dail
 import type * as operations_dailyManagerReportEmail from "../operations/dailyManagerReportEmail.js";
 import type * as operations_dailyOpening from "../operations/dailyOpening.js";
 import type * as operations_dailyOperations from "../operations/dailyOperations.js";
+import type * as operations_dailyOperations_frozenMetricAuthority from "../operations/dailyOperations/frozenMetricAuthority.js";
 import type * as operations_dailyOperationsAutomation from "../operations/dailyOperationsAutomation.js";
 import type * as operations_helpers_eventBuilders from "../operations/helpers/eventBuilders.js";
 import type * as operations_helpers_linking from "../operations/helpers/linking.js";
@@ -801,6 +802,7 @@ declare const fullApi: ApiFromModules<{
   "operations/dailyManagerReportEmail": typeof operations_dailyManagerReportEmail;
   "operations/dailyOpening": typeof operations_dailyOpening;
   "operations/dailyOperations": typeof operations_dailyOperations;
+  "operations/dailyOperations/frozenMetricAuthority": typeof operations_dailyOperations_frozenMetricAuthority;
   "operations/dailyOperationsAutomation": typeof operations_dailyOperationsAutomation;
   "operations/helpers/eventBuilders": typeof operations_helpers_eventBuilders;
   "operations/helpers/linking": typeof operations_helpers_linking;
