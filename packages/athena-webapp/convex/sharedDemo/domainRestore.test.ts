@@ -76,9 +76,6 @@ describe("shared demo domain restore registry", () => {
         "reportingInventoryDeficitLedger",
         "reportingInventoryDeficitLot",
         "reportingInventoryDeficitResolutionWork",
-        "reportingInventoryOccurrenceReplay",
-        "reportingInventoryOccurrenceReplayLot",
-        "reportingInventoryOccurrenceReplayOutcome",
         "reportingReconciliationDiscrepancy",
         "stockAdjustmentBatch",
         "cycleCountDraft",
@@ -117,6 +114,30 @@ describe("shared demo domain restore registry", () => {
     ).not.toContain("posTerminal");
   });
 
+  it("does not query occurrence replay tables removed from the deployed schema", () => {
+    const tableNames = SHARED_DEMO_MUTABLE_TABLES.map(
+      (entry) => entry.tableName,
+    );
+    const baselineSchema = readFileSync(
+      "convex/schemas/sharedDemo.ts",
+      "utf8",
+    );
+    const restoreSource = readFileSync(
+      "convex/sharedDemo/domainRestore.ts",
+      "utf8",
+    );
+
+    for (const tableName of [
+      "reportingInventoryOccurrenceReplay",
+      "reportingInventoryOccurrenceReplayLot",
+      "reportingInventoryOccurrenceReplayOutcome",
+    ]) {
+      expect(tableNames).not.toContain(tableName);
+      expect(restoreSource).not.toContain(`"${tableName}"`);
+      expect(baselineSchema).toContain(`v.literal("${tableName}")`);
+    }
+  });
+
   it("restores changed baseline rows, deletes demo additions, and ignores another tenant", () => {
     const plan = planDomainRestore({
       baseline: [{ _id: "base", storeId: "demo", value: "original" }],
@@ -140,9 +161,6 @@ describe("shared demo domain restore registry", () => {
     "reportingInventoryDeficitLedger",
     "reportingInventoryDeficitLot",
     "reportingInventoryDeficitResolutionWork",
-    "reportingInventoryOccurrenceReplay",
-    "reportingInventoryOccurrenceReplayLot",
-    "reportingInventoryOccurrenceReplayOutcome",
     "reportingReconciliationDiscrepancy",
   ])("converges visitor-created and mutated %s rows", (tableName) => {
     expect(
@@ -239,9 +257,6 @@ describe("shared demo domain restore registry", () => {
       "reportingInventoryDeficitLedger",
       "reportingInventoryDeficitLot",
       "reportingInventoryDeficitResolutionWork",
-      "reportingInventoryOccurrenceReplay",
-      "reportingInventoryOccurrenceReplayLot",
-      "reportingInventoryOccurrenceReplayOutcome",
       "reportingReconciliationDiscrepancy",
       "reportingIngress",
       "reportingIngressSourceReference",
@@ -285,10 +300,6 @@ describe("shared demo domain restore registry", () => {
     expect(source).toContain('"by_positionId_status"');
     expect(source).toContain('tableName === "reportingInventoryDeficitLot"');
     expect(source).toContain('"by_positionId"');
-    expect(source).toContain('tableName === "reportingInventoryOccurrenceReplayLot"');
-    expect(source).toContain('"by_replayId_status_occurredAt_outboundEffectId"');
-    expect(source).toContain('tableName === "reportingInventoryOccurrenceReplayOutcome"');
-    expect(source).toContain('"by_replayId_status"');
     expect(source).toContain("withIndex(indexName");
   });
 
