@@ -86,6 +86,31 @@ describe("ReportsSkuDetailView", () => {
     );
   });
 
+  it("includes the weekday in a single-day reporting period", () => {
+    useQuery.mockReturnValue({
+      days: [],
+      totals: null,
+      identity: {
+        displayName: "forgiveness",
+        sku: "6N2Y-PP9-DY",
+      },
+    });
+
+    render(
+      <ReportsSkuDetailView
+        {...baseProps}
+        startDate="2026-07-29"
+        endDate="2026-07-29"
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Change reporting period, currently Wed, Jul 29, 2026",
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("omits the product action when the owning product is unknown", () => {
     useQuery.mockReturnValue({
       days: [],

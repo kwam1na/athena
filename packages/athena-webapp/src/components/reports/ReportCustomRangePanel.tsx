@@ -2,7 +2,6 @@ import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -20,6 +19,7 @@ import {
   getLocalOperatingDate,
 } from "@/lib/operations/operatingDate";
 import { formatOperatingDate, formatOptionalMoney, formatReportProfit, formatUnits } from "./reportFormat";
+import { ReportCalendar } from "./ReportCalendar";
 
 /** Single-date popover trigger, same shape as `DailyOperationsView`'s operating-date picker. */
 function ReportDateField({
@@ -52,7 +52,7 @@ function ReportDateField({
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-auto p-0">
-        <Calendar
+        <ReportCalendar
           defaultMonth={selectedDate}
           disabled={boundary}
           mode="single"

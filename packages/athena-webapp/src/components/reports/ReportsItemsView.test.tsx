@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 const useQuery = vi.fn();
 const navigateBackMock = vi.fn();
 const search = { current: {} as Record<string, unknown> };
+const renderedLinkSearches: unknown[] = [];
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQuery(...args),
 }));
@@ -20,13 +21,16 @@ vi.mock("@/hooks/use-navigate-back", () => ({
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
+    search: linkSearch,
     to,
     ...props
   }: {
     children?: React.ReactNode;
+    search?: unknown;
     to: string;
   }) => {
     delete (props as Record<string, unknown>).params;
+    renderedLinkSearches.push(linkSearch);
     return (
       <a href={to} {...props}>
         {children}
@@ -113,6 +117,34 @@ describe("ReportsItemsView", () => {
     expect(
       screen.queryByText("kx70hda5jszy8a9c8eg04wb39188g5g6"),
     ).not.toBeInTheDocument();
+  });
+
+  it("carries the selected reporting period into SKU detail links", () => {
+    useQuery.mockReturnValue({
+      rows: [
+        {
+          productSkuId: "sku-1",
+          periodKey: "d:2026-07-28",
+          unitsSold: 1,
+          unitsReturned: 0,
+          grossSalesMinor: 100,
+          netSalesMinor: 100,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: 50,
+        },
+      ],
+      continueCursor: null,
+    });
+
+    render(<ReportsItemsView {...baseProps} />);
+
+    expect(renderedLinkSearches).toContainEqual(
+      expect.objectContaining({
+        periodType: "day",
+        periodDate: "2026-07-28",
+      }),
+    );
   });
 
   it("falls back to the id when the SKU record is gone", () => {
