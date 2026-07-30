@@ -9,6 +9,7 @@ import { descendingSortKey } from "../../shared/reportsContract";
 import {
   getOverview,
   listDays,
+  listRangeSkuMix,
   listPeriodSkus,
   getSkuDetail,
   listSkuDayTransactions,
@@ -276,6 +277,69 @@ describe("listDays", () => {
       }),
     );
     expect(rows).toEqual([]);
+  });
+});
+
+describe("listRangeSkuMix", () => {
+  it("returns the five leading SKUs by units and groups the remainder", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const skuIds = await Promise.all(
+      Array.from({ length: 7 }, () => seedSku(t, storeId)),
+    );
+
+    await t.run(async (ctx) => {
+      await Promise.all(
+        skuIds.map((productSkuId, index) =>
+          ctx.db.insert("reportSkuDay", {
+            storeId,
+            productSkuId,
+            operatingDate: "2026-07-28",
+            unitsSold: 7 - index,
+            unitsReturned: 0,
+            grossSalesMinor: (7 - index) * 100,
+            netSalesMinor: (7 - index) * 100,
+            refundsMinor: 0,
+            uncostedRevenueMinor: 0,
+            grossProfitMinor: (7 - index) * 50,
+          }),
+        ),
+      );
+      await ctx.db.insert("reportSkuDay", {
+        storeId,
+        productSkuId: skuIds[0],
+        operatingDate: "2026-07-14",
+        unitsSold: 100,
+        unitsReturned: 0,
+        grossSalesMinor: 10_000,
+        netSalesMinor: 10_000,
+        refundsMinor: 0,
+        uncostedRevenueMinor: 0,
+        grossProfitMinor: 5_000,
+      });
+    });
+
+    const result = await t.run((ctx) =>
+      handlerOf(listRangeSkuMix)(ctx, {
+        storeId,
+        startDate: "2026-07-15",
+        endDate: "2026-07-28",
+      }),
+    );
+
+    expect(result.totalUnitsSold).toBe(28);
+    expect(result.skuCount).toBe(7);
+    expect(result.rows).toHaveLength(6);
+    expect(result.rows.slice(0, 5).map((row: any) => row.unitsSold)).toEqual([
+      7, 6, 5, 4, 3,
+    ]);
+    expect(result.rows[0].identity).toMatchObject({ displayName: "Wig" });
+    expect(result.rows[5]).toMatchObject({
+      key: "other",
+      label: "Other SKUs",
+      unitsSold: 3,
+      shareBasisPoints: 1071,
+    });
   });
 });
 

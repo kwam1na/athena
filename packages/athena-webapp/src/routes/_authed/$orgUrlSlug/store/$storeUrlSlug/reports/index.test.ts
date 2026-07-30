@@ -13,11 +13,18 @@ describe("reports overview search schema", () => {
       daysStart: "2026-07-01",
       daysEnd: "2026-07-28",
       daysPage: 2,
-      rangeStart: "2026-06-01",
-      rangeEnd: "2026-06-30",
-      requestKey: "req-abc",
     };
     expect(reportsOverviewSearchSchema.parse(value)).toEqual(value);
+  });
+
+  it("drops legacy custom-range search state from the overview route", () => {
+    expect(
+      reportsOverviewSearchSchema.parse({
+        rangeStart: "2026-06-01",
+        rangeEnd: "2026-06-30",
+        requestKey: "req-abc",
+      }),
+    ).toEqual({});
   });
 
   it("rejects malformed dates", () => {

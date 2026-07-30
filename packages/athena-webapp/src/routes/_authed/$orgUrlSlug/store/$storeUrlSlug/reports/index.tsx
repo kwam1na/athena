@@ -6,7 +6,6 @@ import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useStableReportQuery } from "@/components/reports/useStableReportQuery";
 import { api } from "~/convex/_generated/api";
 
-import { ReportCustomRangePanel } from "@/components/reports/ReportCustomRangePanel";
 import { ReportsCatalogLookup } from "@/components/reports/ReportsCatalogLookup";
 import { ReportDaysPanel } from "@/components/reports/ReportDaysPanel";
 import { ReportsOverviewView } from "@/components/reports/ReportsOverviewView";
@@ -24,9 +23,6 @@ export const reportsOverviewSearchSchema = z.object({
   daysStart: dateSchema.optional(),
   daysEnd: dateSchema.optional(),
   daysPage: z.coerce.number().int().positive().optional(),
-  rangeStart: dateSchema.optional(),
-  rangeEnd: dateSchema.optional(),
-  requestKey: z.string().min(1).optional(),
 });
 
 function isoDateOffset(days: number): string {
@@ -48,15 +44,9 @@ function ReportsOverviewRoute() {
   const { activeStore } = useGetActiveStore();
 
   /**
-   * The page's three sections each own a query, and each renders nothing
-   * until its own data settles. Left alone they paint at different moments —
-   * the custom-range panel has nothing to wait for, so it appeared first, at
-   * the top of an empty page, and was then shoved ~1200px down when the
-   * overview and day list landed above it (measured layout shift: 0.165).
-   *
-   * Gating the whole page on the overview query — the same document the
-   * header content needs, deduplicated by the Convex client, so no extra
-   * read — collapses that into a single paint.
+   * Gating the page on the overview query — the same document the header
+   * content needs, deduplicated by the Convex client, so no extra read —
+   * keeps the report sections from painting at different moments.
    */
   const { data: overview, isInitialLoad } = useStableReportQuery(
     useQuery(
@@ -65,10 +55,12 @@ function ReportsOverviewRoute() {
     ),
   );
 
-  const daysEnd = search.daysEnd ?? isoDateOffset(0);
-  const daysStart = search.daysStart ?? isoDateOffset(-13);
-  const rangeEnd = search.rangeEnd ?? isoDateOffset(0);
-  const rangeStart = search.rangeStart ?? isoDateOffset(-29);
+  const defaultDaysEnd = isoDateOffset(0);
+  const defaultDaysStart = isoDateOffset(-13);
+  const daysEnd = search.daysEnd ?? defaultDaysEnd;
+  const daysStart = search.daysStart ?? defaultDaysStart;
+  const canResetDaysRange =
+    daysStart !== defaultDaysStart || daysEnd !== defaultDaysEnd;
   const selectedWindow = search.window ?? "today";
   const overviewAnchorDate =
     overview?.dailyTrend.at(-1)?.operatingDate ?? todayOperatingDateGuess();
@@ -98,6 +90,7 @@ function ReportsOverviewRoute() {
         selectedWindow={selectedWindow}
       />
       <ReportDaysPanel
+        canResetRange={canResetDaysRange}
         endDate={daysEnd}
         onPageChange={(daysPage) =>
           void navigate({
@@ -119,39 +112,19 @@ function ReportsOverviewRoute() {
             }),
           })
         }
+        onRangeReset={() =>
+          void navigate({
+            replace: true,
+            search: (current) => ({
+              ...current,
+              daysStart: undefined,
+              daysEnd: undefined,
+              daysPage: undefined,
+            }),
+          })
+        }
         page={search.daysPage ?? 1}
         startDate={daysStart}
-      />
-      <ReportCustomRangePanel
-        endDate={rangeEnd}
-        onEndDateChange={(value) =>
-          void navigate({
-            replace: true,
-            search: (current) => ({
-              ...current,
-              rangeEnd: value,
-              requestKey: undefined,
-            }),
-          })
-        }
-        onRequestKeyChange={(requestKey) =>
-          void navigate({
-            replace: true,
-            search: (current) => ({ ...current, requestKey }),
-          })
-        }
-        onStartDateChange={(value) =>
-          void navigate({
-            replace: true,
-            search: (current) => ({
-              ...current,
-              rangeStart: value,
-              requestKey: undefined,
-            }),
-          })
-        }
-        requestKey={search.requestKey}
-        startDate={rangeStart}
       />
     </div>
   );
