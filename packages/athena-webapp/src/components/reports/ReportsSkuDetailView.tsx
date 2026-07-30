@@ -1,12 +1,12 @@
 import { useQuery } from "convex/react";
 import { Link, useParams } from "@tanstack/react-router";
-import { ArrowDown, ArrowUpRight } from "lucide-react";
+import { ArrowDown, ArrowUpRight, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
 import { getOrigin } from "@/lib/navigationUtils";
 import { FadeIn } from "@/components/common/FadeIn";
+import { PageLevelHeader } from "@/components/common/PageLevelHeader";
 import { ListPagination } from "@/components/common/ListPagination";
-import { ReportBackLink } from "./ReportBackLink";
 import { ReportDateRangeField } from "./ReportDateRangeField";
 import { useStableReportQuery } from "./useStableReportQuery";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/states/empty/empty-state";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -41,14 +48,18 @@ export function ReportsSkuDetailView({
   endDate,
   onRangeChange,
   onPageChange,
+  onTransactionDateChange,
   page,
+  transactionDate,
 }: {
   productSkuId: string;
   startDate: string;
   endDate: string;
   onRangeChange: (next: { startDate: string; endDate: string }) => void;
   onPageChange: (page: number) => void;
+  onTransactionDateChange: (operatingDate: string | undefined) => void;
   page: number;
+  transactionDate?: string;
 }) {
   const { activeStore } = useGetActiveStore();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
@@ -86,6 +97,32 @@ export function ReportsSkuDetailView({
     (currentPage - 1) * REPORT_SKU_DETAIL_PAGE_SIZE,
     currentPage * REPORT_SKU_DETAIL_PAGE_SIZE,
   );
+  const transactionEvidenceResult = useQuery(
+    api.reports.queries.listSkuDayTransactions,
+    activeStore?._id && transactionDate
+      ? {
+          storeId: activeStore._id,
+          productSkuId: productSkuId as Id<"productSku">,
+          operatingDate: transactionDate,
+        }
+      : "skip",
+  );
+  const transactionEvidence = transactionDate
+    ? transactionEvidenceResult
+    : undefined;
+  const selectedDateLabel = transactionDate
+    ? formatOperatingDate(transactionDate)
+    : "";
+  const resolvedProductName = detail?.identity
+    ? formatSkuDisplayName(detail.identity, productSkuId)
+    : null;
+  const transactionSheetProductName =
+    resolvedProductName &&
+    resolvedProductName !== productSkuId &&
+    resolvedProductName !== detail?.identity?.sku
+      ? resolvedProductName
+      : "Product";
+  const skuImageUrl = detail?.identity?.imageUrl;
 
   return (
     /* Rhythm: tight inside a cluster, generous between sections, so the page
@@ -95,57 +132,102 @@ export function ReportsSkuDetailView({
         className="space-y-layout-xl md:space-y-layout-2xl"
         data-testid="reports-sku-detail"
       >
-        <div className="space-y-layout-lg">
-          <ReportBackLink label="Back to items" />
+        <div className="space-y-layout-xl">
+          <PageLevelHeader
+            backButtonLabel="Back to items"
+            showBackButton
+            title="Reports"
+          />
 
-          <header className="flex flex-col gap-layout-md sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 space-y-layout-xs">
-              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                Product report
-              </p>
-              <div className="space-y-1">
-                <h2
-                  className="truncate text-2xl font-semibold tracking-tight text-foreground"
-                  data-testid="reports-sku-detail-name"
-                >
-                  {detail
-                    ? formatSkuDisplayName(detail.identity, productSkuId)
-                    : "\u00A0"}
-                </h2>
-                <p className="truncate text-sm text-muted-foreground">
-                  {detail
-                    ? formatSkuSubtitle(detail.identity, productSkuId)
-                    : "\u00A0"}
-                </p>
+          <header
+            className="flex min-w-0 items-start gap-layout-md"
+            data-testid="reports-sku-identity"
+          >
+            <div
+              className="flex w-28 shrink-0 flex-col gap-layout-xs"
+              data-testid="reports-sku-identity-media"
+            >
+              <div className="aspect-square w-full overflow-hidden rounded-md bg-muted/30">
+                {detail === undefined ? null : skuImageUrl ? (
+                  <img
+                    alt={resolvedProductName ?? "SKU"}
+                    className="h-full w-full object-cover"
+                    src={skuImageUrl}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-muted">
+                    <Package
+                      aria-label="SKU image unavailable"
+                      className="h-8 w-8 text-muted-foreground"
+                    />
+                  </div>
+                )}
               </div>
+
+              {detail?.identity?.productId ? (
+                <Button
+                  asChild
+                  className="h-8 w-full gap-1 px-2 text-xs [&_svg]:size-3.5"
+                  size="sm"
+                  variant="utility"
+                >
+                  <Link
+                    params={{
+                      orgUrlSlug: orgUrlSlug!,
+                      storeUrlSlug: storeUrlSlug!,
+                      productSlug: detail.identity.productId,
+                    }}
+                    search={{
+                      o: getOrigin(),
+                      variant: detail.identity.sku,
+                    }}
+                    to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+                  >
+                    View product
+                    <ArrowUpRight aria-hidden="true" />
+                  </Link>
+                </Button>
+              ) : null}
             </div>
 
-            {/* Product management is adjacent to, but distinct from, this
-                reporting identity. An explicit action keeps the heading from
-                doing double duty as navigation. */}
-            {detail?.identity?.productId ? (
-              <Button
-                asChild
-                className="shrink-0 self-start"
-                size="sm"
-                variant="utility"
+            <div className="min-w-0 space-y-layout-sm">
+              <h2
+                className="truncate text-2xl font-semibold tracking-tight text-foreground"
+                data-testid="reports-sku-detail-name"
               >
-                <Link
-                  params={{
-                    orgUrlSlug: orgUrlSlug!,
-                    storeUrlSlug: storeUrlSlug!,
-                    productSlug: detail.identity.productId,
-                  }}
-                  search={{ o: getOrigin() }}
-                  to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
-                >
-                  View product
-                  <ArrowUpRight aria-hidden="true" />
-                </Link>
-              </Button>
-            ) : null}
+                {detail
+                  ? formatSkuDisplayName(detail.identity, productSkuId)
+                  : "\u00A0"}
+              </h2>
+              {detail ? (
+                <dl className="flex min-w-0 items-start gap-layout-md">
+                  <div className="min-w-0">
+                    <dt className="text-xs text-muted-foreground">SKU</dt>
+                    <dd className="truncate text-sm text-foreground">
+                      {formatSkuSubtitle(detail.identity, productSkuId)}
+                    </dd>
+                  </div>
+                  <div className="shrink-0 border-l border-border pl-layout-md">
+                    <dt className="text-xs text-muted-foreground">
+                      Net price
+                    </dt>
+                    <dd className="font-numeric text-sm text-foreground">
+                      {formatOptionalMoney(
+                        detail.identity?.netPriceMinor,
+                        currency,
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+              ) : null}
+            </div>
           </header>
+        </div>
 
+        <div
+          className="space-y-layout-sm"
+          data-testid="reports-sku-summary"
+        >
           <div className="flex flex-wrap">
             <ReportDateRangeField
               align="start"
@@ -155,27 +237,15 @@ export function ReportsSkuDetailView({
               startDate={startDate}
             />
           </div>
-        </div>
 
-        {/* Nothing until the first result settles: these queries resolve fast
-          enough that a skeleton appears and vanishes as a flash of its own.
-          Refreshes keep the previous data on screen (see useStableReportQuery),
-          so this branch is only ever the very first load. */}
-        {isInitialLoad || detail === undefined ? null : detail === null ? (
-          <EmptyState
-            title="No activity"
-            description="This SKU has no activity in the selected range."
-          />
-        ) : (
-          <div
-            aria-busy={isRefreshing}
-            className={cn(
-              "space-y-layout-xl transition-opacity duration-150 motion-reduce:transition-none",
-              isRefreshing && "opacity-60",
-            )}
-            data-refreshing={isRefreshing ? "true" : undefined}
-          >
-            <div className="grid grid-cols-2 gap-layout-sm sm:grid-cols-4">
+          {detail ? (
+            <div
+              aria-busy={isRefreshing}
+              className={cn(
+                "grid grid-cols-2 gap-layout-sm transition-opacity duration-150 motion-reduce:transition-none sm:grid-cols-4",
+                isRefreshing && "opacity-60",
+              )}
+            >
               <OperationsSummaryMetric
                 label="Net sales"
                 value={formatOptionalMoney(
@@ -211,7 +281,27 @@ export function ReportsSkuDetailView({
                 )}
               />
             </div>
+          ) : null}
+        </div>
 
+        {/* Nothing until the first result settles: these queries resolve fast
+          enough that a skeleton appears and vanishes as a flash of its own.
+          Refreshes keep the previous data on screen (see useStableReportQuery),
+          so this branch is only ever the very first load. */}
+        {isInitialLoad || detail === undefined ? null : detail === null ? (
+          <EmptyState
+            title="No activity"
+            description="This SKU has no activity in the selected range."
+          />
+        ) : (
+          <div
+            aria-busy={isRefreshing}
+            className={cn(
+              "space-y-layout-xl transition-opacity duration-150 motion-reduce:transition-none",
+              isRefreshing && "opacity-60",
+            )}
+            data-refreshing={isRefreshing ? "true" : undefined}
+          >
             {detail.days.length === 0 ? (
               <EmptyState
                 title="No days with activity"
@@ -240,7 +330,16 @@ export function ReportsSkuDetailView({
                     {visibleDays.map((day) => (
                       <TableRow key={day.operatingDate}>
                         <TableCell>
-                          {formatOperatingDate(day.operatingDate)}
+                          <button
+                            className="inline-flex items-center gap-2 text-left font-medium text-foreground transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            onClick={() =>
+                              onTransactionDateChange(day.operatingDate)
+                            }
+                            type="button"
+                            aria-label={`View transactions for ${formatOperatingDate(day.operatingDate)}`}
+                          >
+                            {formatOperatingDate(day.operatingDate)}
+                          </button>
                         </TableCell>
                         <TableCell>
                           {formatOptionalMoney(day.netSalesMinor, currency)}
@@ -272,6 +371,246 @@ export function ReportsSkuDetailView({
             ) : null}
           </div>
         )}
+
+        <Sheet
+          onOpenChange={(open) => {
+            if (!open) onTransactionDateChange(undefined);
+          }}
+          open={transactionDate !== undefined}
+        >
+          <SheetContent
+            className="flex w-[min(100vw,72rem)] max-w-[calc(100vw-1rem)] flex-col overflow-hidden border-border bg-surface-raised p-0 shadow-overlay sm:max-w-6xl"
+            side="right"
+          >
+            <SheetHeader className="border-b border-border px-layout-xl py-layout-lg pr-12">
+              <SheetTitle>Transactions for {selectedDateLabel}</SheetTitle>
+              <SheetDescription>
+                {transactionEvidence ? (
+                  <>
+                    {`${transactionEvidence.transactions.length} ${
+                      transactionEvidence.transactions.length === 1
+                        ? "transaction"
+                        : "transactions"
+                    } attached to `}
+                    <span className="font-medium text-foreground">
+                      {transactionSheetProductName}
+                    </span>{" "}
+                    on the selected operating day.
+                  </>
+                ) : (
+                  <>
+                    Loading transaction evidence for{" "}
+                    <span className="font-medium text-foreground">
+                      {transactionSheetProductName}
+                    </span>
+                    .
+                  </>
+                )}
+              </SheetDescription>
+            </SheetHeader>
+
+            <div
+              className="min-h-0 flex-1 overflow-y-auto bg-surface-raised p-layout-lg md:p-layout-xl"
+              data-testid="sku-transaction-report-body"
+            >
+              <div
+                className="overflow-hidden rounded-lg border border-border bg-background/60 shadow-surface"
+                data-testid="sku-transaction-report-table"
+              >
+                {transactionEvidence === undefined ? (
+                  <p className="p-layout-lg text-sm text-muted-foreground">
+                    Loading transactions…
+                  </p>
+                ) : transactionEvidence.transactions.length === 0 ? (
+                  <div className="p-layout-lg">
+                    <EmptyState
+                      description="No attached POS or storefront transactions were found."
+                      title="No transaction evidence"
+                    />
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border">
+                    <div
+                      className="hidden grid-cols-[minmax(11rem,1.2fr)_minmax(7rem,0.65fr)_minmax(6rem,0.55fr)_minmax(9rem,0.8fr)_minmax(13rem,1.15fr)_minmax(8rem,0.7fr)] gap-layout-lg px-layout-xl py-layout-md text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground md:grid"
+                      data-testid="sku-transaction-report-header"
+                    >
+                      <span>Transaction</span>
+                      <span>Channel</span>
+                      <span>Quantity</span>
+                      <span>Net sale</span>
+                      <span>Performance</span>
+                      <span className="text-right">Time</span>
+                    </div>
+
+                    {transactionEvidence.transactions.map((transaction) => {
+                      const isPos = transaction.sourceDomain === "pos";
+                      const linkLabel = `${transaction.reference}, ${isPos ? "POS transaction" : "Storefront order"}`;
+                      const performanceUnavailable =
+                        transaction.costMinor === null ||
+                        transaction.grossProfitMinor === null;
+                      const showStatus =
+                        transaction.status.trim().toLowerCase() !== "completed";
+
+                      return (
+                        <div
+                          className="grid grid-cols-1 gap-layout-sm px-layout-xl py-layout-md text-sm md:grid-cols-[minmax(11rem,1.2fr)_minmax(7rem,0.65fr)_minmax(6rem,0.55fr)_minmax(9rem,0.8fr)_minmax(13rem,1.15fr)_minmax(8rem,0.7fr)] md:items-center md:gap-layout-lg"
+                          data-sku-transaction-report-row=""
+                          key={`${transaction.sourceDomain}:${transaction.sourceId}`}
+                        >
+                          <div
+                            className="min-w-0"
+                            data-sku-transaction-report-column="transaction"
+                          >
+                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                              <Link
+                                className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline active:text-primary"
+                                params={
+                                  isPos
+                                    ? {
+                                        orgUrlSlug: orgUrlSlug!,
+                                        storeUrlSlug: storeUrlSlug!,
+                                        transactionId:
+                                          transaction.sourceId as Id<"posTransaction">,
+                                      }
+                                    : {
+                                        orgUrlSlug: orgUrlSlug!,
+                                        storeUrlSlug: storeUrlSlug!,
+                                        orderSlug:
+                                          transaction.sourceId as Id<"onlineOrder">,
+                                      }
+                                }
+                                search={{ o: getOrigin() }}
+                                to={
+                                  isPos
+                                    ? "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
+                                    : "/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
+                                }
+                                aria-label={linkLabel}
+                              >
+                                #{transaction.reference}
+                                <ArrowUpRight
+                                  aria-hidden="true"
+                                  className="h-3 w-3"
+                                />
+                              </Link>
+                              {showStatus ? (
+                                <span className="text-xs capitalize text-muted-foreground">
+                                  {transaction.status}
+                                </span>
+                              ) : null}
+                            </div>
+                            {transaction.hasRefunds ||
+                            transaction.hasAdjustments ? (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {[
+                                  transaction.hasRefunds
+                                    ? "Refund activity"
+                                    : null,
+                                  transaction.hasAdjustments
+                                    ? "Adjustments applied"
+                                    : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div
+                            className="min-w-0 text-muted-foreground md:text-foreground"
+                            data-sku-transaction-report-column="channel"
+                          >
+                            <span className="mr-2 text-xs text-muted-foreground md:hidden">
+                              Channel
+                            </span>
+                            {isPos ? "POS" : "Storefront"}
+                          </div>
+
+                          <div
+                            className="min-w-0 font-numeric tabular-nums text-foreground"
+                            data-sku-transaction-report-column="quantity"
+                          >
+                            <span className="mr-2 text-xs font-sans text-muted-foreground md:hidden">
+                              Quantity
+                            </span>
+                            {formatUnits(transaction.quantity)}
+                          </div>
+
+                          <div
+                            className="min-w-0 font-numeric tabular-nums text-foreground"
+                            data-sku-transaction-report-column="net-sale"
+                          >
+                            <span className="mr-2 text-xs font-sans text-muted-foreground md:hidden">
+                              Net sale
+                            </span>
+                            {formatOptionalMoney(
+                              transaction.netSalesMinor,
+                              currency,
+                            )}
+                          </div>
+
+                          <div
+                            className="grid min-w-0 grid-cols-2 gap-layout-md"
+                            data-sku-transaction-report-column="performance"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-xs text-muted-foreground">
+                                Cost
+                              </p>
+                              <p className="font-numeric leading-6 text-foreground tabular-nums">
+                                {formatOptionalMoney(
+                                  transaction.costMinor,
+                                  currency,
+                                )}
+                              </p>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs text-muted-foreground">
+                                Profit
+                              </p>
+                              <p className="font-numeric leading-6 text-foreground tabular-nums">
+                                {formatReportProfit(
+                                  transaction.grossProfitMinor,
+                                  currency,
+                                )}
+                              </p>
+                            </div>
+                            {performanceUnavailable ? (
+                              <span className="sr-only">
+                                Historical cost is unavailable for this
+                                transaction.
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <div
+                            className="min-w-0 font-numeric leading-6 text-muted-foreground tabular-nums md:text-right md:text-foreground"
+                            data-sku-transaction-report-column="time"
+                          >
+                            <span className="mr-2 text-xs font-sans text-muted-foreground md:hidden">
+                              Time
+                            </span>
+                            {new Intl.DateTimeFormat("en-US", {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            }).format(transaction.occurredAt)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {transactionEvidence?.truncated ? (
+                <p className="mt-layout-md rounded-md bg-muted p-layout-sm text-xs text-muted-foreground">
+                  This day has more transaction evidence than can be shown here.
+                  The visible results are incomplete.
+                </p>
+              ) : null}
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     </FadeIn>
   );

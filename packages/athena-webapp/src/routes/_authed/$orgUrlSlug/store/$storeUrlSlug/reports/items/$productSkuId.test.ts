@@ -17,6 +17,7 @@ describe("reports sku detail search schema", () => {
       startDate: "2026-06-01",
       endDate: "2026-07-01",
       page: 2,
+      transactionDate: "2026-06-30",
       o: "encoded-origin",
     };
     expect(reportsSkuDetailSearchSchema.parse(value)).toEqual(value);

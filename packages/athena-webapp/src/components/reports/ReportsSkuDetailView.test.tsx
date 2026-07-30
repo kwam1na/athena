@@ -23,15 +23,21 @@ vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
     to,
+    search,
     ...props
   }: {
     children?: React.ReactNode;
+    search?: Record<string, string | undefined>;
     to: string;
   }) => {
     delete (props as Record<string, unknown>).params;
-    delete (props as Record<string, unknown>).search;
+    const searchParams = new URLSearchParams();
+    Object.entries(search ?? {}).forEach(([key, value]) => {
+      if (value !== undefined) searchParams.set(key, value);
+    });
+    const href = searchParams.size > 0 ? `${to}?${searchParams}` : to;
     return (
-      <a href={to} {...props}>
+      <a href={href} {...props}>
         {children}
       </a>
     );
@@ -46,26 +52,36 @@ const baseProps = {
   endDate: "2026-07-28",
   onRangeChange: vi.fn(),
   onPageChange: vi.fn(),
+  onTransactionDateChange: vi.fn(),
   page: 1,
 };
 
 describe("ReportsSkuDetailView", () => {
-  it("separates report identity from the explicit product action", () => {
+  it("lets the product identity stand on its own", () => {
     useQuery.mockReturnValue({
       days: [],
       totals: null,
       identity: {
         displayName: "oshe",
         sku: "6N2Y-JY3-5G6",
+        netPriceMinor: 12_500,
         productId: "product-9",
+        imageUrl: "https://cdn.example.test/oshe.webp",
       },
     });
     render(<ReportsSkuDetailView {...baseProps} />);
 
-    expect(screen.getByText("Product report")).toBeInTheDocument();
+    expect(screen.queryByText("Product report")).not.toBeInTheDocument();
     const periodButton = screen.getByRole("button", {
       name: "Change reporting period, currently Jun 29–Jul 28, 2026",
     });
+    const reportSummary = screen.getByTestId("reports-sku-summary");
+    expect(
+      within(reportSummary).getByRole("button", {
+        name: "Change reporting period, currently Jun 29–Jul 28, 2026",
+      }),
+    ).toBe(periodButton);
+    expect(within(reportSummary).getByText("Net sales")).toBeInTheDocument();
     expect(
       within(periodButton).getByText("Reporting period"),
     ).toBeInTheDocument();
@@ -75,15 +91,29 @@ describe("ReportsSkuDetailView", () => {
     expect(
       screen.getByRole("heading", { level: 2, name: "Oshe" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("SKU")).toBeInTheDocument();
+    expect(screen.getByText("Net price")).toBeInTheDocument();
+    expect(screen.getByText("$125")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Oshe" })).toHaveAttribute(
+      "src",
+      "https://cdn.example.test/oshe.webp",
+    );
     expect(
       screen.queryByRole("link", { name: "Oshe" }),
     ).not.toBeInTheDocument();
 
-    const link = screen.getByRole("link", { name: "View product" });
-    expect(link).toHaveAttribute(
-      "href",
+    const identityMedia = screen.getByTestId("reports-sku-identity-media");
+    const link = within(identityMedia).getByRole("link", {
+      name: "View product",
+    });
+    const productHref = new URL(
+      link.getAttribute("href")!,
+      "http://localhost",
+    );
+    expect(productHref.pathname).toBe(
       "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
     );
+    expect(productHref.searchParams.get("variant")).toBe("6N2Y-JY3-5G6");
   });
 
   it("includes the weekday in a single-day reporting period", () => {
@@ -125,6 +155,7 @@ describe("ReportsSkuDetailView", () => {
     expect(screen.getByTestId("reports-sku-detail-name")).toHaveTextContent(
       "Oshe",
     );
+    expect(screen.getByLabelText("SKU image unavailable")).toBeInTheDocument();
   });
 
   it("offers a way back only when the caller supplied an origin", () => {
@@ -132,6 +163,9 @@ describe("ReportsSkuDetailView", () => {
 
     search.current = {};
     const { unmount } = render(<ReportsSkuDetailView {...baseProps} />);
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Reports" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /back to items/i }),
     ).not.toBeInTheDocument();
@@ -142,8 +176,11 @@ describe("ReportsSkuDetailView", () => {
     };
     render(<ReportsSkuDetailView {...baseProps} />);
     expect(
-      screen.getByRole("button", { name: /back to items/i }),
+      screen.getByRole("heading", { level: 1, name: "Reports" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /back to items/i }),
+    ).toHaveAttribute("data-remote-assist-control", "page-header-back");
 
     search.current = {};
   });
@@ -195,6 +232,153 @@ describe("ReportsSkuDetailView", () => {
 
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     expect(screen.getByText("$28")).toBeInTheDocument();
+  });
+
+  it("opens a day sheet with POS and storefront evidence links", async () => {
+    const user = userEvent.setup();
+    const onTransactionDateChange = vi.fn();
+    useQuery.mockImplementation((_query, args) => {
+      if (args && typeof args === "object" && "operatingDate" in args) {
+        return {
+          transactions: [
+            {
+              sourceDomain: "pos",
+              sourceId: "transaction-1",
+              reference: "TX-1042",
+              occurredAt: 1_753_312_800_000,
+              status: "refunded",
+              quantity: 1,
+              netSalesMinor: 5200,
+              costMinor: 2000,
+              grossProfitMinor: 3200,
+              hasRefunds: false,
+              hasAdjustments: false,
+            },
+            {
+              sourceDomain: "storefront",
+              sourceId: "order-1",
+              reference: "ORD-88",
+              occurredAt: 1_753_313_100_000,
+              status: "completed",
+              quantity: 2,
+              netSalesMinor: 8100,
+              costMinor: null,
+              grossProfitMinor: null,
+              hasRefunds: true,
+              hasAdjustments: false,
+            },
+          ],
+          truncated: false,
+        };
+      }
+      return {
+        days: [
+          {
+            operatingDate: "2026-07-23",
+            unitsSold: 3,
+            netSalesMinor: 13_300,
+            refundsMinor: 0,
+            grossProfitMinor: null,
+          },
+        ],
+        totals: null,
+        identity: {
+          displayName: "consistency",
+          sku: "6N2Y-6A3-CFX",
+        },
+      };
+    });
+
+    const { rerender } = render(
+      <ReportsSkuDetailView
+        {...baseProps}
+        onTransactionDateChange={onTransactionDateChange}
+      />,
+    );
+    const dayButton = screen.getByRole("button", {
+      name: "View transactions for Thu, Jul 23, 2026",
+    });
+    expect(dayButton).not.toHaveClass("hover:underline");
+    expect(dayButton.querySelector("svg")).toBeNull();
+    await user.click(dayButton);
+    expect(onTransactionDateChange).toHaveBeenCalledWith("2026-07-23");
+
+    rerender(
+      <ReportsSkuDetailView
+        {...baseProps}
+        onTransactionDateChange={onTransactionDateChange}
+        transactionDate="2026-07-23"
+      />,
+    );
+
+    const report = screen.getByRole("dialog", {
+      name: "Transactions for Thu, Jul 23, 2026",
+    });
+    const sheetProductName = within(report).getByText("Consistency");
+    expect(sheetProductName).toHaveClass("font-medium", "text-foreground");
+    expect(sheetProductName.parentElement).toHaveTextContent(
+      "2 transactions attached to Consistency on the selected operating day.",
+    );
+    const reportBody = within(report).getByTestId(
+      "sku-transaction-report-body",
+    );
+    expect(reportBody).toHaveClass("bg-surface-raised");
+    const reportTable = within(report).getByTestId(
+      "sku-transaction-report-table",
+    );
+    expect(reportTable).toHaveClass("bg-background/60");
+    const reportHeader = within(report).getByTestId(
+      "sku-transaction-report-header",
+    );
+    expect(
+      Array.from(reportHeader.children).map((column) => column.textContent),
+    ).toEqual([
+      "Transaction",
+      "Channel",
+      "Quantity",
+      "Net sale",
+      "Performance",
+      "Time",
+    ]);
+    expect(screen.getByText("#TX-1042")).toBeInTheDocument();
+    expect(screen.getByText("#ORD-88")).toBeInTheDocument();
+    expect(within(report).queryByText("completed")).not.toBeInTheDocument();
+    expect(within(report).getByText("refunded")).toHaveClass("capitalize");
+    const firstRow = within(report)
+      .getByRole("link", { name: /TX-1042/ })
+      .closest("[data-sku-transaction-report-row]");
+    expect(firstRow).not.toBeNull();
+    expect(
+      Array.from(firstRow!.children).map((column) =>
+        column.getAttribute("data-sku-transaction-report-column"),
+      ),
+    ).toEqual([
+      "transaction",
+      "channel",
+      "quantity",
+      "net-sale",
+      "performance",
+      "time",
+    ]);
+    expect(screen.getAllByText("Cost")).toHaveLength(2);
+    expect(screen.getByText("$20")).toBeInTheDocument();
+    const transactionHref = new URL(
+      screen.getByRole("link", { name: /TX-1042/ }).getAttribute("href")!,
+      "http://localhost",
+    );
+    expect(transactionHref.pathname).toBe(
+      "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+    );
+    const orderHref = new URL(
+      screen.getByRole("link", { name: /ORD-88/ }).getAttribute("href")!,
+      "http://localhost",
+    );
+    expect(orderHref.pathname).toBe(
+      "/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(onTransactionDateChange).toHaveBeenLastCalledWith(undefined);
   });
 
   it("sorts daily activity newest first before paginating in ten-row pages", async () => {

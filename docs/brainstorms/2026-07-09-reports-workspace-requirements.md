@@ -40,7 +40,7 @@ Administrators also have no direct way to start with a product they already have
 | Services                   | Service cases preserve total amount, payment status, allocations, assigned staff, service lines, and consumed inventory.                                                                                         | Include service revenue, but do not claim service profit until service-delivery cost exists.                                                                 |
 | Data integrity             | Daily Close preserves source completeness; POS runtime and terminal state expose delayed or uncertain synchronization.                                                                                           | Every report must expose freshness, completeness, and omitted-value reasons.                                                                                 |
 | Expense data               | Expense transactions represent inventory items consumed at recorded item cost.                                                                                                                                   | Label this as inventory expense or inventory consumed, not general operating expense.                                                                        |
-| Catalog SKU lookup         | Athena can search the active store's product catalog by product name, SKU, and barcode and return variant identity.                                                                                               | Reports can use catalog identity to navigate to a SKU report even when that SKU has no activity in the selected period.                                       |
+| Catalog SKU lookup         | Athena can search the active store's product catalog by product name, SKU, and barcode and return variant identity.                                                                                              | Reports can use catalog identity to navigate to a SKU report even when that SKU has no activity in the selected period.                                      |
 
 ---
 
@@ -154,6 +154,9 @@ Administrators also have no direct way to start with a product they already have
 
 - R39. Every aggregate must preserve a path to the source transactions, SKU activity, inventory movements, payments, purchase orders, or service records that support it.
 - R40. A trusted SKU detail must expose all attached completed transactions in the selected reporting period, including transaction identity, time, channel, quantity, net sale value, snapshotted cost, profit, refund state, and applied adjustments.
+- R40a. Selecting a day in trusted SKU detail must open a right-side transaction sheet scoped to that SKU and operating day.
+- R40b. Each transaction-sheet row must link POS evidence to the POS transaction detail and storefront evidence to the storefront order detail while preserving the SKU report as the return origin.
+- R40c. The transaction sheet must disclose when its bounded evidence result is truncated rather than implying the visible rows are complete.
 - R41. SKU detail must route to full SKU Activity for receipts, reservations, adjustments, provisional lineage, service consumption, and other non-sale movement evidence.
 - R42. Reports must state when a source result is truncated, omitted, stale, or still awaiting synchronized POS activity.
 - R43. Missing cost must remain distinct from a legitimate zero cost.

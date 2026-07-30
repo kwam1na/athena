@@ -15,6 +15,7 @@ export const reportsSkuDetailSearchSchema = z.object({
   startDate: dateSchema.optional(),
   endDate: dateSchema.optional(),
   page: z.coerce.number().int().positive().optional(),
+  transactionDate: dateSchema.optional(),
   /**
    * Encoded origin path for `useNavigateBack`. Declared because
    * `validateSearch` strips unknown keys before the hook can read them.
@@ -68,6 +69,7 @@ function ReportsItemDetailRoute() {
             startDate: next.startDate,
             endDate: next.endDate,
             page: undefined,
+            transactionDate: undefined,
           }),
         })
       }
@@ -80,9 +82,19 @@ function ReportsItemDetailRoute() {
           }),
         })
       }
+      onTransactionDateChange={(transactionDate) =>
+        void navigate({
+          replace: true,
+          search: (current) => ({
+            ...current,
+            transactionDate,
+          }),
+        })
+      }
       page={search.page ?? 1}
       productSkuId={productSkuId}
       startDate={startDate}
+      transactionDate={search.transactionDate}
     />
   );
 }
