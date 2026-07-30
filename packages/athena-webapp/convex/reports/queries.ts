@@ -10,6 +10,7 @@ import type {
   ReportOverviewData,
   ReportRangeSummary,
   ReportSkuIdentity,
+  ReportSkuMixData,
   ReportSkuPeriodRow,
   ReportSkuSortBy,
   ReportSkuTransactionEvidence,
@@ -25,6 +26,8 @@ import { emptySnapshot } from "./overview";
  */
 
 const RANGE_MAX_SPAN_DAYS = 92;
+const RANGE_SKU_MIX_ROW_LIMIT = 5_000;
+const RANGE_SKU_MIX_VISIBLE_LIMIT = 5;
 const SKU_DAY_EVIDENCE_FACT_LIMIT = 500;
 
 /** Inclusive day count between two "YYYY-MM-DD" operating-date labels. */
@@ -138,6 +141,99 @@ export const listDays = query({
       .take(RANGE_MAX_SPAN_DAYS);
 
     return rows.map(toReportDayRow);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// listRangeSkuMix
+// ---------------------------------------------------------------------------
+
+export const listRangeSkuMix = query({
+  args: {
+    storeId: v.id("store"),
+    startDate: v.string(),
+    endDate: v.string(),
+  },
+  handler: async (ctx, args): Promise<ReportSkuMixData> => {
+    await requireReportsStoreAccess(ctx, args.storeId);
+    requireValidDateRange(args.startDate, args.endDate);
+
+    // SKU-day density depends on both range length and catalogue breadth.
+    // Fail closed at a bounded read instead of presenting an understated mix.
+    const skuDays = await ctx.db
+      .query("reportSkuDay")
+      .withIndex("by_storeId_operatingDate_productSkuId", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .gte("operatingDate", args.startDate)
+          .lte("operatingDate", args.endDate),
+      )
+      .take(RANGE_SKU_MIX_ROW_LIMIT + 1);
+
+    if (skuDays.length > RANGE_SKU_MIX_ROW_LIMIT) {
+      throw new Error(
+        "SKU mix covers too much activity to summarize accurately. Choose a shorter range.",
+      );
+    }
+
+    const unitsBySku = new Map<Id<"productSku">, number>();
+    for (const row of skuDays) {
+      unitsBySku.set(
+        row.productSkuId,
+        (unitsBySku.get(row.productSkuId) ?? 0) + row.unitsSold,
+      );
+    }
+
+    const ranked = Array.from(unitsBySku, ([productSkuId, unitsSold]) => ({
+      productSkuId,
+      unitsSold,
+    }))
+      .filter((row) => row.unitsSold > 0)
+      .sort(
+        (left, right) =>
+          right.unitsSold - left.unitsSold ||
+          String(left.productSkuId).localeCompare(String(right.productSkuId)),
+      );
+    const totalUnitsSold = ranked.reduce(
+      (total, row) => total + row.unitsSold,
+      0,
+    );
+    const leadingRows = ranked.slice(0, RANGE_SKU_MIX_VISIBLE_LIMIT);
+    const rows: ReportSkuMixData["rows"] = await Promise.all(
+      leadingRows.map(async (row) => {
+        const identity = await resolveSkuIdentity(ctx, row.productSkuId);
+        return {
+          key: String(row.productSkuId),
+          productSkuId: String(row.productSkuId),
+          label:
+            identity?.sku ??
+            identity?.displayName ??
+            String(row.productSkuId),
+          unitsSold: row.unitsSold,
+          shareBasisPoints:
+            totalUnitsSold === 0
+              ? 0
+              : Math.round((row.unitsSold / totalUnitsSold) * 10_000),
+          ...(identity ? { identity } : {}),
+        };
+      }),
+    );
+    const otherUnitsSold = ranked
+      .slice(RANGE_SKU_MIX_VISIBLE_LIMIT)
+      .reduce((total, row) => total + row.unitsSold, 0);
+
+    if (otherUnitsSold > 0) {
+      rows.push({
+        key: "other",
+        label: "Other SKUs",
+        unitsSold: otherUnitsSold,
+        shareBasisPoints: Math.round(
+          (otherUnitsSold / totalUnitsSold) * 10_000,
+        ),
+      });
+    }
+
+    return { rows, totalUnitsSold, skuCount: ranked.length };
   },
 });
 

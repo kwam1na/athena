@@ -345,6 +345,21 @@ export type ReportSkuPeriodRow = ReportSkuDayMetrics & {
 
 export type ReportSkuSortBy = "revenue" | "units";
 
+export type ReportSkuMixRow = {
+  key: string;
+  productSkuId?: string;
+  label: string;
+  unitsSold: number;
+  shareBasisPoints: number;
+  identity?: ReportSkuIdentity;
+};
+
+export type ReportSkuMixData = {
+  rows: ReportSkuMixRow[];
+  totalUnitsSold: number;
+  skuCount: number;
+};
+
 export type ReportRangeStatus = "pending" | "completed" | "failed";
 
 export type ReportRangeSummary = {
