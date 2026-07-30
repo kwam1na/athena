@@ -460,6 +460,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/remote-assist/PosRemoteAssistRuntimeHost.test.tsx`](../../src/components/remote-assist/PosRemoteAssistRuntimeHost.test.tsx)
 - [`src/components/remote-assist/RemoteAssistLiveViewer.test.tsx`](../../src/components/remote-assist/RemoteAssistLiveViewer.test.tsx)
 - [`src/components/remote-assist/RemoteAssistRuntimeShell.test.tsx`](../../src/components/remote-assist/RemoteAssistRuntimeShell.test.tsx)
+- [`src/components/reports/ReportCalendar.test.tsx`](../../src/components/reports/ReportCalendar.test.tsx)
 - [`src/components/reports/ReportCustomRangePanel.test.tsx`](../../src/components/reports/ReportCustomRangePanel.test.tsx)
 - [`src/components/reports/ReportDaysPanel.test.tsx`](../../src/components/reports/ReportDaysPanel.test.tsx)
 - [`src/components/reports/ReportsCatalogLookup.test.tsx`](../../src/components/reports/ReportsCatalogLookup.test.tsx)

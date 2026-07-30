@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
@@ -31,6 +30,7 @@ import { cn } from "@/lib/utils";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { getOrigin } from "@/lib/navigationUtils";
 import { ReportBackLink } from "./ReportBackLink";
+import { ReportCalendar } from "./ReportCalendar";
 import { ReportFreshness } from "./ReportFreshness";
 import { ListPagination } from "@/components/common/ListPagination";
 import {
@@ -191,7 +191,7 @@ export function ReportsItemsView({
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-auto p-0">
-                  <Calendar
+                  <ReportCalendar
                     defaultMonth={selectedDate}
                     mode="single"
                     onSelect={(date) => {
@@ -291,9 +291,13 @@ export function ReportsItemsView({
                           storeUrlSlug: storeUrlSlug!,
                           productSkuId: row.productSkuId,
                         }}
-                        // Carries the current URL (period, sort, cursor) so
-                        // the detail page can return to this exact list.
-                        search={{ o: getOrigin() }}
+                        // Apply this report's period on the detail page while
+                        // carrying the full list URL for an exact return.
+                        search={{
+                          o: getOrigin(),
+                          periodDate,
+                          periodType,
+                        }}
                         to="/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId"
                       >
                         <span className="block truncate font-medium text-foreground">

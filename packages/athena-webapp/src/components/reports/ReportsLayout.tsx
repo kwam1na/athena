@@ -24,45 +24,50 @@ const REPORT_TABS = [
 export function ReportsLayout() {
   const location = useLocation();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
+  const isSkuDetail = /\/reports\/items\/[^/]+\/?$/.test(location.pathname);
 
   return (
     <View hideBorder hideHeaderBottomBorder scrollMode="page">
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
-          <PageLevelHeader
-            eyebrow="Store performance"
-            title="Reports"
-            description="Review sales and product performance."
-          />
-          <nav
-            aria-label="Reports views"
-            className="overflow-x-auto border-b border-border"
-          >
-            <div className="flex min-w-max gap-layout-lg" role="list">
-              {REPORT_TABS.map((tab) => {
-                const active = tab.suffix
-                  ? location.pathname.includes(`/reports${tab.suffix}`)
-                  : /\/reports\/?$/.test(location.pathname);
-                return (
-                  <Link
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "border-b-2 border-transparent px-1 py-3 text-sm font-medium text-muted-foreground",
-                      active && "border-primary text-primary",
-                    )}
-                    key={tab.label}
-                    params={{
-                      orgUrlSlug: orgUrlSlug!,
-                      storeUrlSlug: storeUrlSlug!,
-                    }}
-                    to={tab.to}
-                  >
-                    {tab.label}
-                  </Link>
-                );
-              })}
-            </div>
-          </nav>
+          {!isSkuDetail ? (
+            <>
+              <PageLevelHeader
+                eyebrow="Store performance"
+                title="Reports"
+                description="Review sales and product performance."
+              />
+              <nav
+                aria-label="Reports views"
+                className="overflow-x-auto border-b border-border"
+              >
+                <div className="flex min-w-max gap-layout-lg" role="list">
+                  {REPORT_TABS.map((tab) => {
+                    const active = tab.suffix
+                      ? location.pathname.includes(`/reports${tab.suffix}`)
+                      : /\/reports\/?$/.test(location.pathname);
+                    return (
+                      <Link
+                        aria-current={active ? "page" : undefined}
+                        className={cn(
+                          "border-b-2 border-transparent px-1 py-3 text-sm font-medium text-muted-foreground",
+                          active && "border-primary text-primary",
+                        )}
+                        key={tab.label}
+                        params={{
+                          orgUrlSlug: orgUrlSlug!,
+                          storeUrlSlug: storeUrlSlug!,
+                        }}
+                        to={tab.to}
+                      >
+                        {tab.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </nav>
+            </>
+          ) : null}
           <Outlet />
         </PageWorkspace>
       </FadeIn>

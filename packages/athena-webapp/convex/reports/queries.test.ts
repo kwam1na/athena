@@ -11,6 +11,7 @@ import {
   listDays,
   listPeriodSkus,
   getSkuDetail,
+  listSkuDayTransactions,
   getRangeResult,
 } from "./queries";
 import { emptySnapshot } from "./overview";
@@ -52,7 +53,12 @@ async function seedStore(t: ReturnType<typeof convexTest>) {
   });
 }
 
-async function seedSku(t: ReturnType<typeof convexTest>, storeId: Id<"store">) {
+async function seedSku(
+  t: ReturnType<typeof convexTest>,
+  storeId: Id<"store">,
+  images: string[] = [],
+  netPrice?: number,
+) {
   return t.run(async (ctx) => {
     const userId = await ctx.db.insert("athenaUser", {
       email: `sku-${Math.random()}@example.test`,
@@ -86,8 +92,9 @@ async function seedSku(t: ReturnType<typeof convexTest>, storeId: Id<"store">) {
       subcategoryId,
     });
     return ctx.db.insert("productSku", {
-      images: [],
+      images,
       inventoryCount: 10,
+      ...(netPrice !== undefined ? { netPrice } : {}),
       price: 100,
       productId,
       quantityAvailable: 10,
@@ -341,6 +348,7 @@ describe("listPeriodSkus", () => {
 
     expect(result.rows[0].identity).toMatchObject({
       displayName: "Wig",
+      netPriceMinor: 100,
       productId: expect.any(String),
     });
     expect(result.updatedAt).toBe(updatedAt);
@@ -526,7 +534,9 @@ describe("getSkuDetail", () => {
   it("returns empty days and null totals when nothing is seeded", async () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
-    const productSkuId = await seedSku(t, storeId);
+    const productSkuId = await seedSku(t, storeId, [
+      "https://cdn.example.test/wig.webp",
+    ], 12_500);
     const result = await t.run((ctx) =>
       handlerOf(getSkuDetail)(ctx, {
         storeId,
@@ -539,6 +549,10 @@ describe("getSkuDetail", () => {
     // simply had no activity in the selected window.
     expect(result).toMatchObject({ days: [], totals: null });
     expect(result?.identity?.displayName).toBe("Wig");
+    expect(result?.identity?.imageUrl).toBe(
+      "https://cdn.example.test/wig.webp",
+    );
+    expect(result?.identity?.netPriceMinor).toBe(12_500);
   });
 
   it("sums metrics across days, with operatingDate per row", async () => {
@@ -609,6 +623,84 @@ describe("getSkuDetail", () => {
         }),
       ),
     ).rejects.toThrow();
+  });
+});
+
+describe("listSkuDayTransactions", () => {
+  it("groups SKU facts by source transaction and resolves POS evidence", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const productSkuId = await seedSku(t, storeId);
+    const transactionId = await t.run((ctx) =>
+      ctx.db.insert("posTransaction", {
+        transactionNumber: "TX-1042",
+        storeId,
+        subtotal: 5200,
+        tax: 0,
+        total: 5200,
+        payments: [
+          { method: "cash", amount: 5200, timestamp: 1_753_312_800_000 },
+        ],
+        totalPaid: 5200,
+        status: "completed",
+        completedAt: 1_753_312_800_000,
+      }),
+    );
+
+    await t.run(async (ctx) => {
+      for (const [lineId, quantity, netAmountMinor] of [
+        ["line-1", 1, 3000],
+        ["line-2", 2, 2200],
+      ] as const) {
+        await ctx.db.insert("reportFact", {
+          storeId,
+          sourceDomain: "pos",
+          sourceId: String(transactionId),
+          lineId,
+          factKind: "sale",
+          fingerprint: `fp-${lineId}`,
+          fingerprintVersion: 1,
+          occurredAt: 1_753_312_800_000,
+          recordedAt: 1_753_312_800_000,
+          operatingDate: "2025-07-23",
+          currency: "GHS",
+          grossAmountMinor: netAmountMinor,
+          netAmountMinor,
+          taxAmountMinor: 0,
+          discountAmountMinor: 0,
+          quantity,
+          productSkuId,
+          unitCostMinor: 500,
+        });
+      }
+    });
+
+    const result = await t.run((ctx) =>
+      handlerOf(listSkuDayTransactions)(ctx, {
+        storeId,
+        productSkuId,
+        operatingDate: "2025-07-23",
+      }),
+    );
+
+    expect(result).toEqual({
+      transactions: [
+        {
+          sourceDomain: "pos",
+          sourceId: String(transactionId),
+          reference: "TX-1042",
+          occurredAt: 1_753_312_800_000,
+          status: "completed",
+          quantity: 3,
+          netSalesMinor: 5200,
+          costMinor: 1500,
+          grossProfitMinor: 3700,
+          hasRefunds: false,
+          hasAdjustments: false,
+        },
+      ],
+      truncated: false,
+    });
   });
 });
 

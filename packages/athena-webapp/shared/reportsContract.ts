@@ -186,6 +186,20 @@ export type NewReportFact = {
   unitCostMinor?: number;
 };
 
+export type ReportSkuTransactionEvidence = {
+  sourceDomain: "pos" | "storefront";
+  sourceId: string;
+  reference: string;
+  occurredAt: number;
+  status: string;
+  quantity: number;
+  netSalesMinor: number;
+  costMinor: number | null;
+  grossProfitMinor: number | null;
+  hasRefunds: boolean;
+  hasAdjustments: boolean;
+};
+
 // ---------------------------------------------------------------------------
 // Period keys and rollups
 // ---------------------------------------------------------------------------
@@ -312,6 +326,10 @@ export type ReportSkuIdentity = {
   displayName: string;
   sku?: string;
   size?: string;
+  /** Current catalog net price in the store's minor currency unit. */
+  netPriceMinor: number;
+  /** Primary SKU image, when one is available. */
+  imageUrl?: string;
   /**
    * Owning product, for linking out to the product detail page. Already on
    * the `productSku` document, so it costs no extra read.

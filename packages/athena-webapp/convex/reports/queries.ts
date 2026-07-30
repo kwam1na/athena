@@ -12,6 +12,7 @@ import type {
   ReportSkuIdentity,
   ReportSkuPeriodRow,
   ReportSkuSortBy,
+  ReportSkuTransactionEvidence,
 } from "../../shared/reportsContract";
 import { emptySnapshot } from "./overview";
 
@@ -24,6 +25,7 @@ import { emptySnapshot } from "./overview";
  */
 
 const RANGE_MAX_SPAN_DAYS = 92;
+const SKU_DAY_EVIDENCE_FACT_LIMIT = 500;
 
 /** Inclusive day count between two "YYYY-MM-DD" operating-date labels. */
 function inclusiveDaySpan(startDate: string, endDate: string): number {
@@ -330,6 +332,8 @@ async function resolveSkuIdentity(
       : undefined;
   const code = cleanMetadataValue(sku.sku);
   const size = cleanMetadataValue(sku.size);
+  const imageUrl = cleanMetadataValue(sku.images[0]);
+  const netPriceMinor = sku.netPrice ?? sku.price;
 
   return {
     displayName:
@@ -337,8 +341,10 @@ async function resolveSkuIdentity(
       cleanMetadataValue(sku.productName) ??
       code ??
       String(productSkuId),
+    netPriceMinor,
     ...(code ? { sku: code } : {}),
     ...(size ? { size } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
     productId: String(sku.productId),
   };
 }
@@ -428,6 +434,139 @@ export const getSkuDetail = query({
     };
 
     return { days, totals, identity };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// listSkuDayTransactions
+// ---------------------------------------------------------------------------
+
+export const listSkuDayTransactions = query({
+  args: {
+    storeId: v.id("store"),
+    productSkuId: v.id("productSku"),
+    operatingDate: v.string(),
+  },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{
+    transactions: ReportSkuTransactionEvidence[];
+    truncated: boolean;
+  }> => {
+    await requireReportsStoreAccess(ctx, args.storeId);
+
+    // Read budget: at most 501 reportFact docs plus at most 500 source docs.
+    // The extra fact tells the UI when the bounded evidence result is not
+    // complete, as required by the Reports trust contract.
+    const factsWithSentinel = await ctx.db
+      .query("reportFact")
+      .withIndex("by_storeId_productSkuId_operatingDate", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("productSkuId", args.productSkuId)
+          .eq("operatingDate", args.operatingDate),
+      )
+      .take(SKU_DAY_EVIDENCE_FACT_LIMIT + 1);
+    const truncated = factsWithSentinel.length > SKU_DAY_EVIDENCE_FACT_LIMIT;
+    const facts = factsWithSentinel
+      .slice(0, SKU_DAY_EVIDENCE_FACT_LIMIT)
+      .filter(
+        (fact) =>
+          fact.sourceDomain === "pos" || fact.sourceDomain === "storefront",
+      );
+
+    const grouped = new Map<string, typeof facts>();
+    for (const fact of facts) {
+      const key = `${fact.sourceDomain}:${fact.sourceId}`;
+      const existing = grouped.get(key);
+      if (existing) existing.push(fact);
+      else grouped.set(key, [fact]);
+    }
+
+    const transactions = await Promise.all(
+      Array.from(grouped.values()).map(
+        async (sourceFacts): Promise<ReportSkuTransactionEvidence> => {
+          const first = sourceFacts[0]!;
+          const quantity = sourceFacts.reduce(
+            (total, fact) => total + fact.quantity,
+            0,
+          );
+          const netSalesMinor = sourceFacts.reduce(
+            (total, fact) => total + fact.netAmountMinor,
+            0,
+          );
+          const costFacts = sourceFacts.filter((fact) => fact.quantity !== 0);
+          const hasCompleteCost = costFacts.every(
+            (fact) => fact.unitCostMinor !== undefined,
+          );
+          const costMinor = hasCompleteCost
+            ? costFacts.reduce(
+                (total, fact) =>
+                  total + fact.quantity * (fact.unitCostMinor ?? 0),
+                0,
+              )
+            : null;
+          const occurredAt = Math.max(
+            ...sourceFacts.map((fact) => fact.occurredAt),
+          );
+          const hasRefunds = sourceFacts.some(
+            (fact) => fact.factKind === "refund" || fact.factKind === "return",
+          );
+          const hasAdjustments = sourceFacts.some(
+            (fact) =>
+              fact.factKind === "correction" || fact.factKind === "void",
+          );
+
+          if (first.sourceDomain === "pos") {
+            const id = ctx.db.normalizeId("posTransaction", first.sourceId);
+            const sourceTransaction = id
+              ? await ctx.db.get("posTransaction", id)
+              : null;
+            const transaction =
+              sourceTransaction?.storeId === args.storeId
+                ? sourceTransaction
+                : null;
+            return {
+              sourceDomain: "pos",
+              sourceId: first.sourceId,
+              reference: transaction?.transactionNumber ?? first.sourceId,
+              occurredAt,
+              status: transaction?.status ?? "Unavailable",
+              quantity,
+              netSalesMinor,
+              costMinor,
+              grossProfitMinor:
+                costMinor === null ? null : netSalesMinor - costMinor,
+              hasRefunds: hasRefunds || transaction?.status === "refunded",
+              hasAdjustments: hasAdjustments || transaction?.status === "void",
+            };
+          }
+
+          const id = ctx.db.normalizeId("onlineOrder", first.sourceId);
+          const sourceOrder = id ? await ctx.db.get("onlineOrder", id) : null;
+          const order =
+            sourceOrder?.storeId === args.storeId ? sourceOrder : null;
+          return {
+            sourceDomain: "storefront",
+            sourceId: first.sourceId,
+            reference: order?.orderNumber ?? first.sourceId,
+            occurredAt,
+            status: order?.status ?? "Unavailable",
+            quantity,
+            netSalesMinor,
+            costMinor,
+            grossProfitMinor:
+              costMinor === null ? null : netSalesMinor - costMinor,
+            hasRefunds: hasRefunds || Boolean(order?.refunds?.length),
+            hasAdjustments,
+          };
+        },
+      ),
+    );
+
+    transactions.sort((left, right) => right.occurredAt - left.occurredAt);
+    return { transactions, truncated };
   },
 });
 

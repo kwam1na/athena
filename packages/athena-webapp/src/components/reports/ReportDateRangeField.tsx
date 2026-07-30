@@ -3,7 +3,6 @@ import { Calendar as CalendarIcon } from "lucide-react";
 import type { DateRange } from "react-day-picker";
 
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
@@ -13,6 +12,8 @@ import {
   getLocalDateFromOperatingDate,
   getLocalOperatingDate,
 } from "@/lib/operations/operatingDate";
+import { formatOperatingDate } from "./reportFormat";
+import { ReportCalendar } from "./ReportCalendar";
 
 function formatDateRange(startDate: string, endDate: string): string {
   const start = getLocalDateFromOperatingDate(startDate);
@@ -21,11 +22,7 @@ function formatDateRange(startDate: string, endDate: string): string {
   if (!start || !end) return "Invalid date range";
 
   if (startDate === endDate) {
-    return start.toLocaleDateString("en-US", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
+    return formatOperatingDate(startDate);
   }
 
   const sameYear = start.getFullYear() === end.getFullYear();
@@ -87,7 +84,7 @@ export function ReportDateRangeField({
         </Button>
       </PopoverTrigger>
       <PopoverContent align={align} className="w-auto p-0">
-        <Calendar
+        <ReportCalendar
           defaultMonth={selectedRange.from}
           mode="range"
           onSelect={(range) => {
