@@ -39,9 +39,6 @@ export const SHARED_DEMO_MUTABLE_TABLES = [
   { domain: "inventory", tableName: "reportingInventoryDeficitLedger" },
   { domain: "inventory", tableName: "reportingInventoryDeficitLot" },
   { domain: "inventory", tableName: "reportingInventoryDeficitResolutionWork" },
-  { domain: "inventory", tableName: "reportingInventoryOccurrenceReplay" },
-  { domain: "inventory", tableName: "reportingInventoryOccurrenceReplayLot" },
-  { domain: "inventory", tableName: "reportingInventoryOccurrenceReplayOutcome" },
   { domain: "inventory", tableName: "stockAdjustmentBatch" },
   { domain: "inventory", tableName: "cycleCountDraft" },
   { domain: "inventory", tableName: "cycleCountDraftLine" },
@@ -339,37 +336,6 @@ async function listStoreRows(ctx: any, tableName: string, storeId: Id<"store">) 
       tableName,
     );
   }
-  if (
-    tableName === "reportingInventoryOccurrenceReplayLot" ||
-    tableName === "reportingInventoryOccurrenceReplayOutcome"
-  ) {
-    const replays = requireBoundedBatch(
-      await ctx.db
-        .query("reportingInventoryOccurrenceReplay")
-        .withIndex("by_storeId_status_updatedAt", (q: any) =>
-          q.eq("storeId", storeId),
-        )
-        .take(RESTORE_BATCH_LIMIT + 1),
-      "reportingInventoryOccurrenceReplay",
-    );
-    const indexName =
-      tableName === "reportingInventoryOccurrenceReplayLot"
-        ? "by_replayId_status_occurredAt_outboundEffectId"
-        : "by_replayId_status";
-    return requireBoundedBatch(
-      (
-        await Promise.all(
-          replays.map((replay: any) =>
-            ctx.db
-              .query(tableName)
-              .withIndex(indexName, (q: any) => q.eq("replayId", replay._id))
-              .take(RESTORE_BATCH_LIMIT + 1),
-          ),
-        )
-      ).flat(),
-      tableName,
-    );
-  }
   if (tableName === "staffMessage") {
     return requireBoundedBatch(await ctx.db.query("staffMessage").withIndex("by_storeId_createdAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
   }
@@ -386,10 +352,7 @@ async function listStoreRows(ctx: any, tableName: string, storeId: Id<"store">) 
   if (tableName === "staffCredential") {
     return requireBoundedBatch(await query.withIndex("by_storeId_status", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
   }
-  if (
-    tableName === "reportingInventoryDeficitResolutionWork" ||
-    tableName === "reportingInventoryOccurrenceReplay"
-  ) {
+  if (tableName === "reportingInventoryDeficitResolutionWork") {
     return requireBoundedBatch(await query.withIndex("by_storeId_status_updatedAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
   }
   if (tableName === "dailyOpening") {

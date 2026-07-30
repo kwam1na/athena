@@ -65,6 +65,8 @@ export const sharedDemoBaselineDocumentSchema = v.object({
     v.literal("reportingInventoryDeficitLedger"),
     v.literal("reportingInventoryDeficitLot"),
     v.literal("reportingInventoryDeficitResolutionWork"),
+    // Retain legacy baseline compatibility until captured documents using these
+    // retired table names have been purged from every deployment.
     v.literal("reportingInventoryOccurrenceReplay"),
     v.literal("reportingInventoryOccurrenceReplayLot"),
     v.literal("reportingInventoryOccurrenceReplayOutcome"),
