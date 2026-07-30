@@ -11,6 +11,47 @@ import {
   SHARED_DEMO_MUTABLE_TABLES,
 } from "./domainRestore";
 
+const RETIRED_REPORTING_TABLES = [
+  "reportingIngress",
+  "reportingIngressSourceReference",
+  "reportingIngressLine",
+  "reportingIngressConflict",
+  "reportingFact",
+  "reportingFactSourceReference",
+  "reportingFactProcessingAttempt",
+  "reportingQuarantine",
+  "reportingProjectionHealth",
+  "reportingReconciliationDiscrepancy",
+  "reportingProjectionGeneration",
+  "reportingProjectionActivation",
+  "reportingStoreDayProjection",
+  "reportingStoreIntradayProjection",
+  "reportingStoreIntradayScheduleState",
+  "reportingSkuDayProjection",
+  "reportingCurrentValuationProjection",
+  "reportingRangeProjection",
+  "reportingAttentionProjection",
+  "reportingDailyCloseProjection",
+  "reportingSkuInsightProjection",
+  "reportingMetricCoverage",
+  "reportingStorePeriodSummary",
+  "reportingSkuPeriodSummary",
+  "reportingSkuPeriodClassification",
+  "reportingPeriodRollup",
+  "reportingPeriodFacet",
+  "reportingInventoryExposureSummary",
+  "reportingInventoryMovementSummary",
+  "reportingInventoryPeriodSummary",
+  "reportingDailyCloseTrust",
+  "reportingReadCursorContext",
+  "reportingWorkspaceMaterializationEpoch",
+  "reportingWorkspaceReadModelActivation",
+  "reportingReadBundle",
+  "reportingReadBundleActivation",
+  "reportingProjectionEvidence",
+  "reportingSkuEvidence",
+] as const;
+
 describe("shared demo domain restore registry", () => {
   it("promotes metadata-only baseline documents without replacing POS sync snapshots", () => {
     const rows = [
@@ -56,7 +97,7 @@ describe("shared demo domain restore registry", () => {
 
   it("covers mutable tables and descendants for every approved demo domain", () => {
     expect([...new Set(SHARED_DEMO_MUTABLE_TABLES.map((entry) => entry.domain))]).toEqual([
-      "pos", "inventory", "cash", "orders", "operations", "reporting", "staff",
+      "pos", "inventory", "cash", "orders", "operations", "staff",
     ]);
     expect(SHARED_DEMO_MUTABLE_TABLES.map((entry) => entry.tableName)).toEqual(
       expect.arrayContaining([
@@ -76,7 +117,6 @@ describe("shared demo domain restore registry", () => {
         "reportingInventoryDeficitLedger",
         "reportingInventoryDeficitLot",
         "reportingInventoryDeficitResolutionWork",
-        "reportingReconciliationDiscrepancy",
         "stockAdjustmentBatch",
         "cycleCountDraft",
         "cycleCountDraftLine",
@@ -87,24 +127,6 @@ describe("shared demo domain restore registry", () => {
         "managerElevation",
         "operationalWorkItem",
         "paymentAllocation",
-        "reportingIngress",
-        "reportingIngressSourceReference",
-        "reportingIngressLine",
-        "reportingIngressConflict",
-        "reportingFact",
-        "reportingFactSourceReference",
-        "reportingFactProcessingAttempt",
-        "reportingQuarantine",
-        "reportingProjectionHealth",
-        "reportingProjectionGeneration",
-        "reportingProjectionActivation",
-        "reportingStoreDayProjection",
-        "reportingSkuDayProjection",
-        "reportingCurrentValuationProjection",
-        "reportingWorkspaceMaterializationEpoch",
-        "reportingWorkspaceReadModelActivation",
-        "reportingReadBundle",
-        "reportingReadBundleActivation",
         "staffMessage",
         "staffCredential",
       ]),
@@ -138,6 +160,26 @@ describe("shared demo domain restore registry", () => {
     }
   });
 
+  it("does not query reporting tables retired by the fact-ledger rebuild", () => {
+    const tableNames = SHARED_DEMO_MUTABLE_TABLES.map(
+      (entry) => entry.tableName,
+    );
+    const baselineSchema = readFileSync(
+      "convex/schemas/sharedDemo.ts",
+      "utf8",
+    );
+    const restoreSource = readFileSync(
+      "convex/sharedDemo/domainRestore.ts",
+      "utf8",
+    );
+
+    for (const tableName of RETIRED_REPORTING_TABLES) {
+      expect(tableNames).not.toContain(tableName);
+      expect(restoreSource).not.toContain(`"${tableName}"`);
+      expect(baselineSchema).toContain(`v.literal("${tableName}")`);
+    }
+  });
+
   it("restores changed baseline rows, deletes demo additions, and ignores another tenant", () => {
     const plan = planDomainRestore({
       baseline: [{ _id: "base", storeId: "demo", value: "original" }],
@@ -161,7 +203,6 @@ describe("shared demo domain restore registry", () => {
     "reportingInventoryDeficitLedger",
     "reportingInventoryDeficitLot",
     "reportingInventoryDeficitResolutionWork",
-    "reportingReconciliationDiscrepancy",
   ])("converges visitor-created and mutated %s rows", (tableName) => {
     expect(
       SHARED_DEMO_MUTABLE_TABLES.some((entry) => entry.tableName === tableName),
@@ -221,18 +262,9 @@ describe("shared demo domain restore registry", () => {
     expect(source).toContain('withIndex("by_storeId_operatingDate"');
   });
 
-  it("uses declared store-prefix indexes for reporting ingress descendants", () => {
+  it("uses declared store-prefix indexes for retained reporting inventory tables", () => {
     const source = readFileSync("convex/sharedDemo/domainRestore.ts", "utf8");
-    expect(source).toContain('tableName === "reportingIngress"');
-    expect(source).toContain('withIndex("by_storeId_status_acceptedAt"');
-    expect(source).toContain('withIndex("by_storeId_sourceType_sourceId"');
-    expect(source).toContain('withIndex("by_storeId_productSkuId_createdAt"');
-    expect(source).toContain('withIndex("by_storeId_status_detectedAt"');
-    expect(source).toContain('withIndex("by_storeId_outcome_startedAt"');
-    expect(source).toContain('withIndex("by_storeId_sourceDomain_projectionKind"');
     expect(source).toContain('withIndex("by_storeId_productSkuId_occurrenceAt"');
-    expect(source).toContain('withIndex("by_storeId_action_subject"');
-    expect(source).toContain('withIndex("by_storeId_terminalId_accountId"');
   });
 
   it("keeps approved-workflow descendants in the baseline schema", () => {
@@ -257,36 +289,9 @@ describe("shared demo domain restore registry", () => {
       "reportingInventoryDeficitLedger",
       "reportingInventoryDeficitLot",
       "reportingInventoryDeficitResolutionWork",
-      "reportingReconciliationDiscrepancy",
-      "reportingIngress",
-      "reportingIngressSourceReference",
-      "reportingIngressLine",
-      "reportingIngressConflict",
-      "reportingFact",
-      "reportingFactSourceReference",
-      "reportingFactProcessingAttempt",
-      "reportingQuarantine",
-      "reportingProjectionHealth",
-      "reportingProjectionGeneration",
-      "reportingProjectionActivation",
-      "reportingStoreDayProjection",
-      "reportingSkuDayProjection",
-      "reportingCurrentValuationProjection",
-      "reportingWorkspaceMaterializationEpoch",
-      "reportingWorkspaceReadModelActivation",
-      "reportingReadBundle",
-      "reportingReadBundleActivation",
     ]) {
       expect(source).toContain(`v.literal("${tableName}")`);
     }
-  });
-
-  it("walks reporting closure through deployed store and generation indexes", () => {
-    const source = readFileSync("convex/sharedDemo/domainRestore.ts", "utf8");
-    expect(source).toContain('"by_storeId_projectionKind_status"');
-    expect(source).toContain('"by_generationId_periodKey"');
-    expect(source).toContain('"by_sourceGenerationId_sourceWatermark"');
-    expect(source).not.toContain('.filter((q: any)');
   });
 
   it("uses indexed ownership traversal for mutable rows without a store index", () => {

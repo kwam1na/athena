@@ -14231,7 +14231,7 @@
       "relation": "calls",
       "source": "domainrestore_liststorerows",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L439",
+      "source_location": "L296",
       "target": "domainrestore_capturebaselinedocumentswithctx",
       "weight": 1
     },
@@ -14243,7 +14243,7 @@
       "relation": "calls",
       "source": "domainrestore_withoutsystemfields",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L443",
+      "source_location": "L300",
       "target": "domainrestore_capturebaselinedocumentswithctx",
       "weight": 1
     },
@@ -14255,7 +14255,7 @@
       "relation": "calls",
       "source": "domainrestore_liststorerows",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L424",
+      "source_location": "L281",
       "target": "domainrestore_countmutabledemostorerowswithctx",
       "weight": 1
     },
@@ -14267,7 +14267,7 @@
       "relation": "calls",
       "source": "domainrestore_requireboundedbatch",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L226",
+      "source_location": "L148",
       "target": "domainrestore_liststorerows",
       "weight": 1
     },
@@ -14279,7 +14279,7 @@
       "relation": "calls",
       "source": "domainrestore_planbaselinedocumentpromotion",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L473",
+      "source_location": "L330",
       "target": "domainrestore_promotebaselinedocumentswithctx",
       "weight": 1
     },
@@ -14291,7 +14291,7 @@
       "relation": "calls",
       "source": "domainrestore_liststorerows",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L509",
+      "source_location": "L366",
       "target": "domainrestore_restoremutabledemostorerowswithctx",
       "weight": 1
     },
@@ -14303,7 +14303,7 @@
       "relation": "calls",
       "source": "domainrestore_remapdocumentids",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L553",
+      "source_location": "L410",
       "target": "domainrestore_restoremutabledemostorerowswithctx",
       "weight": 1
     },
@@ -14315,7 +14315,7 @@
       "relation": "calls",
       "source": "domainrestore_requirecurrentbaselinedocuments",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L512",
+      "source_location": "L369",
       "target": "domainrestore_restoremutabledemostorerowswithctx",
       "weight": 1
     },
@@ -69875,7 +69875,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_shareddemo_domainrestore_ts",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L430",
+      "source_location": "L287",
       "target": "domainrestore_capturebaselinedocumentswithctx",
       "weight": 1
     },
@@ -69887,7 +69887,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_shareddemo_domainrestore_ts",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L417",
+      "source_location": "L274",
       "target": "domainrestore_countmutabledemostorerowswithctx",
       "weight": 1
     },
@@ -69899,7 +69899,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_shareddemo_domainrestore_ts",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L223",
+      "source_location": "L145",
       "target": "domainrestore_liststorerows",
       "weight": 1
     },
@@ -69911,7 +69911,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_shareddemo_domainrestore_ts",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L163",
+      "source_location": "L85",
       "target": "domainrestore_planbaselinedocumentpromotion",
       "weight": 1
     },
@@ -69923,7 +69923,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_shareddemo_domainrestore_ts",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L187",
+      "source_location": "L109",
       "target": "domainrestore_plandomainrestore",
       "weight": 1
     },
@@ -69935,7 +69935,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_shareddemo_domainrestore_ts",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L454",
+      "source_location": "L311",
       "target": "domainrestore_promotebaselinedocumentswithctx",
       "weight": 1
     },
@@ -69947,7 +69947,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_shareddemo_domainrestore_ts",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L204",
+      "source_location": "L126",
       "target": "domainrestore_remapdocumentids",
       "weight": 1
     },
@@ -69959,7 +69959,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_shareddemo_domainrestore_ts",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L140",
+      "source_location": "L62",
       "target": "domainrestore_requireboundedbatch",
       "weight": 1
     },
@@ -69971,7 +69971,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_shareddemo_domainrestore_ts",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L145",
+      "source_location": "L67",
       "target": "domainrestore_requirecurrentbaselinedocuments",
       "weight": 1
     },
@@ -69983,7 +69983,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_shareddemo_domainrestore_ts",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L493",
+      "source_location": "L350",
       "target": "domainrestore_restoremutabledemostorerowswithctx",
       "weight": 1
     },
@@ -69995,7 +69995,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_shareddemo_domainrestore_ts",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L216",
+      "source_location": "L138",
       "target": "domainrestore_withoutsystemfields",
       "weight": 1
     },
@@ -189586,7 +189586,7 @@
       "label": "captureBaselineDocumentsWithCtx()",
       "norm_label": "capturebaselinedocumentswithctx()",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L430"
+      "source_location": "L287"
     },
     {
       "community": 185,
@@ -189595,7 +189595,7 @@
       "label": "countMutableDemoStoreRowsWithCtx()",
       "norm_label": "countmutabledemostorerowswithctx()",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L417"
+      "source_location": "L274"
     },
     {
       "community": 185,
@@ -189604,7 +189604,7 @@
       "label": "listStoreRows()",
       "norm_label": "liststorerows()",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L223"
+      "source_location": "L145"
     },
     {
       "community": 185,
@@ -189613,7 +189613,7 @@
       "label": "planBaselineDocumentPromotion()",
       "norm_label": "planbaselinedocumentpromotion()",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L163"
+      "source_location": "L85"
     },
     {
       "community": 185,
@@ -189622,7 +189622,7 @@
       "label": "planDomainRestore()",
       "norm_label": "plandomainrestore()",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L187"
+      "source_location": "L109"
     },
     {
       "community": 185,
@@ -189631,7 +189631,7 @@
       "label": "promoteBaselineDocumentsWithCtx()",
       "norm_label": "promotebaselinedocumentswithctx()",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L454"
+      "source_location": "L311"
     },
     {
       "community": 185,
@@ -189640,7 +189640,7 @@
       "label": "remapDocumentIds()",
       "norm_label": "remapdocumentids()",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L204"
+      "source_location": "L126"
     },
     {
       "community": 185,
@@ -189649,7 +189649,7 @@
       "label": "requireBoundedBatch()",
       "norm_label": "requireboundedbatch()",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L140"
+      "source_location": "L62"
     },
     {
       "community": 185,
@@ -189658,7 +189658,7 @@
       "label": "requireCurrentBaselineDocuments()",
       "norm_label": "requirecurrentbaselinedocuments()",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L145"
+      "source_location": "L67"
     },
     {
       "community": 185,
@@ -189667,7 +189667,7 @@
       "label": "restoreMutableDemoStoreRowsWithCtx()",
       "norm_label": "restoremutabledemostorerowswithctx()",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L493"
+      "source_location": "L350"
     },
     {
       "community": 185,
@@ -189676,7 +189676,7 @@
       "label": "withoutSystemFields()",
       "norm_label": "withoutsystemfields()",
       "source_file": "packages/athena-webapp/convex/sharedDemo/domainRestore.ts",
-      "source_location": "L216"
+      "source_location": "L138"
     },
     {
       "community": 185,
