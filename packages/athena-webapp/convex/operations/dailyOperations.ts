@@ -39,6 +39,13 @@ import {
   type LogicalOperationalWorkGroup,
   type LogicalOperationalWorkProjection,
 } from "./logicalOperationalWork";
+import {
+  closeCandidateOperatingRange,
+  emptyCloseSummary,
+  frozenWeekMetricForDate,
+  type DailyOperationsCloseSummary,
+  type DailyOperationsWeekMetric,
+} from "./dailyOperations/frozenMetricAuthority";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_OPERATIONS_QUERY_LIMIT = 200;
@@ -205,38 +212,6 @@ type DailyOperationsScheduledRunSummary = {
   windowStartAt: number;
 };
 
-type DailyOperationsCloseSummary = {
-  adjustedSalesTotal: number;
-  adjustmentCashSettlementTotal: number;
-  adjustmentCollectionTotal: number;
-  adjustmentNetSettlementTotal: number;
-  adjustmentRefundTotal: number;
-  carriedOverCashTotal: number;
-  carriedOverRegisterCount: number;
-  currentDayCashTotal: number;
-  currentDayCashTransactionCount: number;
-  expenseTotal: number;
-  expenseTransactionCount: number;
-  itemAdjustmentCount: number;
-  netCashVariance: number;
-  netCashMovementTotal: number;
-  paymentTotals: Array<{
-    amount: number;
-    method: string;
-    transactionCount?: number;
-  }>;
-  registerVarianceCount: number;
-  salesTotal: number;
-  transactionCount: number;
-};
-
-type DailyOperationsWeekMetric = DailyOperationsCloseSummary & {
-  isClosed: boolean;
-  isReopened: boolean;
-  isSelected: boolean;
-  operatingDate: string;
-};
-
 const storePulseWindowValidator = v.union(
   v.literal("today"),
   v.literal("this_week"),
@@ -333,51 +308,40 @@ function approvalRequestBelongsToOperationsDay(args: {
   return requestIsBeforeDayEnd && args.request.createdAt >= args.startAt;
 }
 
-function emptyCloseSummary(): DailyOperationsCloseSummary {
-  return {
-    adjustedSalesTotal: 0,
-    adjustmentCashSettlementTotal: 0,
-    adjustmentCollectionTotal: 0,
-    adjustmentNetSettlementTotal: 0,
-    adjustmentRefundTotal: 0,
-    carriedOverCashTotal: 0,
-    carriedOverRegisterCount: 0,
-    currentDayCashTotal: 0,
-    currentDayCashTransactionCount: 0,
-    expenseTotal: 0,
-    expenseTransactionCount: 0,
-    itemAdjustmentCount: 0,
-    netCashVariance: 0,
-    netCashMovementTotal: 0,
-    paymentTotals: [],
-    registerVarianceCount: 0,
-    salesTotal: 0,
-    transactionCount: 0,
-  };
-}
-
 function pluralize(value: number, singular: string, plural = `${singular}s`) {
   if (value === 1) return `1 ${singular}`;
   return `${value} ${plural}`;
 }
 
-async function buildWeekMetricForDate(
+async function buildLiveWeekMetricForDate(
   ctx: Pick<QueryCtx, "db">,
   args: {
+    dailyCloseCandidates?: Array<Doc<"dailyClose">>;
     isSelected: boolean;
     operatingDate: string;
     operatingTimezoneOffsetMinutes?: number;
     storeId: Id<"store">;
   },
 ): Promise<DailyOperationsWeekMetric> {
-  const range = operatingDateRangeForOffset(
+  const requestedRange = operatingDateRangeForOffset(
     args.operatingDate,
     args.operatingTimezoneOffsetMinutes,
   );
+  const range =
+    (args.dailyCloseCandidates &&
+      closeCandidateOperatingRange({
+        candidates: args.dailyCloseCandidates,
+        expectedEndAt: requestedRange.endAt,
+        expectedStartAt: requestedRange.startAt,
+        operatingDate: args.operatingDate,
+        storeId: args.storeId,
+      })) ||
+    requestedRange;
 
   if (!Number.isFinite(range.startAt) || !Number.isFinite(range.endAt)) {
     return {
       ...emptyCloseSummary(),
+      adjustmentPaymentTotals: [],
       isClosed: false,
       isReopened: false,
       isSelected: args.isSelected,
@@ -385,6 +349,14 @@ async function buildWeekMetricForDate(
     };
   }
 
+  const dailyClosePromise = args.dailyCloseCandidates
+    ? Promise.resolve(args.dailyCloseCandidates)
+    : ctx.db
+        .query("dailyClose")
+        .withIndex("by_storeId_operatingDate", (q) =>
+          q.eq("storeId", args.storeId).eq("operatingDate", args.operatingDate),
+        )
+        .take(MAX_OPERATIONS_QUERY_LIMIT);
   const [
     completedTransactions,
     appliedTransactionAdjustments,
@@ -416,18 +388,16 @@ async function buildWeekMetricForDate(
           .lt("completedAt", range.endAt),
       )
       .take(MAX_OPERATIONS_QUERY_LIMIT),
-    ctx.db
-      .query("dailyClose")
-      .withIndex("by_storeId_operatingDate", (q) =>
-        q.eq("storeId", args.storeId).eq("operatingDate", args.operatingDate),
-      )
-      .take(MAX_OPERATIONS_QUERY_LIMIT),
+    dailyClosePromise,
   ]);
   const currentDailyClose = selectEffectiveDailyClose(dailyClose);
   const isReopened =
     currentDailyClose?.lifecycleStatus === "reopened" ||
     (currentDailyClose?.lifecycleStatus === "superseded" &&
-      typeof currentDailyClose.reopenedAt === "number");
+      typeof currentDailyClose.reopenedAt === "number") ||
+    (currentDailyClose?.status === "open" &&
+      (currentDailyClose.reopenedFromDailyCloseId !== undefined ||
+        currentDailyClose.supersedesDailyCloseId !== undefined));
   const currentDayCashTotal = completedTransactions.reduce(
     (sum, transaction) => sum + transactionCashDelta(transaction),
     0,
@@ -465,6 +435,105 @@ async function buildWeekMetricForDate(
   };
 }
 
+async function buildWeekMetricsForDates(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    metrics: Array<{
+      isSelected: boolean;
+      operatingDate: string;
+    }>;
+    operatingTimezoneOffsetMinutes?: number;
+    storeId: Id<"store">;
+  },
+) {
+  if (args.metrics.length === 0) return [];
+  const orderedOperatingDates = [
+    ...new Set(args.metrics.map((metric) => metric.operatingDate)),
+  ].sort();
+  const firstOperatingDate = orderedOperatingDates[0];
+  const lastOperatingDate = orderedOperatingDates.at(-1)!;
+  const closeCandidates = await ctx.db
+    .query("dailyClose")
+    .withIndex("by_storeId_operatingDate", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .gte("operatingDate", firstOperatingDate)
+        .lte("operatingDate", lastOperatingDate),
+    )
+    .take(MAX_OPERATIONS_LOOKAHEAD_LIMIT);
+
+  if (closeCandidates.length > MAX_OPERATIONS_QUERY_LIMIT) {
+    return Promise.all(
+      args.metrics.map((metric) =>
+        buildLiveWeekMetricForDate(ctx, {
+          ...metric,
+          operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
+          storeId: args.storeId,
+        }),
+      ),
+    );
+  }
+
+  const candidatesByOperatingDate = new Map<string, Array<Doc<"dailyClose">>>();
+  for (const candidate of closeCandidates) {
+    const candidates =
+      candidatesByOperatingDate.get(candidate.operatingDate) ?? [];
+    candidates.push(candidate);
+    candidatesByOperatingDate.set(candidate.operatingDate, candidates);
+  }
+
+  return Promise.all(
+    args.metrics.map((metric) => {
+      const candidates =
+        candidatesByOperatingDate.get(metric.operatingDate) ?? [];
+      const requestedRange = operatingDateRangeForOffset(
+        metric.operatingDate,
+        args.operatingTimezoneOffsetMinutes,
+      );
+      const frozenMetric = frozenWeekMetricForDate({
+        ...metric,
+        candidates,
+        endAt: requestedRange.endAt,
+        startAt: requestedRange.startAt,
+        storeId: args.storeId,
+      });
+
+      return (
+        frozenMetric ??
+        buildLiveWeekMetricForDate(ctx, {
+          ...metric,
+          dailyCloseCandidates: candidates,
+          operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
+          storeId: args.storeId,
+        })
+      );
+    }),
+  );
+}
+
+async function buildWeekMetricForDate(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    isSelected: boolean;
+    operatingDate: string;
+    operatingTimezoneOffsetMinutes?: number;
+    storeId: Id<"store">;
+  },
+) {
+  const [metric] = await buildWeekMetricsForDates(ctx, {
+    metrics: [
+      {
+        isSelected: args.isSelected,
+        operatingDate: args.operatingDate,
+      },
+    ],
+    operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
+    storeId: args.storeId,
+  });
+
+  return metric!;
+}
+
 async function buildWeekMetrics(
   ctx: Pick<QueryCtx, "db">,
   args: {
@@ -481,16 +550,14 @@ async function buildWeekMetrics(
     shiftOperatingDate(weekEndOperatingDate, index - 6),
   );
 
-  return Promise.all(
-    operatingDates.map((operatingDate) =>
-      buildWeekMetricForDate(ctx, {
-        isSelected: operatingDate === args.operatingDate,
-        operatingDate,
-        operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
-        storeId: args.storeId,
-      }),
-    ),
-  );
+  return buildWeekMetricsForDates(ctx, {
+    metrics: operatingDates.map((operatingDate) => ({
+      isSelected: operatingDate === args.operatingDate,
+      operatingDate,
+    })),
+    operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
+    storeId: args.storeId,
+  });
 }
 
 function dailyCloseSortTime(close: {
@@ -2796,25 +2863,29 @@ export const getDailyOperationsWeekAnalyticsSnapshot = query({
         weekEndOperatingDate,
         -7,
       );
-      const [weekMetrics, priorWeekBoundaryMetric] =
-        includeManagerReviewEvidence
-          ? await Promise.all([
-              buildWeekMetrics(ctx, {
-                operatingDate: args.operatingDate,
-                operatingTimezoneOffsetMinutes:
-                  args.operatingTimezoneOffsetMinutes,
-                storeId: args.storeId,
-                weekEndOperatingDate,
-              }),
-              buildWeekMetricForDate(ctx, {
+      const operatingDates = Array.from({ length: 7 }, (_, index) =>
+        shiftOperatingDate(weekEndOperatingDate, index - 6),
+      );
+      const metrics = includeManagerReviewEvidence
+        ? await buildWeekMetricsForDates(ctx, {
+            metrics: [
+              ...operatingDates.map((operatingDate) => ({
+                isSelected: operatingDate === args.operatingDate,
+                operatingDate,
+              })),
+              {
                 isSelected: false,
                 operatingDate: priorWeekBoundaryOperatingDate,
-                operatingTimezoneOffsetMinutes:
-                  args.operatingTimezoneOffsetMinutes,
-                storeId: args.storeId,
-              }),
-            ])
-          : [[], null];
+              },
+            ],
+            operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
+            storeId: args.storeId,
+          })
+        : [];
+      const weekMetrics = metrics.slice(0, 7);
+      const priorWeekBoundaryMetric = includeManagerReviewEvidence
+        ? metrics[7]
+        : null;
 
       return {
         operatingDate: args.operatingDate,
@@ -2967,21 +3038,27 @@ export const getDailyOperationsTodayRefreshSnapshot = query({
         timelineLimit: 0,
         timelinePreviewLimit: 0,
       });
-      const weekMetric = includeManagerReviewEvidence
-        ? await buildWeekMetricForDate(ctx, {
-            isSelected: true,
-            operatingDate: args.operatingDate,
+      const refreshMetrics = includeManagerReviewEvidence
+        ? await buildWeekMetricsForDates(ctx, {
+            metrics: [
+              {
+                isSelected: true,
+                operatingDate: args.operatingDate,
+              },
+              {
+                isSelected: false,
+                operatingDate: shiftOperatingDate(args.operatingDate, -1),
+              },
+            ],
             operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
             storeId: args.storeId,
           })
+        : [];
+      const weekMetric = includeManagerReviewEvidence
+        ? refreshMetrics[0]
         : null;
       const priorDayMetric = includeManagerReviewEvidence
-        ? await buildWeekMetricForDate(ctx, {
-            isSelected: false,
-            operatingDate: shiftOperatingDate(args.operatingDate, -1),
-            operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
-            storeId: args.storeId,
-          })
+        ? refreshMetrics[1]
         : null;
 
       return {

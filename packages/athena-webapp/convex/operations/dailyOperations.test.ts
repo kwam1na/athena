@@ -55,8 +55,24 @@ type TableName =
 
 type Row = Record<string, unknown> & { _id: string };
 
+type QueryPredicate = {
+  field: string;
+  operator: "eq" | "gte" | "lt" | "lte";
+  value: unknown;
+};
+
+type QueryObservation = {
+  indexName?: string;
+  limit?: number;
+  order: "asc" | "desc";
+  predicates: QueryPredicate[];
+  table: TableName;
+  terminal: "collect" | "first" | "iterate" | "take";
+};
+
 function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
   const tables = new Map<TableName, Map<string, Row>>();
+  const observations: QueryObservation[] = [];
 
   const tableFor = (table: TableName) => {
     if (!tables.has(table)) {
@@ -75,6 +91,8 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
     const filters: Array<
       [string, unknown | { gte?: number; lt?: number; lte?: number }]
     > = [];
+    const predicates: QueryPredicate[] = [];
+    let indexName: string | undefined;
     let sortDirection: "asc" | "desc" = "asc";
     const filteredRows = () => {
       const rows = Array.from(tableFor(table).values()).filter((row) =>
@@ -112,33 +130,82 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
       );
 
       return rows.sort((left, right) => {
+        if (indexName === "by_storeId_operatingDate") {
+          const storeComparison = String(left.storeId ?? "").localeCompare(
+            String(right.storeId ?? ""),
+          );
+          if (storeComparison !== 0) {
+            return sortDirection === "desc"
+              ? -storeComparison
+              : storeComparison;
+          }
+
+          const dateComparison = String(left.operatingDate ?? "").localeCompare(
+            String(right.operatingDate ?? ""),
+          );
+          if (dateComparison !== 0) {
+            return sortDirection === "desc" ? -dateComparison : dateComparison;
+          }
+        }
+
         const leftValue = Number(
-          left.createdAt ?? left.completedAt ?? left.startedAt ?? 0,
+          left._creationTime ??
+            left.createdAt ??
+            left.completedAt ??
+            left.startedAt ??
+            0,
         );
         const rightValue = Number(
-          right.createdAt ?? right.completedAt ?? right.startedAt ?? 0,
+          right._creationTime ??
+            right.createdAt ??
+            right.completedAt ??
+            right.startedAt ??
+            0,
         );
         return sortDirection === "desc"
           ? rightValue - leftValue
           : leftValue - rightValue;
       });
     };
+    const observe = (
+      terminal: QueryObservation["terminal"],
+      limit?: number,
+    ) => {
+      observations.push({
+        indexName,
+        limit,
+        order: sortDirection,
+        predicates: predicates.map((predicate) => ({ ...predicate })),
+        table,
+        terminal,
+      });
+    };
 
     const chain = {
-      collect: async () => filteredRows(),
-      first: async () => filteredRows()[0] ?? null,
+      collect: async () => {
+        observe("collect");
+        return filteredRows();
+      },
+      first: async () => {
+        observe("first");
+        return filteredRows()[0] ?? null;
+      },
       order(direction: "asc" | "desc") {
         sortDirection = direction;
         return chain;
       },
-      take: async (limit: number) => filteredRows().slice(0, limit),
+      take: async (limit: number) => {
+        observe("take", limit);
+        return filteredRows().slice(0, limit);
+      },
       async *[Symbol.asyncIterator]() {
+        observe("iterate");
         for (const row of filteredRows()) {
           yield row;
         }
       },
       withIndex(
-        _index: string,
+        selectedIndex: string,
         applyIndex: (builder: {
           eq: (field: string, value: unknown) => typeof builder;
           gte: (field: string, value: number) => typeof builder;
@@ -146,21 +213,26 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
           lte: (field: string, value: number) => typeof builder;
         }) => unknown,
       ) {
+        indexName = selectedIndex;
         const builder = {
           eq(field: string, value: unknown) {
             filters.push([field, value]);
+            predicates.push({ field, operator: "eq", value });
             return builder;
           },
           gte(field: string, value: number) {
             filters.push([field, { gte: value }]);
+            predicates.push({ field, operator: "gte", value });
             return builder;
           },
           lt(field: string, value: number) {
             filters.push([field, { lt: value }]);
+            predicates.push({ field, operator: "lt", value });
             return builder;
           },
           lte(field: string, value: number) {
             filters.push([field, { lte: value }]);
+            predicates.push({ field, operator: "lte", value });
             return builder;
           },
         };
@@ -192,7 +264,7 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
     query,
   };
 
-  return { db };
+  return { db, observations };
 }
 
 const store = {
@@ -337,8 +409,275 @@ function buildCtx(seed: Partial<Record<TableName, Row[]>>) {
   return { db } as unknown as QueryCtx;
 }
 
+function buildObservedCtx(seed: Partial<Record<TableName, Row[]>>) {
+  const { db, observations } = createDb(seed);
+  return {
+    ctx: { db } as unknown as QueryCtx,
+    observations,
+  };
+}
+
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
+}
+
+function operatingDateRange(
+  operatingDate: string,
+  operatingTimezoneOffsetMinutes = 0,
+) {
+  const startAt =
+    Date.parse(`${operatingDate}T00:00:00.000Z`) +
+    operatingTimezoneOffsetMinutes * 60_000;
+  return { endAt: startAt + 24 * 60 * 60 * 1000, startAt };
+}
+
+function frozenFinancialCompleteness(
+  operatingDate: string,
+  operatingTimezoneOffsetMinutes = 0,
+) {
+  const range = operatingDateRange(
+    operatingDate,
+    operatingTimezoneOffsetMinutes,
+  );
+  return {
+    complete: true,
+    entries: [
+      {
+        complete: true,
+        limit: 200,
+        range,
+        readMode: "by_storeId_status_completedAt",
+        recordCount: 2,
+        source: "pos_transaction",
+        statuses: ["completed"],
+      },
+      {
+        complete: true,
+        limit: 200,
+        range,
+        readMode: "by_storeId_status_completedAt",
+        recordCount: 1,
+        source: "pos_transaction",
+        statuses: ["void"],
+      },
+      {
+        complete: true,
+        limit: 200,
+        range,
+        readMode: "by_storeId_status_appliedAt",
+        recordCount: 1,
+        source: "pos_transaction_adjustment",
+        statuses: ["applied"],
+      },
+      {
+        complete: true,
+        limit: 200,
+        range,
+        readMode: "by_storeId_status_completedAt",
+        recordCount: 1,
+        source: "expense_transaction",
+        statuses: ["completed"],
+      },
+    ],
+  };
+}
+
+function frozenFinancialCompletenessForRange(
+  operatingDate: string,
+  range: { endAt: number; startAt: number },
+) {
+  const completeness = frozenFinancialCompleteness(operatingDate);
+  return {
+    ...completeness,
+    entries: completeness.entries.map((entry) => ({ ...entry, range })),
+  };
+}
+
+function frozenFinancialCompletenessWithExpenseOverride(
+  overrides: Record<string, unknown>,
+  options: { omitLimit?: boolean } = {},
+) {
+  const completeness = frozenFinancialCompleteness("2026-05-08");
+  return {
+    ...completeness,
+    entries: completeness.entries.map((entry) => {
+      if (entry.source !== "expense_transaction") return entry;
+      const updated: Record<string, unknown> = { ...entry, ...overrides };
+      if (options.omitLimit) delete updated.limit;
+      return updated;
+    }),
+  };
+}
+
+function buildCompletedPosTransaction(
+  overrides: Partial<Row> & Pick<Row, "_id">,
+) {
+  const total = typeof overrides.total === "number" ? overrides.total : 77_000;
+  return {
+    changeGiven: 0,
+    completedAt: Date.UTC(2026, 4, 8, 12),
+    paymentMethod: "cash",
+    paymentAllocations: [],
+    payments: [{ amount: total, method: "cash" }],
+    status: "completed",
+    storeId: "store-1",
+    terminalId: "terminal-1",
+    total,
+    totalPaid: total,
+    transactionNumber: String(overrides._id).toUpperCase(),
+    ...overrides,
+  };
+}
+
+function buildFrozenClose(args: {
+  id?: string;
+  isCurrent?: boolean;
+  lifecycleStatus?: "active" | "reopened" | "superseded";
+  operatingDate: string;
+  operatingTimezoneOffsetMinutes?: number;
+  rowOverrides?: Record<string, unknown>;
+  salesTotal?: number;
+  snapshotOverrides?: Record<string, unknown>;
+  summaryOverrides?: Record<string, unknown>;
+}) {
+  const range = operatingDateRange(
+    args.operatingDate,
+    args.operatingTimezoneOffsetMinutes,
+  );
+  const completedAt = range.endAt - 60 * 60 * 1000;
+  const summary = {
+    adjustedSalesTotal: (args.salesTotal ?? 111_000) + 5_000,
+    adjustmentCashSettlementTotal: 5_000,
+    adjustmentCollectionTotal: 5_000,
+    adjustmentNetSettlementTotal: 5_000,
+    adjustmentPaymentTotals: [
+      {
+        amount: 5_000,
+        method: "cash",
+        transactionCount: 1,
+      },
+    ],
+    adjustmentRefundTotal: 0,
+    carriedOverCashTotal: 987_654,
+    carriedOverRegisterCount: 9,
+    currentDayCashTotal: args.salesTotal ?? 111_000,
+    currentDayCashTransactionCount: 2,
+    expenseTotal: 12_000,
+    expenseTransactionCount: 1,
+    itemAdjustmentCount: 1,
+    netCashMovementTotal: (args.salesTotal ?? 111_000) - 7_000,
+    netCashVariance: 654_321,
+    paymentTotals: [
+      {
+        amount: args.salesTotal ?? 111_000,
+        method: "cash",
+        transactionCount: 2,
+      },
+    ],
+    registerVarianceCount: 8,
+    salesTotal: args.salesTotal ?? 111_000,
+    transactionCount: 2,
+    ...args.summaryOverrides,
+  };
+  const baseSnapshot = {
+    snapshotContractVersion: 2,
+    carryForwardItems: [],
+    closeMetadata: {
+      carryForwardWorkItemIds: [],
+      completedAt,
+      endAt: range.endAt,
+      operatingDate: args.operatingDate,
+      organizationId: "org-1",
+      startAt: range.startAt,
+      storeId: "store-1",
+    },
+    readiness: {
+      blockerCount: 0,
+      carryForwardCount: 0,
+      readyCount: 1,
+      reviewCount: 0,
+      status: "ready",
+    },
+    readyItems: [],
+    reviewedItems: [],
+    sourceCompleteness: frozenFinancialCompleteness(
+      args.operatingDate,
+      args.operatingTimezoneOffsetMinutes,
+    ),
+    sourceSubjects: [],
+    summary,
+  };
+  const snapshotOverrides = args.snapshotOverrides ?? {};
+  const reportSnapshot = {
+    ...baseSnapshot,
+    ...snapshotOverrides,
+    closeMetadata: {
+      ...baseSnapshot.closeMetadata,
+      ...((snapshotOverrides.closeMetadata as Record<string, unknown>) ?? {}),
+    },
+    summary: {
+      ...summary,
+      ...((snapshotOverrides.summary as Record<string, unknown>) ?? {}),
+    },
+  };
+
+  return {
+    _id: args.id ?? `close-${args.operatingDate}`,
+    carryForwardWorkItemIds: [],
+    completedAt,
+    createdAt: completedAt,
+    isCurrent: args.isCurrent ?? false,
+    lifecycleStatus: args.lifecycleStatus ?? "active",
+    operatingDate: args.operatingDate,
+    organizationId: "org-1",
+    readiness: baseSnapshot.readiness,
+    reportSnapshot,
+    sourceCompleteness: reportSnapshot.sourceCompleteness,
+    sourceSubjects: [],
+    status: "completed",
+    storeId: "store-1",
+    summary,
+    updatedAt: completedAt,
+    ...args.rowOverrides,
+  };
+}
+
+type FrozenFallbackCase = {
+  label: string;
+  snapshotOverrides?: Record<string, unknown>;
+  summaryOverrides?: Record<string, unknown>;
+};
+
+function mockDailyOperationsRole(role: "full_admin" | "pos_only") {
+  vi.mocked(
+    athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+  ).mockResolvedValue({
+    _creationTime: 0,
+    _id: "user-1" as Id<"athenaUser">,
+    email: role === "full_admin" ? "admin@wigclub.store" : "pos@wigclub.store",
+  });
+  vi.mocked(
+    athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+  ).mockResolvedValue({
+    _creationTime: 0,
+    _id: `member-${role}` as Id<"organizationMember">,
+    organizationId: "org-1" as Id<"organization">,
+    role,
+    userId: "user-1" as Id<"athenaUser">,
+  });
+}
+
+const metricSourceTables = new Set<TableName>([
+  "dailyClose",
+  "expenseTransaction",
+  "posTransaction",
+  "posTransactionAdjustment",
+]);
+
+function metricSourceObservations(observations: QueryObservation[]) {
+  return observations.filter((observation) =>
+    metricSourceTables.has(observation.table),
+  );
 }
 
 describe("daily operations overview read model", () => {
@@ -4956,5 +5295,1630 @@ describe("daily operations overview read model", () => {
       },
       to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
     });
+  });
+
+  it("serves a finalized week with distinct completed and void POS evidence from one bounded frozen-close read", async () => {
+    mockDailyOperationsRole("full_admin");
+    const operatingDates = [
+      "2026-05-02",
+      "2026-05-03",
+      "2026-05-04",
+      "2026-05-05",
+      "2026-05-06",
+      "2026-05-07",
+      "2026-05-08",
+      "2026-05-09",
+    ];
+    const { ctx, observations } = buildObservedCtx({
+      dailyClose: [
+        ...operatingDates.map((operatingDate, index) =>
+          buildFrozenClose({
+            operatingDate,
+            salesTotal: 100_000 + index * 1_000,
+          }),
+        ),
+        buildFrozenClose({
+          id: "close-before-window",
+          operatingDate: "2026-05-01",
+          salesTotal: 800_001,
+        }),
+        buildFrozenClose({
+          id: "close-after-window",
+          operatingDate: "2026-05-10",
+          salesTotal: 800_010,
+        }),
+        buildFrozenClose({
+          id: "close-other-store",
+          operatingDate: "2026-05-08",
+          rowOverrides: { storeId: "store-2" },
+          salesTotal: 900_000,
+          snapshotOverrides: {
+            closeMetadata: { storeId: "store-2" },
+          },
+        }),
+      ],
+      posTransaction: [
+        buildCompletedPosTransaction({
+          _id: "mutable-live-row",
+          completedAt: Date.UTC(2026, 4, 8, 16),
+          total: 999_999,
+          transactionNumber: "MUTABLE",
+        }),
+      ],
+      store: [store],
+    });
+
+    const snapshot = await getHandler(getDailyOperationsWeekAnalyticsSnapshot)(
+      ctx as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      },
+    );
+    const selectedMetric = snapshot.weekMetrics.find(
+      (metric: { operatingDate: string }) =>
+        metric.operatingDate === "2026-05-08",
+    );
+
+    expect(selectedMetric).toEqual({
+      adjustedSalesTotal: 111_000,
+      adjustmentCashSettlementTotal: 5_000,
+      adjustmentCollectionTotal: 5_000,
+      adjustmentNetSettlementTotal: 5_000,
+      adjustmentPaymentTotals: [
+        { amount: 5_000, method: "cash", transactionCount: 1 },
+      ],
+      adjustmentRefundTotal: 0,
+      carriedOverCashTotal: 0,
+      carriedOverRegisterCount: 0,
+      currentDayCashTotal: 106_000,
+      currentDayCashTransactionCount: 2,
+      expenseTotal: 12_000,
+      expenseTransactionCount: 1,
+      isClosed: true,
+      isReopened: false,
+      isSelected: true,
+      itemAdjustmentCount: 1,
+      netCashMovementTotal: 99_000,
+      netCashVariance: 0,
+      operatingDate: "2026-05-08",
+      paymentTotals: [{ amount: 106_000, method: "cash", transactionCount: 2 }],
+      registerVarianceCount: 0,
+      salesTotal: 106_000,
+      transactionCount: 2,
+    });
+    expect(snapshot.priorWeekBoundaryMetric).toMatchObject({
+      operatingDate: "2026-05-02",
+      salesTotal: 100_000,
+    });
+    expect(metricSourceObservations(observations)).toEqual([
+      {
+        indexName: "by_storeId_operatingDate",
+        limit: 201,
+        order: "asc",
+        predicates: [
+          { field: "storeId", operator: "eq", value: "store-1" },
+          {
+            field: "operatingDate",
+            operator: "gte",
+            value: "2026-05-02",
+          },
+          {
+            field: "operatingDate",
+            operator: "lte",
+            value: "2026-05-09",
+          },
+        ],
+        table: "dailyClose",
+        terminal: "take",
+      },
+    ]);
+  });
+
+  it("uses one close-range read plus three financial reads for each live-fallback date", async () => {
+    mockDailyOperationsRole("full_admin");
+    const frozenDates = [
+      "2026-05-03",
+      "2026-05-04",
+      "2026-05-05",
+      "2026-05-06",
+      "2026-05-07",
+      "2026-05-09",
+    ];
+    const { ctx, observations } = buildObservedCtx({
+      dailyClose: [
+        ...frozenDates.map((operatingDate) =>
+          buildFrozenClose({ operatingDate }),
+        ),
+        {
+          ...buildFrozenClose({ operatingDate: "2026-05-02" }),
+          reportSnapshot: undefined,
+        },
+        {
+          ...buildFrozenClose({ operatingDate: "2026-05-08" }),
+          lifecycleStatus: "reopened",
+          reopenedAt: Date.UTC(2026, 4, 9, 8),
+          status: "open",
+        },
+      ],
+      posTransaction: [
+        buildCompletedPosTransaction({
+          _id: "live-prior-boundary",
+          completedAt: Date.UTC(2026, 4, 2, 12),
+          total: 22_000,
+          transactionNumber: "LIVE-PRIOR",
+        }),
+        buildCompletedPosTransaction({
+          _id: "live-selected",
+          total: 88_000,
+          transactionNumber: "LIVE-SELECTED",
+        }),
+      ],
+      store: [store],
+    });
+
+    const snapshot = await getHandler(getDailyOperationsWeekAnalyticsSnapshot)(
+      ctx as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      },
+    );
+
+    expect(
+      snapshot.weekMetrics.find(
+        (metric: { operatingDate: string }) =>
+          metric.operatingDate === "2026-05-08",
+      ),
+    ).toMatchObject({
+      isClosed: false,
+      isReopened: true,
+      salesTotal: 88_000,
+    });
+    expect(snapshot.priorWeekBoundaryMetric).toMatchObject({
+      operatingDate: "2026-05-02",
+      salesTotal: 22_000,
+    });
+    const sourceReads = metricSourceObservations(observations);
+    expect(sourceReads).toHaveLength(1 + 3 * 2);
+    expect(
+      sourceReads.filter((observation) => observation.table === "dailyClose"),
+    ).toHaveLength(1);
+    for (const table of [
+      "posTransaction",
+      "posTransactionAdjustment",
+      "expenseTransaction",
+    ] as const) {
+      expect(
+        sourceReads.filter((observation) => observation.table === table),
+      ).toHaveLength(2);
+    }
+    const frozenMetric = snapshot.weekMetrics.find(
+      (metric: { operatingDate: string }) =>
+        metric.operatingDate === "2026-05-07",
+    );
+    const liveMetric = snapshot.weekMetrics.find(
+      (metric: { operatingDate: string }) =>
+        metric.operatingDate === "2026-05-08",
+    );
+    const expectedMetricKeys = [
+      "adjustedSalesTotal",
+      "adjustmentCashSettlementTotal",
+      "adjustmentCollectionTotal",
+      "adjustmentNetSettlementTotal",
+      "adjustmentPaymentTotals",
+      "adjustmentRefundTotal",
+      "carriedOverCashTotal",
+      "carriedOverRegisterCount",
+      "currentDayCashTotal",
+      "currentDayCashTransactionCount",
+      "expenseTotal",
+      "expenseTransactionCount",
+      "isClosed",
+      "isReopened",
+      "isSelected",
+      "itemAdjustmentCount",
+      "netCashMovementTotal",
+      "netCashVariance",
+      "operatingDate",
+      "paymentTotals",
+      "registerVarianceCount",
+      "salesTotal",
+      "transactionCount",
+    ].sort();
+    expect(Object.keys(frozenMetric).sort()).toEqual(expectedMetricKeys);
+    expect(Object.keys(liveMetric).sort()).toEqual(expectedMetricKeys);
+  });
+
+  it.each<FrozenFallbackCase>([
+    {
+      label: "unsupported snapshot contract",
+      snapshotOverrides: { snapshotContractVersion: 1 },
+    },
+    {
+      label: "aggregate source incompleteness",
+      snapshotOverrides: {
+        sourceCompleteness: {
+          ...frozenFinancialCompleteness("2026-05-08"),
+          complete: false,
+        },
+      },
+    },
+    {
+      label: "missing required financial source",
+      snapshotOverrides: {
+        sourceCompleteness: {
+          complete: true,
+          entries: frozenFinancialCompleteness("2026-05-08").entries.slice(
+            0,
+            2,
+          ),
+        },
+      },
+    },
+    {
+      label: "duplicate required financial source",
+      snapshotOverrides: {
+        sourceCompleteness: {
+          complete: true,
+          entries: [
+            ...frozenFinancialCompleteness("2026-05-08").entries,
+            frozenFinancialCompleteness("2026-05-08").entries[0],
+          ],
+        },
+      },
+    },
+    {
+      label: "combined completed and void POS evidence",
+      snapshotOverrides: {
+        sourceCompleteness: {
+          complete: true,
+          entries: frozenFinancialCompleteness("2026-05-08").entries.map(
+            (entry) =>
+              entry.source === "pos_transaction" &&
+              entry.statuses.includes("completed")
+                ? { ...entry, statuses: ["completed", "void"] }
+                : entry,
+          ),
+        },
+      },
+    },
+    {
+      label: "contradictory source status",
+      snapshotOverrides: {
+        sourceCompleteness: {
+          complete: true,
+          entries: frozenFinancialCompleteness("2026-05-08").entries.map(
+            (entry) =>
+              entry.source === "expense_transaction"
+                ? { ...entry, statuses: ["pending"] }
+                : entry,
+          ),
+        },
+      },
+    },
+    {
+      label: "shifted source range",
+      snapshotOverrides: {
+        sourceCompleteness: {
+          complete: true,
+          entries: frozenFinancialCompleteness("2026-05-08").entries.map(
+            (entry) =>
+              entry.source === "pos_transaction"
+                ? {
+                    ...entry,
+                    range: {
+                      ...entry.range,
+                      startAt: entry.range.startAt + 60_000,
+                    },
+                  }
+                : entry,
+          ),
+        },
+      },
+    },
+    {
+      label: "contradictory source read mode",
+      snapshotOverrides: {
+        sourceCompleteness: {
+          complete: true,
+          entries: frozenFinancialCompleteness("2026-05-08").entries.map(
+            (entry) =>
+              entry.source === "pos_transaction_adjustment"
+                ? { ...entry, readMode: "by_storeId_status_completedAt" }
+                : entry,
+          ),
+        },
+      },
+    },
+    {
+      label: "required source record count equal to its limit",
+      snapshotOverrides: {
+        sourceCompleteness: frozenFinancialCompletenessWithExpenseOverride({
+          limit: 200,
+          recordCount: 200,
+        }),
+      },
+    },
+    {
+      label: "required source record count greater than its limit",
+      snapshotOverrides: {
+        sourceCompleteness: frozenFinancialCompletenessWithExpenseOverride({
+          limit: 200,
+          recordCount: 201,
+        }),
+      },
+    },
+    {
+      label: "required source missing its limit",
+      snapshotOverrides: {
+        sourceCompleteness: frozenFinancialCompletenessWithExpenseOverride(
+          {},
+          { omitLimit: true },
+        ),
+      },
+    },
+    {
+      label: "required source with a zero limit",
+      snapshotOverrides: {
+        sourceCompleteness: frozenFinancialCompletenessWithExpenseOverride({
+          limit: 0,
+        }),
+      },
+    },
+    {
+      label: "required source with a negative limit",
+      snapshotOverrides: {
+        sourceCompleteness: frozenFinancialCompletenessWithExpenseOverride({
+          limit: -1,
+        }),
+      },
+    },
+    {
+      label: "required source with a fractional limit",
+      snapshotOverrides: {
+        sourceCompleteness: frozenFinancialCompletenessWithExpenseOverride({
+          limit: 1.5,
+        }),
+      },
+    },
+    {
+      label: "mismatched snapshot metadata",
+      snapshotOverrides: {
+        closeMetadata: { operatingDate: "2026-05-07" },
+      },
+    },
+    {
+      label: "snapshot boundary shifted beyond DST tolerance",
+      snapshotOverrides: {
+        closeMetadata: {
+          endAt: Date.UTC(2026, 4, 9, 1, 1),
+          startAt: Date.UTC(2026, 4, 8, 1, 1),
+        },
+        sourceCompleteness: frozenFinancialCompletenessForRange("2026-05-08", {
+          endAt: Date.UTC(2026, 4, 9, 1, 1),
+          startAt: Date.UTC(2026, 4, 8, 1, 1),
+        }),
+      },
+    },
+    {
+      label: "snapshot duration outside the 23 to 25 hour DST window",
+      snapshotOverrides: {
+        closeMetadata: {
+          endAt: Date.UTC(2026, 4, 8, 23),
+          startAt: Date.UTC(2026, 4, 8, 1),
+        },
+        sourceCompleteness: frozenFinancialCompletenessForRange("2026-05-08", {
+          endAt: Date.UTC(2026, 4, 8, 23),
+          startAt: Date.UTC(2026, 4, 8, 1),
+        }),
+      },
+    },
+    {
+      label: "non-finite required amount",
+      summaryOverrides: { salesTotal: Number.NaN },
+    },
+    ...[
+      "currentDayCashTransactionCount",
+      "expenseTransactionCount",
+      "itemAdjustmentCount",
+      "transactionCount",
+    ].flatMap((field) => [
+      {
+        label: `negative summary count ${field}`,
+        summaryOverrides: { [field]: -1 },
+      },
+      {
+        label: `fractional summary count ${field}`,
+        summaryOverrides: { [field]: 1.5 },
+      },
+    ]),
+    {
+      label: "summary transaction count contradicts completed POS evidence",
+      summaryOverrides: { transactionCount: 3 },
+    },
+    {
+      label: "summary expense count contradicts expense evidence",
+      summaryOverrides: { expenseTransactionCount: 2 },
+    },
+    {
+      label: "summary adjustment count contradicts adjustment evidence",
+      summaryOverrides: { itemAdjustmentCount: 2 },
+    },
+    {
+      label: "cash transaction count exceeds completed POS evidence",
+      summaryOverrides: { currentDayCashTransactionCount: 3 },
+    },
+    {
+      label: "payment method count exceeds completed POS evidence",
+      summaryOverrides: {
+        paymentTotals: [
+          { amount: 111_000, method: "cash", transactionCount: 3 },
+        ],
+      },
+    },
+    {
+      label: "adjustment payment count exceeds adjustment evidence",
+      summaryOverrides: {
+        adjustmentPaymentTotals: [
+          { amount: 5_000, method: "cash", transactionCount: 2 },
+        ],
+      },
+    },
+    {
+      label: "malformed payment total",
+      summaryOverrides: {
+        paymentTotals: [
+          { amount: Number.NaN, method: "cash", transactionCount: 1 },
+        ],
+      },
+    },
+    {
+      label: "negative payment total transaction count",
+      summaryOverrides: {
+        paymentTotals: [
+          { amount: 5_000, method: "cash", transactionCount: -1 },
+        ],
+      },
+    },
+    {
+      label: "fractional payment total transaction count",
+      summaryOverrides: {
+        paymentTotals: [
+          { amount: 5_000, method: "cash", transactionCount: 1.5 },
+        ],
+      },
+    },
+    {
+      label: "duplicate payment total methods",
+      summaryOverrides: {
+        paymentTotals: [
+          { amount: 3_000, method: "cash", transactionCount: 1 },
+          { amount: 2_000, method: "cash", transactionCount: 1 },
+        ],
+      },
+    },
+    {
+      label: "non-finite adjustment payment total",
+      summaryOverrides: {
+        adjustmentPaymentTotals: [
+          {
+            amount: Number.POSITIVE_INFINITY,
+            method: "cash",
+            transactionCount: 1,
+          },
+        ],
+      },
+    },
+    {
+      label: "malformed adjustment payment total",
+      summaryOverrides: {
+        adjustmentPaymentTotals: [
+          { amount: 5_000, method: "", transactionCount: 1 },
+        ],
+      },
+    },
+    {
+      label: "negative adjustment payment total transaction count",
+      summaryOverrides: {
+        adjustmentPaymentTotals: [
+          { amount: 5_000, method: "cash", transactionCount: -1 },
+        ],
+      },
+    },
+    {
+      label: "fractional adjustment payment total transaction count",
+      summaryOverrides: {
+        adjustmentPaymentTotals: [
+          { amount: 5_000, method: "cash", transactionCount: 1.5 },
+        ],
+      },
+    },
+    {
+      label: "duplicate adjustment payment total methods",
+      summaryOverrides: {
+        adjustmentPaymentTotals: [
+          { amount: 3_000, method: "cash", transactionCount: 1 },
+          { amount: 2_000, method: "cash", transactionCount: 1 },
+        ],
+      },
+    },
+  ])("falls back live for $label", async (testCase) => {
+    mockDailyOperationsRole("full_admin");
+    const { ctx, observations } = buildObservedCtx({
+      dailyClose: [
+        buildFrozenClose({
+          operatingDate: "2026-05-08",
+          salesTotal: 555_000,
+          snapshotOverrides: testCase.snapshotOverrides,
+          summaryOverrides: testCase.summaryOverrides,
+        }),
+      ],
+      posTransaction: [
+        buildCompletedPosTransaction({
+          _id: "trusted-live-row",
+          transactionNumber: "TRUSTED-LIVE",
+        }),
+      ],
+      store: [store],
+    });
+
+    const snapshot = await getHandler(getDailyOperationsWeekAnalyticsSnapshot)(
+      ctx as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      },
+    );
+
+    expect(
+      snapshot.weekMetrics.find(
+        (metric: { operatingDate: string }) =>
+          metric.operatingDate === "2026-05-08",
+      ),
+    ).toMatchObject({ salesTotal: 77_000, transactionCount: 1 });
+    expect(
+      metricSourceObservations(observations).filter(
+        (observation) =>
+          observation.table !== "dailyClose" &&
+          observation.predicates.some(
+            (predicate) =>
+              predicate.operator === "gte" &&
+              predicate.value === Date.UTC(2026, 4, 8),
+          ),
+      ),
+    ).toHaveLength(3);
+  });
+
+  it("accepts legitimate zero-valued frozen metrics without importing close-only totals", async () => {
+    mockDailyOperationsRole("full_admin");
+    const zeroSummary = {
+      adjustedSalesTotal: 0,
+      adjustmentCashSettlementTotal: 0,
+      adjustmentCollectionTotal: 0,
+      adjustmentNetSettlementTotal: 0,
+      adjustmentPaymentTotals: [],
+      adjustmentRefundTotal: 0,
+      currentDayCashTotal: 0,
+      currentDayCashTransactionCount: 0,
+      expenseTotal: 0,
+      expenseTransactionCount: 0,
+      itemAdjustmentCount: 0,
+      netCashMovementTotal: 0,
+      paymentTotals: [],
+      salesTotal: 0,
+      transactionCount: 0,
+    };
+    const { ctx, observations } = buildObservedCtx({
+      dailyClose: [
+        buildFrozenClose({
+          operatingDate: "2026-05-08",
+          snapshotOverrides: {
+            sourceCompleteness: {
+              ...frozenFinancialCompleteness("2026-05-08"),
+              entries: frozenFinancialCompleteness("2026-05-08").entries.map(
+                (entry) => ({ ...entry, recordCount: 0 }),
+              ),
+            },
+          },
+          summaryOverrides: zeroSummary,
+        }),
+      ],
+      posTransaction: [
+        buildCompletedPosTransaction({
+          _id: "mutable-nonzero-row",
+          transactionNumber: "MUTABLE-NONZERO",
+        }),
+      ],
+      store: [store],
+    });
+
+    const snapshot = await getHandler(getDailyOperationsWeekAnalyticsSnapshot)(
+      ctx as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      },
+    );
+    const metric = snapshot.weekMetrics.find(
+      (candidate: { operatingDate: string }) =>
+        candidate.operatingDate === "2026-05-08",
+    );
+
+    expect(metric).toMatchObject({
+      carriedOverCashTotal: 0,
+      carriedOverRegisterCount: 0,
+      netCashVariance: 0,
+      paymentTotals: [],
+      registerVarianceCount: 0,
+      salesTotal: 0,
+      transactionCount: 0,
+    });
+    expect(
+      metricSourceObservations(observations).filter(
+        (observation) =>
+          observation.table !== "dailyClose" &&
+          observation.predicates.some(
+            (predicate) =>
+              predicate.operator === "gte" &&
+              predicate.value === Date.UTC(2026, 4, 8),
+          ),
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("moves writer-shaped reopen authority from live data to the completed replacement snapshot", async () => {
+    mockDailyOperationsRole("full_admin");
+    const reopenedAt = Date.UTC(2026, 4, 9, 8);
+    const reopenedOriginal = {
+      ...buildFrozenClose({
+        id: "writer-original",
+        isCurrent: false,
+        operatingDate: "2026-05-08",
+        salesTotal: 410_000,
+      }),
+      lifecycleStatus: "reopened",
+      reopenedAt,
+      supersededByDailyCloseId: "writer-replacement",
+    };
+    const openReplacement = {
+      ...buildFrozenClose({
+        id: "writer-replacement",
+        isCurrent: true,
+        operatingDate: "2026-05-08",
+        salesTotal: 420_000,
+      }),
+      completedAt: undefined,
+      lifecycleStatus: "active",
+      reopenedAt,
+      reopenedFromDailyCloseId: "writer-original",
+      reportSnapshot: undefined,
+      status: "open",
+      supersedesDailyCloseId: "writer-original",
+    };
+    const liveTransaction = buildCompletedPosTransaction({
+      _id: "writer-live-row",
+      transactionNumber: "WRITER-LIVE",
+    });
+    const openPhase = await getHandler(getDailyOperationsWeekAnalyticsSnapshot)(
+      buildCtx({
+        dailyClose: [reopenedOriginal, openReplacement],
+        posTransaction: [liveTransaction],
+        store: [store],
+      }) as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      },
+    );
+
+    expect(
+      openPhase.weekMetrics.find(
+        (metric: { operatingDate: string }) =>
+          metric.operatingDate === "2026-05-08",
+      ),
+    ).toMatchObject({
+      isClosed: false,
+      isReopened: true,
+      salesTotal: 77_000,
+    });
+
+    const completedReplacement = {
+      ...buildFrozenClose({
+        id: "writer-replacement",
+        isCurrent: true,
+        operatingDate: "2026-05-08",
+        salesTotal: 431_000,
+      }),
+      reopenedAt,
+      reopenedFromDailyCloseId: "writer-original",
+      supersedesDailyCloseId: "writer-original",
+    };
+    const completedPhase = await getHandler(
+      getDailyOperationsWeekAnalyticsSnapshot,
+    )(
+      buildCtx({
+        dailyClose: [
+          {
+            ...reopenedOriginal,
+            lifecycleStatus: "superseded",
+          },
+          completedReplacement,
+        ],
+        posTransaction: [liveTransaction],
+        store: [store],
+      }) as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      },
+    );
+
+    expect(
+      completedPhase.weekMetrics.find(
+        (metric: { operatingDate: string }) =>
+          metric.operatingDate === "2026-05-08",
+      ),
+    ).toMatchObject({
+      isClosed: true,
+      isReopened: false,
+      salesTotal: 431_000,
+    });
+  });
+
+  it("selects the completed v2 terminal snapshot after two writer-shaped reopen cycles", async () => {
+    mockDailyOperationsRole("full_admin");
+    const firstReopenedAt = Date.UTC(2026, 4, 9, 8);
+    const secondReopenedAt = Date.UTC(2026, 4, 10, 8);
+    const firstClose = {
+      ...buildFrozenClose({
+        id: "cycle-a",
+        isCurrent: false,
+        operatingDate: "2026-05-08",
+        salesTotal: 610_000,
+      }),
+      lifecycleStatus: "superseded",
+      reopenedAt: firstReopenedAt,
+      supersededByDailyCloseId: "cycle-b",
+    };
+    const secondClose = {
+      ...buildFrozenClose({
+        id: "cycle-b",
+        isCurrent: false,
+        operatingDate: "2026-05-08",
+        salesTotal: 620_000,
+      }),
+      lifecycleStatus: "superseded",
+      reopenedAt: secondReopenedAt,
+      reopenedFromDailyCloseId: "cycle-a",
+      supersededByDailyCloseId: "cycle-c",
+      supersedesDailyCloseId: "cycle-a",
+    };
+    const terminalClose = {
+      ...buildFrozenClose({
+        id: "cycle-c",
+        isCurrent: true,
+        operatingDate: "2026-05-08",
+        salesTotal: 630_000,
+      }),
+      reopenedAt: secondReopenedAt,
+      reopenedFromDailyCloseId: "cycle-b",
+      supersedesDailyCloseId: "cycle-b",
+    };
+    const { ctx, observations } = buildObservedCtx({
+      dailyClose: [firstClose, secondClose, terminalClose],
+      posTransaction: [
+        buildCompletedPosTransaction({
+          _id: "mutable-two-cycle-row",
+          transactionNumber: "MUTABLE-TWO-CYCLE",
+        }),
+      ],
+      store: [store],
+    });
+
+    const snapshot = await getHandler(getDailyOperationsWeekAnalyticsSnapshot)(
+      ctx as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      },
+    );
+
+    expect(
+      snapshot.weekMetrics.find(
+        (metric: { operatingDate: string }) =>
+          metric.operatingDate === "2026-05-08",
+      ),
+    ).toMatchObject({
+      isClosed: true,
+      isReopened: false,
+      salesTotal: 630_000,
+    });
+    expect(
+      metricSourceObservations(observations).filter(
+        (observation) =>
+          observation.table !== "dailyClose" &&
+          observation.predicates.some(
+            (predicate) =>
+              predicate.operator === "gte" &&
+              predicate.value === Date.UTC(2026, 4, 8),
+          ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("accepts a frozen snapshot whose exact store-day range uses a nonzero timezone offset", async () => {
+    mockDailyOperationsRole("full_admin");
+    const operatingTimezoneOffsetMinutes = 240;
+    const selectedRange = operatingDateRange(
+      "2026-05-08",
+      operatingTimezoneOffsetMinutes,
+    );
+    const { ctx, observations } = buildObservedCtx({
+      dailyClose: [
+        buildFrozenClose({
+          operatingDate: "2026-05-08",
+          operatingTimezoneOffsetMinutes,
+          salesTotal: 240_000,
+        }),
+      ],
+      posTransaction: [
+        buildCompletedPosTransaction({
+          _id: "mutable-offset-row",
+          completedAt: selectedRange.startAt + 12 * 60 * 60_000,
+          total: 999_000,
+          transactionNumber: "MUTABLE-OFFSET",
+        }),
+      ],
+      store: [store],
+    });
+
+    const snapshot = await getHandler(getDailyOperationsWeekAnalyticsSnapshot)(
+      ctx as never,
+      {
+        operatingDate: "2026-05-08",
+        operatingTimezoneOffsetMinutes,
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      },
+    );
+
+    expect(
+      snapshot.weekMetrics.find(
+        (metric: { operatingDate: string }) =>
+          metric.operatingDate === "2026-05-08",
+      ),
+    ).toMatchObject({
+      isClosed: true,
+      salesTotal: 240_000,
+    });
+    expect(
+      observations.filter(
+        (observation) =>
+          observation.table !== "dailyClose" &&
+          metricSourceTables.has(observation.table) &&
+          observation.predicates.some(
+            (predicate) =>
+              predicate.operator === "gte" &&
+              predicate.value === selectedRange.startAt,
+          ),
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    {
+      endAt: Date.UTC(2026, 4, 9),
+      label: "23-hour day",
+      salesTotal: 523_000,
+      startAt: Date.UTC(2026, 4, 8, 1),
+    },
+    {
+      endAt: Date.UTC(2026, 4, 9),
+      label: "25-hour day",
+      salesTotal: 525_000,
+      startAt: Date.UTC(2026, 4, 7, 23),
+    },
+  ])(
+    "accepts a valid frozen $label range within the DST boundary tolerance",
+    async ({ endAt, salesTotal, startAt }) => {
+      mockDailyOperationsRole("full_admin");
+      const actualRange = { endAt, startAt };
+      const { ctx, observations } = buildObservedCtx({
+        dailyClose: [
+          buildFrozenClose({
+            operatingDate: "2026-05-08",
+            salesTotal,
+            snapshotOverrides: {
+              closeMetadata: actualRange,
+              sourceCompleteness: frozenFinancialCompletenessForRange(
+                "2026-05-08",
+                actualRange,
+              ),
+            },
+          }),
+        ],
+        posTransaction: [
+          buildCompletedPosTransaction({
+            _id: `mutable-dst-${salesTotal}`,
+            total: 999_000,
+            transactionNumber: `MUTABLE-DST-${salesTotal}`,
+          }),
+        ],
+        store: [store],
+      });
+
+      const snapshot = await getHandler(
+        getDailyOperationsWeekAnalyticsSnapshot,
+      )(ctx as never, {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      });
+
+      expect(
+        snapshot.weekMetrics.find(
+          (metric: { operatingDate: string }) =>
+            metric.operatingDate === "2026-05-08",
+        ),
+      ).toMatchObject({
+        isClosed: true,
+        salesTotal,
+      });
+      expect(
+        metricSourceObservations(observations).filter(
+          (observation) =>
+            observation.table !== "dailyClose" &&
+            observation.predicates.some(
+              (predicate) =>
+                predicate.operator === "gte" &&
+                predicate.value === Date.UTC(2026, 4, 8),
+            ),
+        ),
+      ).toEqual([]);
+    },
+  );
+
+  it("uses the request-derived range when DST-tolerant close metadata contradicts required source ranges", async () => {
+    mockDailyOperationsRole("full_admin");
+    const requestedRange = operatingDateRange("2026-05-08");
+    const displacedRange = {
+      endAt: requestedRange.endAt,
+      startAt: requestedRange.startAt + 60 * 60_000,
+    };
+    const { ctx, observations } = buildObservedCtx({
+      dailyClose: [
+        buildFrozenClose({
+          operatingDate: "2026-05-08",
+          salesTotal: 508_000,
+          snapshotOverrides: {
+            closeMetadata: displacedRange,
+            // The default source ranges remain request-derived and therefore
+            // deliberately contradict this otherwise DST-tolerant metadata.
+          },
+        }),
+      ],
+      posTransaction: [
+        buildCompletedPosTransaction({
+          _id: "request-edge-hour",
+          completedAt: requestedRange.startAt + 30 * 60_000,
+          total: 33_000,
+          transactionNumber: "REQUEST-EDGE-HOUR",
+        }),
+      ],
+      store: [store],
+    });
+
+    const snapshot = await getHandler(getDailyOperationsWeekAnalyticsSnapshot)(
+      ctx as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      },
+    );
+
+    expect(
+      snapshot.weekMetrics.find(
+        (metric: { operatingDate: string }) =>
+          metric.operatingDate === "2026-05-08",
+      ),
+    ).toMatchObject({
+      isClosed: true,
+      salesTotal: 33_000,
+      transactionCount: 1,
+    });
+    expect(
+      observations
+        .filter(
+          (observation) =>
+            observation.table === "posTransaction" &&
+            observation.terminal === "take",
+        )
+        .find((observation) =>
+          observation.predicates.some(
+            (predicate) =>
+              predicate.operator === "gte" &&
+              predicate.value === requestedRange.startAt,
+          ),
+        ),
+    ).toBeDefined();
+  });
+
+  it("uses trusted DST source evidence for a writer-shaped reopened live fallback", async () => {
+    mockDailyOperationsRole("full_admin");
+    const requestedRange = operatingDateRange("2026-05-08");
+    const trustedReopenedRange = {
+      endAt: requestedRange.endAt,
+      startAt: requestedRange.startAt + 60 * 60_000,
+    };
+    const reopenedAt = Date.UTC(2026, 4, 9, 8);
+    const original = {
+      ...buildFrozenClose({
+        id: "dst-reopened-original",
+        isCurrent: false,
+        operatingDate: "2026-05-08",
+        salesTotal: 608_000,
+        snapshotOverrides: {
+          closeMetadata: trustedReopenedRange,
+          sourceCompleteness: frozenFinancialCompletenessForRange(
+            "2026-05-08",
+            trustedReopenedRange,
+          ),
+        },
+      }),
+      lifecycleStatus: "reopened",
+      reopenedAt,
+      supersededByDailyCloseId: "dst-reopened-successor",
+    };
+    const successor = {
+      ...buildFrozenClose({
+        id: "dst-reopened-successor",
+        isCurrent: true,
+        operatingDate: "2026-05-08",
+      }),
+      completedAt: undefined,
+      lifecycleStatus: "active",
+      reopenedAt,
+      reopenedFromDailyCloseId: "dst-reopened-original",
+      reportSnapshot: undefined,
+      status: "open",
+      supersedesDailyCloseId: "dst-reopened-original",
+    };
+    const { ctx } = buildObservedCtx({
+      dailyClose: [original, successor],
+      posTransaction: [
+        buildCompletedPosTransaction({
+          _id: "excluded-request-edge",
+          completedAt: requestedRange.startAt + 30 * 60_000,
+          total: 33_000,
+          transactionNumber: "EXCLUDED-REQUEST-EDGE",
+        }),
+        buildCompletedPosTransaction({
+          _id: "included-trusted-dst",
+          completedAt: trustedReopenedRange.startAt + 60 * 60_000,
+          total: 44_000,
+          transactionNumber: "INCLUDED-TRUSTED-DST",
+        }),
+      ],
+      store: [store],
+    });
+
+    const snapshot = await getHandler(getDailyOperationsWeekAnalyticsSnapshot)(
+      ctx as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      },
+    );
+
+    expect(
+      snapshot.weekMetrics.find(
+        (metric: { operatingDate: string }) =>
+          metric.operatingDate === "2026-05-08",
+      ),
+    ).toMatchObject({
+      isClosed: false,
+      isReopened: true,
+      salesTotal: 44_000,
+      transactionCount: 1,
+    });
+  });
+
+  it("resolves historical, reopened, reclosed, ambiguous, and broken date-local close authority conservatively", async () => {
+    mockDailyOperationsRole("full_admin");
+    const cases = [
+      {
+        candidates: [
+          buildFrozenClose({
+            isCurrent: false,
+            operatingDate: "2026-05-08",
+            rowOverrides: {
+              currentnessMode: "historical_record",
+            },
+            salesTotal: 410_000,
+            snapshotOverrides: {
+              closeMetadata: { currentnessMode: "historical_record" },
+            },
+          }),
+          buildFrozenClose({
+            id: "store-global-current-other-date",
+            isCurrent: true,
+            operatingDate: "2026-05-09",
+            salesTotal: 999_000,
+          }),
+        ],
+        expected: { isClosed: true, isReopened: false, salesTotal: 410_000 },
+        label: "historical completed row",
+      },
+      {
+        candidates: [
+          {
+            ...buildFrozenClose({
+              operatingDate: "2026-05-08",
+              salesTotal: 420_000,
+            }),
+            lifecycleStatus: "reopened",
+            reopenedAt: Date.UTC(2026, 4, 9, 8),
+          },
+        ],
+        expected: { isClosed: false, isReopened: true, salesTotal: 77_000 },
+        label: "reopened original",
+      },
+      {
+        candidates: [
+          {
+            ...buildFrozenClose({
+              id: "close-original",
+              operatingDate: "2026-05-08",
+              salesTotal: 430_000,
+            }),
+            lifecycleStatus: "superseded",
+            reopenedAt: Date.UTC(2026, 4, 9, 8),
+            supersededByDailyCloseId: "close-replacement",
+          },
+          {
+            ...buildFrozenClose({
+              id: "close-replacement",
+              operatingDate: "2026-05-08",
+              salesTotal: 431_000,
+            }),
+            reopenedFromDailyCloseId: "close-original",
+            supersedesDailyCloseId: "close-original",
+          },
+        ],
+        expected: { isClosed: true, isReopened: false, salesTotal: 431_000 },
+        label: "effective reclose replacement",
+      },
+      {
+        candidates: [
+          buildFrozenClose({
+            id: "duplicate-active-a",
+            operatingDate: "2026-05-08",
+            salesTotal: 440_000,
+          }),
+          buildFrozenClose({
+            id: "duplicate-active-b",
+            operatingDate: "2026-05-08",
+            salesTotal: 441_000,
+          }),
+        ],
+        expected: { salesTotal: 77_000 },
+        label: "duplicate active completions",
+      },
+      {
+        candidates: [
+          {
+            ...buildFrozenClose({
+              id: "broken-replacement",
+              operatingDate: "2026-05-08",
+              salesTotal: 450_000,
+            }),
+            reopenedFromDailyCloseId: "missing-original",
+            supersedesDailyCloseId: "missing-original",
+          },
+        ],
+        expected: { salesTotal: 77_000 },
+        label: "broken replacement link",
+      },
+      {
+        candidates: [
+          {
+            ...buildFrozenClose({
+              id: "cross-date-original",
+              operatingDate: "2026-05-07",
+              salesTotal: 451_000,
+            }),
+            lifecycleStatus: "superseded",
+            supersededByDailyCloseId: "cross-date-replacement",
+          },
+          {
+            ...buildFrozenClose({
+              id: "cross-date-replacement",
+              operatingDate: "2026-05-08",
+              salesTotal: 452_000,
+            }),
+            reopenedFromDailyCloseId: "cross-date-original",
+            supersedesDailyCloseId: "cross-date-original",
+          },
+        ],
+        expected: { salesTotal: 77_000 },
+        label: "cross-date replacement link",
+      },
+    ];
+
+    for (const testCase of cases) {
+      const { ctx } = buildObservedCtx({
+        dailyClose: testCase.candidates,
+        posTransaction: [
+          buildCompletedPosTransaction({
+            _id: `live-${testCase.label}`,
+            transactionNumber: `LIVE-${testCase.label}`,
+          }),
+        ],
+        store: [store],
+      });
+      const snapshot = await getHandler(
+        getDailyOperationsWeekAnalyticsSnapshot,
+      )(ctx as never, {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      });
+
+      expect(
+        snapshot.weekMetrics.find(
+          (metric: { operatingDate: string }) =>
+            metric.operatingDate === "2026-05-08",
+        ),
+        testCase.label,
+      ).toMatchObject(testCase.expected);
+    }
+  });
+
+  it("keeps exactly 200 close candidates complete and ordered before the range limit", async () => {
+    mockDailyOperationsRole("full_admin");
+    const dates = [
+      "2026-05-02",
+      "2026-05-03",
+      "2026-05-04",
+      "2026-05-05",
+      "2026-05-06",
+      "2026-05-07",
+      "2026-05-08",
+      "2026-05-09",
+    ];
+    const closeCandidates = [
+      ...dates.map((operatingDate) =>
+        buildFrozenClose({ operatingDate, salesTotal: 500_000 }),
+      ),
+      ...Array.from({ length: 192 }, (_, index) =>
+        buildFrozenClose({
+          id: `dense-close-${index}`,
+          operatingDate: "2026-05-02",
+          salesTotal: 600_000 + index,
+        }),
+      ),
+    ];
+    const { ctx, observations } = buildObservedCtx({
+      dailyClose: closeCandidates,
+      posTransaction: [
+        buildCompletedPosTransaction({
+          _id: "mutable-selected-at-200",
+          total: 88_000,
+          transactionNumber: "LIVE-200",
+        }),
+      ],
+      store: [store],
+    });
+
+    const snapshot = await getHandler(getDailyOperationsWeekAnalyticsSnapshot)(
+      ctx as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      },
+    );
+
+    expect(
+      snapshot.weekMetrics.find(
+        (metric: { operatingDate: string }) =>
+          metric.operatingDate === "2026-05-08",
+      ),
+    ).toMatchObject({ salesTotal: 500_000 });
+    expect(metricSourceObservations(observations)).toHaveLength(4);
+  });
+
+  it.each(["2026-05-02", "2026-05-06", "2026-05-09"])(
+    "falls the whole window back when 201 close candidates concentrate on %s",
+    async (denseOperatingDate) => {
+      mockDailyOperationsRole("full_admin");
+      const dates = [
+        "2026-05-02",
+        "2026-05-03",
+        "2026-05-04",
+        "2026-05-05",
+        "2026-05-06",
+        "2026-05-07",
+        "2026-05-08",
+        "2026-05-09",
+      ];
+      const closeCandidates = [
+        ...dates.map((operatingDate) =>
+          buildFrozenClose({ operatingDate, salesTotal: 700_000 }),
+        ),
+        ...Array.from({ length: 193 }, (_, index) =>
+          buildFrozenClose({
+            id: `overflow-${denseOperatingDate}-${index}`,
+            operatingDate: denseOperatingDate,
+            salesTotal: 800_000 + index,
+          }),
+        ),
+      ];
+      const liveTransactions = dates.map((operatingDate, index) =>
+        buildCompletedPosTransaction({
+          _id: `live-overflow-${index}`,
+          completedAt:
+            operatingDateRange(operatingDate).startAt + 12 * 60 * 60_000,
+          total: 80_000 + index,
+          transactionNumber: `LIVE-OVERFLOW-${index}`,
+        }),
+      );
+      const { ctx, observations } = buildObservedCtx({
+        dailyClose: closeCandidates,
+        posTransaction: liveTransactions,
+        store: [store],
+      });
+
+      const snapshot = await getHandler(
+        getDailyOperationsWeekAnalyticsSnapshot,
+      )(ctx as never, {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      });
+
+      expect(
+        snapshot.weekMetrics.find(
+          (metric: { operatingDate: string }) =>
+            metric.operatingDate === "2026-05-08",
+        ),
+      ).toMatchObject({ salesTotal: 80_006 });
+      expect(snapshot.priorWeekBoundaryMetric).toMatchObject({
+        salesTotal: 80_000,
+      });
+      expect(metricSourceObservations(observations)).toHaveLength(33);
+    },
+  );
+
+  it("uses frozen authority for both selected and prior metrics in today refresh", async () => {
+    vi.setSystemTime(new Date("2026-05-08T18:30:00.000Z"));
+    mockDailyOperationsRole("full_admin");
+    const { ctx, observations } = buildObservedCtx({
+      dailyClose: [
+        buildFrozenClose({
+          operatingDate: "2026-05-07",
+          salesTotal: 107_000,
+        }),
+        buildFrozenClose({
+          isCurrent: true,
+          operatingDate: "2026-05-08",
+          salesTotal: 108_000,
+        }),
+      ],
+      dailyOpening: [startedOpening],
+      posTransaction: [
+        buildCompletedPosTransaction({
+          _id: "mutable-refresh-selected",
+          total: 999_000,
+          transactionNumber: "MUTABLE-REFRESH",
+        }),
+      ],
+      store: [store],
+    });
+
+    const snapshot = await getHandler(getDailyOperationsTodayRefreshSnapshot)(
+      ctx as never,
+      {
+        operatingDate: "2026-05-08",
+        refreshRequestedAt: 12345,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.weekMetric).toMatchObject({
+      isClosed: true,
+      isSelected: true,
+      salesTotal: 108_000,
+    });
+    expect(snapshot.priorDayMetric).toMatchObject({
+      isClosed: true,
+      isSelected: false,
+      operatingDate: "2026-05-07",
+      salesTotal: 107_000,
+    });
+    expect(snapshot.refreshRequestedAt).toBe(12345);
+    expect(
+      observations.filter(
+        (observation) =>
+          observation.terminal === "take" &&
+          observation.table !== "dailyClose" &&
+          metricSourceTables.has(observation.table) &&
+          observation.predicates.some(
+            (predicate) =>
+              predicate.operator === "gte" &&
+              predicate.value === Date.UTC(2026, 4, 7),
+          ) &&
+          observation.predicates.some(
+            (predicate) =>
+              predicate.operator === "lt" &&
+              predicate.value === Date.UTC(2026, 4, 8),
+          ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("uses live reopened authority for today refresh while preserving a frozen prior metric", async () => {
+    vi.setSystemTime(new Date("2026-05-08T18:30:00.000Z"));
+    mockDailyOperationsRole("full_admin");
+    const reopenedAt = Date.UTC(2026, 4, 9, 8);
+    const original = {
+      ...buildFrozenClose({
+        id: "refresh-original",
+        isCurrent: false,
+        operatingDate: "2026-05-08",
+        salesTotal: 508_000,
+      }),
+      lifecycleStatus: "reopened",
+      reopenedAt,
+      supersededByDailyCloseId: "refresh-replacement",
+    };
+    const openReplacement = {
+      ...buildFrozenClose({
+        id: "refresh-replacement",
+        isCurrent: true,
+        operatingDate: "2026-05-08",
+        salesTotal: 608_000,
+      }),
+      completedAt: undefined,
+      lifecycleStatus: "active",
+      reopenedAt,
+      reopenedFromDailyCloseId: "refresh-original",
+      reportSnapshot: undefined,
+      status: "open",
+      supersedesDailyCloseId: "refresh-original",
+    };
+    const { ctx } = buildObservedCtx({
+      dailyClose: [
+        buildFrozenClose({
+          operatingDate: "2026-05-07",
+          salesTotal: 107_000,
+        }),
+        original,
+        openReplacement,
+      ],
+      dailyOpening: [startedOpening],
+      posTransaction: [
+        buildCompletedPosTransaction({
+          _id: "refresh-live-reopened",
+          total: 78_000,
+          transactionNumber: "REFRESH-LIVE-REOPENED",
+        }),
+      ],
+      store: [store],
+    });
+
+    const snapshot = await getHandler(getDailyOperationsTodayRefreshSnapshot)(
+      ctx as never,
+      {
+        operatingDate: "2026-05-08",
+        refreshRequestedAt: 12346,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.weekMetric).toMatchObject({
+      isClosed: false,
+      isReopened: true,
+      isSelected: true,
+      salesTotal: 78_000,
+    });
+    expect(snapshot.priorDayMetric).toMatchObject({
+      isClosed: true,
+      operatingDate: "2026-05-07",
+      salesTotal: 107_000,
+    });
+  });
+
+  it("short-circuits POS-only week analytics before all metric-source reads", async () => {
+    mockDailyOperationsRole("pos_only");
+    const { ctx, observations } = buildObservedCtx({
+      dailyClose: [
+        buildFrozenClose({
+          isCurrent: true,
+          operatingDate: "2026-05-08",
+          salesTotal: 999_000,
+        }),
+      ],
+      posTransaction: [
+        {
+          _id: "restricted-financial-row",
+          completedAt: Date.UTC(2026, 4, 8, 12),
+          status: "completed",
+          storeId: "store-1",
+          total: 999_000,
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await getHandler(getDailyOperationsWeekAnalyticsSnapshot)(
+      ctx as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      },
+    );
+
+    expect(snapshot.weekMetrics).toEqual([]);
+    expect(snapshot.priorWeekBoundaryMetric).toBeNull();
+    expect(metricSourceObservations(observations)).toEqual([]);
+  });
+
+  it("returns null POS-only today metrics without reading financial source tables", async () => {
+    mockDailyOperationsRole("pos_only");
+    const { ctx, observations } = buildObservedCtx({
+      dailyClose: [
+        buildFrozenClose({
+          isCurrent: true,
+          operatingDate: "2026-05-08",
+          salesTotal: 999_000,
+        }),
+      ],
+      dailyOpening: [startedOpening],
+      posTransaction: [
+        {
+          _id: "restricted-refresh-row",
+          completedAt: Date.UTC(2026, 4, 8, 12),
+          status: "completed",
+          storeId: "store-1",
+          total: 999_000,
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await getHandler(getDailyOperationsTodayRefreshSnapshot)(
+      ctx as never,
+      {
+        operatingDate: "2026-05-08",
+        refreshRequestedAt: 12345,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.weekMetric).toBeNull();
+    expect(snapshot.priorDayMetric).toBeNull();
+    expect(
+      observations.filter((observation) =>
+        (
+          [
+            "expenseTransaction",
+            "posTransaction",
+            "posTransactionAdjustment",
+          ] as TableName[]
+        ).includes(observation.table),
+      ),
+    ).toEqual([]);
   });
 });

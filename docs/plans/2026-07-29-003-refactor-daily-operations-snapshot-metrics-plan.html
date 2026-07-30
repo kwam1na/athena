@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Serve finalized Daily Operations metrics from close snapshots</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f6f4;
+      --surface: #ffffff;
+      --text: #1e2320;
+      --muted: #626a65;
+      --border: #dce1dc;
+      --accent: #176c52;
+      --accent-soft: #e9f5ef;
+      --code: #eef1ee;
+      --warn: #9a5b08;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #131614;
+        --surface: #1c201d;
+        --text: #edf1ee;
+        --muted: #afb7b1;
+        --border: #353c37;
+        --accent: #7ed5b5;
+        --accent-soft: #1c342b;
+        --code: #272c28;
+        --warn: #f3bd70;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: min(1080px, calc(100% - 32px)); margin: 40px auto 72px; }
+    header, nav, section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      margin-bottom: 18px;
+      padding: 24px;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-size: .76rem;
+      font-weight: 750;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    h1 { font-size: clamp(2rem, 5vw, 3.15rem); line-height: 1.08; margin: 6px 0 12px; }
+    h2 { font-size: 1.35rem; margin: 0 0 14px; }
+    h3 { font-size: 1.06rem; margin: 20px 0 8px; }
+    p { margin: 8px 0; }
+    a { color: var(--accent); }
+    code { background: var(--code); border-radius: 5px; padding: .1em .35em; }
+    .meta { color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: .9rem; }
+    .muted { color: var(--muted); }
+    .callout {
+      background: var(--accent-soft);
+      border-left: 4px solid var(--accent);
+      border-radius: 8px;
+      margin-top: 16px;
+      padding: 14px 16px;
+    }
+    nav ul, .compact { margin: 0; padding-left: 20px; }
+    nav li, .compact li { margin: 5px 0; }
+    table { border-collapse: collapse; margin-top: 12px; width: 100%; }
+    th, td {
+      border-bottom: 1px solid var(--border);
+      padding: 11px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-size: .78rem;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 8px;
+      margin: 18px 0;
+      align-items: center;
+    }
+    .node {
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      font-size: .86rem;
+      padding: 12px 8px;
+      text-align: center;
+    }
+    .decision { background: var(--accent-soft); border-color: var(--accent); }
+    .arrow { color: var(--muted); text-align: center; }
+    article { border-top: 1px solid var(--border); margin-top: 18px; padding-top: 18px; }
+    article:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+    .unit-id { color: var(--accent); font-weight: 750; }
+    .risk { color: var(--warn); font-weight: 700; }
+    @media (max-width: 800px) {
+      main { margin-top: 18px; width: min(100% - 20px, 1080px); }
+      header, nav, section { border-radius: 11px; padding: 18px; }
+      .flow { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Refactor plan · Active · Deepened</div>
+    <h1>Serve finalized Daily Operations metrics from close snapshots</h1>
+    <p>Replace historical weekly source fan-out with frozen EOD summaries while preserving live calculation for every non-final or incompatible snapshot contract.</p>
+    <div class="meta">
+      <span>Created: July 29, 2026</span>
+      <span>Type: refactor</span>
+      <span>Units: 3</span>
+      <span>Canonical source: <a href="2026-07-29-003-refactor-daily-operations-snapshot-metrics-plan.md">Markdown plan</a></span>
+    </div>
+  </header>
+
+  <nav aria-label="Plan contents">
+    <h2>Contents</h2>
+    <ul>
+      <li><a href="#problem">Problem and target</a></li>
+      <li><a href="#modes">Behavior by date state</a></li>
+      <li><a href="#decisions">Key decisions</a></li>
+      <li><a href="#units">Implementation units</a></li>
+      <li><a href="#risks">Risks</a></li>
+      <li><a href="#verification">Verification</a></li>
+    </ul>
+  </nav>
+
+  <section id="problem">
+    <h2>Problem and target</h2>
+    <p>The weekly companion query currently builds seven visible dates and one comparison boundary. Each date can read transactions, adjustments, expenses, and Daily Close rows: up to 32 indexed queries and roughly 6,400 capped rows.</p>
+    <div class="callout">
+      <strong>Target:</strong> one bounded close-window read, then no mutable financial-source reads for dates with an effective completed and structurally usable frozen snapshot.
+    </div>
+    <div class="flow" aria-label="Weekly metric selection flow">
+      <div class="node">Week request</div><div class="arrow">→</div>
+      <div class="node">8-date close range</div><div class="arrow">→</div>
+      <div class="node decision">Usable finalized snapshot?</div><div class="arrow">→</div>
+      <div class="node">Frozen metric or live fallback</div>
+    </div>
+    <p class="muted">Daily Operations stays a read-only aggregate. EOD Review remains the close owner; Reports remains amended financial truth.</p>
+  </section>
+
+  <section id="modes">
+    <h2>Behavior by date state</h2>
+    <table>
+      <thead><tr><th>Date state</th><th>Metric source</th><th>Financial-source reads</th></tr></thead>
+      <tbody>
+        <tr><td>Effective completed close, usable snapshot</td><td>Frozen report summary</td><td>None</td></tr>
+        <tr><td>Open or reopened revision</td><td>Existing live calculation</td><td>Transactions, adjustments, expenses</td></tr>
+        <tr><td>Effective reclosed replacement</td><td>Replacement frozen summary</td><td>None</td></tr>
+        <tr><td>Legacy snapshot contract, malformed, incomplete, or ambiguous close</td><td>Existing live calculation</td><td>Transactions, adjustments, expenses</td></tr>
+      </tbody>
+    </table>
+    <div class="callout">
+      <strong>Authority rule:</strong> resolve within each operating date. Store-global <code>isCurrent</code> cannot identify the authoritative historical revision.
+    </div>
+  </section>
+
+  <section id="decisions">
+    <h2>Key decisions</h2>
+    <table>
+      <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Frozen snapshot for finalized dates</td><td>Matches EOD History semantics and stops mutable-source drift.</td></tr>
+        <tr><td>Strict v2 snapshot eligibility</td><td>Metadata must identify the requested store day and remain within one hour of request-derived boundaries, with a 23–25 hour duration for DST transitions; source entries must exactly match the frozen metadata, and absent or mis-bucketed money cannot become authoritative.</td></tr>
+        <tr><td>One contiguous close-range read</td><td>The seven dates plus prior Saturday form one bounded eight-date window.</td></tr>
+        <tr><td>Live fallback retained</td><td>Open, reopened, legacy-snapshot, malformed, and ambiguous dates keep current correctness; legacy lifecycle rows with valid v2 snapshots remain eligible.</td></tr>
+        <tr><td>Allowlisted metric projection</td><td>Prevents close-only carry-over and variance data from changing the weekly contract.</td></tr>
+        <tr><td>Unique, consistent date-local authority</td><td>Duplicate terminal rows or broken revision links cannot safely select frozen financial truth.</td></tr>
+        <tr><td>Whole-window fallback at row 201</td><td>Exactly 200 candidates is complete; the extra row proves truncation, so no frozen financial authority is trusted.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="units">
+    <h2>Implementation units</h2>
+    <article>
+      <h3><span class="unit-id">U1</span> · Characterize eligibility and read behavior</h3>
+      <p>Instrument the existing in-memory query harness and pin snapshot authority, lifecycle resolution, fallback, redaction, and serialized metric shape before production changes.</p>
+      <p><strong>Primary file:</strong> <code>packages/athena-webapp/convex/operations/dailyOperations.test.ts</code></p>
+      <p><strong>Proof:</strong> tests execute compound-index ordering and record table, index name, predicates, terminal operation, and limits—not merely equal output.</p>
+    </article>
+    <article>
+      <h3><span class="unit-id">U2</span> · Route weekly analytics through frozen closes</h3>
+      <p>Bulk-load close candidates, resolve authority per date, project usable frozen summaries, and invoke the existing live builder only for fallback dates.</p>
+      <p><strong>Primary files:</strong> <code>dailyOperations.ts</code> and its focused backend tests.</p>
+      <p><strong>Proof:</strong> the normal path uses <code>1 + 3k</code> metric-source queries for <code>k</code> fallback dates; capped windows discard snapshot authority and recover through the established path.</p>
+    </article>
+    <article>
+      <h3><span class="unit-id">U3</span> · Preserve refresh and client contracts</h3>
+      <p>Apply the same decision to selected/prior refresh metrics, retain redaction and cache merge semantics, and capture the boundary in Athena's read-amplification learning.</p>
+      <p><strong>Primary files:</strong> backend refresh tests, optional frontend characterization, and the existing performance solution note.</p>
+      <p><strong>Proof:</strong> no public arguments or response fields change.</p>
+    </article>
+  </section>
+
+  <section id="risks">
+    <h2>Risks and mitigations</h2>
+    <table>
+      <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td><span class="risk">Malformed historical money</span></td><td>Require supported version, complete evidence, matching identity, finite fields, and valid payment totals.</td></tr>
+        <tr><td>Wrong close revision</td><td>Resolve per date; ambiguity falls back live.</td></tr>
+        <tr><td>Weekly contract drift</td><td>Project only fields the live weekly builder currently owns.</td></tr>
+        <tr><td>Late facts no longer change closed metrics</td><td>Document intentional close-time semantics; Reports owns amended truth.</td></tr>
+        <tr><td>Legacy-snapshot contracts retain read cost</td><td>Accept compatibility fallback; legacy lifecycle shapes with valid v2 snapshots remain eligible.</td></tr>
+        <tr><td>Range cap hides later revisions</td><td>Accept exactly 200, detect truncation at 201, and discard the entire range for frozen financial authority.</td></tr>
+        <tr><td>Tests pass with a wrong index shape</td><td>Observe ordered predicates and limits alongside output and query counts.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="verification">
+    <h2>Verification strategy</h2>
+    <ul class="compact">
+      <li>Snapshot values win over deliberately conflicting live rows.</li>
+      <li>Active completed → reopen → reclose moves authority frozen → live → replacement frozen.</li>
+      <li>Historical automation works with <code>isCurrent: false</code>.</li>
+      <li>Malformed, incomplete, unsupported, or ambiguous evidence falls back live.</li>
+      <li>Seven dates and prior boundary share identical selection logic.</li>
+      <li>Full-admin, POS-only, timezone, today-refresh, and client merge behavior remain stable.</li>
+      <li>Table/index observers prove finalized dates avoid POS, adjustment, and expense reads.</li>
+      <li>Normal-path cost is <code>1 + 3k</code>; cap-triggered recovery is measured and reported separately.</li>
+      <li>A pre-rollout sample establishes usable-snapshot coverage and representative close-document size.</li>
+      <li>Matching 24-hour and 72-hour production windows compare bytes per call, errors, and p50/p95 latency.</li>
+    </ul>
+    <p class="muted">Merge-ready validation remains owned by <code>bun run pr:athena</code>; Graphify is rebuilt after code changes.</p>
+  </section>
+</main>
+</body>
+</html>
