@@ -54,89 +54,11 @@ export const SHARED_DEMO_MUTABLE_TABLES = [
   { domain: "operations", tableName: "operationalEvent" },
   { domain: "operations", tableName: "paymentAllocation" },
   { domain: "operations", tableName: "dailyOpening" },
-  { domain: "reporting", tableName: "reportingIngress" },
-  { domain: "reporting", tableName: "reportingIngressSourceReference" },
-  { domain: "reporting", tableName: "reportingIngressLine" },
-  { domain: "reporting", tableName: "reportingIngressConflict" },
-  { domain: "reporting", tableName: "reportingFact" },
-  { domain: "reporting", tableName: "reportingFactSourceReference" },
-  { domain: "reporting", tableName: "reportingFactProcessingAttempt" },
-  { domain: "reporting", tableName: "reportingQuarantine" },
-  { domain: "reporting", tableName: "reportingProjectionHealth" },
-  { domain: "reporting", tableName: "reportingReconciliationDiscrepancy" },
-  { domain: "reporting", tableName: "reportingProjectionGeneration" },
-  { domain: "reporting", tableName: "reportingProjectionActivation" },
-  { domain: "reporting", tableName: "reportingStoreDayProjection" },
-  { domain: "reporting", tableName: "reportingStoreIntradayProjection" },
-  { domain: "reporting", tableName: "reportingStoreIntradayScheduleState" },
-  { domain: "reporting", tableName: "reportingSkuDayProjection" },
-  { domain: "reporting", tableName: "reportingCurrentValuationProjection" },
-  { domain: "reporting", tableName: "reportingRangeProjection" },
-  { domain: "reporting", tableName: "reportingAttentionProjection" },
-  { domain: "reporting", tableName: "reportingDailyCloseProjection" },
-  { domain: "reporting", tableName: "reportingSkuInsightProjection" },
-  { domain: "reporting", tableName: "reportingMetricCoverage" },
-  { domain: "reporting", tableName: "reportingStorePeriodSummary" },
-  { domain: "reporting", tableName: "reportingSkuPeriodSummary" },
-  { domain: "reporting", tableName: "reportingSkuPeriodClassification" },
-  { domain: "reporting", tableName: "reportingPeriodRollup" },
-  { domain: "reporting", tableName: "reportingPeriodFacet" },
-  { domain: "reporting", tableName: "reportingInventoryExposureSummary" },
-  { domain: "reporting", tableName: "reportingInventoryMovementSummary" },
-  { domain: "reporting", tableName: "reportingInventoryPeriodSummary" },
-  { domain: "reporting", tableName: "reportingDailyCloseTrust" },
-  { domain: "reporting", tableName: "reportingReadCursorContext" },
-  { domain: "reporting", tableName: "reportingWorkspaceMaterializationEpoch" },
-  { domain: "reporting", tableName: "reportingWorkspaceReadModelActivation" },
-  { domain: "reporting", tableName: "reportingReadBundle" },
-  { domain: "reporting", tableName: "reportingReadBundleActivation" },
-  { domain: "reporting", tableName: "reportingProjectionEvidence" },
-  { domain: "reporting", tableName: "reportingSkuEvidence" },
   { domain: "staff", tableName: "staffProfile" },
   { domain: "staff", tableName: "staffCredential" },
   { domain: "staff", tableName: "staffMessage" },
 ] as const;
 const RESTORE_BATCH_LIMIT = 500;
-const REPORTING_STORE_INDEXES: Record<string, string> = {
-  reportingAttentionProjection: "by_storeId_scope_primaryReason",
-  reportingCurrentValuationProjection: "by_storeId_productSkuId",
-  reportingDailyCloseProjection:
-    "by_storeId_operatingDate_acceptedCloseVersion",
-  reportingMetricCoverage: "by_storeId_metric_sourceDomain",
-  reportingProjectionActivation:
-    "by_storeId_projectionKind_activatedAt",
-  reportingProjectionEvidence: "by_storeId_factId",
-  reportingProjectionGeneration: "by_storeId_projectionKind_status",
-  reportingRangeProjection: "by_storeId_rangeStartDate_rangeEndDate",
-  reportingReadBundle: "by_storeId_createdAt",
-  reportingReadBundleActivation: "by_storeId_activatedAt",
-  reportingReadCursorContext: "by_storeId_athenaUserId_expiresAt",
-  reportingSkuDayProjection: "by_storeId_productSkuId_operatingDate",
-  reportingSkuEvidence: "by_storeId_productSkuId_recognitionAt_identityKey",
-  reportingStoreDayProjection: "by_storeId_operatingDate_metric",
-  reportingStoreIntradayProjection:
-    "by_storeId_operatingDate_checkpointAt",
-  reportingWorkspaceReadModelActivation:
-    "by_storeId_projectionKind_activatedAt",
-};
-
-const REPORTING_GENERATION_INDEXES: Record<string, string> = {
-  reportingDailyCloseTrust: "by_generationId_operatingDate",
-  reportingInventoryExposureSummary: "by_generationId_productSkuId",
-  reportingInventoryMovementSummary:
-    "by_generationId_periodKey_productSkuId",
-  reportingInventoryPeriodSummary: "by_generationId_periodKey",
-  reportingPeriodFacet: "by_generationId_periodKey_facet_value",
-  reportingPeriodRollup:
-    "by_generationId_periodKey_dimension_dimensionId",
-  reportingSkuInsightProjection: "by_generationId_productSkuId",
-  reportingSkuPeriodClassification: "by_gen_period_class_sku",
-  reportingSkuPeriodSummary:
-    "by_generationId_periodKey_productSkuId",
-  reportingStoreIntradayScheduleState: "by_generationId_operatingDate",
-  reportingStorePeriodSummary: "by_generationId_periodKey",
-};
-
 export function requireBoundedBatch<T>(rows: T[], tableName: string) {
   if (rows.length > RESTORE_BATCH_LIMIT) throw new Error(`Demo restore batch required for ${tableName}.`);
   return rows;
@@ -221,48 +143,6 @@ function withoutSystemFields(row: Record<string, unknown>) {
 // This is intentionally the sole dynamic-table adapter. Its table names are
 // frozen by SHARED_DEMO_MUTABLE_TABLES and validated by the schema union.
 async function listStoreRows(ctx: any, tableName: string, storeId: Id<"store">) {
-  const reportingStoreIndex = REPORTING_STORE_INDEXES[tableName];
-  if (reportingStoreIndex) {
-    return requireBoundedBatch(
-      await ctx.db
-        .query(tableName)
-        .withIndex(reportingStoreIndex, (q: any) => q.eq("storeId", storeId))
-        .take(RESTORE_BATCH_LIMIT + 1),
-      tableName,
-    );
-  }
-  const reportingGenerationIndex = REPORTING_GENERATION_INDEXES[tableName];
-  if (
-    reportingGenerationIndex ||
-    tableName === "reportingWorkspaceMaterializationEpoch"
-  ) {
-    const generations = await ctx.db
-      .query("reportingProjectionGeneration")
-      .withIndex("by_storeId_projectionKind_status", (q: any) =>
-        q.eq("storeId", storeId),
-      )
-      .take(RESTORE_BATCH_LIMIT + 1);
-    requireBoundedBatch(generations, "reportingProjectionGeneration");
-    const indexName =
-      reportingGenerationIndex ??
-      "by_sourceGenerationId_sourceWatermark";
-    const parentField = reportingGenerationIndex
-      ? "generationId"
-      : "sourceGenerationId";
-    const rows = (
-      await Promise.all(
-        generations.map((generation: any) =>
-          ctx.db
-            .query(tableName)
-            .withIndex(indexName, (q: any) =>
-              q.eq(parentField, generation._id),
-            )
-            .take(RESTORE_BATCH_LIMIT + 1),
-        ),
-      )
-    ).flat();
-    return requireBoundedBatch(rows, tableName);
-  }
   if (tableName === "posTransactionItem") {
     const parents = await ctx.db.query("posTransaction").withIndex("by_storeId", (q: any) => q.eq("storeId", storeId)).take(500);
     return requireBoundedBatch((await Promise.all(parents.map((parent: any) => ctx.db.query("posTransactionItem").withIndex("by_transactionId", (q: any) => q.eq("transactionId", parent._id)).take(RESTORE_BATCH_LIMIT + 1)))).flat(), tableName);
@@ -376,31 +256,8 @@ async function listStoreRows(ctx: any, tableName: string, storeId: Id<"store">) 
   if (tableName === "reportingInventoryPosition") {
     return requireBoundedBatch(await query.withIndex("by_storeId_productSkuId", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
   }
-  if (tableName === "reportingIngress") {
-    return requireBoundedBatch(await query.withIndex("by_storeId_status_acceptedAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
-  }
-  if (
-    tableName === "reportingIngressSourceReference" ||
-    tableName === "reportingFactSourceReference" ||
-    tableName === "reportingInventoryEffectSourceReference"
-  ) {
+  if (tableName === "reportingInventoryEffectSourceReference") {
     return requireBoundedBatch(await query.withIndex("by_storeId_sourceType_sourceId", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
-  }
-  if (tableName === "reportingIngressLine") {
-    return requireBoundedBatch(await query.withIndex("by_storeId_productSkuId_createdAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
-  }
-  if (
-    tableName === "reportingIngressConflict" ||
-    tableName === "reportingQuarantine" ||
-    tableName === "reportingReconciliationDiscrepancy"
-  ) {
-    return requireBoundedBatch(await query.withIndex("by_storeId_status_detectedAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
-  }
-  if (tableName === "reportingFactProcessingAttempt") {
-    return requireBoundedBatch(await query.withIndex("by_storeId_outcome_startedAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
-  }
-  if (tableName === "reportingProjectionHealth") {
-    return requireBoundedBatch(await query.withIndex("by_storeId_sourceDomain_projectionKind", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
   }
   if (tableName === "reportingInventoryEffect") {
     return requireBoundedBatch(await query.withIndex("by_storeId_productSkuId_occurrenceAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
