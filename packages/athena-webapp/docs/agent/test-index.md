@@ -46,6 +46,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/customerMessaging/webhookSecurity.test.ts`](../../convex/customerMessaging/webhookSecurity.test.ts)
 - [`convex/customerMessaging/whatsappClient.test.ts`](../../convex/customerMessaging/whatsappClient.test.ts)
 - [`convex/customerMessaging/whatsappConfig.test.ts`](../../convex/customerMessaging/whatsappConfig.test.ts)
+- [`convex/emails/ApprovalRequestPending.test.tsx`](../../convex/emails/ApprovalRequestPending.test.tsx)
 - [`convex/emails/DailyManagerReport.test.tsx`](../../convex/emails/DailyManagerReport.test.tsx)
 - [`convex/emails/NewOrderAdmin.test.tsx`](../../convex/emails/NewOrderAdmin.test.tsx)
 - [`convex/emails/OrderEmail.test.tsx`](../../convex/emails/OrderEmail.test.tsx)

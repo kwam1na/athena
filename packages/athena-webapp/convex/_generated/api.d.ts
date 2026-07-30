@@ -46,6 +46,7 @@ import type * as customerMessaging_webhookSecurity from "../customerMessaging/we
 import type * as customerMessaging_whatsappClient from "../customerMessaging/whatsappClient.js";
 import type * as customerMessaging_whatsappConfig from "../customerMessaging/whatsappConfig.js";
 import type * as devPatchBadTransaction from "../devPatchBadTransaction.js";
+import type * as emails_ApprovalRequestPending from "../emails/ApprovalRequestPending.js";
 import type * as emails_DailyManagerReport from "../emails/DailyManagerReport.js";
 import type * as emails_DailyManagerReportBordered from "../emails/DailyManagerReportBordered.js";
 import type * as emails_DailyManagerReportComparisonPreview from "../emails/DailyManagerReportComparisonPreview.js";
@@ -624,6 +625,7 @@ declare const fullApi: ApiFromModules<{
   "customerMessaging/whatsappClient": typeof customerMessaging_whatsappClient;
   "customerMessaging/whatsappConfig": typeof customerMessaging_whatsappConfig;
   devPatchBadTransaction: typeof devPatchBadTransaction;
+  "emails/ApprovalRequestPending": typeof emails_ApprovalRequestPending;
   "emails/DailyManagerReport": typeof emails_DailyManagerReport;
   "emails/DailyManagerReportBordered": typeof emails_DailyManagerReportBordered;
   "emails/DailyManagerReportComparisonPreview": typeof emails_DailyManagerReportComparisonPreview;

@@ -7,18 +7,18 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - [packages/AGENTS.md](../../packages/AGENTS.md) - package router plus the operational guides for each harnessed package
 
 ## Repo Summary
-- Code files discovered: 2701
-- Graph nodes: 11024
-- Graph edges: 13425
-- Communities: 2626
+- Code files discovered: 2681
+- Graph nodes: 10922
+- Graph edges: 13301
+- Communities: 2606
 
 ## Graph Hotspots
 - `dailyClose.ts` (93 edges, Community 0) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `harness-inferential-review.ts` (88 edges, Community 2) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
 - `posLocalStore.ts` (87 edges, Community 1) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts)
-- `dailyOperations.ts` (76 edges, Community 3) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../packages/athena-webapp/convex/operations/dailyOperations.ts)
-- `terminalHealthPresentation.ts` (76 edges, Community 4) - [`packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts`](../../packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts)
-- `catalogImport.ts` (75 edges, Community 5) - [`packages/athena-webapp/convex/inventory/catalogImport.ts`](../../packages/athena-webapp/convex/inventory/catalogImport.ts)
+- `terminalHealthPresentation.ts` (76 edges, Community 3) - [`packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts`](../../packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts)
+- `catalogImport.ts` (75 edges, Community 4) - [`packages/athena-webapp/convex/inventory/catalogImport.ts`](../../packages/athena-webapp/convex/inventory/catalogImport.ts)
+- `dailyOperations.ts` (75 edges, Community 5) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../packages/athena-webapp/convex/operations/dailyOperations.ts)
 - `DailyCloseView.tsx` (71 edges, Community 6) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
 - `usePosLocalSyncRuntime.ts` (69 edges, Community 7) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts)
 
