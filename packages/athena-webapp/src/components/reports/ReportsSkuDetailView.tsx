@@ -123,6 +123,11 @@ export function ReportsSkuDetailView({
       ? resolvedProductName
       : "Product";
   const skuImageUrl = detail?.identity?.imageUrl;
+  const unitMarginMinor =
+    typeof detail?.identity?.netPriceMinor === "number" &&
+    typeof detail.identity.unitCostMinor === "number"
+      ? detail.identity.netPriceMinor - detail.identity.unitCostMinor
+      : undefined;
 
   return (
     /* Rhythm: tight inside a cluster, generous between sections, so the page
@@ -216,6 +221,25 @@ export function ReportsSkuDetailView({
                         detail.identity?.netPriceMinor,
                         currency,
                       )}
+                    </dd>
+                  </div>
+                  <div className="shrink-0 border-l border-border pl-layout-md">
+                    <dt className="text-xs text-muted-foreground">
+                      Unit cost
+                    </dt>
+                    <dd className="font-numeric text-sm text-foreground">
+                      {formatOptionalMoney(
+                        detail.identity?.unitCostMinor,
+                        currency,
+                      )}
+                    </dd>
+                  </div>
+                  <div className="shrink-0 border-l border-border pl-layout-md">
+                    <dt className="text-xs text-muted-foreground">
+                      Unit margin
+                    </dt>
+                    <dd className="font-numeric text-sm text-foreground">
+                      {formatOptionalMoney(unitMarginMinor, currency)}
                     </dd>
                   </div>
                 </dl>

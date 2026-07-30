@@ -328,6 +328,8 @@ export type ReportSkuIdentity = {
   size?: string;
   /** Current catalog net price in the store's minor currency unit. */
   netPriceMinor: number;
+  /** Current catalog unit cost in the store's minor currency unit, when set. */
+  unitCostMinor?: number;
   /** Primary SKU image, when one is available. */
   imageUrl?: string;
   /**

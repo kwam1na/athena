@@ -13,6 +13,7 @@ describe("reports overview search schema", () => {
       daysStart: "2026-07-01",
       daysEnd: "2026-07-28",
       daysPage: 2,
+      selectedDay: "2026-07-16",
     };
     expect(reportsOverviewSearchSchema.parse(value)).toEqual(value);
   });
@@ -30,6 +31,9 @@ describe("reports overview search schema", () => {
   it("rejects malformed dates", () => {
     expect(() =>
       reportsOverviewSearchSchema.parse({ daysStart: "07/01/2026" }),
+    ).toThrow();
+    expect(() =>
+      reportsOverviewSearchSchema.parse({ selectedDay: "07/16/2026" }),
     ).toThrow();
   });
 

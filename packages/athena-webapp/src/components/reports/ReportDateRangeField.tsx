@@ -12,36 +12,8 @@ import {
   getLocalDateFromOperatingDate,
   getLocalOperatingDate,
 } from "@/lib/operations/operatingDate";
-import { formatOperatingDate } from "./reportFormat";
+import { formatReportDateRange } from "./reportFormat";
 import { ReportCalendar } from "./ReportCalendar";
-
-function formatDateRange(startDate: string, endDate: string): string {
-  const start = getLocalDateFromOperatingDate(startDate);
-  const end = getLocalDateFromOperatingDate(endDate);
-
-  if (!start || !end) return "Invalid date range";
-
-  if (startDate === endDate) {
-    return formatOperatingDate(startDate);
-  }
-
-  const sameYear = start.getFullYear() === end.getFullYear();
-  const sameMonth = sameYear && start.getMonth() === end.getMonth();
-  const startLabel = start.toLocaleDateString("en-US", {
-    day: "numeric",
-    month: "short",
-    year: sameYear ? undefined : "numeric",
-  });
-  const endLabel = sameMonth
-    ? `${end.getDate()}, ${end.getFullYear()}`
-    : end.toLocaleDateString("en-US", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      });
-
-  return `${startLabel}–${endLabel}`;
-}
 
 /** A compact, atomic date-range control shared by report views. */
 export function ReportDateRangeField({
@@ -62,7 +34,7 @@ export function ReportDateRangeField({
   const selectedEnd = getLocalDateFromOperatingDate(endDate) ?? selectedStart;
   const selectedRange = { from: selectedStart, to: selectedEnd };
   const [draftRange, setDraftRange] = useState<DateRange>(selectedRange);
-  const rangeLabel = formatDateRange(startDate, endDate);
+  const rangeLabel = formatReportDateRange(startDate, endDate);
 
   return (
     <Popover

@@ -8,6 +8,7 @@ import { REPORT_SKU_PAGE_SIZE } from "../../shared/reportsContract";
 import type {
   ReportDayRow,
   ReportOverviewData,
+  ReportPeriodKey,
   ReportRangeSummary,
   ReportSkuIdentity,
   ReportSkuMixData,
@@ -16,6 +17,7 @@ import type {
   ReportSkuTransactionEvidence,
 } from "../../shared/reportsContract";
 import { emptySnapshot } from "./overview";
+import { periodDateRange } from "./rollups";
 
 /**
  * Slice D — read queries for the rebuilt reports layer.
@@ -29,6 +31,8 @@ const RANGE_MAX_SPAN_DAYS = 92;
 const RANGE_SKU_MIX_ROW_LIMIT = 5_000;
 const RANGE_SKU_MIX_VISIBLE_LIMIT = 5;
 const SKU_DAY_EVIDENCE_FACT_LIMIT = 500;
+const ITEMS_PERIOD_MAX_DAYS = 31;
+const ITEMS_UNCLOSED_DAY_FACT_LIMIT = 2_000;
 
 /** Inclusive day count between two "YYYY-MM-DD" operating-date labels. */
 function inclusiveDaySpan(startDate: string, endDate: string): number {
@@ -282,6 +286,50 @@ function decodeCursor(cursor: string): ListPeriodSkusCursor {
  */
 const TIE_BREAK_OVERFETCH = 25;
 
+function transactionCountFromCloseSummary(
+  summary: Record<string, unknown>,
+): number {
+  const transactionCount = summary.transactionCount;
+  return typeof transactionCount === "number" &&
+    Number.isFinite(transactionCount) &&
+    transactionCount >= 0
+    ? Math.trunc(transactionCount)
+    : 0;
+}
+
+async function livePosTransactionCount(
+  ctx: QueryCtx,
+  day: Pick<Doc<"reportDay">, "currency" | "operatingDate" | "storeId">,
+): Promise<number> {
+  const facts = await ctx.db
+    .query("reportFact")
+    .withIndex("by_storeId_operatingDate", (q) =>
+      q.eq("storeId", day.storeId).eq("operatingDate", day.operatingDate),
+    )
+    .take(ITEMS_UNCLOSED_DAY_FACT_LIMIT + 1);
+  if (facts.length > ITEMS_UNCLOSED_DAY_FACT_LIMIT) {
+    throw new Error(
+      `Transaction count is unavailable because ${day.operatingDate} exceeds the report fact limit.`,
+    );
+  }
+
+  const saleSources = new Set<string>();
+  const voidedSources = new Set<string>();
+  for (const fact of facts) {
+    if (
+      fact.sourceDomain !== "pos" ||
+      fact.currency !== day.currency ||
+      fact.quarantine
+    ) {
+      continue;
+    }
+    if (fact.factKind === "sale") saleSources.add(fact.sourceId);
+    if (fact.factKind === "void") voidedSources.add(fact.sourceId);
+  }
+  for (const sourceId of voidedSources) saleSources.delete(sourceId);
+  return saleSources.size;
+}
+
 export const listPeriodSkus = query({
   args: {
     storeId: v.id("store"),
@@ -295,9 +343,12 @@ export const listPeriodSkus = query({
   ): Promise<{
     rows: ReportSkuPeriodRow[];
     continueCursor: string | null;
+    totalUnitsSold: number;
+    totalTransactions: number;
     updatedAt: number | null;
   }> => {
     await requireReportsStoreAccess(ctx, args.storeId);
+    const periodRange = periodDateRange(args.periodKey as ReportPeriodKey);
 
     let cursorCtx: ListPeriodSkusCursor | null = null;
     if (args.cursor) {
@@ -372,19 +423,58 @@ export const listPeriodSkus = query({
           })
         : null;
 
-    // One singleton read carries the same sweep timestamp shown on Overview,
-    // so Items can disclose rollup freshness without a second client query.
-    const [rows, overview] = await Promise.all([
+    // The bounded day read keeps period totals independent of SKU pagination
+    // and uses the same reportDay authority as Overview's day rows. Linked,
+    // accepted closes are the authority for finalized transaction counts.
+    // A day without a close reads at most 2,001 facts to count its distinct
+    // live POS transactions; the extra row detects the same 2,000-fact cap
+    // enforced by the day fold instead of silently returning a partial count.
+    // One singleton read carries the same sweep timestamp shown on Overview.
+    const [rows, overview, periodDays] = await Promise.all([
       withSkuIdentity(ctx, page.map(toSkuPeriodRow)),
       ctx.db
         .query("reportOverview")
         .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
         .first(),
+      periodRange
+        ? ctx.db
+            .query("reportDay")
+            .withIndex("by_storeId_operatingDate", (q) =>
+              q
+                .eq("storeId", args.storeId)
+                .gte("operatingDate", periodRange.startDate)
+                .lte("operatingDate", periodRange.endDate),
+            )
+            .take(ITEMS_PERIOD_MAX_DAYS)
+        : Promise.resolve([]),
     ]);
+    const periodCloses = await Promise.all(
+      periodDays.map((day) =>
+        day.closeId
+          ? ctx.db.get("dailyClose", day.closeId)
+          : Promise.resolve(null),
+      ),
+    );
+    const periodTransactionCounts = await Promise.all(
+      periodDays.map((day, index) => {
+        const close = periodCloses[index];
+        return close
+          ? transactionCountFromCloseSummary(close.summary)
+          : livePosTransactionCount(ctx, day);
+      }),
+    );
 
     return {
       rows,
       continueCursor,
+      totalUnitsSold: periodDays.reduce(
+        (total, day) => total + day.unitsSold,
+        0,
+      ),
+      totalTransactions: periodTransactionCounts.reduce(
+        (total, count) => total + count,
+        0,
+      ),
       updatedAt: overview?.updatedAt ?? null,
     };
   },
@@ -430,6 +520,7 @@ async function resolveSkuIdentity(
   const size = cleanMetadataValue(sku.size);
   const imageUrl = cleanMetadataValue(sku.images[0]);
   const netPriceMinor = sku.netPrice ?? sku.price;
+  const unitCostMinor = sku.unitCost;
 
   return {
     displayName:
@@ -438,6 +529,7 @@ async function resolveSkuIdentity(
       code ??
       String(productSkuId),
     netPriceMinor,
+    ...(unitCostMinor !== undefined ? { unitCostMinor } : {}),
     ...(code ? { sku: code } : {}),
     ...(size ? { size } : {}),
     ...(imageUrl ? { imageUrl } : {}),

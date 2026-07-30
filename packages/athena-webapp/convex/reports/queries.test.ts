@@ -50,7 +50,7 @@ async function seedStore(t: ReturnType<typeof convexTest>) {
       organizationId,
       slug: "queries",
     });
-    return { storeId };
+    return { organizationId, storeId };
   });
 }
 
@@ -59,6 +59,7 @@ async function seedSku(
   storeId: Id<"store">,
   images: string[] = [],
   netPrice?: number,
+  unitCost?: number,
 ) {
   return t.run(async (ctx) => {
     const userId = await ctx.db.insert("athenaUser", {
@@ -101,6 +102,7 @@ async function seedSku(
       quantityAvailable: 10,
       sku: `SKU-${Math.random()}`,
       storeId,
+      ...(unitCost !== undefined ? { unitCost } : {}),
     });
   });
 }
@@ -344,6 +346,50 @@ describe("listRangeSkuMix", () => {
 });
 
 describe("listPeriodSkus", () => {
+  async function seedReportDay(
+    t: ReturnType<typeof convexTest>,
+    organizationId: Id<"organization">,
+    storeId: Id<"store">,
+    operatingDate: string,
+    unitsSold: number,
+    transactionCount: number,
+  ) {
+    await t.run(async (ctx) => {
+      const closeId = await ctx.db.insert("dailyClose", {
+        storeId,
+        organizationId,
+        operatingDate,
+        status: "completed",
+        isCurrent: true,
+        readiness: {
+          status: "ready",
+          blockerCount: 0,
+          reviewCount: 0,
+          carryForwardCount: 0,
+          readyCount: 0,
+        },
+        summary: { transactionCount },
+        sourceSubjects: [],
+        carryForwardWorkItemIds: [],
+        createdAt: 1,
+        updatedAt: 1,
+        completedAt: 1,
+      });
+      return ctx.db.insert("reportDay", {
+        storeId,
+        operatingDate,
+        currency: "GHS",
+        status: "reconciled",
+        ...dayMetrics({ unitsSold }),
+        closeId,
+        foldVersion: 1,
+        factCount: unitsSold,
+        lastFactRecordedAt: 1000,
+        flags: dayFlags,
+      });
+    });
+  }
+
   async function seedRollup(
     t: ReturnType<typeof convexTest>,
     storeId: Id<"store">,
@@ -368,6 +414,99 @@ describe("listPeriodSkus", () => {
       }),
     );
   }
+
+  it("returns period totals independently of SKU pagination", async () => {
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t);
+    await seedReportDay(
+      t,
+      organizationId,
+      storeId,
+      "2026-07-28",
+      10,
+      4,
+    );
+    await seedReportDay(
+      t,
+      organizationId,
+      storeId,
+      "2026-07-29",
+      6,
+      3,
+    );
+    await seedReportDay(
+      t,
+      organizationId,
+      storeId,
+      "2026-08-03",
+      99,
+      99,
+    );
+
+    const result = await t.run((ctx) =>
+      handlerOf(listPeriodSkus)(ctx, {
+        storeId,
+        periodKey: "w:2026-W31",
+        sortBy: "revenue",
+      }),
+    );
+
+    expect(result.totalUnitsSold).toBe(16);
+    expect(result.totalTransactions).toBe(7);
+  });
+
+  it("counts live POS transactions when an open day has no close yet", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("reportDay", {
+        storeId,
+        operatingDate: "2026-07-29",
+        currency: "GHS",
+        status: "open",
+        ...dayMetrics({ unitsSold: 3 }),
+        foldVersion: 1,
+        factCount: 3,
+        lastFactRecordedAt: 1000,
+        flags: dayFlags,
+      });
+      for (const [sourceId, lineId] of [
+        ["transaction-1", "line-1"],
+        ["transaction-1", "line-2"],
+        ["transaction-2", "line-1"],
+      ] as const) {
+        await ctx.db.insert("reportFact", {
+          storeId,
+          sourceDomain: "pos",
+          sourceId,
+          lineId,
+          factKind: "sale",
+          fingerprint: `${sourceId}-${lineId}`,
+          fingerprintVersion: 1,
+          occurredAt: 1000,
+          recordedAt: 1000,
+          operatingDate: "2026-07-29",
+          currency: "GHS",
+          grossAmountMinor: 100,
+          netAmountMinor: 100,
+          taxAmountMinor: 0,
+          discountAmountMinor: 0,
+          quantity: 1,
+        });
+      }
+    });
+
+    const result = await t.run((ctx) =>
+      handlerOf(listPeriodSkus)(ctx, {
+        storeId,
+        periodKey: "d:2026-07-29",
+        sortBy: "revenue",
+      }),
+    );
+
+    expect(result.totalUnitsSold).toBe(3);
+    expect(result.totalTransactions).toBe(2);
+  });
 
   it("uses the linked product name when the SKU has no denormalized product name", async () => {
     const t = convexTest(schema, modules);
@@ -600,7 +739,7 @@ describe("getSkuDetail", () => {
     const { storeId } = await seedStore(t);
     const productSkuId = await seedSku(t, storeId, [
       "https://cdn.example.test/wig.webp",
-    ], 12_500);
+    ], 12_500, 7_250);
     const result = await t.run((ctx) =>
       handlerOf(getSkuDetail)(ctx, {
         storeId,
@@ -617,6 +756,7 @@ describe("getSkuDetail", () => {
       "https://cdn.example.test/wig.webp",
     );
     expect(result?.identity?.netPriceMinor).toBe(12_500);
+    expect(result?.identity?.unitCostMinor).toBe(7_250);
   });
 
   it("sums metrics across days, with operatingDate per row", async () => {
