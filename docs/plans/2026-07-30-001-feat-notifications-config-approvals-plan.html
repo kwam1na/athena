@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>feat: Notification subscription settings surface and approval-request emails — plan review</title>
+<style>
+  :root { --fg: #1a1a1a; --muted: #666; --border: #ddd; --accent: #0b5cad; --bg-soft: #f6f7f9; --warn: #8a5a00; --warn-bg: #fff7e6; }
+  body { margin: 0 auto; max-width: 60rem; padding: 2rem 1.25rem 4rem; font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--fg); }
+  header { border-bottom: 2px solid var(--border); padding-bottom: 1rem; margin-bottom: 1.5rem; }
+  h1 { font-size: 1.5rem; margin: 0 0 .5rem; }
+  h2 { font-size: 1.2rem; margin-top: 2.2rem; border-bottom: 1px solid var(--border); padding-bottom: .3rem; }
+  h3 { font-size: 1.02rem; margin-top: 1.4rem; }
+  .meta { color: var(--muted); font-size: .9rem; }
+  .meta code { background: var(--bg-soft); padding: .1rem .35rem; border-radius: 4px; }
+  nav { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 8px; padding: .8rem 1.2rem; font-size: .92rem; }
+  nav a { color: var(--accent); text-decoration: none; margin-right: 1rem; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .88em; background: var(--bg-soft); padding: .08rem .3rem; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92rem; }
+  th, td { border: 1px solid var(--border); padding: .45rem .6rem; text-align: left; vertical-align: top; }
+  th { background: var(--bg-soft); }
+  .unit { border: 1px solid var(--border); border-radius: 8px; padding: .9rem 1.1rem; margin: 1rem 0; }
+  .unit h3 { margin: 0 0 .4rem; }
+  .tag { display: inline-block; font-size: .75rem; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 999px; padding: .05rem .55rem; margin-right: .3rem; color: var(--muted); }
+  .callout { background: var(--warn-bg); border-left: 4px solid var(--warn); padding: .6rem .9rem; border-radius: 0 6px 6px 0; margin: 1rem 0; font-size: .95rem; }
+  ul { padding-left: 1.3rem; }
+  li { margin: .25rem 0; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 700px) { .cols { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>feat: Notification subscription settings surface and approval-request emails</h1>
+  <p class="meta">Type: <strong>feat</strong> &middot; Status: <strong>active</strong> &middot; Created: <strong>2026-07-30</strong> &middot; Canonical source: <code>docs/plans/2026-07-30-001-feat-notifications-config-approvals-plan.md</code></p>
+</header>
+
+<nav aria-label="Contents">
+  <a href="#summary">Summary</a>
+  <a href="#scope">Scope</a>
+  <a href="#decisions">Key Decisions</a>
+  <a href="#design">Design</a>
+  <a href="#units">Implementation Units</a>
+  <a href="#impact">System Impact</a>
+  <a href="#risks">Risks</a>
+  <a href="#verification">Verification</a>
+</nav>
+
+<main>
+<section id="summary">
+  <h2>Summary &amp; Problem Frame</h2>
+  <p>Give operators a product surface to configure who receives admin notifications, and put approval requests on the notifications rail. Two workstreams:</p>
+  <ul>
+    <li><strong>Settings surface</strong> — a <code>NotificationsView</code> on the store configuration page manages <code>notificationSubscription</code> rows per category, backed by the rail&rsquo;s first public Convex functions.</li>
+    <li><strong>Approval emails</strong> — a new <code>approvals.request_created</code> kind emails subscribed managers when an approval request needing asynchronous manager approval is created, with per-<code>requestType</code> template differentiation and suppression for requests already decided.</li>
+  </ul>
+  <p>The rail (PR #710) centralized delivery but left audience config dashboard-only and shipped no UI; async approval requests today notify nobody. Requests created and decided in the same flow by a present manager need no notification — the pending ones do, and &ldquo;pending row created&rdquo; is exactly the discriminator the code already provides.</p>
+</section>
+
+<section id="scope">
+  <h2>Scope Boundaries</h2>
+  <div class="cols">
+    <div>
+      <h3>In scope</h3>
+      <ul>
+        <li>Four category cards (<code>cash_controls</code>, <code>eod</code>, <code>system_health</code>, new <code>approvals</code>): list, add, enable/disable, remove recipients</li>
+        <li>Member picker (managers first) + free-form email entry</li>
+        <li>Three-state semantics UI: fallback active / active recipients / silenced</li>
+        <li><code>approvals.request_created</code> kind + <code>ApprovalRequestPending</code> template + shared insert helper wrapping all eight insert sites</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Out of scope / deferred</h3>
+      <ul>
+        <li>In-app channel and inbox UI (still stubbed)</li>
+        <li>Store-scoped subscription rows (org-wide only in v1)</li>
+        <li>Dispatch delay, digest, batching (ship as-is, user-confirmed)</li>
+        <li>Manager-role auto-sync (recipients stay explicit rows; a one-time manager seed at rollout is in scope in U5)</li>
+        <li>Admin-side variance-review notification gap (pre-existing; follow-up)</li>
+        <li>Any change to existing kinds, dedupe keys, or PR #710 cutover guards</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout"><strong>Sharp semantics the UI must teach:</strong> zero rows for a category &rarr; hardcoded <code>ADMIN_EMAILS</code> fallback; first row added &rarr; fallback stops entirely; rows exist but all disabled &rarr; category is silenced (fallback does <em>not</em> re-arm). Remove-last and disable-last look similar but have opposite outcomes &mdash; each gets distinct confirmation copy.</div>
+</section>
+
+<section id="decisions">
+  <h2>Key Technical Decisions</h2>
+  <table>
+    <tr><th>Decision</th><th>Rationale</th></tr>
+    <tr><td>Org-wide subscription rows only (no <code>storeId</code>) in v1</td><td>A store-scoped row kills the org-wide fallback for every other store (fallback keys on zero rows per org+category) — silent cross-store silencing hazard</td></tr>
+    <tr><td>Auth mirrors <code>reports/access.ts</code>, not the sibling config mutation</td><td><code>patchConfigV2Command</code> has no membership check; copying it would let any authenticated user rewrite alert audiences</td></tr>
+    <tr><td>Immediate dispatch + &ldquo;may already be resolved&rdquo; copy</td><td>No per-kind delay knob exists; adding one touches the rail&rsquo;s tested core. Judge volume in production first (user-confirmed)</td></tr>
+    <tr><td><code>variance_review</code> excluded via helper-level skip</td><td>Registry-level suppression burns an intent row + operational event per closeout — collides with the low-DB-reads rule</td></tr>
+    <tr><td>Emit at insert; suppress at <code>prepareEmail</code> when not pending</td><td>Render-at-send re-reads the request: null = unsendable (decided/deleted), throw = transient retry. The rail&rsquo;s documented mechanism; no new machinery</td></tr>
+    <tr><td>Dedupe key = percent-encoded approval request id</td><td>Idempotent across sync replays and retries; matches existing kind recipes</td></tr>
+    <tr><td>Descriptor map = the seven live queue types; generic fallback owns the rest</td><td><code>requestType</code> is an open string; <code>register_sync_review</code> (work-item-only) and any future type render via the required generic fallback — never crash or silently skip</td></tr>
+    <tr><td>Seed per-org <code>approvals</code> rows from manager <code>operationalRoles</code> at rollout</td><td>The <code>ADMIN_EMAILS</code> fallback bridge was designed for low-volume alerts; at approval-request frequency it would route every org&rsquo;s operational detail to two personal inboxes while managers got nothing (revised during document review)</td></tr>
+    <tr><td>Wrap the caller-less <code>createApprovalRequest</code> too</td><td>Future callers must not silently bypass notification</td></tr>
+    <tr><td>Category union lands schema-first (single unit)</td><td>A registry/schema mismatch would make emit throw <em>inside POS commands and closeout mutations</em> — blast radius is domain writes, not just notifications</td></tr>
+  </table>
+</section>
+
+<section id="design">
+  <h2>High-Level Design (directional, not implementation spec)</h2>
+  <p><strong>Backend flow:</strong> domain mutation &rarr; <code>insertApprovalRequestWithCtx</code> (skips <code>variance_review</code>) &rarr; <code>emitNotificationWithCtx</code> with dedupe = request id &rarr; <code>dispatchIntent</code> at 0 delay &rarr; <code>prepareEmail</code> re-reads the request &rarr; still pending: descriptor-driven <code>ApprovalRequestPending</code> render to the <code>approvals</code> audience; decided/deleted: null &rarr; suppressed.</p>
+  <p><strong>Frontend flow:</strong> <code>NotificationsView</code> (configuration page, <code>full_admin</code>) &rarr; bounded list query per category + member-picker query &rarr; add/toggle/remove mutations (admission rail, full_admin server check, demo guards, dedupe/cap/format integrity) &rarr; rows consumed unchanged by dispatch&rsquo;s <code>resolveRecipients</code>.</p>
+</section>
+
+<section id="units">
+  <h2>Implementation Units</h2>
+  <div class="unit"><h3>U1. <code>approvals</code> category across schema, registry, and seed boundary</h3>
+    <span class="tag">R9</span><span class="tag">deps: none</span>
+    <p>Extend <code>notificationCategoryValidator</code> + <code>NotificationCategory</code> in lockstep; <code>SEED_CATEGORIES</code> deliberately untouched (asserted by test). Derive later enumerations from the schema union.</p></div>
+  <div class="unit"><h3>U2. <code>ApprovalRequestPending</code> template with per-type descriptors</h3>
+    <span class="tag">R6</span><span class="tag">deps: none</span>
+    <p>One React Email template; descriptor map (label, subject fragment, rendered fields) over the seven live non-variance types + required generic fallback. Store identity in subject and header; requester from server-validated fields; currency-correct amounts; queue link; &ldquo;may already be resolved&rdquo; copy. Tests include unknown-type and non-GHS currency cases.</p></div>
+  <div class="unit"><h3>U3. Payload query and registry entry</h3>
+    <span class="tag">R5 R6 R10</span><span class="tag">deps: U1, U2</span>
+    <p><code>convex/operations/approvalRequestEmail.ts</code>: null when missing/decided (suppress), throw on transient (retry). Registry entry: category <code>approvals</code>, dedupe = percent-encoded request id. End-to-end rail tests incl. fallback audience and falsified suppression test.</p></div>
+  <div class="unit"><h3>U4. <code>insertApprovalRequestWithCtx</code> + call-site migration</h3>
+    <span class="tag">R5 R7 R10</span><span class="tag">deps: U3</span>
+    <p>Insert + emit in one transaction; explicit tested <code>variance_review</code> carve-out at the choke point. All eight sites migrate (six live emitting, two variance-skipped, plus the caller-less internal mutation). Verification: grep-clean of direct inserts.</p></div>
+  <div class="unit"><h3>U5. Public subscription API (list, add, toggle, remove)</h3>
+    <span class="tag">R1 R4 R8</span><span class="tag">deps: U1</span>
+    <p>The rail&rsquo;s first public functions: bounded <code>.take()</code> list with N+ completeness; mutations behind <code>admitPublicMutation</code> + <code>requireOrganizationMemberRoleWithCtx(["full_admin"])</code> + demo guards; normalized-email dedupe, format validation, server-side 200-row cap (counts disabled rows), <code>email</code> channel only, org-wide rows only. <code>setEnabled</code>/<code>remove</code> authorize against the <em>target row&rsquo;s</em> <code>organizationId</code> (cross-org rejection tested). Read definitions for the public queries go in <code>operationAdmission/readDefinitions.ts</code> (separate from <code>definitions.ts</code>). Includes the one-time per-org <code>approvals</code> manager seed mutation. Return-contract tests; admission checker must pass.</p></div>
+  <div class="unit"><h3>U6. Member picker query</h3>
+    <span class="tag">R3 R4</span><span class="tag">deps: U5</span>
+    <p>New authorized query joining <code>organizationMember</code> &rarr; <code>athenaUser</code> with <code>operationalRoles</code> (don&rsquo;t widen the unauthenticated <code>getAll</code>). PII-gated to full_admin.</p></div>
+  <div class="unit"><h3>U7. <code>NotificationsView</code> on the store configuration page</h3>
+    <span class="tag">R1 R2 R3</span><span class="tag">deps: U5, U6</span>
+    <p>Category cards with three-state banners plus a distinct loading skeleton (an unresolved query must never render the fallback banner) and distinct remove-last / disable-last confirms. Add flow: one combobox, members managers-first, free-form email row, already-subscribed members disabled with an &ldquo;already added&rdquo; hint, add control disabled at the 200 cap. <code>runCommand</code>/<code>presentCommandToast</code> conventions; reads mounted only on this route. Component + hook tests.</p></div>
+  <div class="unit"><h3>U8. Docs, artifacts, and delivery gates</h3>
+    <span class="tag">deps: U1&ndash;U7</span>
+    <p>Update the rail solution note (manual-seeding gap closed), code map, Graphify rebuild, Convex client artifacts; <code>bun run pr:athena</code> as merge-ready authority.</p></div>
+</section>
+
+<section id="impact">
+  <h2>System-Wide Impact</h2>
+  <ul>
+    <li><strong>Interaction graph:</strong> six domain command paths gain an in-transaction emit; dispatch/sweeper unchanged; configuration page gains its first non-<code>store.config</code> view.</li>
+    <li><strong>Error propagation:</strong> emit failures would fail domain transactions — mitigated by schema-first ordering (U1) and idempotent dedupe; null-vs-throw keeps suppression and transient faults separate.</li>
+    <li><strong>State lifecycle:</strong> subscription rows outlive membership (deferred badge); fast-resolved approvals end as one suppressed intent each, bounded by dedupe.</li>
+    <li><strong>Unchanged invariants:</strong> existing kinds, dedupe keys, cutover guards, transport, delivery policy, sweeper, and fallback semantics are untouched — the UI only makes the semantics visible.</li>
+  </ul>
+</section>
+
+<section id="risks">
+  <h2>Risks &amp; Mitigations</h2>
+  <table>
+    <tr><th>Risk</th><th>Mitigation</th></tr>
+    <tr><td>Category union mismatch breaks domain mutations at deploy boundary</td><td>U1 lands schema+registry together, before any emit site; rail test asserts validity</td></tr>
+    <tr><td>Approval email volume annoys managers</td><td>User-accepted; expectation-setting copy; one email per request via dedupe; delay knob only if data warrants</td></tr>
+    <tr><td>New public surface under-authorized</td><td>Explicit <code>reports/access.ts</code> posture; per-<code>_handler</code> auth tests; admission checker in CI</td></tr>
+    <tr><td>Operator silences a category believing fallback still applies</td><td>Three-state banners, distinct confirms, integration test pinning no-fallback-when-disabled</td></tr>
+    <tr><td>Descriptor map drifts from live request types</td><td>Required generic fallback + exhaustiveness check against queue-listed types</td></tr>
+  </table>
+</section>
+
+<section id="verification">
+  <h2>Verification Strategy</h2>
+  <ul>
+    <li>convexTest suites: category validity, kind end-to-end (emit &rarr; dispatch &rarr; audience &rarr; suppression), helper carve-out, subscription integrity (auth, dedupe, cap, channel), member-picker auth.</li>
+    <li>Falsify new regression-critical tests (suppression, no-fallback-when-disabled) against intentionally broken behavior, per the rail learning.</li>
+    <li>Template render tests incl. unknown type and non-GHS currency; <code>email:dev</code> preview.</li>
+    <li>Frontend hook/component tests with mocked <code>convex/react</code>; three banner states and both confirm variants.</li>
+    <li>Gates: <code>bun scripts/convex-operation-admission-check.ts</code>, return-contract tests, Graphify rebuild, <code>bun run pr:athena</code> from repo root.</li>
+  </ul>
+</section>
+</main>
+</body>
+</html>
