@@ -237,6 +237,33 @@ describe("emit", () => {
   });
 });
 
+describe("notificationCategoryValidator", () => {
+  it("accepts an intent inserted with category 'approvals'", async () => {
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+
+    const intentId = await t.run((ctx) =>
+      ctx.db.insert("notificationIntent", {
+        kind: "approvals.some_future_kind",
+        category: "approvals",
+        storeId: fixture.storeId,
+        organizationId: fixture.organizationId,
+        subjectType: "store",
+        subjectId: String(fixture.storeId),
+        dedupeKey: "approvals.some_future_kind:1",
+        payload: {},
+        status: "pending",
+        emittedAt: NOW,
+      }),
+    );
+
+    const intent = await t.run((ctx) =>
+      ctx.db.get("notificationIntent", intentId),
+    );
+    expect(intent).toMatchObject({ category: "approvals" });
+  });
+});
+
 describe("reserveIntentDeliveries", () => {
   it("resolves subscriptions with store scoping, disabled exclusion, and email collapse", async () => {
     const t = convexTest(schema, modules);
@@ -2358,5 +2385,28 @@ describe("seedAdminSubscriptions", () => {
           subscription.storeId === undefined,
       ),
     ).toBe(true);
+  });
+
+  it("covers exactly cash_controls, eod, and system_health", async () => {
+    // Guards against silently widening the seed audience: adding a new
+    // category (e.g. "approvals") to notificationCategoryValidator/registry
+    // must not automatically enroll it here — that's a deliberate follow-up.
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+
+    await t.mutation(internal.notifications.seed.seedAdminSubscriptions, {});
+
+    const subscriptions = await t.run((ctx) =>
+      ctx.db
+        .query("notificationSubscription")
+        .withIndex("by_organizationId_and_category", (q) =>
+          q.eq("organizationId", fixture.organizationId),
+        )
+        .take(100),
+    );
+    const categories = new Set(
+      subscriptions.map((subscription) => subscription.category),
+    );
+    expect(categories).toEqual(new Set(["cash_controls", "eod", "system_health"]));
   });
 });

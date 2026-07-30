@@ -7,7 +7,11 @@ import DailyManagerReport from "../emails/DailyManagerReport";
 import PosTerminalHealthAlert from "../emails/PosTerminalHealthAlert";
 import RegisterCloseoutVarianceAlert from "../emails/RegisterCloseoutVarianceAlert";
 
-export type NotificationCategory = "cash_controls" | "eod" | "system_health";
+export type NotificationCategory =
+  | "cash_controls"
+  | "eod"
+  | "system_health"
+  | "approvals";
 export type NotificationChannel = "email" | "in_app";
 export type NotificationPayload = Record<string, unknown>;
 export type PreparedNotificationEmail = { subject: string; html: string };

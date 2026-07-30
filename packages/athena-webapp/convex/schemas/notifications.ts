@@ -4,6 +4,7 @@ export const notificationCategoryValidator = v.union(
   v.literal("cash_controls"),
   v.literal("eod"),
   v.literal("system_health"),
+  v.literal("approvals"),
 );
 
 export const notificationChannelValidator = v.union(
