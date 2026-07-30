@@ -2410,3 +2410,283 @@ describe("seedAdminSubscriptions", () => {
     expect(categories).toEqual(new Set(["cash_controls", "eod", "system_health"]));
   });
 });
+
+describe("approvals.request_created rail", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  function stubProdTransport(status = 202) {
+    vi.stubEnv("STAGE", "prod");
+    vi.stubEnv("MAILERSEND_API_KEY", "test-key");
+    const fetchMock = vi.fn(
+      async (_input: string | URL | Request, _init?: RequestInit) =>
+        new Response(null, {
+          status,
+          headers: { "x-message-id": "msg-1" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  async function seedPendingApprovalRequest(
+    t: ReturnType<typeof convexTest>,
+    fixture: SeededFixture,
+  ) {
+    return t.run(async (ctx) => {
+      const staffProfileId = await ctx.db.insert("staffProfile", {
+        storeId: fixture.storeId,
+        organizationId: fixture.organizationId,
+        fullName: "Ama Mensah",
+        firstName: "Ama",
+        lastName: "Mensah",
+        status: "active",
+      });
+      const approvalRequestId = await ctx.db.insert("approvalRequest", {
+        storeId: fixture.storeId,
+        organizationId: fixture.organizationId,
+        requestType: "pos_transaction_void",
+        subjectType: "pos_transaction",
+        subjectId: "tx-1",
+        status: "pending",
+        requestedByStaffProfileId: staffProfileId,
+        reason: "Manager approval is required to void a completed sale.",
+        metadata: { transactionNumber: "TXN-1048", total: 4218 },
+        createdAt: NOW,
+      });
+      return { approvalRequestId, staffProfileId };
+    });
+  }
+
+  async function emitApprovalRequestCreated(
+    t: ReturnType<typeof convexTest>,
+    fixture: SeededFixture,
+    approvalRequestId: Id<"approvalRequest">,
+  ) {
+    return t.mutation(internal.notifications.emit.emitNotification, {
+      kind: "approvals.request_created",
+      storeId: fixture.storeId,
+      organizationId: fixture.organizationId,
+      subjectType: "approvalRequest",
+      subjectId: String(approvalRequestId),
+      // Refs only — never rendered content.
+      payload: {
+        approvalRequestId,
+        storeId: fixture.storeId,
+        requestType: "pos_transaction_void",
+      },
+    });
+  }
+
+  it("emits, dispatches, and sends a pending approval with store name and type label in the subject", async () => {
+    // Emit under fake timers so the emit-scheduled dispatch stays inert and
+    // the explicit dispatch below is the only one that runs...
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const fetchMock = stubProdTransport();
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    const { approvalRequestId } = await seedPendingApprovalRequest(t, fixture);
+
+    const { intentId, created } = await emitApprovalRequestCreated(
+      t,
+      fixture,
+      approvalRequestId,
+    );
+    expect(created).toBe(true);
+    // ...then dispatch on real timers: react-email's render never resolves
+    // under a fake clock.
+    vi.useRealTimers();
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+    ).toMatchObject({
+      kind: "approvals.request_created",
+      category: "approvals",
+      dedupeKey: `approvals.request_created:${approvalRequestId}`,
+      status: "pending",
+    });
+
+    await t.action(internal.notifications.dispatch.dispatchIntent, {
+      intentId,
+    });
+
+    const deliveries = await listDeliveries(t);
+    expect(deliveries).toHaveLength(ADMIN_EMAILS.length);
+    for (const delivery of deliveries) {
+      expect(delivery.status).toBe("sent");
+      expect(delivery.category).toBe("approvals");
+    }
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+    ).toMatchObject({ status: "dispatched" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(ADMIN_EMAILS.length);
+    const body = JSON.parse(String(fetchMock.mock.calls[0]![1]!.body));
+    // Store name + type label + identifier, built from a FRESH read.
+    expect(body.subject).toBe(
+      "Accra approval needed - Transaction void - TXN-1048",
+    );
+    expect(body.html).toContain("Ama Mensah");
+    // Queue-level link only: no per-request deep link.
+    expect(body.html).toContain("/accra/store/accra/operations/approvals");
+    expect(body.html).not.toContain(`approvals/${approvalRequestId}`);
+  });
+
+  it("suppresses the intent and deliveries when the request was decided before dispatch", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const fetchMock = stubProdTransport();
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    const { approvalRequestId } = await seedPendingApprovalRequest(t, fixture);
+
+    const { intentId } = await emitApprovalRequestCreated(
+      t,
+      fixture,
+      approvalRequestId,
+    );
+
+    // Decided between emit and dispatch: the "approval needed" email is no
+    // longer true and must never send.
+    await t.run((ctx) =>
+      ctx.db.patch("approvalRequest", approvalRequestId, {
+        status: "approved",
+        decidedAt: NOW + 1,
+      }),
+    );
+    // Dispatch on real timers so a suppression regression fails on the
+    // delivery assertions below (a wrongly-rendered email would otherwise
+    // hang react-email's render under the fake clock).
+    vi.useRealTimers();
+
+    await t.action(internal.notifications.dispatch.dispatchIntent, {
+      intentId,
+    });
+
+    const deliveries = await listDeliveries(t);
+    expect(deliveries).toHaveLength(ADMIN_EMAILS.length);
+    for (const delivery of deliveries) {
+      expect(delivery.status).toBe("suppressed");
+      expect(delivery.errorCode).toBe("payload_unavailable");
+      expect(delivery.terminalAt).toBeDefined();
+    }
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+    ).toMatchObject({
+      status: "suppressed",
+      suppressedReason: "payload_unavailable",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // The dropped alert must leave a trace on the subject's operational
+    // timeline, not vanish into a table.
+    const failureEvents = (await listOperationalEvents(t)).filter(
+      (event) => event.eventType === "notification_delivery_failed",
+    );
+    expect(failureEvents).toHaveLength(1);
+    expect(failureEvents[0]).toMatchObject({
+      storeId: fixture.storeId,
+      subjectType: "approvalRequest",
+      subjectId: String(approvalRequestId),
+    });
+    expect(failureEvents[0]?.metadata).toMatchObject({
+      notificationKind: "approvals.request_created",
+      notificationSubjectKey: `${intentId}:payload_unavailable`,
+      errorCode: "payload_unavailable",
+    });
+  });
+
+  it("collapses a second emit for the same approval request into one intent", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    const { approvalRequestId } = await seedPendingApprovalRequest(t, fixture);
+
+    const first = await emitApprovalRequestCreated(
+      t,
+      fixture,
+      approvalRequestId,
+    );
+    const second = await emitApprovalRequestCreated(
+      t,
+      fixture,
+      approvalRequestId,
+    );
+
+    expect(first.created).toBe(true);
+    expect(second).toEqual({ intentId: first.intentId, created: false });
+    const intents = await t.run((ctx) =>
+      ctx.db.query("notificationIntent").take(10),
+    );
+    expect(intents).toHaveLength(1);
+  });
+
+  it("keeps the batch retryable when the payload query hits a transient read fault", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const fetchMock = stubProdTransport();
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    const { approvalRequestId } = await seedPendingApprovalRequest(t, fixture);
+
+    const { intentId } = await emitApprovalRequestCreated(
+      t,
+      fixture,
+      approvalRequestId,
+    );
+
+    // The request is still pending but its store row cannot be read: a
+    // broken read of required context, which must throw and stay retryable —
+    // suppressing here would permanently silence a live approval alert.
+    await t.run((ctx) => ctx.db.delete("store", fixture.storeId));
+
+    const before = Date.now();
+    await t.action(internal.notifications.dispatch.dispatchIntent, {
+      intentId,
+    });
+
+    const deliveries = await listDeliveries(t);
+    expect(deliveries).toHaveLength(ADMIN_EMAILS.length);
+    for (const delivery of deliveries) {
+      expect(delivery.status).toBe("retryable_failure");
+      expect(delivery.errorCode).toBe("payload_error");
+      expect(delivery.nextAttemptAt).toBeGreaterThan(before);
+      expect(delivery.terminalAt).toBeUndefined();
+    }
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+    ).toMatchObject({ status: "dispatched" });
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+    ).not.toMatchObject({ status: "suppressed" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to ADMIN_EMAILS when the org has no approvals subscription rows", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    const { approvalRequestId } = await seedPendingApprovalRequest(t, fixture);
+
+    const { intentId } = await emitApprovalRequestCreated(
+      t,
+      fixture,
+      approvalRequestId,
+    );
+
+    const reserved = await t.mutation(
+      internal.notifications.dispatch.reserveIntentDeliveries,
+      { intentId },
+    );
+
+    expect(
+      reserved!.leased.map((lease) => lease.recipientEmail).sort(),
+    ).toEqual(NORMALIZED_ADMIN_EMAILS);
+  });
+});

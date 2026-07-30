@@ -23,7 +23,10 @@ import {
 } from "./registry";
 import { sendNotificationEmail } from "./transport";
 
-const SUBSCRIPTION_RESOLUTION_CAP = 200;
+// Single source of truth for the per-(org, category) subscription bound: the
+// dispatch audience read budget AND the server-side cap the subscriptions
+// write API enforces. Do not duplicate the literal.
+export const SUBSCRIPTION_RESOLUTION_CAP = 200;
 
 type LeasedDelivery = {
   deliveryId: Id<"notificationDelivery">;

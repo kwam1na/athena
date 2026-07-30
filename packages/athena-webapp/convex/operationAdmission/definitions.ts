@@ -528,6 +528,54 @@ export const reopenCostOverlayRunOperationDefinition =
 export const abandonCostOverlayRunOperationDefinition =
   costOverlayStoreWriteOperation("abandonCostOverlayRun");
 
+// Notification subscription writes are org-scoped configuration. Shared demo
+// is denied: audience management edits real recipient email lists. The
+// setEnabled/remove scope resolves from the TARGET ROW's own organizationId,
+// never a caller-supplied org, and the handlers re-authorize against the same
+// row-derived org.
+export const addNotificationSubscriptionOperationDefinition = defineOperation({
+  functionName: "notifications/subscriptions:addSubscription",
+  operationId: "notifications/subscriptions.addSubscription",
+  capability: "organization.manage",
+  scope: { kind: "organization", organizationIdArg: "organizationId" },
+  readiness: { kind: "none" },
+  effects: { mode: "none" },
+  actors: { normalUser: "admit", sharedDemo: "deny" },
+});
+
+function notificationSubscriptionRowWriteOperation(
+  functionName: "setSubscriptionEnabled" | "removeSubscription",
+) {
+  return defineOperation({
+    functionName: `notifications/subscriptions:${functionName}`,
+    operationId: `notifications/subscriptions.${functionName}`,
+    capability: "organization.manage",
+    scope: {
+      kind: "organization",
+      resolve: async (ctx, args) => {
+        const subscriptionId = args.subscriptionId;
+        if (typeof subscriptionId !== "string") return {};
+        const subscription = await ctx.db.get(
+          "notificationSubscription",
+          subscriptionId as never,
+        );
+        return subscription
+          ? { organizationId: subscription.organizationId }
+          : {};
+      },
+    },
+    readiness: { kind: "none" },
+    effects: { mode: "none" },
+    actors: { normalUser: "admit", sharedDemo: "deny" },
+  });
+}
+
+export const setNotificationSubscriptionEnabledOperationDefinition =
+  notificationSubscriptionRowWriteOperation("setSubscriptionEnabled");
+
+export const removeNotificationSubscriptionOperationDefinition =
+  notificationSubscriptionRowWriteOperation("removeSubscription");
+
 export const OPERATION_ADMISSION_DEFINITIONS = [
   resolveSyncedSaleInventoryReviewGroupOperationDefinition,
   decideApprovalRequestOperationDefinition,
@@ -579,6 +627,9 @@ export const OPERATION_ADMISSION_DEFINITIONS = [
   refreshCostOverlayUndoPreviewOperationDefinition,
   reopenCostOverlayRunOperationDefinition,
   abandonCostOverlayRunOperationDefinition,
+  addNotificationSubscriptionOperationDefinition,
+  setNotificationSubscriptionEnabledOperationDefinition,
+  removeNotificationSubscriptionOperationDefinition,
 ] as const satisfies readonly OperationDefinition[];
 
 export function validateOperationDefinition(

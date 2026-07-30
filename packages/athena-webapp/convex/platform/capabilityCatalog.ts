@@ -146,6 +146,7 @@ const PUBLIC_WRITE_MODULE_CAPABILITIES = {
   "inventoryLedger/corrections": "reporting.maintain",
   "inventory/subcategories": "catalog.manage",
   "llm/storeInsights": "intelligence.generate",
+  "notifications/subscriptions": "organization.manage",
   "llm/userInsights": "intelligence.generate",
   "operations/approvalRequests": "approvals.manage",
   "operations/dailyClose": "daily_operations.write",

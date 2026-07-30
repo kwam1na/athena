@@ -12,6 +12,7 @@ const SEED_CATEGORIES: NotificationCategory[] = [
 
 const ORGANIZATION_SCAN_CAP = 100;
 const SUBSCRIPTION_SCAN_CAP = 200;
+const MEMBER_SCAN_CAP = 200;
 
 // One-time backfill: every ADMIN_EMAILS recipient gets an org-wide email
 // subscription for each category, matching the legacy hardcoded audience.
@@ -57,6 +58,68 @@ export const seedAdminSubscriptions = internalMutation({
           });
           inserted += 1;
         }
+      }
+    }
+
+    return { inserted };
+  },
+});
+
+// One-time backfill for the `approvals` category: every organization member
+// whose operationalRoles include "manager" gets an org-wide, enabled email
+// subscription. Orgs that already have ANY approvals subscription rows are
+// skipped entirely — an admin who has curated that audience must not have it
+// silently widened by a re-run. Idempotent; safe to re-run.
+export const seedApprovalsManagerSubscriptions = internalMutation({
+  args: {},
+  returns: v.object({ inserted: v.number() }),
+  handler: async (ctx) => {
+    const organizations = await ctx.db
+      .query("organization")
+      .take(ORGANIZATION_SCAN_CAP);
+    const now = Date.now();
+    let inserted = 0;
+
+    for (const organization of organizations) {
+      const existingApprovals = await ctx.db
+        .query("notificationSubscription")
+        .withIndex("by_organizationId_and_category", (q) =>
+          q.eq("organizationId", organization._id).eq("category", "approvals"),
+        )
+        .take(1);
+      if (existingApprovals.length > 0) continue;
+
+      const members = await ctx.db
+        .query("organizationMember")
+        .withIndex("by_organizationId_userId", (q) =>
+          q.eq("organizationId", organization._id),
+        )
+        .take(MEMBER_SCAN_CAP);
+
+      const seededEmails = new Set<string>();
+      for (const member of members) {
+        if (!member.operationalRoles?.includes("manager")) continue;
+        const athenaUser = await ctx.db.get("athenaUser", member.userId);
+        if (!athenaUser) continue;
+        const email = normalizeRecipientEmail(athenaUser.email);
+        if (!email || seededEmails.has(email)) continue;
+        seededEmails.add(email);
+        const recipientName =
+          [athenaUser.firstName, athenaUser.lastName]
+            .filter(Boolean)
+            .join(" ") || undefined;
+        await ctx.db.insert("notificationSubscription", {
+          organizationId: organization._id,
+          category: "approvals",
+          channel: "email",
+          recipientEmail: email,
+          recipientName,
+          recipientUserId: member.userId,
+          enabled: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+        inserted += 1;
       }
     }
 
