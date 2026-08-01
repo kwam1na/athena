@@ -263,6 +263,72 @@ describe("ReportDaysPanel", () => {
     );
   });
 
+  it("targets the selected start date after an expanded table range loads", async () => {
+    const user = userEvent.setup();
+    const onRangeChange = vi.fn();
+    const onPageChange = vi.fn();
+    const initialDays = Array.from({ length: 14 }, (_, index) => {
+      const date = new Date(Date.UTC(2026, 6, 28 - index));
+      return {
+        operatingDate: date.toISOString().slice(0, 10),
+        status: "reconciled",
+        currency: "USD",
+        netSalesMinor: 1000,
+        unitsSold: 1,
+        closeVarianceMinor: 0,
+      };
+    });
+    useQuery.mockReturnValue(initialDays);
+
+    const { rerender } = render(
+      <ReportDaysPanel
+        {...baseProps}
+        onPageChange={onPageChange}
+        onRangeChange={onRangeChange}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Change date range, currently Jul 15–28, 2026",
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Friday, July 3rd, 2026/i }),
+    );
+
+    expect(onRangeChange).toHaveBeenCalledWith(
+      { startDate: "2026-07-03", endDate: "2026-07-28" },
+      1,
+    );
+    expect(onPageChange).not.toHaveBeenCalled();
+
+    useQuery.mockReturnValue(
+      Array.from({ length: 26 }, (_, index) => {
+        const date = new Date(Date.UTC(2026, 6, 28 - index));
+        return {
+          operatingDate: date.toISOString().slice(0, 10),
+          status: "reconciled",
+          currency: "USD",
+          netSalesMinor: 1000,
+          unitsSold: 1,
+          closeVarianceMinor: 0,
+        };
+      }),
+    );
+    rerender(
+      <ReportDaysPanel
+        {...baseProps}
+        onPageChange={onPageChange}
+        onRangeChange={onRangeChange}
+        startDate="2026-07-03"
+        tableStartDate="2026-07-03"
+      />,
+    );
+
+    await waitFor(() => expect(onPageChange).toHaveBeenCalledWith(2));
+  });
+
   it("selects a day row while preserving the date drill-down", async () => {
     const user = userEvent.setup();
     const onRangeChange = vi.fn();

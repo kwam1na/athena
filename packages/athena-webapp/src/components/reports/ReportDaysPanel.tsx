@@ -1,7 +1,7 @@
 import { useQuery } from "convex/react";
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowDown, RotateCcw } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -31,12 +31,12 @@ const REPORT_DAYS_PAGE_SIZE = 14;
 function pageContainingDate(
   daysNewestFirst: Array<{ operatingDate: string }>,
   operatingDate: string,
-): number {
+): number | undefined {
   const dateIndex = daysNewestFirst.findIndex(
     (day) => day.operatingDate === operatingDate,
   );
   return dateIndex < 0
-    ? 1
+    ? undefined
     : Math.floor(dateIndex / REPORT_DAYS_PAGE_SIZE) + 1;
 }
 
@@ -77,6 +77,7 @@ export function ReportDaysPanel({
 }) {
   const { activeStore } = useGetActiveStore();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
+  const pendingRangeStart = useRef<string | null>(null);
   const {
     data: days,
     dataContext: settledDaysPage,
@@ -143,6 +144,17 @@ export function ReportDaysPanel({
     );
   };
 
+  useEffect(() => {
+    const targetDate = pendingRangeStart.current;
+    if (!targetDate || !daysNewestFirst || isRefreshing) return;
+
+    const targetPage = pageContainingDate(daysNewestFirst, targetDate);
+    pendingRangeStart.current = null;
+    if (targetPage !== undefined && targetPage !== page) {
+      onPageChange(targetPage);
+    }
+  }, [daysNewestFirst, isRefreshing, onPageChange, page]);
+
   return (
     <section className="space-y-layout-sm" data-testid="report-days-panel">
       <div className="flex flex-wrap items-center justify-end gap-layout-xs">
@@ -169,12 +181,15 @@ export function ReportDaysPanel({
         ) : null}
         <ReportDateRangeField
           endDate={endDate}
-          onSelect={(next) =>
-            onRangeChange(
-              next,
-              pageContainingDate(daysNewestFirst ?? [], next.startDate),
-            )
-          }
+          onSelect={(next) => {
+            const targetPage = pageContainingDate(
+              daysNewestFirst ?? [],
+              next.startDate,
+            );
+            pendingRangeStart.current =
+              targetPage === undefined ? next.startDate : null;
+            onRangeChange(next, targetPage ?? 1);
+          }}
           startDate={startDate}
         />
       </div>
