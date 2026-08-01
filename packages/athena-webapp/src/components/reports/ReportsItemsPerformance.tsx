@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { Calendar as CalendarIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,10 @@ import {
   getLocalDateFromOperatingDate,
   getLocalOperatingDate,
 } from "@/lib/operations/operatingDate";
+import { getOrigin } from "@/lib/navigationUtils";
 import type { ReportSkuSortBy } from "~/shared/reportsContract";
 import { FlipNumber } from "@/components/common/FlipNumber";
+import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
 import { ReportCalendar } from "./ReportCalendar";
 import { ReportFreshness } from "./ReportFreshness";
 import {
@@ -36,6 +38,8 @@ import {
   formatUnits,
 } from "./reportFormat";
 
+export type ReportsItemsVariant = "card" | "canvas";
+
 export function ReportsItemsPerformance({
   currency,
   periodType,
@@ -46,9 +50,13 @@ export function ReportsItemsPerformance({
   totalTransactions,
   updatedAt,
   hasActivity,
+  isTodayInProgress,
   onPeriodTypeChange,
   onPeriodDateChange,
   onSortByChange,
+  orgUrlSlug,
+  storeUrlSlug,
+  variant,
 }: {
   currency: string;
   periodType: ReportPeriodType;
@@ -59,21 +67,43 @@ export function ReportsItemsPerformance({
   totalTransactions?: number;
   updatedAt?: number | null;
   hasActivity: boolean;
+  isTodayInProgress: boolean;
   onPeriodTypeChange: (periodType: ReportPeriodType) => void;
   onPeriodDateChange: (periodDate: string) => void;
   onSortByChange: (sortBy: ReportSkuSortBy) => void;
+  orgUrlSlug: string;
+  storeUrlSlug: string;
+  variant: ReportsItemsVariant;
 }) {
   const periodRange = dateRangeForItemsPeriod(periodType, periodDate);
   const selectedDate = getLocalDateFromOperatingDate(periodDate);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const transactionsSearch = {
+    endDate: periodRange.endDate,
+    o: getOrigin(),
+    startDate: periodRange.startDate,
+    ...(periodType === "day" && isTodayInProgress
+      ? {}
+      : { order: "oldestFirst" as const }),
+  };
 
   return (
     <section
       aria-labelledby="items-sales-title"
-      className="overflow-hidden rounded-xl border border-border bg-surface-raised shadow-surface"
+      className={cn(
+        variant === "card"
+          ? "overflow-hidden rounded-xl border border-border bg-surface-raised shadow-surface"
+          : "space-y-layout-lg",
+      )}
+      data-variant={variant}
       data-testid="items-report-workspace"
     >
-      <header className="space-y-layout-md p-layout-md md:p-layout-lg">
+      <header
+        className={cn(
+          "space-y-layout-md",
+          variant === "card" && "p-layout-md md:p-layout-lg",
+        )}
+      >
         <div className="space-y-1">
           <h2
             className="text-lg font-semibold tracking-tight text-foreground"
@@ -216,43 +246,134 @@ export function ReportsItemsPerformance({
         </div>
       </header>
 
-      <div className="flex flex-col gap-layout-sm border-t border-border bg-muted/20 px-layout-md py-layout-md sm:flex-row sm:items-end sm:justify-between md:px-layout-lg">
-        <div
-          aria-hidden={hasActivity ? undefined : true}
-          className={cn(
-            "flex flex-wrap items-start gap-layout-xl",
-            !hasActivity && "invisible",
-          )}
-          data-testid="items-period-metrics-reserved"
-        >
-          <Metric
-            formatValue={(value) => formatReportMoney(value, currency)}
-            label="Net sales"
-            testId={hasActivity ? "items-period-net-sales" : undefined}
-            value={totalNetSalesMinor ?? 0}
-          />
-          <Metric
-            formatValue={formatUnits}
-            label="Units sold"
-            numberTestId={
-              hasActivity ? "items-period-units-number" : undefined
-            }
-            testId={hasActivity ? "items-period-units-sold" : undefined}
-            value={totalUnitsSold ?? 0}
-          />
-          <Metric
-            formatValue={formatUnits}
-            label="Transactions"
-            numberTestId={
-              hasActivity ? "items-period-transactions-number" : undefined
-            }
-            testId={hasActivity ? "items-period-transactions" : undefined}
-            value={totalTransactions ?? 0}
-          />
+      {variant === "canvas" ? (
+        <div className="space-y-layout-sm">
+          <div
+            aria-hidden={hasActivity ? undefined : true}
+            className={cn(
+              "grid grid-cols-1 gap-layout-sm sm:grid-cols-3",
+              !hasActivity && "invisible",
+            )}
+            data-testid="items-period-metrics-reserved"
+          >
+            <MetricCard
+              formatValue={(value) => formatReportMoney(value, currency)}
+              label="Net sales"
+              link={{
+                ariaLabel: "Open transactions for net sales",
+                orgUrlSlug,
+                search: transactionsSearch,
+                storeUrlSlug,
+                to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+              }}
+              testId={hasActivity ? "items-period-net-sales" : undefined}
+              value={totalNetSalesMinor ?? 0}
+            />
+            <MetricCard
+              formatValue={formatUnits}
+              label="Units sold"
+              numberTestId={
+                hasActivity ? "items-period-units-number" : undefined
+              }
+              testId={hasActivity ? "items-period-units-sold" : undefined}
+              value={totalUnitsSold ?? 0}
+            />
+            <MetricCard
+              formatValue={formatUnits}
+              label="Transactions"
+              link={{
+                ariaLabel: "Open transactions for transaction count",
+                orgUrlSlug,
+                search: transactionsSearch,
+                storeUrlSlug,
+                to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+              }}
+              numberTestId={
+                hasActivity ? "items-period-transactions-number" : undefined
+              }
+              testId={hasActivity ? "items-period-transactions" : undefined}
+              value={totalTransactions ?? 0}
+            />
+          </div>
+          <div className="flex justify-end">
+            <ReportFreshness
+              delayedDataLabel="Item data"
+              updatedAt={updatedAt}
+            />
+          </div>
         </div>
-        <ReportFreshness delayedDataLabel="Item data" updatedAt={updatedAt} />
-      </div>
+      ) : (
+        <div className="flex flex-col gap-layout-sm border-t border-border bg-muted/20 px-layout-md py-layout-md sm:flex-row sm:items-end sm:justify-between md:px-layout-lg">
+          <div
+            aria-hidden={hasActivity ? undefined : true}
+            className={cn(
+              "flex flex-wrap items-start gap-layout-xl",
+              !hasActivity && "invisible",
+            )}
+            data-testid="items-period-metrics-reserved"
+          >
+            <Metric
+              formatValue={(value) => formatReportMoney(value, currency)}
+              label="Net sales"
+              testId={hasActivity ? "items-period-net-sales" : undefined}
+              value={totalNetSalesMinor ?? 0}
+            />
+            <Metric
+              formatValue={formatUnits}
+              label="Units sold"
+              numberTestId={
+                hasActivity ? "items-period-units-number" : undefined
+              }
+              testId={hasActivity ? "items-period-units-sold" : undefined}
+              value={totalUnitsSold ?? 0}
+            />
+            <Metric
+              formatValue={formatUnits}
+              label="Transactions"
+              numberTestId={
+                hasActivity ? "items-period-transactions-number" : undefined
+              }
+              testId={hasActivity ? "items-period-transactions" : undefined}
+              value={totalTransactions ?? 0}
+            />
+          </div>
+          <ReportFreshness delayedDataLabel="Item data" updatedAt={updatedAt} />
+        </div>
+      )}
     </section>
+  );
+}
+
+function MetricCard({
+  formatValue,
+  label,
+  link,
+  testId,
+  numberTestId,
+  value,
+}: {
+  formatValue: (value: number) => string;
+  label: string;
+  link?: ComponentProps<typeof OperationsSummaryMetric>["link"];
+  testId?: string;
+  numberTestId?: string;
+  value: number;
+}) {
+  return (
+    <div data-testid={testId}>
+      <OperationsSummaryMetric
+        label={label}
+        link={link}
+        value={
+          <FlipNumber
+            formatValue={formatValue}
+            testId={numberTestId}
+            transitionFromZero="fade"
+            value={value}
+          />
+        }
+      />
+    </div>
   );
 }
 

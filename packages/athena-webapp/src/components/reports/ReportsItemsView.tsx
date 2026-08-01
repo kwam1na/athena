@@ -8,7 +8,10 @@ import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import type { ReportSkuSortBy } from "~/shared/reportsContract";
 import { ReportBackLink } from "./ReportBackLink";
-import { ReportsItemsPerformance } from "./ReportsItemsPerformance";
+import {
+  ReportsItemsPerformance,
+  type ReportsItemsVariant,
+} from "./ReportsItemsPerformance";
 import { ReportsItemsTable } from "./ReportsItemsTable";
 import {
   periodKeyForSelection,
@@ -26,6 +29,7 @@ export function ReportsItemsView({
   onPeriodDateChange,
   onSortByChange,
   onCursorChange,
+  variant = "card",
 }: {
   periodType: ReportPeriodType;
   periodDate: string;
@@ -36,6 +40,7 @@ export function ReportsItemsView({
   onPeriodDateChange: (periodDate: string) => void;
   onSortByChange: (sortBy: ReportSkuSortBy) => void;
   onCursorChange: (cursor: string | undefined, cursorTrail: string[]) => void;
+  variant?: ReportsItemsVariant;
 }) {
   const { activeStore } = useGetActiveStore();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
@@ -84,16 +89,20 @@ export function ReportsItemsView({
         <ReportsItemsPerformance
           currency={activeStore?.currency ?? "USD"}
           hasActivity={hasActivity}
+          isTodayInProgress={result?.isTodayInProgress ?? false}
           onPeriodDateChange={onPeriodDateChange}
           onPeriodTypeChange={onPeriodTypeChange}
           onSortByChange={onSortByChange}
+          orgUrlSlug={orgUrlSlug!}
           periodDate={periodDate}
           periodType={periodType}
           sortBy={sortBy}
+          storeUrlSlug={storeUrlSlug!}
           totalNetSalesMinor={result?.totalNetSalesMinor}
           totalTransactions={result?.totalTransactions}
           totalUnitsSold={result?.totalUnitsSold}
           updatedAt={result?.updatedAt}
+          variant={variant}
         />
 
         {isInitialLoad || result === undefined ? null : (

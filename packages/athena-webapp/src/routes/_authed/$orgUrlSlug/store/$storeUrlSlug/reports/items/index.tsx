@@ -95,6 +95,7 @@ function ReportsItemsRoute() {
         periodDate={periodDate}
         periodType={periodType}
         sortBy={(search.sortBy ?? "revenue") as ReportSkuSortBy}
+        variant="canvas"
       />
     </div>
   );

@@ -37,7 +37,10 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 vi.mock("@/hooks/useGetActiveStore", () => ({
-  default: () => ({ activeStore: { _id: "store-1", currency: "USD" }, isLoadingStores: false }),
+  default: () => ({
+    activeStore: { _id: "store-1", currency: "USD" },
+    isLoadingStores: false,
+  }),
 }));
 vi.mock("recharts", () => ({
   Area: ({
@@ -60,10 +63,14 @@ vi.mock("recharts", () => ({
           },
         })
       : null,
-  AreaChart: ({ children }: { children?: React.ReactNode }) => <svg>{children}</svg>,
+  AreaChart: ({ children }: { children?: React.ReactNode }) => (
+    <svg>{children}</svg>
+  ),
   CartesianGrid: () => null,
   Legend: () => null,
-  ResponsiveContainer: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  ResponsiveContainer: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   Tooltip: () => null,
   XAxis: () => null,
   YAxis: () => null,
@@ -97,7 +104,11 @@ const fixture: ReportOverviewData = {
   yesterday: snapshot({ netSalesMinor: 80_00, unitsSold: 8 }),
   weekToDate: snapshot({ dayCount: 5, netSalesMinor: 400_00 }),
   priorWeek: snapshot({ dayCount: 7, netSalesMinor: 350_00 }),
-  trailing30: snapshot({ dayCount: 30, netSalesMinor: 2500_00, grossProfitMinor: null }),
+  trailing30: snapshot({
+    dayCount: 30,
+    netSalesMinor: 2500_00,
+    grossProfitMinor: null,
+  }),
   trailing3Months: snapshot({ dayCount: 82, netSalesMinor: 7000_00 }),
   comparisons: {
     netSalesVsPriorWeekBp: 1250,
@@ -105,7 +116,11 @@ const fixture: ReportOverviewData = {
   },
   dailyTrend: [
     { operatingDate: "2026-07-26", netSalesMinor: 80_00, status: "reconciled" },
-    { operatingDate: "2026-07-27", netSalesMinor: 90_00, status: "provisional" },
+    {
+      operatingDate: "2026-07-27",
+      netSalesMinor: 90_00,
+      status: "provisional",
+    },
   ],
   trust: {
     reconciledDays: 25,
@@ -248,6 +263,27 @@ describe("ReportsOverviewView", () => {
     expect(screen.getByTestId("report-trust-summary")).toHaveTextContent(
       "30-day trend · 27 of 28 reported days reconciled · Today in progress",
     );
+    expect(screen.getByTestId("report-period-status")).toHaveTextContent(
+      "In progress",
+    );
+    const dailyOperationsLink = screen.getByRole("link", {
+      name: "View Daily Operations",
+    });
+    expect(dailyOperationsLink).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/operations",
+    );
+    expect(JSON.parse(dailyOperationsLink.dataset.params ?? "{}")).toEqual({
+      orgUrlSlug: "wigclub",
+      storeUrlSlug: "wigclub",
+    });
+    expect(JSON.parse(dailyOperationsLink.dataset.search ?? "{}")).toEqual({
+      o: expect.any(String),
+      operatingDate: "2026-07-29",
+    });
+    expect(
+      dailyOperationsLink.closest('[data-motion="period-status"]'),
+    ).not.toBeNull();
   });
 
   it("states the prior-week comparison in words rather than a bare percentage", async () => {
@@ -323,7 +359,12 @@ describe("ReportsOverviewView", () => {
     expect(
       screen.getByTestId("report-period-status-transition"),
     ).toHaveAttribute("data-motion", "height");
-    expect(eodReviewLink.closest('[data-motion="period-status"]')).not.toBeNull();
+    expect(
+      eodReviewLink.closest('[data-motion="period-status"]'),
+    ).not.toBeNull();
+    expect(
+      screen.queryByRole("link", { name: "View Daily Operations" }),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Week to date" }));
     await waitFor(() =>
@@ -370,9 +411,15 @@ describe("ReportsOverviewView", () => {
 
     expect(linkedRange()).toEqual({
       endDate: "2026-07-30",
-      order: "oldestFirst",
+      order: undefined,
       startDate: "2026-07-30",
     });
+    expect(
+      JSON.parse(
+        screen.getByRole("link", { name: "Open transactions" }).dataset
+          .search ?? "{}",
+      ),
+    ).not.toHaveProperty("order");
 
     await user.click(screen.getByRole("tab", { name: "Week to date" }));
     expect(linkedRange()).toEqual({

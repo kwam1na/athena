@@ -638,6 +638,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/routes/_authed-shell.test.tsx`](../../src/routes/_authed-shell.test.tsx)
 - [`src/routes/_authed.route.test.tsx`](../../src/routes/_authed.route.test.tsx)
 - [`src/routes/_authed.test.tsx`](../../src/routes/_authed.test.tsx)
+- [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index.test.ts`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index.test.ts)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import.test.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import.test.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay.test.ts`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay.test.ts)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity.test.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity.test.tsx)
