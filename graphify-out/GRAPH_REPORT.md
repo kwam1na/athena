@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 11013 nodes · 13413 edges · 2625 communities detected
+- 11014 nodes · 13414 edges · 2625 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -6456,47 +6456,47 @@ Nodes (2): mockGetSku(), validateInventoryForTransaction()
 
 ### Community 948 - "Community 948"
 Cohesion: 0.67
-Nodes (1): hashPassword()
+Nodes (0):
 
 ### Community 949 - "Community 949"
 Cohesion: 0.67
-Nodes (0):
+Nodes (1): hashPassword()
 
 ### Community 950 - "Community 950"
 Cohesion: 0.67
-Nodes (1): manualChunks()
+Nodes (0):
 
 ### Community 951 - "Community 951"
 Cohesion: 0.67
-Nodes (0):
+Nodes (1): manualChunks()
 
 ### Community 952 - "Community 952"
-Cohesion: 1.0
-Nodes (2): getAllColors(), getBaseUrl()
+Cohesion: 0.67
+Nodes (0):
 
 ### Community 953 - "Community 953"
 Cohesion: 1.0
-Nodes (2): getHomepageSnapshot(), getStoredMarker()
+Nodes (2): getAllColors(), getBaseUrl()
 
 ### Community 954 - "Community 954"
-Cohesion: 0.67
-Nodes (0):
+Cohesion: 1.0
+Nodes (2): getHomepageSnapshot(), getStoredMarker()
 
 ### Community 955 - "Community 955"
-Cohesion: 1.0
-Nodes (2): getBaseUrl(), getLastViewedProduct()
+Cohesion: 0.67
+Nodes (0):
 
 ### Community 956 - "Community 956"
 Cohesion: 1.0
-Nodes (2): getBaseUrl(), getUserOffersEligibility()
+Nodes (2): getBaseUrl(), getLastViewedProduct()
 
 ### Community 957 - "Community 957"
 Cohesion: 1.0
-Nodes (2): getPreferredCardSku(), hasSellableAvailability()
+Nodes (2): getBaseUrl(), getUserOffersEligibility()
 
 ### Community 958 - "Community 958"
-Cohesion: 0.67
-Nodes (0):
+Cohesion: 1.0
+Nodes (2): getPreferredCardSku(), hasSellableAvailability()
 
 ### Community 959 - "Community 959"
 Cohesion: 0.67
@@ -6511,12 +6511,12 @@ Cohesion: 0.67
 Nodes (0):
 
 ### Community 962 - "Community 962"
-Cohesion: 1.0
-Nodes (2): handleKeyDown(), handleRedeemPromoCode()
-
-### Community 963 - "Community 963"
 Cohesion: 0.67
 Nodes (0):
+
+### Community 963 - "Community 963"
+Cohesion: 1.0
+Nodes (2): handleKeyDown(), handleRedeemPromoCode()
 
 ### Community 964 - "Community 964"
 Cohesion: 0.67
@@ -6527,12 +6527,12 @@ Cohesion: 0.67
 Nodes (0):
 
 ### Community 966 - "Community 966"
-Cohesion: 1.0
-Nodes (2): getPromoAlertCopy(), PromoAlert()
-
-### Community 967 - "Community 967"
 Cohesion: 0.67
 Nodes (0):
+
+### Community 967 - "Community 967"
+Cohesion: 1.0
+Nodes (2): getPromoAlertCopy(), PromoAlert()
 
 ### Community 968 - "Community 968"
 Cohesion: 0.67
@@ -6603,16 +6603,16 @@ Cohesion: 0.67
 Nodes (0):
 
 ### Community 985 - "Community 985"
-Cohesion: 1.0
-Nodes (2): collectWorkflowFiles(), runWorkflowCheck()
-
-### Community 986 - "Community 986"
 Cohesion: 0.67
 Nodes (0):
 
-### Community 987 - "Community 987"
+### Community 986 - "Community 986"
 Cohesion: 1.0
-Nodes (2): createFixtureRepo(), write()
+Nodes (2): collectWorkflowFiles(), runWorkflowCheck()
+
+### Community 987 - "Community 987"
+Cohesion: 0.67
+Nodes (0):
 
 ### Community 988 - "Community 988"
 Cohesion: 1.0
@@ -6627,28 +6627,28 @@ Cohesion: 1.0
 Nodes (2): createFixtureRepo(), write()
 
 ### Community 991 - "Community 991"
+Cohesion: 1.0
+Nodes (2): createFixtureRepo(), write()
+
+### Community 992 - "Community 992"
 Cohesion: 0.67
 Nodes (0):
 
-### Community 992 - "Community 992"
+### Community 993 - "Community 993"
 Cohesion: 1.0
 Nodes (2): gitFixtureEnv(), runGit()
 
-### Community 993 - "Community 993"
+### Community 994 - "Community 994"
 Cohesion: 0.67
 Nodes (0):
 
-### Community 994 - "Community 994"
+### Community 995 - "Community 995"
 Cohesion: 1.0
 Nodes (2): collectRootScriptTestFiles(), runRootScriptsCoverage()
 
-### Community 995 - "Community 995"
-Cohesion: 1.0
-Nodes (2): createFixtureRepo(), runGit()
-
 ### Community 996 - "Community 996"
 Cohesion: 1.0
-Nodes (0):
+Nodes (2): createFixtureRepo(), runGit()
 
 ### Community 997 - "Community 997"
 Cohesion: 1.0
@@ -8168,11 +8168,11 @@ Nodes (0):
 
 ### Community 1376 - "Community 1376"
 Cohesion: 1.0
-Nodes (1): FakeMessageChannel
+Nodes (0):
 
 ### Community 1377 - "Community 1377"
 Cohesion: 1.0
-Nodes (0):
+Nodes (1): FakeMessageChannel
 
 ### Community 1378 - "Community 1378"
 Cohesion: 1.0
@@ -13165,505 +13165,505 @@ Nodes (0):
 ## Knowledge Gaps
 - **3 isolated node(s):** `StaleConstructionError`, `FakeMessageChannel`, `HelpRequested`
   These have ≤1 connection - possible missing edges or undocumented components.
-- **Thin community `Community 996`** (2 nodes): `SharedDemoTicket.ts`, `authorizeSharedDemoTicket()`
+- **Thin community `Community 997`** (2 nodes): `SharedDemoTicket.ts`, `authorizeSharedDemoTicket()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 997`** (2 nodes): `createDb()`, `automationFoundation.test.ts`
+- **Thin community `Community 998`** (2 nodes): `createDb()`, `automationFoundation.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 998`** (2 nodes): `scheduledRunLedger.test.ts`, `createLedgerCtx()`
+- **Thin community `Community 999`** (2 nodes): `scheduledRunLedger.test.ts`, `createLedgerCtx()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 999`** (2 nodes): `paymentAllocationAttribution.test.ts`, `readProjectFile()`
+- **Thin community `Community 1000`** (2 nodes): `paymentAllocationAttribution.test.ts`, `readProjectFile()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1000`** (2 nodes): `registerSessions.test.ts`, `getHandler()`
+- **Thin community `Community 1001`** (2 nodes): `registerSessions.test.ts`, `getHandler()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1001`** (2 nodes): `stream.ts`, `getCloudflareConfig()`
+- **Thin community `Community 1002`** (2 nodes): `stream.ts`, `getCloudflareConfig()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1002`** (2 nodes): `analyticsRow()`, `historicalStorefrontContextImport.test.ts`
+- **Thin community `Community 1003`** (2 nodes): `analyticsRow()`, `historicalStorefrontContextImport.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1003`** (2 nodes): `buildHistoricalStorefrontContextImportReport()`, `historicalStorefrontContextImportReport.ts`
+- **Thin community `Community 1004`** (2 nodes): `buildHistoricalStorefrontContextImportReport()`, `historicalStorefrontContextImportReport.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1004`** (2 nodes): `analyticsRow()`, `legacyStorefrontAnalytics.test.ts`
+- **Thin community `Community 1005`** (2 nodes): `analyticsRow()`, `legacyStorefrontAnalytics.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1005`** (2 nodes): `policy.ts`, `assertSupportedCustomerMessagePolicy()`
+- **Thin community `Community 1006`** (2 nodes): `policy.ts`, `assertSupportedCustomerMessagePolicy()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1006`** (2 nodes): `repository.test.ts`, `queryResult()`
+- **Thin community `Community 1007`** (2 nodes): `repository.test.ts`, `queryResult()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1007`** (2 nodes): `webhookSecurity.test.ts`, `sign()`
+- **Thin community `Community 1008`** (2 nodes): `webhookSecurity.test.ts`, `sign()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1008`** (2 nodes): `DailyManagerReportBordered()`, `DailyManagerReportBordered.tsx`
+- **Thin community `Community 1009`** (2 nodes): `DailyManagerReportBordered()`, `DailyManagerReportBordered.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1009`** (2 nodes): `DailyManagerReportUnbordered()`, `DailyManagerReportUnbordered.tsx`
+- **Thin community `Community 1010`** (2 nodes): `DailyManagerReportUnbordered()`, `DailyManagerReportUnbordered.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1010`** (2 nodes): `OrderEmailPreview()`, `OrderEmail.tsx`
+- **Thin community `Community 1011`** (2 nodes): `OrderEmailPreview()`, `OrderEmail.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1011`** (2 nodes): `PosTerminalHealthAlert.tsx`, `PosTerminalHealthAlert()`
+- **Thin community `Community 1012`** (2 nodes): `PosTerminalHealthAlert.tsx`, `PosTerminalHealthAlert()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1012`** (2 nodes): `RegisterCloseoutMatchReportPreview.tsx`, `RegisterCloseoutMatchReportPreview()`
+- **Thin community `Community 1013`** (2 nodes): `RegisterCloseoutMatchReportPreview.tsx`, `RegisterCloseoutMatchReportPreview()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1013`** (2 nodes): `RegisterCloseoutVarianceAlertPreview.tsx`, `RegisterCloseoutVarianceAlertPreview()`
+- **Thin community `Community 1014`** (2 nodes): `RegisterCloseoutVarianceAlertPreview.tsx`, `RegisterCloseoutVarianceAlertPreview()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1014`** (2 nodes): `VerificationCode.tsx`, `VerificationCode()`
+- **Thin community `Community 1015`** (2 nodes): `VerificationCode.tsx`, `VerificationCode()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1015`** (2 nodes): `WalkthroughRequestNotification.tsx`, `delinkUntrustedEmailText()`
+- **Thin community `Community 1016`** (2 nodes): `WalkthroughRequestNotification.tsx`, `delinkUntrustedEmailText()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1016`** (2 nodes): `resolvePublicBannerMessage()`, `bannerMessage.ts`
+- **Thin community `Community 1017`** (2 nodes): `resolvePublicBannerMessage()`, `bannerMessage.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1017`** (2 nodes): `readBoundedBody()`, `boundedBody.ts`
+- **Thin community `Community 1018`** (2 nodes): `readBoundedBody()`, `boundedBody.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1018`** (2 nodes): `subcategories.ts`, `removeStorefrontHiddenSubcategoryList()`
+- **Thin community `Community 1019`** (2 nodes): `subcategories.ts`, `removeStorefrontHiddenSubcategoryList()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1019`** (2 nodes): `storefrontCors.test.ts`, `readRouteFile()`
+- **Thin community `Community 1020`** (2 nodes): `storefrontCors.test.ts`, `readRouteFile()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1020`** (2 nodes): `whatsapp.ts`, `mapWebhookStatus()`
+- **Thin community `Community 1021`** (2 nodes): `whatsapp.ts`, `mapWebhookStatus()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1021`** (2 nodes): `handleCollectionNotification()`, `mtnMomo.ts`
+- **Thin community `Community 1022`** (2 nodes): `handleCollectionNotification()`, `mtnMomo.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1022`** (2 nodes): `routerComposition.test.ts`, `readProjectFile()`
+- **Thin community `Community 1023`** (2 nodes): `routerComposition.test.ts`, `readProjectFile()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1023`** (2 nodes): `createFakeStructuredTextProvider()`, `fake.ts`
+- **Thin community `Community 1024`** (2 nodes): `createFakeStructuredTextProvider()`, `fake.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1024`** (2 nodes): `isExpiredSharedDemoSessionError()`, `athenaUser.ts`
+- **Thin community `Community 1025`** (2 nodes): `isExpiredSharedDemoSessionError()`, `athenaUser.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1025`** (2 nodes): `source()`, `athenaUserIdentityWriters.test.ts`
+- **Thin community `Community 1026`** (2 nodes): `source()`, `athenaUserIdentityWriters.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1026`** (2 nodes): `mapAthenaAuthSyncError()`, `auth.ts`
+- **Thin community `Community 1027`** (2 nodes): `mapAthenaAuthSyncError()`, `auth.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1027`** (2 nodes): `getHandler()`, `bannerMessage.test.ts`
+- **Thin community `Community 1028`** (2 nodes): `getHandler()`, `bannerMessage.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1028`** (2 nodes): `getHandler()`, `bestSeller.test.ts`
+- **Thin community `Community 1029`** (2 nodes): `getHandler()`, `bestSeller.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1029`** (2 nodes): `createCatalogSummaryCtx()`, `catalogSummary.test.ts`
+- **Thin community `Community 1030`** (2 nodes): `createCatalogSummaryCtx()`, `catalogSummary.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1030`** (2 nodes): `userErrorFromExpenseItemCommandFailure()`, `expenseSessionItems.ts`
+- **Thin community `Community 1031`** (2 nodes): `userErrorFromExpenseItemCommandFailure()`, `expenseSessionItems.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1031`** (2 nodes): `createFakeMutationCtx()`, `expenseTransactions.test.ts`
+- **Thin community `Community 1032`** (2 nodes): `createFakeMutationCtx()`, `expenseTransactions.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1032`** (2 nodes): `createWorkContext()`, `inventoryImportCostOverlayWork.test.ts`
+- **Thin community `Community 1033`** (2 nodes): `createWorkContext()`, `inventoryImportCostOverlayWork.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1033`** (2 nodes): `posQueryCleanup.test.ts`, `readProjectFile()`
+- **Thin community `Community 1034`** (2 nodes): `posQueryCleanup.test.ts`, `readProjectFile()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1034`** (2 nodes): `productSku.ts`, `syncProductSkuSearchProjectionsByStore()`
+- **Thin community `Community 1035`** (2 nodes): `productSku.ts`, `syncProductSkuSearchProjectionsByStore()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1035`** (2 nodes): `productUtil.ts`, `buildAllProductsCacheKey()`
+- **Thin community `Community 1036`** (2 nodes): `productUtil.ts`, `buildAllProductsCacheKey()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1036`** (2 nodes): `promoCode.ts`, `calculateSelectedProductPromoDiscount()`
+- **Thin community `Community 1037`** (2 nodes): `promoCode.ts`, `calculateSelectedProductPromoDiscount()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1037`** (2 nodes): `stores.ts`, `toV2OnlyConfig()`
+- **Thin community `Community 1038`** (2 nodes): `stores.ts`, `toV2OnlyConfig()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1038`** (2 nodes): `context()`, `commerceEffects.test.ts`
+- **Thin community `Community 1039`** (2 nodes): `context()`, `commerceEffects.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1039`** (2 nodes): `positionRevisions.ts`, `recordInventoryPositionRevisionWithCtx()`
+- **Thin community `Community 1040`** (2 nodes): `positionRevisions.ts`, `recordInventoryPositionRevisionWithCtx()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1040`** (2 nodes): `scheduleWork.ts`, `scheduleReportingWorkBestEffort()`
+- **Thin community `Community 1041`** (2 nodes): `scheduleWork.ts`, `scheduleReportingWorkBestEffort()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1041`** (2 nodes): `context()`, `athenaUserAuth.test.ts`
+- **Thin community `Community 1042`** (2 nodes): `context()`, `athenaUserAuth.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1042`** (2 nodes): `commandResultValidator()`, `commandResultValidators.ts`
+- **Thin community `Community 1043`** (2 nodes): `commandResultValidator()`, `commandResultValidators.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1043`** (2 nodes): `storeMemberAccess.ts`, `requireStoreMemberAccessWithCtx()`
+- **Thin community `Community 1044`** (2 nodes): `storeMemberAccess.ts`, `requireStoreMemberAccessWithCtx()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1044`** (2 nodes): `callLlmProvider()`, `callLlmProvider.ts`
+- **Thin community `Community 1045`** (2 nodes): `callLlmProvider()`, `callLlmProvider.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1045`** (2 nodes): `callAnthropic()`, `anthropic.ts`
+- **Thin community `Community 1046`** (2 nodes): `callAnthropic()`, `anthropic.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1046`** (2 nodes): `callOpenAi()`, `openai.ts`
+- **Thin community `Community 1047`** (2 nodes): `callOpenAi()`, `openai.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1047`** (2 nodes): `shouldExpireFunnelRecord()`, `landingFunnelRetention.ts`
+- **Thin community `Community 1048`** (2 nodes): `shouldExpireFunnelRecord()`, `landingFunnelRetention.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1048`** (2 nodes): `walkthroughBudgets.ts`, `consumeWalkthroughBudget()`
+- **Thin community `Community 1049`** (2 nodes): `walkthroughBudgets.ts`, `consumeWalkthroughBudget()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1049`** (2 nodes): `walkthroughRequestNotifications.test.ts`, `insertAttempt()`
+- **Thin community `Community 1050`** (2 nodes): `walkthroughRequestNotifications.test.ts`, `insertAttempt()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1050`** (2 nodes): `createCtx()`, `backfillStoreTimezoneAuthority.test.ts`
+- **Thin community `Community 1051`** (2 nodes): `createCtx()`, `backfillStoreTimezoneAuthority.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1051`** (2 nodes): `createCtx()`, `migratePosAmountsToPesewas.test.ts`
+- **Thin community `Community 1052`** (2 nodes): `createCtx()`, `migratePosAmountsToPesewas.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1052`** (2 nodes): `readProjectFile()`, `foundation.test.ts`
+- **Thin community `Community 1053`** (2 nodes): `readProjectFile()`, `foundation.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1053`** (2 nodes): `emitNotificationWithCtx()`, `emit.ts`
+- **Thin community `Community 1054`** (2 nodes): `emitNotificationWithCtx()`, `emit.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1054`** (2 nodes): `sweeper.ts`, `terminalizeOrphanedDelivery()`
+- **Thin community `Community 1055`** (2 nodes): `sweeper.ts`, `terminalizeOrphanedDelivery()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1055`** (2 nodes): `transport.test.ts`, `stubFetch()`
+- **Thin community `Community 1056`** (2 nodes): `transport.test.ts`, `stubFetch()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1056`** (2 nodes): `transport.ts`, `sendNotificationEmail()`
+- **Thin community `Community 1057`** (2 nodes): `transport.ts`, `sendNotificationEmail()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1057`** (2 nodes): `declaresProtectedGateway()`, `effects.ts`
+- **Thin community `Community 1058`** (2 nodes): `declaresProtectedGateway()`, `effects.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1058`** (2 nodes): `readAdapters.test.ts`, `demoCtx()`
+- **Thin community `Community 1059`** (2 nodes): `readAdapters.test.ts`, `demoCtx()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1059`** (2 nodes): `scopes.ts`, `resolveOperationScope()`
+- **Thin community `Community 1060`** (2 nodes): `scopes.ts`, `resolveOperationScope()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1060`** (2 nodes): `consumeCommandApprovalProofWithCtx()`, `approvalActions.ts`
+- **Thin community `Community 1061`** (2 nodes): `consumeCommandApprovalProofWithCtx()`, `approvalActions.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1061`** (2 nodes): `createOperationalEventCtx()`, `approvalAuditEvents.test.ts`
+- **Thin community `Community 1062`** (2 nodes): `createOperationalEventCtx()`, `approvalAuditEvents.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1062`** (2 nodes): `createApprovalProofMutationCtx()`, `approvalProofs.test.ts`
+- **Thin community `Community 1063`** (2 nodes): `createApprovalProofMutationCtx()`, `approvalProofs.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1063`** (2 nodes): `buildApprovalRequest()`, `approvalRequestHelpers.ts`
+- **Thin community `Community 1064`** (2 nodes): `buildApprovalRequest()`, `approvalRequestHelpers.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1064`** (2 nodes): `createApprovalRequestMutationCtx()`, `approvalRequests.test.ts`
+- **Thin community `Community 1065`** (2 nodes): `createApprovalRequestMutationCtx()`, `approvalRequests.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1065`** (2 nodes): `createInventoryMovementCtx()`, `inventoryMovements.test.ts`
+- **Thin community `Community 1066`** (2 nodes): `createInventoryMovementCtx()`, `inventoryMovements.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1066`** (2 nodes): `workItem()`, `logicalOperationalWork.test.ts`
+- **Thin community `Community 1067`** (2 nodes): `workItem()`, `logicalOperationalWork.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1067`** (2 nodes): `createCtx()`, `operationalEvents.test.ts`
+- **Thin community `Community 1068`** (2 nodes): `createCtx()`, `operationalEvents.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1068`** (2 nodes): `fullWindow()`, `owedDailyCloseSweep.test.ts`
+- **Thin community `Community 1069`** (2 nodes): `fullWindow()`, `owedDailyCloseSweep.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1069`** (2 nodes): `paymentAllocationCallers.test.ts`, `source()`
+- **Thin community `Community 1070`** (2 nodes): `paymentAllocationCallers.test.ts`, `source()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1070`** (2 nodes): `paymentAllocations.test.ts`, `paymentContext()`
+- **Thin community `Community 1071`** (2 nodes): `paymentAllocations.test.ts`, `paymentContext()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1071`** (2 nodes): `registerCloseoutVarianceEmail.test.ts`, `getHandler()`
+- **Thin community `Community 1072`** (2 nodes): `registerCloseoutVarianceEmail.test.ts`, `getHandler()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1072`** (2 nodes): `staffMessages.ts`, `requireStoreMember()`
+- **Thin community `Community 1073`** (2 nodes): `staffMessages.ts`, `requireStoreMember()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1073`** (2 nodes): `createPendingCheckoutCtx()`, `createOrReusePendingCheckoutItem.test.ts`
+- **Thin community `Community 1074`** (2 nodes): `createPendingCheckoutCtx()`, `createOrReusePendingCheckoutItem.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1074`** (2 nodes): `quickAddCatalogItem.test.ts`, `createQuickAddCtx()`
+- **Thin community `Community 1075`** (2 nodes): `quickAddCatalogItem.test.ts`, `createQuickAddCtx()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1075`** (2 nodes): `createMutationCtx()`, `correctTransactionPaymentMethod.test.ts`
+- **Thin community `Community 1076`** (2 nodes): `createMutationCtx()`, `correctTransactionPaymentMethod.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1076`** (2 nodes): `buildCorrectionOperationalEvent()`, `correctionEvents.ts`
+- **Thin community `Community 1077`** (2 nodes): `buildCorrectionOperationalEvent()`, `correctionEvents.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1077`** (2 nodes): `redactSensitiveDiagnosticText()`, `diagnosticRedaction.ts`
+- **Thin community `Community 1078`** (2 nodes): `redactSensitiveDiagnosticText()`, `diagnosticRedaction.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1078`** (2 nodes): `mockCorrectionHistoryDb()`, `getTransactions.test.ts`
+- **Thin community `Community 1079`** (2 nodes): `mockCorrectionHistoryDb()`, `getTransactions.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1079`** (2 nodes): `createRegisterCatalogCtx()`, `listRegisterCatalog.test.ts`
+- **Thin community `Community 1080`** (2 nodes): `createRegisterCatalogCtx()`, `listRegisterCatalog.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1080`** (2 nodes): `projectionPolicies.test.ts`, `saleItem()`
+- **Thin community `Community 1081`** (2 nodes): `projectionPolicies.test.ts`, `saleItem()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1081`** (2 nodes): `registerCatalogRevision.test.ts`, `createRevisionCtx()`
+- **Thin community `Community 1082`** (2 nodes): `registerCatalogRevision.test.ts`, `createRevisionCtx()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1082`** (2 nodes): `resolveLocalSyncReview.test.ts`, `createFakeRepository()`
+- **Thin community `Community 1083`** (2 nodes): `resolveLocalSyncReview.test.ts`, `createFakeRepository()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1083`** (2 nodes): `staffProofValidation.ts`, `validatePosLocalStaffProofWithCtx()`
+- **Thin community `Community 1084`** (2 nodes): `staffProofValidation.ts`, `validatePosLocalStaffProofWithCtx()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1084`** (2 nodes): `transactionAdjustmentPlanner.test.ts`, `baseInput()`
+- **Thin community `Community 1085`** (2 nodes): `transactionAdjustmentPlanner.test.ts`, `baseInput()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1085`** (2 nodes): `posLifecycleJournal.test.ts`, `createCtx()`
+- **Thin community `Community 1086`** (2 nodes): `posLifecycleJournal.test.ts`, `createCtx()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1086`** (2 nodes): `posLifecycleJournal.ts`, `appendPosLifecycleJournalWithCtx()`
+- **Thin community `Community 1087`** (2 nodes): `posLifecycleJournal.ts`, `appendPosLifecycleJournalWithCtx()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1087`** (2 nodes): `getCashierForRegisterState()`, `cashierRepository.ts`
+- **Thin community `Community 1088`** (2 nodes): `getCashierForRegisterState()`, `cashierRepository.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1088`** (2 nodes): `createExpenseSessionCommandRepository()`, `expenseSessionCommandRepository.ts`
+- **Thin community `Community 1089`** (2 nodes): `createExpenseSessionCommandRepository()`, `expenseSessionCommandRepository.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1089`** (2 nodes): `readProjectFile()`, `localSyncRepository.test.ts`
+- **Thin community `Community 1090`** (2 nodes): `readProjectFile()`, `localSyncRepository.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1090`** (2 nodes): `registerLifecycleAuthorityRepository.ts`, `createRegisterLifecycleAuthorityRepository()`
+- **Thin community `Community 1091`** (2 nodes): `registerLifecycleAuthorityRepository.ts`, `createRegisterLifecycleAuthorityRepository()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1091`** (2 nodes): `registerSessionRepository.test.ts`, `createRegisterSessionQueryCtx()`
+- **Thin community `Community 1092`** (2 nodes): `registerSessionRepository.test.ts`, `createRegisterSessionQueryCtx()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1092`** (2 nodes): `sessionCommandRepository.test.ts`, `readProjectFile()`
+- **Thin community `Community 1093`** (2 nodes): `sessionCommandRepository.test.ts`, `readProjectFile()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1093`** (2 nodes): `sessionRepository.test.ts`, `buildSession()`
+- **Thin community `Community 1094`** (2 nodes): `sessionRepository.test.ts`, `buildSession()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1094`** (2 nodes): `posRuntimeAdapter.ts`, `buildPosRemoteAssistClientPresence()`
+- **Thin community `Community 1095`** (2 nodes): `posRuntimeAdapter.ts`, `buildPosRemoteAssistClientPresence()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1095`** (2 nodes): `remoteAssistRepository.ts`, `createRemoteAssistRepository()`
+- **Thin community `Community 1096`** (2 nodes): `remoteAssistRepository.ts`, `createRemoteAssistRepository()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1096`** (2 nodes): `buildContext()`, `LiveKitRemoteAssistTransportProvider.test.ts`
+- **Thin community `Community 1097`** (2 nodes): `buildContext()`, `LiveKitRemoteAssistTransportProvider.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1097`** (2 nodes): `createRemoteAssistTransportProvider()`, `createRemoteAssistTransportProvider.ts`
+- **Thin community `Community 1098`** (2 nodes): `createRemoteAssistTransportProvider()`, `createRemoteAssistTransportProvider.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1098`** (2 nodes): `public.ts`, `toRemoteAssistSessionReturn()`
+- **Thin community `Community 1099`** (2 nodes): `public.ts`, `toRemoteAssistSessionReturn()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1099`** (2 nodes): `transport.ts`, `issueCredential()`
+- **Thin community `Community 1100`** (2 nodes): `transport.ts`, `issueCredential()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1100`** (2 nodes): `context()`, `access.test.ts`
+- **Thin community `Community 1101`** (2 nodes): `context()`, `access.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1101`** (2 nodes): `requireReportsStoreAccess()`, `access.ts`
+- **Thin community `Community 1102`** (2 nodes): `requireReportsStoreAccess()`, `access.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1102`** (2 nodes): `fact()`, `fingerprint.test.ts`
+- **Thin community `Community 1103`** (2 nodes): `fact()`, `fingerprint.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1103`** (2 nodes): `posLocalSyncContractValidators.ts`, `unionFromValidators()`
+- **Thin community `Community 1104`** (2 nodes): `posLocalSyncContractValidators.ts`, `unionFromValidators()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1104`** (2 nodes): `getSource()`, `moduleWiring.test.ts`
+- **Thin community `Community 1105`** (2 nodes): `getSource()`, `moduleWiring.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1105`** (2 nodes): `serviceCaseTracing.test.ts`, `buildServiceCase()`
+- **Thin community `Community 1106`** (2 nodes): `serviceCaseTracing.test.ts`, `buildServiceCase()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1106`** (2 nodes): `contextFor()`, `actor.test.ts`
+- **Thin community `Community 1107`** (2 nodes): `contextFor()`, `actor.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1107`** (2 nodes): `invoke()`, `enforcement.test.ts`
+- **Thin community `Community 1108`** (2 nodes): `invoke()`, `enforcement.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1108`** (2 nodes): `demoCtx()`, `operationAdapter.test.ts`
+- **Thin community `Community 1109`** (2 nodes): `demoCtx()`, `operationAdapter.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1109`** (2 nodes): `posStoreReadAccessCoverage.test.ts`, `source()`
+- **Thin community `Community 1110`** (2 nodes): `posStoreReadAccessCoverage.test.ts`, `source()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1110`** (2 nodes): `providerEnforcement.test.ts`, `invoke()`
+- **Thin community `Community 1111`** (2 nodes): `providerEnforcement.test.ts`, `invoke()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1111`** (2 nodes): `provision.test.ts`, `seedDemoRegisterFoundation()`
+- **Thin community `Community 1112`** (2 nodes): `provision.test.ts`, `seedDemoRegisterFoundation()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1112`** (2 nodes): `registerBaseline.test.ts`, `seedStoreWithRegister()`
+- **Thin community `Community 1113`** (2 nodes): `registerBaseline.test.ts`, `seedStoreWithRegister()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1113`** (2 nodes): `restore.test.ts`, `restoreStateContext()`
+- **Thin community `Community 1114`** (2 nodes): `restore.test.ts`, `restoreStateContext()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1114`** (2 nodes): `createStockOpsAccessQueryCtx()`, `access.test.ts`
+- **Thin community `Community 1115`** (2 nodes): `createStockOpsAccessQueryCtx()`, `access.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1115`** (2 nodes): `requireStoreFullAdminAccess()`, `access.ts`
+- **Thin community `Community 1116`** (2 nodes): `requireStoreFullAdminAccess()`, `access.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1116`** (2 nodes): `purchaseOrderTracing.test.ts`, `createWorkflowTraceCtx()`
+- **Thin community `Community 1117`** (2 nodes): `purchaseOrderTracing.test.ts`, `createWorkflowTraceCtx()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1117`** (2 nodes): `getStoreFrontActorById()`, `auth.ts`
+- **Thin community `Community 1118`** (2 nodes): `getStoreFrontActorById()`, `auth.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1118`** (2 nodes): `createQueryCtx()`, `customerBehaviorTimeline.test.ts`
+- **Thin community `Community 1119`** (2 nodes): `createQueryCtx()`, `customerBehaviorTimeline.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1119`** (2 nodes): `createAnalyticsEvent()`, `customerObservabilityTimeline.test.ts`
+- **Thin community `Community 1120`** (2 nodes): `createAnalyticsEvent()`, `customerObservabilityTimeline.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1120`** (2 nodes): `readProjectFile()`, `helperOrchestration.test.ts`
+- **Thin community `Community 1121`** (2 nodes): `readProjectFile()`, `helperOrchestration.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1121`** (2 nodes): `createMutationCtx()`, `customerEngagementEvents.test.ts`
+- **Thin community `Community 1122`** (2 nodes): `createMutationCtx()`, `customerEngagementEvents.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1122`** (2 nodes): `sku()`, `homepageSnapshot.test.ts`
+- **Thin community `Community 1123`** (2 nodes): `sku()`, `homepageSnapshot.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1123`** (2 nodes): `payment.test.ts`, `getHandler()`
+- **Thin community `Community 1124`** (2 nodes): `payment.test.ts`, `getHandler()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1124`** (2 nodes): `reviews.ts`, `getStoreFrontActorById()`
+- **Thin community `Community 1125`** (2 nodes): `reviews.ts`, `getStoreFrontActorById()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1125`** (2 nodes): `rewards.ts`, `formatPointsLabel()`
+- **Thin community `Community 1126`** (2 nodes): `rewards.ts`, `formatPointsLabel()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1126`** (2 nodes): `savedBag.ts`, `listSavedBagItems()`
+- **Thin community `Community 1127`** (2 nodes): `savedBag.ts`, `listSavedBagItems()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1127`** (2 nodes): `storefrontObservabilityReport.test.ts`, `createAnalyticsEvent()`
+- **Thin community `Community 1128`** (2 nodes): `storefrontObservabilityReport.test.ts`, `createAnalyticsEvent()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1128`** (2 nodes): `syntheticMonitor.ts`, `isSyntheticMonitorOrigin()`
+- **Thin community `Community 1129`** (2 nodes): `syntheticMonitor.ts`, `isSyntheticMonitorOrigin()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1129`** (2 nodes): `timeQueryRefactors.test.ts`, `readSource()`
+- **Thin community `Community 1130`** (2 nodes): `timeQueryRefactors.test.ts`, `readSource()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1130`** (2 nodes): `userOffers.ts`, `determineOfferEligibility()`
+- **Thin community `Community 1131`** (2 nodes): `userOffers.ts`, `determineOfferEligibility()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1131`** (2 nodes): `createCtx()`, `ensureTimezoneAuthority.test.ts`
+- **Thin community `Community 1132`** (2 nodes): `createCtx()`, `ensureTimezoneAuthority.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1132`** (2 nodes): `schedule()`, `operatingPeriods.test.ts`
+- **Thin community `Community 1133`** (2 nodes): `schedule()`, `operatingPeriods.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1133`** (2 nodes): `buildExpenseSessionTraceSeed()`, `expenseSession.ts`
+- **Thin community `Community 1134`** (2 nodes): `buildExpenseSessionTraceSeed()`, `expenseSession.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1134`** (2 nodes): `buildOrder()`, `onlineOrder.test.ts`
+- **Thin community `Community 1135`** (2 nodes): `buildOrder()`, `onlineOrder.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1135`** (2 nodes): `buildOrder()`, `orderReturnExchange.test.ts`
+- **Thin community `Community 1136`** (2 nodes): `buildOrder()`, `orderReturnExchange.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1136`** (2 nodes): `posSession.ts`, `buildPosSessionTraceSeed()`
+- **Thin community `Community 1137`** (2 nodes): `posSession.ts`, `buildPosSessionTraceSeed()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1137`** (2 nodes): `presentation.ts`, `buildWorkflowTraceViewModel()`
+- **Thin community `Community 1138`** (2 nodes): `presentation.ts`, `buildWorkflowTraceViewModel()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1138`** (2 nodes): `schemaIndexes.test.ts`, `getTableIndexes()`
+- **Thin community `Community 1139`** (2 nodes): `schemaIndexes.test.ts`, `getTableIndexes()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1139`** (2 nodes): `isAthenaIntelligenceCapability()`, `capabilityTypes.ts`
+- **Thin community `Community 1140`** (2 nodes): `isAthenaIntelligenceCapability()`, `capabilityTypes.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1140`** (2 nodes): `createContextTracker()`, `contextTracking.ts`
+- **Thin community `Community 1141`** (2 nodes): `createContextTracker()`, `contextTracking.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1141`** (2 nodes): `posTerminalRegistrationError.ts`, `isPosRegisterNumberConflict()`
+- **Thin community `Community 1142`** (2 nodes): `posTerminalRegistrationError.ts`, `isPosRegisterNumberConflict()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1142`** (2 nodes): `reviewReasonFormatter.ts`, `formatStoredReviewReason()`
+- **Thin community `Community 1143`** (2 nodes): `reviewReasonFormatter.ts`, `formatStoredReviewReason()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1143`** (2 nodes): `serviceIntake.ts`, `validateServiceIntakeInput()`
+- **Thin community `Community 1144`** (2 nodes): `serviceIntake.ts`, `validateServiceIntakeInput()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1144`** (2 nodes): `sharedDemoActionError.ts`, `isSharedDemoActionDeniedData()`
+- **Thin community `Community 1145`** (2 nodes): `sharedDemoActionError.ts`, `isSharedDemoActionDeniedData()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1145`** (2 nodes): `sharedDemoRegisterError.ts`, `isSharedDemoRegisterUnavailableError()`
+- **Thin community `Community 1146`** (2 nodes): `sharedDemoRegisterError.ts`, `isSharedDemoRegisterUnavailableError()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1146`** (2 nodes): `removeConvexAuthCodeParamFromUrl()`, `convexAuthUrl.ts`
+- **Thin community `Community 1147`** (2 nodes): `removeConvexAuthCodeParamFromUrl()`, `convexAuthUrl.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1147`** (2 nodes): `Navigation()`, `OrganizationView.tsx`
+- **Thin community `Community 1148`** (2 nodes): `Navigation()`, `OrganizationView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1148`** (2 nodes): `Navigation()`, `OrganizationsView.tsx`
+- **Thin community `Community 1149`** (2 nodes): `Navigation()`, `OrganizationsView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1149`** (2 nodes): `PermissionGate.tsx`, `PermissionGate()`
+- **Thin community `Community 1150`** (2 nodes): `PermissionGate.tsx`, `PermissionGate()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1150`** (2 nodes): `ProtectedRoute.tsx`, `ProtectedRoute()`
+- **Thin community `Community 1151`** (2 nodes): `ProtectedRoute.tsx`, `ProtectedRoute()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1151`** (2 nodes): `SettingsView.tsx`, `SettingsView()`
+- **Thin community `Community 1152`** (2 nodes): `SettingsView.tsx`, `SettingsView()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1152`** (2 nodes): `StoreActions.tsx`, `StoreActions()`
+- **Thin community `Community 1153`** (2 nodes): `StoreActions.tsx`, `StoreActions()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1153`** (2 nodes): `StoreDropdown.tsx`, `StoreDropdown()`
+- **Thin community `Community 1154`** (2 nodes): `StoreDropdown.tsx`, `StoreDropdown()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1154`** (2 nodes): `StoreView.tsx`, `Navigation()`
+- **Thin community `Community 1155`** (2 nodes): `StoreView.tsx`, `Navigation()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1155`** (2 nodes): `StoresDropdown.tsx`, `StoresDropdown()`
+- **Thin community `Community 1156`** (2 nodes): `StoresDropdown.tsx`, `StoresDropdown()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1156`** (2 nodes): `handlePrint()`, `BarcodeQRViewer.tsx`
+- **Thin community `Community 1157`** (2 nodes): `handlePrint()`, `BarcodeQRViewer.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1157`** (2 nodes): `ProcessingFees.tsx`, `ProcessingFeesView()`
+- **Thin community `Community 1158`** (2 nodes): `ProcessingFees.tsx`, `ProcessingFeesView()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1158`** (2 nodes): `ProductAvailabilityToggleGroup.tsx`, `ProductAvailabilityToggleGroup()`
+- **Thin community `Community 1159`** (2 nodes): `ProductAvailabilityToggleGroup.tsx`, `ProductAvailabilityToggleGroup()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1159`** (2 nodes): `ProductDetails.tsx`, `handleNameChange()`
+- **Thin community `Community 1160`** (2 nodes): `ProductDetails.tsx`, `handleNameChange()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1160`** (2 nodes): `ProductImages.tsx`, `Header()`
+- **Thin community `Community 1161`** (2 nodes): `ProductImages.tsx`, `Header()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1161`** (2 nodes): `ProductPage.tsx`, `ProductPage()`
+- **Thin community `Community 1162`** (2 nodes): `ProductPage.tsx`, `ProductPage()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1162`** (2 nodes): `buildCopyImagesSkuUpdate()`, `CopyImagesView.tsx`
+- **Thin community `Community 1163`** (2 nodes): `buildCopyImagesSkuUpdate()`, `CopyImagesView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1163`** (2 nodes): `product-variant-columns.tsx`, `setSourceVariant()`
+- **Thin community `Community 1164`** (2 nodes): `product-variant-columns.tsx`, `setSourceVariant()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1164`** (2 nodes): `taxonomySelectLabels.ts`, `formatTaxonomySelectOptionLabel()`
+- **Thin community `Community 1165`** (2 nodes): `taxonomySelectLabels.ts`, `formatTaxonomySelectOptionLabel()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1165`** (2 nodes): `capitalizeFirstLetter()`, `ActivityTimeline.tsx`
+- **Thin community `Community 1166`** (2 nodes): `capitalizeFirstLetter()`, `ActivityTimeline.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1166`** (2 nodes): `AnalyticsCombinedUsers()`, `AnalyticsCombinedUsers.tsx`
+- **Thin community `Community 1167`** (2 nodes): `AnalyticsCombinedUsers()`, `AnalyticsCombinedUsers.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1167`** (2 nodes): `AnalyticsItems()`, `AnalyticsItems.tsx`
+- **Thin community `Community 1168`** (2 nodes): `AnalyticsItems()`, `AnalyticsItems.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1168`** (2 nodes): `AnalyticsProducts()`, `AnalyticsProducts.tsx`
+- **Thin community `Community 1169`** (2 nodes): `AnalyticsProducts()`, `AnalyticsProducts.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1169`** (2 nodes): `AnalyticsUsers()`, `AnalyticsUsers.tsx`
+- **Thin community `Community 1170`** (2 nodes): `AnalyticsUsers()`, `AnalyticsUsers.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1170`** (2 nodes): `getDateRangeMilliseconds()`, `EnhancedAnalyticsView.tsx`
+- **Thin community `Community 1171`** (2 nodes): `getDateRangeMilliseconds()`, `EnhancedAnalyticsView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1171`** (2 nodes): `StoreInsights.test.tsx`, `renderWithQueries()`
+- **Thin community `Community 1172`** (2 nodes): `StoreInsights.test.tsx`, `renderWithQueries()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1172`** (2 nodes): `VisitorChart.tsx`, `formatHour()`
+- **Thin community `Community 1173`** (2 nodes): `VisitorChart.tsx`, `formatHour()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1173`** (2 nodes): `readSource()`, `analyticsWorkspaceEfficiency.test.ts`
+- **Thin community `Community 1174`** (2 nodes): `readSource()`, `analyticsWorkspaceEfficiency.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1174`** (2 nodes): `LogItems()`, `LogItems.tsx`
+- **Thin community `Community 1175`** (2 nodes): `LogItems()`, `LogItems.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1175`** (2 nodes): `Header()`, `LogView.tsx`
+- **Thin community `Community 1176`** (2 nodes): `Header()`, `LogView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1176`** (2 nodes): `Navigation()`, `LogsView.tsx`
+- **Thin community `Community 1177`** (2 nodes): `Navigation()`, `LogsView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1177`** (2 nodes): `useLoadLogItems.ts`, `useLoadLogItems()`
+- **Thin community `Community 1178`** (2 nodes): `useLoadLogItems.ts`, `useLoadLogItems()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1178`** (2 nodes): `cn()`, `AppMessageHost.tsx`
+- **Thin community `Community 1179`** (2 nodes): `cn()`, `AppMessageHost.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1179`** (2 nodes): `cn()`, `AppSettingsView.tsx`
+- **Thin community `Community 1180`** (2 nodes): `cn()`, `AppSettingsView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1180`** (2 nodes): `Auth()`, `Auth.tsx`
+- **Thin community `Community 1181`** (2 nodes): `Auth()`, `Auth.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1181`** (2 nodes): `resolveSignIn()`, `InputOTP.test.tsx`
+- **Thin community `Community 1182`** (2 nodes): `resolveSignIn()`, `InputOTP.test.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1182`** (2 nodes): `isEmailNotApprovedError()`, `LoginForm.tsx`
+- **Thin community `Community 1183`** (2 nodes): `isEmailNotApprovedError()`, `LoginForm.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1183`** (2 nodes): `expectPendingAuthSyncRedirect()`, `index.test.tsx`
+- **Thin community `Community 1184`** (2 nodes): `expectPendingAuthSyncRedirect()`, `index.test.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1184`** (2 nodes): `DataTableColumnHeader()`, `data-table-column-header.tsx`
+- **Thin community `Community 1185`** (2 nodes): `DataTableColumnHeader()`, `data-table-column-header.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1185`** (2 nodes): `handleLoadProducts()`, `BulkOperationsFilters.tsx`
+- **Thin community `Community 1186`** (2 nodes): `handleLoadProducts()`, `BulkOperationsFilters.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1186`** (2 nodes): `makeRow()`, `BulkOperationsPreview.test.tsx`
+- **Thin community `Community 1187`** (2 nodes): `makeRow()`, `BulkOperationsPreview.test.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1187`** (2 nodes): `formatPrice()`, `BulkOperationsPreview.tsx`
+- **Thin community `Community 1188`** (2 nodes): `formatPrice()`, `BulkOperationsPreview.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1188`** (2 nodes): `formatReviewReason()`, `formatReviewReason.ts`
+- **Thin community `Community 1189`** (2 nodes): `formatReviewReason()`, `formatReviewReason.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1189`** (2 nodes): `registerSessionColumns.tsx`, `RegisterSessionLink()`
+- **Thin community `Community 1190`** (2 nodes): `registerSessionColumns.tsx`, `RegisterSessionLink()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1190`** (2 nodes): `CheckoutSessionsTable()`, `CheckoutSessionsTable.tsx`
+- **Thin community `Community 1191`** (2 nodes): `CheckoutSessionsTable()`, `CheckoutSessionsTable.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1191`** (2 nodes): `Navigation()`, `CheckoutSesssionsView.tsx`
+- **Thin community `Community 1192`** (2 nodes): `Navigation()`, `CheckoutSesssionsView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1192`** (2 nodes): `AnimatedDataState()`, `AnimatedDataState.tsx`
+- **Thin community `Community 1193`** (2 nodes): `AnimatedDataState()`, `AnimatedDataState.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1193`** (2 nodes): `AnimatedHeight()`, `AnimatedHeight.tsx`
+- **Thin community `Community 1194`** (2 nodes): `AnimatedHeight()`, `AnimatedHeight.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1194`** (2 nodes): `FinancialValue()`, `FinancialValue.tsx`
+- **Thin community `Community 1195`** (2 nodes): `FinancialValue()`, `FinancialValue.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1195`** (2 nodes): `RegisterSessionIdentity.tsx`, `RegisterSessionIdentity()`
+- **Thin community `Community 1196`** (2 nodes): `RegisterSessionIdentity.tsx`, `RegisterSessionIdentity()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1196`** (2 nodes): `registerSessionIdentityPresentation.ts`, `formatRegisterHeaderName()`
+- **Thin community `Community 1197`** (2 nodes): `registerSessionIdentityPresentation.ts`, `formatRegisterHeaderName()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1197`** (2 nodes): `ExpenseView()`, `ExpenseView.tsx`
+- **Thin community `Community 1198`** (2 nodes): `ExpenseView()`, `ExpenseView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1198`** (2 nodes): `BestSellersDialog()`, `BestSellersDialog.tsx`
+- **Thin community `Community 1199`** (2 nodes): `BestSellersDialog()`, `BestSellersDialog.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1199`** (2 nodes): `FeaturedSectionDialog()`, `FeaturedSectionDialog.tsx`
+- **Thin community `Community 1200`** (2 nodes): `FeaturedSectionDialog()`, `FeaturedSectionDialog.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1200`** (2 nodes): `handleUpdateConfig()`, `LandingPageReelVersion.tsx`
+- **Thin community `Community 1201`** (2 nodes): `handleUpdateConfig()`, `LandingPageReelVersion.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1201`** (2 nodes): `ShopLookDialog.tsx`, `ShopLookDialog()`
+- **Thin community `Community 1202`** (2 nodes): `ShopLookDialog.tsx`, `ShopLookDialog()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1202`** (2 nodes): `ReadoutSupport.tsx`, `ReadoutTrustMetadata()`
+- **Thin community `Community 1203`** (2 nodes): `ReadoutSupport.tsx`, `ReadoutTrustMetadata()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1203`** (2 nodes): `JoinTeam()`, `index.tsx`
+- **Thin community `Community 1204`** (2 nodes): `JoinTeam()`, `index.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1204`** (2 nodes): `LandingGrain()`, `LandingGrain.tsx`
+- **Thin community `Community 1205`** (2 nodes): `LandingGrain()`, `LandingGrain.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1205`** (2 nodes): `AutomationRevealScene()`, `AutomationRevealScene.tsx`
+- **Thin community `Community 1206`** (2 nodes): `AutomationRevealScene()`, `AutomationRevealScene.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1206`** (2 nodes): `CashControlsScene()`, `CashControlsScene.tsx`
+- **Thin community `Community 1207`** (2 nodes): `CashControlsScene()`, `CashControlsScene.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1207`** (2 nodes): `PosHubRoleSwitcher.tsx`, `PosHubRoleSwitcher()`
+- **Thin community `Community 1208`** (2 nodes): `PosHubRoleSwitcher.tsx`, `PosHubRoleSwitcher()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1208`** (2 nodes): `SyncBridgeScene.tsx`, `SyncBridgeScene()`
+- **Thin community `Community 1209`** (2 nodes): `SyncBridgeScene.tsx`, `SyncBridgeScene()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1209`** (2 nodes): `formatDemoMoney()`, `demoDay.ts`
+- **Thin community `Community 1210`** (2 nodes): `formatDemoMoney()`, `demoDay.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1210`** (2 nodes): `storyTime()`, `demoDayFixtures.ts`
+- **Thin community `Community 1211`** (2 nodes): `storyTime()`, `demoDayFixtures.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1211`** (2 nodes): `useLandingTheme.ts`, `useLandingTheme()`
+- **Thin community `Community 1212`** (2 nodes): `useLandingTheme.ts`, `useLandingTheme()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1212`** (2 nodes): `renderWorkspace()`, `InventoryCostOverlayView.test.tsx`
+- **Thin community `Community 1213`** (2 nodes): `renderWorkspace()`, `InventoryCostOverlayView.test.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1213`** (2 nodes): `OperationReviewItemCard()`, `OperationReviewItemCard.tsx`
+- **Thin community `Community 1214`** (2 nodes): `OperationReviewItemCard()`, `OperationReviewItemCard.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1214`** (2 nodes): `buildParams()`, `OperationsSummaryMetric.tsx`
+- **Thin community `Community 1215`** (2 nodes): `buildParams()`, `OperationsSummaryMetric.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1215`** (2 nodes): `toApprovalRequesterBindingArg()`, `approvalRequesterBinding.ts`
+- **Thin community `Community 1216`** (2 nodes): `toApprovalRequesterBindingArg()`, `approvalRequesterBinding.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1216`** (2 nodes): `handleSendOrderEmail()`, `EmailStatusView.tsx`
+- **Thin community `Community 1217`** (2 nodes): `handleSendOrderEmail()`, `EmailStatusView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1217`** (2 nodes): `handleTimeRangeChange()`, `OrderMetricsPanel.tsx`
+- **Thin community `Community 1218`** (2 nodes): `handleTimeRangeChange()`, `OrderMetricsPanel.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1218`** (2 nodes): `Orders()`, `Orders.tsx`
+- **Thin community `Community 1219`** (2 nodes): `Orders()`, `Orders.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1219`** (2 nodes): `OrdersView()`, `OrdersView.tsx`
+- **Thin community `Community 1220`** (2 nodes): `OrdersView()`, `OrdersView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1220`** (2 nodes): `RefundsView.tsx`, `handleRefundOrder()`
+- **Thin community `Community 1221`** (2 nodes): `RefundsView.tsx`, `handleRefundOrder()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1221`** (2 nodes): `useGetActiveOnlineOrder.ts`, `useGetActiveOnlineOrder()`
+- **Thin community `Community 1222`** (2 nodes): `useGetActiveOnlineOrder.ts`, `useGetActiveOnlineOrder()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1222`** (2 nodes): `OrderCustomerCell()`, `OrderCustomerCell.tsx`
+- **Thin community `Community 1223`** (2 nodes): `OrderCustomerCell()`, `OrderCustomerCell.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1223`** (2 nodes): `handleClearFilters()`, `data-table-toolbar.tsx`
+- **Thin community `Community 1224`** (2 nodes): `handleClearFilters()`, `data-table-toolbar.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1224`** (2 nodes): `if()`, `orderColumns.tsx`
+- **Thin community `Community 1225`** (2 nodes): `if()`, `orderColumns.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1225`** (2 nodes): `OrganizationSwitcher()`, `organization-switcher.tsx`
+- **Thin community `Community 1226`** (2 nodes): `OrganizationSwitcher()`, `organization-switcher.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1226`** (2 nodes): `buildServiceLine()`, `CartItems.test.tsx`
+- **Thin community `Community 1227`** (2 nodes): `buildServiceLine()`, `CartItems.test.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1227`** (2 nodes): `DebugProducts()`, `DebugProducts.tsx`
+- **Thin community `Community 1228`** (2 nodes): `DebugProducts()`, `DebugProducts.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1228`** (2 nodes): `NoResultsMessage()`, `NoResultsMessage.tsx`
+- **Thin community `Community 1229`** (2 nodes): `NoResultsMessage()`, `NoResultsMessage.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1229`** (2 nodes): `PinInput.tsx`, `PinInput()`
+- **Thin community `Community 1230`** (2 nodes): `PinInput.tsx`, `PinInput()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1230`** (2 nodes): `PosClientTelemetryHost.tsx`, `PosClientTelemetryHost()`
+- **Thin community `Community 1231`** (2 nodes): `PosClientTelemetryHost.tsx`, `PosClientTelemetryHost()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1231`** (2 nodes): `PrintInstructions.tsx`, `PrintInstructions()`
+- **Thin community `Community 1232`** (2 nodes): `PrintInstructions.tsx`, `PrintInstructions()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1232`** (2 nodes): `SearchResultsSection.test.tsx`, `buildProduct()`
+- **Thin community `Community 1233`** (2 nodes): `SearchResultsSection.test.tsx`, `buildProduct()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1233`** (2 nodes): `SessionDemo.tsx`, `SessionDemo()`
+- **Thin community `Community 1234`** (2 nodes): `SessionDemo.tsx`, `SessionDemo()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1234`** (2 nodes): `handlePrintReceipt()`, `ExpenseReportView.tsx`
+- **Thin community `Community 1235`** (2 nodes): `handlePrintReceipt()`, `ExpenseReportView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1235`** (2 nodes): `toExpenseReportRows()`, `expenseReportRows.ts`
+- **Thin community `Community 1236`** (2 nodes): `toExpenseReportRows()`, `expenseReportRows.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1236`** (2 nodes): `buildCheckout()`, `ExpenseCompletionPanel.test.tsx`
+- **Thin community `Community 1237`** (2 nodes): `buildCheckout()`, `ExpenseCompletionPanel.test.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1237`** (2 nodes): `POSRegisterView.test.tsx`, `pressDebugPanelShortcut()`
+- **Thin community `Community 1238`** (2 nodes): `POSRegisterView.test.tsx`, `pressDebugPanelShortcut()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1238`** (2 nodes): `RegisterCheckoutPanel.tsx`, `RegisterCheckoutPanel()`
+- **Thin community `Community 1239`** (2 nodes): `RegisterCheckoutPanel.tsx`, `RegisterCheckoutPanel()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1239`** (2 nodes): `RegisterCustomerAttribution.test.tsx`, `makeCustomer()`
+- **Thin community `Community 1240`** (2 nodes): `RegisterCustomerAttribution.test.tsx`, `makeCustomer()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1240`** (2 nodes): `RegisterCustomerPanel.tsx`, `RegisterCustomerPanel()`
+- **Thin community `Community 1241`** (2 nodes): `RegisterCustomerPanel.tsx`, `RegisterCustomerPanel()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1241`** (2 nodes): `RegisterDrawerGate.test.tsx`, `renderGate()`
+- **Thin community `Community 1242`** (2 nodes): `RegisterDrawerGate.test.tsx`, `renderGate()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1242`** (2 nodes): `RegisterDrawerGate.tsx`, `if()`
+- **Thin community `Community 1243`** (2 nodes): `RegisterDrawerGate.tsx`, `if()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1243`** (2 nodes): `RegisterSessionPanel.tsx`, `RegisterSessionPanel()`
+- **Thin community `Community 1244`** (2 nodes): `RegisterSessionPanel.tsx`, `RegisterSessionPanel()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1244`** (2 nodes): `POSSalesPulseView.tsx`, `POSStorePulseSection()`
+- **Thin community `Community 1245`** (2 nodes): `POSSalesPulseView.tsx`, `POSStorePulseSection()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1245`** (2 nodes): `POSTerminalHealthView.test.tsx`, `[
+- **Thin community `Community 1246`** (2 nodes): `POSTerminalHealthView.test.tsx`, `[
           {
             ...baseSummary,
             attentionReasons: [
@@ -13699,453 +13699,451 @@ Nodes (0):
           },
         ]()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1246`** (2 nodes): `POSTerminalHealthView.tsx`, `CountMetric()`
+- **Thin community `Community 1247`** (2 nodes): `POSTerminalHealthView.tsx`, `CountMetric()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1247`** (2 nodes): `PosClientErrorsPanel.test.tsx`, `buildEvent()`
+- **Thin community `Community 1248`** (2 nodes): `PosClientErrorsPanel.test.tsx`, `buildEvent()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1248`** (2 nodes): `transactionColumns.test.tsx`, `renderTransactionCell()`
+- **Thin community `Community 1249`** (2 nodes): `transactionColumns.test.tsx`, `renderTransactionCell()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1249`** (2 nodes): `transactionColumns.tsx`, `getPaymentMethodIcon()`
+- **Thin community `Community 1250`** (2 nodes): `transactionColumns.tsx`, `getPaymentMethodIcon()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1250`** (2 nodes): `BarcodeView()`, `BarcodeView.tsx`
+- **Thin community `Community 1251`** (2 nodes): `BarcodeView()`, `BarcodeView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1251`** (2 nodes): `CategorizationView()`, `CategorizationView.tsx`
+- **Thin community `Community 1252`** (2 nodes): `CategorizationView()`, `CategorizationView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1252`** (2 nodes): `handleKeyDown()`, `ImagesView.tsx`
+- **Thin community `Community 1253`** (2 nodes): `handleKeyDown()`, `ImagesView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1253`** (2 nodes): `ProductDetailView.tsx`, `ProductDetailViewHeader()`
+- **Thin community `Community 1254`** (2 nodes): `ProductDetailView.tsx`, `ProductDetailViewHeader()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1254`** (2 nodes): `ProductStatus.tsx`, `ProductStatus()`
+- **Thin community `Community 1255`** (2 nodes): `ProductStatus.tsx`, `ProductStatus()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1255`** (2 nodes): `productStockPresentation.ts`, `productStockTextClass()`
+- **Thin community `Community 1256`** (2 nodes): `productStockPresentation.ts`, `productStockTextClass()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1256`** (2 nodes): `product-actions.tsx`, `useArchiveProduct()`
+- **Thin community `Community 1257`** (2 nodes): `product-actions.tsx`, `useArchiveProduct()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1257`** (2 nodes): `ArchivedProductsToolbar()`, `ArchivedProducts.tsx`
+- **Thin community `Community 1258`** (2 nodes): `ArchivedProductsToolbar()`, `ArchivedProducts.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1258`** (2 nodes): `CategoryListView()`, `CategoryListView.tsx`
+- **Thin community `Community 1259`** (2 nodes): `CategoryListView()`, `CategoryListView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1259`** (2 nodes): `ProductsView.tsx`, `ProductsView()`
+- **Thin community `Community 1260`** (2 nodes): `ProductsView.tsx`, `ProductsView()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1260`** (2 nodes): `ProductTaxonomyCells.tsx`, `ProductCategoryCell()`
+- **Thin community `Community 1261`** (2 nodes): `ProductTaxonomyCells.tsx`, `ProductCategoryCell()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1261`** (2 nodes): `AddProductCommand()`, `add-product-command.tsx`
+- **Thin community `Community 1262`** (2 nodes): `AddProductCommand()`, `add-product-command.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1262`** (2 nodes): `Products.tsx`, `Products()`
+- **Thin community `Community 1263`** (2 nodes): `Products.tsx`, `Products()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1263`** (2 nodes): `PromoCodeForm.tsx`, `toggleDiscountType()`
+- **Thin community `Community 1264`** (2 nodes): `PromoCodeForm.tsx`, `toggleDiscountType()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1264`** (2 nodes): `PromoCodeHeader.tsx`, `handleDeletePromoCode()`
+- **Thin community `Community 1265`** (2 nodes): `PromoCodeHeader.tsx`, `handleDeletePromoCode()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1265`** (2 nodes): `PromoCodePreview.tsx`, `Discount()`
+- **Thin community `Community 1266`** (2 nodes): `PromoCodePreview.tsx`, `Discount()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1266`** (2 nodes): `PromoCodesView.test.tsx`, `readSource()`
+- **Thin community `Community 1267`** (2 nodes): `PromoCodesView.test.tsx`, `readSource()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1267`** (2 nodes): `PromoCodesView.tsx`, `PromoCodesView()`
+- **Thin community `Community 1268`** (2 nodes): `PromoCodesView.tsx`, `PromoCodesView()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1268`** (2 nodes): `SelectableCategories.tsx`, `toggle()`
+- **Thin community `Community 1269`** (2 nodes): `SelectableCategories.tsx`, `toggle()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1269`** (2 nodes): `DiscountTypeToggleGroup()`, `DiscountTypeToggleGroup.tsx`
+- **Thin community `Community 1270`** (2 nodes): `DiscountTypeToggleGroup()`, `DiscountTypeToggleGroup.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1270`** (2 nodes): `PromoCodeSpanToggleGroup.tsx`, `PromoCodeSpanToggleGroup()`
+- **Thin community `Community 1271`** (2 nodes): `PromoCodeSpanToggleGroup.tsx`, `PromoCodeSpanToggleGroup()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1271`** (2 nodes): `CapturedEmails()`, `CapturedEmails.tsx`
+- **Thin community `Community 1272`** (2 nodes): `CapturedEmails()`, `CapturedEmails.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1272`** (2 nodes): `promo-code-modal.tsx`, `PromoCodeModal()`
+- **Thin community `Community 1273`** (2 nodes): `promo-code-modal.tsx`, `PromoCodeModal()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1273`** (2 nodes): `RemoteAssistLiveViewer.tsx`, `async()`
+- **Thin community `Community 1274`** (2 nodes): `RemoteAssistLiveViewer.tsx`, `async()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1274`** (2 nodes): `RemoteAssistRuntimeShell.tsx`, `handleDisconnect()`
+- **Thin community `Community 1275`** (2 nodes): `RemoteAssistRuntimeShell.tsx`, `handleDisconnect()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1275`** (2 nodes): `ReportBackLink.tsx`, `ReportBackLink()`
+- **Thin community `Community 1276`** (2 nodes): `ReportBackLink.tsx`, `ReportBackLink()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1276`** (2 nodes): `ReportDaysPanel.test.tsx`, `constructor()`
+- **Thin community `Community 1277`** (2 nodes): `ReportDaysPanel.test.tsx`, `constructor()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1277`** (2 nodes): `ReportFreshness.tsx`, `ReportFreshness()`
+- **Thin community `Community 1278`** (2 nodes): `ReportFreshness.tsx`, `ReportFreshness()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1278`** (2 nodes): `ReportTrendChart.test.tsx`, `labelFormatter()`
+- **Thin community `Community 1279`** (2 nodes): `ReportTrendChart.test.tsx`, `labelFormatter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1279`** (2 nodes): `ReportTrustStrip.tsx`, `ReportTrustStrip()`
+- **Thin community `Community 1280`** (2 nodes): `ReportTrustStrip.tsx`, `ReportTrustStrip()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1280`** (2 nodes): `ReportsCatalogLookup.test.tsx`, `result()`
+- **Thin community `Community 1281`** (2 nodes): `ReportsCatalogLookup.test.tsx`, `result()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1281`** (2 nodes): `ReportsItemsPerformance.tsx`, `cn()`
+- **Thin community `Community 1282`** (2 nodes): `ReportsItemsPerformance.tsx`, `cn()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1282`** (2 nodes): `ReportsItemsTable.tsx`, `ReportsItemsTable()`
+- **Thin community `Community 1283`** (2 nodes): `ReportsItemsTable.tsx`, `ReportsItemsTable()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1283`** (2 nodes): `ReportsItemsView.tsx`, `handlePageChange()`
+- **Thin community `Community 1284`** (2 nodes): `ReportsItemsView.tsx`, `handlePageChange()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1284`** (2 nodes): `ReportsLayout.tsx`, `cn()`
+- **Thin community `Community 1285`** (2 nodes): `ReportsLayout.tsx`, `cn()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1285`** (2 nodes): `ReportsSkuDetailView.tsx`, `cn()`
+- **Thin community `Community 1286`** (2 nodes): `ReportsSkuDetailView.tsx`, `cn()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1286`** (2 nodes): `useStableReportQuery.ts`, `useStableReportQuery()`
+- **Thin community `Community 1287`** (2 nodes): `useStableReportQuery.ts`, `useStableReportQuery()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1287`** (2 nodes): `ReviewActions.tsx`, `ReviewActions()`
+- **Thin community `Community 1288`** (2 nodes): `ReviewActions.tsx`, `ReviewActions()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1288`** (2 nodes): `ServiceCasesView.test.tsx`, `chooseSelectOption()`
+- **Thin community `Community 1289`** (2 nodes): `ServiceCasesView.test.tsx`, `chooseSelectOption()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1289`** (2 nodes): `ServiceCatalogView.test.tsx`, `chooseSelectOption()`
+- **Thin community `Community 1290`** (2 nodes): `ServiceCatalogView.test.tsx`, `chooseSelectOption()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1290`** (2 nodes): `ServiceIntakeView.auth.test.tsx`, `chooseSelectOption()`
+- **Thin community `Community 1291`** (2 nodes): `ServiceIntakeView.auth.test.tsx`, `chooseSelectOption()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1291`** (2 nodes): `ServiceWorkspaceDemoNotice.tsx`, `ServiceWorkspaceDemoNotice()`
+- **Thin community `Community 1292`** (2 nodes): `ServiceWorkspaceDemoNotice.tsx`, `ServiceWorkspaceDemoNotice()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1292`** (2 nodes): `ServicesWorkspaceView.test.tsx`, `chooseSelectOption()`
+- **Thin community `Community 1293`** (2 nodes): `ServicesWorkspaceView.test.tsx`, `chooseSelectOption()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1293`** (2 nodes): `DemoNotice()`, `DemoNotice.tsx`
+- **Thin community `Community 1294`** (2 nodes): `DemoNotice()`, `DemoNotice.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1294`** (2 nodes): `SharedDemoManagerSignInGuidance.tsx`, `SharedDemoManagerSignInGuidance()`
+- **Thin community `Community 1295`** (2 nodes): `SharedDemoManagerSignInGuidance.tsx`, `SharedDemoManagerSignInGuidance()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1295`** (2 nodes): `SharedDemoOwnerHome.tsx`, `SharedDemoOwnerHome()`
+- **Thin community `Community 1296`** (2 nodes): `SharedDemoOwnerHome.tsx`, `SharedDemoOwnerHome()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1296`** (2 nodes): `SharedDemoRestrictedSurface.tsx`, `SharedDemoRestrictedSurface()`
+- **Thin community `Community 1297`** (2 nodes): `SharedDemoRestrictedSurface.tsx`, `SharedDemoRestrictedSurface()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1297`** (2 nodes): `SharedDemoRuntime.test.tsx`, `ProviderStatusProbe()`
+- **Thin community `Community 1298`** (2 nodes): `SharedDemoRuntime.test.tsx`, `ProviderStatusProbe()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1298`** (2 nodes): `SharedDemoStatusBar.tsx`, `normalizePathname()`
+- **Thin community `Community 1299`** (2 nodes): `SharedDemoStatusBar.tsx`, `normalizePathname()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1299`** (2 nodes): `sharedDemoProviderStatus.ts`, `resolveSharedDemoProvidedBootstrapStatus()`
+- **Thin community `Community 1300`** (2 nodes): `sharedDemoProviderStatus.ts`, `resolveSharedDemoProvidedBootstrapStatus()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1300`** (2 nodes): `sharedDemoRestoreOverlayModel.ts`, `resolveSharedDemoRestoreOverlayPhase()`
+- **Thin community `Community 1301`** (2 nodes): `sharedDemoRestoreOverlayModel.ts`, `resolveSharedDemoRestoreOverlayPhase()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1301`** (2 nodes): `sharedDemoRestrictions.ts`, `isSharedDemoRestrictedPath()`
+- **Thin community `Community 1302`** (2 nodes): `sharedDemoRestrictions.ts`, `isSharedDemoRestrictedPath()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1302`** (2 nodes): `sharedDemoRoutes.ts`, `getSharedDemoRoutes()`
+- **Thin community `Community 1303`** (2 nodes): `sharedDemoRoutes.ts`, `getSharedDemoRoutes()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1303`** (2 nodes): `sharedDemoRuntimeCoordinator.test.ts`, `deferred()`
+- **Thin community `Community 1304`** (2 nodes): `sharedDemoRuntimeCoordinator.test.ts`, `deferred()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1304`** (2 nodes): `StaffMessagesView.tsx`, `submit()`
+- **Thin community `Community 1305`** (2 nodes): `StaffMessagesView.tsx`, `submit()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1305`** (2 nodes): `staffPinPolicy.ts`, `normalizeStaffPin()`
+- **Thin community `Community 1306`** (2 nodes): `staffPinPolicy.ts`, `normalizeStaffPin()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1306`** (2 nodes): `onClick()`, `empty-state.tsx`
+- **Thin community `Community 1307`** (2 nodes): `onClick()`, `empty-state.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1307`** (2 nodes): `NoPermission()`, `NoPermission.tsx`
+- **Thin community `Community 1308`** (2 nodes): `NoPermission()`, `NoPermission.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1308`** (2 nodes): `NoPermissionView()`, `NoPermissionView.tsx`
+- **Thin community `Community 1309`** (2 nodes): `NoPermissionView()`, `NoPermissionView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1309`** (2 nodes): `NotFoundView()`, `NotFoundView.tsx`
+- **Thin community `Community 1310`** (2 nodes): `NotFoundView()`, `NotFoundView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1310`** (2 nodes): `ProtectedAdminSignInView.tsx`, `ProtectedAdminSignInView()`
+- **Thin community `Community 1311`** (2 nodes): `ProtectedAdminSignInView.tsx`, `ProtectedAdminSignInView()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1311`** (2 nodes): `ContactView()`, `ContactView.tsx`
+- **Thin community `Community 1312`** (2 nodes): `ContactView()`, `ContactView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1312`** (2 nodes): `Header()`, `Header.tsx`
+- **Thin community `Community 1313`** (2 nodes): `Header()`, `Header.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1313`** (2 nodes): `MaintenanceView()`, `MaintenanceView.tsx`
+- **Thin community `Community 1314`** (2 nodes): `MaintenanceView()`, `MaintenanceView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1314`** (2 nodes): `TaxView.tsx`, `handleUpdateTaxSettings()`
+- **Thin community `Community 1315`** (2 nodes): `TaxView.tsx`, `handleUpdateTaxSettings()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1315`** (2 nodes): `useStoreConfigUpdate.ts`, `useStoreConfigUpdate()`
+- **Thin community `Community 1316`** (2 nodes): `useStoreConfigUpdate.ts`, `useStoreConfigUpdate()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1316`** (2 nodes): `useStoreScheduleUpdate.ts`, `useStoreScheduleUpdate()`
+- **Thin community `Community 1317`** (2 nodes): `useStoreScheduleUpdate.ts`, `useStoreScheduleUpdate()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1317`** (2 nodes): `store-switcher.tsx`, `onStoreSelect()`
+- **Thin community `Community 1318`** (2 nodes): `store-switcher.tsx`, `onStoreSelect()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1318`** (2 nodes): `useChart()`, `chart.tsx`
+- **Thin community `Community 1319`** (2 nodes): `useChart()`, `chart.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1319`** (2 nodes): `handleCopy()`, `copy-button.tsx`
+- **Thin community `Community 1320`** (2 nodes): `handleCopy()`, `copy-button.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1320`** (2 nodes): `handleCopy()`, `copy-wrapper.tsx`
+- **Thin community `Community 1321`** (2 nodes): `handleCopy()`, `copy-wrapper.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1321`** (2 nodes): `Label()`, `label.tsx`
+- **Thin community `Community 1322`** (2 nodes): `Label()`, `label.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1322`** (2 nodes): `CustomModal()`, `custom-modal.tsx`
+- **Thin community `Community 1323`** (2 nodes): `CustomModal()`, `custom-modal.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1323`** (2 nodes): `onSubmit()`, `organization-modal.tsx`
+- **Thin community `Community 1324`** (2 nodes): `onSubmit()`, `organization-modal.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1324`** (2 nodes): `store-modal.tsx`, `onSubmit()`
+- **Thin community `Community 1325`** (2 nodes): `store-modal.tsx`, `onSubmit()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1325`** (2 nodes): `welcome-back-modal-example.tsx`, `WelcomeBackModalExample()`
+- **Thin community `Community 1326`** (2 nodes): `welcome-back-modal-example.tsx`, `WelcomeBackModalExample()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1326`** (2 nodes): `welcome-back-modal.tsx`, `WelcomeBackModal()`
+- **Thin community `Community 1327`** (2 nodes): `welcome-back-modal.tsx`, `WelcomeBackModal()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1327`** (2 nodes): `select-native.tsx`, `cn()`
+- **Thin community `Community 1328`** (2 nodes): `select-native.tsx`, `cn()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1328`** (2 nodes): `sidebar.test.tsx`, `SidebarToggleProbe()`
+- **Thin community `Community 1329`** (2 nodes): `sidebar.test.tsx`, `SidebarToggleProbe()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1329`** (2 nodes): `timeline-item.tsx`, `TimelineItem()`
+- **Thin community `Community 1330`** (2 nodes): `timeline-item.tsx`, `TimelineItem()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1330`** (2 nodes): `webp-image.tsx`, `WebpImage()`
+- **Thin community `Community 1331`** (2 nodes): `webp-image.tsx`, `WebpImage()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1331`** (2 nodes): `BagItems()`, `BagItems.tsx`
+- **Thin community `Community 1332`** (2 nodes): `BagItems()`, `BagItems.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1332`** (2 nodes): `BagItemsView()`, `BagItemsView.tsx`
+- **Thin community `Community 1333`** (2 nodes): `BagItemsView()`, `BagItemsView.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1333`** (2 nodes): `Bags()`, `Bags.tsx`
+- **Thin community `Community 1334`** (2 nodes): `Bags()`, `Bags.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1334`** (2 nodes): `String()`, `CustomerBehaviorTimeline.tsx`
+- **Thin community `Community 1335`** (2 nodes): `String()`, `CustomerBehaviorTimeline.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1335`** (2 nodes): `UserAnalyticsName.tsx`, `UserAnalyticsName()`
+- **Thin community `Community 1336`** (2 nodes): `UserAnalyticsName.tsx`, `UserAnalyticsName()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1336`** (2 nodes): `UserBag.tsx`, `UserBag()`
+- **Thin community `Community 1337`** (2 nodes): `UserBag.tsx`, `UserBag()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1337`** (2 nodes): `UserInsightsSection.test.tsx`, `renderWithQueries()`
+- **Thin community `Community 1338`** (2 nodes): `UserInsightsSection.test.tsx`, `renderWithQueries()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1338`** (2 nodes): `UserOnlineOrders.tsx`, `UserOnlineOrders()`
+- **Thin community `Community 1339`** (2 nodes): `UserOnlineOrders.tsx`, `UserOnlineOrders()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1339`** (2 nodes): `UserStatus.tsx`, `UserStatus()`
+- **Thin community `Community 1340`** (2 nodes): `UserStatus.tsx`, `UserStatus()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1340`** (2 nodes): `UserView.tsx`, `UserActions()`
+- **Thin community `Community 1341`** (2 nodes): `UserView.tsx`, `UserActions()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1341`** (2 nodes): `CustomerJourneyStageCard()`, `CustomerJourneyStage.tsx`
+- **Thin community `Community 1342`** (2 nodes): `CustomerJourneyStageCard()`, `CustomerJourneyStage.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1342`** (2 nodes): `UserBehaviorInsights.tsx`, `UserBehaviorInsights()`
+- **Thin community `Community 1343`** (2 nodes): `UserBehaviorInsights.tsx`, `UserBehaviorInsights()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1343`** (2 nodes): `buildAthenaWebappContextEvent()`, `athenaWebappContextEvents.ts`
+- **Thin community `Community 1344`** (2 nodes): `buildAthenaWebappContextEvent()`, `athenaWebappContextEvents.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1344`** (2 nodes): `wrapper()`, `ManagerElevationContext.test.tsx`
+- **Thin community `Community 1345`** (2 nodes): `wrapper()`, `ManagerElevationContext.test.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1345`** (2 nodes): `SessionOrderProbe()`, `OnlineOrderContext.test.tsx`
+- **Thin community `Community 1346`** (2 nodes): `SessionOrderProbe()`, `OnlineOrderContext.test.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1346`** (2 nodes): `ProductContext.test.tsx`, `buildProductSku()`
+- **Thin community `Community 1347`** (2 nodes): `ProductContext.test.tsx`, `buildProductSku()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1347`** (2 nodes): `use-image-upload.ts`, `useImageUpload()`
+- **Thin community `Community 1348`** (2 nodes): `use-image-upload.ts`, `useImageUpload()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1348`** (2 nodes): `use-mobile.tsx`, `useIsMobile()`
+- **Thin community `Community 1349`** (2 nodes): `use-mobile.tsx`, `useIsMobile()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1349`** (2 nodes): `use-navigate-back.ts`, `useNavigateBack()`
+- **Thin community `Community 1350`** (2 nodes): `use-navigate-back.ts`, `useNavigateBack()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1350`** (2 nodes): `use-navigation-keyboard-shortcuts.ts`, `useNavigationKeyboardShortcuts()`
+- **Thin community `Community 1351`** (2 nodes): `use-navigation-keyboard-shortcuts.ts`, `useNavigationKeyboardShortcuts()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1351`** (2 nodes): `use-pagination-persistence.ts`, `usePaginationPersistence()`
+- **Thin community `Community 1352`** (2 nodes): `use-pagination-persistence.ts`, `usePaginationPersistence()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1352`** (2 nodes): `use-table-keyboard-pagination.ts`, `useTableKeyboardPagination()`
+- **Thin community `Community 1353`** (2 nodes): `use-table-keyboard-pagination.ts`, `useTableKeyboardPagination()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1353`** (2 nodes): `useBulkOperations.test.ts`, `makeSku()`
+- **Thin community `Community 1354`** (2 nodes): `useBulkOperations.test.ts`, `makeSku()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1354`** (2 nodes): `useConvexAuthIdentity.ts`, `useConvexAuthIdentity()`
+- **Thin community `Community 1355`** (2 nodes): `useConvexAuthIdentity.ts`, `useConvexAuthIdentity()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1355`** (2 nodes): `useCopyText.ts`, `useCopyText()`
+- **Thin community `Community 1356`** (2 nodes): `useCopyText.ts`, `useCopyText()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1356`** (2 nodes): `useCreateComplimentaryProduct.ts`, `useCreateComplimentaryProduct()`
+- **Thin community `Community 1357`** (2 nodes): `useCreateComplimentaryProduct.ts`, `useCreateComplimentaryProduct()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1357`** (2 nodes): `useDebounce.ts`, `useDebounce()`
+- **Thin community `Community 1358`** (2 nodes): `useDebounce.ts`, `useDebounce()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1358`** (2 nodes): `useGetActiveProduct.ts`, `useGetActiveProduct()`
+- **Thin community `Community 1359`** (2 nodes): `useGetActiveProduct.ts`, `useGetActiveProduct()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1359`** (2 nodes): `useGetAuthedUser.ts`, `useGetAuthedUser()`
+- **Thin community `Community 1360`** (2 nodes): `useGetAuthedUser.ts`, `useGetAuthedUser()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1360`** (2 nodes): `useGetCategories.ts`, `useGetCategories()`
+- **Thin community `Community 1361`** (2 nodes): `useGetCategories.ts`, `useGetCategories()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1361`** (2 nodes): `useGetComplimentaryProducts.ts`, `useGetComplimentaryProducts()`
+- **Thin community `Community 1362`** (2 nodes): `useGetComplimentaryProducts.ts`, `useGetComplimentaryProducts()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1362`** (2 nodes): `useGetCurrencyFormatter.ts`, `useGetCurrencyFormatter()`
+- **Thin community `Community 1363`** (2 nodes): `useGetCurrencyFormatter.ts`, `useGetCurrencyFormatter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1363`** (2 nodes): `useGetSubcategories.ts`, `useGetSubcategories()`
+- **Thin community `Community 1364`** (2 nodes): `useGetSubcategories.ts`, `useGetSubcategories()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1364`** (2 nodes): `useGetTerminal.ts`, `useGetTerminal()`
+- **Thin community `Community 1365`** (2 nodes): `useGetTerminal.ts`, `useGetTerminal()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1365`** (2 nodes): `useNewOrderNotification.ts`, `useNewOrderNotification()`
+- **Thin community `Community 1366`** (2 nodes): `useNewOrderNotification.ts`, `useNewOrderNotification()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1366`** (2 nodes): `usePermissions.ts`, `usePermissions()`
+- **Thin community `Community 1367`** (2 nodes): `usePermissions.ts`, `usePermissions()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1367`** (2 nodes): `useProductSearchResults.ts`, `useProductSearchResults()`
+- **Thin community `Community 1368`** (2 nodes): `useProductSearchResults.ts`, `useProductSearchResults()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1368`** (2 nodes): `useProductWithNoImagesNotification.tsx`, `useProductWithNoImagesNotification()`
+- **Thin community `Community 1369`** (2 nodes): `useProductWithNoImagesNotification.tsx`, `useProductWithNoImagesNotification()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1369`** (2 nodes): `useProtectedAdminPageState.ts`, `useProtectedAdminPageState()`
+- **Thin community `Community 1370`** (2 nodes): `useProtectedAdminPageState.ts`, `useProtectedAdminPageState()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1370`** (2 nodes): `useSkusReservedInCheckout.ts`, `useSkusReservedInCheckout()`
+- **Thin community `Community 1371`** (2 nodes): `useSkusReservedInCheckout.ts`, `useSkusReservedInCheckout()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1371`** (2 nodes): `useSkusReservedInPosSession.ts`, `useSkusReservedInPosSession()`
+- **Thin community `Community 1372`** (2 nodes): `useSkusReservedInPosSession.ts`, `useSkusReservedInPosSession()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1372`** (2 nodes): `useToggleComplimentaryProductActive.ts`, `useToggleComplimentaryProductActive()`
+- **Thin community `Community 1373`** (2 nodes): `useToggleComplimentaryProductActive.ts`, `useToggleComplimentaryProductActive()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1373`** (2 nodes): `useAppActionBlocker.test.tsx`, `wrapper()`
+- **Thin community `Community 1374`** (2 nodes): `useAppActionBlocker.test.tsx`, `wrapper()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1374`** (2 nodes): `UpdateCoordinatorProvider.tsx`, `UpdateCoordinatorProvider()`
+- **Thin community `Community 1375`** (2 nodes): `UpdateCoordinatorProvider.tsx`, `UpdateCoordinatorProvider()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1375`** (2 nodes): `createFakeWindow()`, `appUpdateReload.test.ts`
+- **Thin community `Community 1376`** (2 nodes): `createFakeWindow()`, `appUpdateReload.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1376`** (2 nodes): `updateAssetStaging.test.ts`, `FakeMessageChannel`
+- **Thin community `Community 1377`** (2 nodes): `updateAssetStaging.test.ts`, `FakeMessageChannel`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1377`** (2 nodes): `updateCommunicationPreference.tsx`, `UpdateCommunicationPreferenceProvider()`
+- **Thin community `Community 1378`** (2 nodes): `updateCommunicationPreference.tsx`, `UpdateCommunicationPreferenceProvider()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1378`** (2 nodes): `updateDetectionSequencer.test.ts`, `createDeferredStatus()`
+- **Thin community `Community 1379`** (2 nodes): `updateDetectionSequencer.test.ts`, `createDeferredStatus()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1379`** (2 nodes): `updateDetectionSequencer.ts`, `createUpdateDetectionSequencer()`
+- **Thin community `Community 1380`** (2 nodes): `updateDetectionSequencer.ts`, `createUpdateDetectionSequencer()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1380`** (2 nodes): `useUpdateApplyBlocker.ts`, `useUpdateApplyBlocker()`
+- **Thin community `Community 1381`** (2 nodes): `useUpdateApplyBlocker.ts`, `useUpdateApplyBlocker()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1381`** (2 nodes): `toOperatorMessage()`, `operatorMessages.ts`
+- **Thin community `Community 1382`** (2 nodes): `toOperatorMessage()`, `operatorMessages.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1382`** (2 nodes): `presentUnexpectedErrorToast.ts`, `presentUnexpectedErrorToast()`
+- **Thin community `Community 1383`** (2 nodes): `presentUnexpectedErrorToast.ts`, `presentUnexpectedErrorToast()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1383`** (2 nodes): `storeEntryRoute.ts`, `getStoreEntryRouteForRole()`
+- **Thin community `Community 1384`** (2 nodes): `storeEntryRoute.ts`, `getStoreEntryRouteForRole()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1384`** (2 nodes): `posLocalStoreTypes.ts`, `canUploadPosLocalEventType()`
+- **Thin community `Community 1385`** (2 nodes): `posLocalStoreTypes.ts`, `canUploadPosLocalEventType()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1385`** (2 nodes): `addItem()`, `addItem.ts`
+- **Thin community `Community 1386`** (2 nodes): `addItem()`, `addItem.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1386`** (2 nodes): `bootstrapRegister()`, `bootstrapRegister.ts`
+- **Thin community `Community 1387`** (2 nodes): `bootstrapRegister()`, `bootstrapRegister.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1387`** (2 nodes): `holdSession()`, `holdSession.ts`
+- **Thin community `Community 1388`** (2 nodes): `holdSession()`, `holdSession.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1388`** (2 nodes): `openDrawer()`, `openDrawer.ts`
+- **Thin community `Community 1389`** (2 nodes): `openDrawer()`, `openDrawer.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1389`** (2 nodes): `startSession.ts`, `startSession()`
+- **Thin community `Community 1390`** (2 nodes): `startSession.ts`, `startSession()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1390`** (2 nodes): `calculateCartTotals()`, `calculations.ts`
+- **Thin community `Community 1391`** (2 nodes): `calculateCartTotals()`, `calculations.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1391`** (2 nodes): `scope()`, `expenseLocalCommandGateway.test.ts`
+- **Thin community `Community 1392`** (2 nodes): `scope()`, `expenseLocalCommandGateway.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1392`** (2 nodes): `posLocalLedgerPolicy.ts`, `assessPosLocalLedgerRetention()`
+- **Thin community `Community 1393`** (2 nodes): `posLocalLedgerPolicy.ts`, `assessPosLocalLedgerRetention()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1393`** (2 nodes): `posLocalStorageBoundary.test.ts`, `collectProductionSources()`
+- **Thin community `Community 1394`** (2 nodes): `posLocalStorageBoundary.test.ts`, `collectProductionSources()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1394`** (2 nodes): `posLocalStorageRuntimeContext.test.tsx`, `RuntimeStatus()`
+- **Thin community `Community 1395`** (2 nodes): `posLocalStorageRuntimeContext.test.tsx`, `RuntimeStatus()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1395`** (2 nodes): `posLocalStoreErrorTaxonomy.test.ts`, `failingAdapter()`
+- **Thin community `Community 1396`** (2 nodes): `posLocalStoreErrorTaxonomy.test.ts`, `failingAdapter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1396`** (2 nodes): `posLocalStoreMigrationCoordinator.test.ts`, `createLogicalFixtureEngine()`
+- **Thin community `Community 1397`** (2 nodes): `posLocalStoreMigrationCoordinator.test.ts`, `createLogicalFixtureEngine()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1397`** (2 nodes): `posLocalStoreMigrationCoordinator.ts`, `createTestOnlyPosLocalStoreMigrationCoordinator()`
+- **Thin community `Community 1398`** (2 nodes): `posLocalStoreMigrationCoordinator.ts`, `createTestOnlyPosLocalStoreMigrationCoordinator()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1398`** (2 nodes): `posLocalStoreMigrations.ts`, `runPosLocalStoreMigrations()`
+- **Thin community `Community 1399`** (2 nodes): `posLocalStoreMigrations.ts`, `runPosLocalStoreMigrations()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1399`** (2 nodes): `posLocalStoreSnapshot.ts`, `validatePosLocalStoreSnapshotShape()`
+- **Thin community `Community 1400`** (2 nodes): `posLocalStoreSnapshot.ts`, `validatePosLocalStoreSnapshotShape()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1400`** (2 nodes): `posLocalStoreVersions.ts`, `comparePosLocalStoreVersion()`
+- **Thin community `Community 1401`** (2 nodes): `posLocalStoreVersions.ts`, `comparePosLocalStoreVersion()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1401`** (2 nodes): `registerAvailabilitySnapshot.test.ts`, `buildAvailabilityRow()`
+- **Thin community `Community 1402`** (2 nodes): `registerAvailabilitySnapshot.test.ts`, `buildAvailabilityRow()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1402`** (2 nodes): `registerAvailabilitySnapshot.ts`, `readRegisterAvailabilitySnapshotState()`
+- **Thin community `Community 1403`** (2 nodes): `registerAvailabilitySnapshot.ts`, `readRegisterAvailabilitySnapshotState()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1403`** (2 nodes): `registerLifecycleAuthorityReconciliation.test.ts`, `versioned()`
+- **Thin community `Community 1404`** (2 nodes): `registerLifecycleAuthorityReconciliation.test.ts`, `versioned()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1404`** (2 nodes): `registerServiceCatalogSnapshot.test.ts`, `buildServiceCatalogRow()`
+- **Thin community `Community 1405`** (2 nodes): `registerServiceCatalogSnapshot.test.ts`, `buildServiceCatalogRow()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1405`** (2 nodes): `registerServiceCatalogSnapshot.ts`, `readRegisterServiceCatalogSnapshotState()`
+- **Thin community `Community 1406`** (2 nodes): `registerServiceCatalogSnapshot.ts`, `readRegisterServiceCatalogSnapshotState()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1406`** (2 nodes): `registerSessionAuthorityBootstrap.ts`, `seedRegisterSessionAuthorityBootstrap()`
+- **Thin community `Community 1407`** (2 nodes): `registerSessionAuthorityBootstrap.ts`, `seedRegisterSessionAuthorityBootstrap()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1407`** (2 nodes): `syncGapDiagnosis.ts`, `diagnoseHeldSyncBlocker()`
+- **Thin community `Community 1408`** (2 nodes): `syncGapDiagnosis.ts`, `diagnoseHeldSyncBlocker()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1408`** (2 nodes): `syncScheduler.test.ts`, `baseEvent()`
+- **Thin community `Community 1409`** (2 nodes): `syncScheduler.test.ts`, `baseEvent()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1409`** (2 nodes): `syncStatus.test.ts`, `event()`
+- **Thin community `Community 1410`** (2 nodes): `syncStatus.test.ts`, `event()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1410`** (2 nodes): `terminalRuntimeStatus.test.ts`, `buildLocalEvent()`
+- **Thin community `Community 1411`** (2 nodes): `terminalRuntimeStatus.test.ts`, `buildLocalEvent()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1411`** (2 nodes): `terminalStaffAuthorityRefresh.test.ts`, `buildAuthorityRecord()`
+- **Thin community `Community 1412`** (2 nodes): `terminalStaffAuthorityRefresh.test.ts`, `buildAuthorityRecord()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1412`** (2 nodes): `toMetadataRecord()`, `loggerGateway.ts`
+- **Thin community `Community 1413`** (2 nodes): `toMetadataRecord()`, `loggerGateway.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1413`** (2 nodes): `usePosClientTelemetryDrain.ts`, `usePosClientTelemetryDrain()`
+- **Thin community `Community 1414`** (2 nodes): `usePosClientTelemetryDrain.ts`, `usePosClientTelemetryDrain()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1414`** (2 nodes): `useRegisterCatalogIndex.ts`, `useRegisterCatalogIndex()`
+- **Thin community `Community 1415`** (2 nodes): `useRegisterCatalogIndex.ts`, `useRegisterCatalogIndex()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1415`** (2 nodes): `useRegisterCheckoutDraftState.ts`, `useRegisterCheckoutDraftState()`
+- **Thin community `Community 1416`** (2 nodes): `useRegisterCheckoutDraftState.ts`, `useRegisterCheckoutDraftState()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1416`** (2 nodes): `useRegisterLocalRuntime.test.ts`, `renderRuntime()`
+- **Thin community `Community 1417`** (2 nodes): `useRegisterLocalRuntime.test.ts`, `renderRuntime()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1417`** (2 nodes): `registerSessionCode.ts`, `formatRegisterSessionCode()`
+- **Thin community `Community 1418`** (2 nodes): `registerSessionCode.ts`, `formatRegisterSessionCode()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1418`** (2 nodes): `remoteAssistCobrowseRecorder.test.ts`, `setElementRect()`
+- **Thin community `Community 1419`** (2 nodes): `remoteAssistCobrowseRecorder.test.ts`, `setElementRect()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1419`** (2 nodes): `runtime.test.ts`, `buildState()`
+- **Thin community `Community 1420`** (2 nodes): `runtime.test.ts`, `buildState()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1420`** (2 nodes): `runtime.ts`, `getRemoteAssistConnectedState()`
+- **Thin community `Community 1421`** (2 nodes): `runtime.ts`, `getRemoteAssistConnectedState()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1421`** (2 nodes): `useRemoteAssistSupportTransport.ts`, `useRemoteAssistSupportTransport()`
+- **Thin community `Community 1422`** (2 nodes): `useRemoteAssistSupportTransport.ts`, `useRemoteAssistSupportTransport()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1422`** (2 nodes): `RemoteAssistLiveTransportClient.test.ts`, `encode()`
+- **Thin community `Community 1423`** (2 nodes): `RemoteAssistLiveTransportClient.test.ts`, `encode()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1423`** (2 nodes): `pinHash.ts`, `hashPin()`
+- **Thin community `Community 1424`** (2 nodes): `pinHash.ts`, `hashPin()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1424`** (2 nodes): `productSkuSearchAdapters.test.ts`, `buildResult()`
+- **Thin community `Community 1425`** (2 nodes): `productSkuSearchAdapters.test.ts`, `buildResult()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1425`** (2 nodes): `theme.test.ts`, `installMatchMedia()`
+- **Thin community `Community 1426`** (2 nodes): `theme.test.ts`, `installMatchMedia()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1426`** (2 nodes): `AuthenticatedLayout()`, `-authenticated-layout.tsx`
+- **Thin community `Community 1427`** (2 nodes): `AuthenticatedLayout()`, `-authenticated-layout.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1427`** (2 nodes): `getSharedDemoEntryPresentation()`, `-demo-presentation.ts`
+- **Thin community `Community 1428`** (2 nodes): `getSharedDemoEntryPresentation()`, `-demo-presentation.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1428`** (2 nodes): `-public-layout.tsx`, `onScroll()`
+- **Thin community `Community 1429`** (2 nodes): `-public-layout.tsx`, `onScroll()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1429`** (2 nodes): `hasOrgNotFoundPayload()`, `index.tsx`
+- **Thin community `Community 1430`** (2 nodes): `hasOrgNotFoundPayload()`, `index.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1430`** (2 nodes): `$sessionId.tsx`, `hasOrgNotFoundPayload()`
+- **Thin community `Community 1431`** (2 nodes): `$sessionId.tsx`, `hasOrgNotFoundPayload()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1431`** (2 nodes): `registers.$sessionId.activity.tsx`, `hasOrgNotFoundPayload()`
+- **Thin community `Community 1432`** (2 nodes): `registers.$sessionId.activity.tsx`, `hasOrgNotFoundPayload()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1432`** (2 nodes): `registers.index.tsx`, `hasOrgNotFoundPayload()`
+- **Thin community `Community 1433`** (2 nodes): `registers.index.tsx`, `hasOrgNotFoundPayload()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1433`** (2 nodes): `StoreRootRedirect()`, `index.tsx`
+- **Thin community `Community 1434`** (2 nodes): `StoreRootRedirect()`, `index.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1434`** (2 nodes): `InventoryImportRoute()`, `-inventory-import-route.tsx`
+- **Thin community `Community 1435`** (2 nodes): `InventoryImportRoute()`, `-inventory-import-route.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1435`** (2 nodes): `ApprovalsRoute()`, `approvals.tsx`
+- **Thin community `Community 1436`** (2 nodes): `ApprovalsRoute()`, `approvals.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1436`** (2 nodes): `DailyCloseHistoryRoute()`, `daily-close-history.tsx`
+- **Thin community `Community 1437`** (2 nodes): `DailyCloseHistoryRoute()`, `daily-close-history.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1437`** (2 nodes): `DailyCloseRoute()`, `daily-close.tsx`
+- **Thin community `Community 1438`** (2 nodes): `DailyCloseRoute()`, `daily-close.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1438`** (2 nodes): `DailyOperationsRoute()`, `index.tsx`
+- **Thin community `Community 1439`** (2 nodes): `DailyOperationsRoute()`, `index.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1439`** (2 nodes): `OpenWorkRoute()`, `open-work.tsx`
+- **Thin community `Community 1440`** (2 nodes): `OpenWorkRoute()`, `open-work.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1440`** (2 nodes): `DailyOpeningRoute()`, `opening.tsx`
+- **Thin community `Community 1441`** (2 nodes): `DailyOpeningRoute()`, `opening.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1441`** (2 nodes): `stock-adjustments.tsx`, `StockAdjustmentsRoute()`
+- **Thin community `Community 1442`** (2 nodes): `stock-adjustments.tsx`, `StockAdjustmentsRoute()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1442`** (2 nodes): `ExpenseRouteComponent()`, `expense.index.tsx`
+- **Thin community `Community 1443`** (2 nodes): `ExpenseRouteComponent()`, `expense.index.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1443`** (2 nodes): `PointOfSaleRoute()`, `index.tsx`
+- **Thin community `Community 1444`** (2 nodes): `PointOfSaleRoute()`, `index.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1444`** (2 nodes): `settings.index.tsx`, `SettingsNotFoundComponent()`
+- **Thin community `Community 1445`** (2 nodes): `settings.index.tsx`, `SettingsNotFoundComponent()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1445`** (2 nodes): `terminals.route.test.tsx`, `routeBuilder()`
+- **Thin community `Community 1446`** (2 nodes): `terminals.route.test.tsx`, `routeBuilder()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1446`** (2 nodes): `ComplimentaryProductsNotFoundComponent()`, `index.tsx`
+- **Thin community `Community 1447`** (2 nodes): `ComplimentaryProductsNotFoundComponent()`, `index.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1447`** (2 nodes): `ProductsNotFoundComponent()`, `index.tsx`
+- **Thin community `Community 1448`** (2 nodes): `ProductsNotFoundComponent()`, `index.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1448`** (2 nodes): `ReportsItemsRoute()`, `index.tsx`
+- **Thin community `Community 1449`** (2 nodes): `ReportsItemsRoute()`, `index.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1449`** (2 nodes): `published.index.tsx`, `RouteComponent()`
+- **Thin community `Community 1450`** (2 nodes): `published.index.tsx`, `RouteComponent()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1450`** (2 nodes): `shared-demo.tsx`, `SharedDemoHomeRoute()`
+- **Thin community `Community 1451`** (2 nodes): `shared-demo.tsx`, `SharedDemoHomeRoute()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1451`** (2 nodes): `_authed.route.test.tsx`, `_authed.tsx`
+- **Thin community `Community 1452`** (2 nodes): `_authed.route.test.tsx`, `_authed.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1452`** (2 nodes): `AthenaLoginReadyView()`, `-login-ready-view.tsx`
+- **Thin community `Community 1453`** (2 nodes): `AthenaLoginReadyView()`, `-login-ready-view.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1453`** (2 nodes): `activeHandoff()`, `_layout.test.tsx`
+- **Thin community `Community 1454`** (2 nodes): `activeHandoff()`, `_layout.test.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1454`** (2 nodes): `OrganizationSettingsAccordion()`, `OrganizationsSettingsAccordion.tsx`
+- **Thin community `Community 1455`** (2 nodes): `OrganizationSettingsAccordion()`, `OrganizationsSettingsAccordion.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1455`** (2 nodes): `PatternsOverview()`, `Overview.stories.tsx`
+- **Thin community `Community 1456`** (2 nodes): `PatternsOverview()`, `Overview.stories.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1456`** (2 nodes): `view-patterns.tsx`, `cn()`
+- **Thin community `Community 1457`** (2 nodes): `view-patterns.tsx`, `cn()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1457`** (2 nodes): `ControlsShowcase()`, `Controls.stories.tsx`
+- **Thin community `Community 1458`** (2 nodes): `ControlsShowcase()`, `Controls.stories.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1458`** (2 nodes): `DialogShowcase()`, `Dialog.stories.tsx`
+- **Thin community `Community 1459`** (2 nodes): `DialogShowcase()`, `Dialog.stories.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1459`** (2 nodes): `FeedbackShowcase()`, `Feedback.stories.tsx`
+- **Thin community `Community 1460`** (2 nodes): `FeedbackShowcase()`, `Feedback.stories.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1460`** (2 nodes): `PrimitivesOverview()`, `Overview.stories.tsx`
+- **Thin community `Community 1461`** (2 nodes): `PrimitivesOverview()`, `Overview.stories.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1461`** (2 nodes): `Popover.stories.tsx`, `PopoverShowcase()`
+- **Thin community `Community 1462`** (2 nodes): `Popover.stories.tsx`, `PopoverShowcase()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1462`** (2 nodes): `Sheet.stories.tsx`, `SheetShowcase()`
+- **Thin community `Community 1463`** (2 nodes): `Sheet.stories.tsx`, `SheetShowcase()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1463`** (2 nodes): `Tooltip.stories.tsx`, `TooltipShowcase()`
+- **Thin community `Community 1464`** (2 nodes): `Tooltip.stories.tsx`, `TooltipShowcase()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1464`** (2 nodes): `TemplatesOverview()`, `Overview.stories.tsx`
+- **Thin community `Community 1465`** (2 nodes): `TemplatesOverview()`, `Overview.stories.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1465`** (2 nodes): `wedAt()`, `dailyOperationsFixtures.ts`
+- **Thin community `Community 1466`** (2 nodes): `wedAt()`, `dailyOperationsFixtures.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1466`** (2 nodes): `wedAt()`, `openingHandoffFixtures.ts`
+- **Thin community `Community 1467`** (2 nodes): `wedAt()`, `openingHandoffFixtures.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1467`** (2 nodes): `momentAt()`, `operationsFixtureContext.ts`
+- **Thin community `Community 1468`** (2 nodes): `momentAt()`, `operationsFixtureContext.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1468`** (2 nodes): `posHubFixtures.ts`, `buildTrend()`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1469`** (2 nodes): `usePrint.test.ts`, `setWindowOpenMock()`
+- **Thin community `Community 1469`** (2 nodes): `posHubFixtures.ts`, `buildTrend()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 1470`** (2 nodes): `formatNumber()`, `formatNumber.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
