@@ -47,6 +47,18 @@ export const REPORT_DAY_STATUSES = [
 export type ReportDayStatus = (typeof REPORT_DAY_STATUSES)[number];
 
 /**
+ * Authoritative definition of "Today in progress" in reporting.
+ *
+ * Reporting follows the materialized day lifecycle, not a browser or server
+ * clock: the current operating day remains `open` until rollover advances it.
+ */
+export function isReportingTodayInProgress(
+  status: ReportDayStatus | null | undefined,
+): boolean {
+  return status === "open";
+}
+
+/**
  * Day-level metrics. One FIELD per metric — never one row per metric.
  * `grossProfitMinor` is null when any revenue lacks a cost basis; the
  * uncovered portion is reported honestly in `uncostedRevenueMinor`.

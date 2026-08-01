@@ -3528,6 +3528,7 @@ export function DailyOperationsViewContent({
           <PageLevelHeader
             eyebrow="Store Ops"
             title="Daily Operations"
+            showBackButton
             description="Review the store day, see what needs attention, and move into the workflow that owns the next action."
           />
 

@@ -8,7 +8,10 @@ import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { cn } from "@/lib/utils";
 import { getOrigin } from "@/lib/navigationUtils";
 import { api } from "~/convex/_generated/api";
-import type { ReportOverviewData } from "~/shared/reportsContract";
+import {
+  isReportingTodayInProgress,
+  type ReportOverviewData,
+} from "~/shared/reportsContract";
 import { ReportPeriodMetrics } from "./ReportPeriodMetrics";
 import { ReportFreshness } from "./ReportFreshness";
 import { ReportTrendChart } from "./ReportTrendChart";
@@ -99,6 +102,7 @@ export function ReportsOverviewView({
   const comparison = comparisonFor(overview, selectedWindow);
   const anchorDay = overview.dailyTrend.at(-1);
   const anchorOperatingDate = anchorDay?.operatingDate;
+  const isAnchorDayInProgress = isReportingTodayInProgress(anchorDay?.status);
   const isAnchorDayClosed =
     anchorDay?.status === "reconciled" || anchorDay?.status === "amended";
   const transactionsRange = anchorOperatingDate
@@ -151,6 +155,22 @@ export function ReportsOverviewView({
           <ReportPeriodMetrics
             comparison={comparison}
             currency={currency}
+            dailyOperationsLink={
+              selectedWindow === "today" &&
+              isAnchorDayInProgress &&
+              anchorOperatingDate &&
+              orgUrlSlug &&
+              storeUrlSlug
+                ? {
+                    orgUrlSlug,
+                    search: {
+                      o: getOrigin(),
+                      operatingDate: anchorOperatingDate,
+                    },
+                    storeUrlSlug,
+                  }
+                : undefined
+            }
             eodReviewLink={
               selectedWindow === "today" &&
               isAnchorDayClosed &&
@@ -177,8 +197,10 @@ export function ReportsOverviewView({
                     search: {
                       endDate: transactionsRange.endDate,
                       o: getOrigin(),
-                      order: "oldestFirst",
                       startDate: transactionsRange.startDate,
+                      ...(selectedWindow === "today" && isAnchorDayInProgress
+                        ? {}
+                        : { order: "oldestFirst" }),
                     },
                     storeUrlSlug,
                   }

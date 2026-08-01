@@ -28,16 +28,31 @@ import { ReportSkuMixChart } from "./ReportSkuMixChart";
 
 const REPORT_DAYS_PAGE_SIZE = 14;
 
+function pageContainingDate(
+  daysNewestFirst: Array<{ operatingDate: string }>,
+  operatingDate: string,
+): number {
+  const dateIndex = daysNewestFirst.findIndex(
+    (day) => day.operatingDate === operatingDate,
+  );
+  return dateIndex < 0
+    ? 1
+    : Math.floor(dateIndex / REPORT_DAYS_PAGE_SIZE) + 1;
+}
+
 /**
- * Day overview: `listDays` stays scoped to the operator's bounded range while
- * an optional day selection narrows only the product mix. The date link opens
- * the Items view scoped to that day's `d:` period key (via
+ * Day overview: `listDays` stays scoped to the stable table range while the
+ * selected range controls emphasis and the product mix. An optional day
+ * selection temporarily narrows both to one operating date. The date link
+ * opens the Items view scoped to that day's `d:` period key (via
  * `periodType`/`periodDate`, see `reports/items/index.tsx`).
  */
 export function ReportDaysPanel({
   canResetRange,
   startDate,
   endDate,
+  tableStartDate,
+  tableEndDate,
   onRangeChange,
   onRangeReset,
   onSelectedDateChange,
@@ -48,7 +63,12 @@ export function ReportDaysPanel({
   canResetRange: boolean;
   startDate: string;
   endDate: string;
-  onRangeChange: (next: { startDate: string; endDate: string }) => void;
+  tableStartDate: string;
+  tableEndDate: string;
+  onRangeChange: (
+    next: { startDate: string; endDate: string },
+    targetPage: number,
+  ) => void;
   onRangeReset: () => void;
   onSelectedDateChange: (date: string | undefined) => void;
   onPageChange: (page: number) => void;
@@ -66,7 +86,11 @@ export function ReportDaysPanel({
     useQuery(
       api.reports.queries.listDays,
       activeStore?._id
-        ? { storeId: activeStore._id, startDate, endDate }
+        ? {
+            storeId: activeStore._id,
+            startDate: tableStartDate,
+            endDate: tableEndDate,
+          }
         : "skip",
     ),
     page,
@@ -111,6 +135,8 @@ export function ReportDaysPanel({
   );
   const isSelectedDay = (operatingDate: string) =>
     selectedDate === operatingDate;
+  const isInSelectedRange = (operatingDate: string) =>
+    operatingDate >= startDate && operatingDate <= endDate;
   const selectDay = (operatingDate: string) => {
     onSelectedDateChange(
       isSelectedDay(operatingDate) ? undefined : operatingDate,
@@ -124,7 +150,7 @@ export function ReportDaysPanel({
           <Button
             aria-label={
               selectedDate !== undefined
-                ? "Return to previous date range"
+                ? "Return to selected date range"
                 : "Reset date range to default"
             }
             className="h-auto gap-2 px-layout-sm py-layout-xs text-sm font-normal text-muted-foreground"
@@ -138,12 +164,17 @@ export function ReportDaysPanel({
             variant="ghost"
           >
             <RotateCcw aria-hidden="true" className="h-4 w-4" />
-            {selectedDate !== undefined ? "Show full range" : "Reset range"}
+            {selectedDate !== undefined ? "Show selected range" : "Reset range"}
           </Button>
         ) : null}
         <ReportDateRangeField
           endDate={endDate}
-          onSelect={onRangeChange}
+          onSelect={(next) =>
+            onRangeChange(
+              next,
+              pageContainingDate(daysNewestFirst ?? [], next.startDate),
+            )
+          }
           startDate={startDate}
         />
       </div>
@@ -202,8 +233,10 @@ export function ReportDaysPanel({
                 <TableBody>
                   {visibleDays?.map((day) => {
                     const isSelected = isSelectedDay(day.operatingDate);
-                    const isDeemphasized =
-                      selectedDate !== undefined && !isSelected;
+                    const isHighlighted = selectedDate
+                      ? isSelected
+                      : isInSelectedRange(day.operatingDate);
+                    const isDeemphasized = !isHighlighted;
 
                     return (
                       <TableRow
@@ -217,6 +250,9 @@ export function ReportDaysPanel({
                         )}
                         data-deemphasized={
                           isDeemphasized ? "true" : undefined
+                        }
+                        data-highlighted={
+                          isHighlighted ? "true" : undefined
                         }
                         data-status={day.status}
                         key={day.operatingDate}
@@ -246,7 +282,7 @@ export function ReportDaysPanel({
                         <TableCell>
                           <Link
                             className={cn(
-                              isSelected && "font-medium text-foreground",
+                              isHighlighted && "font-medium text-foreground",
                             )}
                             params={{
                               orgUrlSlug: orgUrlSlug!,

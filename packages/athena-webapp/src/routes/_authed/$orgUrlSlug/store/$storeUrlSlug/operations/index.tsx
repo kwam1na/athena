@@ -4,11 +4,18 @@ import { z } from "zod";
 import { DailyOperationsView } from "~/src/components/operations/DailyOperationsView";
 import { useDailyOperationsFixture } from "~/src/stories/operations/devFixtureActivation";
 
-const dailyOperationsSearchSchema = z.object({
+export const dailyOperationsSearchSchema = z.object({
   // Development-only screenshot fixtures; inert in production builds.
   fixture: z.string().optional(),
-  operatingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  weekEndOperatingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  o: z.string().optional(),
+  operatingDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  weekEndOperatingDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 function DailyOperationsRoute() {

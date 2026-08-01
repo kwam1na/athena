@@ -45,6 +45,8 @@ import { ReportDaysPanel } from "./ReportDaysPanel";
 const baseProps = {
   startDate: "2026-07-15",
   endDate: "2026-07-28",
+  tableStartDate: "2026-07-15",
+  tableEndDate: "2026-07-28",
   canResetRange: false,
   onRangeChange: vi.fn(),
   onRangeReset: vi.fn(),
@@ -219,6 +221,48 @@ describe("ReportDaysPanel", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("targets the page containing the first date of a newly selected range", async () => {
+    const user = userEvent.setup();
+    const onRangeChange = vi.fn();
+    const omittedDates = new Set(["2026-07-10", "2026-07-21"]);
+    useQuery.mockReturnValue(
+      Array.from({ length: 29 }, (_, index) => {
+        const date = new Date(Date.UTC(2026, 6, 31 - index));
+        return {
+          operatingDate: date.toISOString().slice(0, 10),
+          status: "reconciled",
+          currency: "USD",
+          netSalesMinor: 1000,
+          unitsSold: 1,
+          closeVarianceMinor: 0,
+        };
+      }).filter((day) => !omittedDates.has(day.operatingDate)),
+    );
+
+    render(
+      <ReportDaysPanel
+        {...baseProps}
+        onRangeChange={onRangeChange}
+        tableEndDate="2026-07-31"
+        tableStartDate="2026-07-03"
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Change date range, currently Jul 15–28, 2026",
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Friday, July 3rd, 2026/i }),
+    );
+
+    expect(onRangeChange).toHaveBeenCalledWith(
+      { startDate: "2026-07-03", endDate: "2026-07-28" },
+      2,
+    );
+  });
+
   it("selects a day row while preserving the date drill-down", async () => {
     const user = userEvent.setup();
     const onRangeChange = vi.fn();
@@ -381,6 +425,141 @@ describe("ReportDaysPanel", () => {
     expect(onRangeChange).not.toHaveBeenCalled();
   });
 
+  it("keeps the table scope visible while emphasizing only the selected range", () => {
+    useQuery.mockReturnValue([
+      {
+        operatingDate: "2026-07-20",
+        status: "reconciled",
+        currency: "USD",
+        netSalesMinor: 5600,
+        unitsSold: 8,
+      },
+      {
+        operatingDate: "2026-07-14",
+        status: "reconciled",
+        currency: "USD",
+        netSalesMinor: 4200,
+        unitsSold: 6,
+      },
+    ]);
+
+    render(
+      <ReportDaysPanel
+        {...baseProps}
+        endDate="2026-07-20"
+        startDate="2026-07-15"
+        tableEndDate="2026-07-28"
+        tableStartDate="2026-07-01"
+      />,
+    );
+
+    const selectedRangeRow = screen.getByRole("button", {
+      name: "Show products sold for Mon, Jul 20, 2026",
+    });
+    const outsideRangeRow = screen.getByRole("button", {
+      name: "Show products sold for Tue, Jul 14, 2026",
+    });
+    expect(selectedRangeRow).toHaveAttribute("data-highlighted", "true");
+    expect(selectedRangeRow).not.toHaveAttribute("data-deemphasized");
+    expect(outsideRangeRow).toHaveAttribute("data-deemphasized", "true");
+
+    const daysQuery = useQuery.mock.calls.find(
+      ([functionReference]) =>
+        getFunctionName(functionReference as never) ===
+        "reports/queries:listDays",
+    );
+    const skuMixQuery = useQuery.mock.calls.find(
+      ([functionReference]) =>
+        getFunctionName(functionReference as never) ===
+        "reports/queries:listRangeSkuMix",
+    );
+    expect(daysQuery?.[1]).toMatchObject({
+      startDate: "2026-07-01",
+      endDate: "2026-07-28",
+    });
+    expect(skuMixQuery?.[1]).toMatchObject({
+      startDate: "2026-07-15",
+      endDate: "2026-07-20",
+    });
+  });
+
+  it("returns from a selected day to the current selected range", async () => {
+    const user = userEvent.setup();
+    const onSelectedDateChange = vi.fn();
+    useQuery.mockReturnValue([
+      {
+        operatingDate: "2026-07-20",
+        status: "reconciled",
+        currency: "USD",
+        netSalesMinor: 5600,
+        unitsSold: 8,
+      },
+      {
+        operatingDate: "2026-07-19",
+        status: "reconciled",
+        currency: "USD",
+        netSalesMinor: 4200,
+        unitsSold: 6,
+      },
+      {
+        operatingDate: "2026-07-14",
+        status: "reconciled",
+        currency: "USD",
+        netSalesMinor: 2100,
+        unitsSold: 3,
+      },
+    ]);
+
+    const { rerender } = render(
+      <ReportDaysPanel
+        {...baseProps}
+        endDate="2026-07-20"
+        onSelectedDateChange={onSelectedDateChange}
+        selectedDate="2026-07-20"
+        startDate="2026-07-19"
+        tableEndDate="2026-07-28"
+        tableStartDate="2026-07-01"
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Show products sold for Sun, Jul 19, 2026",
+      }),
+    ).toHaveAttribute("data-deemphasized", "true");
+
+    await user.click(
+      within(
+        screen.getByRole("button", {
+          name: "Clear day selection for Mon, Jul 20, 2026",
+        }),
+      ).getByText("$56"),
+    );
+    expect(onSelectedDateChange).toHaveBeenCalledWith(undefined);
+
+    rerender(
+      <ReportDaysPanel
+        {...baseProps}
+        endDate="2026-07-20"
+        onSelectedDateChange={onSelectedDateChange}
+        startDate="2026-07-19"
+        tableEndDate="2026-07-28"
+        tableStartDate="2026-07-01"
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Show products sold for Sun, Jul 19, 2026",
+      }),
+    ).toHaveAttribute("data-highlighted", "true");
+    expect(
+      screen.getByRole("button", {
+        name: "Show products sold for Tue, Jul 14, 2026",
+      }),
+    ).toHaveAttribute("data-deemphasized", "true");
+  });
+
   it("clears single-day mode without changing the range or page", async () => {
     const user = userEvent.setup();
     const onRangeChange = vi.fn();
@@ -413,7 +592,7 @@ describe("ReportDaysPanel", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "Return to previous date range" }),
+      screen.getByRole("button", { name: "Return to selected date range" }),
     );
     expect(onSelectedDateChange).toHaveBeenCalledWith(undefined);
     expect(onRangeChange).not.toHaveBeenCalled();

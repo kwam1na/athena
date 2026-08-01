@@ -469,6 +469,7 @@ describe("listPeriodSkus", () => {
     expect(result.totalNetSalesMinor).toBe(1_800);
     expect(result.totalUnitsSold).toBe(16);
     expect(result.totalTransactions).toBe(7);
+    expect(result.isTodayInProgress).toBe(false);
   });
 
   it("counts live POS transactions when an open day has no close yet", async () => {
@@ -522,6 +523,7 @@ describe("listPeriodSkus", () => {
 
     expect(result.totalUnitsSold).toBe(3);
     expect(result.totalTransactions).toBe(2);
+    expect(result.isTodayInProgress).toBe(true);
   });
 
   it("uses the linked product name when the SKU has no denormalized product name", async () => {

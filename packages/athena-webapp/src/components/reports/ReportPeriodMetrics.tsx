@@ -28,6 +28,7 @@ export function ReportPeriodMetrics({
   snapshot,
   currency,
   comparison,
+  dailyOperationsLink,
   periodLabel,
   priorWindowLabel,
   eodReviewLink,
@@ -37,6 +38,11 @@ export function ReportPeriodMetrics({
   currency: string;
   /** Prior-window values for the comparable metrics; omit when not comparable. */
   comparison?: { netSalesMinor?: number; unitsSold?: number };
+  dailyOperationsLink?: {
+    orgUrlSlug: string;
+    search: Record<string, string>;
+    storeUrlSlug: string;
+  };
   eodReviewLink?: {
     orgUrlSlug: string;
     search: Record<string, string>;
@@ -51,26 +57,35 @@ export function ReportPeriodMetrics({
   };
 }) {
   const shouldReduceMotion = Boolean(useReducedMotion());
-  const periodStatus =
-    eodReviewLink
-      ? "Closed"
+  const statusLink = eodReviewLink
+    ? {
+        ...eodReviewLink,
+        label: "View EOD Review",
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close" as const,
+      }
+    : dailyOperationsLink
+      ? {
+          ...dailyOperationsLink,
+          label: "View Daily Operations",
+          to: "/$orgUrlSlug/store/$storeUrlSlug/operations" as const,
+        }
+      : undefined;
+  const periodStatus = eodReviewLink
+    ? "Closed"
+    : dailyOperationsLink
+      ? "In progress"
       : snapshot.unsettledDayCount === 0
-      ? undefined
-      : periodLabel === "Today"
-        ? "In progress"
-        : `${snapshot.unsettledDayCount.toLocaleString()} of ${snapshot.dayCount.toLocaleString()} reported ${
-            snapshot.dayCount === 1 ? "day" : "days"
-          } awaiting reconciliation`;
-  const showPeriodStatus = Boolean(periodStatus || eodReviewLink);
+        ? undefined
+        : periodLabel === "Today"
+          ? "In progress"
+          : `${snapshot.unsettledDayCount.toLocaleString()} of ${snapshot.dayCount.toLocaleString()} reported ${
+              snapshot.dayCount === 1 ? "day" : "days"
+            } awaiting reconciliation`;
+  const showPeriodStatus = Boolean(periodStatus || statusLink);
 
   return (
-    <section
-      data-testid={`report-period-metrics-${periodLabel}`}
-    >
-      <AnimatedHeight
-        animateFromZero
-        testId="report-period-status-transition"
-      >
+    <section data-testid={`report-period-metrics-${periodLabel}`}>
+      <AnimatedHeight animateFromZero testId="report-period-status-transition">
         <AnimatePresence initial={false}>
           {showPeriodStatus ? (
             <motion.div
@@ -91,20 +106,23 @@ export function ReportPeriodMetrics({
                 data-testid="report-period-status"
               >
                 {periodStatus ? <span>{periodStatus}</span> : null}
-                {eodReviewLink ? (
+                {statusLink ? (
                   <>
                     <span aria-hidden="true">·</span>
                     <Link
                       className="inline-flex items-center gap-1 rounded-sm font-medium text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       params={{
-                        orgUrlSlug: eodReviewLink.orgUrlSlug,
-                        storeUrlSlug: eodReviewLink.storeUrlSlug,
+                        orgUrlSlug: statusLink.orgUrlSlug,
+                        storeUrlSlug: statusLink.storeUrlSlug,
                       }}
-                      search={eodReviewLink.search}
-                      to="/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close"
+                      search={statusLink.search}
+                      to={statusLink.to}
                     >
-                      View EOD Review
-                      <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+                      {statusLink.label}
+                      <ArrowUpRight
+                        aria-hidden="true"
+                        className="h-3.5 w-3.5"
+                      />
                     </Link>
                   </>
                 ) : null}

@@ -39,6 +39,8 @@ export type ReportDateRange = {
   endDate: string;
 };
 
+const REPORT_DAYS_MAX_SPAN = 92;
+
 function operatingDateToUtc(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
 }
@@ -51,6 +53,37 @@ function addOperatingDays(value: string, days: number): string {
   const date = operatingDateToUtc(value);
   date.setUTCDate(date.getUTCDate() + days);
   return utcToOperatingDate(date);
+}
+
+/**
+ * Keeps the rendered day scope stable while a new selection fits inside the
+ * reporting query's 92-day read budget. A distant selection starts a fresh
+ * scope instead of creating an invalid, ever-growing query range.
+ */
+export function tableRangeIncludingSelection(
+  tableRange: ReportDateRange,
+  selectedRange: ReportDateRange,
+): ReportDateRange {
+  const expandedRange = {
+    startDate:
+      selectedRange.startDate < tableRange.startDate
+        ? selectedRange.startDate
+        : tableRange.startDate,
+    endDate:
+      selectedRange.endDate > tableRange.endDate
+        ? selectedRange.endDate
+        : tableRange.endDate,
+  };
+  const inclusiveDays =
+    Math.floor(
+      (operatingDateToUtc(expandedRange.endDate).getTime() -
+        operatingDateToUtc(expandedRange.startDate).getTime()) /
+        86_400_000,
+    ) + 1;
+
+  return inclusiveDays <= REPORT_DAYS_MAX_SPAN
+    ? expandedRange
+    : selectedRange;
 }
 
 function isoWeekStart(value: string): string {

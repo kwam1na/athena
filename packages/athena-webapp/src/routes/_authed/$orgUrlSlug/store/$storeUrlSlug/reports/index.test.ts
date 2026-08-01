@@ -12,6 +12,8 @@ describe("reports overview search schema", () => {
       window: "weekToDate" as const,
       daysStart: "2026-07-01",
       daysEnd: "2026-07-28",
+      daysTableStart: "2026-06-01",
+      daysTableEnd: "2026-07-31",
       daysPage: 2,
       selectedDay: "2026-07-16",
     };

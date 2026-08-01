@@ -21,18 +21,24 @@ vi.mock("@/hooks/use-navigate-back", () => ({
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
+    params: linkParams,
     search: linkSearch,
     to,
     ...props
   }: {
     children?: React.ReactNode;
+    params?: unknown;
     search?: unknown;
     to: string;
   }) => {
-    delete (props as Record<string, unknown>).params;
     renderedLinkSearches.push(linkSearch);
     return (
-      <a href={to} {...props}>
+      <a
+        data-params={JSON.stringify(linkParams)}
+        data-search={JSON.stringify(linkSearch)}
+        href={to}
+        {...props}
+      >
         {children}
       </a>
     );
@@ -76,6 +82,7 @@ describe("ReportsItemsView", () => {
       totalUnitsSold: 16,
       totalTransactions: 7,
       updatedAt: null,
+      isTodayInProgress: false,
     });
 
     render(<ReportsItemsView {...baseProps} />);
@@ -454,6 +461,197 @@ describe("ReportsItemsView", () => {
     expect(performance).toContainElement(screen.getByTestId("report-freshness"));
     expect(performance).not.toContainElement(screen.getByRole("table"));
     expect(results).toContainElement(screen.getByRole("table"));
+  });
+
+  it("supports a canvas workspace with Operations metric cards", () => {
+    useQuery.mockReturnValue({
+      rows: [
+        {
+          productSkuId: "sku-1",
+          periodKey: "d:2026-07-28",
+          unitsSold: 16,
+          unitsReturned: 0,
+          grossSalesMinor: 1600,
+          netSalesMinor: 1600,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: 800,
+        },
+      ],
+      continueCursor: null,
+      totalNetSalesMinor: 1600,
+      totalUnitsSold: 16,
+      totalTransactions: 7,
+      updatedAt: null,
+    });
+
+    render(<ReportsItemsView {...baseProps} variant="canvas" />);
+
+    const workspace = screen.getByTestId("items-report-workspace");
+    expect(workspace).toHaveAttribute("data-variant", "canvas");
+    expect(workspace).not.toHaveClass(
+      "rounded-xl",
+      "border",
+      "bg-surface-raised",
+      "shadow-surface",
+    );
+
+    for (const testId of [
+      "items-period-net-sales",
+      "items-period-units-sold",
+      "items-period-transactions",
+    ]) {
+      expect(screen.getByTestId(testId).firstElementChild).toHaveClass(
+        "rounded-lg",
+        "border",
+        "bg-surface",
+        "shadow-surface",
+      );
+    }
+  });
+
+  it("links sales and transaction metrics to oldest-first transactions for the selected period", () => {
+    useQuery.mockReturnValue({
+      rows: [
+        {
+          productSkuId: "sku-1",
+          periodKey: "w:2026-W31",
+          unitsSold: 16,
+          unitsReturned: 0,
+          grossSalesMinor: 1600,
+          netSalesMinor: 1600,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: 800,
+        },
+      ],
+      continueCursor: null,
+      totalNetSalesMinor: 1600,
+      totalUnitsSold: 16,
+      totalTransactions: 7,
+      updatedAt: null,
+    });
+
+    render(
+      <ReportsItemsView
+        {...baseProps}
+        periodDate="2026-07-29"
+        periodType="week"
+        variant="canvas"
+      />,
+    );
+
+    for (const name of [
+      "Open transactions for net sales",
+      "Open transactions for transaction count",
+    ]) {
+      const link = screen.getByRole("link", { name });
+      expect(link).toHaveAttribute(
+        "href",
+        "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+      );
+      expect(JSON.parse(link.dataset.search ?? "{}")).toEqual({
+        endDate: "2026-08-02",
+        o: expect.any(String),
+        order: "oldestFirst",
+        startDate: "2026-07-27",
+      });
+      expect(JSON.parse(link.dataset.params ?? "{}")).toEqual({
+        orgUrlSlug: "acme",
+        storeUrlSlug: "downtown",
+      });
+    }
+  });
+
+  it("lets an in-progress day use the transactions view's newest-first default", () => {
+    useQuery.mockReturnValue({
+      rows: [
+        {
+          productSkuId: "sku-1",
+          periodKey: "d:2026-08-01",
+          unitsSold: 1,
+          unitsReturned: 0,
+          grossSalesMinor: 100,
+          netSalesMinor: 100,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: 50,
+        },
+      ],
+      continueCursor: null,
+      totalNetSalesMinor: 100,
+      totalUnitsSold: 1,
+      totalTransactions: 1,
+      updatedAt: null,
+      isTodayInProgress: true,
+    });
+
+    render(
+      <ReportsItemsView
+        {...baseProps}
+        periodDate="2026-08-01"
+        variant="canvas"
+      />,
+    );
+
+    for (const name of [
+      "Open transactions for net sales",
+      "Open transactions for transaction count",
+    ]) {
+      const link = screen.getByRole("link", { name });
+      expect(JSON.parse(link.dataset.search ?? "{}")).toEqual({
+        endDate: "2026-08-01",
+        o: expect.any(String),
+        startDate: "2026-08-01",
+      });
+    }
+  });
+
+  it("keeps a historic day oldest-first in the transactions view", () => {
+    useQuery.mockReturnValue({
+      rows: [
+        {
+          productSkuId: "sku-1",
+          periodKey: "d:2026-07-28",
+          unitsSold: 1,
+          unitsReturned: 0,
+          grossSalesMinor: 100,
+          netSalesMinor: 100,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: 50,
+        },
+      ],
+      continueCursor: null,
+      totalNetSalesMinor: 100,
+      totalUnitsSold: 1,
+      totalTransactions: 1,
+      updatedAt: null,
+      isTodayInProgress: false,
+    });
+
+    render(<ReportsItemsView {...baseProps} variant="canvas" />);
+
+    const link = screen.getByRole("link", {
+      name: "Open transactions for transaction count",
+    });
+    expect(JSON.parse(link.dataset.search ?? "{}")).toEqual({
+      endDate: "2026-07-28",
+      o: expect.any(String),
+      order: "oldestFirst",
+      startDate: "2026-07-28",
+    });
+  });
+
+  it("retains the original card workspace as the default variant", () => {
+    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+
+    render(<ReportsItemsView {...baseProps} />);
+
+    expect(screen.getByTestId("items-report-workspace")).toHaveAttribute(
+      "data-variant",
+      "card",
+    );
   });
 
   it("uses the shared animated data surface for full and empty states", async () => {

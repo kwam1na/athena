@@ -5,6 +5,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { requireReportsStoreAccess } from "./access";
 import {
   dayPeriodKey,
+  isReportingTodayInProgress,
   trailingThreeMonthsStart,
 } from "../../shared/reportsContract";
 import { REPORT_SKU_PAGE_SIZE } from "../../shared/reportsContract";
@@ -389,6 +390,7 @@ export const listPeriodSkus = query({
     totalUnitsSold: number;
     totalTransactions: number;
     updatedAt: number | null;
+    isTodayInProgress: boolean;
   }> => {
     await requireReportsStoreAccess(ctx, args.storeId);
     const periodRange = periodDateRange(args.periodKey as ReportPeriodKey);
@@ -506,6 +508,10 @@ export const listPeriodSkus = query({
           : livePosTransactionCount(ctx, day);
       }),
     );
+    const selectedDayDate =
+      periodRange && periodRange.startDate === periodRange.endDate
+        ? periodRange.startDate
+        : null;
 
     return {
       rows,
@@ -523,6 +529,13 @@ export const listPeriodSkus = query({
         0,
       ),
       updatedAt: overview?.updatedAt ?? null,
+      isTodayInProgress:
+        selectedDayDate !== null &&
+        periodDays.some(
+          (day) =>
+            day.operatingDate === selectedDayDate &&
+            isReportingTodayInProgress(day.status),
+        ),
     };
   },
 });

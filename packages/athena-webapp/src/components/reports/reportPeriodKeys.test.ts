@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   dateRangeForItemsPeriod,
   dateRangeForOverviewWindow,
+  tableRangeIncludingSelection,
 } from "./reportPeriodKeys";
 
 describe("report period date ranges", () => {
@@ -44,5 +45,28 @@ describe("report period date ranges", () => {
       startDate: "2026-02-01",
       endDate: "2026-02-28",
     });
+  });
+
+  it("keeps the table stable for contained ranges and safely replaces over-wide scopes", () => {
+    expect(
+      tableRangeIncludingSelection(
+        { startDate: "2026-07-01", endDate: "2026-07-31" },
+        { startDate: "2026-07-15", endDate: "2026-07-20" },
+      ),
+    ).toEqual({ startDate: "2026-07-01", endDate: "2026-07-31" });
+
+    expect(
+      tableRangeIncludingSelection(
+        { startDate: "2026-07-01", endDate: "2026-07-31" },
+        { startDate: "2026-06-15", endDate: "2026-07-20" },
+      ),
+    ).toEqual({ startDate: "2026-06-15", endDate: "2026-07-31" });
+
+    expect(
+      tableRangeIncludingSelection(
+        { startDate: "2026-04-01", endDate: "2026-06-30" },
+        { startDate: "2026-07-15", endDate: "2026-07-20" },
+      ),
+    ).toEqual({ startDate: "2026-07-15", endDate: "2026-07-20" });
   });
 });

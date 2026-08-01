@@ -12,6 +12,7 @@ import { ReportsOverviewView } from "@/components/reports/ReportsOverviewView";
 import {
   dateRangeForOverviewWindow,
   REPORT_OVERVIEW_WINDOWS,
+  tableRangeIncludingSelection,
   todayOperatingDateGuess,
   type ReportOverviewWindow,
 } from "@/components/reports/reportPeriodKeys";
@@ -22,6 +23,8 @@ export const reportsOverviewSearchSchema = z.object({
   window: z.enum(REPORT_OVERVIEW_WINDOWS).optional(),
   daysStart: dateSchema.optional(),
   daysEnd: dateSchema.optional(),
+  daysTableStart: dateSchema.optional(),
+  daysTableEnd: dateSchema.optional(),
   daysPage: z.coerce.number().int().positive().optional(),
   selectedDay: dateSchema.optional(),
 });
@@ -60,6 +63,8 @@ function ReportsOverviewRoute() {
   const defaultDaysStart = isoDateOffset(-13);
   const daysEnd = search.daysEnd ?? defaultDaysEnd;
   const daysStart = search.daysStart ?? defaultDaysStart;
+  const daysTableEnd = search.daysTableEnd ?? daysEnd;
+  const daysTableStart = search.daysTableStart ?? daysStart;
   const canResetDaysRange =
     daysStart !== defaultDaysStart || daysEnd !== defaultDaysEnd;
   const selectedWindow = search.window ?? "today";
@@ -102,18 +107,24 @@ function ReportsOverviewRoute() {
             }),
           })
         }
-        onRangeChange={(next) =>
+        onRangeChange={(next, targetPage) => {
+          const nextTableRange = tableRangeIncludingSelection(
+            { startDate: daysTableStart, endDate: daysTableEnd },
+            next,
+          );
           void navigate({
             replace: true,
             search: (current) => ({
               ...current,
               daysStart: next.startDate,
               daysEnd: next.endDate,
-              daysPage: undefined,
+              daysTableStart: nextTableRange.startDate,
+              daysTableEnd: nextTableRange.endDate,
+              daysPage: targetPage === 1 ? undefined : targetPage,
               selectedDay: undefined,
             }),
-          })
-        }
+          });
+        }}
         onRangeReset={() =>
           void navigate({
             replace: true,
@@ -138,6 +149,8 @@ function ReportsOverviewRoute() {
         page={search.daysPage ?? 1}
         selectedDate={search.selectedDay}
         startDate={daysStart}
+        tableEndDate={daysTableEnd}
+        tableStartDate={daysTableStart}
       />
     </div>
   );
