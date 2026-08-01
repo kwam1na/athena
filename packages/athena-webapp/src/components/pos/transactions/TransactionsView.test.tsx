@@ -77,6 +77,7 @@ vi.mock("../../base/table/data-table", () => ({
     data,
     onPageIndexChange,
     pageIndex,
+    paginationItemLabel,
     renderMobileCard,
   }: {
     data: Array<{
@@ -88,6 +89,7 @@ vi.mock("../../base/table/data-table", () => ({
     }>;
     onPageIndexChange?: (pageIndex: number) => void;
     pageIndex?: number;
+    paginationItemLabel?: string;
     renderMobileCard?: (row: {
       _id?: string;
       itemCount?: number;
@@ -99,6 +101,15 @@ vi.mock("../../base/table/data-table", () => ({
     <div>
       <div data-testid="transaction-table-page-index">
         {pageIndex ?? "local"}
+      </div>
+      <div data-testid="transaction-batch-summary">
+        {paginationItemLabel
+          ? `${data.length} ${
+              data.length === 1
+                ? paginationItemLabel
+                : `${paginationItemLabel}s`
+            }`
+          : null}
       </div>
       {renderMobileCard ? (
         <div data-testid="transaction-mobile-cards">
@@ -417,6 +428,36 @@ describe("TransactionsView", () => {
 
     expect(screen.getByText("POS-SERVICE-COUNT")).toBeInTheDocument();
     expect(screen.getAllByText("3 items").length).toBeGreaterThan(0);
+  });
+
+  it("counts every transaction in the loaded batch, not only the current page", () => {
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue(
+      Array.from({ length: 12 }, (_, index) => ({
+        _id: `txn-${index + 1}`,
+        transactionNumber: `POS-${index + 1}`,
+        total: 1000,
+        paymentMethod: "cash",
+        paymentMethods: ["cash"],
+        cashierName: "Ada L.",
+        customerName: null,
+        itemCount: index + 1,
+        completedAt: Date.now() - index,
+        hasTrace: false,
+        sessionTraceId: null,
+      })),
+    );
+
+    render(<TransactionsView />);
+
+    expect(screen.getByTestId("transaction-batch-summary")).toHaveTextContent(
+      "12 transactions",
+    );
   });
 
   it("passes the register session filter to the completed transactions query", () => {
@@ -847,6 +888,7 @@ describe("TransactionsView", () => {
     expect(
       screen.getByText("Showing latest 100 completed transactions."),
     ).toBeInTheDocument();
+    expect(screen.getByTestId("transaction-batch-summary")).toBeEmptyDOMElement();
 
     await user.click(screen.getByRole("button", { name: "Load more history" }));
 

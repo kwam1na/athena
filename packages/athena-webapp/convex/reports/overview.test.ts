@@ -244,6 +244,31 @@ describe("buildOverviewData", () => {
     expect(data.trailing3Months.netSalesMinor).toBe(2499);
   });
 
+  it("materializes adjacent prior snapshots for both rolling windows", () => {
+    const data = buildOverviewData({
+      days: [
+        day("2026-03-01", { netSalesMinor: 100, refundsMinor: 10 }),
+        day("2026-06-01", { netSalesMinor: 200 }),
+        day("2026-06-03", { netSalesMinor: 400, unitsSold: 4 }),
+        day("2026-07-03", { netSalesMinor: 800, unitsSold: 8 }),
+        day("2026-08-01", {
+          status: "open",
+          netSalesMinor: 1_600,
+          unitsSold: 16,
+        }),
+      ],
+      fallbackCurrency: "GHS",
+      now: 0,
+    });
+
+    expect(data.priorTrailing30.netSalesMinor).toBe(400);
+    expect(data.priorTrailing30.unitsSold).toBe(4);
+    expect(data.trailing30.netSalesMinor).toBe(2_400);
+    expect(data.priorTrailing3Months.netSalesMinor).toBe(100);
+    expect(data.priorTrailing3Months.refundsMinor).toBe(10);
+    expect(data.trailing3Months.netSalesMinor).toBe(3_000);
+  });
+
   it("is an empty-but-valid document for a store with no days", () => {
     const data = buildOverviewData({
       days: [],
@@ -259,7 +284,9 @@ describe("buildOverviewData", () => {
       weekToDate: emptySnapshot(),
       priorWeek: emptySnapshot(),
       trailing30: emptySnapshot(),
+      priorTrailing30: emptySnapshot(),
       trailing3Months: emptySnapshot(),
+      priorTrailing3Months: emptySnapshot(),
       comparisons: { netSalesVsPriorWeekBp: null, unitsSoldVsPriorWeekBp: null },
       dailyTrend: [],
       trust: { reconciledDays: 0, provisionalDays: 0, amendedDays: 0 },

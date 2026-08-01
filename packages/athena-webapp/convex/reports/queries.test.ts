@@ -472,6 +472,81 @@ describe("listPeriodSkus", () => {
     expect(result.isTodayInProgress).toBe(false);
   });
 
+  it("returns prior day, week, and month totals for metric comparisons", async () => {
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t);
+    await seedReportDay(
+      t,
+      organizationId,
+      storeId,
+      "2026-06-30",
+      3,
+      1,
+    );
+    await seedReportDay(
+      t,
+      organizationId,
+      storeId,
+      "2026-07-21",
+      5,
+      2,
+    );
+    await seedReportDay(
+      t,
+      organizationId,
+      storeId,
+      "2026-07-28",
+      10,
+      4,
+    );
+    await seedReportDay(
+      t,
+      organizationId,
+      storeId,
+      "2026-07-29",
+      6,
+      3,
+    );
+
+    const dayResult = await t.run((ctx) =>
+      handlerOf(listPeriodSkus)(ctx, {
+        storeId,
+        periodKey: "d:2026-07-29",
+        sortBy: "revenue",
+      }),
+    );
+    const weekResult = await t.run((ctx) =>
+      handlerOf(listPeriodSkus)(ctx, {
+        storeId,
+        periodKey: "w:2026-W31",
+        sortBy: "revenue",
+      }),
+    );
+    const monthResult = await t.run((ctx) =>
+      handlerOf(listPeriodSkus)(ctx, {
+        storeId,
+        periodKey: "m:2026-07",
+        sortBy: "revenue",
+      }),
+    );
+
+    expect(dayResult.priorPeriodTotals).toEqual({
+      netSalesMinor: 900,
+      unitsSold: 10,
+      transactions: 4,
+    });
+    expect(weekResult.priorPeriodTotals).toEqual({
+      netSalesMinor: 900,
+      unitsSold: 5,
+      transactions: 2,
+    });
+    expect(monthResult.priorPeriodTotals).toEqual({
+      netSalesMinor: 900,
+      unitsSold: 3,
+      transactions: 1,
+    });
+  });
+
   it("counts live POS transactions when an open day has no close yet", async () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
@@ -569,9 +644,9 @@ describe("listPeriodSkus", () => {
 
     expect(result.rows[0].identity).toMatchObject({
       displayName: "Wig",
-      netPriceMinor: 100,
       productId: expect.any(String),
     });
+    expect(result.rows[0].identity).not.toHaveProperty("netPriceMinor");
     expect(result.updatedAt).toBe(updatedAt);
   });
 
@@ -805,6 +880,44 @@ describe("getSkuDetail", () => {
       netSalesMinor: 300,
       grossProfitMinor: 120,
       unitsSold: 4,
+    });
+  });
+
+  it("returns totals for the immediately preceding equal-length range", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const productSkuId = await seedSku(t, storeId);
+    await seedSkuDay(t, storeId, productSkuId, "2026-07-24", {
+      netSalesMinor: 100,
+      grossProfitMinor: 40,
+    });
+    await seedSkuDay(t, storeId, productSkuId, "2026-07-25", {
+      netSalesMinor: 200,
+      grossProfitMinor: 80,
+    });
+    await seedSkuDay(t, storeId, productSkuId, "2026-07-26", {
+      netSalesMinor: 300,
+      grossProfitMinor: 120,
+    });
+    await seedSkuDay(t, storeId, productSkuId, "2026-07-27", {
+      netSalesMinor: 500,
+      grossProfitMinor: 200,
+    });
+
+    const result = await t.run((ctx) =>
+      handlerOf(getSkuDetail)(ctx, {
+        storeId,
+        productSkuId,
+        startDate: "2026-07-26",
+        endDate: "2026-07-27",
+      }),
+    );
+
+    expect(result.priorPeriodTotals).toMatchObject({
+      netSalesMinor: 300,
+      grossProfitMinor: 120,
+      unitsSold: 4,
+      refundsMinor: 0,
     });
   });
 

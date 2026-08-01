@@ -310,7 +310,9 @@ export type ReportOverviewData = {
   weekToDate: ReportPeriodSnapshot;
   priorWeek: ReportPeriodSnapshot;
   trailing30: ReportPeriodSnapshot;
+  priorTrailing30: ReportPeriodSnapshot;
   trailing3Months: ReportPeriodSnapshot;
+  priorTrailing3Months: ReportPeriodSnapshot;
   comparisons: {
     netSalesVsPriorWeekBp: number | null;
     unitsSoldVsPriorWeekBp: number | null;
@@ -351,8 +353,8 @@ export type ReportSkuIdentity = {
   displayName: string;
   sku?: string;
   size?: string;
-  /** Current catalog net price in the store's minor currency unit. */
-  netPriceMinor: number;
+  /** Current catalog net price in the store's minor currency unit, when set. */
+  netPriceMinor?: number;
   /** Current catalog unit cost in the store's minor currency unit, when set. */
   unitCostMinor?: number;
   /** Primary SKU image, when one is available. */

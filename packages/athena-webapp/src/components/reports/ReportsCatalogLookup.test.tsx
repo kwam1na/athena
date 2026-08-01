@@ -48,6 +48,7 @@ function result(
       matchedValue: "BW-18",
       rank: 1,
     },
+    netPrice: 120_00,
     price: 120_00,
     productAvailability: "live",
     productId: "product-1" as Id<"product">,
@@ -166,10 +167,13 @@ describe("ReportsCatalogLookup", () => {
       limit: 25,
       truncated: false,
       results: [
-        result({
-          productName: "FRESH LOOK CONTACT SOLUTION",
-          sku: "6N2Y-SZX-1D4",
-        }),
+        {
+          ...result({
+            productName: "FRESH LOOK CONTACT SOLUTION",
+            sku: "6N2Y-SZX-1D4",
+          }),
+          netPrice: 95_00,
+        },
       ],
     });
 
@@ -186,7 +190,7 @@ describe("ReportsCatalogLookup", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
-        name: "View report for Fresh Look Contact Solution, 6N2Y-SZX-1D4, net price GH₵120",
+        name: "View report for Fresh Look Contact Solution, 6N2Y-SZX-1D4, net price GH₵95",
       }),
     ).toBeInTheDocument();
   });

@@ -25,10 +25,10 @@ import { addDaysToDate } from "./rollups";
  */
 
 /**
- * Day docs read per rebuild. One doc per operating day; 92 covers the longest
- * possible three-calendar-month window (for example May 1 through July 31).
+ * Day docs read per rebuild. One doc per operating day; 184 covers the current
+ * and immediately preceding three-calendar-month windows.
  */
-export const OVERVIEW_DAY_SCAN_LIMIT = 92;
+export const OVERVIEW_DAY_SCAN_LIMIT = 184;
 
 export const OVERVIEW_TREND_DAYS = 30;
 
@@ -154,7 +154,9 @@ export function buildOverviewData(args: {
       weekToDate: emptySnapshot(),
       priorWeek: emptySnapshot(),
       trailing30: emptySnapshot(),
+      priorTrailing30: emptySnapshot(),
       trailing3Months: emptySnapshot(),
+      priorTrailing3Months: emptySnapshot(),
       comparisons: { netSalesVsPriorWeekBp: null, unitsSoldVsPriorWeekBp: null },
       dailyTrend: [],
       trust: { reconciledDays: 0, provisionalDays: 0, amendedDays: 0 },
@@ -169,14 +171,33 @@ export function buildOverviewData(args: {
   const currency = anchorDay?.currency ?? args.fallbackCurrency;
 
   const trailingStart = addDaysToDate(anchor, -(OVERVIEW_TREND_DAYS - 1));
+  const priorTrailing30Start = addDaysToDate(
+    trailingStart,
+    -OVERVIEW_TREND_DAYS,
+  );
+  const priorTrailing30End = addDaysToDate(trailingStart, -1);
   const trailing30Days = days.filter(
     (day) => day.operatingDate >= trailingStart && day.operatingDate <= anchor,
   );
+  const priorTrailing30Days = days.filter(
+    (day) =>
+      day.operatingDate >= priorTrailing30Start &&
+      day.operatingDate <= priorTrailing30End,
+  );
   const trailing3MonthsStart = trailingThreeMonthsStart(anchor);
+  const priorTrailing3MonthsEnd = addDaysToDate(trailing3MonthsStart, -1);
+  const priorTrailing3MonthsStart = trailingThreeMonthsStart(
+    priorTrailing3MonthsEnd,
+  );
   const trailing3MonthsDays = days.filter(
     (day) =>
       day.operatingDate >= trailing3MonthsStart &&
       day.operatingDate <= anchor,
+  );
+  const priorTrailing3MonthsDays = days.filter(
+    (day) =>
+      day.operatingDate >= priorTrailing3MonthsStart &&
+      day.operatingDate <= priorTrailing3MonthsEnd,
   );
 
   const currentWeekKey = weekPeriodKey(anchor);
@@ -211,7 +232,9 @@ export function buildOverviewData(args: {
     weekToDate,
     priorWeek,
     trailing30: snapshotForDays(trailing30Days),
+    priorTrailing30: snapshotForDays(priorTrailing30Days),
     trailing3Months: snapshotForDays(trailing3MonthsDays),
+    priorTrailing3Months: snapshotForDays(priorTrailing3MonthsDays),
     comparisons: {
       netSalesVsPriorWeekBp: comparisonBp(
         weekToDate.netSalesMinor,

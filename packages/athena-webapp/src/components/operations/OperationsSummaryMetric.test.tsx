@@ -1,12 +1,46 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
 import {
   formatOperationsMetricComparison,
   formatOperationsMetricHelper,
 } from "./operationsMetricFormatting";
 
 describe("operations metric helpers", () => {
+  it("reuses the flip animation for numeric metric values", () => {
+    const { rerender } = render(
+      <OperationsSummaryMetric
+        formatValue={(value) => `$${value}`}
+        label="Net sales"
+        value={124}
+        valueTestId="summary-metric-value"
+      />,
+    );
+
+    expect(screen.getByTestId("summary-metric-value")).toHaveAttribute(
+      "data-motion",
+      "flip",
+    );
+    expect(screen.getByTestId("summary-metric-value")).toHaveAttribute(
+      "data-value",
+      "$124",
+    );
+
+    rerender(
+      <OperationsSummaryMetric
+        formatValue={(value) => `$${value}`}
+        label="Net sales"
+        value={711}
+        valueTestId="summary-metric-value"
+      />,
+    );
+    expect(screen.getByTestId("summary-metric-value")).toHaveAttribute(
+      "data-value",
+      "$711",
+    );
+  });
+
   it("renders missing prior activity with operator-friendly copy", () => {
     render(
       <p>

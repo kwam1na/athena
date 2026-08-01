@@ -48,6 +48,7 @@ export function ReportsItemsView({
   const currentPage = cursor ? cursorTrail.length + 2 : 1;
   const {
     data: result,
+    dataContext: settledPeriodKey,
     isInitialLoad,
     isRefreshing,
   } = useStableReportQuery(
@@ -57,6 +58,7 @@ export function ReportsItemsView({
         ? { storeId: activeStore._id, periodKey, sortBy, cursor }
         : "skip",
     ),
+    periodKey,
   );
 
   function handlePageChange(page: number) {
@@ -87,6 +89,7 @@ export function ReportsItemsView({
         <ReportBackLink />
 
         <ReportsItemsPerformance
+          comparisonPeriodKey={settledPeriodKey ?? periodKey}
           currency={activeStore?.currency ?? "USD"}
           hasActivity={hasActivity}
           isTodayInProgress={result?.isTodayInProgress ?? false}
@@ -96,6 +99,7 @@ export function ReportsItemsView({
           orgUrlSlug={orgUrlSlug!}
           periodDate={periodDate}
           periodType={periodType}
+          priorPeriodTotals={result?.priorPeriodTotals}
           sortBy={sortBy}
           storeUrlSlug={storeUrlSlug!}
           totalNetSalesMinor={result?.totalNetSalesMinor}

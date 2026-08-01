@@ -47,4 +47,23 @@ describe("GenericDataTable", () => {
     expect(within(mobileCards).getByText("Item 12")).toBeInTheDocument();
     expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
   });
+
+  it("keeps the loaded row count anchored in the pagination footer", () => {
+    const data = Array.from({ length: 12 }, (_, index) => ({
+      id: `row-${index + 1}`,
+      name: `Item ${index + 1}`,
+    }));
+
+    render(
+      <GenericDataTable
+        columns={columns}
+        data={data}
+        paginationItemLabel="transaction"
+        tableId="shared-batch-summary"
+      />,
+    );
+
+    expect(screen.getByText("12 transactions")).toBeInTheDocument();
+    expect(screen.getByText("Page 1 of 2")).toBeInTheDocument();
+  });
 });

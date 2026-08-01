@@ -84,8 +84,25 @@ export function ReportsItemsTable({
                   <span className="block truncate font-medium text-foreground">
                     {formatSkuDisplayName(row.identity, row.productSkuId)}
                   </span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {formatSkuSubtitle(row.identity, row.productSkuId)}
+                  <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-xs leading-5 text-muted-foreground">
+                    <span className="min-w-0 truncate font-mono">
+                      {formatSkuSubtitle(row.identity, row.productSkuId)}
+                    </span>
+                    <span aria-hidden="true" className="text-muted-foreground/60">
+                      ·
+                    </span>
+                    <span
+                      aria-label={`Net price ${formatOptionalMoney(
+                        row.identity?.netPriceMinor,
+                        currency,
+                      )}`}
+                      className="whitespace-nowrap font-numeric tabular-nums text-foreground"
+                    >
+                      {formatOptionalMoney(
+                        row.identity?.netPriceMinor,
+                        currency,
+                      )}
+                    </span>
                   </span>
                 </Link>
               </TableCell>
