@@ -1,7 +1,7 @@
 ---
 title: "Athena Reports Workspace Uses Generation-Coherent Server-Shaped Read Models"
 date: 2026-07-11
-last_updated: 2026-07-12
+last_updated: 2026-08-01
 category: architecture-patterns
 module: athena-webapp
 problem_type: architecture_pattern
@@ -26,7 +26,7 @@ tags:
   - cursor-coherence
   - tanstack-router
   - server-shaped-ui
-delivery_diff_fingerprint: 8b7831360e24d83d82eef28cb6ea0f45197f79a4254cdd87cea8ffaaadb7b2bb
+delivery_diff_fingerprint: e57fb8e248b848bf57d4d28716d1d22bbf1445493f0c0f89a5a51c1b1a0ecbcd
 ---
 
 # Athena Reports Workspace Uses Generation-Coherent Server-Shaped Read Models
