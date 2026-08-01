@@ -22,6 +22,14 @@ const mockPrintWindow = {
   onload: null as null | (() => void),
 };
 
+/** Fire an event the hook registered on the print window via addEventListener. */
+function emitPrintWindowEvent(type: string) {
+  for (const [eventType, handler] of mockPrintWindow.addEventListener.mock
+    .calls as Array<[string, () => void]>) {
+    if (eventType === type) handler();
+  }
+}
+
 function setWindowOpenMock(returnValue: Window | null) {
   Object.defineProperty(window, "open", {
     configurable: true,
@@ -155,7 +163,7 @@ describe("usePrint Hook", () => {
       expect(mockPrintWindow.print).toHaveBeenCalled();
     });
 
-    it("should close window after printing with delay", () => {
+    it("closes the window once the browser reports the print finished", () => {
       vi.useFakeTimers();
       const { result } = renderHook(() => usePrint());
 
@@ -171,11 +179,40 @@ describe("usePrint Hook", () => {
       });
 
       act(() => {
-        vi.advanceTimersByTime(500);
+        emitPrintWindowEvent("afterprint");
+        vi.advanceTimersByTime(250);
       });
       vi.useRealTimers();
 
       expect(mockPrintWindow.close).toHaveBeenCalled();
+    });
+
+    it("keeps the window alive while the print dialog is still up", () => {
+      // The old fixed teardown timer discarded the browsing context mid-print,
+      // which is what produced "The provided callback is no longer runnable".
+      vi.useFakeTimers();
+      const { result } = renderHook(() => usePrint());
+
+      act(() => {
+        result.current.printReceipt("<div>Test</div>");
+      });
+      act(() => {
+        mockPrintWindow.onload?.();
+      });
+
+      // No afterprint yet: the dialog is still open.
+      act(() => {
+        vi.advanceTimersByTime(30_000);
+      });
+      expect(mockPrintWindow.close).not.toHaveBeenCalled();
+
+      // A browser that never fires afterprint still gets cleaned up.
+      act(() => {
+        vi.advanceTimersByTime(30_000);
+      });
+      vi.useRealTimers();
+
+      expect(mockPrintWindow.close).toHaveBeenCalledTimes(1);
     });
 
     it("should prevent multiple close attempts", () => {
@@ -197,7 +234,8 @@ describe("usePrint Hook", () => {
       mockPrintWindow.closed = true;
 
       act(() => {
-        vi.advanceTimersByTime(500);
+        emitPrintWindowEvent("afterprint");
+        vi.advanceTimersByTime(60_000);
       });
       vi.useRealTimers();
 
@@ -277,22 +315,39 @@ describe("usePrint Hook", () => {
       act(() => {
         result.current.printReceipt("<div>Test</div>");
       });
-      // Load, print, and let the teardown timer run.
-      act(() => {
-        mockPrintWindow.onload?.();
-      });
-      act(() => {
-        vi.advanceTimersByTime(500);
-      });
-      mockPrintWindow.print.mockClear();
 
-      // The slow-load fallback fires afterwards and must stay quiet.
+      // The operator dismisses the popup before it finished loading.
       act(() => {
-        vi.advanceTimersByTime(500);
+        emitPrintWindowEvent("unload");
+      });
+
+      // The slow-load fallback fires afterwards and must stay quiet rather than
+      // printing into a context that is already going away.
+      act(() => {
+        vi.advanceTimersByTime(1000);
       });
       vi.useRealTimers();
 
       expect(mockPrintWindow.print).not.toHaveBeenCalled();
+    });
+
+    it("does not close the window a second time after it unloads itself", () => {
+      vi.useFakeTimers();
+      const { result } = renderHook(() => usePrint());
+
+      act(() => {
+        result.current.printReceipt("<div>Test</div>");
+      });
+      act(() => {
+        mockPrintWindow.onload?.();
+      });
+      act(() => {
+        emitPrintWindowEvent("unload");
+        vi.advanceTimersByTime(60_000);
+      });
+      vi.useRealTimers();
+
+      expect(mockPrintWindow.close).not.toHaveBeenCalled();
     });
 
     it("should handle blocked popup window", () => {

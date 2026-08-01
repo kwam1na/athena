@@ -4,6 +4,12 @@ const RECEIPT_PAGE_WIDTH_MM = 80;
 const RECEIPT_MIN_PAGE_HEIGHT_MM = 120;
 const RECEIPT_PAGE_HEIGHT_BUFFER_MM = 8;
 const CSS_PIXELS_PER_MM = 96 / 25.4;
+// Small breather after `afterprint` so the browser finishes unwinding the print
+// pipeline before the browsing context goes away.
+const AFTER_PRINT_CLOSE_DELAY_MS = 250;
+// Only for browsers that never fire `afterprint`. Long enough that it cannot
+// fire while a print dialog is still open on the terminal.
+const PRINT_FALLBACK_CLOSE_MS = 60_000;
 
 const receiptPrintStyles = `
             * {
@@ -323,9 +329,33 @@ export const usePrint = () => {
 
     // Set up close event handler to prevent reopening
     let isClosing = false;
+    let fallbackCloseTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const cancelFallbackClose = () => {
+      if (fallbackCloseTimer !== undefined) {
+        clearTimeout(fallbackCloseTimer);
+        fallbackCloseTimer = undefined;
+      }
+    };
+
     const handleClose = () => {
       if (!isClosing) {
         isClosing = true;
+        cancelFallbackClose();
+      }
+    };
+
+    const closeWindow = () => {
+      if (isClosing) return;
+      isClosing = true;
+      cancelFallbackClose();
+
+      try {
+        if (printWindow && !printWindow.closed) {
+          printWindow.close();
+        }
+      } catch (error) {
+        console.error("Error closing print window:", error);
       }
     };
 
@@ -353,22 +383,30 @@ ${receiptPrintStyles}
 
       printWindow.document.close();
 
-      const closeAfterDelay = () => {
-        setTimeout(() => {
-          if (printWindow && !printWindow.closed && !isClosing) {
-            isClosing = true;
-            printWindow.close();
-          }
-        }, 500);
+      // Tear the window down only once the browser says the print flow is
+      // over. Closing on a fixed delay discarded the browsing context while
+      // Blink was still running the print pipeline, and Chrome reports that as
+      // "Failed to execute 'print' on 'Window': The provided callback is no
+      // longer runnable" — raised asynchronously, so the try/catch around
+      // `print()` never sees it and it lands on the terminal as an unhandled
+      // rejection. `afterprint` fires once the dialog is dismissed (whether the
+      // job was sent or cancelled); the long fallback only covers browsers that
+      // never fire it, and must stay well clear of a dialog a cashier is still
+      // reading.
+      const closeAfterPrintCompletes = () => {
+        const handleAfterPrint = () => {
+          printWindow.removeEventListener("afterprint", handleAfterPrint);
+          setTimeout(closeWindow, AFTER_PRINT_CLOSE_DELAY_MS);
+        };
+
+        printWindow.addEventListener("afterprint", handleAfterPrint);
+        cancelFallbackClose();
+        fallbackCloseTimer = setTimeout(closeWindow, PRINT_FALLBACK_CLOSE_MS);
       };
 
-      // The print window is torn down on a timer while the browser may still
-      // be settling the print dialog, so `print()` can land on a context that
-      // is already being discarded — Chrome answers that with "The provided
-      // callback is no longer runnable". Never touch a window that is closed or
-      // closing, and only ever print once: the load handler and the slow-load
-      // fallback below both route through here, and re-entering would both
-      // double-print and print into a tearing-down window.
+      // Only ever print once: the load handler and the slow-load fallback below
+      // both route through here, and re-entering would both double-print and
+      // print into a tearing-down window.
       let hasPrinted = false;
       const runPrint = () => {
         if (hasPrinted || isClosing) return;
@@ -380,11 +418,13 @@ ${receiptPrintStyles}
           }
 
           setContinuousReceiptPageSize(printWindow);
+          // Registered before `print()` because the call is modal — the
+          // afterprint event can fire before it returns.
+          closeAfterPrintCompletes();
           printWindow.print();
-          closeAfterDelay();
         } catch (error) {
           console.error("Error during printing:", error);
-          closeAfterDelay();
+          closeWindow();
         }
       };
 
@@ -405,9 +445,7 @@ ${receiptPrintStyles}
       }, 1000);
     } catch (error) {
       console.error("Error preparing print window:", error);
-      if (!printWindow.closed) {
-        printWindow.close();
-      }
+      closeWindow();
     }
   }, []);
 
