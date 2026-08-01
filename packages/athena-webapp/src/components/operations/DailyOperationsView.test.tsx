@@ -73,6 +73,10 @@ vi.mock("convex/react", () => ({
   useQuery: mockedHooks.useQuery,
 }));
 
+vi.mock("~/src/hooks/use-navigate-back", () => ({
+  useNavigateBack: () => vi.fn(),
+}));
+
 vi.mock("@/hooks/useProtectedAdminPageState", () => ({
   useProtectedAdminPageState: mockedHooks.useProtectedAdminPageState,
 }));

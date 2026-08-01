@@ -21,7 +21,7 @@ tags:
   - date-range
   - lifecycle-authority
   - navigation
-delivery_diff_fingerprint: 0518c00b47d68ca87f8f53325b7e03594ceb75a6b0f49321a1aea48d7e5d7edc
+delivery_diff_fingerprint: 4cf02ad97e014ed7629eeb36667e911050816b8e814b58a9158664da396417fd
 ---
 
 # Athena Reporting Separates Rendered Scope, Period Focus, and Day Lifecycle
