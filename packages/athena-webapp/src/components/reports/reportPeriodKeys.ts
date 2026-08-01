@@ -1,6 +1,7 @@
 import {
   dayPeriodKey,
   monthPeriodKey,
+  trailingThreeMonthsStart,
   weekPeriodKey,
   type ReportPeriodKey,
 } from "~/shared/reportsContract";
@@ -12,6 +13,7 @@ export const REPORT_OVERVIEW_WINDOWS = [
   "today",
   "weekToDate",
   "trailing30",
+  "trailing3Months",
 ] as const;
 export type ReportOverviewWindow =
   (typeof REPORT_OVERVIEW_WINDOWS)[number];
@@ -23,6 +25,7 @@ export const REPORT_OVERVIEW_WINDOW_LABELS: Record<
   today: "Today",
   weekToDate: "Week to date",
   trailing30: "Trailing 30 days",
+  trailing3Months: "Trailing 3 months",
 };
 
 export const REPORT_PERIOD_TYPE_LABELS: Record<ReportPeriodType, string> = {
@@ -68,6 +71,11 @@ export function dateRangeForOverviewWindow(
     case "trailing30":
       return {
         startDate: addOperatingDays(anchorDate, -29),
+        endDate: anchorDate,
+      };
+    case "trailing3Months":
+      return {
+        startDate: trailingThreeMonthsStart(anchorDate),
         endDate: anchorDate,
       };
   }

@@ -16,16 +16,23 @@ vi.mock("@/hooks/useGetActiveStore", () => ({
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
+    params,
+    search,
     to,
     ...props
   }: {
     children?: React.ReactNode;
+    params?: Record<string, string>;
+    search?: Record<string, string>;
     to: string;
   }) => {
-    delete (props as Record<string, unknown>).params;
-    delete (props as Record<string, unknown>).search;
     return (
-      <a href={to} {...props}>
+      <a
+        data-params={JSON.stringify(params)}
+        data-search={JSON.stringify(search)}
+        href={to}
+        {...props}
+      >
         {children}
       </a>
     );
@@ -514,6 +521,24 @@ describe("ReportDaysPanel", () => {
     expect(screen.getByText("Other SKUs")).toBeInTheDocument();
     expect(screen.getByText("10%")).toBeInTheDocument();
     expect(screen.queryByText("oshe")).not.toBeInTheDocument();
+    const osheLink = screen.getByRole("link", { name: /Oshe.*WIG-A.*70%/ });
+    expect(osheLink).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId",
+    );
+    expect(JSON.parse(osheLink.dataset.params ?? "{}")).toEqual({
+      orgUrlSlug: "acme",
+      productSkuId: "sku-1",
+      storeUrlSlug: "downtown",
+    });
+    expect(JSON.parse(osheLink.dataset.search ?? "{}")).toEqual({
+      endDate: "2026-07-28",
+      o: expect.any(String),
+      startDate: "2026-07-15",
+    });
+    expect(
+      screen.getByText("Other SKUs").closest("a"),
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId("sku-mix-swatch-other")).toHaveStyle({
       backgroundColor: "hsl(var(--muted-foreground) / 0.15)",
     });
@@ -534,8 +559,10 @@ describe("ReportDaysPanel", () => {
     );
     expect(screen.getByLabelText("Product sales legend")).toHaveClass(
       "min-h-[18.75rem]",
+      "grid-rows-6",
       "sm:min-h-36",
       "sm:grid-cols-2",
+      "sm:grid-rows-3",
     );
     act(() => {
       intersectionCallback?.(
@@ -563,6 +590,48 @@ describe("ReportDaysPanel", () => {
       { timeout: 1_500 },
     );
     expect(disconnect).toHaveBeenCalled();
+  });
+
+  it("scopes SKU legend drill-downs to the selected operating day", () => {
+    useQuery.mockImplementation((functionReference: unknown) => {
+      const functionName = getFunctionName(functionReference as never);
+      if (functionName === "reports/queries:listRangeSkuMix") {
+        return {
+          totalUnitsSold: 7,
+          skuCount: 1,
+          rows: [
+            {
+              key: "sku-1",
+              productSkuId: "sku-1",
+              label: "WIG-A",
+              unitsSold: 7,
+              shareBasisPoints: 10000,
+              identity: { displayName: "Oshe", sku: "WIG-A" },
+            },
+          ],
+        };
+      }
+      return [
+        {
+          operatingDate: "2026-07-28",
+          status: "provisional",
+          currency: "USD",
+          netSalesMinor: 1200,
+          unitsSold: 7,
+        },
+      ];
+    });
+
+    render(
+      <ReportDaysPanel {...baseProps} selectedDate="2026-07-28" />,
+    );
+
+    const osheLink = screen.getByRole("link", { name: /Oshe.*WIG-A.*100%/ });
+    expect(JSON.parse(osheLink.dataset.search ?? "{}")).toEqual({
+      o: expect.any(String),
+      periodDate: "2026-07-28",
+      periodType: "day",
+    });
   });
 
   it("centers the product empty state within the chart card", () => {
@@ -919,6 +988,10 @@ describe("ReportDaysPanel", () => {
     expect(screen.getByTestId("report-sku-mix-number")).toHaveAttribute(
       "data-transition-easing",
       "ease",
+    );
+    expect(screen.getByTestId("report-sku-mix-number")).toHaveAttribute(
+      "data-transition-from-zero",
+      "fade",
     );
 
     totalUnitsSold = 7;

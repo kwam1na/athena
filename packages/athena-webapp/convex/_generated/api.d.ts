@@ -186,6 +186,7 @@ import type * as marketing_walkthroughRequestRetention from "../marketing/walkth
 import type * as marketing_walkthroughRequests from "../marketing/walkthroughRequests.js";
 import type * as migrations_backfillAthenaUserNormalizedEmail from "../migrations/backfillAthenaUserNormalizedEmail.js";
 import type * as migrations_backfillStoreSchedules from "../migrations/backfillStoreSchedules.js";
+import type * as migrations_backfillStoreTimezoneAuthority from "../migrations/backfillStoreTimezoneAuthority.js";
 import type * as migrations_migrateAmountsToPesewas from "../migrations/migrateAmountsToPesewas.js";
 import type * as migrations_migratePosAmountsToPesewas from "../migrations/migratePosAmountsToPesewas.js";
 import type * as mtn_client from "../mtn/client.js";
@@ -562,6 +563,7 @@ import type * as storeFront_syntheticMonitor from "../storeFront/syntheticMonito
 import type * as storeFront_user from "../storeFront/user.js";
 import type * as storeFront_userOffers from "../storeFront/userOffers.js";
 import type * as storeFront_users from "../storeFront/users.js";
+import type * as storeTime_ensureTimezoneAuthority from "../storeTime/ensureTimezoneAuthority.js";
 import type * as storeTime_operatingPeriods from "../storeTime/operatingPeriods.js";
 import type * as storeTime_storeTimeAuthority from "../storeTime/storeTimeAuthority.js";
 import type * as types_payment from "../types/payment.js";
@@ -762,6 +764,7 @@ declare const fullApi: ApiFromModules<{
   "marketing/walkthroughRequests": typeof marketing_walkthroughRequests;
   "migrations/backfillAthenaUserNormalizedEmail": typeof migrations_backfillAthenaUserNormalizedEmail;
   "migrations/backfillStoreSchedules": typeof migrations_backfillStoreSchedules;
+  "migrations/backfillStoreTimezoneAuthority": typeof migrations_backfillStoreTimezoneAuthority;
   "migrations/migrateAmountsToPesewas": typeof migrations_migrateAmountsToPesewas;
   "migrations/migratePosAmountsToPesewas": typeof migrations_migratePosAmountsToPesewas;
   "mtn/client": typeof mtn_client;
@@ -1138,6 +1141,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/user": typeof storeFront_user;
   "storeFront/userOffers": typeof storeFront_userOffers;
   "storeFront/users": typeof storeFront_users;
+  "storeTime/ensureTimezoneAuthority": typeof storeTime_ensureTimezoneAuthority;
   "storeTime/operatingPeriods": typeof storeTime_operatingPeriods;
   "storeTime/storeTimeAuthority": typeof storeTime_storeTimeAuthority;
   "types/payment": typeof types_payment;

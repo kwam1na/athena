@@ -69,6 +69,32 @@ describe("AnimatedHeight", () => {
     );
   });
 
+  it("can animate from a collapsed height when content mounts", () => {
+    render(
+      <AnimatedHeight animateFromZero testId="animated-height">
+        <div>Summary</div>
+      </AnimatedHeight>,
+    );
+
+    const wrapper = screen.getByTestId("animated-height");
+    Object.defineProperty(wrapper, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ height: 0 }),
+    });
+
+    resizeCallback?.([{ contentRect: { height: 0, width: 400 } }]);
+    resizeCallback?.([{ contentRect: { height: 48, width: 400 } }]);
+
+    expect(wrapper).toHaveStyle({ height: "0px" });
+    expect(animate).toHaveBeenCalledWith(
+      wrapper,
+      expect.objectContaining({
+        duration: 240,
+        height: "48px",
+      }),
+    );
+  });
+
   it("updates immediately when motion is disabled", () => {
     render(
       <AnimatedHeight enabled={false} testId="animated-height">

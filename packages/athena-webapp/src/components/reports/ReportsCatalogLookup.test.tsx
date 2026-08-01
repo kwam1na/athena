@@ -22,7 +22,7 @@ vi.mock("convex/react", () => ({
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => ({
     activeStore: activeStoreId
-      ? { _id: activeStoreId as Id<"store"> }
+      ? { _id: activeStoreId as Id<"store">, currency: "GHS" }
       : null,
   }),
 }));
@@ -100,6 +100,10 @@ describe("ReportsCatalogLookup", () => {
       <ReportsCatalogLookup endDate="2026-07-29" startDate="2026-07-27" />,
     );
 
+    expect(
+      screen.getByTestId("reports-search-results-transition"),
+    ).toHaveAttribute("data-motion", "height");
+
     await user.type(
       screen.getByRole("searchbox", { name: "Search products" }),
       "body",
@@ -110,6 +114,7 @@ describe("ReportsCatalogLookup", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /BW-18/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /BW-20/ })).toBeInTheDocument();
+    expect(screen.getAllByText("GH₵120")).toHaveLength(2);
 
     await user.click(screen.getByRole("button", { name: /BW-18/ }));
 
@@ -181,7 +186,7 @@ describe("ReportsCatalogLookup", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
-        name: "View report for Fresh Look Contact Solution, 6N2Y-SZX-1D4",
+        name: "View report for Fresh Look Contact Solution, 6N2Y-SZX-1D4, net price GH₵120",
       }),
     ).toBeInTheDocument();
   });

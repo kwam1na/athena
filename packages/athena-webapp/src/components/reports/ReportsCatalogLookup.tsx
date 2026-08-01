@@ -3,6 +3,7 @@ import { useQuery } from "convex/react";
 import { ChevronRight, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { AnimatedHeight } from "@/components/common/AnimatedHeight";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
@@ -14,6 +15,7 @@ import {
   type ProductSkuSearchResultLike,
 } from "@/lib/skuSearch/productSkuSearchAdapters";
 import { api } from "~/convex/_generated/api";
+import { formatReportMoney } from "./reportFormat";
 
 type ProductSkuSearchResponse = {
   candidateOverflow: boolean;
@@ -155,13 +157,17 @@ export function ReportsCatalogLookup({
           ) : null}
         </div>
 
-        {hasQuery ? (
-          <div
-            aria-busy={isLoading}
-            className="max-h-[28rem] overflow-y-auto overscroll-contain border-t border-border"
-            id="reports-product-matches"
-          >
-            {isLoading ? (
+        <AnimatedHeight
+          animateFromZero
+          testId="reports-search-results-transition"
+        >
+          {hasQuery ? (
+            <div
+              aria-busy={isLoading}
+              className="max-h-[28rem] overflow-y-auto overscroll-contain border-t border-border"
+              id="reports-product-matches"
+            >
+              {isLoading ? (
               <p
                 className="px-layout-md py-layout-md text-sm text-muted-foreground"
                 role="status"
@@ -202,17 +208,21 @@ export function ReportsCatalogLookup({
                         {group.skus.map((option) => {
                           const skuLabel =
                             option.sku?.trim() || String(option.productSkuId);
+                          const netPrice = formatReportMoney(
+                            option.searchResult.price,
+                            activeStore?.currency ?? "USD",
+                          );
 
                           return (
                             <button
-                              aria-label={`View report for ${productName}, ${skuLabel}`}
+                              aria-label={`View report for ${productName}, ${skuLabel}, net price ${netPrice}`}
                               className="group flex min-h-12 w-full items-center justify-between gap-layout-md rounded-lg px-layout-sm py-layout-sm text-left outline-none transition-[background-color,transform] duration-100 hover:bg-accent active:scale-[0.99] active:bg-accent focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
                               key={option.productSkuId}
                               onClick={() => inspectSku(option.productSkuId)}
                               type="button"
                             >
                               <span className="min-w-0">
-                                <span className="block truncate text-sm font-normal tabular-nums text-foreground/80">
+                                <span className="block truncate text-xs font-medium tabular-nums text-muted-foreground">
                                   {skuLabel}
                                 </span>
                                 {option.subtitle ? (
@@ -221,10 +231,15 @@ export function ReportsCatalogLookup({
                                   </span>
                                 ) : null}
                               </span>
-                              <ChevronRight
-                                aria-hidden="true"
-                                className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transition-none"
-                              />
+                              <span className="flex shrink-0 items-center gap-layout-sm">
+                                <span className="font-numeric text-sm tabular-nums text-foreground">
+                                  {netPrice}
+                                </span>
+                                <ChevronRight
+                                  aria-hidden="true"
+                                  className="h-4 w-4 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transition-none"
+                                />
+                              </span>
                             </button>
                           );
                         })}
@@ -239,9 +254,10 @@ export function ReportsCatalogLookup({
                   </p>
                 ) : null}
               </div>
-            )}
-          </div>
-        ) : null}
+              )}
+            </div>
+          ) : null}
+        </AnimatedHeight>
       </div>
     </section>
   );

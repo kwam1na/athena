@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Athena Screen Redact",
+  "version": "1.0.0",
+  "description": "Masks currency amounts with X's so the admin app can be screen-recorded safely.",
+  "permissions": ["storage", "scripting", "activeTab"],
+  "host_permissions": [
+    "https://athena.wigclub.store/*",
+    "http://localhost/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Athena Screen Redact"
+  },
+  "commands": {
+    "toggle-redaction": {
+      "suggested_key": { "default": "Alt+Shift+M" },
+      "description": "Toggle redaction on the current tab"
+    }
+  },
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://athena.wigclub.store/*", "http://localhost/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ]
+}

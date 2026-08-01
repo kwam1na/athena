@@ -1,0 +1,50 @@
+<!doctype html>
+<meta charset="utf-8" />
+<style>
+  body {
+    width: 240px;
+    margin: 0;
+    padding: 12px;
+    font: 13px/1.4 ui-sans-serif, system-ui, sans-serif;
+    color: #111;
+  }
+  h1 {
+    font-size: 13px;
+    margin: 0 0 10px;
+  }
+  label {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin-bottom: 10px;
+  }
+  span small {
+    display: block;
+    color: #666;
+  }
+  footer {
+    color: #666;
+    border-top: 1px solid #eee;
+    padding-top: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1b1b1b; color: #eee; }
+    span small, footer { color: #aaa; }
+    footer { border-color: #333; }
+  }
+</style>
+<h1>Athena Screen Redact</h1>
+<label>
+  <input type="checkbox" id="enabled" />
+  <span>Mask amounts<small>Digits become X's</small></span>
+</label>
+<label>
+  <input type="checkbox" id="aggressive" />
+  <span>Include unlabelled numbers<small>1,234.56 with no currency symbol</small></span>
+</label>
+<label>
+  <input type="checkbox" id="blurMedia" />
+  <span>Blur images and charts</span>
+</label>
+<footer>Toggle anytime with Alt+Shift+M.</footer>
+<script src="popup.js"></script>

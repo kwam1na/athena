@@ -1,20 +1,65 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ReportOverviewData } from "~/shared/reportsContract";
 
 const useQuery = vi.fn();
+const navigate = vi.fn();
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQuery(...args),
+}));
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    params,
+    search,
+    to,
+    ...props
+  }: {
+    children?: React.ReactNode;
+    params?: Record<string, string>;
+    search?: Record<string, string>;
+    to: string;
+  }) => (
+    <a
+      data-params={JSON.stringify(params)}
+      data-search={JSON.stringify(search)}
+      href={to}
+      {...props}
+    >
+      {children}
+    </a>
+  ),
+  useNavigate: () => navigate,
+  useParams: () => ({ orgUrlSlug: "wigclub", storeUrlSlug: "wigclub" }),
 }));
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => ({ activeStore: { _id: "store-1", currency: "USD" }, isLoadingStores: false }),
 }));
 vi.mock("recharts", () => ({
-  Area: () => null,
+  Area: ({
+    activeDot,
+  }: {
+    activeDot?: (props: Record<string, unknown>) => React.ReactNode;
+  }) =>
+    typeof activeDot === "function"
+      ? activeDot({
+          cx: 20,
+          cy: 20,
+          payload: {
+            axisLabel: "Mon, Jul 27",
+            chartIndex: 1,
+            label: "Mon, Jul 27, 2026",
+            netSalesMinor: 90_00,
+            operatingDate: "2026-07-27",
+            status: "provisional",
+            unitsSold: 9,
+          },
+        })
+      : null,
   AreaChart: ({ children }: { children?: React.ReactNode }) => <svg>{children}</svg>,
   CartesianGrid: () => null,
   Legend: () => null,
@@ -53,6 +98,7 @@ const fixture: ReportOverviewData = {
   weekToDate: snapshot({ dayCount: 5, netSalesMinor: 400_00 }),
   priorWeek: snapshot({ dayCount: 7, netSalesMinor: 350_00 }),
   trailing30: snapshot({ dayCount: 30, netSalesMinor: 2500_00, grossProfitMinor: null }),
+  trailing3Months: snapshot({ dayCount: 82, netSalesMinor: 7000_00 }),
   comparisons: {
     netSalesVsPriorWeekBp: 1250,
     unitsSoldVsPriorWeekBp: null,
@@ -85,13 +131,45 @@ function renderOverview(initialWindow: ReportOverviewWindow = "today") {
 }
 
 describe("ReportsOverviewView", () => {
-  it("discloses the overview refresh cadence and snapshot time", () => {
+  beforeEach(() => {
+    navigate.mockReset();
+  });
+
+  it("opens a selected chart day in the item sales workspace", async () => {
+    const user = userEvent.setup();
+    useQuery.mockReturnValue(fixture);
+    renderOverview();
+
+    await user.click(
+      screen.getByRole("link", {
+        name: "View item sales for Mon, Jul 27, 2026",
+      }),
+    );
+
+    expect(navigate).toHaveBeenCalledWith({
+      params: {
+        orgUrlSlug: "wigclub",
+        storeUrlSlug: "wigclub",
+      },
+      search: {
+        o: expect.any(String),
+        periodDate: "2026-07-27",
+        periodType: "day",
+      },
+      to: "/$orgUrlSlug/store/$storeUrlSlug/reports/items",
+    });
+  });
+
+  it("discloses the overview processing delay and snapshot time", () => {
     useQuery.mockReturnValue(fixture);
     renderOverview();
 
     const freshness = screen.getByTestId("report-freshness");
     expect(freshness).toHaveTextContent(
-      "Report totals update about every 5 minutes",
+      "Day totals update first. Overview data may take about 5 minutes to catch up.",
+    );
+    expect(freshness).not.toHaveTextContent(
+      "New activity may take about 5 minutes to appear",
     );
     expect(freshness).toHaveTextContent("Last updated");
     expect(freshness.querySelector("time")).toHaveAttribute(
@@ -110,14 +188,28 @@ describe("ReportsOverviewView", () => {
     expect(screen.queryByText("$400")).not.toBeInTheDocument();
     expect(screen.queryByText("$2,500")).not.toBeInTheDocument();
 
-    // Reporting status is window-independent and reads as one informational
-    // sentence rather than four operational metric cards.
-    expect(screen.getByTestId("report-trust-summary")).toHaveTextContent(
-      "Last 30 days · 25 of 30 reported days reconciled · 3 awaiting reconciliation · 2 amended after close · Oldest unsettled Wed, Jul 1, 2026",
+    const transactionsLink = screen.getByRole("link", {
+      name: "Open transactions",
+    });
+    expect(JSON.parse(transactionsLink.dataset.search ?? "{}")).toEqual({
+      endDate: "2026-07-27",
+      o: expect.any(String),
+      order: "oldestFirst",
+      startDate: "2026-07-27",
+    });
+    expect(JSON.parse(transactionsLink.dataset.params ?? "{}")).toEqual({
+      orgUrlSlug: "wigclub",
+      storeUrlSlug: "wigclub",
+    });
+
+    // Reporting status is window-independent and belongs to the fixed
+    // 30-day trend heading, not the selectable KPI window above it.
+    const trendHeading = screen.getByRole("heading", { name: "Net sales" });
+    const trustSummary = screen.getByTestId("report-trust-summary");
+    expect(trustSummary).toHaveTextContent(
+      "30-day trend · 25 of 30 reported days reconciled · 3 awaiting reconciliation · 2 amended after close · Oldest unsettled Wed, Jul 1, 2026",
     );
-    expect(
-      screen.getByRole("heading", { name: "Net sales" }),
-    ).toBeInTheDocument();
+    expect(trendHeading.parentElement).toContainElement(trustSummary);
     expect(
       screen.queryByText("Net sales — last 30 days"),
     ).not.toBeInTheDocument();
@@ -131,6 +223,9 @@ describe("ReportsOverviewView", () => {
 
     await user.click(screen.getByRole("tab", { name: "Trailing 30 days" }));
     expect(screen.getByText("$2,500")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Trailing 3 months" }));
+    expect(screen.getByText("$7,000")).toBeInTheDocument();
   });
 
   it("describes the current open day as in progress", () => {
@@ -151,7 +246,7 @@ describe("ReportsOverviewView", () => {
     renderOverview();
 
     expect(screen.getByTestId("report-trust-summary")).toHaveTextContent(
-      "Last 30 days · 27 of 28 reported days reconciled · Today in progress",
+      "30-day trend · 27 of 28 reported days reconciled · Today in progress",
     );
   });
 
@@ -165,6 +260,140 @@ describe("ReportsOverviewView", () => {
     // 400 vs prior week 350 => +14%, rendered with the prior-window named.
     // Both comparable metrics (net sales, units sold) carry it.
     expect(screen.getAllByText(/prior week/i).length).toBeGreaterThan(0);
+  });
+
+  it("presents unsettled reporting state once at the period level", async () => {
+    const user = userEvent.setup();
+    useQuery.mockReturnValue({
+      ...fixture,
+      today: snapshot({ unsettledDayCount: 1 }),
+      weekToDate: snapshot({ dayCount: 5, unsettledDayCount: 1 }),
+    });
+    renderOverview();
+
+    expect(screen.getByTestId("report-period-status")).toHaveTextContent(
+      "In progress",
+    );
+    expect(screen.getByTestId("report-period-status")).not.toHaveTextContent(
+      "Today",
+    );
+    expect(screen.queryByText(/day\\(s\\) unsettled/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Week to date" }));
+
+    expect(screen.getByTestId("report-period-status")).toHaveTextContent(
+      "1 of 5 reported days awaiting reconciliation",
+    );
+    expect(screen.queryByText(/day\\(s\\) unsettled/i)).not.toBeInTheDocument();
+  });
+
+  it("links a closed current operating day to its EOD Review", async () => {
+    const user = userEvent.setup();
+    useQuery.mockReturnValue({
+      ...fixture,
+      dailyTrend: [
+        ...fixture.dailyTrend,
+        {
+          operatingDate: "2026-07-30",
+          netSalesMinor: 100_00,
+          status: "reconciled",
+        },
+      ],
+    });
+    renderOverview();
+
+    expect(screen.getByTestId("report-period-status")).toHaveTextContent(
+      "Closed",
+    );
+    const eodReviewLink = screen.getByRole("link", {
+      name: "View EOD Review",
+    });
+    expect(eodReviewLink).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+    );
+    expect(JSON.parse(eodReviewLink.dataset.params ?? "{}")).toEqual({
+      orgUrlSlug: "wigclub",
+      storeUrlSlug: "wigclub",
+    });
+    expect(JSON.parse(eodReviewLink.dataset.search ?? "{}")).toEqual({
+      o: expect.any(String),
+      operatingDate: "2026-07-30",
+    });
+    expect(
+      screen.getByTestId("report-period-status-transition"),
+    ).toHaveAttribute("data-motion", "height");
+    expect(eodReviewLink.closest('[data-motion="period-status"]')).not.toBeNull();
+
+    await user.click(screen.getByRole("tab", { name: "Week to date" }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("link", { name: "View EOD Review" }),
+      ).not.toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Today" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("link", { name: "View EOD Review" }),
+      ).toBeInTheDocument(),
+    );
+    expect(
+      screen
+        .getByRole("link", { name: "View EOD Review" })
+        .closest('[data-motion="period-status"]'),
+    ).not.toBeNull();
+  });
+
+  it("links each overview window to transactions from that period's start date", async () => {
+    const user = userEvent.setup();
+    useQuery.mockReturnValue({
+      ...fixture,
+      dailyTrend: [
+        ...fixture.dailyTrend,
+        {
+          operatingDate: "2026-07-30",
+          netSalesMinor: 100_00,
+          status: "open",
+        },
+      ],
+    });
+    renderOverview();
+
+    const linkedRange = () => {
+      const link = screen.getByRole("link", { name: "Open transactions" });
+      const { endDate, order, startDate } = JSON.parse(
+        link.dataset.search ?? "{}",
+      );
+      return { endDate, order, startDate };
+    };
+
+    expect(linkedRange()).toEqual({
+      endDate: "2026-07-30",
+      order: "oldestFirst",
+      startDate: "2026-07-30",
+    });
+
+    await user.click(screen.getByRole("tab", { name: "Week to date" }));
+    expect(linkedRange()).toEqual({
+      endDate: "2026-07-30",
+      order: "oldestFirst",
+      startDate: "2026-07-27",
+    });
+
+    await user.click(screen.getByRole("tab", { name: "Trailing 30 days" }));
+    expect(linkedRange()).toEqual({
+      endDate: "2026-07-30",
+      order: "oldestFirst",
+      startDate: "2026-07-01",
+    });
+
+    await user.click(screen.getByRole("tab", { name: "Trailing 3 months" }));
+    expect(linkedRange()).toEqual({
+      endDate: "2026-07-30",
+      order: "oldestFirst",
+      startDate: "2026-05-01",
+    });
   });
 
   it("names an empty prior window instead of rendering -100%", async () => {

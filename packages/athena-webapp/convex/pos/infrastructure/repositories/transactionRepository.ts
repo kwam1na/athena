@@ -269,31 +269,44 @@ export async function listCompletedTransactions(
   ctx: QueryCtx,
   args: {
     completedFrom?: number;
+    completedTo?: number;
+    order?: "oldestFirst" | "newestFirst";
     registerSessionId?: Id<"registerSession">;
     storeId: Id<"store">;
     limit?: number;
   },
 ) {
   const limit = args.limit ?? 50;
+  const indexOrder = args.order === "oldestFirst" ? "asc" : "desc";
   if (args.registerSessionId) {
     const [completed, voided] = await Promise.all(
       (["completed", "void"] as const).map((status) =>
         ctx.db
           .query("posTransaction")
-          .withIndex("by_storeId_status_registerSessionId_completedAt", (q) =>
-            q
-              .eq("storeId", args.storeId)
-              .eq("status", status)
-              .eq("registerSessionId", args.registerSessionId)
-              .gte("completedAt", args.completedFrom ?? 0),
+          .withIndex(
+            "by_storeId_status_registerSessionId_completedAt",
+            (q) => {
+              const range = q
+                .eq("storeId", args.storeId)
+                .eq("status", status)
+                .eq("registerSessionId", args.registerSessionId)
+                .gte("completedAt", args.completedFrom ?? 0);
+              return args.completedTo === undefined
+                ? range
+                : range.lte("completedAt", args.completedTo);
+            },
           )
-          .order("desc")
+          .order(indexOrder)
           .take(limit),
       ),
     );
 
     return [...completed, ...voided]
-      .sort((first, second) => second.completedAt - first.completedAt)
+      .sort((first, second) =>
+        indexOrder === "asc"
+          ? first.completedAt - second.completedAt
+          : second.completedAt - first.completedAt,
+      )
       .slice(0, limit);
   }
 
@@ -301,19 +314,26 @@ export async function listCompletedTransactions(
     (["completed", "void"] as const).map((status) =>
       ctx.db
         .query("posTransaction")
-        .withIndex("by_storeId_status_completedAt", (q) =>
-          q
-            .eq("storeId", args.storeId)
-            .eq("status", status)
-            .gte("completedAt", args.completedFrom ?? 0),
-        )
-        .order("desc")
+        .withIndex("by_storeId_status_completedAt", (q) => {
+          const range = q
+              .eq("storeId", args.storeId)
+              .eq("status", status)
+              .gte("completedAt", args.completedFrom ?? 0);
+          return args.completedTo === undefined
+            ? range
+            : range.lte("completedAt", args.completedTo);
+        })
+        .order(indexOrder)
         .take(limit),
     ),
   );
 
   return [...completed, ...voided]
-    .sort((first, second) => second.completedAt - first.completedAt)
+    .sort((first, second) =>
+      indexOrder === "asc"
+        ? first.completedAt - second.completedAt
+        : second.completedAt - first.completedAt,
+    )
     .slice(0, limit);
 }
 

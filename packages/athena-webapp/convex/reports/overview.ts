@@ -2,6 +2,7 @@ import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import {
   weekPeriodKey,
+  trailingThreeMonthsStart,
   type ReportDayMetrics,
   type ReportOverviewData,
   type ReportPeriodSnapshot,
@@ -24,11 +25,10 @@ import { addDaysToDate } from "./rollups";
  */
 
 /**
- * Day docs read per rebuild. One doc per operating day, so 45 docs reach at
- * least 45 calendar days back — comfortably covering the trailing-30 window
- * and the prior ISO week (at most 13 days back) in a single index read.
+ * Day docs read per rebuild. One doc per operating day; 92 covers the longest
+ * possible three-calendar-month window (for example May 1 through July 31).
  */
-export const OVERVIEW_DAY_SCAN_LIMIT = 45;
+export const OVERVIEW_DAY_SCAN_LIMIT = 92;
 
 export const OVERVIEW_TREND_DAYS = 30;
 
@@ -154,6 +154,7 @@ export function buildOverviewData(args: {
       weekToDate: emptySnapshot(),
       priorWeek: emptySnapshot(),
       trailing30: emptySnapshot(),
+      trailing3Months: emptySnapshot(),
       comparisons: { netSalesVsPriorWeekBp: null, unitsSoldVsPriorWeekBp: null },
       dailyTrend: [],
       trust: { reconciledDays: 0, provisionalDays: 0, amendedDays: 0 },
@@ -170,6 +171,12 @@ export function buildOverviewData(args: {
   const trailingStart = addDaysToDate(anchor, -(OVERVIEW_TREND_DAYS - 1));
   const trailing30Days = days.filter(
     (day) => day.operatingDate >= trailingStart && day.operatingDate <= anchor,
+  );
+  const trailing3MonthsStart = trailingThreeMonthsStart(anchor);
+  const trailing3MonthsDays = days.filter(
+    (day) =>
+      day.operatingDate >= trailing3MonthsStart &&
+      day.operatingDate <= anchor,
   );
 
   const currentWeekKey = weekPeriodKey(anchor);
@@ -191,6 +198,7 @@ export function buildOverviewData(args: {
     operatingDate: day.operatingDate,
     netSalesMinor: day.netSalesMinor,
     status: day.status,
+    unitsSold: day.unitsSold,
   }));
 
   return {
@@ -203,6 +211,7 @@ export function buildOverviewData(args: {
     weekToDate,
     priorWeek,
     trailing30: snapshotForDays(trailing30Days),
+    trailing3Months: snapshotForDays(trailing3MonthsDays),
     comparisons: {
       netSalesVsPriorWeekBp: comparisonBp(
         weekToDate.netSalesMinor,

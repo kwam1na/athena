@@ -80,6 +80,7 @@ describe("reports contract ↔ schema parity", () => {
       "weekToDate",
       "priorWeek",
       "trailing30",
+      "trailing3Months",
     ] as const) {
       const snapshot = fieldsOf(fields[period]);
       for (const key of REPORT_DAY_METRIC_KEYS) {

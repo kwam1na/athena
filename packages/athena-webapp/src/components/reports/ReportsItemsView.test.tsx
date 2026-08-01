@@ -72,6 +72,7 @@ describe("ReportsItemsView", () => {
         },
       ],
       continueCursor: null,
+      totalNetSalesMinor: 1600,
       totalUnitsSold: 16,
       totalTransactions: 7,
       updatedAt: null,
@@ -80,18 +81,23 @@ describe("ReportsItemsView", () => {
     render(<ReportsItemsView {...baseProps} />);
 
     const total = screen.getByTestId("items-period-units-sold");
-    expect(within(total).getByText("Total units sold")).toBeInTheDocument();
+    expect(within(total).getByText("Units sold")).toBeInTheDocument();
     expect(
       within(total).getByTestId("items-period-units-number"),
     ).toHaveAttribute("data-value", "16");
     const transactions = screen.getByTestId("items-period-transactions");
     expect(
-      within(transactions).getByText("Total transactions"),
+      within(transactions).getByText("Transactions"),
     ).toBeInTheDocument();
     expect(
       within(transactions).getByTestId("items-period-transactions-number"),
     ).toHaveAttribute("data-value", "7");
-    expect(total.parentElement?.parentElement).toHaveClass("pt-layout-sm");
+    const netSales = screen.getByTestId("items-period-net-sales");
+    expect(within(netSales).getByText("Net sales")).toBeInTheDocument();
+    expect(within(netSales).getByText("$16")).toBeInTheDocument();
+    const workspace = screen.getByTestId("items-report-workspace");
+    expect(workspace).toContainElement(total);
+    expect(workspace).not.toContainElement(screen.getByRole("table"));
   });
 
   it("flips both period totals when refreshed values settle", () => {
@@ -153,10 +159,13 @@ describe("ReportsItemsView", () => {
     expect(
       screen.queryByTestId("items-period-transactions"),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("No SKU activity")).toBeInTheDocument();
+    expect(screen.getByTestId("items-period-metrics-reserved")).toHaveClass(
+      "invisible",
+    );
+    expect(screen.getByText("No item sales")).toBeInTheDocument();
   });
 
-  it("discloses the item rollup refresh cadence and snapshot time", () => {
+  it("discloses the item rollup processing delay and snapshot time", () => {
     const updatedAt = Date.UTC(2026, 6, 29, 15, 30);
     useQuery.mockReturnValue({
       rows: [],
@@ -168,7 +177,10 @@ describe("ReportsItemsView", () => {
 
     const freshness = screen.getByTestId("report-freshness");
     expect(freshness).toHaveTextContent(
-      "Report totals update about every 5 minutes",
+      "Day totals update first. Item data may take about 5 minutes to catch up.",
+    );
+    expect(freshness).not.toHaveTextContent(
+      "New activity may take about 5 minutes to appear",
     );
     expect(freshness.querySelector("time")).toHaveAttribute(
       "datetime",
@@ -355,12 +367,14 @@ describe("ReportsItemsView", () => {
     expect(onCursorChange).toHaveBeenCalledWith("cursor-page-2", []);
   });
 
-  it("switches sort mode via the revenue/units toggle", async () => {
+  it("switches sort mode via the revenue/units sold toggle", async () => {
     const onSortByChange = vi.fn();
     useQuery.mockReturnValue({ rows: [], continueCursor: null });
 
     render(<ReportsItemsView {...baseProps} onSortByChange={onSortByChange} />);
-    await userEvent.click(screen.getByRole("button", { name: "Units" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Units sold" }),
+    );
 
     expect(onSortByChange).toHaveBeenCalledWith("units");
   });
@@ -372,7 +386,7 @@ describe("ReportsItemsView", () => {
 
     const reportControls = screen.getByTestId("items-report-controls");
     expect(within(reportControls).getByText("Period")).toBeInTheDocument();
-    expect(within(reportControls).getByText("Anchor date")).toBeInTheDocument();
+    expect(within(reportControls).getByText("Date")).toBeInTheDocument();
     const periodControls = within(reportControls).getByRole("group", {
       name: "Period",
     });
@@ -381,7 +395,7 @@ describe("ReportsItemsView", () => {
     ).toBeInTheDocument();
     expect(
       within(periodControls).getByRole("button", {
-        name: /change anchor date/i,
+        name: /change date/i,
       }),
     ).toBeInTheDocument();
 
@@ -397,6 +411,49 @@ describe("ReportsItemsView", () => {
       "bg-primary-soft",
       "text-primary",
     );
+  });
+
+  it("separates period performance from the SKU results table", () => {
+    useQuery.mockReturnValue({
+      rows: [
+        {
+          productSkuId: "sku-1",
+          periodKey: "d:2026-07-28",
+          unitsSold: 1,
+          unitsReturned: 0,
+          grossSalesMinor: 100,
+          netSalesMinor: 100,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: 50,
+        },
+      ],
+      continueCursor: null,
+      totalUnitsSold: 1,
+      totalTransactions: 1,
+      updatedAt: Date.UTC(2026, 6, 28, 12),
+    });
+
+    render(<ReportsItemsView {...baseProps} />);
+
+    const performance = screen.getByRole("region", {
+      name: "Item sales",
+    });
+    expect(performance).toHaveTextContent(
+      "Choose a reporting period and rank items by revenue or units sold.",
+    );
+    const results = screen.getByRole("region", {
+      name: "Item sales results",
+    });
+    expect(performance).toContainElement(
+      screen.getByTestId("items-report-controls"),
+    );
+    expect(performance).toContainElement(
+      screen.getByTestId("items-period-units-sold"),
+    );
+    expect(performance).toContainElement(screen.getByTestId("report-freshness"));
+    expect(performance).not.toContainElement(screen.getByRole("table"));
+    expect(results).toContainElement(screen.getByRole("table"));
   });
 
   it("uses the shared animated data surface for full and empty states", async () => {
@@ -427,12 +484,10 @@ describe("ReportsItemsView", () => {
     expect(resultsState).toHaveAttribute("data-state", "data");
     expect(resultsState).toHaveAttribute("data-motion", "data-state");
     expect(screen.getByRole("table")).toBeInTheDocument();
-    const dataMotionState = screen
-      .getByTestId("items-period-units-sold")
-      .closest<HTMLDivElement>('[data-state="data"]');
-    expect(dataMotionState).not.toBeNull();
-    expect(resultsState).toContainElement(dataMotionState);
-    expect(dataMotionState).toContainElement(screen.getByRole("table"));
+    expect(resultsState).toContainElement(screen.getByRole("table"));
+    expect(resultsState).not.toContainElement(
+      screen.getByTestId("items-period-units-sold"),
+    );
 
     result = {
       ...result,
@@ -444,7 +499,7 @@ describe("ReportsItemsView", () => {
 
     expect(resultsState).toHaveAttribute("data-state", "empty");
     await waitFor(() => {
-      expect(screen.getByText("No SKU activity")).toBeInTheDocument();
+      expect(screen.getByText("No item sales")).toBeInTheDocument();
       expect(
         screen.queryByTestId("items-period-units-sold"),
       ).not.toBeInTheDocument();
@@ -474,7 +529,7 @@ describe("ReportsItemsView", () => {
     expect(resultsState).toHaveAttribute("data-state", "data");
     await waitFor(() => {
       expect(screen.getByRole("table")).toBeInTheDocument();
-      expect(screen.queryByText("No SKU activity")).not.toBeInTheDocument();
+      expect(screen.queryByText("No item sales")).not.toBeInTheDocument();
     });
   });
 
@@ -490,7 +545,7 @@ describe("ReportsItemsView", () => {
     );
 
     expect(screen.getByTestId("items-period-range")).toHaveTextContent(
-      "Reporting range Jul 1–31, 2026",
+      "Reporting range Wed, Jul 1–Fri, Jul 31, 2026",
     );
   });
 
@@ -506,7 +561,7 @@ describe("ReportsItemsView", () => {
     );
 
     expect(screen.getByTestId("items-period-range")).toHaveTextContent(
-      "Reporting range Jul 13–19, 2026",
+      "Reporting range Mon, Jul 13–Sun, Jul 19, 2026",
     );
   });
 

@@ -215,6 +215,16 @@ export function monthPeriodKey(operatingDate: string): ReportPeriodKey {
   return `m:${operatingDate.slice(0, 7)}`;
 }
 
+/** First operating date of the three-calendar-month window ending at anchor. */
+export function trailingThreeMonthsStart(anchorDate: string): string {
+  const anchor = new Date(`${anchorDate}T00:00:00.000Z`);
+  return new Date(
+    Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth() - 2, 1),
+  )
+    .toISOString()
+    .slice(0, 10);
+}
+
 /**
  * ISO-8601 week key for an operating-date label. Operating dates are calendar
  * labels, so UTC math over the label is correct by construction — no store
@@ -269,6 +279,8 @@ export type ReportTrendPoint = {
   operatingDate: string;
   netSalesMinor: number;
   status: ReportDayStatus;
+  /** Optional while existing overview documents are refreshed by the sweeper. */
+  unitsSold?: number;
 };
 
 export type ReportTrustSummary = {
@@ -286,6 +298,7 @@ export type ReportOverviewData = {
   weekToDate: ReportPeriodSnapshot;
   priorWeek: ReportPeriodSnapshot;
   trailing30: ReportPeriodSnapshot;
+  trailing3Months: ReportPeriodSnapshot;
   comparisons: {
     netSalesVsPriorWeekBp: number | null;
     unitsSoldVsPriorWeekBp: number | null;
@@ -337,6 +350,7 @@ export type ReportSkuIdentity = {
    * the `productSku` document, so it costs no extra read.
    */
   productId?: string;
+  quantityAvailable?: number;
 };
 
 export type ReportSkuPeriodRow = ReportSkuDayMetrics & {

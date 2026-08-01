@@ -8,8 +8,10 @@ const reportUpdatedAtFormatter = new Intl.DateTimeFormat("en-US", {
 });
 
 export function ReportFreshness({
+  delayedDataLabel,
   updatedAt,
 }: {
+  delayedDataLabel: string;
   updatedAt: number | null | undefined;
 }) {
   return (
@@ -18,7 +20,10 @@ export function ReportFreshness({
       data-testid="report-freshness"
     >
       <Clock3 aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-      <span>Report totals update about every 5 minutes</span>
+      <span>
+        Day totals update first. {delayedDataLabel} may take about 5 minutes to
+        catch up.
+      </span>
       {updatedAt !== null && updatedAt !== undefined ? (
         <>
           <span aria-hidden="true">·</span>

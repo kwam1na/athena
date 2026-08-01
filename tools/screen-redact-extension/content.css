@@ -1,0 +1,28 @@
+/* Money inputs keep their real value; only the rendering is hidden. */
+input.athena-redact-input {
+  -webkit-text-security: disc;
+  text-security: disc;
+}
+
+/* Opt-in blurring for media and anything tagged data-redact="blur". */
+.athena-redact-blur-media img,
+.athena-redact-blur-media canvas,
+.athena-redact-on [data-redact="blur"] {
+  filter: blur(6px);
+}
+
+/* Small always-visible marker so you never record while thinking it is off. */
+.athena-redact-on::after {
+  /* content: "REDACTED"; */
+  position: fixed;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2147483647;
+  pointer-events: none;
+  font: 600 10px/1 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  padding: 4px 6px;
+  border-radius: 4px;
+  color: #fff;
+  background: rgba(17, 17, 17, 0.55);
+}

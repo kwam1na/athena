@@ -16,11 +16,13 @@ const MEASUREMENT_TOLERANCE_PX = 0.5;
  * interrupted safely from their currently rendered height.
  */
 export function AnimatedHeight({
+  animateFromZero = false,
   children,
   className,
   enabled = true,
   testId,
 }: {
+  animateFromZero?: boolean;
   children: ReactNode;
   className?: string;
   enabled?: boolean;
@@ -75,7 +77,7 @@ export function AnimatedHeight({
       }
 
       wrapper.style.height = `${
-        renderedHeight > 0 ? renderedHeight : nextHeight
+        renderedHeight > 0 || animateFromZero ? renderedHeight : nextHeight
       }px`;
       animationRef.current = animate(wrapper, {
         duration: HEIGHT_TRANSITION_DURATION_MS,
@@ -95,7 +97,7 @@ export function AnimatedHeight({
       animationRef.current?.cancel();
       animationRef.current = null;
     };
-  }, [enabled, shouldReduceMotion]);
+  }, [animateFromZero, enabled, shouldReduceMotion]);
 
   return (
     <div

@@ -15,6 +15,6 @@ export const create = mutation({
       ...args,
     });
 
-    return await ctx.db.get(id);
+    return await ctx.db.get("supportTicket", id);
   },
 });

@@ -19,6 +19,7 @@ import {
   storeScheduleWindowSchema,
 } from "../schemas/inventory";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
+import { ensureTimezoneAuthorityForScheduleWithCtx } from "../storeTime/ensureTimezoneAuthority";
 
 type StoreScheduleInput = {
   storeId: Id<"store">;
@@ -482,6 +483,12 @@ export async function upsertStoreScheduleCommandWithCtx(
   }
 
   const saved = await ctx.db.get(entity, scheduleId);
+  if (saved && actorUserId && saved.status === "active") {
+    await ensureTimezoneAuthorityForScheduleWithCtx(ctx, {
+      actorUserId,
+      schedule: saved,
+    });
+  }
   return ok(toSummary(saved ?? { ...draft, _id: scheduleId }));
 }
 

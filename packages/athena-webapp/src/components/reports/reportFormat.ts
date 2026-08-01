@@ -136,6 +136,7 @@ export function formatOperatingDate(operatingDate: string): string {
 export function formatReportDateRange(
   startDate: string,
   endDate: string,
+  options: { includeWeekday?: boolean } = {},
 ): string {
   const start = getLocalDateFromOperatingDate(startDate);
   const end = getLocalDateFromOperatingDate(endDate);
@@ -147,6 +148,23 @@ export function formatReportDateRange(
   }
 
   const sameYear = start.getFullYear() === end.getFullYear();
+
+  if (options.includeWeekday) {
+    const startLabel = start.toLocaleDateString("en-US", {
+      day: "numeric",
+      month: "short",
+      weekday: "short",
+      year: sameYear ? undefined : "numeric",
+    });
+    const endLabel = end.toLocaleDateString("en-US", {
+      day: "numeric",
+      month: "short",
+      weekday: "short",
+      year: "numeric",
+    });
+    return `${startLabel}–${endLabel}`;
+  }
+
   const sameMonth = sameYear && start.getMonth() === end.getMonth();
   const startLabel = start.toLocaleDateString("en-US", {
     day: "numeric",

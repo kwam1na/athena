@@ -1,4 +1,5 @@
 // convex/migrations/migrateAmountsToPesewas.ts
+/* eslint-disable @convex-dev/no-collect-in-query -- Legacy one-shot maintenance migrations intentionally inspect each target table in full so no pre-cutoff money rows are silently left in mixed units. */
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import { toDisplayAmount, toPesewas } from "../lib/currency";
@@ -33,7 +34,7 @@ export const migrateOnlineOrders = internalMutation({
       if (order.paymentDue !== undefined) {
         // updates.paymentDue = toDisplayAmount(order.paymentDue);
       }
-      await ctx.db.patch(order._id, updates);
+      await ctx.db.patch("onlineOrder", order._id, updates);
       migrated++;
     }
 
@@ -65,7 +66,7 @@ export const migrateCheckoutSessions = internalMutation({
       if (session.deliveryFee !== null && session.deliveryFee !== undefined) {
         updates.deliveryFee = toPesewas(session.deliveryFee);
       }
-      await ctx.db.patch(session._id, updates);
+      await ctx.db.patch("checkoutSession", session._id, updates);
       migrated++;
     }
 
@@ -122,7 +123,7 @@ export const migrateStoreConfigs = internalMutation({
         },
       };
 
-      await ctx.db.patch(store._id, { config: nextConfig });
+      await ctx.db.patch("store", store._id, { config: nextConfig });
       migrated++;
 
       console.log(
@@ -166,7 +167,7 @@ export const migrateProductSkuPrices = internalMutation({
         updates.unitCost = toPesewas(sku.unitCost);
       }
 
-      await ctx.db.patch(sku._id, updates);
+      await ctx.db.patch("productSku", sku._id, updates);
       migrated++;
     }
 
@@ -192,7 +193,9 @@ export const migrateBagAndSessionItems = internalMutation({
         continue;
       }
       if (item.price !== undefined && item.price !== null) {
-        await ctx.db.patch(item._id, { price: toPesewas(item.price) });
+        await ctx.db.patch("bagItem", item._id, {
+          price: toPesewas(item.price),
+        });
         migrated++;
       }
     }
@@ -208,7 +211,9 @@ export const migrateBagAndSessionItems = internalMutation({
         continue;
       }
       if (item.price !== undefined) {
-        await ctx.db.patch(item._id, { price: toPesewas(item.price) });
+        await ctx.db.patch("checkoutSessionItem", item._id, {
+          price: toPesewas(item.price),
+        });
         migrated++;
       }
     }
@@ -224,7 +229,9 @@ export const migrateBagAndSessionItems = internalMutation({
         continue;
       }
       if (item.price !== undefined) {
-        await ctx.db.patch(item._id, { price: toPesewas(item.price) });
+        await ctx.db.patch("onlineOrderItem", item._id, {
+          price: toPesewas(item.price),
+        });
         migrated++;
       }
     }
