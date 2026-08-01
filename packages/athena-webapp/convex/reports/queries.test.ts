@@ -170,6 +170,19 @@ describe("getOverview", () => {
         },
       }),
     );
+    await t.run((ctx) =>
+      ctx.db.insert("reportDay", {
+        storeId,
+        operatingDate: "2026-07-28",
+        currency: "GHS",
+        status: "open",
+        ...dayMetrics({ unitsSold: 10 }),
+        foldVersion: 1,
+        factCount: 3,
+        lastFactRecordedAt: 1000,
+        flags: dayFlags,
+      }),
+    );
 
     const result = await t.run((ctx) =>
       handlerOf(getOverview)(ctx, { storeId }),
@@ -181,6 +194,8 @@ describe("getOverview", () => {
     );
     expect(result).toMatchObject({ updatedAt: 1000, currency: "GHS" });
     expect(result?.yesterday).toEqual(emptySnapshot());
+    expect(result?.trailing3Months.netSalesMinor).toBe(900);
+    expect(result?.dailyTrend[0]?.unitsSold).toBe(10);
     expect(result).not.toHaveProperty("storeId");
   });
 
@@ -451,6 +466,7 @@ describe("listPeriodSkus", () => {
       }),
     );
 
+    expect(result.totalNetSalesMinor).toBe(1_800);
     expect(result.totalUnitsSold).toBe(16);
     expect(result.totalTransactions).toBe(7);
   });

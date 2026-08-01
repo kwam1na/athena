@@ -99,6 +99,29 @@ describe("ReportsSkuDetailView", () => {
     expect(screen.getByText("$72.50")).toBeInTheDocument();
     expect(screen.getByText("Unit margin")).toBeInTheDocument();
     expect(screen.getByText("$52.50")).toBeInTheDocument();
+    const primaryIdentity = screen.getByTestId("reports-sku-primary-identity");
+    expect(
+      within(primaryIdentity).getByRole("heading", { name: "Oshe" }),
+    ).toBeInTheDocument();
+    expect(within(primaryIdentity).queryByText("SKU")).not.toBeInTheDocument();
+    expect(within(primaryIdentity).queryByText("Net price")).not.toBeInTheDocument();
+
+    const details = screen.getByTestId("reports-sku-details");
+    expect(within(details).getByText("SKU")).toBeInTheDocument();
+    expect(within(details).getByText("6N2Y-JY3-5G6")).toBeInTheDocument();
+    expect(details).toHaveClass("space-y-layout-xs");
+
+    const pricing = screen.getByRole("group", { name: "Pricing" });
+    expect(within(pricing).getByText("Net price")).toBeInTheDocument();
+    expect(within(pricing).getByText("Unit cost")).toBeInTheDocument();
+    expect(within(pricing).getByText("Unit margin")).toBeInTheDocument();
+    expect(within(pricing).queryByText("SKU")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Pricing" }),
+    ).not.toBeInTheDocument();
+    expect(pricing.querySelector("dl")).toHaveClass("flex");
+    expect(pricing.querySelector("dl")).not.toHaveClass("grid");
+    expect(pricing.querySelector(".border-l")).not.toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Oshe" })).toHaveAttribute(
       "src",
       "https://cdn.example.test/oshe.webp",
@@ -179,7 +202,7 @@ describe("ReportsSkuDetailView", () => {
       screen.getByRole("heading", { level: 1, name: "Reports" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /back to items/i }),
+      screen.queryByRole("button", { name: "Go back" }),
     ).not.toBeInTheDocument();
     unmount();
 
@@ -190,9 +213,12 @@ describe("ReportsSkuDetailView", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Reports" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /back to items/i }),
-    ).toHaveAttribute("data-remote-assist-control", "page-header-back");
+    const backButton = screen.getByRole("button", { name: "Go back" });
+    expect(backButton).toHaveAttribute(
+      "data-remote-assist-control",
+      "page-header-back",
+    );
+    expect(within(backButton).queryByText(/back/i)).not.toBeInTheDocument();
 
     search.current = {};
   });

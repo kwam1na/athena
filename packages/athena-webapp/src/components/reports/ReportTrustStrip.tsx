@@ -28,7 +28,7 @@ export function ReportTrustStrip({
   );
   const reportedDayLabel = reportedDayCount === 1 ? "day" : "days";
   const segments = [
-    "Last 30 days",
+    "30-day trend",
     `${trust.reconciledDays.toLocaleString()} of ${reportedDayCount.toLocaleString()} reported ${reportedDayLabel} reconciled`,
   ];
 

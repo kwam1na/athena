@@ -91,6 +91,8 @@ export const reportOverviewSchema = v.object({
   weekToDate: periodSnapshot,
   priorWeek: periodSnapshot,
   trailing30: periodSnapshot,
+  // Optional while existing singleton documents are refreshed by the sweeper.
+  trailing3Months: v.optional(periodSnapshot),
   comparisons: v.object({
     netSalesVsPriorWeekBp: v.union(v.number(), v.null()),
     unitsSoldVsPriorWeekBp: v.union(v.number(), v.null()),
@@ -100,6 +102,8 @@ export const reportOverviewSchema = v.object({
       operatingDate: v.string(),
       netSalesMinor: v.number(),
       status: dayStatus,
+      // Optional during the rolling overview-document migration.
+      unitsSold: v.optional(v.number()),
     }),
   ),
   trust: v.object({

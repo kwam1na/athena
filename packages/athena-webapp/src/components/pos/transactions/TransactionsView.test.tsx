@@ -633,8 +633,12 @@ describe("TransactionsView", () => {
     );
   });
 
-  it("uses the operating date search param as the completed-from filter", () => {
-    useSearchMock.mockReturnValue({ operatingDate: "2026-05-08" });
+  it("uses caller-requested ascending order with the completed-from filter", () => {
+    useSearchMock.mockReturnValue({
+      endDate: "2026-07-30",
+      order: "oldestFirst",
+      startDate: "2026-05-08",
+    });
     getActiveStoreMock.mockReturnValue({
       activeStore: {
         _id: "store-1",
@@ -642,6 +646,20 @@ describe("TransactionsView", () => {
       },
     });
     useQueryMock.mockReturnValue([
+      {
+        _id: "txn-2",
+        transactionNumber: "POS-JUL-30",
+        total: 2000,
+        paymentMethod: "card",
+        paymentMethods: ["card"],
+        hasMultiplePaymentMethods: false,
+        cashierName: "Ada L.",
+        customerName: null,
+        itemCount: 1,
+        completedAt: new Date(2026, 6, 30, 10).getTime(),
+        hasTrace: false,
+        sessionTraceId: null,
+      },
       {
         _id: "txn-1",
         transactionNumber: "POS-MAY-08",
@@ -661,9 +679,11 @@ describe("TransactionsView", () => {
     render(<TransactionsView />);
 
     expect(useQueryMock.mock.calls[0]?.[1]).toEqual({
-      storeId: "store-1",
-      completedFrom: new Date(2026, 4, 8).getTime(),
+      endDate: "2026-07-30",
       limit: 100,
+      order: "oldestFirst",
+      startDate: "2026-05-08",
+      storeId: "store-1",
     });
     expect(
       screen.queryByText("Showing transactions from May 8, 2026"),
@@ -671,6 +691,14 @@ describe("TransactionsView", () => {
     expect(screen.getByRole("button", { name: "From May 8, 2026" }))
       .toBeInTheDocument();
     expect(screen.getByText("POS-MAY-08")).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("transaction-mobile-cards"))
+        .getAllByRole("link")
+        .map((link) => link.getAttribute("aria-label")),
+    ).toEqual([
+      "Open transaction #POS-MAY-08",
+      "Open transaction #POS-JUL-30",
+    ]);
   });
 
   it("uses the time range search param as the selected transaction range", () => {

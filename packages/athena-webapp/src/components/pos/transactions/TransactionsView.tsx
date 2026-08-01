@@ -376,17 +376,37 @@ export function TransactionsView() {
   const sharedDemoContext = useSharedDemoContext();
   const isSharedDemo = Boolean(sharedDemoContext);
   const navigate = useNavigate();
-  const { operatingDate, page, paymentMethod, registerSessionId, timeRange } =
-    useSearch({
-      strict: false,
-    }) as {
+  const {
+    operatingDate,
+    order,
+    page,
+    paymentMethod,
+    registerSessionId,
+    startDate,
+    endDate,
+    timeRange,
+  } = useSearch({
+    strict: false,
+  }) as {
     operatingDate?: string;
+    order?: unknown;
     page?: unknown;
     paymentMethod?: string;
     registerSessionId?: string;
+    startDate?: string;
+    endDate?: string;
     timeRange?: unknown;
   };
-  const operatingDateStartAt = getStartOfOperatingDate(operatingDate);
+  const rangeStartDate = startDate ?? operatingDate;
+  const operatingDateStartAt = getStartOfOperatingDate(rangeStartDate);
+  const rangeEndDate = endDate ?? rangeStartDate;
+  const operatingDateEndAt = getStartOfOperatingDate(rangeEndDate);
+  const hasValidOperatingDateRange =
+    operatingDateStartAt !== null &&
+    operatingDateEndAt !== null &&
+    operatingDateEndAt >= operatingDateStartAt;
+  const transactionOrder =
+    order === "oldestFirst" || order === "newestFirst" ? order : undefined;
   const [filter, setFilter] = useState<TransactionTimeFilter>(() =>
     getTransactionTimeFilter({
       operatingDateStartAt,
@@ -418,7 +438,7 @@ export function TransactionsView() {
     isSharedDemo
       ? todayStartAt
       : isOperatingDateFilterActive
-        ? operatingDateStartAt
+        ? undefined
         : filter === "today"
           ? todayStartAt
           : undefined;
@@ -435,6 +455,13 @@ export function TransactionsView() {
               }
             : {}),
           ...(completedFrom !== undefined ? { completedFrom } : {}),
+          ...(isOperatingDateFilterActive && hasValidOperatingDateRange
+            ? {
+                endDate: rangeEndDate!,
+                startDate: rangeStartDate!,
+              }
+            : {}),
+          ...(transactionOrder ? { order: transactionOrder } : {}),
         }
       : "skip",
   );
@@ -480,8 +507,13 @@ export function TransactionsView() {
         ? createSharedDemoTransactionFixtures()
         : [];
 
+    const direction = transactionOrder === "oldestFirst" ? 1 : -1;
+
     return [...transactions, ...fixtureTransactions]
-      .sort((first, second) => second.completedAt - first.completedAt)
+      .sort(
+        (first, second) =>
+          direction * (first.completedAt - second.completedAt),
+      )
       .map((transaction: CompletedTransaction) => ({
         _id: transaction._id,
         transactionNumber: transaction.transactionNumber,
@@ -507,14 +539,20 @@ export function TransactionsView() {
         voidedAt: transaction.voidedAt,
         voidReason: transaction.voidReason,
       }));
-  }, [formatter, isSharedDemo, registerSessionId, transactions]);
+  }, [
+    formatter,
+    isSharedDemo,
+    registerSessionId,
+    transactionOrder,
+    transactions,
+  ]);
 
   const filteredData = useMemo(() => {
     const dateFilteredData =
       filter === "all"
         ? tableData
-        : filter === "fromDate" && operatingDateStartAt !== null
-          ? tableData.filter((t) => t.completedAt >= operatingDateStartAt)
+        : filter === "fromDate" && hasValidOperatingDateRange
+          ? tableData
           : tableData.filter((t) => isToday(t.completedAt));
 
     if (!paymentMethodFilter) return dateFilteredData;
@@ -524,7 +562,12 @@ export function TransactionsView() {
         paymentMethodFilter,
       ),
     );
-  }, [tableData, filter, operatingDateStartAt, paymentMethodFilter]);
+  }, [
+    tableData,
+    filter,
+    hasValidOperatingDateRange,
+    paymentMethodFilter,
+  ]);
 
   useEffect(() => {
     setFilter(
@@ -542,6 +585,7 @@ export function TransactionsView() {
     filter,
     minimumLoadedLimit,
     operatingDateStartAt,
+    operatingDateEndAt,
     paymentMethodFilter,
     registerSessionId,
   ]);
@@ -664,9 +708,9 @@ export function TransactionsView() {
               <Tabs value={filter} onValueChange={handleFilterChange}>
                 <TabsList>
                   <TabsTrigger value="today">Today</TabsTrigger>
-                  {operatingDate && operatingDateStartAt !== null ? (
+                  {rangeStartDate && operatingDateStartAt !== null ? (
                     <TabsTrigger value="fromDate">
-                      From {formatOperatingDateFilterLabel(operatingDate)}
+                      From {formatOperatingDateFilterLabel(rangeStartDate)}
                     </TabsTrigger>
                   ) : null}
                   <TabsTrigger value="all">All Time</TabsTrigger>
@@ -719,7 +763,7 @@ export function TransactionsView() {
                     <p className="text-muted-foreground">
                       {getEmptyTransactionTitle({
                         filter,
-                        operatingDate,
+                        operatingDate: rangeStartDate,
                         paymentMethod: paymentMethodFilter,
                         registerFilterLabel,
                         registerSessionId,

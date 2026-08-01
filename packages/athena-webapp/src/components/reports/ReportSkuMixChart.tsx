@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { animate, cubicBezier, utils } from "animejs";
 import { useReducedMotion } from "framer-motion";
 import { Cell, Pie, PieChart } from "recharts";
@@ -52,10 +53,16 @@ function rowName(row: ReportSkuMixRow): string {
 
 export function ReportSkuMixChart({
   data,
+  detailLink,
   isRefreshing,
   selectedDate,
 }: {
   data: ReportSkuMixData | undefined;
+  detailLink?: {
+    orgUrlSlug: string;
+    search: Record<string, string>;
+    storeUrlSlug: string;
+  };
   isRefreshing: boolean;
   selectedDate?: string;
 }) {
@@ -316,8 +323,8 @@ export function ReportSkuMixChart({
                   animateChanges={hasChartData}
                   formatValue={formatUnits}
                   reduceMotion={Boolean(shouldReduceMotion)}
-                  skipAnimationFromZero
                   testId="report-sku-mix-number"
+                  transitionFromZero="fade"
                   value={renderedData.totalUnitsSold}
                 />
               </span>
@@ -333,41 +340,63 @@ export function ReportSkuMixChart({
           <ul
             aria-label="Product sales legend"
             className={cn(
-              "grid min-h-[18.75rem] gap-x-layout-lg gap-y-layout-sm sm:min-h-36 sm:grid-cols-2",
+              "grid min-h-[18.75rem] grid-rows-6 gap-x-layout-lg gap-y-layout-sm sm:min-h-36 sm:grid-cols-2 sm:grid-rows-3",
               !hasChartData && "invisible",
             )}
             data-exiting={String(isExiting)}
             ref={legendMotionRef}
           >
-            {rows.map((row, index) => (
-              <li
-                className="flex min-w-0 items-center gap-layout-sm"
-                key={row.key}
-              >
-                <span
-                  aria-hidden="true"
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  data-testid={`sku-mix-swatch-${row.key}`}
-                  style={{
-                    backgroundColor: rowColor(row, index),
-                  }}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {rowName(row)}
-                  </p>
-                  {row.identity?.sku &&
-                  row.identity.sku !== row.identity.displayName ? (
-                    <p className="truncate font-mono text-xs text-muted-foreground">
-                      {row.identity.sku}
+            {rows.map((row, index) => {
+              const content = (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    data-testid={`sku-mix-swatch-${row.key}`}
+                    style={{
+                      backgroundColor: rowColor(row, index),
+                    }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {rowName(row)}
                     </p>
-                  ) : null}
-                </div>
-                <span className="font-numeric text-sm tabular-nums text-muted-foreground">
-                  {formatShare(row.shareBasisPoints)}
-                </span>
-              </li>
-            ))}
+                    {row.identity?.sku &&
+                    row.identity.sku !== row.identity.displayName ? (
+                      <p className="truncate font-mono text-xs text-muted-foreground">
+                        {row.identity.sku}
+                      </p>
+                    ) : null}
+                  </div>
+                  <span className="font-numeric text-sm tabular-nums text-muted-foreground">
+                    {formatShare(row.shareBasisPoints)}
+                  </span>
+                </>
+              );
+
+              return (
+                <li className="min-w-0" key={row.key}>
+                  {row.productSkuId && detailLink ? (
+                    <Link
+                      className="-mx-2 flex min-w-0 items-center gap-layout-sm rounded-md px-2 py-1 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      params={{
+                        orgUrlSlug: detailLink.orgUrlSlug,
+                        productSkuId: row.productSkuId,
+                        storeUrlSlug: detailLink.storeUrlSlug,
+                      }}
+                      search={detailLink.search}
+                      to="/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId"
+                    >
+                      {content}
+                    </Link>
+                  ) : (
+                    <div className="flex min-w-0 items-center gap-layout-sm py-1">
+                      {content}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           {showEmptyState ? (
             <div

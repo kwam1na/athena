@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type KeyboardEvent, type ReactNode } from "react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import {
@@ -29,6 +29,54 @@ type TrendChartPoint = ReportTrendPoint & {
   axisLabel: string;
   chartIndex: number;
 };
+
+type ActiveTrendDotProps = {
+  cx?: number;
+  cy?: number;
+  payload?: TrendChartPoint;
+};
+
+function ActiveTrendDot({
+  cx,
+  cy,
+  onSelect,
+  payload,
+}: ActiveTrendDotProps & {
+  onSelect: (operatingDate: string) => void;
+}) {
+  if (cx === undefined || cy === undefined || !payload) return <g />;
+
+  const operatingDate = payload.operatingDate;
+
+  function selectDay() {
+    onSelect(operatingDate);
+  }
+
+  function handleKeyDown(event: KeyboardEvent<SVGGElement>) {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    selectDay();
+  }
+
+  return (
+    <g
+      aria-label={`View item sales for ${payload.label}`}
+      className="cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      onClick={selectDay}
+      onKeyDown={handleKeyDown}
+      role="link"
+      tabIndex={0}
+    >
+      <circle cx={cx} cy={cy} fill="transparent" r={12} />
+      <circle
+        cx={cx}
+        cy={cy}
+        fill="var(--color-netSalesMinor)"
+        r={4}
+      />
+    </g>
+  );
+}
 
 /**
  * Axis labels: short weekday + short month + day, matching
@@ -64,9 +112,13 @@ const MOBILE_TICK_COUNT = 3;
 export function ReportTrendChart({
   dailyTrend,
   currency,
+  onDaySelect,
+  summary,
 }: {
   dailyTrend: ReportTrendPoint[];
   currency: string;
+  onDaySelect: (operatingDate: string) => void;
+  summary?: ReactNode;
 }) {
   const isMobile = useIsMobile();
   const chartData: TrendChartPoint[] = dailyTrend.map((point, index) => ({
@@ -97,10 +149,11 @@ export function ReportTrendChart({
 
   return (
     <section className="space-y-layout-sm">
-      <div>
+      <div className="space-y-1">
         <h3 className="text-base font-medium text-foreground">
           Net sales
         </h3>
+        {summary}
       </div>
       <div className="overflow-hidden rounded-lg border border-border bg-surface-raised px-layout-sm py-8 shadow-surface sm:p-8">
         {chartData.length === 0 ? (
@@ -175,6 +228,12 @@ export function ReportTrendChart({
                           <span className="font-numeric text-foreground">
                             {formatReportMoney(Number(value), currency)}
                           </span>
+                          {point.unitsSold !== undefined ? (
+                            <span className="text-muted-foreground">
+                              {point.unitsSold.toLocaleString()}{" "}
+                              {point.unitsSold === 1 ? "unit" : "units"} sold
+                            </span>
+                          ) : null}
                           <span className="text-muted-foreground">
                             {presentation.label}
                           </span>
@@ -192,7 +251,9 @@ export function ReportTrendChart({
                 }
               />
               <Area
-                activeDot={{ r: 4 }}
+                activeDot={(props: ActiveTrendDotProps) => (
+                  <ActiveTrendDot {...props} onSelect={onDaySelect} />
+                )}
                 dataKey="netSalesMinor"
                 data-replay-key={chartAnimationKey}
                 dot={false}

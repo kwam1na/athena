@@ -3,7 +3,10 @@ import { query } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { requireReportsStoreAccess } from "./access";
-import { dayPeriodKey } from "../../shared/reportsContract";
+import {
+  dayPeriodKey,
+  trailingThreeMonthsStart,
+} from "../../shared/reportsContract";
 import { REPORT_SKU_PAGE_SIZE } from "../../shared/reportsContract";
 import type {
   ReportDayRow,
@@ -16,7 +19,7 @@ import type {
   ReportSkuSortBy,
   ReportSkuTransactionEvidence,
 } from "../../shared/reportsContract";
-import { emptySnapshot } from "./overview";
+import { emptySnapshot, snapshotForDays } from "./overview";
 import { periodDateRange } from "./rollups";
 
 /**
@@ -96,12 +99,50 @@ export const getOverview = query({
   handler: async (ctx, args): Promise<ReportOverviewData | null> => {
     await requireReportsStoreAccess(ctx, args.storeId);
 
-    // Read budget: 1 doc — the reportOverview singleton via by_storeId.
+    // Steady-state read budget: 1 doc — the reportOverview singleton via
+    // by_storeId. During the unitsSold rollout, legacy overview documents are
+    // enriched from at most 30 reportDay rows until the next sweep refreshes
+    // the singleton.
     const doc = await ctx.db
       .query("reportOverview")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .first();
     if (!doc) return null;
+
+    let dailyTrend = doc.dailyTrend;
+    let trailing3Months = doc.trailing3Months;
+    const needsTrendUnits = dailyTrend.some(
+      (point) => point.unitsSold === undefined,
+    );
+    const anchorDate = dailyTrend.at(-1)?.operatingDate;
+
+    if ((needsTrendUnits || !trailing3Months) && anchorDate) {
+      const startDate = trailing3Months
+        ? dailyTrend.at(0)?.operatingDate
+        : trailingThreeMonthsStart(anchorDate);
+
+      if (startDate) {
+        const days = await ctx.db
+          .query("reportDay")
+          .withIndex("by_storeId_operatingDate", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .gte("operatingDate", startDate)
+              .lte("operatingDate", anchorDate),
+          )
+          .take(92);
+        if (needsTrendUnits) {
+          const unitsByDate = new Map(
+            days.map((day) => [day.operatingDate, day.unitsSold]),
+          );
+          dailyTrend = dailyTrend.map((point) => ({
+            ...point,
+            unitsSold: point.unitsSold ?? unitsByDate.get(point.operatingDate),
+          }));
+        }
+        trailing3Months ??= snapshotForDays(days);
+      }
+    }
 
     return {
       updatedAt: doc.updatedAt,
@@ -111,8 +152,9 @@ export const getOverview = query({
       weekToDate: doc.weekToDate,
       priorWeek: doc.priorWeek,
       trailing30: doc.trailing30,
+      trailing3Months: trailing3Months ?? emptySnapshot(),
       comparisons: doc.comparisons,
-      dailyTrend: doc.dailyTrend,
+      dailyTrend,
       trust: doc.trust,
     };
   },
@@ -343,6 +385,7 @@ export const listPeriodSkus = query({
   ): Promise<{
     rows: ReportSkuPeriodRow[];
     continueCursor: string | null;
+    totalNetSalesMinor: number;
     totalUnitsSold: number;
     totalTransactions: number;
     updatedAt: number | null;
@@ -399,13 +442,13 @@ export const listPeriodSkus = query({
 
     const filtered = cursorCtx
       ? candidates.filter((row) => {
-          const key = row[sortField];
-          if (key > cursorCtx!.lastSortKey) return true;
-          if (key === cursorCtx!.lastSortKey) {
-            return row.productSkuId > cursorCtx!.lastSkuId;
-          }
-          return false;
-        })
+        const key = row[sortField];
+        if (key > cursorCtx!.lastSortKey) return true;
+        if (key === cursorCtx!.lastSortKey) {
+          return row.productSkuId > cursorCtx!.lastSkuId;
+        }
+        return false;
+      })
       : candidates;
 
     const page = filtered.slice(0, REPORT_SKU_PAGE_SIZE);
@@ -415,12 +458,12 @@ export const listPeriodSkus = query({
     const continueCursor =
       hasMore && last
         ? encodeCursor({
-            storeId: args.storeId,
-            periodKey: args.periodKey,
-            sortBy: args.sortBy,
-            lastSortKey: last[sortField],
-            lastSkuId: last.productSkuId,
-          })
+          storeId: args.storeId,
+          periodKey: args.periodKey,
+          sortBy: args.sortBy,
+          lastSortKey: last[sortField],
+          lastSkuId: last.productSkuId,
+        })
         : null;
 
     // The bounded day read keeps period totals independent of SKU pagination
@@ -438,14 +481,14 @@ export const listPeriodSkus = query({
         .first(),
       periodRange
         ? ctx.db
-            .query("reportDay")
-            .withIndex("by_storeId_operatingDate", (q) =>
-              q
-                .eq("storeId", args.storeId)
-                .gte("operatingDate", periodRange.startDate)
-                .lte("operatingDate", periodRange.endDate),
-            )
-            .take(ITEMS_PERIOD_MAX_DAYS)
+          .query("reportDay")
+          .withIndex("by_storeId_operatingDate", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .gte("operatingDate", periodRange.startDate)
+              .lte("operatingDate", periodRange.endDate),
+          )
+          .take(ITEMS_PERIOD_MAX_DAYS)
         : Promise.resolve([]),
     ]);
     const periodCloses = await Promise.all(
@@ -467,6 +510,10 @@ export const listPeriodSkus = query({
     return {
       rows,
       continueCursor,
+      totalNetSalesMinor: periodDays.reduce(
+        (total, day) => total + day.netSalesMinor,
+        0,
+      ),
       totalUnitsSold: periodDays.reduce(
         (total, day) => total + day.unitsSold,
         0,
@@ -690,10 +737,10 @@ export const listSkuDayTransactions = query({
           );
           const costMinor = hasCompleteCost
             ? costFacts.reduce(
-                (total, fact) =>
-                  total + fact.quantity * (fact.unitCostMinor ?? 0),
-                0,
-              )
+              (total, fact) =>
+                total + fact.quantity * (fact.unitCostMinor ?? 0),
+              0,
+            )
             : null;
           const occurredAt = Math.max(
             ...sourceFacts.map((fact) => fact.occurredAt),

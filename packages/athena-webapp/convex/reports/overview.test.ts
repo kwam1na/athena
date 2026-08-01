@@ -235,10 +235,13 @@ describe("buildOverviewData", () => {
       operatingDate: "2026-07-28",
       netSalesMinor: 500,
       status: "open",
+      unitsSold: 5,
     });
     // The trailing-30 snapshot excludes the June day too.
     expect(data.trailing30.dayCount).toBe(5);
     expect(data.trailing30.netSalesMinor).toBe(1500);
+    expect(data.trailing3Months.dayCount).toBe(6);
+    expect(data.trailing3Months.netSalesMinor).toBe(2499);
   });
 
   it("is an empty-but-valid document for a store with no days", () => {
@@ -256,6 +259,7 @@ describe("buildOverviewData", () => {
       weekToDate: emptySnapshot(),
       priorWeek: emptySnapshot(),
       trailing30: emptySnapshot(),
+      trailing3Months: emptySnapshot(),
       comparisons: { netSalesVsPriorWeekBp: null, unitsSoldVsPriorWeekBp: null },
       dailyTrend: [],
       trust: { reconciledDays: 0, provisionalDays: 0, amendedDays: 0 },

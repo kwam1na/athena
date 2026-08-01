@@ -74,18 +74,18 @@ export function ReportsSkuDetailView({
       api.reports.queries.getSkuDetail,
       activeStore?._id
         ? {
-            storeId: activeStore._id,
-            productSkuId: productSkuId as Id<"productSku">,
-            startDate,
-            endDate,
-          }
+          storeId: activeStore._id,
+          productSkuId: productSkuId as Id<"productSku">,
+          startDate,
+          endDate,
+        }
         : "skip",
     ),
   );
   const daysNewestFirst = detail
     ? [...detail.days].sort((left, right) =>
-        right.operatingDate.localeCompare(left.operatingDate),
-      )
+      right.operatingDate.localeCompare(left.operatingDate),
+    )
     : [];
   const totalDays = daysNewestFirst.length;
   const pageCount = Math.max(
@@ -101,10 +101,10 @@ export function ReportsSkuDetailView({
     api.reports.queries.listSkuDayTransactions,
     activeStore?._id && transactionDate
       ? {
-          storeId: activeStore._id,
-          productSkuId: productSkuId as Id<"productSku">,
-          operatingDate: transactionDate,
-        }
+        storeId: activeStore._id,
+        productSkuId: productSkuId as Id<"productSku">,
+        operatingDate: transactionDate,
+      }
       : "skip",
   );
   const transactionEvidence = transactionDate
@@ -118,14 +118,14 @@ export function ReportsSkuDetailView({
     : null;
   const transactionSheetProductName =
     resolvedProductName &&
-    resolvedProductName !== productSkuId &&
-    resolvedProductName !== detail?.identity?.sku
+      resolvedProductName !== productSkuId &&
+      resolvedProductName !== detail?.identity?.sku
       ? resolvedProductName
       : "Product";
   const skuImageUrl = detail?.identity?.imageUrl;
   const unitMarginMinor =
     typeof detail?.identity?.netPriceMinor === "number" &&
-    typeof detail.identity.unitCostMinor === "number"
+      typeof detail.identity.unitCostMinor === "number"
       ? detail.identity.netPriceMinor - detail.identity.unitCostMinor
       : undefined;
 
@@ -139,7 +139,6 @@ export function ReportsSkuDetailView({
       >
         <div className="space-y-layout-xl">
           <PageLevelHeader
-            backButtonLabel="Back to items"
             showBackButton
             title="Reports"
           />
@@ -195,54 +194,68 @@ export function ReportsSkuDetailView({
               ) : null}
             </div>
 
-            <div className="min-w-0 space-y-layout-sm">
-              <h2
-                className="truncate text-2xl font-semibold tracking-tight text-foreground"
-                data-testid="reports-sku-detail-name"
+            <div className="min-w-0 flex-1 space-y-layout-md">
+              <div
+                className="min-w-0"
+                data-testid="reports-sku-primary-identity"
               >
-                {detail
-                  ? formatSkuDisplayName(detail.identity, productSkuId)
-                  : "\u00A0"}
-              </h2>
+                <h2
+                  className="truncate text-2xl font-semibold tracking-tight text-foreground"
+                  data-testid="reports-sku-detail-name"
+                >
+                  {detail
+                    ? formatSkuDisplayName(detail.identity, productSkuId)
+                    : "\u00A0"}
+                </h2>
+              </div>
               {detail ? (
-                <dl className="flex min-w-0 items-start gap-layout-md">
-                  <div className="min-w-0">
-                    <dt className="text-xs text-muted-foreground">SKU</dt>
-                    <dd className="truncate text-sm text-foreground">
+                <div
+                  className="space-y-layout-xs"
+                  data-testid="reports-sku-details"
+                >
+                  <p className="flex min-w-0 items-baseline gap-2 text-xs text-muted-foreground">
+                    <span className="font-medium uppercase tracking-wide">
+                      SKU
+                    </span>
+                    <span className="truncate font-mono text-foreground">
                       {formatSkuSubtitle(detail.identity, productSkuId)}
-                    </dd>
+                    </span>
+                  </p>
+                  <div aria-label="Pricing" role="group">
+                    <dl className="flex min-w-0 flex-wrap items-baseline gap-x-layout-lg gap-y-layout-xs">
+                      <div className="flex min-w-0 items-baseline gap-1.5">
+                        <dt className="text-xs text-muted-foreground">
+                          Net price
+                        </dt>
+                        <dd className="font-numeric text-sm tabular-nums text-foreground">
+                          {formatOptionalMoney(
+                            detail.identity?.netPriceMinor,
+                            currency,
+                          )}
+                        </dd>
+                      </div>
+                      <div className="flex min-w-0 items-baseline gap-1.5">
+                        <dt className="text-xs text-muted-foreground">
+                          Unit cost
+                        </dt>
+                        <dd className="font-numeric text-sm tabular-nums text-foreground">
+                          {formatOptionalMoney(
+                            detail.identity?.unitCostMinor,
+                            currency,
+                          )}
+                        </dd>
+                      </div>
+                      <div className="flex min-w-0 items-baseline gap-1.5">
+                        <dt className="text-xs text-muted-foreground">
+                          Unit margin
+                        </dt>
+                        <dd className="font-numeric text-sm tabular-nums text-foreground">
+                          {formatOptionalMoney(unitMarginMinor, currency)}
+                        </dd>
+                      </div>
+                    </dl>
                   </div>
-                  <div className="shrink-0 border-l border-border pl-layout-md">
-                    <dt className="text-xs text-muted-foreground">
-                      Net price
-                    </dt>
-                    <dd className="font-numeric text-sm text-foreground">
-                      {formatOptionalMoney(
-                        detail.identity?.netPriceMinor,
-                        currency,
-                      )}
-                    </dd>
-                  </div>
-                  <div className="shrink-0 border-l border-border pl-layout-md">
-                    <dt className="text-xs text-muted-foreground">
-                      Unit cost
-                    </dt>
-                    <dd className="font-numeric text-sm text-foreground">
-                      {formatOptionalMoney(
-                        detail.identity?.unitCostMinor,
-                        currency,
-                      )}
-                    </dd>
-                  </div>
-                  <div className="shrink-0 border-l border-border pl-layout-md">
-                    <dt className="text-xs text-muted-foreground">
-                      Unit margin
-                    </dt>
-                    <dd className="font-numeric text-sm text-foreground">
-                      {formatOptionalMoney(unitMarginMinor, currency)}
-                    </dd>
-                  </div>
-                </dl>
+                </div>
               ) : null}
             </div>
           </header>
@@ -291,9 +304,9 @@ export function ReportsSkuDetailView({
                 value={
                   detail.totals
                     ? formatReportProfit(
-                        detail.totals.grossProfitMinor,
-                        currency,
-                      )
+                      detail.totals.grossProfitMinor,
+                      currency,
+                    )
                     : "—"
                 }
               />
@@ -411,11 +424,10 @@ export function ReportsSkuDetailView({
               <SheetDescription>
                 {transactionEvidence ? (
                   <>
-                    {`${transactionEvidence.transactions.length} ${
-                      transactionEvidence.transactions.length === 1
-                        ? "transaction"
-                        : "transactions"
-                    } attached to `}
+                    {`${transactionEvidence.transactions.length} ${transactionEvidence.transactions.length === 1
+                      ? "transaction"
+                      : "transactions"
+                      } attached to `}
                     <span className="font-medium text-foreground">
                       {transactionSheetProductName}
                     </span>{" "}
@@ -491,17 +503,17 @@ export function ReportsSkuDetailView({
                                 params={
                                   isPos
                                     ? {
-                                        orgUrlSlug: orgUrlSlug!,
-                                        storeUrlSlug: storeUrlSlug!,
-                                        transactionId:
-                                          transaction.sourceId as Id<"posTransaction">,
-                                      }
+                                      orgUrlSlug: orgUrlSlug!,
+                                      storeUrlSlug: storeUrlSlug!,
+                                      transactionId:
+                                        transaction.sourceId as Id<"posTransaction">,
+                                    }
                                     : {
-                                        orgUrlSlug: orgUrlSlug!,
-                                        storeUrlSlug: storeUrlSlug!,
-                                        orderSlug:
-                                          transaction.sourceId as Id<"onlineOrder">,
-                                      }
+                                      orgUrlSlug: orgUrlSlug!,
+                                      storeUrlSlug: storeUrlSlug!,
+                                      orderSlug:
+                                        transaction.sourceId as Id<"onlineOrder">,
+                                    }
                                 }
                                 search={{ o: getOrigin() }}
                                 to={
@@ -524,7 +536,7 @@ export function ReportsSkuDetailView({
                               ) : null}
                             </div>
                             {transaction.hasRefunds ||
-                            transaction.hasAdjustments ? (
+                              transaction.hasAdjustments ? (
                               <p className="mt-1 text-xs text-muted-foreground">
                                 {[
                                   transaction.hasRefunds

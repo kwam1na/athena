@@ -104,8 +104,8 @@ describe("POS and expense session indexing", () => {
     expect(schema).toContain(
       '.index("by_storeId_status_registerSessionId_completedAt", [',
     );
-    expect(repository).toContain(
-      'withIndex("by_storeId_status_registerSessionId_completedAt"',
+    expect(repository).toMatch(
+      /withIndex\(\s*"by_storeId_status_registerSessionId_completedAt"/,
     );
   });
 

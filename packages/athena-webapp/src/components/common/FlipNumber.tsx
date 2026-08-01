@@ -11,6 +11,9 @@ const flipTransitionEase = cubicBezier(0.25, 0.1, 0.25, 1);
 const FLIP_GLYPH_STAGGER_MS = 12;
 const FLIP_OUT_DURATION_MS = 200;
 const FLIP_IN_DURATION_MS = 280;
+const ZERO_FADE_DURATION_MS = 180;
+
+export type FlipNumberZeroTransition = "fade" | "flip" | "instant";
 
 function defaultFormatValue(value: number): string {
   return value.toLocaleString();
@@ -44,6 +47,7 @@ export function FlipNumber({
   reduceMotion,
   skipAnimationFromZero = false,
   testId,
+  transitionFromZero,
   value,
 }: {
   accessible?: boolean;
@@ -51,13 +55,17 @@ export function FlipNumber({
   className?: string;
   formatValue?: (value: number) => string;
   reduceMotion?: boolean;
+  /** @deprecated Use transitionFromZero="instant" instead. */
   skipAnimationFromZero?: boolean;
   testId?: string;
+  transitionFromZero?: FlipNumberZeroTransition;
   value: number;
 }) {
   const prefersReducedMotion = useReducedMotion();
   const shouldReduceMotion = reduceMotion ?? Boolean(prefersReducedMotion);
   const formattedValue = formatValue(value);
+  const resolvedZeroTransition =
+    transitionFromZero ?? (skipAnimationFromZero ? "instant" : "flip");
   const valueRef = useRef<HTMLSpanElement | null>(null);
   const displayedValueRef = useRef(formattedValue);
   const displayedNumberRef = useRef(value);
@@ -79,11 +87,35 @@ export function FlipNumber({
       return;
     }
 
-    if (!animateChanges || (skipAnimationFromZero && previousNumber === 0)) {
+    if (!animateChanges) {
       displayedValueRef.current = formattedValue;
       displayedNumberRef.current = value;
       renderFlipGlyphs(element, formattedValue);
       return;
+    }
+
+    if (previousNumber === 0 && resolvedZeroTransition !== "flip") {
+      displayedValueRef.current = formattedValue;
+      displayedNumberRef.current = value;
+      const incomingGlyphs = renderFlipGlyphs(element, formattedValue);
+
+      if (resolvedZeroTransition === "instant") {
+        return;
+      }
+
+      utils.set(incomingGlyphs, { opacity: 0 });
+      animationRef.current = animate(incomingGlyphs, {
+        duration: ZERO_FADE_DURATION_MS,
+        ease: flipTransitionEase,
+        opacity: 1,
+        onComplete: () => {
+          incomingGlyphs.forEach((glyph) => glyph.removeAttribute("style"));
+          animationRef.current = null;
+        },
+      });
+      return () => {
+        animationRef.current?.revert();
+      };
     }
 
     const outgoingGlyphs =
@@ -153,8 +185,8 @@ export function FlipNumber({
   }, [
     animateChanges,
     formattedValue,
+    resolvedZeroTransition,
     shouldReduceMotion,
-    skipAnimationFromZero,
     value,
   ]);
 
@@ -170,6 +202,7 @@ export function FlipNumber({
       data-transition-delay={FLIP_TRANSITION_DELAY_MS}
       data-transition-duration={FLIP_TRANSITION_DURATION_MS}
       data-transition-easing={FLIP_TRANSITION_EASING}
+      data-transition-from-zero={resolvedZeroTransition}
       data-value={formattedValue}
     >
       {accessible ? <span className="sr-only">{formattedValue}</span> : null}

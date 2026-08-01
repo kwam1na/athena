@@ -1,10 +1,12 @@
 import { useQuery } from "convex/react";
+import { useNavigate, useParams } from "@tanstack/react-router";
 
 import { EmptyState } from "@/components/states/empty/empty-state";
 import { FadeIn } from "@/components/common/FadeIn";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { cn } from "@/lib/utils";
+import { getOrigin } from "@/lib/navigationUtils";
 import { api } from "~/convex/_generated/api";
 import type { ReportOverviewData } from "~/shared/reportsContract";
 import { ReportPeriodMetrics } from "./ReportPeriodMetrics";
@@ -13,6 +15,7 @@ import { ReportTrendChart } from "./ReportTrendChart";
 import { ReportTrustStrip } from "./ReportTrustStrip";
 import { useStableReportQuery } from "./useStableReportQuery";
 import {
+  dateRangeForOverviewWindow,
   REPORT_OVERVIEW_WINDOWS,
   REPORT_OVERVIEW_WINDOW_LABELS,
   type ReportOverviewWindow,
@@ -62,6 +65,8 @@ export function ReportsOverviewView({
   onSelectedWindowChange: (window: ReportOverviewWindow) => void;
 }) {
   const { activeStore } = useGetActiveStore();
+  const navigate = useNavigate();
+  const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
   const {
     data: overview,
     isInitialLoad,
@@ -92,6 +97,13 @@ export function ReportsOverviewView({
 
   const { currency } = overview;
   const comparison = comparisonFor(overview, selectedWindow);
+  const anchorDay = overview.dailyTrend.at(-1);
+  const anchorOperatingDate = anchorDay?.operatingDate;
+  const isAnchorDayClosed =
+    anchorDay?.status === "reconciled" || anchorDay?.status === "amended";
+  const transactionsRange = anchorOperatingDate
+    ? dateRangeForOverviewWindow(selectedWindow, anchorOperatingDate)
+    : undefined;
   return (
     <FadeIn>
       <section
@@ -104,7 +116,7 @@ export function ReportsOverviewView({
         data-refreshing={isRefreshing ? "true" : undefined}
         data-testid="reports-overview"
       >
-        <div className="space-y-layout-md">
+        <div className="space-y-layout-lg">
           <div className="flex flex-wrap items-center justify-between gap-layout-sm">
             <Tabs
               onValueChange={(next) =>
@@ -130,29 +142,74 @@ export function ReportsOverviewView({
               </TabsList>
             </Tabs>
 
-            <ReportFreshness updatedAt={overview.updatedAt} />
+            <ReportFreshness
+              delayedDataLabel="Overview data"
+              updatedAt={overview.updatedAt}
+            />
           </div>
 
           <ReportPeriodMetrics
             comparison={comparison}
             currency={currency}
+            eodReviewLink={
+              selectedWindow === "today" &&
+              isAnchorDayClosed &&
+              anchorOperatingDate &&
+              orgUrlSlug &&
+              storeUrlSlug
+                ? {
+                    orgUrlSlug,
+                    search: {
+                      o: getOrigin(),
+                      operatingDate: anchorOperatingDate,
+                    },
+                    storeUrlSlug,
+                  }
+                : undefined
+            }
             periodLabel={REPORT_OVERVIEW_WINDOW_LABELS[selectedWindow]}
             priorWindowLabel={comparison?.priorWindowLabel ?? "prior period"}
             snapshot={overview[selectedWindow]}
+            transactionsLink={
+              transactionsRange && orgUrlSlug && storeUrlSlug
+                ? {
+                    orgUrlSlug,
+                    search: {
+                      endDate: transactionsRange.endDate,
+                      o: getOrigin(),
+                      order: "oldestFirst",
+                      startDate: transactionsRange.startDate,
+                    },
+                    storeUrlSlug,
+                  }
+                : undefined
+            }
           />
         </div>
 
-        <div className="space-y-layout-sm">
-          <ReportTrendChart
-            currency={currency}
-            dailyTrend={overview.dailyTrend}
-          />
-          <ReportTrustStrip
-            reportedDayCount={overview.trailing30.dayCount}
-            today={overview.dailyTrend.at(-1)?.operatingDate}
-            trust={overview.trust}
-          />
-        </div>
+        <ReportTrendChart
+          currency={currency}
+          dailyTrend={overview.dailyTrend}
+          onDaySelect={(operatingDate) => {
+            if (!orgUrlSlug || !storeUrlSlug) return;
+            void navigate({
+              params: { orgUrlSlug, storeUrlSlug },
+              search: {
+                o: getOrigin(),
+                periodDate: operatingDate,
+                periodType: "day",
+              },
+              to: "/$orgUrlSlug/store/$storeUrlSlug/reports/items",
+            });
+          }}
+          summary={
+            <ReportTrustStrip
+              reportedDayCount={overview.trailing30.dayCount}
+              today={overview.dailyTrend.at(-1)?.operatingDate}
+              trust={overview.trust}
+            />
+          }
+        />
       </section>
     </FadeIn>
   );

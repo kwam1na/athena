@@ -550,7 +550,12 @@ export const getCompletedTransactions = query({
   args: {
     storeId: v.id("store"),
     completedFrom: v.optional(v.number()),
+    endDate: v.optional(v.string()),
+    order: v.optional(
+      v.union(v.literal("oldestFirst"), v.literal("newestFirst")),
+    ),
     registerSessionId: v.optional(v.id("registerSession")),
+    startDate: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
   returns: v.array(
@@ -584,8 +589,11 @@ export const getCompletedTransactions = query({
       ctx,
       args: {
         completedFrom?: number;
+        endDate?: string;
         limit?: number;
+        order?: "oldestFirst" | "newestFirst";
         registerSessionId?: Id<"registerSession">;
+        startDate?: string;
         storeId: Id<"store">;
       },
     ) => {

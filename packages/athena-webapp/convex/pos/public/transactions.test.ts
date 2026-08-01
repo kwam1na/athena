@@ -635,9 +635,14 @@ describe("POS public transaction read and correction authorization", () => {
     ] as never);
     const ctx = createTransactionAuthCtx();
 
-    await getHandler(getCompletedTransactions)(ctx as never, {
+    const args = {
+      endDate: "2026-07-30",
+      order: "oldestFirst" as const,
+      startDate: "2026-07-01",
       storeId: "store-1" as Id<"store">,
-    });
+    };
+
+    await getHandler(getCompletedTransactions)(ctx as never, args);
 
     expect(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
@@ -647,7 +652,10 @@ describe("POS public transaction read and correction authorization", () => {
       organizationId: "org-1",
       userId: "user-1",
     });
-    expect(transactionQueries.getCompletedTransactions).toHaveBeenCalled();
+    expect(transactionQueries.getCompletedTransactions).toHaveBeenCalledWith(
+      ctx,
+      args,
+    );
   });
 
   it("forces today's redacted POS pulse summary for non-full-admin store members", async () => {

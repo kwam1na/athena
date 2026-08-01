@@ -1,6 +1,7 @@
 import { useQuery } from "convex/react";
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowDown, RotateCcw } from "lucide-react";
+import { useMemo } from "react";
 import {
   Table,
   TableBody,
@@ -70,9 +71,13 @@ export function ReportDaysPanel({
     ),
     page,
   );
+  const skuMixContext = useMemo(
+    () => ({ endDate, selectedDate, startDate }),
+    [endDate, selectedDate, startDate],
+  );
   const {
     data: skuMix,
-    dataContext: settledSkuMixSelectedDate,
+    dataContext: settledSkuMixContext,
     isRefreshing: isSkuMixRefreshing,
   } = useStableReportQuery(
     useQuery(
@@ -85,7 +90,7 @@ export function ReportDaysPanel({
           }
         : "skip",
     ),
-    selectedDate,
+    skuMixContext,
   );
   const daysNewestFirst = days
     ? [...days].sort((left, right) =>
@@ -310,8 +315,28 @@ export function ReportDaysPanel({
             </div>
             <ReportSkuMixChart
               data={skuMix}
+              detailLink={
+                orgUrlSlug && storeUrlSlug
+                  ? {
+                      orgUrlSlug,
+                      search: settledSkuMixContext?.selectedDate
+                        ? {
+                            o: getOrigin(),
+                            periodDate: settledSkuMixContext.selectedDate,
+                            periodType: "day",
+                          }
+                        : {
+                            endDate: settledSkuMixContext?.endDate ?? endDate,
+                            o: getOrigin(),
+                            startDate:
+                              settledSkuMixContext?.startDate ?? startDate,
+                          },
+                      storeUrlSlug,
+                    }
+                  : undefined
+              }
               isRefreshing={isSkuMixRefreshing}
-              selectedDate={settledSkuMixSelectedDate}
+              selectedDate={settledSkuMixContext?.selectedDate}
             />
           </div>
         </div>

@@ -19,6 +19,12 @@ describe("report period date ranges", () => {
       startDate: "2026-06-30",
       endDate: "2026-07-29",
     });
+    expect(
+      dateRangeForOverviewWindow("trailing3Months", "2026-07-29"),
+    ).toEqual({
+      startDate: "2026-05-01",
+      endDate: "2026-07-29",
+    });
   });
 
   it("maps day, ISO week, and month selections to inclusive ranges", () => {

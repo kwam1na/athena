@@ -18,6 +18,10 @@ import {
   listTransactionItems,
 } from "../infrastructure/repositories/transactionRepository";
 import { getTerminalById } from "../infrastructure/repositories/terminalRepository";
+import {
+  resolveReportingCalendarDateRangeWithCtx,
+  resolveReportingOperatingDateRangeWithCtx,
+} from "../../storeTime/operatingPeriods";
 
 vi.mock("../infrastructure/repositories/transactionRepository", () => ({
   getCashierById: vi.fn(),
@@ -34,6 +38,11 @@ vi.mock("../infrastructure/repositories/transactionRepository", () => ({
 
 vi.mock("../infrastructure/repositories/terminalRepository", () => ({
   getTerminalById: vi.fn(),
+}));
+
+vi.mock("../../storeTime/operatingPeriods", () => ({
+  resolveReportingCalendarDateRangeWithCtx: vi.fn(),
+  resolveReportingOperatingDateRangeWithCtx: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -260,16 +269,44 @@ describe("getCompletedTransactions", () => {
     ]);
   });
 
-  it("passes the completed-from lower bound into the completed transaction repository", async () => {
+  it("uses reporting calendar days so after-hours transactions remain in the caller-owned range", async () => {
     vi.mocked(listCompletedTransactions).mockResolvedValue([] as never);
+    vi.mocked(resolveReportingCalendarDateRangeWithCtx)
+      .mockResolvedValueOnce({ kind: "resolved", startAt: 0 } as never)
+      .mockResolvedValueOnce({ endAt: 86_399, kind: "resolved" } as never);
+    vi.mocked(resolveReportingOperatingDateRangeWithCtx)
+      .mockResolvedValueOnce({ kind: "resolved", startAt: 9_000 } as never)
+      .mockResolvedValueOnce({ endAt: 19_000, kind: "resolved" } as never);
 
     await getCompletedTransactions({} as never, {
-      completedFrom: Date.UTC(2026, 4, 8),
+      endDate: "2026-05-31",
+      order: "oldestFirst",
+      startDate: "2026-05-08",
       storeId: "store-1" as Id<"store">,
     });
 
+    expect(resolveReportingCalendarDateRangeWithCtx).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      {
+        reportingDate: "2026-05-08",
+        storeId: "store-1",
+      },
+    );
+    expect(resolveReportingCalendarDateRangeWithCtx).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      {
+        reportingDate: "2026-05-31",
+        storeId: "store-1",
+      },
+    );
     expect(listCompletedTransactions).toHaveBeenCalledWith(expect.anything(), {
-      completedFrom: Date.UTC(2026, 4, 8),
+      completedFrom: 0,
+      completedTo: 86_399,
+      limit: undefined,
+      order: "oldestFirst",
+      registerSessionId: undefined,
       storeId: "store-1",
     });
   });

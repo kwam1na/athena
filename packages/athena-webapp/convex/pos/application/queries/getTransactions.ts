@@ -19,6 +19,7 @@ import {
   getStorePulseSummaryForWindow,
   type PosPulseWindow,
 } from "./storePulse";
+import { resolveReportingCalendarDateRangeWithCtx } from "../../../storeTime/operatingPeriods";
 
 const ITEM_ADJUSTMENT_REQUEST_TYPES = new Set([
   "pos_item_adjustment",
@@ -358,12 +359,44 @@ export async function getCompletedTransactions(
   ctx: QueryCtx,
   args: {
     completedFrom?: number;
+    endDate?: string;
+    order?: "oldestFirst" | "newestFirst";
     registerSessionId?: Id<"registerSession">;
+    startDate?: string;
     storeId: Id<"store">;
     limit?: number;
   },
 ) {
-  const transactions = await listCompletedTransactions(ctx, args);
+  if (Boolean(args.startDate) !== Boolean(args.endDate)) {
+    throw new Error("Start and end operating dates must be provided together.");
+  }
+
+  const range =
+    args.startDate && args.endDate
+      ? await Promise.all([
+          resolveReportingCalendarDateRangeWithCtx(ctx, {
+            reportingDate: args.startDate,
+            storeId: args.storeId,
+          }),
+          resolveReportingCalendarDateRangeWithCtx(ctx, {
+            reportingDate: args.endDate,
+            storeId: args.storeId,
+          }),
+        ])
+      : null;
+  if (range?.some((boundary) => boundary.kind !== "resolved")) {
+    return [];
+  }
+
+  const transactions = await listCompletedTransactions(ctx, {
+    completedFrom:
+      range?.[0]?.kind === "resolved" ? range[0].startAt : args.completedFrom,
+    completedTo: range?.[1]?.kind === "resolved" ? range[1].endAt : undefined,
+    limit: args.limit,
+    order: args.order,
+    registerSessionId: args.registerSessionId,
+    storeId: args.storeId,
+  });
 
   return Promise.all(
     transactions.map(async (transaction) => {

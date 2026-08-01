@@ -4,6 +4,7 @@
   "packageManager": "bun@1.1.29",
   "scripts": {
     "prepare": "sh scripts/configure-git-hooks.sh",
+    "docs:fingerprint": "bun scripts/compound-solution-check.ts --base origin/main --print-fingerprint",
     "architecture:check": "bun scripts/architecture-boundary-check.ts",
     "compound:check": "bun scripts/compound-solution-check.ts --base origin/main",
     "landed-report:check": "bun scripts/landed-change-report-check.ts --base origin/main",

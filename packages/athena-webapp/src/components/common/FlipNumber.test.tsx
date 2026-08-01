@@ -37,4 +37,28 @@ describe("FlipNumber", () => {
     expect(number).toHaveAttribute("aria-hidden", "true");
     expect(number.querySelector(".sr-only")).not.toBeInTheDocument();
   });
+
+  it("can fade the first non-zero value in without flipping the zero out", () => {
+    const { rerender } = render(
+      <FlipNumber
+        testId="zero-fade-number"
+        transitionFromZero="fade"
+        value={0}
+      />,
+    );
+
+    rerender(
+      <FlipNumber
+        testId="zero-fade-number"
+        transitionFromZero="fade"
+        value={24}
+      />,
+    );
+
+    const number = screen.getByTestId("zero-fade-number");
+    expect(number).toHaveAttribute("data-transition-from-zero", "fade");
+    expect(
+      number.querySelector('[aria-hidden="true"]'),
+    ).toHaveTextContent("24");
+  });
 });

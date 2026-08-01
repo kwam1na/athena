@@ -14,6 +14,31 @@ import {
 } from "@/lib/operations/operatingDate";
 import { formatReportDateRange } from "./reportFormat";
 import { ReportCalendar } from "./ReportCalendar";
+import { dateRangeForOverviewWindow } from "./reportPeriodKeys";
+
+type DateRangeValue = { startDate: string; endDate: string };
+
+function getDateRangePresets(today: Date) {
+  const endDate = getLocalOperatingDate(today);
+  return [
+    {
+      label: "Today",
+      range: dateRangeForOverviewWindow("today", endDate),
+    },
+    {
+      label: "Week to date",
+      range: dateRangeForOverviewWindow("weekToDate", endDate),
+    },
+    {
+      label: "Trailing 30 days",
+      range: dateRangeForOverviewWindow("trailing30", endDate),
+    },
+    {
+      label: "Trailing 3 months",
+      range: dateRangeForOverviewWindow("trailing3Months", endDate),
+    },
+  ] satisfies Array<{ label: string; range: DateRangeValue }>;
+}
 
 /** A compact, atomic date-range control shared by report views. */
 export function ReportDateRangeField({
@@ -35,6 +60,12 @@ export function ReportDateRangeField({
   const selectedRange = { from: selectedStart, to: selectedEnd };
   const [draftRange, setDraftRange] = useState<DateRange>(selectedRange);
   const rangeLabel = formatReportDateRange(startDate, endDate);
+  const presets = getDateRangePresets(new Date());
+
+  const applyRange = (range: DateRangeValue) => {
+    onSelect(range);
+    setIsOpen(false);
+  };
 
   return (
     <Popover
@@ -56,21 +87,47 @@ export function ReportDateRangeField({
         </Button>
       </PopoverTrigger>
       <PopoverContent align={align} className="w-auto p-0">
-        <ReportCalendar
-          defaultMonth={selectedRange.from}
-          mode="range"
-          onSelect={(range) => {
-            if (!range) return;
-            setDraftRange(range);
-            if (!range.from || !range.to) return;
-            onSelect({
-              startDate: getLocalOperatingDate(range.from),
-              endDate: getLocalOperatingDate(range.to),
-            });
-            setIsOpen(false);
-          }}
-          selected={draftRange}
-        />
+        <div>
+          <ReportCalendar
+            defaultMonth={selectedRange.from}
+            mode="range"
+            onSelect={(range) => {
+              if (!range) return;
+              setDraftRange(range);
+              if (!range.from || !range.to) return;
+              applyRange({
+                startDate: getLocalOperatingDate(range.from),
+                endDate: getLocalOperatingDate(range.to),
+              });
+            }}
+            selected={draftRange}
+          />
+          <div
+            aria-label="Preset date ranges"
+            className="grid grid-cols-2 gap-1 border-t border-border p-2"
+            role="group"
+          >
+            {presets.map((preset) => {
+              const isSelected =
+                preset.range.startDate === startDate &&
+                preset.range.endDate === endDate;
+
+              return (
+                <Button
+                  aria-pressed={isSelected}
+                  className="justify-start px-2.5 text-xs"
+                  key={preset.label}
+                  onClick={() => applyRange(preset.range)}
+                  size="sm"
+                  type="button"
+                  variant={isSelected ? "primary-soft" : "ghost"}
+                >
+                  {preset.label}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
       </PopoverContent>
     </Popover>
   );

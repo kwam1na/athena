@@ -296,7 +296,12 @@ describe("dirty-mark lifecycle", () => {
     expect(overviews).toHaveLength(1);
     expect(overviews[0].today.netSalesMinor).toBe(1_500);
     expect(overviews[0].dailyTrend).toEqual([
-      { operatingDate: "2026-07-28", netSalesMinor: 1_500, status: "provisional" },
+      {
+        operatingDate: "2026-07-28",
+        netSalesMinor: 1_500,
+        status: "provisional",
+        unitsSold: 3,
+      },
     ]);
   });
 

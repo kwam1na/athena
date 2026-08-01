@@ -1,3 +1,4 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- Reservation validation must inspect every active session and every item in those session-scoped sets; truncation could allow stock edits while a matching SKU is reserved. */
 import { query } from "../_generated/server";
 import { v } from "convex/values";
 
