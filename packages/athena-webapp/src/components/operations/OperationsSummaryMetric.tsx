@@ -2,6 +2,10 @@ import { Link } from "@tanstack/react-router";
 import { ArrowUpRight } from "lucide-react";
 import type { ReactNode } from "react";
 
+import {
+  FlipNumber,
+  type FlipNumberZeroTransition,
+} from "@/components/common/FlipNumber";
 import { cn } from "@/lib/utils";
 import { Button } from "../ui/button";
 
@@ -29,6 +33,7 @@ export function OperationsSummaryMetric({
   ariaPressed,
   className,
   disabled,
+  formatValue,
   helper,
   helperClassName,
   label,
@@ -38,10 +43,13 @@ export function OperationsSummaryMetric({
   tone = "default",
   value,
   valueClassName,
+  valueTestId,
+  valueTransitionFromZero,
 }: {
   ariaPressed?: boolean;
   className?: string;
   disabled?: boolean;
+  formatValue?: (value: number) => string;
   helper?: ReactNode;
   helperClassName?: string;
   label: string;
@@ -51,7 +59,20 @@ export function OperationsSummaryMetric({
   tone?: "default" | "quiet";
   value: ReactNode;
   valueClassName?: string;
+  valueTestId?: string;
+  valueTransitionFromZero?: FlipNumberZeroTransition;
 }) {
+  const renderedValue =
+    typeof value === "number" && formatValue ? (
+      <FlipNumber
+        formatValue={formatValue}
+        testId={valueTestId}
+        transitionFromZero={valueTransitionFromZero}
+        value={value}
+      />
+    ) : (
+      value
+    );
   const content = (
     <>
       <div className="flex items-start justify-between gap-layout-sm">
@@ -95,7 +116,7 @@ export function OperationsSummaryMetric({
           valueClassName,
         )}
       >
-        {value}
+        {renderedValue}
       </p>
       {helper ? (
         <p

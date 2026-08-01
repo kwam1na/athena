@@ -109,7 +109,21 @@ const fixture: ReportOverviewData = {
     netSalesMinor: 2500_00,
     grossProfitMinor: null,
   }),
+  priorTrailing30: snapshot({
+    dayCount: 30,
+    netSalesMinor: 2000_00,
+    unitsSold: 10,
+    grossProfitMinor: 700_00,
+    refundsMinor: 5_00,
+  }),
   trailing3Months: snapshot({ dayCount: 82, netSalesMinor: 7000_00 }),
+  priorTrailing3Months: snapshot({
+    dayCount: 92,
+    netSalesMinor: 6000_00,
+    unitsSold: 10,
+    grossProfitMinor: 20_00,
+    refundsMinor: 5_00,
+  }),
   comparisons: {
     netSalesVsPriorWeekBp: 1250,
     unitsSoldVsPriorWeekBp: null,
@@ -230,7 +244,7 @@ describe("ReportsOverviewView", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByText("+13%")).toBeInTheDocument();
     expect(screen.getByText("+50%")).toBeInTheDocument();
-    expect(screen.getAllByText("vs yesterday")).toHaveLength(2);
+    expect(screen.getAllByText("vs yesterday")).toHaveLength(4);
 
     await user.click(screen.getByRole("tab", { name: "Week to date" }));
     expect(screen.getByText("$400")).toBeInTheDocument();
@@ -296,6 +310,47 @@ describe("ReportsOverviewView", () => {
     // 400 vs prior week 350 => +14%, rendered with the prior-window named.
     // Both comparable metrics (net sales, units sold) carry it.
     expect(screen.getAllByText(/prior week/i).length).toBeGreaterThan(0);
+  });
+
+  it("animates every metric value and comparison across every overview period", async () => {
+    const user = userEvent.setup();
+    useQuery.mockReturnValue({
+      ...fixture,
+      trailing30: snapshot({
+        dayCount: 30,
+        netSalesMinor: 2500_00,
+        grossProfitMinor: 900_00,
+      }),
+    });
+    renderOverview();
+
+    const metricLabels = ["Net sales", "Units sold", "Gross profit", "Refunds"];
+    const expectAnimatedMetrics = (comparisonLabel: string) => {
+      for (const label of metricLabels) {
+        const metricLabel = screen
+          .getAllByText(label)
+          .find((element) => element.tagName === "P");
+        const card = metricLabel?.closest("div.rounded-lg");
+        expect(card?.querySelector('[data-motion="flip"]')).not.toBeNull();
+        expect(
+          card?.querySelector('[data-motion="comparison-crossfade"]'),
+        ).not.toBeNull();
+      }
+      expect(
+        screen.getAllByText(new RegExp(comparisonLabel, "i")),
+      ).toHaveLength(4);
+    };
+
+    expectAnimatedMetrics("yesterday");
+
+    await user.click(screen.getByRole("tab", { name: "Week to date" }));
+    expectAnimatedMetrics("prior week");
+
+    await user.click(screen.getByRole("tab", { name: "Trailing 30 days" }));
+    expectAnimatedMetrics("previous 30 days");
+
+    await user.click(screen.getByRole("tab", { name: "Trailing 3 months" }));
+    expectAnimatedMetrics("previous 3 months");
   });
 
   it("presents unsettled reporting state once at the period level", async () => {

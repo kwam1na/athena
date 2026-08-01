@@ -42,6 +42,7 @@ interface DataTableProps<TData, TValue> {
   onRowClick?: (row: Row<TData>) => void;
   paginationRangeItemLabel?: string;
   paginationRangeItemPluralLabel?: string;
+  paginationItemLabel?: string;
   showPagination?: boolean;
   tableId: string; // Unique identifier for localStorage keys
 }
@@ -60,6 +61,7 @@ export function GenericDataTable<TData, TValue>({
   onRowClick,
   paginationRangeItemLabel,
   paginationRangeItemPluralLabel,
+  paginationItemLabel,
   showPagination = true,
   tableId,
 }: DataTableProps<TData, TValue>) {
@@ -188,6 +190,7 @@ export function GenericDataTable<TData, TValue>({
       {showPagination ? (
         <DataTablePagination
           isLoadingMore={isLoadingMore}
+          itemLabel={paginationItemLabel}
           onLoadMore={onLoadMore}
           rangeItemLabel={paginationRangeItemLabel}
           rangeItemPluralLabel={paginationRangeItemPluralLabel}

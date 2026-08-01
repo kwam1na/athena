@@ -215,6 +215,7 @@ describe("ReportsItemsView", () => {
             displayName: "bottle water",
             sku: "6N2Y-Y4Q-95V",
             size: "500ml",
+            netPriceMinor: 12_500,
           },
           unitsSold: 3,
           unitsReturned: 0,
@@ -233,6 +234,8 @@ describe("ReportsItemsView", () => {
     expect(screen.getByText("Bottle Water")).toBeInTheDocument();
     // The code disambiguates same-named SKUs, so it is always shown.
     expect(screen.getByText("6N2Y-Y4Q-95V · 500ml")).toBeInTheDocument();
+    expect(screen.getByText("$125")).toBeInTheDocument();
+    expect(screen.queryByText("Net price")).not.toBeInTheDocument();
     expect(
       screen.queryByText("kx70hda5jszy8a9c8eg04wb39188g5g6"),
     ).not.toBeInTheDocument();
@@ -508,6 +511,102 @@ describe("ReportsItemsView", () => {
         "shadow-surface",
       );
     }
+  });
+
+  it("shows each card's comparison with the prior calendar period", () => {
+    const result = {
+      rows: [
+        {
+          productSkuId: "sku-1",
+          periodKey: "d:2026-07-28",
+          unitsSold: 16,
+          unitsReturned: 0,
+          grossSalesMinor: 1600,
+          netSalesMinor: 1600,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: 800,
+        },
+      ],
+      continueCursor: null,
+      totalNetSalesMinor: 1600,
+      totalUnitsSold: 16,
+      totalTransactions: 7,
+      priorPeriodTotals: {
+        netSalesMinor: 800,
+        unitsSold: 8,
+        transactions: 14,
+      },
+      updatedAt: null,
+    };
+    let queryResult: typeof result | undefined = result;
+    useQuery.mockImplementation(() => queryResult);
+
+    const { rerender } = render(
+      <ReportsItemsView {...baseProps} variant="canvas" />,
+    );
+
+    expect(screen.getByTestId("items-period-net-sales")).toHaveTextContent(
+      "+100% vs prior day",
+    );
+    expect(screen.getByTestId("items-period-units-sold")).toHaveTextContent(
+      "+100% vs prior day",
+    );
+    expect(screen.getByTestId("items-period-transactions")).toHaveTextContent(
+      "-50% vs prior day",
+    );
+    expect(
+      screen
+        .getByTestId("items-period-net-sales")
+        .querySelector('[data-motion="comparison-crossfade"]'),
+    ).toHaveAttribute("data-comparison-key", "day");
+
+    queryResult = undefined;
+    rerender(
+      <ReportsItemsView
+        {...baseProps}
+        periodType="week"
+        variant="canvas"
+      />,
+    );
+    expect(
+      screen
+        .getByTestId("items-period-net-sales")
+        .querySelector('[data-motion="comparison-crossfade"]'),
+    ).toHaveAttribute("data-comparison-key", "day");
+
+    queryResult = result;
+    rerender(
+      <ReportsItemsView
+        {...baseProps}
+        periodType="week"
+        variant="canvas"
+      />,
+    );
+    expect(screen.getByTestId("items-period-net-sales")).toHaveTextContent(
+      "vs prior week",
+    );
+    expect(
+      screen
+        .getByTestId("items-period-net-sales")
+        .querySelector('[data-motion="comparison-crossfade"]'),
+    ).toHaveAttribute("data-comparison-key", "week");
+
+    rerender(
+      <ReportsItemsView
+        {...baseProps}
+        periodType="month"
+        variant="canvas"
+      />,
+    );
+    expect(screen.getByTestId("items-period-net-sales")).toHaveTextContent(
+      "vs prior month",
+    );
+    expect(
+      screen
+        .getByTestId("items-period-net-sales")
+        .querySelector('[data-motion="comparison-crossfade"]'),
+    ).toHaveAttribute("data-comparison-key", "month");
   });
 
   it("links sales and transaction metrics to oldest-first transactions for the selected period", () => {

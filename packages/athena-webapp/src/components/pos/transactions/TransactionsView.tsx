@@ -743,6 +743,9 @@ export function TransactionsView() {
                 columns={transactionColumns}
                 pageIndex={tablePageIndex}
                 onPageIndexChange={handleTablePageIndexChange}
+                paginationItemLabel={
+                  isTransactionBatchFull ? undefined : "transaction"
+                }
                 renderMobileCard={(transaction) => (
                   <TransactionMobileCard transaction={transaction} />
                 )}

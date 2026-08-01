@@ -272,6 +272,56 @@ describe("ReportsSkuDetailView", () => {
     expect(screen.getByText("$28")).toBeInTheDocument();
   });
 
+  it("shows prior-period comparisons with the shared crossfade on every metric card", () => {
+    useQuery.mockReturnValue({
+      days: [],
+      totals: {
+        productSkuId: "sku-1",
+        periodKey: "range:2026-06-29:2026-07-28",
+        unitsSold: 6,
+        unitsReturned: 0,
+        grossSalesMinor: 14_400,
+        netSalesMinor: 14_400,
+        refundsMinor: 300,
+        uncostedRevenueMinor: 0,
+        grossProfitMinor: 7_200,
+      },
+      priorPeriodTotals: {
+        productSkuId: "sku-1",
+        periodKey: "range:2026-05-30:2026-06-28",
+        unitsSold: 3,
+        unitsReturned: 0,
+        grossSalesMinor: 9_600,
+        netSalesMinor: 9_600,
+        refundsMinor: 600,
+        uncostedRevenueMinor: 0,
+        grossProfitMinor: 4_800,
+      },
+      identity: { displayName: "skillz", sku: "6N2Y-WVP-S86" },
+    });
+
+    render(<ReportsSkuDetailView {...baseProps} />);
+
+    const summary = screen.getByTestId("reports-sku-summary");
+    const expectations = [
+      ["Net sales", "+50% vs prior period"],
+      ["Units sold", "+100% vs prior period"],
+      ["Gross profit", "+50% vs prior period"],
+      ["Refunds", "-50% vs prior period"],
+    ] as const;
+
+    for (const [label, comparison] of expectations) {
+      const labelElement = within(summary).getByText(label);
+      const card = labelElement.parentElement?.parentElement;
+      expect(card).not.toBeNull();
+      expect(card).toHaveTextContent(comparison);
+      expect(
+        card?.querySelector('[data-motion="comparison-crossfade"]'),
+      ).not.toBeNull();
+      expect(card?.querySelector('[data-motion="flip"]')).not.toBeNull();
+    }
+  });
+
   it("opens a day sheet with POS and storefront evidence links", async () => {
     const user = userEvent.setup();
     const onTransactionDateChange = vi.fn();

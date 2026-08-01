@@ -15,7 +15,7 @@ import {
   type ProductSkuSearchResultLike,
 } from "@/lib/skuSearch/productSkuSearchAdapters";
 import { api } from "~/convex/_generated/api";
-import { formatReportMoney } from "./reportFormat";
+import { formatOptionalMoney } from "./reportFormat";
 
 type ProductSkuSearchResponse = {
   candidateOverflow: boolean;
@@ -208,8 +208,8 @@ export function ReportsCatalogLookup({
                         {group.skus.map((option) => {
                           const skuLabel =
                             option.sku?.trim() || String(option.productSkuId);
-                          const netPrice = formatReportMoney(
-                            option.searchResult.price,
+                          const netPrice = formatOptionalMoney(
+                            option.searchResult.netPrice,
                             activeStore?.currency ?? "USD",
                           );
 

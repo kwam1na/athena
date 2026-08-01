@@ -3,11 +3,13 @@ import { Link, useParams } from "@tanstack/react-router";
 import { ArrowDown, ArrowUpRight, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
+import { formatOperationsMetricComparison } from "@/components/operations/operationsMetricFormatting";
 import { getOrigin } from "@/lib/navigationUtils";
 import { FadeIn } from "@/components/common/FadeIn";
 import { PageLevelHeader } from "@/components/common/PageLevelHeader";
 import { ListPagination } from "@/components/common/ListPagination";
 import { ReportDateRangeField } from "./ReportDateRangeField";
+import { ReportMetricComparisonCrossfade } from "./ReportMetricComparisonCrossfade";
 import { useStableReportQuery } from "./useStableReportQuery";
 import { cn } from "@/lib/utils";
 import {
@@ -64,9 +66,11 @@ export function ReportsSkuDetailView({
   const { activeStore } = useGetActiveStore();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
   const currency = activeStore?.currency ?? "USD";
+  const rangeKey = `${startDate}:${endDate}`;
 
   const {
     data: detail,
+    dataContext: settledRangeKey,
     isInitialLoad,
     isRefreshing,
   } = useStableReportQuery(
@@ -81,7 +85,42 @@ export function ReportsSkuDetailView({
         }
         : "skip",
     ),
+    rangeKey,
   );
+  const comparisonKey = settledRangeKey ?? rangeKey;
+  const comparisonHelper = (
+    currentValue: number | null | undefined,
+    priorValue: number | null | undefined,
+    missingComparisonLabel?: string,
+  ) => (
+    <ReportMetricComparisonCrossfade comparisonKey={comparisonKey}>
+      {formatOperationsMetricComparison({
+        currentValue,
+        missingComparisonLabel,
+        priorValue,
+        priorWindowLabel: "prior period",
+      })}
+    </ReportMetricComparisonCrossfade>
+  );
+  const grossProfitHelper = () => {
+    const totals = detail?.totals;
+    if (!totals) return undefined;
+    if (totals.grossProfitMinor === null) {
+      return (
+        <ReportMetricComparisonCrossfade comparisonKey={comparisonKey}>
+          {reportProfitHelper(totals.grossProfitMinor)}
+        </ReportMetricComparisonCrossfade>
+      );
+    }
+
+    return comparisonHelper(
+      totals.grossProfitMinor,
+      detail.priorPeriodTotals?.grossProfitMinor,
+      detail.priorPeriodTotals?.grossProfitMinor === null
+        ? "Prior period profit unavailable"
+        : undefined,
+    );
+  };
   const daysNewestFirst = detail
     ? [...detail.days].sort((left, right) =>
       right.operatingDate.localeCompare(left.operatingDate),
@@ -284,38 +323,59 @@ export function ReportsSkuDetailView({
               )}
             >
               <OperationsSummaryMetric
-                label="Net sales"
-                value={formatOptionalMoney(
-                  detail.totals?.netSalesMinor,
-                  currency,
-                )}
-              />
-              <OperationsSummaryMetric
-                label="Units sold"
-                value={formatUnits(detail.totals?.unitsSold)}
-              />
-              <OperationsSummaryMetric
+                formatValue={(value) =>
+                  formatOptionalMoney(value, currency)
+                }
                 helper={
                   detail.totals
-                    ? reportProfitHelper(detail.totals.grossProfitMinor)
+                    ? comparisonHelper(
+                      detail.totals.netSalesMinor,
+                      detail.priorPeriodTotals?.netSalesMinor,
+                    )
                     : undefined
                 }
-                label="Gross profit"
-                value={
-                  detail.totals
-                    ? formatReportProfit(
-                      detail.totals.grossProfitMinor,
-                      currency,
-                    )
-                    : "—"
-                }
+                label="Net sales"
+                value={detail.totals?.netSalesMinor ?? "—"}
+                valueTransitionFromZero="fade"
               />
               <OperationsSummaryMetric
+                formatValue={formatUnits}
+                helper={
+                  detail.totals
+                    ? comparisonHelper(
+                      detail.totals.unitsSold,
+                      detail.priorPeriodTotals?.unitsSold,
+                    )
+                    : undefined
+                }
+                label="Units sold"
+                value={detail.totals?.unitsSold ?? "—"}
+                valueTransitionFromZero="fade"
+              />
+              <OperationsSummaryMetric
+                formatValue={(value) =>
+                  formatReportProfit(value, currency)
+                }
+                helper={grossProfitHelper()}
+                label="Gross profit"
+                value={detail.totals?.grossProfitMinor ?? "—"}
+                valueTransitionFromZero="fade"
+              />
+              <OperationsSummaryMetric
+                formatValue={(value) =>
+                  formatOptionalMoney(value, currency)
+                }
+                helper={
+                  detail.totals
+                    ? comparisonHelper(
+                      detail.totals.refundsMinor,
+                      detail.priorPeriodTotals?.refundsMinor,
+                    )
+                    : undefined
+                }
                 label="Refunds"
-                value={formatOptionalMoney(
-                  detail.totals?.refundsMinor,
-                  currency,
-                )}
+                value={detail.totals?.refundsMinor ?? "—"}
+                valueTransitionFromZero="fade"
               />
             </div>
           ) : null}

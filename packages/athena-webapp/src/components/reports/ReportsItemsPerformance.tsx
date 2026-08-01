@@ -23,8 +23,10 @@ import { getOrigin } from "@/lib/navigationUtils";
 import type { ReportSkuSortBy } from "~/shared/reportsContract";
 import { FlipNumber } from "@/components/common/FlipNumber";
 import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
+import { formatOperationsMetricComparison } from "@/components/operations/operationsMetricFormatting";
 import { ReportCalendar } from "./ReportCalendar";
 import { ReportFreshness } from "./ReportFreshness";
+import { ReportMetricComparisonCrossfade } from "./ReportMetricComparisonCrossfade";
 import {
   REPORT_PERIOD_TYPE_LABELS,
   REPORT_PERIOD_TYPES,
@@ -41,6 +43,7 @@ import {
 export type ReportsItemsVariant = "card" | "canvas";
 
 export function ReportsItemsPerformance({
+  comparisonPeriodKey,
   currency,
   periodType,
   periodDate,
@@ -55,9 +58,11 @@ export function ReportsItemsPerformance({
   onPeriodDateChange,
   onSortByChange,
   orgUrlSlug,
+  priorPeriodTotals,
   storeUrlSlug,
   variant,
 }: {
+  comparisonPeriodKey: string;
   currency: string;
   periodType: ReportPeriodType;
   periodDate: string;
@@ -72,12 +77,30 @@ export function ReportsItemsPerformance({
   onPeriodDateChange: (periodDate: string) => void;
   onSortByChange: (sortBy: ReportSkuSortBy) => void;
   orgUrlSlug: string;
+  priorPeriodTotals?: {
+    netSalesMinor: number;
+    unitsSold: number;
+    transactions: number;
+  };
   storeUrlSlug: string;
   variant: ReportsItemsVariant;
 }) {
   const periodRange = dateRangeForItemsPeriod(periodType, periodDate);
   const selectedDate = getLocalDateFromOperatingDate(periodDate);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const comparisonPeriodType: ReportPeriodType = comparisonPeriodKey.startsWith(
+    "d:",
+  )
+    ? "day"
+    : comparisonPeriodKey.startsWith("w:")
+      ? "week"
+      : "month";
+  const priorWindowLabel =
+    comparisonPeriodType === "day"
+      ? "prior day"
+      : comparisonPeriodType === "week"
+        ? "prior week"
+        : "prior month";
   const transactionsSearch = {
     endDate: periodRange.endDate,
     o: getOrigin(),
@@ -257,7 +280,18 @@ export function ReportsItemsPerformance({
             data-testid="items-period-metrics-reserved"
           >
             <MetricCard
+              comparisonKey={comparisonPeriodKey}
+              comparisonPeriodType={comparisonPeriodType}
               formatValue={(value) => formatReportMoney(value, currency)}
+              helper={
+                priorPeriodTotals
+                  ? formatOperationsMetricComparison({
+                      currentValue: totalNetSalesMinor,
+                      priorValue: priorPeriodTotals.netSalesMinor,
+                      priorWindowLabel,
+                    })
+                  : undefined
+              }
               label="Net sales"
               link={{
                 ariaLabel: "Open transactions for net sales",
@@ -270,7 +304,18 @@ export function ReportsItemsPerformance({
               value={totalNetSalesMinor ?? 0}
             />
             <MetricCard
+              comparisonKey={comparisonPeriodKey}
+              comparisonPeriodType={comparisonPeriodType}
               formatValue={formatUnits}
+              helper={
+                priorPeriodTotals
+                  ? formatOperationsMetricComparison({
+                      currentValue: totalUnitsSold,
+                      priorValue: priorPeriodTotals.unitsSold,
+                      priorWindowLabel,
+                    })
+                  : undefined
+              }
               label="Units sold"
               numberTestId={
                 hasActivity ? "items-period-units-number" : undefined
@@ -279,7 +324,18 @@ export function ReportsItemsPerformance({
               value={totalUnitsSold ?? 0}
             />
             <MetricCard
+              comparisonKey={comparisonPeriodKey}
+              comparisonPeriodType={comparisonPeriodType}
               formatValue={formatUnits}
+              helper={
+                priorPeriodTotals
+                  ? formatOperationsMetricComparison({
+                      currentValue: totalTransactions,
+                      priorValue: priorPeriodTotals.transactions,
+                      priorWindowLabel,
+                    })
+                  : undefined
+              }
               label="Transactions"
               link={{
                 ariaLabel: "Open transactions for transaction count",
@@ -345,14 +401,20 @@ export function ReportsItemsPerformance({
 }
 
 function MetricCard({
+  comparisonKey,
+  comparisonPeriodType,
   formatValue,
+  helper,
   label,
   link,
   testId,
   numberTestId,
   value,
 }: {
+  comparisonKey: string;
+  comparisonPeriodType: ReportPeriodType;
   formatValue: (value: number) => string;
+  helper?: ComponentProps<typeof OperationsSummaryMetric>["helper"];
   label: string;
   link?: ComponentProps<typeof OperationsSummaryMetric>["link"];
   testId?: string;
@@ -360,18 +422,27 @@ function MetricCard({
   value: number;
 }) {
   return (
-    <div data-testid={testId}>
+    <div className="h-full" data-testid={testId}>
       <OperationsSummaryMetric
+        className="h-full"
+        formatValue={formatValue}
+        helper={
+          helper ? (
+            <ReportMetricComparisonCrossfade
+              comparisonKey={comparisonKey}
+              comparisonState={comparisonPeriodType}
+            >
+              {helper}
+            </ReportMetricComparisonCrossfade>
+          ) : (
+            <span aria-hidden="true">&nbsp;</span>
+          )
+        }
         label={label}
         link={link}
-        value={
-          <FlipNumber
-            formatValue={formatValue}
-            testId={numberTestId}
-            transitionFromZero="fade"
-            value={value}
-          />
-        }
+        value={value}
+        valueTestId={numberTestId}
+        valueTransitionFromZero="fade"
       />
     </div>
   );

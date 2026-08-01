@@ -6,6 +6,7 @@ import { AnimatedHeight } from "@/components/common/AnimatedHeight";
 import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
 import { formatOperationsMetricComparison } from "@/components/operations/operationsMetricFormatting";
 import type { ReportPeriodSnapshot } from "~/shared/reportsContract";
+import { ReportMetricComparisonCrossfade } from "./ReportMetricComparisonCrossfade";
 import {
   formatReportMoney,
   formatReportProfit,
@@ -28,6 +29,7 @@ export function ReportPeriodMetrics({
   snapshot,
   currency,
   comparison,
+  comparisonKey,
   dailyOperationsLink,
   periodLabel,
   priorWindowLabel,
@@ -36,8 +38,9 @@ export function ReportPeriodMetrics({
 }: {
   snapshot: ReportPeriodSnapshot;
   currency: string;
-  /** Prior-window values for the comparable metrics; omit when not comparable. */
-  comparison?: { netSalesMinor?: number; unitsSold?: number };
+  /** Materialized prior-window values for all headline metrics. */
+  comparison?: ReportPeriodSnapshot;
+  comparisonKey: string;
   dailyOperationsLink?: {
     orgUrlSlug: string;
     search: Record<string, string>;
@@ -82,6 +85,38 @@ export function ReportPeriodMetrics({
               snapshot.dayCount === 1 ? "day" : "days"
             } awaiting reconciliation`;
   const showPeriodStatus = Boolean(periodStatus || statusLink);
+  const comparisonHelper = (
+    currentValue: number | null | undefined,
+    priorValue: number | null | undefined,
+    missingComparisonLabel?: string,
+  ) => (
+    <ReportMetricComparisonCrossfade comparisonKey={comparisonKey}>
+      {formatOperationsMetricComparison({
+        currentValue,
+        missingComparisonLabel,
+        priorValue,
+        priorWindowLabel,
+      })}
+    </ReportMetricComparisonCrossfade>
+  );
+  const grossProfitHelper =
+    snapshot.grossProfitMinor === null
+      ? (
+          <ReportMetricComparisonCrossfade comparisonKey={comparisonKey}>
+            {snapshot.uncostedRevenueMinor > 0
+              ? `${formatReportMoney(snapshot.uncostedRevenueMinor, currency)} without item cost`
+              : reportProfitHelper(snapshot.grossProfitMinor)}
+          </ReportMetricComparisonCrossfade>
+        )
+      : comparison
+        ? comparisonHelper(
+            snapshot.grossProfitMinor,
+            comparison.grossProfitMinor,
+            comparison.grossProfitMinor === null
+              ? "Prior period profit unavailable"
+              : undefined,
+          )
+        : undefined;
 
   return (
     <section data-testid={`report-period-metrics-${periodLabel}`}>
@@ -133,13 +168,14 @@ export function ReportPeriodMetrics({
       </AnimatedHeight>
       <div className="grid gap-layout-md [grid-template-columns:repeat(auto-fit,minmax(min(14rem,100%),1fr))] md:gap-layout-lg">
         <OperationsSummaryMetric
+          className="h-full"
+          formatValue={(value) => formatReportMoney(value, currency)}
           helper={
             comparison
-              ? formatOperationsMetricComparison({
-                  currentValue: snapshot.netSalesMinor,
-                  priorValue: comparison.netSalesMinor,
-                  priorWindowLabel,
-                })
+              ? comparisonHelper(
+                  snapshot.netSalesMinor,
+                  comparison.netSalesMinor,
+                )
               : undefined
           }
           label="Net sales"
@@ -152,33 +188,47 @@ export function ReportPeriodMetrics({
                 }
               : undefined
           }
-          value={formatReportMoney(snapshot.netSalesMinor, currency)}
+          value={snapshot.netSalesMinor}
+          valueTestId="overview-net-sales-number"
+          valueTransitionFromZero="fade"
         />
         <OperationsSummaryMetric
+          className="h-full"
+          formatValue={formatUnits}
           helper={
             comparison
-              ? formatOperationsMetricComparison({
-                  currentValue: snapshot.unitsSold,
-                  priorValue: comparison.unitsSold,
-                  priorWindowLabel,
-                })
+              ? comparisonHelper(snapshot.unitsSold, comparison.unitsSold)
               : undefined
           }
           label="Units sold"
-          value={formatUnits(snapshot.unitsSold)}
+          value={snapshot.unitsSold}
+          valueTestId="overview-units-sold-number"
+          valueTransitionFromZero="fade"
         />
         <OperationsSummaryMetric
-          helper={
-            snapshot.uncostedRevenueMinor > 0
-              ? `${formatReportMoney(snapshot.uncostedRevenueMinor, currency)} without item cost`
-              : reportProfitHelper(snapshot.grossProfitMinor)
-          }
+          className="h-full"
+          formatValue={(value) => formatReportProfit(value, currency)}
+          helper={grossProfitHelper}
           label="Gross profit"
-          value={formatReportProfit(snapshot.grossProfitMinor, currency)}
+          value={snapshot.grossProfitMinor ?? formatReportProfit(null, currency)}
+          valueTestId="overview-gross-profit-number"
+          valueTransitionFromZero="fade"
         />
         <OperationsSummaryMetric
+          className="h-full"
+          formatValue={(value) => formatReportMoney(value, currency)}
+          helper={
+            comparison
+              ? comparisonHelper(
+                  snapshot.refundsMinor,
+                  comparison.refundsMinor,
+                )
+              : undefined
+          }
           label="Refunds"
-          value={formatReportMoney(snapshot.refundsMinor, currency)}
+          value={snapshot.refundsMinor}
+          valueTestId="overview-refunds-number"
+          valueTransitionFromZero="fade"
         />
       </div>
     </section>

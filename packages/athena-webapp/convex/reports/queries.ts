@@ -6,6 +6,7 @@ import { requireReportsStoreAccess } from "./access";
 import {
   dayPeriodKey,
   isReportingTodayInProgress,
+  monthPeriodKey,
   trailingThreeMonthsStart,
 } from "../../shared/reportsContract";
 import { REPORT_SKU_PAGE_SIZE } from "../../shared/reportsContract";
@@ -21,7 +22,7 @@ import type {
   ReportSkuTransactionEvidence,
 } from "../../shared/reportsContract";
 import { emptySnapshot, snapshotForDays } from "./overview";
-import { periodDateRange } from "./rollups";
+import { addDaysToDate, periodDateRange } from "./rollups";
 
 /**
  * Slice D — read queries for the rebuilt reports layer.
@@ -101,9 +102,9 @@ export const getOverview = query({
     await requireReportsStoreAccess(ctx, args.storeId);
 
     // Steady-state read budget: 1 doc — the reportOverview singleton via
-    // by_storeId. During the unitsSold rollout, legacy overview documents are
-    // enriched from at most 30 reportDay rows until the next sweep refreshes
-    // the singleton.
+    // by_storeId. During overview-document rollouts, legacy documents are
+    // enriched from at most 184 reportDay rows until the next sweep refreshes
+    // the singleton with both current and prior rolling snapshots.
     const doc = await ctx.db
       .query("reportOverview")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
@@ -112,15 +113,31 @@ export const getOverview = query({
 
     let dailyTrend = doc.dailyTrend;
     let trailing3Months = doc.trailing3Months;
+    let priorTrailing30 = doc.priorTrailing30;
+    let priorTrailing3Months = doc.priorTrailing3Months;
     const needsTrendUnits = dailyTrend.some(
       (point) => point.unitsSold === undefined,
     );
     const anchorDate = dailyTrend.at(-1)?.operatingDate;
 
-    if ((needsTrendUnits || !trailing3Months) && anchorDate) {
-      const startDate = trailing3Months
-        ? dailyTrend.at(0)?.operatingDate
-        : trailingThreeMonthsStart(anchorDate);
+    if (
+      (needsTrendUnits ||
+        !trailing3Months ||
+        !priorTrailing30 ||
+        !priorTrailing3Months) &&
+      anchorDate
+    ) {
+      const trailing3MonthsStart = trailingThreeMonthsStart(anchorDate);
+      const priorTrailing3MonthsEnd = addDaysToDate(
+        trailing3MonthsStart,
+        -1,
+      );
+      const startDate =
+        !priorTrailing30 || !priorTrailing3Months
+          ? trailingThreeMonthsStart(priorTrailing3MonthsEnd)
+          : !trailing3Months
+            ? trailing3MonthsStart
+            : dailyTrend.at(0)?.operatingDate;
 
       if (startDate) {
         const days = await ctx.db
@@ -131,7 +148,7 @@ export const getOverview = query({
               .gte("operatingDate", startDate)
               .lte("operatingDate", anchorDate),
           )
-          .take(92);
+          .take(184);
         if (needsTrendUnits) {
           const unitsByDate = new Map(
             days.map((day) => [day.operatingDate, day.unitsSold]),
@@ -141,7 +158,30 @@ export const getOverview = query({
             unitsSold: point.unitsSold ?? unitsByDate.get(point.operatingDate),
           }));
         }
-        trailing3Months ??= snapshotForDays(days);
+        trailing3Months ??= snapshotForDays(
+          days.filter(
+            (day) =>
+              day.operatingDate >= trailing3MonthsStart &&
+              day.operatingDate <= anchorDate,
+          ),
+        );
+        priorTrailing30 ??= snapshotForDays(
+          days.filter((day) => {
+            const endDate = addDaysToDate(anchorDate, -30);
+            const startDate = addDaysToDate(anchorDate, -59);
+            return (
+              day.operatingDate >= startDate && day.operatingDate <= endDate
+            );
+          }),
+        );
+        priorTrailing3Months ??= snapshotForDays(
+          days.filter(
+            (day) =>
+              day.operatingDate >=
+                trailingThreeMonthsStart(priorTrailing3MonthsEnd) &&
+              day.operatingDate <= priorTrailing3MonthsEnd,
+          ),
+        );
       }
     }
 
@@ -153,7 +193,9 @@ export const getOverview = query({
       weekToDate: doc.weekToDate,
       priorWeek: doc.priorWeek,
       trailing30: doc.trailing30,
+      priorTrailing30: priorTrailing30 ?? emptySnapshot(),
       trailing3Months: trailing3Months ?? emptySnapshot(),
+      priorTrailing3Months: priorTrailing3Months ?? emptySnapshot(),
       comparisons: doc.comparisons,
       dailyTrend,
       trust: doc.trust,
@@ -373,6 +415,55 @@ async function livePosTransactionCount(
   return saleSources.size;
 }
 
+function priorPeriodDateRange(
+  periodKey: ReportPeriodKey,
+  periodRange: { startDate: string; endDate: string } | null,
+) {
+  if (!periodRange) return null;
+
+  if (periodKey.startsWith("d:")) {
+    const operatingDate = addDaysToDate(periodRange.startDate, -1);
+    return { startDate: operatingDate, endDate: operatingDate };
+  }
+
+  if (periodKey.startsWith("w:")) {
+    return {
+      startDate: addDaysToDate(periodRange.startDate, -7),
+      endDate: addDaysToDate(periodRange.endDate, -7),
+    };
+  }
+
+  if (periodKey.startsWith("m:")) {
+    return periodDateRange(
+      monthPeriodKey(addDaysToDate(periodRange.startDate, -1)),
+    );
+  }
+
+  return null;
+}
+
+async function transactionCountsForDays(
+  ctx: QueryCtx,
+  days: Doc<"reportDay">[],
+): Promise<number[]> {
+  const closes = await Promise.all(
+    days.map((day) =>
+      day.closeId
+        ? ctx.db.get("dailyClose", day.closeId)
+        : Promise.resolve(null),
+    ),
+  );
+
+  return Promise.all(
+    days.map((day, index) => {
+      const close = closes[index];
+      return close
+        ? transactionCountFromCloseSummary(close.summary)
+        : livePosTransactionCount(ctx, day);
+    }),
+  );
+}
+
 export const listPeriodSkus = query({
   args: {
     storeId: v.id("store"),
@@ -389,11 +480,20 @@ export const listPeriodSkus = query({
     totalNetSalesMinor: number;
     totalUnitsSold: number;
     totalTransactions: number;
+    priorPeriodTotals: {
+      netSalesMinor: number;
+      unitsSold: number;
+      transactions: number;
+    };
     updatedAt: number | null;
     isTodayInProgress: boolean;
   }> => {
     await requireReportsStoreAccess(ctx, args.storeId);
     const periodRange = periodDateRange(args.periodKey as ReportPeriodKey);
+    const priorRange = priorPeriodDateRange(
+      args.periodKey as ReportPeriodKey,
+      periodRange,
+    );
 
     let cursorCtx: ListPeriodSkusCursor | null = null;
     if (args.cursor) {
@@ -475,7 +575,7 @@ export const listPeriodSkus = query({
     // live POS transactions; the extra row detects the same 2,000-fact cap
     // enforced by the day fold instead of silently returning a partial count.
     // One singleton read carries the same sweep timestamp shown on Overview.
-    const [rows, overview, periodDays] = await Promise.all([
+    const [rows, overview, periodDays, priorPeriodDays] = await Promise.all([
       withSkuIdentity(ctx, page.map(toSkuPeriodRow)),
       ctx.db
         .query("reportOverview")
@@ -492,22 +592,23 @@ export const listPeriodSkus = query({
           )
           .take(ITEMS_PERIOD_MAX_DAYS)
         : Promise.resolve([]),
+      priorRange
+        ? ctx.db
+          .query("reportDay")
+          .withIndex("by_storeId_operatingDate", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .gte("operatingDate", priorRange.startDate)
+              .lte("operatingDate", priorRange.endDate),
+          )
+          .take(ITEMS_PERIOD_MAX_DAYS)
+        : Promise.resolve([]),
     ]);
-    const periodCloses = await Promise.all(
-      periodDays.map((day) =>
-        day.closeId
-          ? ctx.db.get("dailyClose", day.closeId)
-          : Promise.resolve(null),
-      ),
-    );
-    const periodTransactionCounts = await Promise.all(
-      periodDays.map((day, index) => {
-        const close = periodCloses[index];
-        return close
-          ? transactionCountFromCloseSummary(close.summary)
-          : livePosTransactionCount(ctx, day);
-      }),
-    );
+    const [periodTransactionCounts, priorPeriodTransactionCounts] =
+      await Promise.all([
+        transactionCountsForDays(ctx, periodDays),
+        transactionCountsForDays(ctx, priorPeriodDays),
+      ]);
     const selectedDayDate =
       periodRange && periodRange.startDate === periodRange.endDate
         ? periodRange.startDate
@@ -528,6 +629,20 @@ export const listPeriodSkus = query({
         (total, count) => total + count,
         0,
       ),
+      priorPeriodTotals: {
+        netSalesMinor: priorPeriodDays.reduce(
+          (total, day) => total + day.netSalesMinor,
+          0,
+        ),
+        unitsSold: priorPeriodDays.reduce(
+          (total, day) => total + day.unitsSold,
+          0,
+        ),
+        transactions: priorPeriodTransactionCounts.reduce(
+          (total, count) => total + count,
+          0,
+        ),
+      },
       updatedAt: overview?.updatedAt ?? null,
       isTodayInProgress:
         selectedDayDate !== null &&
@@ -579,7 +694,6 @@ async function resolveSkuIdentity(
   const code = cleanMetadataValue(sku.sku);
   const size = cleanMetadataValue(sku.size);
   const imageUrl = cleanMetadataValue(sku.images[0]);
-  const netPriceMinor = sku.netPrice ?? sku.price;
   const unitCostMinor = sku.unitCost;
 
   return {
@@ -588,7 +702,7 @@ async function resolveSkuIdentity(
       cleanMetadataValue(sku.productName) ??
       code ??
       String(productSkuId),
-    netPriceMinor,
+    ...(sku.netPrice !== undefined ? { netPriceMinor: sku.netPrice } : {}),
     ...(unitCostMinor !== undefined ? { unitCostMinor } : {}),
     ...(code ? { sku: code } : {}),
     ...(size ? { size } : {}),
@@ -616,6 +730,36 @@ async function withSkuIdentity(
 // getSkuDetail
 // ---------------------------------------------------------------------------
 
+function precedingEqualRange(startDate: string, endDate: string) {
+  const dayCount = inclusiveDaySpan(startDate, endDate);
+  const priorEndDate = addDaysToDate(startDate, -1);
+  return {
+    startDate: addDaysToDate(priorEndDate, 1 - dayCount),
+    endDate: priorEndDate,
+  };
+}
+
+function skuRangeTotals(
+  rows: Doc<"reportSkuDay">[],
+  productSkuId: Id<"productSku">,
+  periodKey: string,
+): ReportSkuPeriodRow | null {
+  if (rows.length === 0) return null;
+
+  const anyUncosted = rows.some((row) => row.grossProfitMinor === null);
+  return {
+    productSkuId,
+    periodKey,
+    unitsSold: sum(rows, "unitsSold"),
+    unitsReturned: sum(rows, "unitsReturned"),
+    grossSalesMinor: sum(rows, "grossSalesMinor"),
+    netSalesMinor: sum(rows, "netSalesMinor"),
+    refundsMinor: sum(rows, "refundsMinor"),
+    uncostedRevenueMinor: sum(rows, "uncostedRevenueMinor"),
+    grossProfitMinor: anyUncosted ? null : sum(rows, "grossProfitMinor"),
+  };
+}
+
 export const getSkuDetail = query({
   args: {
     storeId: v.id("store"),
@@ -629,30 +773,47 @@ export const getSkuDetail = query({
   ): Promise<{
     days: (ReportSkuPeriodRow & { operatingDate: string })[];
     totals: ReportSkuPeriodRow | null;
+    priorPeriodTotals: ReportSkuPeriodRow | null;
     identity?: ReportSkuIdentity;
   } | null> => {
     await requireReportsStoreAccess(ctx, args.storeId);
     requireValidDateRange(args.startDate, args.endDate);
+    const priorRange = precedingEqualRange(args.startDate, args.endDate);
 
-    // Read budget: up to RANGE_MAX_SPAN_DAYS (92) reportSkuDay docs — a
-    // single range read on by_storeId_productSkuId_operatingDate.
-    const rows = await ctx.db
-      .query("reportSkuDay")
-      .withIndex("by_storeId_productSkuId_operatingDate", (q) =>
-        q
-          .eq("storeId", args.storeId)
-          .eq("productSkuId", args.productSkuId)
-          .gte("operatingDate", args.startDate)
-          .lte("operatingDate", args.endDate),
-      )
-      .take(RANGE_MAX_SPAN_DAYS);
-
-    // Resolved before the empty-range return so the page can still name the
-    // SKU when it simply had no activity in the selected window.
-    const identity = await resolveSkuIdentity(ctx, args.productSkuId);
+    // Read budget: up to 2 * RANGE_MAX_SPAN_DAYS (184) reportSkuDay docs —
+    // one bounded indexed read for the selected range and one for the
+    // immediately preceding equal-length comparison range.
+    const [rows, priorRows, identity] = await Promise.all([
+      ctx.db
+        .query("reportSkuDay")
+        .withIndex("by_storeId_productSkuId_operatingDate", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("productSkuId", args.productSkuId)
+            .gte("operatingDate", args.startDate)
+            .lte("operatingDate", args.endDate),
+        )
+        .take(RANGE_MAX_SPAN_DAYS),
+      ctx.db
+        .query("reportSkuDay")
+        .withIndex("by_storeId_productSkuId_operatingDate", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("productSkuId", args.productSkuId)
+            .gte("operatingDate", priorRange.startDate)
+            .lte("operatingDate", priorRange.endDate),
+        )
+        .take(RANGE_MAX_SPAN_DAYS),
+      resolveSkuIdentity(ctx, args.productSkuId),
+    ]);
+    const priorPeriodTotals = skuRangeTotals(
+      priorRows,
+      args.productSkuId,
+      `range:${priorRange.startDate}:${priorRange.endDate}`,
+    );
 
     if (rows.length === 0) {
-      return { days: [], totals: null, identity };
+      return { days: [], totals: null, priorPeriodTotals, identity };
     }
 
     const days = rows.map((row) => ({
@@ -668,20 +829,13 @@ export const getSkuDetail = query({
       grossProfitMinor: row.grossProfitMinor,
     }));
 
-    const anyUncosted = rows.some((row) => row.grossProfitMinor === null);
-    const totals: ReportSkuPeriodRow = {
-      productSkuId: args.productSkuId,
-      periodKey: `range:${args.startDate}:${args.endDate}`,
-      unitsSold: sum(rows, "unitsSold"),
-      unitsReturned: sum(rows, "unitsReturned"),
-      grossSalesMinor: sum(rows, "grossSalesMinor"),
-      netSalesMinor: sum(rows, "netSalesMinor"),
-      refundsMinor: sum(rows, "refundsMinor"),
-      uncostedRevenueMinor: sum(rows, "uncostedRevenueMinor"),
-      grossProfitMinor: anyUncosted ? null : sum(rows, "grossProfitMinor"),
-    };
+    const totals = skuRangeTotals(
+      rows,
+      args.productSkuId,
+      `range:${args.startDate}:${args.endDate}`,
+    );
 
-    return { days, totals, identity };
+    return { days, totals, priorPeriodTotals, identity };
   },
 });
 

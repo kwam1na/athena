@@ -17,6 +17,7 @@ export type ProductSkuSearchResultLike = {
     matchedValue: string | null;
     rank: number;
   };
+  netPrice?: number | null;
   price: number;
   productAvailability: "archived" | "draft" | "live";
   productId: Id<"product">;

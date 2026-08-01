@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Report period comparisons plan</title>
+  <style>
+    :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, sans-serif; }
+    body { margin: 0 auto; max-width: 920px; padding: 48px 24px 80px; line-height: 1.55; }
+    h1 { font-size: 2rem; line-height: 1.15; }
+    h2 { margin-top: 2rem; border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent); padding-bottom: .35rem; }
+    h3 { margin-top: 1.5rem; }
+    code { background: color-mix(in srgb, currentColor 10%, transparent); border-radius: 4px; padding: .1rem .3rem; }
+    .meta, .note { color: color-mix(in srgb, currentColor 72%, transparent); }
+    .unit { border: 1px solid color-mix(in srgb, currentColor 18%, transparent); border-radius: 12px; margin: 1rem 0; padding: 1rem 1.25rem; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid color-mix(in srgb, currentColor 18%, transparent); padding: .6rem; text-align: left; vertical-align: top; }
+  </style>
+</head>
+<body>
+  <p class="meta">Athena · Implementation plan · 2026-08-01</p>
+  <h1>Trustworthy prior-period comparisons in Reports</h1>
+  <p>Extend Athena's server-shaped Reports read models so overview, item-period, and SKU-detail metrics compare against the immediately preceding equivalent period. Preserve bounded Convex reads, missing-data semantics, source evidence, and restrained operator-facing transitions.</p>
+
+  <h2>Requirements</h2>
+  <ul>
+    <li>Expose preceding equivalent windows for overview, item-period, and SKU-detail metrics.</li>
+    <li>Respect fixed day/week spans, calendar-month boundaries, and equal-length custom ranges.</li>
+    <li>Keep missing values distinct from legitimate zero baselines.</li>
+    <li>Use indexed, bounded Convex reads and prove limits in tests.</li>
+    <li>Share comparison presentation behavior without redesigning unrelated surfaces.</li>
+  </ul>
+
+  <h2>Implementation units</h2>
+  <section class="unit"><h3>1. Overview snapshots</h3><p>Extend shared contracts, derived schema, and overview projection with current/prior rolling snapshots plus bounded legacy-document enrichment.</p></section>
+  <section class="unit"><h3>2. Item and SKU query totals</h3><p>Resolve prior ranges by period meaning and return explicit prior totals from the canonical report queries.</p></section>
+  <section class="unit"><h3>3. Metric presentation</h3><p>Consume server-provided comparisons through one shared crossfade and consistent operational copy.</p></section>
+  <section class="unit"><h3>4. Adjacent layout contracts</h3><p>Preserve predictable table, transaction, and catalog-lookup sizing under the expanded metric content.</p></section>
+  <section class="unit"><h3>5. Validation and generated artifacts</h3><p>Run focused Vitest suites, rebuild Graphify after final code edits, and finish with <code>bun run pr:athena</code>.</p></section>
+
+  <h2>Key risks</h2>
+  <table>
+    <tr><th>Risk</th><th>Control</th></tr>
+    <tr><td>Overlapping or misleading comparison ranges</td><td>Period-specific tests across month and year boundaries.</td></tr>
+    <tr><td>Convex read amplification</td><td>Indexed reads with explicit caps and budget assertions.</td></tr>
+    <tr><td>Missing data shown as zero</td><td>Optional/null semantics carried through contract and UI tests.</td></tr>
+    <tr><td>Generated graph drift</td><td>Graphify rebuild after the last code change.</td></tr>
+  </table>
+
+  <h2>Finish line</h2>
+  <p>A reviewed, validated PR is merged to <code>main</code>; the root checkout is fast-forwarded to <code>origin/main</code>, clean, and aligned with the merged commit.</p>
+  <p class="note">Full detail and requirement traceability are in the paired Markdown plan.</p>
+</body>
+</html>

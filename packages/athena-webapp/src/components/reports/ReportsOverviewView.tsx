@@ -25,34 +25,43 @@ import {
 } from "./reportPeriodKeys";
 
 /**
- * Prior-window values for comparable windows. Today compares with the
- * previous calendar day, week-to-date with the prior week, and trailing-30
- * remains context-only.
+ * Prior-window values for every selectable overview period. These snapshots
+ * are materialized with the overview so the page keeps its one-document read
+ * boundary.
  */
 function comparisonFor(
   overview: ReportOverviewData,
   window: ReportOverviewWindow,
 ):
   | {
-      netSalesMinor?: number;
-      unitsSold?: number;
+      snapshot: ReportOverviewData["today"];
       priorWindowLabel: string;
     }
   | undefined {
   if (window === "today") {
     return {
-      netSalesMinor: overview.yesterday.netSalesMinor,
-      unitsSold: overview.yesterday.unitsSold,
+      snapshot: overview.yesterday,
       priorWindowLabel: "yesterday",
     };
   }
 
-  if (window !== "weekToDate") return undefined;
+  if (window === "weekToDate") {
+    return {
+      snapshot: overview.priorWeek,
+      priorWindowLabel: "prior week",
+    };
+  }
+
+  if (window === "trailing30") {
+    return {
+      snapshot: overview.priorTrailing30,
+      priorWindowLabel: "previous 30 days",
+    };
+  }
 
   return {
-    netSalesMinor: overview.priorWeek.netSalesMinor,
-    unitsSold: overview.priorWeek.unitsSold,
-    priorWindowLabel: "prior week",
+    snapshot: overview.priorTrailing3Months,
+    priorWindowLabel: "previous 3 months",
   };
 }
 
@@ -153,7 +162,8 @@ export function ReportsOverviewView({
           </div>
 
           <ReportPeriodMetrics
-            comparison={comparison}
+            comparison={comparison?.snapshot}
+            comparisonKey={selectedWindow}
             currency={currency}
             dailyOperationsLink={
               selectedWindow === "today" &&
