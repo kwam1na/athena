@@ -13,11 +13,8 @@ import {
   User,
   MousePointerClick,
 } from "lucide-react";
-import {
-  getRelativeTime,
-  capitalizeFirstLetter,
-  snakeCaseToWords,
-} from "~/src/lib/utils";
+import { capitalizeFirstLetter, snakeCaseToWords } from "~/src/lib/utils";
+import { RelativeTimestamp } from "../ui/relative-timestamp";
 import { useGetCurrencyFormatter } from "~/src/hooks/useGetCurrencyFormatter";
 import { Link } from "@tanstack/react-router";
 import { getOrigin } from "~/src/lib/navigationUtils";
@@ -140,9 +137,10 @@ export function ActivityTimeline({
                       <span className="text-sm font-medium text-gray-900">
                         {activityType.label}
                       </span>
-                      <span className="text-xs text-gray-500">
-                        {getRelativeTime(activity._creationTime)}
-                      </span>
+                      <RelativeTimestamp
+                        className="text-xs text-gray-500"
+                        value={activity._creationTime}
+                      />
                     </div>
 
                     {/* Product info if available */}

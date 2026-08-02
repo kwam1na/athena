@@ -1,6 +1,6 @@
 import React from "react";
 import { ChevronDown } from "lucide-react";
-import { getRelativeTime } from "~/src/lib/utils";
+import { RelativeTimestamp } from "../ui/relative-timestamp";
 import {
   formatObservabilityLabel,
   getDeviceIcon,
@@ -70,9 +70,10 @@ export function TimelineEventCard({ event }: TimelineEventCardProps) {
                 )}
               </div>
 
-              <span className="whitespace-nowrap text-xs text-gray-500">
-                {getRelativeTime(event._creationTime)}
-              </span>
+              <RelativeTimestamp
+                className="whitespace-nowrap text-xs text-gray-500"
+                value={event._creationTime}
+              />
             </div>
 
             {productLabel && (

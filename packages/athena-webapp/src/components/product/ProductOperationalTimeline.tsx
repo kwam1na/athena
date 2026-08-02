@@ -4,7 +4,7 @@ import { Circle, History } from "lucide-react";
 import { api } from "~/convex/_generated/api";
 import { useProduct } from "~/src/contexts/ProductContext";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
-import { getRelativeTime } from "~/src/lib/utils";
+import { RelativeTimestamp } from "../ui/relative-timestamp";
 import { FadeIn } from "../common/FadeIn";
 import { Badge } from "../ui/badge";
 
@@ -20,13 +20,6 @@ type ProductOperationalTimelineEvent = {
   };
   type: string;
 };
-
-function formatTimelineTime(timestamp: number) {
-  return new Intl.DateTimeFormat([], {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(timestamp));
-}
 
 function formatEventType(type: string) {
   return type
@@ -52,12 +45,7 @@ function TimelineRow({
               {event.message}
             </p>
             <p className="mt-layout-xs text-xs text-muted-foreground">
-              <time
-                dateTime={new Date(event.createdAt).toISOString()}
-                title={formatTimelineTime(event.createdAt)}
-              >
-                {getRelativeTime(event.createdAt)}
-              </time>{" "}
+              <RelativeTimestamp value={event.createdAt} />{" "}
               · {formatEventType(event.type)}
             </p>
           </div>
