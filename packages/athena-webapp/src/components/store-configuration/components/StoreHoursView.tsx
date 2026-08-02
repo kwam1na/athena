@@ -6,10 +6,20 @@ import type { FunctionReference } from "convex/server";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -18,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { nextReportingCycleBoundary } from "~/convex/lib/storeScheduleTime";
 import { usePermissions } from "@/hooks/usePermissions";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
@@ -25,6 +36,8 @@ import type { Id } from "~/convex/_generated/dataModel";
 import type {
   StoreScheduleDayKey,
   StoreScheduleExceptionInput,
+  StoreScheduleUpsertPayload,
+  StoreScheduleVersion,
   StoreScheduleWeeklyDayInput,
 } from "../hooks/useStoreScheduleUpdate";
 import { useStoreScheduleUpdate } from "../hooks/useStoreScheduleUpdate";
@@ -35,6 +48,7 @@ type StoreScheduleQueryResult = {
   exceptions?: StoreScheduleExceptionInput[] | null;
   nextCloseLabel?: string | null;
   nextOpenLabel?: string | null;
+  reportingCycleStartsOn?: number | null;
   source?: string | null;
   scheduleVersionId?: string | null;
   summary?: {
@@ -72,6 +86,7 @@ type StoreScheduleQueryResult = {
     source?: string | null;
     status?: string | null;
     timezone?: string | null;
+    reportingCycleStartsOn?: number | null;
     weeklyClosedDays?: number[] | null;
     weeklyWindows?: Array<{
       dayOfWeek: number;
@@ -80,6 +95,17 @@ type StoreScheduleQueryResult = {
     }> | null;
   } | null;
 };
+
+type StoreScheduleVersionsQuery = FunctionReference<
+  "query",
+  "public",
+  {
+    organizationId: string;
+    status?: "active" | "superseded" | "candidate";
+    storeId: string;
+  },
+  StoreScheduleVersion[]
+>;
 
 type StoreScheduleAdminQuery = FunctionReference<
   "query",
@@ -94,6 +120,7 @@ const storeScheduleApi = (
       storeSchedule: {
         getStoreScheduleForAdmin: StoreScheduleAdminQuery;
         getStoreScheduleSummary: StoreScheduleAdminQuery;
+        listStoreScheduleVersions: StoreScheduleVersionsQuery;
       };
     };
   }
@@ -125,6 +152,11 @@ const DAY_KEY_BY_DAY_OF_WEEK = Object.fromEntries(
     day,
   ]),
 ) as Record<number, StoreScheduleDayKey>;
+
+const REPORTING_CYCLE_DAYS = WEEKDAYS.map(({ day, label }) => ({
+  dayOfWeek: DAY_OF_WEEK_BY_KEY[day],
+  label,
+}));
 
 const DEFAULT_WEEKLY_HOURS: StoreScheduleWeeklyDayInput[] = WEEKDAYS.map(
   ({ day }) => ({
@@ -430,6 +462,30 @@ function formatDateLabel(value: string) {
   }).format(date);
 }
 
+function reportingCycleDayLabel(dayOfWeek: number) {
+  return (
+    REPORTING_CYCLE_DAYS.find((day) => day.dayOfWeek === dayOfWeek)?.label ??
+    "Unknown day"
+  );
+}
+
+function formatEffectiveDate(effectiveFrom: number, timezone: string) {
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      day: "numeric",
+      month: "short",
+      timeZone: timezone,
+      year: "numeric",
+    }).format(new Date(effectiveFrom));
+  } catch {
+    return new Intl.DateTimeFormat("en-US", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(effectiveFrom));
+  }
+}
+
 function StoreHoursTimeSelect({
   id,
   label,
@@ -445,7 +501,8 @@ function StoreHoursTimeSelect({
     ? TIME_OPTIONS
     : [...TIME_OPTIONS, value].sort((first, second) => {
         const firstMinute = timeInputToMinute(first) ?? Number.MAX_SAFE_INTEGER;
-        const secondMinute = timeInputToMinute(second) ?? Number.MAX_SAFE_INTEGER;
+        const secondMinute =
+          timeInputToMinute(second) ?? Number.MAX_SAFE_INTEGER;
         return firstMinute - secondMinute;
       });
 
@@ -496,6 +553,36 @@ function StoreHoursTimezoneSelect({
         {options.map((option) => (
           <SelectItem key={option} value={option}>
             {option}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function ReportingCycleStartSelect({
+  onChange,
+  value,
+}: {
+  onChange: (value: number) => void;
+  value: number;
+}) {
+  return (
+    <Select
+      onValueChange={(next) => onChange(Number(next))}
+      value={String(value)}
+    >
+      <SelectTrigger
+        aria-label="Reporting cycle starts"
+        className="h-control-standard bg-background"
+        id="reporting-cycle-starts"
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {REPORTING_CYCLE_DAYS.map((day) => (
+          <SelectItem key={day.dayOfWeek} value={String(day.dayOfWeek)}>
+            {day.label}
           </SelectItem>
         ))}
       </SelectContent>
@@ -599,14 +686,17 @@ function normalizeScheduleForForm(schedule?: StoreScheduleQueryResult | null) {
   return {
     ...schedule,
     adminConfirmed:
-      schedule.schedule.status === "active" && schedule.schedule.source === "admin",
+      schedule.schedule.status === "active" &&
+      schedule.schedule.source === "admin",
     confirmationStatus:
-      schedule.schedule.status === "active" && schedule.schedule.source === "admin"
+      schedule.schedule.status === "active" &&
+      schedule.schedule.source === "admin"
         ? "admin_confirmed"
         : "candidate",
     exceptions,
     nextCloseLabel,
     nextOpenLabel,
+    reportingCycleStartsOn: schedule.schedule.reportingCycleStartsOn ?? 1,
     source: schedule.schedule.source,
     summary: {
       nextCloseLabel,
@@ -622,6 +712,7 @@ function normalizeScheduleForForm(schedule?: StoreScheduleQueryResult | null) {
 
 function buildStoreSchedulePayload(args: {
   exceptions: StoreScheduleExceptionInput[];
+  reportingCycleStartsOn: number;
   scheduleVersionId?: string | null;
   timezone: string;
   weeklyHours: StoreScheduleWeeklyDayInput[];
@@ -692,6 +783,7 @@ function buildStoreSchedulePayload(args: {
   return {
     dateExceptions,
     effectiveFrom: Date.now(),
+    reportingCycleStartsOn: args.reportingCycleStartsOn,
     ...(args.scheduleVersionId
       ? { supersedesScheduleId: args.scheduleVersionId as Id<"storeSchedule"> }
       : {}),
@@ -710,17 +802,41 @@ export const StoreHoursView = () => {
       : storeScheduleApi.getStoreScheduleSummary,
     !isLoading && activeStore?._id ? { storeId: activeStore._id } : "skip",
   ) as StoreScheduleQueryResult | null | undefined;
+  const scheduleVersions = useQuery(
+    storeScheduleApi.listStoreScheduleVersions,
+    !isLoading &&
+      hasFullAdminAccess &&
+      activeStore?._id &&
+      activeStore.organizationId
+      ? {
+          organizationId: activeStore.organizationId,
+          status: "active",
+          storeId: activeStore._id,
+        }
+      : "skip",
+  ) as StoreScheduleVersion[] | undefined;
   const schedule = useMemo(
     () => normalizeScheduleForForm(rawSchedule),
     [rawSchedule],
   );
   const { isUpdating, updateSchedule } = useStoreScheduleUpdate();
   const [timezone, setTimezone] = useState("America/New_York");
+  const [reportingCycleStartsOn, setReportingCycleStartsOn] = useState(1);
   const [weeklyHours, setWeeklyHours] = useState(DEFAULT_WEEKLY_HOURS);
   const [exceptions, setExceptions] = useState<StoreScheduleExceptionInput[]>(
     [],
   );
   const [confirmCandidate, setConfirmCandidate] = useState(false);
+  /**
+   * A submission that moves the reporting-cycle anchor is staged, not
+   * immediate — and because the schedule is one versioned aggregate, every
+   * other field in the same submission is staged with it. The operator sees
+   * that before the mutation runs, never after.
+   */
+  const [stagedAnchorSave, setStagedAnchorSave] = useState<{
+    effectiveDateLabel: string;
+    schedule: StoreScheduleUpsertPayload;
+  } | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [message, setMessage] = useState<{
     kind: "error" | "success";
@@ -728,7 +844,9 @@ export const StoreHoursView = () => {
   } | null>(null);
 
   const candidateSchedule = isCandidateSchedule(schedule);
-  const statusLabel = candidateSchedule ? "Needs admin review" : "Admin confirmed";
+  const statusLabel = candidateSchedule
+    ? "Needs admin review"
+    : "Admin confirmed";
   const summary = useMemo(() => {
     const summaryTimezone =
       schedule?.summary?.timezoneLabel ?? schedule?.timezone ?? timezone;
@@ -774,6 +892,16 @@ export const StoreHoursView = () => {
       timezone: summaryTimezone,
     };
   }, [schedule, timezone]);
+  const pendingSchedule = useMemo(() => {
+    if (!Array.isArray(scheduleVersions)) return null;
+
+    return (
+      scheduleVersions
+        .filter((version) => version.effectiveFrom > Date.now())
+        .sort((left, right) => left.effectiveFrom - right.effectiveFrom)[0] ??
+      null
+    );
+  }, [scheduleVersions]);
 
   useEffect(() => {
     if (schedule === undefined) {
@@ -781,16 +909,20 @@ export const StoreHoursView = () => {
     }
 
     setTimezone(schedule?.timezone || "America/New_York");
+    setReportingCycleStartsOn(schedule?.reportingCycleStartsOn ?? 1);
     setWeeklyHours(normalizeWeeklyHours(schedule?.weeklyHours));
     setExceptions((schedule?.exceptions ?? []).map(normalizeException));
     setConfirmCandidate(false);
+    setStagedAnchorSave(null);
     setIsDirty(false);
     setMessage(null);
   }, [schedule]);
 
   const updateDay = (
     day: StoreScheduleDayKey,
-    updater: (entry: StoreScheduleWeeklyDayInput) => StoreScheduleWeeklyDayInput,
+    updater: (
+      entry: StoreScheduleWeeklyDayInput,
+    ) => StoreScheduleWeeklyDayInput,
   ) => {
     setWeeklyHours((current) =>
       current.map((entry) => (entry.day === day ? updater(entry) : entry)),
@@ -800,7 +932,9 @@ export const StoreHoursView = () => {
 
   const updateException = (
     index: number,
-    updater: (entry: StoreScheduleExceptionInput) => StoreScheduleExceptionInput,
+    updater: (
+      entry: StoreScheduleExceptionInput,
+    ) => StoreScheduleExceptionInput,
   ) => {
     setExceptions((current) =>
       current.map((entry, entryIndex) =>
@@ -832,9 +966,11 @@ export const StoreHoursView = () => {
 
   const resetForm = () => {
     setTimezone(schedule?.timezone || "America/New_York");
+    setReportingCycleStartsOn(schedule?.reportingCycleStartsOn ?? 1);
     setWeeklyHours(normalizeWeeklyHours(schedule?.weeklyHours));
     setExceptions((schedule?.exceptions ?? []).map(normalizeException));
     setConfirmCandidate(false);
+    setStagedAnchorSave(null);
     setIsDirty(false);
     setMessage(null);
   };
@@ -849,6 +985,36 @@ export const StoreHoursView = () => {
     }
 
     return null;
+  };
+
+  const runSave = async (nextSchedule: StoreScheduleUpsertPayload) => {
+    if (!activeStore?._id) return;
+
+    await updateSchedule({
+      storeId: activeStore._id,
+      schedule: nextSchedule,
+      onError: () => {
+        setMessage({
+          kind: "error",
+          text: "Store hours were not saved. Review the highlighted fields.",
+        });
+      },
+      onSuccess: (savedSchedule) => {
+        setIsDirty(false);
+        setConfirmCandidate(false);
+        const reportingCycleChanged =
+          savedSchedule.reportingCycleStartsOn !==
+          (schedule?.reportingCycleStartsOn ?? 1);
+        const isStaged = savedSchedule.effectiveFrom > Date.now();
+        setMessage({
+          kind: "success",
+          text:
+            reportingCycleChanged && isStaged
+              ? `Reporting cycle change staged for ${formatEffectiveDate(savedSchedule.effectiveFrom, savedSchedule.timezone)}.`
+              : "Store hours saved.",
+        });
+      },
+    });
   };
 
   const handleSave = async () => {
@@ -868,6 +1034,7 @@ export const StoreHoursView = () => {
 
     const nextSchedule = buildStoreSchedulePayload({
       exceptions,
+      reportingCycleStartsOn,
       scheduleVersionId: schedule?.scheduleVersionId,
       timezone: timezone.trim(),
       weeklyHours,
@@ -881,21 +1048,34 @@ export const StoreHoursView = () => {
       return;
     }
 
-    await updateSchedule({
-      storeId: activeStore._id,
-      schedule: nextSchedule,
-      onError: () => {
-        setMessage({
-          kind: "error",
-          text: "Store hours were not saved. Review the highlighted fields.",
+    const activeAnchor = schedule?.reportingCycleStartsOn ?? 1;
+    const anchorChanged =
+      Boolean(schedule?.scheduleVersionId) &&
+      reportingCycleStartsOn !== activeAnchor;
+
+    if (anchorChanged) {
+      // Resolve the boundary under the anchor still in force, matching how
+      // the schedule mutation stages the replacement version.
+      const effectiveFrom = nextReportingCycleBoundary({
+        at: Date.now(),
+        reportingCycleStartsOn: activeAnchor,
+        timezone: schedule?.timezone || timezone.trim(),
+      });
+
+      if (effectiveFrom !== null) {
+        setMessage(null);
+        setStagedAnchorSave({
+          effectiveDateLabel: formatEffectiveDate(
+            effectiveFrom,
+            schedule?.timezone || timezone.trim(),
+          ),
+          schedule: nextSchedule,
         });
-      },
-      onSuccess: () => {
-        setIsDirty(false);
-        setConfirmCandidate(false);
-        setMessage({ kind: "success", text: "Store hours saved." });
-      },
-    });
+        return;
+      }
+    }
+
+    await runSave(nextSchedule);
   };
 
   if (isLoading || schedule === undefined) {
@@ -976,6 +1156,63 @@ export const StoreHoursView = () => {
               <p className="text-xs text-muted-foreground">
                 Choose the store-local IANA timezone.
               </p>
+            </div>
+
+            <div className="space-y-layout-xs">
+              <Label htmlFor="reporting-cycle-starts">
+                Reporting cycle starts
+              </Label>
+              <ReportingCycleStartSelect
+                onChange={(value) => {
+                  setReportingCycleStartsOn(value);
+                  setIsDirty(true);
+                }}
+                value={reportingCycleStartsOn}
+              />
+              <p className="text-xs text-muted-foreground">
+                Report sales are included by scheduled day, not store hours.
+              </p>
+            </div>
+
+            <div
+              aria-label="Reporting cycle configuration"
+              className="border-y border-border py-layout-md"
+            >
+              <p className="text-sm font-medium text-foreground">
+                Reporting cycle configuration
+              </p>
+              <dl className="mt-layout-sm grid gap-layout-sm text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="text-muted-foreground">Active</dt>
+                  <dd className="mt-layout-2xs font-medium text-foreground">
+                    {reportingCycleDayLabel(
+                      schedule?.reportingCycleStartsOn ?? 1,
+                    )}
+                  </dd>
+                </div>
+                {pendingSchedule ? (
+                  <div>
+                    <dt className="text-muted-foreground">Pending</dt>
+                    <dd className="mt-layout-2xs font-medium text-foreground">
+                      {reportingCycleDayLabel(
+                        pendingSchedule.reportingCycleStartsOn,
+                      )}{" "}
+                      from{" "}
+                      {formatEffectiveDate(
+                        pendingSchedule.effectiveFrom,
+                        pendingSchedule.timezone,
+                      )}
+                    </dd>
+                  </div>
+                ) : (
+                  <div>
+                    <dt className="text-muted-foreground">Pending</dt>
+                    <dd className="mt-layout-2xs text-muted-foreground">
+                      No staged reporting-cycle change.
+                    </dd>
+                  </div>
+                )}
+              </dl>
             </div>
 
             <div className="space-y-layout-sm">
@@ -1267,9 +1504,62 @@ export const StoreHoursView = () => {
               </div>
             ) : null}
 
+            <Dialog
+              onOpenChange={(open) => {
+                if (!open) setStagedAnchorSave(null);
+              }}
+              open={stagedAnchorSave !== null}
+            >
+              <DialogContent className="w-[min(calc(100vw-2rem),34rem)] space-y-layout-lg">
+                <div className="space-y-layout-xs">
+                  <DialogTitle>Stage this reporting-cycle change?</DialogTitle>
+                  <DialogDescription>
+                    The reporting cycle moves to{" "}
+                    {reportingCycleDayLabel(reportingCycleStartsOn)} on{" "}
+                    {stagedAnchorSave?.effectiveDateLabel}. Reports keep the
+                    current cycle until then.
+                  </DialogDescription>
+                </div>
+                <div className="space-y-layout-xs text-sm leading-6 text-muted-foreground">
+                  <p>
+                    Every change in this save — timezone, weekly hours, and date
+                    exceptions — is staged to{" "}
+                    {stagedAnchorSave?.effectiveDateLabel} with it.
+                  </p>
+                  <p>
+                    To change an operational day now, cancel, save that change
+                    on its own, then stage the reporting cycle.
+                  </p>
+                </div>
+                <div className="flex flex-wrap justify-end gap-layout-sm">
+                  <Button
+                    onClick={() => setStagedAnchorSave(null)}
+                    type="button"
+                    variant="outline"
+                  >
+                    Cancel
+                  </Button>
+                  <LoadingButton
+                    disabled={isUpdating}
+                    isLoading={isUpdating}
+                    onClick={() => {
+                      const staged = stagedAnchorSave;
+                      setStagedAnchorSave(null);
+                      if (staged) void runSave(staged.schedule);
+                    }}
+                    variant="default"
+                  >
+                    Stage change
+                  </LoadingButton>
+                </div>
+              </DialogContent>
+            </Dialog>
+
             <div className="flex flex-wrap gap-layout-sm border-t border-border pt-layout-md">
               <LoadingButton
-                disabled={isUpdating || (candidateSchedule && !confirmCandidate)}
+                disabled={
+                  isUpdating || (candidateSchedule && !confirmCandidate)
+                }
                 isLoading={isUpdating}
                 onClick={handleSave}
                 variant="default"

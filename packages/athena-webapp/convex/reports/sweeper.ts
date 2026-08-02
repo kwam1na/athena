@@ -11,6 +11,12 @@ import { foldDay } from "./foldDay";
 import { computeRange } from "./customRange";
 import { rebuildStoreOverview } from "./overview";
 import { rebuildRollupsForDates } from "./rollups";
+import {
+  markWeekDirty,
+  reconcileRecentAcceptedWeeksForStore,
+  rebuildCurrentWeek,
+  refreshAcceptedWeekForDate,
+} from "./weekly";
 
 /**
  * The sweeper — the ONE reporting cron (slice C).
@@ -48,6 +54,8 @@ export const OPEN_DAY_SCAN_LIMIT = 5;
 export const RANGE_BATCH_PER_STORE = 3;
 /** Expired range results deleted per tick. */
 export const RANGE_EXPIRY_BATCH = 20;
+/** Weekly singleton rebuilds per existing sweep; one marker per store. */
+export const WEEKLY_DIRTY_BATCH = 10;
 
 export const REPORTS_SWEEP_STORE_ALLOWLIST_ENV =
   "REPORTS_SWEEP_STORE_ALLOWLIST";
@@ -62,6 +70,10 @@ export type SweepResult = {
   storesTouched: number;
   rangesComputed: number;
   rangesExpired: number;
+  weeksRebuilt: number;
+  weekFailures: number;
+  weeksAccepted: number;
+  weeksRefreshed: number;
 };
 
 /**
@@ -134,6 +146,12 @@ export function toFoldFact(fact: Doc<"reportFact">): FoldFact {
       : {}),
     ...(fact.unitCostMinor !== undefined
       ? { unitCostMinor: fact.unitCostMinor }
+      : {}),
+    ...(fact.paymentAllocationMinor !== undefined
+      ? { paymentAllocationMinor: fact.paymentAllocationMinor }
+      : {}),
+    ...(fact.paymentAllocationCoverage !== undefined
+      ? { paymentAllocationCoverage: fact.paymentAllocationCoverage }
       : {}),
     quarantined: fact.quarantine !== undefined,
   };
@@ -256,7 +274,11 @@ export async function foldAndReplaceDay(
   // Past the cap, rows for SKUs that lost activity would never be deleted, so
   // the day would keep stale per-SKU numbers. Refuse rather than half-reconcile.
   if (existingSkuDays.length > MAX_SKU_DAY_ROWS_PER_DAY) {
-    throw new DayCapExceeded(operatingDate, MAX_SKU_DAY_ROWS_PER_DAY, "skuDays");
+    throw new DayCapExceeded(
+      operatingDate,
+      MAX_SKU_DAY_ROWS_PER_DAY,
+      "skuDays",
+    );
   }
 
   const close = await loadAcceptedClose(ctx, storeId, operatingDate);
@@ -301,6 +323,7 @@ export async function foldAndReplaceDay(
     factCount: result.day.factCount,
     lastFactRecordedAt: result.day.lastFactRecordedAt,
     flags: result.day.flags,
+    paymentPosture: result.day.paymentPosture,
   };
 
   if (existingDay) {
@@ -362,7 +385,10 @@ export async function markDayDirty(
     .unique();
 
   if (existing) {
-    await ctx.db.patch("reportDirtyDay", existing._id, { reason, markedAt: now });
+    await ctx.db.patch("reportDirtyDay", existing._id, {
+      reason,
+      markedAt: now,
+    });
     return;
   }
 
@@ -464,9 +490,14 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
     storesTouched: 0,
     rangesComputed: 0,
     rangesExpired: 0,
+    weeksRebuilt: 0,
+    weekFailures: 0,
+    weeksAccepted: 0,
+    weeksRefreshed: 0,
   };
 
   const touchedStores = new Map<string, Id<"store">>();
+  const foldedDatesByStore = new Map<string, Set<string>>();
 
   for (const mark of marks) {
     if (
@@ -497,6 +528,9 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
       await foldAndReplaceDay(ctx, mark.storeId, mark.operatingDate, now, {
         preserveOpen: mark.reason === "day_open",
       });
+      const foldedDates = foldedDatesByStore.get(storeKey) ?? new Set<string>();
+      foldedDates.add(mark.operatingDate);
+      foldedDatesByStore.set(storeKey, foldedDates);
       result.daysFolded += 1;
     } catch (error) {
       // Containment: a day that could not be folded goes back on the queue
@@ -526,6 +560,53 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
   for (const storeId of touchedStores.values()) {
     await rebuildStoreOverview(ctx, storeId, now);
     result.rangesComputed += await computePendingRanges(ctx, storeId);
+    // A day fold is the sole normal signal for current weekly truth. The
+    // singleton is still built from reportDay only, not from source domains.
+    // The folded dates ride on the marker rather than on this tick's memory:
+    // a store whose marker falls outside the weekly page below would otherwise
+    // lose its exact historical amendment handoff to page-boundary timing.
+    await markWeekDirty(ctx, storeId, "day_folded", now, {
+      foldedDates: [...(foldedDatesByStore.get(String(storeId)) ?? [])],
+    });
+  }
+
+  const dirtyWeeks = await ctx.db
+    .query("reportDirtyWeek")
+    .withIndex("by_markedAt")
+    .order("asc")
+    .take(WEEKLY_DIRTY_BATCH);
+  for (const mark of dirtyWeeks) {
+    if (!allowlist.has(String(mark.storeId))) continue;
+    const store = await ctx.db.get("store", mark.storeId);
+    if (!store || store.reportingReseedStartedAt !== undefined) continue;
+    // Drained with the mark: the dates and the acceptance intent are durable
+    // work, so a failed tick puts both back rather than losing the handoff.
+    const foldedDates = mark.foldedDates ?? [];
+    const intent = mark.intent;
+    await ctx.db.delete("reportDirtyWeek", mark._id);
+    try {
+      const status = await rebuildCurrentWeek(ctx, mark.storeId, now);
+      if (status === "rebuilt") result.weeksRebuilt += 1;
+      result.weeksAccepted += await reconcileRecentAcceptedWeeksForStore(
+        ctx,
+        mark.storeId,
+        now,
+      );
+      for (const operatingDate of foldedDates) {
+        result.weeksRefreshed += await refreshAcceptedWeekForDate(
+          ctx,
+          mark.storeId,
+          operatingDate,
+          now,
+        );
+      }
+    } catch {
+      result.weekFailures += 1;
+      await markWeekDirty(ctx, mark.storeId, "write_failure", now, {
+        foldedDates,
+        ...(intent ? { intent } : {}),
+      });
+    }
   }
 
   result.storesTouched = touchedStores.size;

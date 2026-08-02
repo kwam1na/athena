@@ -50,6 +50,7 @@ describe("useStoreScheduleUpdate", () => {
         schedule: {
           dateExceptions: [],
           effectiveFrom: 1_782_528_000_000,
+          reportingCycleStartsOn: 1,
           timezone: "America/New_York",
           weeklyClosedDays: [0],
           weeklyWindows: [
@@ -64,10 +65,13 @@ describe("useStoreScheduleUpdate", () => {
       });
     });
 
-    expect(mockedUseMutation).toHaveBeenCalledWith("upsertStoreScheduleCommand");
+    expect(mockedUseMutation).toHaveBeenCalledWith(
+      "upsertStoreScheduleCommand",
+    );
     expect(upsertStoreSchedule).toHaveBeenCalledWith({
       dateExceptions: [],
       effectiveFrom: 1_782_528_000_000,
+      reportingCycleStartsOn: 1,
       storeId: "store-1",
       timezone: "America/New_York",
       weeklyClosedDays: [0],
@@ -102,6 +106,7 @@ describe("useStoreScheduleUpdate", () => {
         schedule: {
           dateExceptions: [],
           effectiveFrom: 1_782_528_000_000,
+          reportingCycleStartsOn: 1,
           timezone: "",
           weeklyClosedDays: [],
           weeklyWindows: [],

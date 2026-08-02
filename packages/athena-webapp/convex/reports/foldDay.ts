@@ -7,6 +7,10 @@ import type {
   ReportDayMetrics,
   SkuDayFoldResult,
 } from "../../shared/reportsContract";
+import {
+  derivePaymentPosture,
+  normalizeCurrencyCode,
+} from "../../shared/reportsContract";
 
 /**
  * The deterministic day fold — the correctness authority for reporting.
@@ -132,6 +136,7 @@ export const foldDay: FoldDayFn = (
   let lastFactRecordedAt = 0;
   let postCloseNetSalesDeltaMinor = 0;
   let sawPostCloseFact = false;
+  let paymentAllocationOmittedMinor = 0;
 
   for (const fact of ordered) {
     if (fact.recordedAt > lastFactRecordedAt) {
@@ -140,7 +145,8 @@ export const foldDay: FoldDayFn = (
 
     // Observations about the input hold whether or not the fact is countable.
     if (fact.quarantined) flags.quarantinedFactCount += 1;
-    if (fact.currency !== storeCurrency) flags.mixedCurrency = true;
+    const factCurrency = normalizeCurrencyCode(fact.currency);
+    if (factCurrency !== storeCurrency) flags.mixedCurrency = true;
 
     const isPostClose = close !== undefined && fact.recordedAt > close.acceptedAt;
     if (isPostClose) sawPostCloseFact = true;
@@ -148,7 +154,7 @@ export const foldDay: FoldDayFn = (
     // Excluded from every metric: quarantined facts and foreign-currency facts
     // (no FX rate lives in the fold; converting here would invent numbers).
     if (fact.quarantined) continue;
-    if (fact.currency !== storeCurrency) continue;
+    if (factCurrency !== storeCurrency) continue;
 
     const sku =
       fact.productSkuId !== undefined && REVENUE_KINDS.has(fact.factKind)
@@ -209,12 +215,29 @@ export const foldDay: FoldDayFn = (
         break;
       }
       case "payment": {
-        day.paymentsCollectedMinor += fact.netAmountMinor;
-        day.paymentAllocatedMinor += fact.netAmountMinor;
+        const amount = Math.abs(fact.netAmountMinor);
+        day.paymentsCollectedMinor += amount;
+        if (
+          fact.paymentAllocationCoverage === "known" &&
+          fact.paymentAllocationMinor !== undefined
+        ) {
+          day.paymentAllocatedMinor += fact.paymentAllocationMinor;
+        } else {
+          paymentAllocationOmittedMinor += amount;
+        }
         break;
       }
       case "payment_refund": {
-        day.paymentsRefundedMinor += Math.abs(fact.netAmountMinor);
+        const amount = Math.abs(fact.netAmountMinor);
+        day.paymentsRefundedMinor += amount;
+        if (
+          fact.paymentAllocationCoverage === "known" &&
+          fact.paymentAllocationMinor !== undefined
+        ) {
+          day.paymentAllocatedMinor += fact.paymentAllocationMinor;
+        } else {
+          paymentAllocationOmittedMinor += amount;
+        }
         break;
       }
       case "close_snapshot":
@@ -277,6 +300,12 @@ export const foldDay: FoldDayFn = (
     ...day,
     grossProfitMinor: flags.hasUncostedRevenue ? null : day.grossProfitMinor,
   };
+  const paymentPosture = derivePaymentPosture({
+    collectedMinor: metrics.paymentsCollectedMinor,
+    refundedMinor: metrics.paymentsRefundedMinor,
+    allocatedMinor: metrics.paymentAllocatedMinor,
+    allocationOmittedMinor: paymentAllocationOmittedMinor,
+  });
 
   if (close === undefined) {
     return {
@@ -286,6 +315,7 @@ export const foldDay: FoldDayFn = (
         flags,
         factCount: facts.length,
         lastFactRecordedAt,
+        paymentPosture,
       },
       skuDays,
     };
@@ -301,6 +331,7 @@ export const foldDay: FoldDayFn = (
       lastFactRecordedAt,
       closeVarianceMinor,
       ...(sawPostCloseFact ? { postCloseNetSalesDeltaMinor } : {}),
+      paymentPosture,
     },
     skuDays,
   };

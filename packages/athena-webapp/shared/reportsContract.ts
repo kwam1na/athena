@@ -12,7 +12,11 @@
  */
 
 export const REPORTS_FOLD_VERSION = 1 as const;
-export const REPORTS_FINGERPRINT_VERSION = 1 as const;
+/**
+ * Version 2 adds the source-derived allocation dimensions carried by payment
+ * facts. Replays hash with the version already stored on a fact.
+ */
+export const REPORTS_FINGERPRINT_VERSION = 2 as const;
 
 export const REPORT_SOURCE_DOMAINS = [
   "pos",
@@ -116,6 +120,459 @@ export type ReportDayFlags = {
   quarantinedFactCount: number;
 };
 
+/**
+ * Settlement is a payment-only view. It never restates recognised sales and
+ * contains no tender-method identity.
+ */
+export type ReportPaymentPosture = {
+  collectedMinor: number;
+  refundedMinor: number;
+  allocatedMinor: number;
+  unsettledMinor: number | null;
+  allocationCoverage: "complete" | "unknown";
+  allocationOmittedMinor: number;
+  hasInvalidAllocation: boolean;
+};
+
+/**
+ * The explicit metric fields materialized on each weekly projection.
+ *
+ * `paymentAllocationOmittedMinor` and `paymentHasInvalidAllocation` are
+ * optional only while weekly documents written before they landed are
+ * refreshed. Read them through `normalizeWeekMetrics` so a legacy row never
+ * presents an omitted total of zero as source-proven.
+ */
+export type ReportWeekMetrics = ReportDayMetrics & {
+  paymentUnsettledMinor: number | null;
+  paymentAllocationCoverage: "complete" | "unknown";
+  paymentAllocationOmittedMinor?: number;
+  paymentHasInvalidAllocation?: boolean;
+};
+
+/**
+ * Presentation-ready weekly values. Reports queries own these aliases and
+ * net-unit calculation so clients only render a reporting conclusion.
+ */
+export type ReportWeekSummary = {
+  grossSalesMinor: number;
+  merchandiseMarginMinor: number | null;
+  netSalesMinor: number;
+  netUnits: number;
+  paymentAllocatedMinor: number;
+  paymentAllocationCoverage: "complete" | "unknown";
+  paymentUnsettledMinor: number | null;
+  paymentsCollectedMinor: number;
+  paymentsRefundedMinor: number;
+  refundsMinor: number;
+  unitsReturned: number;
+  unitsSold: number;
+};
+
+export const REPORT_WEEK_METRIC_KEYS = [
+  ...REPORT_DAY_METRIC_KEYS,
+  "paymentUnsettledMinor",
+  "paymentAllocationCoverage",
+] as const satisfies readonly (keyof ReportWeekMetrics)[];
+
+/** Weekly payment posture fields still rolling out as optional-then-required. */
+export const REPORT_WEEK_ROLLOUT_METRIC_KEYS = [
+  "paymentAllocationOmittedMinor",
+  "paymentHasInvalidAllocation",
+] as const satisfies readonly (keyof ReportWeekMetrics)[];
+
+/**
+ * Fail-closed normalization for the rolling-out payment fields: an absent
+ * omitted total is unknown coverage, not a proven zero.
+ */
+export function normalizeWeekMetrics(metrics: ReportWeekMetrics): Required<
+  Pick<
+    ReportWeekMetrics,
+    "paymentAllocationOmittedMinor" | "paymentHasInvalidAllocation"
+  >
+> &
+  ReportWeekMetrics {
+  return {
+    ...metrics,
+    paymentAllocationOmittedMinor: metrics.paymentAllocationOmittedMinor ?? 0,
+    paymentHasInvalidAllocation: metrics.paymentHasInvalidAllocation ?? false,
+    paymentAllocationCoverage:
+      metrics.paymentAllocationOmittedMinor === undefined
+        ? metrics.paymentAllocationCoverage
+        : metrics.paymentAllocationOmittedMinor > 0
+          ? "unknown"
+          : metrics.paymentAllocationCoverage,
+  };
+}
+
+/**
+ * Combine the scheduled and outside-schedule lanes into the week's total.
+ *
+ * The reporting frame is seven dates; every fact inside it lands in exactly
+ * one lane, so the sum is everything that happened in the labelled date range
+ * — which is what a headline over that range must say. The lanes stay stored
+ * and separate as evidence; this is the read-time conclusion, so accepted
+ * baselines keep their original values and fingerprints.
+ *
+ * Unknowns poison rather than vanish: an unknown profit or settlement on
+ * either lane makes the combined value unknown instead of silently reporting
+ * the half that happens to be provable.
+ */
+export function addWeekMetrics(
+  a: ReportWeekMetrics,
+  b: ReportWeekMetrics,
+): ReportWeekMetrics {
+  const left = normalizeWeekMetrics(a);
+  const right = normalizeWeekMetrics(b);
+  return {
+    grossSalesMinor: left.grossSalesMinor + right.grossSalesMinor,
+    netSalesMinor: left.netSalesMinor + right.netSalesMinor,
+    refundsMinor: left.refundsMinor + right.refundsMinor,
+    unitsSold: left.unitsSold + right.unitsSold,
+    unitsReturned: left.unitsReturned + right.unitsReturned,
+    uncostedRevenueMinor: left.uncostedRevenueMinor + right.uncostedRevenueMinor,
+    grossProfitMinor:
+      left.grossProfitMinor === null || right.grossProfitMinor === null
+        ? null
+        : left.grossProfitMinor + right.grossProfitMinor,
+    paymentsCollectedMinor:
+      left.paymentsCollectedMinor + right.paymentsCollectedMinor,
+    paymentsRefundedMinor:
+      left.paymentsRefundedMinor + right.paymentsRefundedMinor,
+    paymentAllocatedMinor:
+      left.paymentAllocatedMinor + right.paymentAllocatedMinor,
+    paymentUnsettledMinor:
+      left.paymentUnsettledMinor === null || right.paymentUnsettledMinor === null
+        ? null
+        : left.paymentUnsettledMinor + right.paymentUnsettledMinor,
+    paymentAllocationCoverage:
+      left.paymentAllocationCoverage === "unknown" ||
+      right.paymentAllocationCoverage === "unknown"
+        ? "unknown"
+        : "complete",
+    paymentAllocationOmittedMinor:
+      left.paymentAllocationOmittedMinor + right.paymentAllocationOmittedMinor,
+    paymentHasInvalidAllocation:
+      left.paymentHasInvalidAllocation || right.paymentHasInvalidAllocation,
+  };
+}
+
+export type ReportWeekCompletenessReason =
+  | "complete"
+  | "missing_schedule"
+  | "missing_timezone"
+  | "schedule_history_cap"
+  | "missing_day_fold"
+  | "mixed_currency"
+  | "payment_coverage_unknown"
+  | "payment_invalid_allocation"
+  | "fact_cap_exceeded"
+  | "legacy_fact_without_observed_at";
+
+/**
+ * Headline completeness covers included dates only. The outside-schedule lane
+ * discloses its own verdict, so an excluded date neither withholds nor
+ * silently completes the headline week. Optional while weekly documents
+ * written before the split are refreshed.
+ */
+export type ReportWeekCompleteness = {
+  complete: boolean;
+  reason: ReportWeekCompletenessReason;
+  outsideSchedule?: {
+    complete: boolean;
+    reason: ReportWeekCompletenessReason;
+  };
+};
+
+/**
+ * The verdict for the combined week. A total is only as trustworthy as its
+ * weakest lane, so an incomplete outside-schedule lane makes the headline
+ * incomplete too — the scheduled lane keeps its own verdict for the
+ * breakdown. Every rebuild writes both verdicts; an absent outside-schedule
+ * verdict means no lane-specific limitation was recorded, not a hidden one.
+ */
+export function combineWeekCompleteness(
+  completeness: ReportWeekCompleteness,
+): ReportWeekCompleteness {
+  const outside = completeness.outsideSchedule;
+  if (!completeness.complete) {
+    return { complete: false, reason: completeness.reason, outsideSchedule: outside };
+  }
+  if (outside && !outside.complete) {
+    return { complete: false, reason: outside.reason, outsideSchedule: outside };
+  }
+  return { complete: true, reason: "complete", outsideSchedule: outside };
+}
+
+export type ReportWeekLineage = {
+  localDate: string;
+  included: boolean;
+  scheduleVersionId: string | null;
+  dayStatus: ReportDayStatus | null;
+  dayAvailable: boolean;
+  activityPosture: "recorded" | "zero_activity" | "unavailable";
+};
+
+export type ReportWeekLifecyclePosture =
+  | "live"
+  | "awaiting_final_close"
+  | "materializing"
+  | "accepted"
+  | "reopened_awaiting_successor"
+  | "successor_accepted";
+
+export type ReportWeekAmendmentPosture =
+  | "none"
+  | "pending_recompute"
+  | "amended";
+
+export type ReportWeekChangeDirection = "higher" | "lower" | "unchanged";
+
+export type ReportWeekInventoryCompleteness =
+  | "complete"
+  | "incomplete"
+  | "unavailable";
+
+export type ReportWeekInventoryGroup = {
+  classification: "carried_forward" | "new_this_week";
+  evidenceLimited: boolean;
+  hasNewActivity: boolean;
+  key: string;
+  memberCount: number;
+  productSkuId: string | null;
+};
+
+/**
+ * The inventory-attention lane, always present on a weekly projection.
+ *
+ * A projection materialized before the lane landed is normalized to the
+ * explicit `unavailable` posture by the read queries rather than omitted, so a
+ * client can never confuse "no lane evidence" with "no lane". The lane carries
+ * no route: routing is rebuilt per read as `ReportWeekOwnerRoutes`.
+ */
+export type ReportWeekInventoryAttention = {
+  carriedForwardCount: number;
+  completeness: ReportWeekInventoryCompleteness;
+  groups: ReportWeekInventoryGroup[];
+  newCount: number;
+  observedCount: number;
+  overflow: boolean;
+};
+
+/**
+ * Server-built owner navigation. The Reports layer is the single routing
+ * authority for a weekly report; no route literal is ever persisted.
+ */
+export type ReportWeekOwnerRoutes = {
+  transactions: {
+    to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions";
+    search: { startDate: string; endDate: string; order: "oldestFirst" };
+  };
+  dailyClose:
+    | {
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close";
+        search: { operatingDate: string };
+      }
+    | {
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history";
+        search: { day: string };
+      }
+    | null;
+  cashControls: { to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls" };
+  openWork: {
+    to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work";
+    search: { workType: "synced_sale_inventory_review" };
+  };
+};
+
+export type ReportWeekClosePosture = {
+  acceptedCloseId: string;
+  currentCloseId?: string;
+  changedAt: number;
+  status: "accepted" | "reopened_awaiting_successor" | "successor_accepted";
+};
+
+/**
+ * `closeVarianceMinor` covers every frame date with close evidence. The split
+ * names the two lanes behind it and is `null` for a stored row written before
+ * the split existed, whose total means the scheduled lane alone.
+ *
+ * Coverage counts stay scheduled-only: an outside-schedule date without a
+ * close was never expected to have one.
+ */
+export type ReportWeekVariancePosture = {
+  closeVarianceMinor: number;
+  coverage: "complete" | "partial" | "unavailable";
+  coveredIncludedDayCount: number;
+  includedDayCount: number;
+  scheduledVarianceMinor: number | null;
+  outsideScheduleVarianceMinor: number | null;
+  outsideScheduleCoveredDayCount: number | null;
+};
+
+export type ReportWeekComparabilityReason =
+  | "comparable"
+  | "missing_schedule"
+  | "missing_timezone"
+  | "schedule_history_cap"
+  | "scheduled_membership_changed"
+  | "missing_prior_day_fold"
+  | "prior_incomplete";
+
+/** Prior period as read: stored lineage plus the derived presentation lane. */
+export type ReportWeekPriorPeriod = {
+  cycleStartDate: string;
+  cycleEndDate: string;
+  comparabilityReason: ReportWeekComparabilityReason;
+  currentScheduledPositionCount: number;
+  equivalentScheduledPositions: boolean;
+  priorScheduledPositionCount: number;
+  values: ReportWeekMetrics | null;
+  /**
+   * The prior week's outside-schedule lane. Optional only while prior-period
+   * records written before the total lane landed are rebuilt; an absent value
+   * means the prior total is not knowable, never that it was zero.
+   */
+  outsideScheduleValues?: ReportWeekMetrics | null;
+  summary: ReportWeekSummary | null;
+  /**
+   * The prior week's total across the labelled date range — the only like-for-
+   * like counterpart to the current week's headline. `null` when either lane
+   * is unavailable.
+   */
+  totalSummary: ReportWeekSummary | null;
+  /** Current total vs prior total. Never a scheduled-lane-only comparison. */
+  netSalesChange: {
+    amountMinor: number;
+    direction: ReportWeekChangeDirection;
+  } | null;
+};
+
+/** The single replacement amendment, with its presentation summaries. */
+export type ReportWeekAmendment = {
+  changedAt: number;
+  currentFingerprint: string;
+  included: ReportWeekMetrics;
+  includedNetSalesDeltaMinor: number;
+  outsideSchedule: ReportWeekMetrics;
+  outsideScheduleNetSalesDeltaMinor: number;
+  outsideScheduleSummary: ReportWeekSummary;
+  /** Both lanes combined — the amended conclusion for the labelled range. */
+  totalSummary: ReportWeekSummary;
+  /** The headline movement: both lane deltas together. */
+  netSalesDeltaMinor: number;
+  sourceCloseAcceptedAt?: number;
+  sourceCloseId?: string;
+  summary: ReportWeekSummary;
+};
+
+/** Fields shared by the live and accepted weekly projections. */
+type ReportWeekProjectionBase = {
+  cycleStartDate: string;
+  cycleEndDate: string;
+  currency: string;
+  metricVersion: number;
+  included: ReportWeekMetrics;
+  summary: ReportWeekSummary;
+  outsideSchedule: ReportWeekMetrics;
+  /** The outside-schedule lane as a presentation summary, always disclosed. */
+  outsideScheduleSummary: ReportWeekSummary;
+  /**
+   * The headline conclusion for the labelled date range: both lanes combined.
+   * Derived at read time from the stored lanes, so accepted baselines keep
+   * their original values and fingerprints untouched.
+   */
+  total: ReportWeekSummary;
+  /** The combined verdict — as trustworthy as the weaker of the two lanes. */
+  totalCompleteness: ReportWeekCompleteness;
+  scheduleLineage: ReportWeekLineage[];
+  completeness: ReportWeekCompleteness;
+  lifecyclePosture: ReportWeekLifecyclePosture;
+  amendmentPosture: ReportWeekAmendmentPosture;
+  inventoryAttention: ReportWeekInventoryAttention;
+  closePosture?: ReportWeekClosePosture;
+  amendment?: ReportWeekAmendment;
+  priorPeriod?: ReportWeekPriorPeriod;
+  variancePosture?: ReportWeekVariancePosture;
+  ownerRoutes: ReportWeekOwnerRoutes;
+};
+
+/** The live weekly singleton as read. Never a source or document identity. */
+export type ReportWeekCurrentProjection = ReportWeekProjectionBase & {
+  materializedAt: number;
+};
+
+/**
+ * An immutable accepted baseline as read. `current` restates later truth
+ * beside, never over, the accepted values.
+ */
+export type ReportWeekAcceptedProjection = ReportWeekProjectionBase & {
+  reportId: string;
+  acceptedAt: number;
+  cutoffObservedAt: number;
+  closeId: string;
+  current?: {
+    included: ReportWeekMetrics;
+    summary: ReportWeekSummary;
+    includedNetSalesDeltaMinor: number;
+    outsideSchedule: ReportWeekMetrics;
+    outsideScheduleSummary: ReportWeekSummary;
+    outsideScheduleNetSalesDeltaMinor: number;
+    totalSummary: ReportWeekSummary;
+    netSalesDeltaMinor: number;
+  };
+};
+
+export type ReportWeekUnavailableReason =
+  | "capability_disabled"
+  | "missing_schedule"
+  | "missing_timezone"
+  | "schedule_history_cap"
+  | "no_scheduled_dates"
+  | "missing_day_fold"
+  | "missing_projection";
+
+/** The weekly tab's single subscription envelope. */
+export type ReportWeekBriefing =
+  | { status: "unavailable"; reason: ReportWeekUnavailableReason }
+  | {
+      status: "available";
+      current: ReportWeekCurrentProjection;
+      acceptedBaseline: ReportWeekAcceptedProjection | null;
+    };
+
+/** One page of accepted history, newest first. */
+export type ReportWeekHistoryPage = {
+  page: ReportWeekAcceptedProjection[];
+  isDone: boolean;
+  continueCursor: string;
+  splitCursor?: string | null;
+  pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+};
+
+export function derivePaymentPosture(args: {
+  collectedMinor: number;
+  refundedMinor: number;
+  allocatedMinor: number;
+  allocationOmittedMinor: number;
+}): ReportPaymentPosture {
+  const eligibleMinor = Math.max(0, args.collectedMinor - args.refundedMinor);
+  const hasUnknownCoverage = args.allocationOmittedMinor > 0;
+  const hasInvalidAllocation =
+    args.allocatedMinor < 0 || args.allocatedMinor > eligibleMinor;
+
+  return {
+    collectedMinor: args.collectedMinor,
+    refundedMinor: args.refundedMinor,
+    allocatedMinor: args.allocatedMinor,
+    unsettledMinor: hasUnknownCoverage
+      ? null
+      : Math.max(0, eligibleMinor - Math.max(0, args.allocatedMinor)),
+    allocationCoverage: hasUnknownCoverage ? "unknown" : "complete",
+    allocationOmittedMinor: args.allocationOmittedMinor,
+    hasInvalidAllocation,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Fold interface (slice A implements; slices C and F call)
 // ---------------------------------------------------------------------------
@@ -137,6 +594,8 @@ export type FoldFact = {
   quantity: number;
   productSkuId?: string;
   unitCostMinor?: number;
+  paymentAllocationMinor?: number;
+  paymentAllocationCoverage?: "known" | "unknown";
   quarantined: boolean;
 };
 
@@ -156,6 +615,7 @@ export type DayFoldResult = {
     lastFactRecordedAt: number;
     closeVarianceMinor?: number;
     postCloseNetSalesDeltaMinor?: number;
+    paymentPosture: ReportPaymentPosture;
   };
   /** Keyed by productSkuId. Only SKUs with activity appear. */
   skuDays: Map<string, SkuDayFoldResult>;
@@ -196,6 +656,9 @@ export type NewReportFact = {
   quantity: number;
   productSkuId?: string;
   unitCostMinor?: number;
+  /** Source-proven signed allocation; omitted on legacy payment facts. */
+  paymentAllocationMinor?: number;
+  paymentAllocationCoverage?: "known" | "unknown";
 };
 
 export type ReportSkuTransactionEvidence = {

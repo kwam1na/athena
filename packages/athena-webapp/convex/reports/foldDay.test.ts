@@ -191,26 +191,114 @@ describe("foldDay — per-kind golden semantics", () => {
     expect(day.unitsSold).toBe(0);
   });
 
-  it("payment feeds collected + allocated; payment_refund feeds refunded as a magnitude", () => {
+  it("derives complete payment posture without changing sales recognition", () => {
     const { day } = foldDay("GHS", [
       fact({
         factId: "f1",
         sourceDomain: "payments",
         factKind: "payment",
         netAmountMinor: 2_000,
+        paymentAllocationCoverage: "known",
+        paymentAllocationMinor: 2_000,
       }),
       fact({
         factId: "f2",
         sourceDomain: "payments",
         factKind: "payment_refund",
         netAmountMinor: -750,
+        paymentAllocationCoverage: "known",
+        paymentAllocationMinor: -750,
       }),
     ]);
     expect(day.paymentsCollectedMinor).toBe(2_000);
-    expect(day.paymentAllocatedMinor).toBe(2_000);
+    expect(day.paymentAllocatedMinor).toBe(1_250);
     expect(day.paymentsRefundedMinor).toBe(750);
+    expect(day.paymentPosture).toEqual({
+      collectedMinor: 2_000,
+      refundedMinor: 750,
+      allocatedMinor: 1_250,
+      unsettledMinor: 0,
+      allocationCoverage: "complete",
+      allocationOmittedMinor: 0,
+      hasInvalidAllocation: false,
+    });
     expect(day.netSalesMinor).toBe(0);
     expect(day.grossSalesMinor).toBe(0);
+  });
+
+  it("discloses partial, over-allocated, and legacy-unknown allocation coverage", () => {
+    const partial = foldDay("GHS", [
+      fact({
+        factId: "partial",
+        factKind: "payment",
+        sourceDomain: "payments",
+        netAmountMinor: 2_000,
+        paymentAllocationCoverage: "known",
+        paymentAllocationMinor: 1_250,
+      }),
+    ]);
+    expect(partial.day.paymentPosture.unsettledMinor).toBe(750);
+
+    const overAllocated = foldDay("GHS", [
+      fact({
+        factId: "over",
+        factKind: "payment",
+        sourceDomain: "payments",
+        netAmountMinor: 2_000,
+        paymentAllocationCoverage: "known",
+        paymentAllocationMinor: 2_100,
+      }),
+    ]);
+    expect(overAllocated.day.paymentPosture).toMatchObject({
+      unsettledMinor: 0,
+      hasInvalidAllocation: true,
+    });
+
+    const legacy = foldDay("GHS", [
+      fact({
+        factId: "legacy",
+        factKind: "payment",
+        sourceDomain: "payments",
+        netAmountMinor: 2_000,
+      }),
+    ]);
+    expect(legacy.day.paymentPosture).toMatchObject({
+      allocationCoverage: "unknown",
+      allocationOmittedMinor: 2_000,
+      unsettledMinor: null,
+    });
+  });
+
+  it("clamps unsettled value to zero when refunds exceed eligible collection", () => {
+    const { day } = foldDay("GHS", [
+      fact({
+        factId: "collect",
+        sourceDomain: "payments",
+        factKind: "payment",
+        netAmountMinor: 5_000,
+        paymentAllocationCoverage: "known",
+        paymentAllocationMinor: 5_000,
+      }),
+      fact({
+        factId: "over-refund",
+        sourceDomain: "payments",
+        factKind: "payment_refund",
+        netAmountMinor: 8_000,
+        paymentAllocationCoverage: "known",
+        paymentAllocationMinor: -8_000,
+      }),
+    ]);
+    expect(day.paymentPosture).toEqual({
+      collectedMinor: 5_000,
+      refundedMinor: 8_000,
+      // Net allocation went negative: real, disclosed, and never clamped away.
+      allocatedMinor: -3_000,
+      unsettledMinor: 0,
+      allocationCoverage: "complete",
+      allocationOmittedMinor: 0,
+      hasInvalidAllocation: true,
+    });
+    expect(day.paymentPosture.unsettledMinor).not.toBeLessThan(0);
   });
 
   it("close_snapshot, inventory_issue and procurement_receipt contribute no metrics", () => {
@@ -224,6 +312,7 @@ describe("foldDay — per-kind golden semantics", () => {
         factId: `f${i}`,
         factKind,
         sourceDomain: factKind === "close_snapshot" ? "daily_close" : "inventory",
+        currency: "ghs",
         grossAmountMinor: 5_000,
         netAmountMinor: 5_000,
         quantity: 7,
@@ -237,6 +326,7 @@ describe("foldDay — per-kind golden semantics", () => {
     expect(day.unitsSold).toBe(0);
     expect(day.grossProfitMinor).toBe(0);
     expect(day.factCount).toBe(3);
+    expect(day.flags.mixedCurrency).toBe(false);
     expect(skuDays.size).toBe(0);
   });
 });
@@ -469,6 +559,15 @@ describe("foldDay — status, close variance and amendment", () => {
       paymentsCollectedMinor: 0,
       paymentsRefundedMinor: 0,
       paymentAllocatedMinor: 0,
+      paymentPosture: {
+        collectedMinor: 0,
+        refundedMinor: 0,
+        allocatedMinor: 0,
+        unsettledMinor: 0,
+        allocationCoverage: "complete",
+        allocationOmittedMinor: 0,
+        hasInvalidAllocation: false,
+      },
       status: "provisional",
       flags: {
         mixedCurrency: false,

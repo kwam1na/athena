@@ -29,6 +29,7 @@ export type StoreScheduleDraft = {
   weeklyWindows: StoreScheduleWindow[];
   weeklyClosedDays: number[];
   dateExceptions: StoreScheduleDateException[];
+  reportingCycleStartsOn?: number;
   effectiveFrom: number;
   effectiveTo?: number;
   status: ScheduleStatus;
@@ -204,6 +205,10 @@ function addDays(localDate: string, days: number) {
   return localDateFromUtc(parsed.utc + days * DAY_MS);
 }
 
+export function localDateAt(timestamp: number, timezone: string) {
+  return localPartsAt(timestamp, timezone).localDate;
+}
+
 function dayOfWeek(localDate: string) {
   const parsed = parseLocalDate(localDate);
   if (!parsed) {
@@ -216,7 +221,9 @@ function dayOfWeek(localDate: string) {
 function localPartsAt(timestamp: number, timezone: string) {
   const fields: Record<string, string> = {};
 
-  for (const part of getFormatter(timezone).formatToParts(new Date(timestamp))) {
+  for (const part of getFormatter(timezone).formatToParts(
+    new Date(timestamp),
+  )) {
     if (part.type !== "literal") {
       fields[part.type] = part.value;
     }
@@ -245,6 +252,21 @@ function localMinuteAt(timestamp: number, timezone: string) {
   return parts.hour * 60 + parts.minute;
 }
 
+/**
+ * Store-local wall-clock components for a real instant. Keep this separate
+ * from elapsed milliseconds: adjacent local dates can be 23 or 25 hours
+ * apart at daylight-saving transitions.
+ */
+export function localTimeAt(timestamp: number, timezone: string) {
+  const parts = localPartsAt(timestamp, timezone);
+  return {
+    hour: parts.hour,
+    minute: parts.minute,
+    second: parts.second,
+    millisecond: ((timestamp % 1_000) + 1_000) % 1_000,
+  };
+}
+
 function localDateMinuteToUtcCandidates(
   localDate: string,
   minuteOfDay: number,
@@ -257,7 +279,13 @@ function localDateMinuteToUtcCandidates(
 
   const hour = Math.floor(minuteOfDay / 60);
   const minute = minuteOfDay % 60;
-  const wantedUtc = Date.UTC(parsed.year, parsed.month - 1, parsed.day, hour, minute);
+  const wantedUtc = Date.UTC(
+    parsed.year,
+    parsed.month - 1,
+    parsed.day,
+    hour,
+    minute,
+  );
   let candidate = wantedUtc;
 
   for (let index = 0; index < 5; index += 1) {
@@ -300,7 +328,44 @@ function localDateMinuteToUtc(
   minuteOfDay: number,
   timezone: string,
 ) {
-  return localDateMinuteToUtcCandidates(localDate, minuteOfDay, timezone)[0] ?? null;
+  return (
+    localDateMinuteToUtcCandidates(localDate, minuteOfDay, timezone)[0] ?? null
+  );
+}
+
+export function localDateStartAt(localDate: string, timezone: string) {
+  return localDateMinuteToUtc(localDate, 0, timezone);
+}
+
+/**
+ * Resolves a real instant for a store-local wall-clock time. The earliest
+ * occurrence is deliberate for a repeated autumn-DST hour, matching the
+ * existing local-date boundary rule.
+ */
+export function localDateTimeAt(args: {
+  localDate: string;
+  time: { hour: number; minute: number; second: number; millisecond: number };
+  timezone: string;
+}) {
+  const atMinute = localDateMinuteToUtc(
+    args.localDate,
+    args.time.hour * 60 + args.time.minute,
+    args.timezone,
+  );
+  return atMinute === null
+    ? null
+    : atMinute + args.time.second * 1_000 + args.time.millisecond;
+}
+
+export function nextReportingCycleBoundary(args: {
+  at: number;
+  reportingCycleStartsOn?: number;
+  timezone: string;
+}) {
+  const startDay = args.reportingCycleStartsOn ?? 1;
+  const currentDate = localDateAt(args.at, args.timezone);
+  const daysUntilNext = ((startDay - dayOfWeek(currentDate) + 6) % 7) + 1;
+  return localDateStartAt(addDays(currentDate, daysUntilNext), args.timezone);
 }
 
 function minutesToLabel(minuteOfDay: number) {
@@ -342,9 +407,11 @@ function validateWindowShape(
   }
 }
 
-function expandedWindowRange(
-  window: { dayOfWeek: number; startMinute: number; endMinute: number },
-) {
+function expandedWindowRange(window: {
+  dayOfWeek: number;
+  startMinute: number;
+  endMinute: number;
+}) {
   const start = window.dayOfWeek * 24 * 60 + window.startMinute;
   let end = window.dayOfWeek * 24 * 60 + window.endMinute;
   if (end <= start) {
@@ -413,7 +480,11 @@ export function resolveStoreCalendarRangeForDate(args: {
     return { kind: "invalid" as const };
   }
   const startAt = localDateMinuteToUtc(args.localDate, 0, args.timezone);
-  const endAt = localDateMinuteToUtc(addDays(args.localDate, 1), 0, args.timezone);
+  const endAt = localDateMinuteToUtc(
+    addDays(args.localDate, 1),
+    0,
+    args.timezone,
+  );
   if (startAt === null || endAt === null || endAt <= startAt) {
     return { kind: "invalid" as const };
   }
@@ -442,11 +513,26 @@ export function validateStoreScheduleDraft(
     addField(fields, "effectiveTo", "Choose an effective end after the start.");
   }
 
+  if (
+    schedule.reportingCycleStartsOn !== undefined &&
+    (!isWholeNumber(schedule.reportingCycleStartsOn) ||
+      schedule.reportingCycleStartsOn < 0 ||
+      schedule.reportingCycleStartsOn > 6)
+  ) {
+    addField(
+      fields,
+      "reportingCycleStartsOn",
+      "Choose a valid reporting-cycle weekday.",
+    );
+  }
+
   for (const day of schedule.weeklyClosedDays) {
     validateDayOfWeek(fields, "weeklyClosedDays", day);
   }
 
-  if (new Set(schedule.weeklyClosedDays).size !== schedule.weeklyClosedDays.length) {
+  if (
+    new Set(schedule.weeklyClosedDays).size !== schedule.weeklyClosedDays.length
+  ) {
     addField(fields, "weeklyClosedDays", "Closed days must be unique.");
   }
 
@@ -481,7 +567,11 @@ export function validateStoreScheduleDraft(
     exceptionDates.add(exception.localDate);
 
     if (exception.closed && exception.windows.length > 0) {
-      addField(fields, "dateExceptions", "Closed exception dates cannot include hours.");
+      addField(
+        fields,
+        "dateExceptions",
+        "Closed exception dates cannot include hours.",
+      );
     }
 
     for (const window of exception.windows) {
@@ -563,7 +653,9 @@ function windowsForLocalDate(schedule: StoreScheduleDraft, localDate: string) {
 function toContextWindow(
   schedule: StoreScheduleDraft,
   localDate: string,
-  window: StoreScheduleWindow | (StoreScheduleExceptionWindow & { dayOfWeek: number }),
+  window:
+    | StoreScheduleWindow
+    | (StoreScheduleExceptionWindow & { dayOfWeek: number }),
 ): StoreScheduleContextWindow | null {
   const startsAt = localDateMinuteToUtc(
     localDate,
@@ -595,7 +687,10 @@ function toContextWindow(
   };
 }
 
-function contextWindowsForDate(schedule: StoreScheduleDraft, localDate: string) {
+function contextWindowsForDate(
+  schedule: StoreScheduleDraft,
+  localDate: string,
+) {
   return windowsForLocalDate(schedule, localDate)
     .map((window) => toContextWindow(schedule, localDate, window))
     .filter((window): window is StoreScheduleContextWindow => window !== null)
@@ -652,8 +747,9 @@ export function resolveStoreScheduleContext(args: {
     ...contextWindowsForDate(schedule, localDate),
   ];
   const currentWindow =
-    currentCandidates.find((window) => at >= window.startsAt && at < window.endsAt) ??
-    null;
+    currentCandidates.find(
+      (window) => at >= window.startsAt && at < window.endsAt,
+    ) ?? null;
 
   if (currentWindow) {
     return {
@@ -737,7 +833,11 @@ export function resolveStoreOperatingRangeForDate(args: {
   const startAt = Math.min(...result.windows.map((window) => window.startsAt));
   const endAt = Math.max(...result.windows.map((window) => window.endsAt));
 
-  if (!Number.isFinite(startAt) || !Number.isFinite(endAt) || endAt <= startAt) {
+  if (
+    !Number.isFinite(startAt) ||
+    !Number.isFinite(endAt) ||
+    endAt <= startAt
+  ) {
     return {
       kind: "invalid",
       timezone: result.timezone,

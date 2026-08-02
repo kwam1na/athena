@@ -102,13 +102,30 @@ describe("ReportsCatalogLookup", () => {
     );
 
     expect(
-      screen.getByTestId("reports-search-results-transition"),
-    ).toHaveAttribute("data-motion", "height");
+      screen.getByTestId("reports-search-results-overlay"),
+    ).not.toHaveClass("border-b");
 
     await user.type(
       screen.getByRole("searchbox", { name: "Search products" }),
       "body",
     );
+
+    expect(screen.getByTestId("reports-search-results-overlay")).toHaveClass(
+      "absolute",
+      "bg-background",
+      "left-0",
+      "right-0",
+      "z-50",
+    );
+    expect(
+      screen.getByTestId("reports-search-results-overlay"),
+    ).not.toHaveClass("bg-surface-raised");
+    expect(
+      screen.getByTestId("reports-search-results-overlay"),
+    ).not.toHaveClass("shadow-sm", "shadow-md", "shadow-lg");
+    expect(
+      screen.getByTestId("reports-search-results-overlay"),
+    ).toHaveAttribute("data-motion", "height");
 
     expect(
       screen.getByRole("heading", { name: "Body Wave Bundle" }),
@@ -148,10 +165,7 @@ describe("ReportsCatalogLookup", () => {
 
     expect(
       screen.getByRole("searchbox", { name: "Search products" }),
-    ).toHaveAttribute(
-      "placeholder",
-      "Search by product name, SKU, or barcode",
-    );
+    ).toHaveAttribute("placeholder", "Search by product name, SKU, or barcode");
     expect(
       screen.queryByRole("heading", { name: "Find a product" }),
     ).not.toBeInTheDocument();
@@ -229,7 +243,9 @@ describe("ReportsCatalogLookup", () => {
     expect(screen.getByText(/Refine your search/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /BW-18/ })).toBeEnabled();
     expect(
-      screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent),
+      screen
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent),
     ).toEqual(["Body Wave Bundle", "Text match"]);
   });
 

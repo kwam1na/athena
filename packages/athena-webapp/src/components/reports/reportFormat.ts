@@ -133,6 +133,33 @@ export function formatOperatingDate(operatingDate: string): string {
   });
 }
 
+/**
+ * The dates named in a disclosure that already sits under a labelled week.
+ *
+ * The year is dropped on purpose: the section directly above prints the range,
+ * so repeating "2026" on every date adds length without adding meaning. Dates
+ * read in sentence form ("Sat, Aug 1 and Sun, Aug 2") because the disclosure
+ * is a sentence, not a list. The weekday is what makes a single stray date
+ * recognizable, but past two dates every label carries its own comma and the
+ * sentence turns to comma soup — so longer runs drop the weekday.
+ */
+export function formatOperatingDateList(operatingDates: string[]): string {
+  const withWeekday = operatingDates.length <= 2;
+  const labels = operatingDates.map((operatingDate) =>
+    new Date(`${operatingDate}T00:00:00.000Z`).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+      weekday: withWeekday ? "short" : undefined,
+    }),
+  );
+
+  if (labels.length === 0) return "";
+  if (labels.length === 1) return labels[0]!;
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")}, and ${labels.at(-1)}`;
+}
+
 export function formatReportDateRange(
   startDate: string,
   endDate: string,

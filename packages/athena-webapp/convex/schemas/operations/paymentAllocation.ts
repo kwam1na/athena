@@ -14,6 +14,8 @@ export const paymentAllocationSchema = v.object({
   status: v.union(v.literal("recorded"), v.literal("voided")),
   collectedInStore: v.boolean(),
   recordedAt: v.number(),
+  /** Server-stamped reversal time. Absent on legacy voided allocations. */
+  voidedAt: v.optional(v.number()),
   actorUserId: v.optional(v.id("athenaUser")),
   actorStaffProfileId: v.optional(v.id("staffProfile")),
   customerProfileId: v.optional(v.id("customerProfile")),

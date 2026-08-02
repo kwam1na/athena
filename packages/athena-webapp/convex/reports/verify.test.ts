@@ -11,6 +11,8 @@ import { foldAndReplaceDay } from "./sweeper";
 import {
   computeExpectedDay,
   diffMetrics,
+  VERIFY_MAX_DAYS,
+  VERIFY_MAX_DOCS_PER_DOMAIN,
   verifyDayWithCtx,
   verifyStoreSummaryWithCtx,
 } from "./verify";
@@ -85,7 +87,9 @@ async function foldDirtyDays(
 const EXPECTED_DAY1 = {
   grossSalesMinor: 18_500,
   netSalesMinor: 17_000,
+  paymentAllocatedMinor: 8_000,
   paymentsCollectedMinor: 9_000,
+  paymentsRefundedMinor: 1_000,
   refundsMinor: 1_000,
   unitsReturned: 0,
   unitsSold: 4,
@@ -133,6 +137,27 @@ async function seedVerifiableDay(ctx: MutationCtx): Promise<SeededStore> {
 }
 
 describe("verify — agreement with a reseeded, folded day", () => {
+  it("does not bless a source with more than 500 child rows", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(seedStore);
+    await t.run((ctx) =>
+      seedPosSale(ctx, seeded, {
+        completedAt: at("10:00"),
+        lines: Array.from({ length: 501 }, () => ({
+          quantity: 1,
+          unitPrice: 1,
+        })),
+        transactionNumber: "oversized-verifier-transaction",
+      }),
+    );
+
+    const result = await t.run((ctx: QueryCtx) =>
+      verifyDayWithCtx(ctx, seeded.storeId, DAY1),
+    );
+    expect(result.truncated).toBe(true);
+    expect(result.matches).toBe(false);
+  });
+
   it("recomputes the same totals the fold produced", async () => {
     vi.spyOn(Date, "now").mockReturnValue(NOW);
     const t = convexTest(schema, modules);
@@ -145,6 +170,14 @@ describe("verify — agreement with a reseeded, folded day", () => {
       expect(result.differences).toEqual([]);
       expect(result.matches).toBe(true);
       expect(result.expected).toEqual(EXPECTED_DAY1);
+      expect(result.paymentDifferences).toEqual([]);
+      expect(result.paymentPosture).toMatchObject({
+        allocationCoverage: "complete",
+        coveredMinor: 8_000,
+        eligibleMinor: 8_000,
+        outcome: "complete",
+        unsettledMinor: 0,
+      });
       expect(result.truncated).toBe(false);
       expect(result.factCount).toBeGreaterThan(0);
     });
@@ -203,7 +236,10 @@ describe("verify — catching a corrupted fold", () => {
           q.eq("storeId", seeded.storeId).eq("operatingDate", DAY1),
         )
         .unique();
-      await ctx.db.patch("reportDay", day!._id, { netSalesMinor: 1, unitsSold: 99 });
+      await ctx.db.patch("reportDay", day!._id, {
+        netSalesMinor: 1,
+        unitsSold: 99,
+      });
     });
 
     await t.run(async (ctx: QueryCtx) => {
@@ -232,7 +268,9 @@ describe("verify — catching a corrupted fold", () => {
       ).toEqual([
         "grossSalesMinor",
         "netSalesMinor",
+        "paymentAllocatedMinor",
         "paymentsCollectedMinor",
+        "paymentsRefundedMinor",
         "refundsMinor",
         "unitsSold",
       ]);
@@ -269,6 +307,108 @@ describe("verify — catching a corrupted fold", () => {
 });
 
 describe("verifyStoreSummary", () => {
+  it("checks an exact-cap day set completely and truncates only on overflow", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(seedStore);
+    await t.run(async (ctx) => {
+      for (let index = 0; index < VERIFY_MAX_DAYS; index += 1) {
+        const operatingDate = new Date(
+          Date.parse("2025-01-01T12:00:00.000Z") + index * 86_400_000,
+        )
+          .toISOString()
+          .slice(0, 10);
+        await ctx.db.insert("reportDay", {
+          currency: "GHS",
+          factCount: 0,
+          flags: {
+            hasUncostedRevenue: false,
+            mixedCurrency: false,
+            quarantinedFactCount: 0,
+          },
+          foldVersion: 1,
+          grossProfitMinor: 0,
+          grossSalesMinor: 0,
+          lastFactRecordedAt: NOW,
+          netSalesMinor: 0,
+          operatingDate,
+          paymentAllocatedMinor: 0,
+          paymentPosture: {
+            allocatedMinor: 0,
+            allocationCoverage: "complete",
+            allocationOmittedMinor: 0,
+            collectedMinor: 0,
+            hasInvalidAllocation: false,
+            refundedMinor: 0,
+            unsettledMinor: 0,
+          },
+          paymentsCollectedMinor: 0,
+          paymentsRefundedMinor: 0,
+          refundsMinor: 0,
+          status: "open",
+          storeId: seeded.storeId,
+          uncostedRevenueMinor: 0,
+          unitsReturned: 0,
+          unitsSold: 0,
+        });
+      }
+    });
+
+    const exact = await t.run(async (ctx: QueryCtx) =>
+      verifyStoreSummaryWithCtx(ctx, seeded.storeId),
+    );
+    expect(exact).toMatchObject({
+      daysChecked: VERIFY_MAX_DAYS,
+      daysMatching: VERIFY_MAX_DAYS,
+      mismatches: [],
+      truncated: false,
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("reportDay", {
+        currency: "GHS",
+        factCount: 0,
+        flags: {
+          hasUncostedRevenue: false,
+          mixedCurrency: false,
+          quarantinedFactCount: 0,
+        },
+        foldVersion: 1,
+        grossProfitMinor: 0,
+        grossSalesMinor: 0,
+        lastFactRecordedAt: NOW,
+        netSalesMinor: 0,
+        operatingDate: "2026-12-31",
+        paymentAllocatedMinor: 0,
+        paymentPosture: {
+          allocatedMinor: 0,
+          allocationCoverage: "complete",
+          allocationOmittedMinor: 0,
+          collectedMinor: 0,
+          hasInvalidAllocation: false,
+          refundedMinor: 0,
+          unsettledMinor: 0,
+        },
+        paymentsCollectedMinor: 0,
+        paymentsRefundedMinor: 0,
+        refundsMinor: 0,
+        status: "open",
+        storeId: seeded.storeId,
+        uncostedRevenueMinor: 0,
+        unitsReturned: 0,
+        unitsSold: 0,
+      });
+    });
+    const overflow = await t.run(async (ctx: QueryCtx) =>
+      verifyStoreSummaryWithCtx(ctx, seeded.storeId),
+    );
+    expect(overflow).toMatchObject({
+      daysChecked: VERIFY_MAX_DAYS,
+      daysMatching: VERIFY_MAX_DAYS,
+      mismatches: [],
+      truncated: true,
+    });
+  });
+
   it("aggregates across every folded day and lists only the mismatches", async () => {
     vi.spyOn(Date, "now").mockReturnValue(NOW);
     const t = convexTest(schema, modules);
@@ -390,7 +530,11 @@ describe("verify — operating-day attribution", () => {
     });
 
     await t.run(async (ctx: QueryCtx) => {
-      const utcDay = await computeExpectedDay(ctx, seeded.storeId, "2026-03-05");
+      const utcDay = await computeExpectedDay(
+        ctx,
+        seeded.storeId,
+        "2026-03-05",
+      );
       expect(utcDay.expected.netSalesMinor).toBe(0);
       const localDay = await computeExpectedDay(
         ctx,
@@ -403,8 +547,8 @@ describe("verify — operating-day attribution", () => {
   });
 });
 
-describe("verify — payment collection", () => {
-  it("counts inbound recorded allocations only", async () => {
+describe("verify — payment posture", () => {
+  it("proves timed refunds/allocation and marks untimed legacy voids incomplete", async () => {
     vi.spyOn(Date, "now").mockReturnValue(NOW);
     const t = convexTest(schema, modules);
     const seeded = await t.run(async (ctx) => {
@@ -420,18 +564,145 @@ describe("verify — payment collection", () => {
         recordedAt: at("10:00"),
         targetId: "b",
       });
-      await seedPaymentAllocation(ctx, store, {
+      const timedVoidId = await seedPaymentAllocation(ctx, store, {
         amount: 3_000,
         recordedAt: at("11:00"),
         status: "voided",
         targetId: "c",
       });
+      await ctx.db.patch("paymentAllocation", timedVoidId, {
+        voidedAt: at("12:00"),
+      });
+      await seedPaymentAllocation(ctx, store, {
+        amount: 1_000,
+        recordedAt: at("13:00"),
+        status: "voided",
+        targetId: "legacy",
+      });
       return store;
     });
 
     await t.run(async (ctx: QueryCtx) => {
-      const { expected } = await computeExpectedDay(ctx, seeded.storeId, DAY1);
-      expect(expected.paymentsCollectedMinor).toBe(5_000);
+      const { expected, paymentPosture } = await computeExpectedDay(
+        ctx,
+        seeded.storeId,
+        DAY1,
+      );
+      expect(expected).toMatchObject({
+        paymentsCollectedMinor: 9_000,
+        paymentsRefundedMinor: 5_000,
+        paymentAllocatedMinor: 3_000,
+      });
+      expect(paymentPosture).toMatchObject({
+        allocationCoverage: "unknown",
+        omittedMinor: 1_000,
+        outcome: "incomplete",
+        reason: "legacy_void_missing_timestamp",
+        unsettledMinor: null,
+      });
+    });
+  });
+
+  it("bounds the allocation scan to the period, not the store's lifetime", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      // Far outside the verified period's lookback. Before this scan was date
+      // bounded these alone exhausted the per-domain cap, and every later day
+      // in the store's life verified as permanently incomplete.
+      for (let index = 0; index <= VERIFY_MAX_DOCS_PER_DOMAIN; index += 1) {
+        await seedPaymentAllocation(ctx, store, {
+          amount: 100,
+          recordedAt: Date.parse("2025-01-01T10:00:00Z") + index,
+          targetId: `ancient-${index}`,
+        });
+      }
+      for (const [index, amount] of [1_000, 2_000, 3_000].entries()) {
+        await seedPaymentAllocation(ctx, store, {
+          amount,
+          recordedAt: at("09:00") + index,
+          targetId: `inside-${index}`,
+        });
+      }
+      return store;
+    });
+
+    await t.run(async (ctx: QueryCtx) => {
+      const { expected, paymentPosture, truncated } = await computeExpectedDay(
+        ctx,
+        seeded.storeId,
+        DAY1,
+      );
+      expect(truncated).toBe(false);
+      expect(expected.paymentsCollectedMinor).toBe(6_000);
+      expect(expected.paymentAllocatedMinor).toBe(6_000);
+      expect(paymentPosture).toMatchObject({
+        allocationCoverage: "complete",
+        omittedMinor: 0,
+        outcome: "complete",
+        reason: "complete",
+      });
+    });
+  });
+
+  it("refuses a period that itself exceeds the allocation cap", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      for (let index = 0; index <= VERIFY_MAX_DOCS_PER_DOMAIN; index += 1) {
+        await seedPaymentAllocation(ctx, store, {
+          amount: 100,
+          recordedAt: at("09:00") + index,
+          targetId: `inside-${index}`,
+        });
+      }
+      return store;
+    });
+
+    await t.run(async (ctx: QueryCtx) => {
+      const result = await verifyDayWithCtx(ctx, seeded.storeId, DAY1);
+      // A capped read is a lower bound, never a total that happens to agree.
+      expect(result.truncated).toBe(true);
+      expect(result.matches).toBe(false);
+      expect(result.paymentPosture).toMatchObject({
+        allocationCoverage: "unknown",
+        outcome: "incomplete",
+        reason: "source_cap_exceeded",
+        unsettledMinor: null,
+      });
+    });
+  });
+
+  it("flags period-local over-allocation and never returns negative unsettled", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      await seedPaymentAllocation(ctx, store, {
+        amount: 5_000,
+        recordedAt: at("09:00"),
+        targetId: "collection",
+      });
+      await seedPaymentAllocation(ctx, store, {
+        amount: 6_000,
+        direction: "out",
+        recordedAt: at("10:00"),
+        targetId: "refund",
+      });
+      return store;
+    });
+
+    await t.run(async (ctx: QueryCtx) => {
+      const { paymentPosture } = await computeExpectedDay(
+        ctx,
+        seeded.storeId,
+        DAY1,
+      );
+      expect(paymentPosture).toMatchObject({
+        hasInvalidAllocation: true,
+        outcome: "incomplete",
+        reason: "invalid_allocation",
+        unsettledMinor: null,
+      });
     });
   });
 });
@@ -442,6 +713,8 @@ describe("verify — diffMetrics", () => {
       grossSalesMinor: 1,
       netSalesMinor: 2,
       paymentsCollectedMinor: 3,
+      paymentsRefundedMinor: 7,
+      paymentAllocatedMinor: -4,
       refundsMinor: 4,
       unitsReturned: 5,
       unitsSold: 6,

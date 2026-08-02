@@ -41,6 +41,7 @@ export const storeScheduleSchema = v.object({
   weeklyWindows: v.array(storeScheduleWindowSchema),
   weeklyClosedDays: v.array(v.number()),
   dateExceptions: v.array(storeScheduleDateExceptionSchema),
+  reportingCycleStartsOn: v.optional(v.number()),
   effectiveFrom: v.number(),
   effectiveTo: v.optional(v.number()),
   status: storeScheduleStatusSchema,

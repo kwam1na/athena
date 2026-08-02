@@ -7,9 +7,12 @@ import schema from "../schema";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import {
+  REPORTS_FINGERPRINT_VERSION,
   REPORTS_FOLD_VERSION,
   type NewReportFact,
 } from "../../shared/reportsContract";
+import { factFingerprint, LEGACY_REPORTS_FINGERPRINT_VERSION } from "./fingerprint";
+import { foldDay } from "./foldDay";
 import { recordFacts } from "./ingest";
 
 const modules = import.meta.glob("../**/*.ts");
@@ -109,6 +112,28 @@ async function readDay(ctx: MutationCtx, storeId: Id<"store">, date: string) {
     .unique();
 }
 
+/**
+ * Fold the day from its stored facts — the correctness authority the open-day
+ * preview must agree with on payment posture.
+ */
+async function refoldDay(ctx: MutationCtx, storeId: Id<"store">, date: string) {
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+  const rows = await ctx.db
+    .query("reportFact")
+    .withIndex("by_storeId_operatingDate", (q) =>
+      q.eq("storeId", storeId).eq("operatingDate", date),
+    )
+    .collect();
+  return foldDay(
+    "GHS",
+    rows.map((row) => ({
+      ...row,
+      factId: String(row._id),
+      quarantined: row.quarantine !== undefined,
+    })),
+  );
+}
+
 async function readDirty(ctx: MutationCtx, storeId: Id<"store">) {
   // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
   const rows = await ctx.db
@@ -138,15 +163,16 @@ describe("recordFacts — identity and replay", () => {
       expect(facts).toHaveLength(1);
       expect(facts[0]).toMatchObject({
         factKind: "sale",
-        fingerprintVersion: 1,
+        fingerprintVersion: 2,
         lineId: "line_1",
         operatingDate: TODAY,
+        observedAt: NOW,
         recordedAt: NOW,
         sourceDomain: "pos",
         sourceId: "txn_1",
         taxAmountMinor: 500,
       });
-      expect(facts[0].fingerprint).toMatch(/^v1:[0-9a-f]{8}$/);
+      expect(facts[0].fingerprint).toMatch(/^v2:[0-9a-f]{8}$/);
       expect(facts[0].quarantine).toBeUndefined();
     });
   });
@@ -165,6 +191,98 @@ describe("recordFacts — identity and replay", () => {
       const day = await readDay(ctx, storeId, TODAY);
       // The replay must not double-count the open day either.
       expect(day).toMatchObject({ factCount: 1, netSalesMinor: 9_000 });
+    });
+  });
+
+  it("replays a legacy payment fact under its stored fingerprint version", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { storeId } = await seed(ctx);
+      const payment = saleFact({
+        sourceDomain: "payments",
+        sourceId: "allocation_legacy",
+        lineId: "",
+        factKind: "payment",
+        grossAmountMinor: 2_000,
+        netAmountMinor: 2_000,
+        quantity: 0,
+      });
+      const { productSkuId: _productSkuId, ...legacyPayment } = payment;
+      await ctx.db.insert("reportFact", {
+        ...legacyPayment,
+        fingerprint: factFingerprint(payment, LEGACY_REPORTS_FINGERPRINT_VERSION),
+        fingerprintVersion: LEGACY_REPORTS_FINGERPRINT_VERSION,
+        operatingDate: TODAY,
+        recordedAt: NOW,
+        storeId,
+      });
+
+      await recordFacts(ctx, storeId, [
+        {
+          ...payment,
+          paymentAllocationCoverage: "known",
+          paymentAllocationMinor: 2_000,
+        },
+      ]);
+
+      // The new fields are intentionally ignored for v1 identity comparison;
+      // routine replay never upgrades or quarantines historical lineage.
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      const facts = await ctx.db.query("reportFact").collect();
+      expect(facts).toHaveLength(1);
+      expect(facts[0].quarantine).toBeUndefined();
+      expect(facts[0].paymentAllocationCoverage).toBeUndefined();
+    });
+  });
+
+  it("normalises currency at the boundary so casing drift is not a conflict", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { skuId, storeId } = await seed(ctx);
+      await recordFacts(ctx, storeId, [
+        saleFact({ currency: " ghs ", productSkuId: skuId }),
+      ]);
+      await recordFacts(ctx, storeId, [
+        saleFact({ currency: "GHS", productSkuId: skuId }),
+      ]);
+
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      const facts = await ctx.db.query("reportFact").collect();
+      expect(facts).toHaveLength(1);
+      expect(facts[0].currency).toBe("GHS");
+      expect(facts[0].quarantine).toBeUndefined();
+      const day = await readDay(ctx, storeId, TODAY);
+      expect(day).toMatchObject({ factCount: 1, netSalesMinor: 9_000 });
+      expect(day?.flags.mixedCurrency).toBe(false);
+    });
+  });
+
+  it("replays a stored row that predates currency normalisation", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { storeId } = await seed(ctx);
+      const legacy = saleFact({ currency: " ghs " });
+      const { productSkuId: _productSkuId, ...legacyRow } = legacy;
+      await ctx.db.insert("reportFact", {
+        ...legacyRow,
+        fingerprint: factFingerprint(legacy),
+        fingerprintVersion: REPORTS_FINGERPRINT_VERSION,
+        operatingDate: TODAY,
+        recordedAt: NOW,
+        storeId,
+      });
+
+      await recordFacts(ctx, storeId, [saleFact({ currency: "GHS" })]);
+
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      const facts = await ctx.db.query("reportFact").collect();
+      expect(facts).toHaveLength(1);
+      // The raw spelling stays as written; it is not drift and not rewritten.
+      expect(facts[0].currency).toBe(" ghs ");
+      expect(facts[0].quarantine).toBeUndefined();
     });
   });
 
@@ -251,6 +369,8 @@ describe("recordFacts — open-day incremental math", () => {
           productSkuId: undefined,
           quantity: 0,
           sourceId: "pay_1",
+          paymentAllocationCoverage: "known",
+          paymentAllocationMinor: 14_000,
         },
       ]);
 
@@ -279,6 +399,10 @@ describe("recordFacts — open-day incremental math", () => {
         hasUncostedRevenue: false,
         mixedCurrency: false,
         quarantinedFactCount: 0,
+      });
+      expect(day?.paymentPosture).toMatchObject({
+        allocationCoverage: "complete",
+        unsettledMinor: 0,
       });
 
       // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
@@ -375,6 +499,94 @@ describe("recordFacts — open-day incremental math", () => {
     });
   });
 
+  it("accumulates omitted allocation value across sequential batches", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { storeId } = await seed(ctx);
+      const payment = (overrides: Partial<NewReportFact>): NewReportFact => ({
+        ...saleFact(),
+        factKind: "payment",
+        grossAmountMinor: 4_000,
+        lineId: "",
+        netAmountMinor: 4_000,
+        quantity: 0,
+        ...overrides,
+      });
+
+      await recordFacts(ctx, storeId, [
+        payment({
+          paymentAllocationCoverage: "known",
+          paymentAllocationMinor: 4_000,
+          sourceId: "pay_known",
+        }),
+      ]);
+      expect((await readDay(ctx, storeId, TODAY))?.paymentPosture).toMatchObject({
+        allocationCoverage: "complete",
+        allocationOmittedMinor: 0,
+      });
+
+      // The second batch's unknown coverage must survive the first batch's
+      // established posture instead of being discarded.
+      await recordFacts(ctx, storeId, [
+        payment({ netAmountMinor: 1_500, sourceId: "pay_unknown" }),
+      ]);
+
+      const day = await readDay(ctx, storeId, TODAY);
+      expect(day?.paymentPosture).toMatchObject({
+        allocationCoverage: "unknown",
+        allocationOmittedMinor: 1_500,
+        unsettledMinor: null,
+      });
+      const { day: folded } = await refoldDay(ctx, storeId, TODAY);
+      expect(day?.paymentPosture).toEqual(folded.paymentPosture);
+    });
+  });
+
+  it("keeps a foreign-currency payment out of posture while flagging the day", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { storeId } = await seed(ctx);
+      await recordFacts(ctx, storeId, [
+        {
+          ...saleFact(),
+          factKind: "payment",
+          grossAmountMinor: 4_000,
+          lineId: "",
+          netAmountMinor: 4_000,
+          paymentAllocationCoverage: "known",
+          paymentAllocationMinor: 4_000,
+          quantity: 0,
+          sourceId: "pay_local",
+        },
+        {
+          ...saleFact(),
+          currency: "USD",
+          factKind: "payment",
+          grossAmountMinor: 9_900,
+          lineId: "",
+          netAmountMinor: 9_900,
+          quantity: 0,
+          sourceId: "pay_foreign",
+        },
+      ]);
+
+      const day = await readDay(ctx, storeId, TODAY);
+      // No FX rate exists here, so the foreign fact is neither collected nor
+      // counted as omitted — exactly what the fold decides.
+      expect(day?.paymentPosture).toMatchObject({
+        allocationCoverage: "complete",
+        allocationOmittedMinor: 0,
+        collectedMinor: 4_000,
+      });
+      expect(day?.flags.mixedCurrency).toBe(true);
+      const { day: folded } = await refoldDay(ctx, storeId, TODAY);
+      expect(day?.paymentPosture).toEqual(folded.paymentPosture);
+      expect(folded.flags.mixedCurrency).toBe(true);
+    });
+  });
+
   it("records non-revenue kinds without moving day metrics", async () => {
     vi.spyOn(Date, "now").mockReturnValue(NOW);
     const t = convexTest(schema, modules);
@@ -384,6 +596,7 @@ describe("recordFacts — open-day incremental math", () => {
         {
           ...saleFact(),
           factKind: "close_snapshot",
+          currency: "ghs",
           lineId: "",
           sourceDomain: "daily_close",
           sourceId: "close_1",
@@ -396,6 +609,7 @@ describe("recordFacts — open-day incremental math", () => {
         grossSalesMinor: 0,
         netSalesMinor: 0,
       });
+      expect(day?.flags.mixedCurrency).toBe(false);
       // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       expect(await ctx.db.query("reportFact").collect()).toHaveLength(1);
     });
@@ -532,7 +746,7 @@ describe("recordFacts — containment", () => {
       const { storeId } = await seed(ctx);
       await expect(
         recordFacts(brokenCtx(ctx, "reportFact"), storeId, [saleFact()]),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({ outcome: "contained_failure" });
 
       // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       expect(await ctx.db.query("reportFact").collect()).toHaveLength(0);
@@ -551,7 +765,7 @@ describe("recordFacts — containment", () => {
         recordFacts(brokenCtx(ctx, "reportDay"), storeId, [
           saleFact({ productSkuId: skuId }),
         ]),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({ outcome: "contained_failure" });
 
       // The fact landed; only the derived preview failed — exactly what the
       // dirty mark tells the sweeper to rebuild.
@@ -572,7 +786,7 @@ describe("recordFacts — containment", () => {
         recordFacts(brokenCtx(ctx, "reportFact"), storeId, [
           saleFact({ occurredAt: Date.parse("2026-03-09T10:00:00Z") }),
         ]),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({ outcome: "contained_failure" });
 
       expect(await readDirty(ctx, storeId)).toEqual(
         expect.arrayContaining([

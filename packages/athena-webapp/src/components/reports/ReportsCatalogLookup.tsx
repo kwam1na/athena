@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useDebounce } from "@/hooks/useDebounce";
 import { getOrigin } from "@/lib/navigationUtils";
+import { cn } from "@/lib/utils";
 import {
   buildAdminSkuSearchOptions,
   groupAdminSkuSearchOptionsByProduct,
@@ -92,7 +93,8 @@ export function ReportsCatalogLookup({
   const isLoading =
     hasQuery && (isWaitingForDebounce || searchResult === undefined);
   const isLimited =
-    Boolean(searchResult?.truncated) || Boolean(searchResult?.candidateOverflow);
+    Boolean(searchResult?.truncated) ||
+    Boolean(searchResult?.candidateOverflow);
 
   function clearQuery() {
     setQuery("");
@@ -120,10 +122,15 @@ export function ReportsCatalogLookup({
   return (
     <section
       aria-label="Find a product"
-      className="max-w-2xl"
+      className="relative z-20 max-w-2xl"
       data-testid="reports-catalog-lookup"
     >
-      <div className="overflow-hidden rounded-xl border border-border bg-surface-raised focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
+      <div
+        className={cn(
+          "border border-border bg-surface-raised focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background",
+          hasQuery ? "rounded-t-xl" : "rounded-xl",
+        )}
+      >
         <div className="relative">
           <Search
             aria-hidden="true"
@@ -159,7 +166,12 @@ export function ReportsCatalogLookup({
 
         <AnimatedHeight
           animateFromZero
-          testId="reports-search-results-transition"
+          className={cn(
+            "absolute left-0 right-0 top-full z-50",
+            hasQuery &&
+              "rounded-b-xl border-x border-b border-border bg-background",
+          )}
+          testId="reports-search-results-overlay"
         >
           {hasQuery ? (
             <div
@@ -168,92 +180,96 @@ export function ReportsCatalogLookup({
               id="reports-product-matches"
             >
               {isLoading ? (
-              <p
-                className="px-layout-md py-layout-md text-sm text-muted-foreground"
-                role="status"
-              >
-                Searching…
-              </p>
-            ) : groups.length === 0 ? (
-              <div className="px-layout-md py-layout-md">
-                <p className="text-sm font-medium text-foreground">
-                  No matching products
+                <p
+                  className="px-layout-md py-layout-md text-sm text-muted-foreground"
+                  role="status"
+                >
+                  Searching…
                 </p>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  Check the product name, SKU, or barcode and try again.
-                </p>
-              </div>
-            ) : (
-              <div aria-label="Product matches">
-                {groups.map((group, groupIndex) => {
-                  const productName = capitalizeProductName(group.productName);
-
-                  return (
-                    <div
-                      className={
-                        groupIndex === 0 ? undefined : "border-t border-border"
-                      }
-                      key={group.productId}
-                    >
-                      <div className="flex items-baseline justify-between gap-layout-sm px-layout-md pb-1 pt-layout-sm">
-                        <h3 className="truncate text-sm font-semibold tracking-tight text-foreground">
-                          {productName}
-                        </h3>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {group.skus.length}{" "}
-                          {group.skus.length === 1 ? "variant" : "variants"}
-                        </span>
-                      </div>
-                      <div className="px-1.5 pb-1.5">
-                        {group.skus.map((option) => {
-                          const skuLabel =
-                            option.sku?.trim() || String(option.productSkuId);
-                          const netPrice = formatOptionalMoney(
-                            option.searchResult.netPrice,
-                            activeStore?.currency ?? "USD",
-                          );
-
-                          return (
-                            <button
-                              aria-label={`View report for ${productName}, ${skuLabel}, net price ${netPrice}`}
-                              className="group flex min-h-12 w-full items-center justify-between gap-layout-md rounded-lg px-layout-sm py-layout-sm text-left outline-none transition-[background-color,transform] duration-100 hover:bg-accent active:scale-[0.99] active:bg-accent focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
-                              key={option.productSkuId}
-                              onClick={() => inspectSku(option.productSkuId)}
-                              type="button"
-                            >
-                              <span className="min-w-0">
-                                <span className="block truncate text-xs font-medium tabular-nums text-muted-foreground">
-                                  {skuLabel}
-                                </span>
-                                {option.subtitle ? (
-                                  <span className="mt-0.5 block truncate text-xs leading-relaxed text-muted-foreground">
-                                    {option.subtitle}
-                                  </span>
-                                ) : null}
-                              </span>
-                              <span className="flex shrink-0 items-center gap-layout-sm">
-                                <span className="font-numeric text-sm tabular-nums text-foreground">
-                                  {netPrice}
-                                </span>
-                                <ChevronRight
-                                  aria-hidden="true"
-                                  className="h-4 w-4 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transition-none"
-                                />
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-                {isLimited ? (
-                  <p className="border-t border-border px-layout-md py-layout-sm text-xs leading-relaxed text-muted-foreground">
-                    Showing the closest matches. Refine your search to narrow
-                    the list.
+              ) : groups.length === 0 ? (
+                <div className="px-layout-md py-layout-md">
+                  <p className="text-sm font-medium text-foreground">
+                    No matching products
                   </p>
-                ) : null}
-              </div>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    Check the product name, SKU, or barcode and try again.
+                  </p>
+                </div>
+              ) : (
+                <div aria-label="Product matches">
+                  {groups.map((group, groupIndex) => {
+                    const productName = capitalizeProductName(
+                      group.productName,
+                    );
+
+                    return (
+                      <div
+                        className={
+                          groupIndex === 0
+                            ? undefined
+                            : "border-t border-border"
+                        }
+                        key={group.productId}
+                      >
+                        <div className="flex items-baseline justify-between gap-layout-sm px-layout-md pb-1 pt-layout-sm">
+                          <h3 className="truncate text-sm font-semibold tracking-tight text-foreground">
+                            {productName}
+                          </h3>
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            {group.skus.length}{" "}
+                            {group.skus.length === 1 ? "variant" : "variants"}
+                          </span>
+                        </div>
+                        <div className="px-1.5 pb-1.5">
+                          {group.skus.map((option) => {
+                            const skuLabel =
+                              option.sku?.trim() || String(option.productSkuId);
+                            const netPrice = formatOptionalMoney(
+                              option.searchResult.netPrice,
+                              activeStore?.currency ?? "USD",
+                            );
+
+                            return (
+                              <button
+                                aria-label={`View report for ${productName}, ${skuLabel}, net price ${netPrice}`}
+                                className="group flex min-h-12 w-full items-center justify-between gap-layout-md rounded-lg px-layout-sm py-layout-sm text-left outline-none transition-[background-color,transform] duration-100 hover:bg-accent active:scale-[0.99] active:bg-accent focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+                                key={option.productSkuId}
+                                onClick={() => inspectSku(option.productSkuId)}
+                                type="button"
+                              >
+                                <span className="min-w-0">
+                                  <span className="block truncate text-xs font-medium tabular-nums text-muted-foreground">
+                                    {skuLabel}
+                                  </span>
+                                  {option.subtitle ? (
+                                    <span className="mt-0.5 block truncate text-xs leading-relaxed text-muted-foreground">
+                                      {option.subtitle}
+                                    </span>
+                                  ) : null}
+                                </span>
+                                <span className="flex shrink-0 items-center gap-layout-sm">
+                                  <span className="font-numeric text-sm tabular-nums text-foreground">
+                                    {netPrice}
+                                  </span>
+                                  <ChevronRight
+                                    aria-hidden="true"
+                                    className="h-4 w-4 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transition-none"
+                                  />
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {isLimited ? (
+                    <p className="border-t border-border px-layout-md py-layout-sm text-xs leading-relaxed text-muted-foreground">
+                      Showing the closest matches. Refine your search to narrow
+                      the list.
+                    </p>
+                  ) : null}
+                </div>
               )}
             </div>
           ) : null}

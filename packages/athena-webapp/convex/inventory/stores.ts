@@ -28,9 +28,78 @@ import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import { listOrganizationStoresReadDefinition } from "../operationAdmission/readDefinitions";
 import type { OperationQueryCtx } from "../operationAdmission/types";
+import type { MutationCtx } from "../_generated/server";
 
 const entity = "store";
 const CONFIG_MIGRATION_PAGE_SIZE = 50;
+const WEEKLY_ACCEPTED_DELETE_BATCH_SIZE = 100;
+
+/**
+ * Delete the weekly tables introduced by the EOW report for one store.
+ *
+ * Current and dirty rows are singletons. Accepted history is deleted in small
+ * batches. A full batch schedules another mutation, so removing a store cannot
+ * leave an older accepted baseline (or its inline amendment) behind or turn
+ * one mutation into an unbounded cleanup. There is no separate weekly
+ * diagnostics table in V1.
+ */
+export async function deleteWeeklyReportingForStoreWithCtx(
+  ctx: MutationCtx,
+  storeId: Id<"store">,
+): Promise<{ deletedAcceptedRows: number; hasMore: boolean }> {
+  const [current, dirty] = await Promise.all([
+    ctx.db
+      .query("reportWeekCurrent")
+      .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+      .unique(),
+    ctx.db
+      .query("reportDirtyWeek")
+      .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+      .unique(),
+  ]);
+
+  await Promise.all([
+    ...(current ? [ctx.db.delete("reportWeekCurrent", current._id)] : []),
+    ...(dirty ? [ctx.db.delete("reportDirtyWeek", dirty._id)] : []),
+  ]);
+
+  const accepted = await ctx.db
+    .query("reportWeekAccepted")
+    .withIndex("by_storeId_cycleStartDate", (q) => q.eq("storeId", storeId))
+    .take(WEEKLY_ACCEPTED_DELETE_BATCH_SIZE);
+  await Promise.all(
+    accepted.map((row) => ctx.db.delete("reportWeekAccepted", row._id)),
+  );
+  return {
+    deletedAcceptedRows: accepted.length,
+    hasMore: accepted.length === WEEKLY_ACCEPTED_DELETE_BATCH_SIZE,
+  };
+}
+
+export async function removeStoreWithCtx(
+  ctx: MutationCtx,
+  storeId: Id<"store">,
+): Promise<boolean> {
+  const store = await ctx.db.get("store", storeId);
+  if (!store) return true;
+
+  const cleanup = await deleteWeeklyReportingForStoreWithCtx(ctx, storeId);
+  if (cleanup.hasMore) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.inventory.stores.continueStoreRemoval,
+      { storeId },
+    );
+    return false;
+  }
+  await ctx.db.delete("store", storeId);
+  return true;
+}
+
+export const continueStoreRemoval = internalMutation({
+  args: { storeId: v.id("store") },
+  handler: async (ctx, args) => removeStoreWithCtx(ctx, args.storeId),
+});
 
 const toV2OnlyConfig = (existingConfig: unknown) => {
   const normalized = toV2Config(existingConfig);
@@ -240,7 +309,7 @@ export const remove = mutation({
       ctx,
       "administration.destructive",
     );
-    await ctx.db.delete("store", args.id);
+    await removeStoreWithCtx(ctx, args.id);
 
     return { message: "OK" };
   },

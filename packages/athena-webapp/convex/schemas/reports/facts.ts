@@ -45,6 +45,12 @@ export const reportFactSchema = v.object({
   occurredAt: v.number(),
   /** Arrival metadata — when Athena learned of it. */
   recordedAt: v.number(),
+  /**
+   * Server-stamped knowledge time for immutable reporting cutoffs. Optional
+   * during the compatibility migration; acceptance refuses legacy rows until
+   * they have been stamped rather than guessing from business time.
+   */
+  observedAt: v.optional(v.number()),
   /** Store-local operating day label, resolved at ingest via time authority. */
   operatingDate: v.string(),
 
@@ -56,6 +62,11 @@ export const reportFactSchema = v.object({
   quantity: v.number(),
   productSkuId: v.optional(v.id("productSku")),
   unitCostMinor: v.optional(v.number()),
+  // Absent legacy allocation lineage is an honest unknown, never zero.
+  paymentAllocationMinor: v.optional(v.number()),
+  paymentAllocationCoverage: v.optional(
+    v.union(v.literal("known"), v.literal("unknown")),
+  ),
 
   quarantine: v.optional(
     v.object({

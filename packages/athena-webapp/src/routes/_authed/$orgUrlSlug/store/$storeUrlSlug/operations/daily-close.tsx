@@ -7,6 +7,7 @@ import { useDailyCloseFixture } from "~/src/stories/operations/devFixtureActivat
 const dailyCloseSearchSchema = z.object({
   // Development-only screenshot fixtures; inert in production builds.
   fixture: z.string().optional(),
+  o: z.string().optional(),
   operatingDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)

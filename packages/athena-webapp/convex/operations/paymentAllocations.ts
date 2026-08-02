@@ -165,35 +165,109 @@ export function paymentAllocationReportingIdentity(
   return `payment_allocation:${String(allocation._id)}:${allocation.status}`;
 }
 
+/**
+ * The allocation record is the payment source of truth, so it can state
+ * allocation coverage without exposing a tender method to Reports.
+ */
+export function paymentAllocationReportingDimensions(
+  allocation: Pick<Doc<"paymentAllocation">, "amount" | "direction" | "status">,
+) {
+  const amountMinor = Math.abs(allocation.amount);
+  const isReversal = allocation.status === "voided";
+  const isRefund = allocation.direction === "out" && !isReversal;
+
+  return {
+    factKind: isReversal || isRefund ? ("payment_refund" as const) : ("payment" as const),
+    amountMinor,
+    paymentAllocationMinor: isReversal || isRefund ? -amountMinor : amountMinor,
+    paymentAllocationCoverage: "known" as const,
+  };
+}
+
+/**
+ * KEEP IN SYNC WITH convex/reports/reseed.ts (`paymentFacts`).
+ *
+ * Reseed re-derives a whole allocation's evidence; the live path emits the one
+ * event that just happened. The two must agree on what each allocation SHAPE
+ * looks like in the fact stream, including the shapes no live event can date:
+ * a legacy voided row (no `voidedAt`) and a voided outbound refund. Those
+ * cannot be filed as a dated reversal without inventing a time, so they are
+ * recorded with unknown allocation coverage — omitted value, disclosed — rather
+ * than dropped, which would silently understate the day's payment volume.
+ */
 async function ensurePaymentAllocationReportingWithCtx(
   ctx: MutationCtx,
   allocation: Doc<"paymentAllocation">,
 ) {
   const store = await ctx.db.get("store", allocation.storeId);
   if (!store) throw new Error("Payment allocation store is unavailable.");
-  const organizationId = allocation.organizationId ?? store.organizationId;
-  const isReversal = allocation.status === "voided";
-  const isRefund = allocation.direction === "out" && !isReversal;
-  const amountMinor = Math.abs(allocation.amount);
+  const posture = paymentAllocationReportingDimensions(allocation);
   const currencyCode = (allocation.currency ?? store.currency)
     ?.trim()
     .toUpperCase();
 
-  const fact: NewReportFact = {
-    sourceDomain: "payments",
+  const base = {
+    sourceDomain: "payments" as const,
     sourceId: String(allocation._id),
     lineId: "",
-    factKind: isReversal || isRefund ? "payment_refund" : "payment",
-    occurredAt: allocation.recordedAt,
     currency: currencyCode ?? store.currency,
-    grossAmountMinor: amountMinor,
-    netAmountMinor: amountMinor,
+    grossAmountMinor: posture.amountMinor,
+    netAmountMinor: posture.amountMinor,
     taxAmountMinor: 0,
     discountAmountMinor: 0,
     quantity: 0,
   };
 
+  const isUndatedVoid =
+    allocation.status === "voided" && allocation.voidedAt === undefined;
+  const isVoidedRefund =
+    allocation.status === "voided" && allocation.direction === "out";
+
+  const fact: NewReportFact =
+    isUndatedVoid || isVoidedRefund
+      ? {
+          ...base,
+          // The reversal date is never guessed from `recordedAt`; only the
+          // original event time is source-proven, and coverage stays unknown.
+          factKind: isVoidedRefund ? "payment_refund" : "payment",
+          occurredAt: allocation.recordedAt,
+          paymentAllocationCoverage: "unknown",
+        }
+      : {
+          ...base,
+          factKind: posture.factKind,
+          occurredAt:
+            allocation.status === "voided"
+              ? allocation.voidedAt!
+              : allocation.recordedAt,
+          paymentAllocationMinor: posture.paymentAllocationMinor,
+          paymentAllocationCoverage: posture.paymentAllocationCoverage,
+        };
+
   await recordFacts(ctx, allocation.storeId, [fact]);
+}
+
+/**
+ * Operator/maintenance surface: no domain flow voids an allocation yet, and
+ * this is deliberately reachable only from internal callers until one does.
+ * Registered as `voidPaymentAllocation` (internalMutation) — never public.
+ */
+export async function voidPaymentAllocationWithCtx(
+  ctx: MutationCtx,
+  allocationId: Id<"paymentAllocation">,
+) {
+  const allocation = await ctx.db.get("paymentAllocation", allocationId);
+  if (!allocation) throw new Error("Payment allocation was not found.");
+  if (allocation.status === "voided") return allocation;
+
+  const voidedAt = Date.now();
+  await ctx.db.patch("paymentAllocation", allocation._id, {
+    status: "voided",
+    voidedAt,
+  });
+  const voidedAllocation = { ...allocation, status: "voided" as const, voidedAt };
+  await ensurePaymentAllocationReportingWithCtx(ctx, voidedAllocation);
+  return voidedAllocation;
 }
 
 export async function recordPaymentAllocationWithCtx(
@@ -372,6 +446,13 @@ export const recordPaymentAllocation = internalMutation({
     recordedAt: v.optional(v.number()),
   },
   handler: (ctx, args) => recordPaymentAllocationWithCtx(ctx, args),
+});
+
+/** Internal maintenance tooling — kept pending a domain caller. Not public. */
+export const voidPaymentAllocation = internalMutation({
+  args: { paymentAllocationId: v.id("paymentAllocation") },
+  handler: (ctx, args) =>
+    voidPaymentAllocationWithCtx(ctx, args.paymentAllocationId),
 });
 
 export const listPaymentAllocationsForTarget = internalQuery({

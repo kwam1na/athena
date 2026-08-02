@@ -12,6 +12,7 @@ import { createOperationalWorkItemWithCtx } from "./operationalWorkItems";
 import {
   projectLogicalOperationalWork,
   type LogicalOperationalWorkGroup,
+  type LogicalOperationalWorkProjection,
 } from "./logicalOperationalWork";
 import { recordOperationalEventWithCtx } from "./operationalEvents";
 import {
@@ -64,7 +65,10 @@ import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import type { AutomationDecisionEvidence } from "../automation/runLedger";
 import { recordFacts } from "../reports/ingest";
 import { resolveOperatingDate } from "../reports/operatingDay";
-import type { NewReportFact } from "../../shared/reportsContract";
+import {
+  normalizeCurrencyCode,
+  type NewReportFact,
+} from "../../shared/reportsContract";
 
 export { buildAdjustmentReportTotals, listAppliedTransactionAdjustmentsForDay };
 
@@ -126,6 +130,25 @@ export type DailyCloseFrozenCarryForwardGroup = {
   type: string;
   memberWorkItemIds: Id<"operationalWorkItem">[];
   memberCount: number;
+};
+
+/**
+ * Immutable logical inventory-review evidence captured at Daily Close. This is
+ * deliberately separate from the carry-forward handoff: a weekly report needs
+ * the entire open review universe as it existed at close, including groups an
+ * operator did not select for an Opening handoff.
+ */
+export type DailyCloseFrozenSyncedSaleInventoryReviewGroup = {
+  affectedUnitCount?: number;
+  key: string;
+  memberCount?: number;
+  members: Array<{
+    createdAt: number;
+    workItemId: Id<"operationalWorkItem">;
+  }>;
+  membershipCompleteness: "complete" | "incomplete";
+  oldestActionableAt: number;
+  productSkuId: Id<"productSku"> | null;
 };
 
 type DailyCloseRange = { endAt: number; startAt: number };
@@ -257,6 +280,7 @@ type DailyCloseSnapshot = {
   readyItems: DailyCloseItem[];
   readiness: DailyCloseReadiness;
   summary: DailyCloseSummary;
+  frozenSyncedSaleInventoryReviewGroups?: DailyCloseFrozenSyncedSaleInventoryReviewGroup[];
   openWorkMembership: DailyCloseOpenWorkMembership;
   sourceCompleteness: DailyCloseSourceCompleteness;
   sourceSubjects: Array<{
@@ -312,6 +336,7 @@ type DailyCloseReportSnapshot = {
   reviewedItems: DailyCloseItem[];
   carryForwardItems: DailyCloseItem[];
   carryForwardGroups?: DailyCloseFrozenCarryForwardGroup[];
+  frozenSyncedSaleInventoryReviewGroups?: DailyCloseFrozenSyncedSaleInventoryReviewGroup[];
   readyItems: DailyCloseItem[];
   openWorkMembership?: DailyCloseOpenWorkMembership;
   sourceCompleteness?: DailyCloseSourceCompleteness;
@@ -377,6 +402,8 @@ function normalizeCompletedDailyCloseSnapshot(args: {
     blockers: [],
     reviewItems: reportSnapshot.reviewedItems,
     carryForwardItems: reportSnapshot.carryForwardItems,
+    frozenSyncedSaleInventoryReviewGroups:
+      reportSnapshot.frozenSyncedSaleInventoryReviewGroups,
     readyItems: reportSnapshot.readyItems,
     readiness: reportSnapshot.readiness,
     summary: normalizeDailyCloseSummary(reportSnapshot.summary),
@@ -1861,6 +1888,71 @@ function uniqueDailyCloseItems(items: DailyCloseItem[]) {
   return Array.from(itemByKey.values());
 }
 
+function trustedSyncedSaleInventoryReviewUnits(
+  group: LogicalOperationalWorkGroup,
+): number | undefined {
+  if (group.completeness !== "complete" || !group.productSkuId) {
+    return undefined;
+  }
+
+  let total = 0;
+  for (const item of group.items) {
+    const skippedMutationItems = item.metadata?.skippedMutationItems;
+    if (
+      !Array.isArray(skippedMutationItems) ||
+      skippedMutationItems.length === 0
+    ) {
+      return undefined;
+    }
+
+    for (const skippedItem of skippedMutationItems) {
+      if (!skippedItem || typeof skippedItem !== "object") return undefined;
+      const record = skippedItem as Record<string, unknown>;
+      const requestedQuantity = record.requestedQuantity;
+      if (
+        record.productSkuId !== group.productSkuId ||
+        typeof requestedQuantity !== "number" ||
+        !Number.isSafeInteger(requestedQuantity) ||
+        requestedQuantity < 0
+      ) {
+        return undefined;
+      }
+
+      total += requestedQuantity;
+      if (!Number.isSafeInteger(total)) return undefined;
+    }
+  }
+
+  return total;
+}
+
+function frozenSyncedSaleInventoryReviewGroups(
+  logicalOpenWork: LogicalOperationalWorkProjection,
+): DailyCloseFrozenSyncedSaleInventoryReviewGroup[] {
+  return logicalOpenWork.groups
+    .filter(
+      (group) => group.representative.type === "synced_sale_inventory_review",
+    )
+    .map((group) => {
+      const affectedUnitCount = trustedSyncedSaleInventoryReviewUnits(group);
+
+      return {
+        ...(affectedUnitCount === undefined ? {} : { affectedUnitCount }),
+        key: group.key,
+        ...(group.completeness === "complete"
+          ? { memberCount: group.items.length }
+          : {}),
+        members: group.items.map((item) => ({
+          createdAt: item.createdAt,
+          workItemId: item._id,
+        })),
+        membershipCompleteness: group.completeness,
+        oldestActionableAt: group.oldestActionableAt,
+        productSkuId: group.productSkuId,
+      };
+    });
+}
+
 function buildDailyCloseReportSnapshot(args: {
   actorType?: "human" | "automation";
   automationDecisionReason?: string;
@@ -1994,6 +2086,8 @@ function buildDailyCloseReportSnapshot(args: {
         memberCount: memberWorkItemIds.length,
       };
     }),
+    frozenSyncedSaleInventoryReviewGroups:
+      args.snapshot.frozenSyncedSaleInventoryReviewGroups ?? [],
     readyItems: args.snapshot.readyItems,
     openWorkMembership: args.snapshot.openWorkMembership,
     sourceCompleteness: args.snapshot.sourceCompleteness,
@@ -2180,6 +2274,7 @@ function maybeRedactDailyCloseSnapshotForBroadView(
     carryForwardItems: snapshot.carryForwardItems.map(
       redactDailyCloseItemForBroadView,
     ),
+    frozenSyncedSaleInventoryReviewGroups: [],
     existingClose: null,
     priorClose: null,
     readyItems: snapshot.readyItems.map(redactDailyCloseItemForBroadView),
@@ -2348,6 +2443,7 @@ export async function buildDailyCloseSnapshotWithCtx(
         readyCount: 0,
       },
       summary: emptySummary(),
+      frozenSyncedSaleInventoryReviewGroups: [],
       openWorkMembership: {
         completeness: "complete",
         observedLogicalCount: 0,
@@ -3341,6 +3437,8 @@ export async function buildDailyCloseSnapshotWithCtx(
       readyItems,
       readiness,
       summary,
+      frozenSyncedSaleInventoryReviewGroups:
+        frozenSyncedSaleInventoryReviewGroups(logicalOpenWork),
       openWorkMembership: {
         completeness: logicalOpenWork.completeness,
         observedLogicalCount: logicalOpenWork.observedCount,
@@ -3852,7 +3950,7 @@ async function recordDailyCloseCompletedReportFacts(
     lineId: "",
     factKind: "close_snapshot",
     occurredAt,
-    currency: store.currency,
+    currency: normalizeCurrencyCode(store.currency),
     grossAmountMinor: 0,
     netAmountMinor: acceptedNetSalesMinor,
     taxAmountMinor: 0,
@@ -5008,6 +5106,16 @@ export async function reopenDailyCloseWithCtx(
       reopenedDailyCloseId,
     },
   });
+
+  // Reopen changes close posture but never mutates the preserved close. The
+  // ordinary report-day fold is the durable handoff that lets the existing
+  // sweeper clear the close link and refresh weekly posture independently.
+  await markReportDayDirty(
+    ctx,
+    args.storeId,
+    originalDailyClose.operatingDate,
+    "late_fact",
+  );
 
   return ok({
     action: "reopened",

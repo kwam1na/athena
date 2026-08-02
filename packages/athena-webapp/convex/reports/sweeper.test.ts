@@ -26,20 +26,42 @@ vi.mock("./foldDay", async (importOriginal) => {
   };
 });
 
+/**
+ * The weekly lane's own seam: a materialization failure must be contained,
+ * counted, and re-marked without touching the completed Daily Close.
+ */
+const weeklyControl = vi.hoisted(() => ({ shouldThrow: false }));
+
+vi.mock("./weekly", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./weekly")>();
+  return {
+    ...actual,
+    rebuildCurrentWeek: (...args: Parameters<typeof actual.rebuildCurrentWeek>) => {
+      if (weeklyControl.shouldThrow) throw new Error("weekly rebuild exploded");
+      return actual.rebuildCurrentWeek(...args);
+    },
+  };
+});
+
 import {
   MAX_FACTS_PER_DAY,
   REPORTS_SWEEP_STORE_ALLOWLIST_ENV,
+  WEEKLY_DIRTY_BATCH,
   parseStoreAllowlist,
   selectAcceptedClose,
   sweepWithCtx,
   toCloseRef,
 } from "./sweeper";
 
+const WEEKLY_NOW = Date.parse("2026-07-04T12:00:00.000Z");
+
 const modules = import.meta.glob("../**/*.ts");
 
 afterEach(() => {
   foldControl.shouldThrow = false;
+  weeklyControl.shouldThrow = false;
   delete process.env[REPORTS_SWEEP_STORE_ALLOWLIST_ENV];
+  vi.restoreAllMocks();
 });
 
 function allow(...storeIds: Id<"store">[]) {
@@ -137,6 +159,26 @@ async function seedStore(t: Harness, slug: string) {
       name: slug,
       organizationId,
       slug,
+      weeklyObservedAtVerification: {
+        status: "complete",
+        missingCount: 0,
+        startedAt: WEEKLY_NOW,
+        completedAt: WEEKLY_NOW,
+      },
+    });
+    await ctx.db.insert("storeSchedule", {
+      organizationId,
+      storeId,
+      timezone: "UTC",
+      weeklyWindows: [],
+      weeklyClosedDays: [0],
+      dateExceptions: [],
+      reportingCycleStartsOn: 1,
+      effectiveFrom: Date.parse("2026-01-01T00:00:00.000Z"),
+      status: "active",
+      source: "admin",
+      createdAt: WEEKLY_NOW,
+      updatedAt: WEEKLY_NOW,
     });
     const categoryId = await ctx.db.insert("category", {
       name: "Wigs",
@@ -186,6 +228,7 @@ async function insertSaleFact(
     quantity: number;
     unitCostMinor?: number;
     recordedAt?: number;
+    observedAt?: number;
   },
 ) {
   await t.run(async (ctx) => {
@@ -199,6 +242,7 @@ async function insertSaleFact(
       fingerprintVersion: 1,
       occurredAt: 1_000,
       recordedAt: args.recordedAt ?? 1_000,
+      ...(args.observedAt !== undefined ? { observedAt: args.observedAt } : {}),
       operatingDate: args.operatingDate,
       currency: "GHS",
       grossAmountMinor: args.netAmountMinor,
@@ -242,6 +286,126 @@ const marksOf = (t: Harness) =>
 // ---------------------------------------------------------------------------
 
 describe("dirty-mark lifecycle", () => {
+  it("drains the bounded weekly marker through the existing sweeper", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(WEEKLY_NOW);
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t, "sweep-weekly");
+    allow(storeId);
+    await mark(t, storeId, "2026-07-04");
+
+    const result = await sweep(t);
+    expect(result.weeksRebuilt).toBe(1);
+    await t.run(async (ctx) => {
+      const week = await ctx.db
+        .query("reportWeekCurrent")
+        .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+        .unique();
+      expect(week).toMatchObject({
+        cycleStartDate: "2026-06-29",
+        cycleEndDate: "2026-07-05",
+      });
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- fixture inspection
+      expect(await ctx.db.query("reportDirtyWeek").collect()).toHaveLength(0);
+    });
+  });
+
+  it("derives one accepted week only after the final scheduled close day folds", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(WEEKLY_NOW);
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(
+      t,
+      "sweep-weekly-accept",
+    );
+    allow(storeId);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("dailyClose", {
+        storeId,
+        organizationId,
+        operatingDate: "2026-07-03",
+        status: "completed",
+        lifecycleStatus: "active",
+        isCurrent: false,
+        readiness: {
+          status: "ready",
+          blockerCount: 0,
+          reviewCount: 0,
+          carryForwardCount: 0,
+          readyCount: 0,
+        },
+        summary: { salesTotal: 100 },
+        sourceSubjects: [],
+        carryForwardWorkItemIds: [],
+        createdAt: WEEKLY_NOW - 2,
+        updatedAt: WEEKLY_NOW - 2,
+        completedAt: WEEKLY_NOW - 2,
+      });
+    });
+    await insertSaleFact(t, {
+      storeId,
+      operatingDate: "2026-07-03",
+      sourceId: "non-final-sale",
+      netAmountMinor: 100,
+      observedAt: WEEKLY_NOW - 3,
+      quantity: 1,
+    });
+    await mark(t, storeId, "2026-07-03", "close_accepted");
+    await sweep(t);
+    expect(
+      await t.run(async (ctx) =>
+        ctx.db
+          .query("reportWeekAccepted")
+          .withIndex("by_storeId_acceptedAt", (q) => q.eq("storeId", storeId))
+          .take(2),
+      ),
+    ).toHaveLength(0);
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("dailyClose", {
+        storeId,
+        organizationId,
+        operatingDate: "2026-07-04",
+        status: "completed",
+        lifecycleStatus: "active",
+        isCurrent: true,
+        readiness: {
+          status: "ready",
+          blockerCount: 0,
+          reviewCount: 0,
+          carryForwardCount: 0,
+          readyCount: 0,
+        },
+        summary: { salesTotal: 100 },
+        sourceSubjects: [],
+        carryForwardWorkItemIds: [],
+        createdAt: WEEKLY_NOW,
+        updatedAt: WEEKLY_NOW,
+        completedAt: WEEKLY_NOW,
+      });
+    });
+    await insertSaleFact(t, {
+      storeId,
+      operatingDate: "2026-07-04",
+      sourceId: "final-sale",
+      netAmountMinor: 100,
+      observedAt: WEEKLY_NOW,
+      quantity: 1,
+    });
+    await mark(t, storeId, "2026-07-04", "close_accepted");
+
+    const first = await sweep(t);
+    const second = await sweep(t);
+    expect(first.weeksAccepted).toBe(1);
+    expect(second.weeksAccepted).toBe(0);
+    expect(
+      await t.run(async (ctx) =>
+        ctx.db
+          .query("reportWeekAccepted")
+          .withIndex("by_storeId_acceptedAt", (q) => q.eq("storeId", storeId))
+          .take(2),
+      ),
+    ).toHaveLength(1);
+  });
+
   it("folds a marked day, clears the mark, and materializes day/sku/rollup/overview docs", async () => {
     const t = convexTest(schema, modules);
     const { storeId, productSkuId } = await seedStore(t, "sweep-basic");
@@ -330,9 +494,7 @@ describe("dirty-mark lifecycle", () => {
 
     await sweep(t);
 
-    const day = await t.run(async (ctx) =>
-      ctx.db.query("reportDay").unique(),
-    );
+    const day = await t.run(async (ctx) => ctx.db.query("reportDay").unique());
     expect(day?.netSalesMinor).toBe(2_000);
     expect(day?.unitsSold).toBe(2);
     expect(day?.flags.mixedCurrency).toBe(false);
@@ -384,7 +546,9 @@ describe("dirty-mark lifecycle", () => {
     );
     expect(
       second.rollups.map((row) => [row.periodKey, row.netSalesMinor]).sort(),
-    ).toEqual(first.rollups.map((row) => [row.periodKey, row.netSalesMinor]).sort());
+    ).toEqual(
+      first.rollups.map((row) => [row.periodKey, row.netSalesMinor]).sort(),
+    );
     expect(second.skuDays).toHaveLength(1);
   });
 
@@ -498,17 +662,15 @@ describe("dirty-mark lifecycle", () => {
     const requeued = await marksOf(t);
     expect(requeued).toHaveLength(1);
     expect(requeued[0].reason).toBe("write_failure");
-    // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
-    expect(await t.run(async (ctx) => ctx.db.query("reportDay").collect())).toHaveLength(
-      0,
-    );
+    expect(
+      await t.run(async (ctx) => ctx.db.query("reportDay").take(2)),
+    ).toHaveLength(0);
 
     foldControl.shouldThrow = false;
     const healed = await sweep(t);
     expect(healed.daysFolded).toBe(1);
     expect(await marksOf(t)).toHaveLength(0);
-    // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
-    const days = await t.run(async (ctx) => ctx.db.query("reportDay").collect());
+    const days = await t.run(async (ctx) => ctx.db.query("reportDay").take(2));
     expect(days[0].netSalesMinor).toBe(700);
   });
 
@@ -527,6 +689,9 @@ describe("dirty-mark lifecycle", () => {
 
     const leftovers = await marksOf(t);
     expect(leftovers.map((row) => row.operatingDate).sort()).toEqual([
+      // July 4 is the final scheduled date and remains reachable until its
+      // temporarily missing close can establish the accepted baseline.
+      "2026-07-04",
       "2026-07-11",
       "2026-07-12",
     ]);
@@ -567,8 +732,7 @@ describe("allowlist gating", () => {
     expect(marks[0].reason).toBe("late_fact");
     expect(marks[0].markedAt).toBe(500);
 
-    // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
-    const days = await t.run(async (ctx) => ctx.db.query("reportDay").collect());
+    const days = await t.run(async (ctx) => ctx.db.query("reportDay").take(2));
     expect(days).toHaveLength(1);
     expect(days[0].storeId).toBe(allowed.storeId);
   });
@@ -710,8 +874,7 @@ describe("fold integration", () => {
     await mark(t, storeId, "2026-07-28", "close_accepted");
     await sweep(t);
 
-    // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
-    const days = await t.run(async (ctx) => ctx.db.query("reportDay").collect());
+    const days = await t.run(async (ctx) => ctx.db.query("reportDay").take(2));
     expect(days[0].status).toBe("reconciled");
     expect(days[0].closeVarianceMinor).toBe(100); // 1000 folded vs 900 closed
     expect(days[0].closeAcceptedAt).toBe(2_000);
@@ -772,8 +935,7 @@ describe("fold integration", () => {
     await mark(t, storeId, "2026-07-28", "late_fact");
     await sweep(t);
 
-    // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
-    const days = await t.run(async (ctx) => ctx.db.query("reportDay").collect());
+    const days = await t.run(async (ctx) => ctx.db.query("reportDay").take(2));
     expect(days[0].status).toBe("amended");
     expect(days[0].postCloseNetSalesDeltaMinor).toBe(250);
     expect(days[0].netSalesMinor).toBe(1_250);
@@ -823,8 +985,7 @@ describe("fold integration", () => {
     await mark(t, storeId, "2026-07-28");
     await sweep(t);
 
-    // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
-    const days = await t.run(async (ctx) => ctx.db.query("reportDay").collect());
+    const days = await t.run(async (ctx) => ctx.db.query("reportDay").take(2));
     expect(days[0].status).toBe("provisional");
     expect(days[0].closeId).toBeUndefined();
     expect(days[0].closeVarianceMinor).toBeUndefined();
@@ -935,5 +1096,204 @@ describe("fold read caps", () => {
     const day = await t.run(async (ctx) => ctx.db.query("reportDay").unique());
     expect(day?.netSalesMinor).toBe(MAX_FACTS_PER_DAY * 100);
     expect(day?.factCount).toBe(MAX_FACTS_PER_DAY);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Weekly lane containment and handoff
+// ---------------------------------------------------------------------------
+
+async function insertWeeklyCloseFixture(
+  t: Harness,
+  args: {
+    completedAt?: number;
+    operatingDate: string;
+    organizationId: Id<"organization">;
+    storeId: Id<"store">;
+  },
+) {
+  return t.run(async (ctx) =>
+    ctx.db.insert("dailyClose", {
+      storeId: args.storeId,
+      organizationId: args.organizationId,
+      operatingDate: args.operatingDate,
+      status: "completed",
+      lifecycleStatus: "active",
+      isCurrent: true,
+      readiness: {
+        status: "ready",
+        blockerCount: 0,
+        reviewCount: 0,
+        carryForwardCount: 0,
+        readyCount: 0,
+      },
+      summary: { salesTotal: 100 },
+      sourceSubjects: [],
+      carryForwardWorkItemIds: [],
+      createdAt: args.completedAt ?? WEEKLY_NOW,
+      updatedAt: args.completedAt ?? WEEKLY_NOW,
+      completedAt: args.completedAt ?? WEEKLY_NOW,
+    }),
+  );
+}
+
+describe("weekly lane", () => {
+  it("contains a weekly failure without touching the completed close", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(WEEKLY_NOW);
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t, "sweep-weekly-fail");
+    allow(storeId);
+    const closeId = await insertWeeklyCloseFixture(t, {
+      operatingDate: "2026-07-04",
+      organizationId,
+      storeId,
+    });
+    await insertSaleFact(t, {
+      storeId,
+      operatingDate: "2026-07-04",
+      sourceId: "final-sale",
+      netAmountMinor: 100,
+      observedAt: WEEKLY_NOW,
+      quantity: 1,
+    });
+    await mark(t, storeId, "2026-07-04", "close_accepted");
+    const before = await t.run(async (ctx) => ctx.db.get("dailyClose", closeId));
+
+    weeklyControl.shouldThrow = true;
+    const result = await sweep(t);
+
+    expect(result.weekFailures).toBe(1);
+    expect(result.weeksRebuilt).toBe(0);
+    expect(result.daysFolded).toBe(1);
+    await t.run(async (ctx) => {
+      expect(
+        await ctx.db
+          .query("reportDirtyWeek")
+          .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+          .unique(),
+      ).toMatchObject({ reason: "write_failure" });
+      expect(
+        await ctx.db
+          .query("reportWeekAccepted")
+          .withIndex("by_storeId_acceptedAt", (q) => q.eq("storeId", storeId))
+          .take(2),
+      ).toHaveLength(0);
+      expect(await ctx.db.get("dailyClose", closeId)).toEqual(before);
+    });
+  });
+
+  it("replays a folded date whose weekly marker missed the batch page", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(WEEKLY_NOW);
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId, userId } = await seedStore(
+      t,
+      "sweep-weekly-backlog",
+    );
+    const noiseStoreIds = await t.run(async (ctx) => {
+      const ids: Id<"store">[] = [];
+      for (let index = 0; index < WEEKLY_DIRTY_BATCH; index += 1) {
+        const noiseStoreId = await ctx.db.insert("store", {
+          createdByUserId: userId,
+          currency: "GHS",
+          name: `noise-${index}`,
+          organizationId,
+          slug: `noise-${index}`,
+        });
+        ids.push(noiseStoreId);
+      }
+      return ids;
+    });
+    allow(storeId, ...noiseStoreIds);
+
+    await insertWeeklyCloseFixture(t, {
+      operatingDate: "2026-07-04",
+      organizationId,
+      storeId,
+    });
+    await insertSaleFact(t, {
+      storeId,
+      operatingDate: "2026-07-04",
+      sourceId: "final-sale",
+      netAmountMinor: 100,
+      observedAt: WEEKLY_NOW,
+      quantity: 1,
+    });
+    await mark(t, storeId, "2026-07-04", "close_accepted");
+    expect((await sweep(t)).weeksAccepted).toBe(1);
+
+    // A full page of older pending weekly marks now sits ahead of this store.
+    await t.run(async (ctx) => {
+      for (const noiseStoreId of noiseStoreIds) {
+        await ctx.db.insert("reportDirtyWeek", {
+          storeId: noiseStoreId,
+          reason: "day_folded",
+          markedAt: 1,
+        });
+      }
+    });
+
+    // Age the accepted week out of the bounded newest-first fallback, so only
+    // the exact folded-date handoff can still reach it.
+    const baseline = await t.run(async (ctx) => {
+      const accepted = await ctx.db
+        .query("reportWeekAccepted")
+        .withIndex("by_storeId_cycleStartDate", (q) =>
+          q.eq("storeId", storeId).eq("cycleStartDate", "2026-06-29"),
+        )
+        .unique();
+      if (!accepted) throw new Error("missing accepted baseline");
+      const { _creationTime, _id, ...fields } = accepted;
+      for (let index = 0; index < 16; index += 1) {
+        await ctx.db.insert("reportWeekAccepted", {
+          ...fields,
+          acceptedAt: WEEKLY_NOW + index + 1,
+          baselineFingerprint: `newer-${index}`,
+          cycleStartDate: `2026-07-${String(index + 6).padStart(2, "0")}`,
+          cycleEndDate: `2026-08-${String(index + 1).padStart(2, "0")}`,
+        });
+      }
+      return accepted;
+    });
+
+    await insertSaleFact(t, {
+      storeId,
+      operatingDate: "2026-06-29",
+      sourceId: "late-historical-sale",
+      netAmountMinor: 500,
+      observedAt: WEEKLY_NOW + 500,
+      quantity: 1,
+    });
+    await mark(t, storeId, "2026-06-29", "late_fact", WEEKLY_NOW + 500);
+
+    // The store's marker is newer than the ten pending ones, so this tick's
+    // weekly page cannot reach it; the folded date must not be lost with it.
+    const blocked = await sweep(t);
+    expect(blocked.daysFolded).toBe(1);
+    expect(blocked.weeksRefreshed).toBe(0);
+    await t.run(async (ctx) => {
+      expect(
+        await ctx.db.get("reportWeekAccepted", baseline._id),
+      ).toMatchObject({
+        amendment: { includedNetSalesDeltaMinor: 0 },
+      });
+      expect(
+        await ctx.db
+          .query("reportDirtyWeek")
+          .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+          .unique(),
+      ).toMatchObject({ foldedDates: ["2026-06-29"] });
+    });
+
+    const replayed = await sweep(t);
+    expect(replayed.weeksRefreshed).toBe(1);
+    await t.run(async (ctx) => {
+      expect(
+        await ctx.db.get("reportWeekAccepted", baseline._id),
+      ).toMatchObject({
+        amendment: { includedNetSalesDeltaMinor: 500 },
+        baselineFingerprint: baseline.baselineFingerprint,
+        included: baseline.included,
+      });
+    });
   });
 });

@@ -27,7 +27,7 @@ This companion specification supplies the trust layer required by those product 
 | SKU-first performance | Channel-neutral merchandise-line evidence resolves direct and provisional SKU identity. |
 | Merchandise COGS and margin | Moving weighted-average valuation preserves known and unknown cost coverage and immutable sale cost basis. |
 | Inventory movement and value | One stock-effect contract keeps balances, movement evidence, availability, and valuation aligned. |
-| Week-to-date and comparison periods | Server-owned operating periods use the effective store schedule and preserve historical period assignment. |
+| Week-to-date and comparison periods | Server-owned periods use the effective Store Schedule's operational dates, ignore operating hours for financial inclusion, and preserve historical period assignment. |
 | Trustworthy closed and live reporting | Immutable close evidence coexists with versioned post-close reconciliation. |
 | Durable performance | Bounded daily and SKU projections replace uncapped history scans and per-parent fan-out. |
 | Highlight and route | Every aggregate, limitation, and signal retains a path to its owning operational evidence. |
@@ -143,15 +143,19 @@ The audited gaps are concrete:
 
 ### Operating Time and Closed-Day Reconciliation
 
-- **F-R43.** Every report period must be resolved on the server from the store schedule effective for that period, including IANA timezone, operating windows, closed days, exceptions, and cross-midnight windows.
+- **F-R43.** Every report period must be resolved on the server from the Store Schedule effective for that period. A configurable reporting-cycle start, recurring operational days, and date-specific closures determine period boundaries and date membership, while the effective IANA timezone determines local-date boundaries.
 - **F-R44.** Period boundaries must remain correct across daylight-saving transitions and must not depend on browser timezone or fixed-offset arithmetic.
-- **F-R45.** Same-elapsed comparisons must compare equivalent scheduled operating time, exclude future portions of the comparison period, and identify partial operating days.
-- **F-R46.** Active-day denominators must derive from the effective schedule and disclose excluded closed, future, or materially incomplete days.
-- **F-R47.** Historical facts must retain the operating date and effective schedule version used for assignment so later schedule edits do not move facts silently.
+- **F-R45.** Same-elapsed comparisons must compare equivalent scheduled local dates, exclude future scheduled dates, and identify partial or materially incomplete dates; they must not compare elapsed opening-window minutes.
+- **F-R46.** Active-day denominators must derive from the effective scheduled-date membership and disclose excluded non-operational, future, zero-activity, or materially incomplete dates.
+- **F-R47.** Historical facts must retain the operating date and timezone authority used for assignment, while preserved report periods must retain the effective schedule context used for date membership so later schedule edits do not move facts or rewrite historical reports silently.
 - **F-R48.** A completed Daily Close snapshot must remain immutable evidence of what Athena knew and what an administrator accepted at close time.
 - **F-R49.** Current Reports must present the latest reconciled truth while preserving the accepted close value and a separately identified post-close delta with source evidence.
 - **F-R50.** Reopened and superseded closes must preserve lineage and clearly identify the current interpretation without deleting earlier accepted evidence.
 - **F-R51.** Late activity must follow the owning metric's recognition rule: a late-synchronized original sale belongs to its resolved operating period, while a later refund remains financial activity in the refund period.
+- **F-R89.** Opening time, closing time, split windows, cross-midnight windows, and outside-hours state must never exclude a recognized fact whose store-local date belongs to the report period.
+- **F-R90.** Recognized activity on a date the effective schedule marks non-operational must remain reportable as outside-schedule activity and must not be silently discarded or reassigned to an adjacent week.
+- **F-R91.** The final scheduled operating date's accepted Daily Close must trigger an idempotent historical EOW record that preserves accepted values, schedule context, comparison context, metric versions, and source completeness.
+- **F-R92.** Facts learned after EOW acceptance must preserve the accepted record and produce an explicit amendment or delta in current reporting truth.
 
 ### Metric Contracts, Projections, and Evidence
 
@@ -224,6 +228,7 @@ The audited gaps are concrete:
 - **F-AE6, covers F-R16-F-R18 and F-R35-F-R39.** A Week 1 item costed at GHS 25 is refunded in Week 2 but not restocked. Week 2 records refund activity, original-sale SKU performance reflects the outcome, and inventory value does not increase. A later sellable return restores stock at GHS 25 without creating another refund. If a replacement item is issued, its known cost becomes exchange-related merchandise COGS; the sellable return reverses the original item's COGS, and no additional revenue is recognized except an explicit additional collection.
 - **F-AE7, covers F-R20 and F-R41.** An offline sale occurs Monday and syncs Wednesday after a Tuesday receipt changed cost. The sale remains Monday activity; if Monday's basis cannot be reconstructed, its COGS remains unknown rather than using Wednesday's cost.
 - **F-AE8, covers F-R43-F-R51.** A sale syncs after its operating day closed. The accepted Daily Close remains unchanged, current reporting includes the sale in its resolved operating period, and Reports exposes a source-linked post-close delta.
+- **F-AE13, covers F-R43-F-R47 and F-R89-F-R92.** A store starts its reporting cycle Monday, schedules Monday through Saturday, and marks Sunday non-operational. A Saturday after-hours sale remains in the week, a Sunday sale is disclosed outside the week, and a later schedule version that changes operational days or the cycle start changes future periods without rewriting the preserved EOW report.
 - **F-AE9, covers F-R55-F-R70.** POS is current but storefront processing is delayed. Eligible POS metrics remain current, unified net sales is marked stale or partial with the affected source and lag, and the last verified projection remains readable.
 - **F-AE10, covers F-R71-F-R80.** A cutover baseline records 12 units with unknown cost. Reports shows 12 uncosted units and no invented historical value. A backfill fails halfway, resumes without duplication, and activates only after zero-delta reconciliation.
 - **F-AE11, covers F-R27-F-R29 and F-R62.** A trusted SKU shows direct POS and storefront sales plus earlier provisional sales attributed through canonical identity. Every contributing and excluded line is paginated and linked without rewriting original evidence.
@@ -271,9 +276,9 @@ The audited gaps are concrete:
 - Planning will map every existing stock and commerce mutation path to the relevant foundation contract before activation.
 - Existing history will have uneven coverage; the product accepts explicit partial history instead of estimated completeness.
 
-## Reviewer Alignment
+## Prior Reviewer Alignment
 
-All reviewers returned `ALIGNED` against the same final revision after four review rounds.
+All reviewers returned `ALIGNED` against the reporting-foundation revision that preceded the schedule-derived EOW extension. The EOW implementation plan must re-review the refined time, lifecycle, and reconciliation contracts before execution.
 
 - Reporting architecture and projection durability: `ALIGNED`.
 - Finance, inventory, and valuation correctness: `ALIGNED`.

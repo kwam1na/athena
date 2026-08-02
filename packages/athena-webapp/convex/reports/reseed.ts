@@ -9,6 +9,7 @@ import { reportingLineCostFromEffect } from "../inventoryLedger/commerceEffects"
 import { getDiscountValue } from "../inventory/utils";
 import { recordFacts } from "./ingest";
 import { resolveOperatingDate } from "./operatingDay";
+import { markWeekDirty } from "./weekly";
 
 /**
  * Reseed — rebuild a store's entire reporting layer from domain sources.
@@ -17,6 +18,10 @@ import { resolveOperatingDate } from "./operatingDay";
  * Rebuilding is always "purge every derived doc, then re-walk the sources",
  * never "patch the difference" — a partial repair cannot be reasoned about,
  * a full rebuild can.
+ *
+ * This is deliberately separate from routine weekly projection repair. It
+ * reconstructs source facts with new server observation time and must never
+ * be used to manufacture or backdate an accepted weekly baseline.
  *
  * Shape: a resumable phase machine driven by a cursor. Every invocation does
  * a bounded amount of work and either self-schedules with the next cursor or
@@ -101,6 +106,13 @@ export type ReseedProgress = {
   factsRecorded: number;
   rowsPurged: number;
   datesTouched: string[];
+  /** A bounded source read cannot safely reconstruct this store. */
+  incomplete?: {
+    reason: "source_cap_exceeded";
+    source: ReseedCapSource;
+  };
+  /** `recordFacts` contained a write failure; retry this exact source page. */
+  retrying?: "fact_write_failure";
 };
 
 export const reseedCursorValidator = v.object({
@@ -506,6 +518,11 @@ export type OnlineOrderLine = {
   quantity: number;
 };
 
+export type OnlineOrderLinesResult = {
+  lines: OnlineOrderLine[];
+  capExceeded: boolean;
+};
+
 /**
  * An order's lines, preferring the `onlineOrderItem` rows and falling back to
  * the inline `order.items` copy.
@@ -519,27 +536,33 @@ export type OnlineOrderLine = {
 export async function loadOnlineOrderLines(
   ctx: MutationCtx | QueryCtx,
   order: Doc<"onlineOrder">,
-): Promise<OnlineOrderLine[]> {
+): Promise<OnlineOrderLinesResult> {
   const stored = await ctx.db
     .query("onlineOrderItem")
     .withIndex("by_orderId", (q) => q.eq("orderId", order._id))
-    .take(RESEED_MAX_LINES_PER_DOC);
+    .take(RESEED_MAX_LINES_PER_DOC + 1);
 
   if (stored.length > 0) {
-    return stored.map((item) => ({
-      lineKey: String(item._id),
+    return {
+      capExceeded: stored.length > RESEED_MAX_LINES_PER_DOC,
+      lines: stored.slice(0, RESEED_MAX_LINES_PER_DOC).map((item) => ({
+        lineKey: String(item._id),
+        price: item.price,
+        productSkuId: item.productSkuId,
+        quantity: item.quantity,
+      })),
+    };
+  }
+
+  return {
+    capExceeded: false,
+    lines: (order.items ?? []).map((item, index) => ({
+      lineKey: `inline:${index}`,
       price: item.price,
       productSkuId: item.productSkuId,
       quantity: item.quantity,
-    }));
-  }
-
-  return (order.items ?? []).map((item, index) => ({
-    lineKey: `inline:${index}`,
-    price: item.price,
-    productSkuId: item.productSkuId,
-    quantity: item.quantity,
-  }));
+    })),
+  };
 }
 
 /**
@@ -754,31 +777,75 @@ function closeSnapshotFact(
  * KEEP IN SYNC WITH convex/operations/paymentAllocations.ts
  * (`ensurePaymentAllocationReportingWithCtx`).
  *
- * A voided allocation is a reversal and an outbound allocation is a refund;
- * both land as `payment_refund`. Amounts are magnitudes — the fact kind, not
- * the sign, carries direction.
+ * Recorded inbound/outbound rows map to collection/refund facts. A source-
+ * proven voided inbound row reconstructs both the original collection and its
+ * later reversal so reseed matches the live two-event path. Legacy voided rows
+ * without `voidedAt` retain unknown coverage; the reversal date is never
+ * guessed from `recordedAt`.
  */
-function paymentFact(
+function paymentFacts(
   allocation: Doc<"paymentAllocation">,
   storeCurrency: string,
-): NewReportFact {
-  const isReversal = allocation.status === "voided";
-  const isRefund = allocation.direction === "out" && !isReversal;
+): NewReportFact[] {
   const amountMinor = Math.abs(allocation.amount);
-
-  return {
+  const base = {
     currency: normalizeCurrency(allocation.currency ?? storeCurrency),
     discountAmountMinor: 0,
-    factKind: isReversal || isRefund ? "payment_refund" : "payment",
     grossAmountMinor: amountMinor,
     lineId: "",
     netAmountMinor: amountMinor,
-    occurredAt: allocation.recordedAt,
     quantity: 0,
-    sourceDomain: "payments",
+    sourceDomain: "payments" as const,
     sourceId: String(allocation._id),
     taxAmountMinor: 0,
   };
+
+  if (allocation.status === "recorded") {
+    const isRefund = allocation.direction === "out";
+    return [
+      {
+        ...base,
+        factKind: isRefund ? "payment_refund" : "payment",
+        occurredAt: allocation.recordedAt,
+        paymentAllocationCoverage: "known",
+        paymentAllocationMinor: isRefund ? -amountMinor : amountMinor,
+      },
+    ];
+  }
+
+  if (allocation.direction === "out") {
+    return [
+      {
+        ...base,
+        factKind: "payment_refund",
+        occurredAt: allocation.recordedAt,
+        paymentAllocationCoverage: "unknown",
+      },
+    ];
+  }
+
+  const original: NewReportFact = {
+    ...base,
+    factKind: "payment",
+    occurredAt: allocation.recordedAt,
+    paymentAllocationCoverage:
+      allocation.voidedAt === undefined ? "unknown" : "known",
+    ...(allocation.voidedAt === undefined
+      ? {}
+      : { paymentAllocationMinor: amountMinor }),
+  };
+  if (allocation.voidedAt === undefined) return [original];
+
+  return [
+    original,
+    {
+      ...base,
+      factKind: "payment_refund",
+      occurredAt: allocation.voidedAt,
+      paymentAllocationCoverage: "known",
+      paymentAllocationMinor: -amountMinor,
+    },
+  ];
 }
 
 /**
@@ -836,7 +903,25 @@ type WalkOutcome = {
   docsScanned: number;
   isDone: boolean;
   continueCursor: string;
+  capExceededSource?: ReseedCapSource;
 };
+
+type ReseedCapSource =
+  | "online_order_items"
+  | "pos_transaction_items"
+  | "pos_transaction_service_lines"
+  | "pos_transaction_adjustment_lines"
+  | "service_case_line_items";
+
+function capExceededOutcome(source: ReseedCapSource): WalkOutcome {
+  return {
+    capExceededSource: source,
+    continueCursor: "",
+    docsScanned: 0,
+    facts: [],
+    isDone: false,
+  };
+}
 
 async function walkPhase(
   ctx: MutationCtx,
@@ -865,7 +950,10 @@ async function walkPhase(
           .withIndex("by_transactionId", (q) =>
             q.eq("transactionId", transaction._id),
           )
-          .take(RESEED_MAX_LINES_PER_DOC);
+          .take(RESEED_MAX_LINES_PER_DOC + 1);
+        if (items.length > RESEED_MAX_LINES_PER_DOC) {
+          return capExceededOutcome("pos_transaction_items");
+        }
 
         // A voided transaction still made its sale — both fact sets are
         // emitted here so the sale lands on its own day and the withdrawal
@@ -875,7 +963,10 @@ async function walkPhase(
           .withIndex("by_transactionId", (q) =>
             q.eq("transactionId", transaction._id),
           )
-          .take(RESEED_MAX_LINES_PER_DOC);
+          .take(RESEED_MAX_LINES_PER_DOC + 1);
+        if (serviceLines.length > RESEED_MAX_LINES_PER_DOC) {
+          return capExceededOutcome("pos_transaction_service_lines");
+        }
         const saleFacts = await posSaleFacts(
           ctx,
           transaction,
@@ -926,7 +1017,10 @@ async function walkPhase(
           .withIndex("by_adjustmentId", (q) =>
             q.eq("adjustmentId", adjustment._id),
           )
-          .take(RESEED_MAX_LINES_PER_DOC);
+          .take(RESEED_MAX_LINES_PER_DOC + 1);
+        if (lines.length > RESEED_MAX_LINES_PER_DOC) {
+          return capExceededOutcome("pos_transaction_adjustment_lines");
+        }
         facts.push(
           ...posCorrectionFacts(
             adjustment,
@@ -962,8 +1056,9 @@ async function walkPhase(
           continue;
         }
         const items = await loadOnlineOrderLines(ctx, order);
-        if (items.length === 0) continue;
-        facts.push(...(await storefrontFacts(ctx, order, items, currency)));
+        if (items.capExceeded) return capExceededOutcome("online_order_items");
+        if (items.lines.length === 0) continue;
+        facts.push(...(await storefrontFacts(ctx, order, items.lines, currency)));
       }
 
       return {
@@ -996,7 +1091,10 @@ async function walkPhase(
           .withIndex("by_serviceCaseId", (q) =>
             q.eq("serviceCaseId", serviceCase._id),
           )
-          .take(RESEED_MAX_LINES_PER_DOC);
+          .take(RESEED_MAX_LINES_PER_DOC + 1);
+        if (lineItems.length > RESEED_MAX_LINES_PER_DOC) {
+          return capExceededOutcome("service_case_line_items");
+        }
         facts.push(...serviceFacts(serviceCase, lineItems, currency));
       }
 
@@ -1034,7 +1132,7 @@ async function walkPhase(
         .paginate({ cursor: pageCursor, numItems: RESEED_PAGE_SIZE });
 
       for (const allocation of page.page) {
-        facts.push(paymentFact(allocation, storeCurrency));
+        facts.push(...paymentFacts(allocation, storeCurrency));
       }
 
       return {
@@ -1110,6 +1208,14 @@ export async function reseedStep(
   if (!store) throw new Error(`reseedStoreReporting: unknown store ${storeId}`);
 
   if (cursor.phase === "done") {
+    // The existing dirty-week singleton has accumulated every day touched by
+    // the replay. Release it only after the final replay step, so neither the
+    // sweeper nor projection-only repair can publish partial current/amendment
+    // truth while earlier source pages are still absent.
+    if (store.reportingReseedStartedAt !== undefined) {
+      await ctx.db.patch("store", storeId, { reportingReseedStartedAt: undefined });
+      await markWeekDirty(ctx, storeId, "day_folded", Date.now());
+    }
     return {
       cursor: null,
       datesTouched: [],
@@ -1118,6 +1224,10 @@ export async function reseedStep(
       phase: "done",
       rowsPurged: 0,
     };
+  }
+
+  if (store.reportingReseedStartedAt === undefined) {
+    await ctx.db.patch("store", storeId, { reportingReseedStartedAt: Date.now() });
   }
 
   if (cursor.phase === "purge") {
@@ -1164,6 +1274,24 @@ export async function reseedStep(
     cursor.pageCursor,
   );
 
+  if (outcome.capExceededSource) {
+    // Do not write a partial source page and do not chain another scheduled
+    // invocation. The destructive rebuild remains visibly incomplete through
+    // the reseed barrier until an operator resolves the oversized source.
+    return {
+      cursor: null,
+      datesTouched: [],
+      docsScanned: 0,
+      factsRecorded: 0,
+      incomplete: {
+        reason: "source_cap_exceeded",
+        source: outcome.capExceededSource,
+      },
+      phase: cursor.phase,
+      rowsPurged: 0,
+    };
+  }
+
   // `recordFacts` already dirties every day a fact landed on other than the
   // current one. The explicit reseed marks below are belt-and-braces: they
   // cover the current day (which `recordFacts` marks `day_open`, a reason the
@@ -1172,7 +1300,7 @@ export async function reseedStep(
   // Stamp business time as `recordedAt`: a re-derived historical fact must not
   // postdate its day's close, or every reseeded day would fold as `amended`
   // (see NewReportFact.recordedAt in the contract).
-  await recordFacts(
+  const recordOutcome = await recordFacts(
     ctx,
     storeId,
     outcome.facts.map((fact) => ({
@@ -1180,6 +1308,22 @@ export async function reseedStep(
       recordedAt: fact.recordedAt ?? fact.occurredAt,
     })),
   );
+
+  if (recordOutcome.outcome === "contained_failure") {
+    // `recordFacts` intentionally contains write failures for live domain
+    // mutations. A reseed is different: advancing this cursor would silently
+    // skip the page it failed to reconstruct. Keep the same cursor so the
+    // scheduled continuation retries the exact source page.
+    return {
+      cursor,
+      datesTouched: [],
+      docsScanned: outcome.docsScanned,
+      factsRecorded: 0,
+      phase: cursor.phase,
+      retrying: "fact_write_failure",
+      rowsPurged: 0,
+    };
+  }
 
   const datesTouched = new Set<string>();
   for (const fact of outcome.facts) {

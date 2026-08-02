@@ -6,6 +6,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import schema from "../schema";
 import type { Id } from "../_generated/dataModel";
 import { descendingSortKey } from "../../shared/reportsContract";
+import type {
+  ReportWeekAcceptedProjection,
+  ReportWeekBriefing,
+  ReportWeekHistoryPage,
+} from "../../shared/reportsContract";
 import {
   getOverview,
   listDays,
@@ -14,6 +19,9 @@ import {
   getSkuDetail,
   listSkuDayTransactions,
   getRangeResult,
+  getActiveWeeklyBriefing,
+  listAcceptedWeeklyHistory,
+  getAcceptedWeeklyDetail,
 } from "./queries";
 import { emptySnapshot } from "./overview";
 
@@ -24,6 +32,37 @@ vi.mock("./access", () => ({
 }));
 import { requireReportsStoreAccess } from "./access";
 
+/**
+ * Most suites stub the gate to keep projection assertions about projections.
+ * The authorization-matrix suite reinstates this real implementation, so the
+ * organization/role/opacity rules are exercised end to end at least once.
+ */
+const actualAccess = await vi.importActual<typeof import("./access")>(
+  "./access",
+);
+
+// Identity is the only substituted dependency of the real gate: convex-test
+// has no auth provider, but membership and store resolution stay genuine.
+// These are partial mocks on purpose: the public-surface test below loads
+// every reports module, and their untouched exports are still needed.
+vi.mock("../lib/athenaUserAuth", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/athenaUserAuth")>()),
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+}));
+import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
+
+vi.mock("../sharedDemo/actor", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../sharedDemo/actor")>()),
+  requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
+}));
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
+
+vi.mock("../platform/capabilityCatalog", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../platform/capabilityCatalog")>()),
+  isWeeklyReportingEnabledForStoreDoc: vi.fn(),
+}));
+import { isWeeklyReportingEnabledForStoreDoc } from "../platform/capabilityCatalog";
+
 function handlerOf(fn: unknown): (...args: any[]) => Promise<any> {
   return (fn as unknown as { _handler: (...args: any[]) => Promise<any> })
     ._handler;
@@ -31,6 +70,7 @@ function handlerOf(fn: unknown): (...args: any[]) => Promise<any> {
 
 beforeEach(() => {
   vi.mocked(requireReportsStoreAccess).mockResolvedValue({} as never);
+  vi.mocked(isWeeklyReportingEnabledForStoreDoc).mockReturnValue(true);
 });
 
 async function seedStore(t: ReturnType<typeof convexTest>) {
@@ -433,30 +473,9 @@ describe("listPeriodSkus", () => {
   it("returns period totals independently of SKU pagination", async () => {
     const t = convexTest(schema, modules);
     const { organizationId, storeId } = await seedStore(t);
-    await seedReportDay(
-      t,
-      organizationId,
-      storeId,
-      "2026-07-28",
-      10,
-      4,
-    );
-    await seedReportDay(
-      t,
-      organizationId,
-      storeId,
-      "2026-07-29",
-      6,
-      3,
-    );
-    await seedReportDay(
-      t,
-      organizationId,
-      storeId,
-      "2026-08-03",
-      99,
-      99,
-    );
+    await seedReportDay(t, organizationId, storeId, "2026-07-28", 10, 4);
+    await seedReportDay(t, organizationId, storeId, "2026-07-29", 6, 3);
+    await seedReportDay(t, organizationId, storeId, "2026-08-03", 99, 99);
 
     const result = await t.run((ctx) =>
       handlerOf(listPeriodSkus)(ctx, {
@@ -475,38 +494,10 @@ describe("listPeriodSkus", () => {
   it("returns prior day, week, and month totals for metric comparisons", async () => {
     const t = convexTest(schema, modules);
     const { organizationId, storeId } = await seedStore(t);
-    await seedReportDay(
-      t,
-      organizationId,
-      storeId,
-      "2026-06-30",
-      3,
-      1,
-    );
-    await seedReportDay(
-      t,
-      organizationId,
-      storeId,
-      "2026-07-21",
-      5,
-      2,
-    );
-    await seedReportDay(
-      t,
-      organizationId,
-      storeId,
-      "2026-07-28",
-      10,
-      4,
-    );
-    await seedReportDay(
-      t,
-      organizationId,
-      storeId,
-      "2026-07-29",
-      6,
-      3,
-    );
+    await seedReportDay(t, organizationId, storeId, "2026-06-30", 3, 1);
+    await seedReportDay(t, organizationId, storeId, "2026-07-21", 5, 2);
+    await seedReportDay(t, organizationId, storeId, "2026-07-28", 10, 4);
+    await seedReportDay(t, organizationId, storeId, "2026-07-29", 6, 3);
 
     const dayResult = await t.run((ctx) =>
       handlerOf(listPeriodSkus)(ctx, {
@@ -830,9 +821,13 @@ describe("getSkuDetail", () => {
   it("returns empty days and null totals when nothing is seeded", async () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
-    const productSkuId = await seedSku(t, storeId, [
-      "https://cdn.example.test/wig.webp",
-    ], 12_500, 7_250);
+    const productSkuId = await seedSku(
+      t,
+      storeId,
+      ["https://cdn.example.test/wig.webp"],
+      12_500,
+      7_250,
+    );
     const result = await t.run((ctx) =>
       handlerOf(getSkuDetail)(ctx, {
         storeId,
@@ -1095,5 +1090,1276 @@ describe("getRangeResult", () => {
       }),
     );
     expect(result).toBeNull();
+  });
+});
+
+const weeklyMetrics = {
+  grossSalesMinor: 1_000,
+  netSalesMinor: 900,
+  refundsMinor: 100,
+  unitsSold: 10,
+  unitsReturned: 1,
+  uncostedRevenueMinor: 0,
+  grossProfitMinor: 300,
+  paymentsCollectedMinor: 900,
+  paymentsRefundedMinor: 100,
+  paymentAllocatedMinor: 800,
+  paymentUnsettledMinor: 0,
+  paymentAllocationCoverage: "complete" as const,
+};
+
+const weeklyLineage = [
+  {
+    localDate: "2026-07-27",
+    included: true,
+    scheduleVersionId: null,
+    dayStatus: "reconciled" as const,
+    dayAvailable: true,
+    activityPosture: "recorded" as const,
+  },
+];
+
+const weeklyCompleteness = { complete: true, reason: "complete" as const };
+
+async function seedAcceptedWeek(
+  t: ReturnType<typeof convexTest>,
+  storeId: Id<"store">,
+  overrides: Partial<{ acceptedAt: number; cycleStartDate: string }> = {},
+) {
+  return t.run(async (ctx) => {
+    const store = await ctx.db.get("store", storeId);
+    if (!store) throw new Error("Expected seeded store.");
+    const closeId = await ctx.db.insert("dailyClose", {
+      storeId,
+      organizationId: store.organizationId,
+      operatingDate: "2026-08-02",
+      status: "completed",
+      isCurrent: true,
+      readiness: {
+        status: "ready",
+        blockerCount: 0,
+        reviewCount: 0,
+        carryForwardCount: 0,
+        readyCount: 1,
+      },
+      summary: {},
+      sourceSubjects: [],
+      carryForwardWorkItemIds: [],
+      createdAt: 1,
+      updatedAt: 1,
+      completedAt: 1,
+    });
+    return ctx.db.insert("reportWeekAccepted", {
+      storeId,
+      cycleStartDate: overrides.cycleStartDate ?? "2026-07-27",
+      cycleEndDate: "2026-08-02",
+      currency: "GHS",
+      metricVersion: 1,
+      acceptedAt: overrides.acceptedAt ?? 1_000,
+      cutoffObservedAt: 900,
+      closeId,
+      baselineFingerprint: "weekly-fingerprint",
+      included: weeklyMetrics,
+      outsideSchedule: weeklyMetrics,
+      scheduleLineage: weeklyLineage,
+      completeness: weeklyCompleteness,
+      lifecyclePosture: "accepted",
+      amendmentPosture: "none",
+    });
+  });
+}
+
+describe("weekly projection reads", () => {
+  it("fails closed after authorization when the store is outside the rollout", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    vi.mocked(isWeeklyReportingEnabledForStoreDoc).mockReturnValue(false);
+
+    const active = await t.run((ctx) =>
+      handlerOf(getActiveWeeklyBriefing)(ctx, { storeId }),
+    );
+    const history = await t.run((ctx) =>
+      handlerOf(listAcceptedWeeklyHistory)(ctx, {
+        storeId,
+        paginationOpts: { cursor: null, numItems: 12 },
+      }),
+    );
+    const detail = await t.run((ctx) =>
+      handlerOf(getAcceptedWeeklyDetail)(ctx, {
+        storeId,
+        reportId: "week:2026-07-27",
+      }),
+    );
+
+    expect(active).toEqual({
+      status: "unavailable",
+      reason: "capability_disabled",
+    });
+    expect(history).toEqual({ page: [], isDone: true, continueCursor: "" });
+    expect(detail).toBeNull();
+    expect(requireReportsStoreAccess).toHaveBeenCalledTimes(3);
+    expect(isWeeklyReportingEnabledForStoreDoc).toHaveBeenCalledTimes(3);
+    expect(
+      vi.mocked(requireReportsStoreAccess).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(isWeeklyReportingEnabledForStoreDoc).mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("returns the live singleton with its accepted baseline, without source hydration", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const acceptedBaselineId = await seedAcceptedWeek(t, storeId);
+    const acceptedBaseline = await t.run((ctx) =>
+      ctx.db.get("reportWeekAccepted", acceptedBaselineId),
+    );
+    if (!acceptedBaseline) throw new Error("Expected accepted baseline.");
+    const closePosture = {
+      acceptedCloseId: acceptedBaseline.closeId,
+      changedAt: 1_100,
+      status: "accepted" as const,
+    };
+    const amendment = {
+      changedAt: 1_100,
+      currentFingerprint: "amended-fingerprint",
+      included: { ...weeklyMetrics, netSalesMinor: 950 },
+      includedNetSalesDeltaMinor: 50,
+      outsideSchedule: { ...weeklyMetrics, netSalesMinor: 925 },
+      outsideScheduleNetSalesDeltaMinor: 25,
+    };
+    const priorPeriod = {
+      cycleStartDate: "2026-07-20",
+      cycleEndDate: "2026-07-26",
+      comparabilityReason: "comparable" as const,
+      currentScheduledPositionCount: 6,
+      priorScheduledPositionCount: 6,
+      equivalentScheduledPositions: true,
+      values: { ...weeklyMetrics, netSalesMinor: 700 },
+      outsideScheduleValues: weeklyMetrics,
+    };
+    const variancePosture = {
+      closeVarianceMinor: -25,
+      coverage: "complete" as const,
+      coveredIncludedDayCount: 6,
+      includedDayCount: 6,
+    };
+    await t.run((ctx) =>
+      ctx.db.patch("reportWeekAccepted", acceptedBaselineId, {
+        closePosture,
+        amendment,
+        amendmentPosture: "amended",
+        priorPeriod,
+        variancePosture,
+        inventoryAttention: {
+          newCount: 1,
+          carriedForwardCount: 2,
+          completeness: "complete",
+          groups: [],
+          observedCount: 3,
+          overflow: false,
+        },
+      }),
+    );
+    await t.run((ctx) =>
+      ctx.db.insert("reportWeekCurrent", {
+        storeId,
+        cycleStartDate: "2026-07-27",
+        cycleEndDate: "2026-08-02",
+        currency: "GHS",
+        metricVersion: 1,
+        materializedAt: 1_100,
+        included: { ...weeklyMetrics, netSalesMinor: 950 },
+        outsideSchedule: weeklyMetrics,
+        scheduleLineage: weeklyLineage,
+        completeness: weeklyCompleteness,
+        lifecyclePosture: "accepted",
+        amendmentPosture: "amended",
+        inventoryAttention: {
+          newCount: 2,
+          carriedForwardCount: 1,
+          completeness: "incomplete",
+          groups: [],
+          observedCount: 3,
+          overflow: true,
+        },
+        acceptedBaselineId,
+        closePosture,
+        amendment,
+        priorPeriod,
+        variancePosture,
+      }),
+    );
+
+    const result = await t.run((ctx) =>
+      handlerOf(getActiveWeeklyBriefing)(ctx, { storeId }),
+    );
+
+    expect(requireReportsStoreAccess).toHaveBeenCalledWith(
+      expect.anything(),
+      storeId,
+    );
+    expect(result).toMatchObject({
+      status: "available",
+      current: { included: { netSalesMinor: 950 } },
+      acceptedBaseline: {
+        cycleStartDate: "2026-07-27",
+        summary: { netUnits: 9, merchandiseMarginMinor: 300 },
+        current: {
+          summary: { netSalesMinor: 950, netUnits: 9 },
+          outsideScheduleSummary: { netSalesMinor: 925, netUnits: 9 },
+          includedNetSalesDeltaMinor: 50,
+          outsideScheduleNetSalesDeltaMinor: 25,
+        },
+      },
+    });
+    expect(result.current).not.toHaveProperty("storeId");
+    expect(result.acceptedBaseline).not.toHaveProperty("storeId");
+    expect(result.current).toMatchObject({
+      lifecyclePosture: "accepted",
+      amendmentPosture: "amended",
+      scheduleLineage: [{ activityPosture: "recorded" }],
+      closePosture: { status: "accepted" },
+      amendment: { includedNetSalesDeltaMinor: 50 },
+      summary: { netUnits: 9, merchandiseMarginMinor: 300 },
+      priorPeriod: {
+        comparabilityReason: "comparable",
+        equivalentScheduledPositions: true,
+        values: { netSalesMinor: 700 },
+        summary: { netUnits: 9, netSalesMinor: 700 },
+        netSalesChange: { amountMinor: 250, direction: "higher" },
+      },
+      // A row stored before the lane split landed: its total means the
+      // scheduled lane alone, so the split is withheld rather than zeroed.
+      variancePosture: {
+        closeVarianceMinor: -25,
+        coverage: "complete",
+        scheduledVarianceMinor: null,
+        outsideScheduleVarianceMinor: null,
+        outsideScheduleCoveredDayCount: null,
+      },
+      inventoryAttention: {
+        carriedForwardCount: 1,
+        completeness: "incomplete",
+        newCount: 2,
+        overflow: true,
+      },
+    });
+    expect(result.acceptedBaseline).toMatchObject({
+      inventoryAttention: { newCount: 1, carriedForwardCount: 2 },
+      closePosture: { status: "accepted" },
+      lifecyclePosture: "accepted",
+      amendmentPosture: "amended",
+      amendment: { includedNetSalesDeltaMinor: 50 },
+      summary: { netUnits: 9, merchandiseMarginMinor: 300 },
+      priorPeriod: {
+        comparabilityReason: "comparable",
+        equivalentScheduledPositions: true,
+        values: { netSalesMinor: 700 },
+        summary: { netUnits: 9, netSalesMinor: 700 },
+        netSalesChange: { amountMinor: 200, direction: "higher" },
+      },
+      // A row stored before the lane split landed: its total means the
+      // scheduled lane alone, so the split is withheld rather than zeroed.
+      variancePosture: {
+        closeVarianceMinor: -25,
+        coverage: "complete",
+        scheduledVarianceMinor: null,
+        outsideScheduleVarianceMinor: null,
+        outsideScheduleCoveredDayCount: null,
+      },
+      ownerRoutes: {
+        dailyClose: {
+          to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history",
+          search: { day: "2026-07-27" },
+        },
+      },
+    });
+    expect(result.current.ownerRoutes).toEqual({
+      transactions: {
+        to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+        search: {
+          startDate: "2026-07-27",
+          endDate: "2026-08-02",
+          order: "oldestFirst",
+        },
+      },
+      dailyClose: {
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+        search: { operatingDate: "2026-07-27" },
+      },
+      cashControls: {
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls",
+      },
+      openWork: {
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+        search: { workType: "synced_sale_inventory_review" },
+      },
+    });
+  });
+
+  it("does not expose current accepted truth when the baseline has no amendment", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const acceptedBaselineId = await seedAcceptedWeek(t, storeId);
+    await t.run((ctx) =>
+      ctx.db.insert("reportWeekCurrent", {
+        storeId,
+        cycleStartDate: "2026-07-27",
+        cycleEndDate: "2026-08-02",
+        currency: "GHS",
+        metricVersion: 1,
+        materializedAt: 1_100,
+        included: weeklyMetrics,
+        outsideSchedule: weeklyMetrics,
+        scheduleLineage: weeklyLineage,
+        completeness: weeklyCompleteness,
+        lifecyclePosture: "accepted",
+        amendmentPosture: "none",
+        acceptedBaselineId,
+      }),
+    );
+
+    const result = await t.run((ctx) =>
+      handlerOf(getActiveWeeklyBriefing)(ctx, { storeId }),
+    );
+
+    expect(result).toMatchObject({
+      status: "available",
+      current: { lifecyclePosture: "accepted", amendmentPosture: "none" },
+      acceptedBaseline: {
+        cycleStartDate: "2026-07-27",
+        lifecyclePosture: "accepted",
+        amendmentPosture: "none",
+      },
+    });
+    expect(result.acceptedBaseline).not.toHaveProperty("current");
+    expect(result.acceptedBaseline).not.toHaveProperty("amendment");
+  });
+
+  it("normalizes legacy accepted postures across active, history, and detail", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const acceptedBaselineId = await seedAcceptedWeek(t, storeId);
+    const accepted = await t.run((ctx) =>
+      ctx.db.get("reportWeekAccepted", acceptedBaselineId),
+    );
+    if (!accepted) throw new Error("Expected accepted baseline.");
+    await t.run(async (ctx) => {
+      const amendment = {
+        changedAt: 1_100,
+        currentFingerprint: "legacy-amendment",
+        included: { ...weeklyMetrics, netSalesMinor: 950 },
+        includedNetSalesDeltaMinor: 50,
+        outsideSchedule: weeklyMetrics,
+        outsideScheduleNetSalesDeltaMinor: 0,
+      };
+      await ctx.db.patch("reportWeekAccepted", acceptedBaselineId, {
+        lifecyclePosture: undefined,
+        amendmentPosture: undefined,
+        closePosture: {
+          acceptedCloseId: accepted.closeId,
+          changedAt: 1_100,
+          status: "reopened_awaiting_successor",
+        },
+        amendment,
+      });
+      await ctx.db.insert("reportWeekCurrent", {
+        storeId,
+        availability: "available",
+        cycleStartDate: accepted.cycleStartDate,
+        cycleEndDate: accepted.cycleEndDate,
+        currency: accepted.currency,
+        metricVersion: accepted.metricVersion,
+        materializedAt: 1_100,
+        included: weeklyMetrics,
+        outsideSchedule: weeklyMetrics,
+        scheduleLineage: weeklyLineage,
+        completeness: weeklyCompleteness,
+        lifecyclePosture: "reopened_awaiting_successor",
+        amendmentPosture: "amended",
+        acceptedBaselineId,
+      });
+    });
+
+    const active = await t.run((ctx) =>
+      handlerOf(getActiveWeeklyBriefing)(ctx, { storeId }),
+    );
+    const history = await t.run((ctx) =>
+      handlerOf(listAcceptedWeeklyHistory)(ctx, {
+        storeId,
+        paginationOpts: { cursor: null, numItems: 12 },
+      }),
+    );
+    const detail = await t.run((ctx) =>
+      handlerOf(getAcceptedWeeklyDetail)(ctx, {
+        storeId,
+        reportId: "week:2026-07-27",
+      }),
+    );
+
+    const expected = {
+      lifecyclePosture: "reopened_awaiting_successor",
+      amendmentPosture: "amended",
+    };
+    expect(active).toMatchObject({ acceptedBaseline: expected });
+    expect(history.page[0]).toMatchObject(expected);
+    expect(detail).toMatchObject(expected);
+  });
+
+  it("exposes retained values with the schedule-cap refresh posture", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    await t.run((ctx) =>
+      ctx.db.insert("reportWeekCurrent", {
+        storeId,
+        availability: "available",
+        cycleStartDate: "2026-07-27",
+        cycleEndDate: "2026-08-02",
+        currency: "GHS",
+        metricVersion: 1,
+        materializedAt: 1_100,
+        included: { ...weeklyMetrics, netSalesMinor: 950 },
+        outsideSchedule: weeklyMetrics,
+        scheduleLineage: weeklyLineage,
+        completeness: { complete: false, reason: "schedule_history_cap" },
+        lifecyclePosture: "materializing",
+        amendmentPosture: "none",
+      }),
+    );
+
+    await expect(
+      t.run((ctx) => handlerOf(getActiveWeeklyBriefing)(ctx, { storeId })),
+    ).resolves.toMatchObject({
+      status: "available",
+      current: {
+        included: { netSalesMinor: 950 },
+        lifecyclePosture: "materializing",
+        amendmentPosture: "none",
+        completeness: { complete: false, reason: "schedule_history_cap" },
+      },
+    });
+  });
+
+  it("returns missing projection without consulting Store Schedule", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+
+    await expect(
+      t.run((ctx) => handlerOf(getActiveWeeklyBriefing)(ctx, { storeId })),
+    ).resolves.toEqual({ status: "unavailable", reason: "missing_projection" });
+  });
+
+  it.each(["missing_schedule", "missing_timezone", "schedule_history_cap", "no_scheduled_dates", "missing_day_fold"] as const)(
+    "shapes the stored $reason unavailable posture",
+    async (reason) => {
+      const t = convexTest(schema, modules);
+      const { storeId } = await seedStore(t);
+      await t.run((ctx) =>
+        ctx.db.insert("reportWeekCurrent", {
+          storeId,
+          availability: "unavailable",
+          unavailableReason: reason,
+          lifecyclePosture: "materializing",
+          amendmentPosture: "none",
+          materializedAt: 1_100,
+        }),
+      );
+
+      await expect(
+        t.run((ctx) => handlerOf(getActiveWeeklyBriefing)(ctx, { storeId })),
+      ).resolves.toEqual({ status: "unavailable", reason });
+    },
+  );
+
+  it("pages accepted history newest first with a strict page cap", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    await seedAcceptedWeek(t, storeId, {
+      acceptedAt: 100,
+      cycleStartDate: "2026-07-20",
+    });
+    await seedAcceptedWeek(t, storeId, {
+      acceptedAt: 300,
+      cycleStartDate: "2026-07-27",
+    });
+
+    const page = await t.run((ctx) =>
+      handlerOf(listAcceptedWeeklyHistory)(ctx, {
+        storeId,
+        paginationOpts: { cursor: null, numItems: 1 },
+      }),
+    );
+
+    expect(page.page).toHaveLength(1);
+    expect(page.page[0]).toMatchObject({
+      cycleStartDate: "2026-07-27",
+      acceptedAt: 300,
+    });
+    expect(page.page[0]).toHaveProperty("reportId");
+    expect(page.page[0]).toMatchObject({ summary: { netUnits: 9 } });
+    expect(page.isDone).toBe(false);
+    const nextPage = await t.run((ctx) =>
+      handlerOf(listAcceptedWeeklyHistory)(ctx, {
+        storeId,
+        paginationOpts: { cursor: page.continueCursor, numItems: 1 },
+      }),
+    );
+    expect(nextPage.page).toHaveLength(1);
+    expect(nextPage.page[0]).toMatchObject({ cycleStartDate: "2026-07-20" });
+    await expect(
+      t.run((ctx) =>
+        handlerOf(listAcceptedWeeklyHistory)(ctx, {
+          storeId,
+          paginationOpts: { cursor: null, numItems: 25 },
+        }),
+      ),
+    ).rejects.toThrow("page size");
+  });
+
+  it("keeps cross-store and missing historical detail indistinguishable", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const { storeId: otherStoreId } = await seedStore(t);
+    await seedAcceptedWeek(t, otherStoreId);
+
+    const [crossStore, missing] = await Promise.all([
+      t.run((ctx) =>
+        handlerOf(getAcceptedWeeklyDetail)(ctx, {
+          storeId,
+          reportId: "week:2026-07-27",
+        }),
+      ),
+      t.run((ctx) =>
+        handlerOf(getAcceptedWeeklyDetail)(ctx, {
+          storeId,
+          reportId: "week:2026-07-20",
+        }),
+      ),
+    ]);
+
+    expect(crossStore).toBeNull();
+    expect(missing).toBeNull();
+  });
+
+  it("rejects malformed weekly ids before an accepted projection lookup", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+
+    await expect(
+      t.run((ctx) =>
+        handlerOf(getAcceptedWeeklyDetail)(ctx, {
+          storeId,
+          reportId: "not-a-weekly-report",
+        }),
+      ),
+    ).rejects.toThrow("Weekly report id is invalid.");
+  });
+
+  it("rejects a non-string history cursor before any projection read", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    await seedAcceptedWeek(t, storeId);
+
+    await expect(
+      t.run((ctx) =>
+        handlerOf(listAcceptedWeeklyHistory)(ctx, {
+          storeId,
+          paginationOpts: { cursor: 12 as never, numItems: 5 },
+        }),
+      ),
+    ).rejects.toThrow("cursor is invalid");
+    // Bound checks precede authorization, so no store is even resolved.
+    expect(requireReportsStoreAccess).not.toHaveBeenCalled();
+  });
+
+  it("normalizes a rollout projection without an inventory lane to unavailable", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    // Both documents predate the inventory-attention lane: neither carries the
+    // field, and the client contract must still present the explicit posture.
+    const acceptedBaselineId = await seedAcceptedWeek(t, storeId);
+    await t.run((ctx) =>
+      ctx.db.insert("reportWeekCurrent", {
+        storeId,
+        availability: "available",
+        cycleStartDate: "2026-07-27",
+        cycleEndDate: "2026-08-02",
+        currency: "GHS",
+        metricVersion: 1,
+        materializedAt: 1_100,
+        included: weeklyMetrics,
+        outsideSchedule: weeklyMetrics,
+        scheduleLineage: weeklyLineage,
+        completeness: weeklyCompleteness,
+        lifecyclePosture: "accepted",
+        amendmentPosture: "none",
+        acceptedBaselineId,
+      }),
+    );
+
+    const unavailableLane = {
+      carriedForwardCount: 0,
+      completeness: "unavailable",
+      groups: [],
+      newCount: 0,
+      observedCount: 0,
+      overflow: false,
+    };
+
+    const active = await t.run((ctx) =>
+      handlerOf(getActiveWeeklyBriefing)(ctx, { storeId }),
+    );
+    const detail = await t.run((ctx) =>
+      handlerOf(getAcceptedWeeklyDetail)(ctx, {
+        storeId,
+        reportId: "week:2026-07-27",
+      }),
+    );
+    const history = await t.run((ctx) =>
+      handlerOf(listAcceptedWeeklyHistory)(ctx, {
+        storeId,
+        paginationOpts: { cursor: null, numItems: 5 },
+      }),
+    );
+
+    expect(active.current.inventoryAttention).toEqual(unavailableLane);
+    expect(active.acceptedBaseline.inventoryAttention).toEqual(unavailableLane);
+    expect(detail.inventoryAttention).toEqual(unavailableLane);
+    expect(history.page[0].inventoryAttention).toEqual(unavailableLane);
+  });
+
+  it("never exposes a persisted route on the inventory lane", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const acceptedBaselineId = await seedAcceptedWeek(t, storeId);
+    await t.run((ctx) =>
+      ctx.db.patch("reportWeekAccepted", acceptedBaselineId, {
+        inventoryAttention: {
+          carriedForwardCount: 0,
+          completeness: "complete",
+          groups: [],
+          newCount: 1,
+          observedCount: 1,
+          overflow: false,
+        },
+      }),
+    );
+
+    const detail = await t.run((ctx) =>
+      handlerOf(getAcceptedWeeklyDetail)(ctx, {
+        storeId,
+        reportId: "week:2026-07-27",
+      }),
+    );
+
+    expect(detail.inventoryAttention).not.toHaveProperty("route");
+    // Routing stays a single, server-built, per-read authority.
+    expect(detail.ownerRoutes.openWork).toEqual({
+      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+      search: { workType: "synced_sale_inventory_review" },
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The total lane — the headline states the whole labelled date range, so it is
+// both stored lanes combined. The lanes remain individually inspectable as
+// evidence, and the total is derived per read so no accepted value moves.
+// ---------------------------------------------------------------------------
+
+describe("weekly total lane", () => {
+  it("combines both lanes into the headline while keeping each inspectable", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    await t.run((ctx) =>
+      ctx.db.insert("reportWeekCurrent", {
+        storeId,
+        availability: "available",
+        cycleStartDate: "2026-07-27",
+        cycleEndDate: "2026-08-02",
+        currency: "GHS",
+        metricVersion: 1,
+        materializedAt: 1_100,
+        included: { ...weeklyMetrics, netSalesMinor: 950, unitsSold: 10 },
+        outsideSchedule: {
+          ...weeklyMetrics,
+          netSalesMinor: 300,
+          unitsSold: 4,
+          unitsReturned: 0,
+          grossProfitMinor: 120,
+        },
+        scheduleLineage: weeklyLineage,
+        completeness: weeklyCompleteness,
+        lifecyclePosture: "live",
+        amendmentPosture: "none",
+      }),
+    );
+
+    const result = await t.run((ctx) =>
+      handlerOf(getActiveWeeklyBriefing)(ctx, { storeId }),
+    );
+
+    expect(result.current.total).toMatchObject({
+      netSalesMinor: 1_250,
+      unitsSold: 14,
+      unitsReturned: 1,
+      netUnits: 13,
+      merchandiseMarginMinor: 420,
+    });
+    // The evidence lanes survive the combination unchanged.
+    expect(result.current.summary).toMatchObject({ netSalesMinor: 950 });
+    expect(result.current.outsideScheduleSummary).toMatchObject({
+      netSalesMinor: 300,
+      netUnits: 4,
+    });
+    expect(result.current.included).toMatchObject({ netSalesMinor: 950 });
+    expect(result.current.outsideSchedule).toMatchObject({
+      netSalesMinor: 300,
+    });
+    expect(result.current.totalCompleteness).toMatchObject({
+      complete: true,
+      reason: "complete",
+    });
+  });
+
+  it("makes an incomplete outside lane incomplete for the total only", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    await t.run((ctx) =>
+      ctx.db.insert("reportWeekCurrent", {
+        storeId,
+        availability: "available",
+        cycleStartDate: "2026-07-27",
+        cycleEndDate: "2026-08-02",
+        currency: "GHS",
+        metricVersion: 1,
+        materializedAt: 1_100,
+        included: weeklyMetrics,
+        outsideSchedule: weeklyMetrics,
+        scheduleLineage: weeklyLineage,
+        completeness: {
+          complete: true,
+          reason: "complete",
+          outsideSchedule: { complete: false, reason: "mixed_currency" },
+        },
+        lifecyclePosture: "live",
+        amendmentPosture: "none",
+      }),
+    );
+
+    const result = await t.run((ctx) =>
+      handlerOf(getActiveWeeklyBriefing)(ctx, { storeId }),
+    );
+
+    expect(result.current.totalCompleteness).toMatchObject({
+      complete: false,
+      reason: "mixed_currency",
+    });
+    // The scheduled lane keeps its own, still-complete verdict.
+    expect(result.current.completeness).toMatchObject({
+      complete: true,
+      reason: "complete",
+    });
+  });
+
+  it("compares current total against prior total, not the scheduled lane", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    await t.run((ctx) =>
+      ctx.db.insert("reportWeekCurrent", {
+        storeId,
+        availability: "available",
+        cycleStartDate: "2026-07-27",
+        cycleEndDate: "2026-08-02",
+        currency: "GHS",
+        metricVersion: 1,
+        materializedAt: 1_100,
+        // Scheduled money fell week over week (950 < 1000) while the total
+        // rose (1250 > 1100). Comparing included-only would report "lower".
+        included: { ...weeklyMetrics, netSalesMinor: 950 },
+        outsideSchedule: { ...weeklyMetrics, netSalesMinor: 300 },
+        scheduleLineage: weeklyLineage,
+        completeness: weeklyCompleteness,
+        lifecyclePosture: "live",
+        amendmentPosture: "none",
+        priorPeriod: {
+          cycleStartDate: "2026-07-20",
+          cycleEndDate: "2026-07-26",
+          comparabilityReason: "comparable",
+          currentScheduledPositionCount: 6,
+          priorScheduledPositionCount: 6,
+          equivalentScheduledPositions: true,
+          values: { ...weeklyMetrics, netSalesMinor: 1_000 },
+          outsideScheduleValues: { ...weeklyMetrics, netSalesMinor: 100 },
+        },
+      }),
+    );
+
+    const result = await t.run((ctx) =>
+      handlerOf(getActiveWeeklyBriefing)(ctx, { storeId }),
+    );
+
+    expect(result.current.priorPeriod).toMatchObject({
+      summary: { netSalesMinor: 1_000 },
+      totalSummary: { netSalesMinor: 1_100 },
+      netSalesChange: { amountMinor: 150, direction: "higher" },
+    });
+  });
+
+  it("withholds the prior comparison when the prior outside lane was never stored", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    await t.run((ctx) =>
+      ctx.db.insert("reportWeekCurrent", {
+        storeId,
+        availability: "available",
+        cycleStartDate: "2026-07-27",
+        cycleEndDate: "2026-08-02",
+        currency: "GHS",
+        metricVersion: 1,
+        materializedAt: 1_100,
+        included: { ...weeklyMetrics, netSalesMinor: 950 },
+        outsideSchedule: { ...weeklyMetrics, netSalesMinor: 300 },
+        scheduleLineage: weeklyLineage,
+        completeness: weeklyCompleteness,
+        lifecyclePosture: "live",
+        amendmentPosture: "none",
+        // Written before the prior outside-schedule lane was persisted.
+        priorPeriod: {
+          cycleStartDate: "2026-07-20",
+          cycleEndDate: "2026-07-26",
+          comparabilityReason: "comparable",
+          currentScheduledPositionCount: 6,
+          priorScheduledPositionCount: 6,
+          equivalentScheduledPositions: true,
+          values: { ...weeklyMetrics, netSalesMinor: 1_000 },
+        },
+      }),
+    );
+
+    const result = await t.run((ctx) =>
+      handlerOf(getActiveWeeklyBriefing)(ctx, { storeId }),
+    );
+
+    expect(result.current.priorPeriod).toMatchObject({
+      summary: { netSalesMinor: 1_000 },
+      totalSummary: null,
+      netSalesChange: null,
+    });
+  });
+
+  it("states the amendment's movement across both lanes", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const acceptedBaselineId = await seedAcceptedWeek(t, storeId);
+    const amendment = {
+      changedAt: 1_100,
+      currentFingerprint: "amended-fingerprint",
+      included: { ...weeklyMetrics, netSalesMinor: 950 },
+      includedNetSalesDeltaMinor: 50,
+      outsideSchedule: { ...weeklyMetrics, netSalesMinor: 1_200 },
+      outsideScheduleNetSalesDeltaMinor: 300,
+    };
+    await t.run((ctx) =>
+      ctx.db.patch("reportWeekAccepted", acceptedBaselineId, {
+        amendment,
+        amendmentPosture: "amended",
+      }),
+    );
+
+    const detail = await t.run((ctx) =>
+      handlerOf(getAcceptedWeeklyDetail)(ctx, {
+        storeId,
+        reportId: "week:2026-07-27",
+      }),
+    );
+
+    for (const lane of [detail.amendment, detail.current]) {
+      expect(lane.netSalesDeltaMinor).toBe(350);
+      expect(lane.totalSummary).toMatchObject({ netSalesMinor: 2_150 });
+      expect(lane.summary).toMatchObject({ netSalesMinor: 950 });
+      expect(lane.outsideScheduleSummary).toMatchObject({
+        netSalesMinor: 1_200,
+      });
+    }
+  });
+
+  it("derives the total without touching the accepted baseline", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const acceptedBaselineId = await seedAcceptedWeek(t, storeId);
+    const before = await t.run((ctx) =>
+      ctx.db.get("reportWeekAccepted", acceptedBaselineId),
+    );
+
+    await t.run((ctx) =>
+      handlerOf(getAcceptedWeeklyDetail)(ctx, {
+        storeId,
+        reportId: "week:2026-07-27",
+      }),
+    );
+    await t.run((ctx) =>
+      handlerOf(listAcceptedWeeklyHistory)(ctx, {
+        storeId,
+        paginationOpts: { cursor: null, numItems: 5 },
+      }),
+    );
+
+    const after = await t.run((ctx) =>
+      ctx.db.get("reportWeekAccepted", acceptedBaselineId),
+    );
+    if (!before || !after) throw new Error("Expected the accepted baseline.");
+
+    expect(after.included).toEqual(before.included);
+    expect(after.outsideSchedule).toEqual(before.outsideSchedule);
+    expect(after.baselineFingerprint).toBe(before.baselineFingerprint);
+    // The total is a read-time conclusion; nothing about it is ever persisted.
+    expect(after).not.toHaveProperty("total");
+    expect(after).not.toHaveProperty("totalCompleteness");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Contract parity — the shared client contract must not drift from what the
+// handlers actually project. These assignments are compile-time assertions;
+// the runtime expectations keep the block from being dead code.
+// ---------------------------------------------------------------------------
+
+describe("weekly read contract parity", () => {
+  it("projects exactly the shared briefing, history, and detail contracts", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const acceptedBaselineId = await seedAcceptedWeek(t, storeId);
+    await t.run((ctx) =>
+      ctx.db.insert("reportWeekCurrent", {
+        storeId,
+        availability: "available",
+        cycleStartDate: "2026-07-27",
+        cycleEndDate: "2026-08-02",
+        currency: "GHS",
+        metricVersion: 1,
+        materializedAt: 1_100,
+        included: weeklyMetrics,
+        outsideSchedule: weeklyMetrics,
+        scheduleLineage: weeklyLineage,
+        completeness: weeklyCompleteness,
+        lifecyclePosture: "accepted",
+        amendmentPosture: "none",
+        acceptedBaselineId,
+      }),
+    );
+
+    const briefing: ReportWeekBriefing = await t.run((ctx) =>
+      handlerOf(getActiveWeeklyBriefing)(ctx, { storeId }),
+    );
+    const history: ReportWeekHistoryPage = await t.run((ctx) =>
+      handlerOf(listAcceptedWeeklyHistory)(ctx, {
+        storeId,
+        paginationOpts: { cursor: null, numItems: 5 },
+      }),
+    );
+    const detail: ReportWeekAcceptedProjection | null = await t.run((ctx) =>
+      handlerOf(getAcceptedWeeklyDetail)(ctx, {
+        storeId,
+        reportId: "week:2026-07-27",
+      }),
+    );
+
+    if (briefing.status !== "available") {
+      throw new Error("Expected an available briefing.");
+    }
+
+    // Every field the contract declares required must be materially present.
+    for (const projection of [
+      briefing.current,
+      briefing.acceptedBaseline!,
+      history.page[0]!,
+      detail!,
+    ]) {
+      for (const key of [
+        "cycleStartDate",
+        "cycleEndDate",
+        "currency",
+        "metricVersion",
+        "included",
+        "summary",
+        "outsideSchedule",
+        "outsideScheduleSummary",
+        "total",
+        "totalCompleteness",
+        "scheduleLineage",
+        "completeness",
+        "lifecyclePosture",
+        "amendmentPosture",
+        "inventoryAttention",
+        "ownerRoutes",
+      ] as const) {
+        expect(projection[key], `projection is missing ${key}`).toBeDefined();
+      }
+      for (const key of [
+        "carriedForwardCount",
+        "completeness",
+        "groups",
+        "newCount",
+        "observedCount",
+        "overflow",
+      ] as const) {
+        expect(
+          projection.inventoryAttention[key],
+          `inventoryAttention is missing ${key}`,
+        ).toBeDefined();
+      }
+    }
+
+    for (const accepted of [briefing.acceptedBaseline!, detail!]) {
+      for (const key of [
+        "reportId",
+        "acceptedAt",
+        "cutoffObservedAt",
+        "closeId",
+      ] as const) {
+        expect(accepted[key], `accepted projection is missing ${key}`)
+          .toBeDefined();
+      }
+    }
+
+    expect(briefing.current.materializedAt).toBe(1_100);
+    expect(history.isDone).toBe(true);
+    expect(typeof history.continueCursor).toBe("string");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Authorization matrix — the real access gate, not the module mock. Only
+// `../lib/athenaUserAuth` (identity) is substituted; organization membership,
+// store resolution, and the opaque denial all run for real.
+// ---------------------------------------------------------------------------
+
+describe("weekly reads under the real access gate", () => {
+  async function seedMember(
+    t: ReturnType<typeof convexTest>,
+    organizationId: Id<"organization">,
+    role: "full_admin" | "pos_only",
+    operationalRoles?: ("manager" | "cashier")[],
+  ) {
+    return t.run(async (ctx) => {
+      const userId = await ctx.db.insert("athenaUser", {
+        email: `member-${Math.random()}@example.test`,
+      });
+      await ctx.db.insert("organizationMember", {
+        organizationId,
+        userId,
+        role,
+        ...(operationalRoles ? { operationalRoles } : {}),
+      });
+      const athenaUser = await ctx.db.get("athenaUser", userId);
+      if (!athenaUser) throw new Error("Expected seeded member.");
+      return athenaUser;
+    });
+  }
+
+  function signIn(athenaUser: unknown) {
+    vi.mocked(requireAuthenticatedAthenaUserWithCtx).mockResolvedValue(
+      athenaUser as never,
+    );
+  }
+
+  function signOut() {
+    vi.mocked(requireAuthenticatedAthenaUserWithCtx).mockRejectedValue(
+      new Error("Sign in again to continue."),
+    );
+  }
+
+  function readAll(t: ReturnType<typeof convexTest>, storeId: Id<"store">) {
+    return [
+      () =>
+        t.run((ctx) => handlerOf(getActiveWeeklyBriefing)(ctx, { storeId })),
+      () =>
+        t.run((ctx) =>
+          handlerOf(listAcceptedWeeklyHistory)(ctx, {
+            storeId,
+            paginationOpts: { cursor: null, numItems: 5 },
+          }),
+        ),
+      () =>
+        t.run((ctx) =>
+          handlerOf(getAcceptedWeeklyDetail)(ctx, {
+            storeId,
+            reportId: "week:2026-07-27",
+          }),
+        ),
+    ];
+  }
+
+  beforeEach(() => {
+    // Delegate to the genuine gate rather than the suite-wide stub.
+    vi.mocked(requireReportsStoreAccess).mockImplementation(
+      actualAccess.requireReportsStoreAccess as never,
+    );
+    vi.mocked(
+      requireSharedDemoStoreCapabilityIfApplicable,
+    ).mockResolvedValue(null as never);
+  });
+
+  it("lets a full admin of the owning organization read all three surfaces", async () => {
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t);
+    await seedAcceptedWeek(t, storeId);
+    signIn(await seedMember(t, organizationId, "full_admin"));
+
+    const [briefing, history, detail] = await Promise.all(
+      readAll(t, storeId).map((read) => read()),
+    );
+
+    expect(briefing).toEqual({
+      status: "unavailable",
+      reason: "missing_projection",
+    });
+    expect(history.page).toHaveLength(1);
+    expect(detail).toMatchObject({ cycleStartDate: "2026-07-27" });
+  });
+
+  it.each([
+    { label: "manager-elevated operator", role: "pos_only" as const, operationalRoles: ["manager" as const] },
+    { label: "pos_only member", role: "pos_only" as const, operationalRoles: undefined },
+  ])("denies a $label on every surface", async ({ role, operationalRoles }) => {
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t);
+    await seedAcceptedWeek(t, storeId);
+    signIn(await seedMember(t, organizationId, role, operationalRoles));
+
+    for (const read of readAll(t, storeId)) {
+      await expect(read()).rejects.toThrow("Reports access unavailable.");
+    }
+  });
+
+  it("denies an unauthenticated caller on every surface", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    await seedAcceptedWeek(t, storeId);
+    signOut();
+
+    for (const read of readAll(t, storeId)) {
+      await expect(read()).rejects.toThrow("Reports access unavailable.");
+    }
+  });
+
+  it("keeps a foreign store, a forged store id, and a genuinely missing store indistinguishable", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId: storeA } = await seedStore(t);
+    const { organizationId: orgB, storeId: storeB } = await seedStore(t);
+    await seedAcceptedWeek(t, storeA);
+    signIn(await seedMember(t, orgB, "full_admin"));
+
+    const forgedStoreId = await t.run(async (ctx) => {
+      const doomed = await ctx.db.insert("store", {
+        createdByUserId: (await ctx.db.get("store", storeA))!.createdByUserId,
+        currency: "GHS",
+        name: "Doomed",
+        organizationId: orgB,
+        slug: `doomed-${Math.random()}`,
+      });
+      await ctx.db.delete("store", doomed);
+      return doomed;
+    });
+
+    for (const [foreign, forged] of readAll(t, storeA).map(
+      (read, index) => [read, readAll(t, forgedStoreId)[index]!] as const,
+    )) {
+      const foreignError = await foreign().catch((error: Error) => error);
+      const forgedError = await forged().catch((error: Error) => error);
+      expect(foreignError).toBeInstanceOf(Error);
+      expect((foreignError as Error).message).toBe(
+        "Reports access unavailable.",
+      );
+      expect((forgedError as Error).message).toBe(
+        (foreignError as Error).message,
+      );
+    }
+
+    // The same caller reading their OWN empty store gets the ordinary
+    // "nothing here" shape — never a hint that store A holds a record.
+    const [briefing, history, detail] = await Promise.all(
+      readAll(t, storeB).map((read) => read()),
+    );
+    expect(briefing).toEqual({
+      status: "unavailable",
+      reason: "missing_projection",
+    });
+    expect(history.page).toEqual([]);
+    expect(detail).toBeNull();
+  });
+
+  it("rejects an oversized history page before authorizing or reading", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    signOut();
+
+    await expect(
+      t.run((ctx) =>
+        handlerOf(listAcceptedWeeklyHistory)(ctx, {
+          storeId,
+          paginationOpts: { cursor: null, numItems: 25 },
+        }),
+      ),
+    ).rejects.toThrow("page size");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Internal boundary — acceptance, sweeping, reseeding, verification, and
+// repair are operator machinery. Only the read surface may be public.
+// ---------------------------------------------------------------------------
+
+describe("reports module public surface", () => {
+  const reportModules = import.meta.glob("./*.ts");
+
+  it("registers exactly the intended public functions", async () => {
+    const publicNames: string[] = [];
+    const internalNames: string[] = [];
+
+    for (const [path, load] of Object.entries(reportModules)) {
+      if (path.endsWith(".test.ts")) continue;
+      const loaded = (await load()) as Record<string, unknown>;
+      for (const [name, value] of Object.entries(loaded)) {
+        const fn = value as {
+          isQuery?: boolean;
+          isMutation?: boolean;
+          isAction?: boolean;
+          isPublic?: boolean;
+          isInternal?: boolean;
+        } | null;
+        if (!fn || (typeof fn !== "object" && typeof fn !== "function")) {
+          continue;
+        }
+        if (!(fn.isQuery || fn.isMutation || fn.isAction)) continue;
+        const id = `${path.replace(/^\.\//, "").replace(/\.ts$/, "")}.${name}`;
+        if (fn.isPublic) publicNames.push(id);
+        else internalNames.push(id);
+      }
+    }
+
+    expect(publicNames.sort()).toEqual([
+      "customRange.requestRange",
+      "queries.getAcceptedWeeklyDetail",
+      "queries.getActiveWeeklyBriefing",
+      "queries.getOverview",
+      "queries.getRangeResult",
+      "queries.getSkuDetail",
+      "queries.listAcceptedWeeklyHistory",
+      "queries.listDays",
+      "queries.listPeriodSkus",
+      "queries.listRangeSkuMix",
+      "queries.listSkuDayTransactions",
+    ]);
+    // Acceptance, sweeping, reseeding, verification, and repair stay internal.
+    expect(internalNames.sort()).toEqual([
+      "reseed.reseedStoreReporting",
+      "sweeper.sweep",
+      "verify.verifyCurrentWeekAgainstSources",
+      "verify.verifyDayAgainstSources",
+      "verify.verifyStoreSummary",
+      "weeklyRepair.repairCurrentWeeklyProjection",
+    ]);
   });
 });

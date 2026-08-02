@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import { animate, cubicBezier, stagger, utils } from "animejs";
 import { useReducedMotion } from "framer-motion";
 
@@ -12,6 +12,8 @@ const FLIP_GLYPH_STAGGER_MS = 12;
 const FLIP_OUT_DURATION_MS = 200;
 const FLIP_IN_DURATION_MS = 280;
 const ZERO_FADE_DURATION_MS = 180;
+const TEXT_FLIP_TRANSITION_DURATION_MS =
+  FLIP_OUT_DURATION_MS + FLIP_IN_DURATION_MS;
 
 export type FlipNumberZeroTransition = "fade" | "flip" | "instant";
 
@@ -30,6 +32,194 @@ function renderFlipGlyphs(element: HTMLElement, value: string): HTMLElement[] {
   });
   element.replaceChildren(...glyphs);
   return glyphs;
+}
+
+function renderFlipText(element: HTMLElement, value: string): HTMLElement {
+  const text = document.createElement("span");
+  text.className =
+    "inline-block min-w-0 [backface-visibility:hidden] [transform-style:preserve-3d]";
+  text.textContent = value;
+  element.replaceChildren(text);
+  return text;
+}
+
+/** A whole-string variant of the FlipNumber transition. */
+export function FlipText({
+  accessible = true,
+  animateChanges = true,
+  className,
+  delayMs = 0,
+  reduceMotion,
+  testId,
+  value,
+}: {
+  accessible?: boolean;
+  animateChanges?: boolean;
+  className?: string;
+  /** Keeps the current string visible before the next transition begins. */
+  delayMs?: number;
+  reduceMotion?: boolean;
+  testId?: string;
+  value: string;
+}) {
+  const prefersReducedMotion = useReducedMotion();
+  const shouldReduceMotion = reduceMotion ?? Boolean(prefersReducedMotion);
+  const resolvedDelayMs = Math.max(0, delayMs);
+  const valueRef = useRef<HTMLSpanElement | null>(null);
+  const displayedValueRef = useRef(value);
+  const animationRef = useRef<ReturnType<typeof animate> | null>(null);
+  const hasMeasuredInitialMountRef = useRef(false);
+  const assignValueRef = useCallback((element: HTMLSpanElement | null) => {
+    valueRef.current = element;
+    if (element && element.childElementCount === 0) {
+      renderFlipText(element, displayedValueRef.current);
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    const element = valueRef.current;
+    if (!element) return;
+
+    const shouldTraceInitialMount =
+      import.meta.env.DEV &&
+      !navigator.userAgent.includes("jsdom") &&
+      testId === "weekly-status-value" &&
+      !hasMeasuredInitialMountRef.current;
+    const traceInitialMount = (phase: string) => {
+      if (!shouldTraceInitialMount) return;
+
+      const wrapper = element.parentElement;
+      const wrapperRect = wrapper?.getBoundingClientRect();
+      const valueRect = element.getBoundingClientRect();
+      console.debug(
+        "[Weekly status mount]",
+        JSON.stringify({
+          phase,
+          value,
+          visualText: element.textContent,
+          visualChildCount: element.childElementCount,
+          valueHeight: valueRect.height,
+          valueTop: valueRect.top,
+          valueWidth: valueRect.width,
+          wrapperHeight: wrapperRect?.height ?? 0,
+          wrapperTop: wrapperRect?.top ?? 0,
+          wrapperWidth: wrapperRect?.width ?? 0,
+        }),
+      );
+    };
+
+    traceInitialMount("layout-effect:before-content");
+
+    const previousValue = displayedValueRef.current;
+    animationRef.current?.revert();
+    animationRef.current = null;
+
+    if (previousValue === value) {
+      if (element.childElementCount === 0) renderFlipText(element, value);
+
+      if (shouldTraceInitialMount) {
+        traceInitialMount("layout-effect:after-content");
+        const firstFrame = requestAnimationFrame(() => {
+          traceInitialMount("animation-frame:1");
+          requestAnimationFrame(() => {
+            traceInitialMount("animation-frame:2");
+            hasMeasuredInitialMountRef.current = true;
+          });
+        });
+
+        return () => cancelAnimationFrame(firstFrame);
+      }
+      return;
+    }
+
+    if (!animateChanges) {
+      displayedValueRef.current = value;
+      renderFlipText(element, value);
+      return;
+    }
+
+    if (shouldReduceMotion) {
+      displayedValueRef.current = value;
+      const incoming = renderFlipText(element, value);
+      utils.set(incoming, { opacity: 0 });
+      animationRef.current = animate(incoming, {
+        delay: resolvedDelayMs,
+        duration: 120,
+        ease: flipTransitionEase,
+        opacity: 1,
+        onComplete: () => {
+          incoming.removeAttribute("style");
+          animationRef.current = null;
+        },
+      });
+      return () => {
+        animationRef.current?.revert();
+      };
+    }
+
+    const outgoing =
+      (element.firstElementChild as HTMLElement | null) ??
+      renderFlipText(element, previousValue);
+    animationRef.current = animate(outgoing, {
+      delay: resolvedDelayMs,
+      duration: FLIP_OUT_DURATION_MS,
+      ease: flipTransitionEase,
+      filter: "blur(1px)",
+      opacity: 0,
+      rotateX: "55deg",
+      translateY: "-55%",
+      onComplete: () => {
+        displayedValueRef.current = value;
+        const incoming = renderFlipText(element, value);
+        utils.set(incoming, {
+          filter: "blur(1px)",
+          opacity: 0,
+          rotateX: "-55deg",
+          translateY: "55%",
+        });
+        animationRef.current = animate(incoming, {
+          duration: FLIP_IN_DURATION_MS,
+          ease: flipTransitionEase,
+          filter: "blur(0px)",
+          opacity: 1,
+          rotateX: "0deg",
+          translateY: "0%",
+          onComplete: () => {
+            incoming.removeAttribute("style");
+            animationRef.current = null;
+          },
+        });
+      },
+    });
+
+    return () => {
+      animationRef.current?.revert();
+    };
+  }, [animateChanges, resolvedDelayMs, shouldReduceMotion, value]);
+
+  return (
+    <span
+      aria-hidden={accessible ? undefined : true}
+      className={cn(
+        "inline-flex max-w-full overflow-hidden [perspective:8rem]",
+        className,
+      )}
+      data-motion="flip"
+      data-switch-delay={resolvedDelayMs}
+      data-testid={testId}
+      data-transition-duration={TEXT_FLIP_TRANSITION_DURATION_MS}
+      data-transition-easing={FLIP_TRANSITION_EASING}
+      data-value={value}
+      data-variant="text"
+    >
+      {accessible ? <span className="sr-only">{value}</span> : null}
+      <span
+        aria-hidden={accessible ? true : undefined}
+        className="inline-flex min-w-0"
+        ref={assignValueRef}
+      />
+    </span>
+  );
 }
 
 /**

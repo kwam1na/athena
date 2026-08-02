@@ -122,7 +122,20 @@ describe("actual public shared-demo enforcement boundaries", () => {
 
   it("preserves the existing normal store-removal behavior", async () => {
     vi.mocked(requireSharedDemoCapabilityIfApplicable).mockResolvedValueOnce(null);
-    const ctx = { db: { delete: vi.fn() } };
+    // Store removal now sweeps the weekly reporting tables first; an empty
+    // weekly universe keeps the removal single-mutation.
+    const emptyWeeklyQuery = {
+      withIndex: vi.fn().mockReturnThis(),
+      unique: vi.fn().mockResolvedValue(null),
+      take: vi.fn().mockResolvedValue([]),
+    };
+    const ctx = {
+      db: {
+        delete: vi.fn(),
+        get: vi.fn().mockResolvedValue({ _id: "store" }),
+        query: vi.fn().mockReturnValue(emptyWeeklyQuery),
+      },
+    };
     await expect(invoke(removeStore, ctx, { id: "store" })).resolves.toEqual({
       message: "OK",
     });

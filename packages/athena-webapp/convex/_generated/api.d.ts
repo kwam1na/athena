@@ -152,6 +152,7 @@ import type * as inventory_stockValidation from "../inventory/stockValidation.js
 import type * as inventory_storeConfigV2 from "../inventory/storeConfigV2.js";
 import type * as inventory_storeSchedule from "../inventory/storeSchedule.js";
 import type * as inventory_stores from "../inventory/stores.js";
+import type * as inventory_storesTestSupport from "../inventory/storesTestSupport.js";
 import type * as inventory_subcategories from "../inventory/subcategories.js";
 import type * as inventory_utils from "../inventory/utils.js";
 import type * as inventoryLedger_commerceEffects from "../inventoryLedger/commerceEffects.js";
@@ -186,6 +187,8 @@ import type * as marketing_walkthroughRequestNotifications from "../marketing/wa
 import type * as marketing_walkthroughRequestRetention from "../marketing/walkthroughRequestRetention.js";
 import type * as marketing_walkthroughRequests from "../marketing/walkthroughRequests.js";
 import type * as migrations_backfillAthenaUserNormalizedEmail from "../migrations/backfillAthenaUserNormalizedEmail.js";
+import type * as migrations_backfillReportFactObservedAt from "../migrations/backfillReportFactObservedAt.js";
+import type * as migrations_backfillReportingCycleStart from "../migrations/backfillReportingCycleStart.js";
 import type * as migrations_backfillStoreSchedules from "../migrations/backfillStoreSchedules.js";
 import type * as migrations_backfillStoreTimezoneAuthority from "../migrations/backfillStoreTimezoneAuthority.js";
 import type * as migrations_migrateAmountsToPesewas from "../migrations/migrateAmountsToPesewas.js";
@@ -371,6 +374,10 @@ import type * as reports_rollups from "../reports/rollups.js";
 import type * as reports_sweeper from "../reports/sweeper.js";
 import type * as reports_transactionCounts from "../reports/transactionCounts.js";
 import type * as reports_verify from "../reports/verify.js";
+import type * as reports_weekly from "../reports/weekly.js";
+import type * as reports_weeklyInventory from "../reports/weeklyInventory.js";
+import type * as reports_weeklyPeriods from "../reports/weeklyPeriods.js";
+import type * as reports_weeklyRepair from "../reports/weeklyRepair.js";
 import type * as schemas_automation from "../schemas/automation.js";
 import type * as schemas_contextTracking from "../schemas/contextTracking.js";
 import type * as schemas_customerMessaging_customerMessageDelivery from "../schemas/customerMessaging/customerMessageDelivery.js";
@@ -734,6 +741,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/storeConfigV2": typeof inventory_storeConfigV2;
   "inventory/storeSchedule": typeof inventory_storeSchedule;
   "inventory/stores": typeof inventory_stores;
+  "inventory/storesTestSupport": typeof inventory_storesTestSupport;
   "inventory/subcategories": typeof inventory_subcategories;
   "inventory/utils": typeof inventory_utils;
   "inventoryLedger/commerceEffects": typeof inventoryLedger_commerceEffects;
@@ -768,6 +776,8 @@ declare const fullApi: ApiFromModules<{
   "marketing/walkthroughRequestRetention": typeof marketing_walkthroughRequestRetention;
   "marketing/walkthroughRequests": typeof marketing_walkthroughRequests;
   "migrations/backfillAthenaUserNormalizedEmail": typeof migrations_backfillAthenaUserNormalizedEmail;
+  "migrations/backfillReportFactObservedAt": typeof migrations_backfillReportFactObservedAt;
+  "migrations/backfillReportingCycleStart": typeof migrations_backfillReportingCycleStart;
   "migrations/backfillStoreSchedules": typeof migrations_backfillStoreSchedules;
   "migrations/backfillStoreTimezoneAuthority": typeof migrations_backfillStoreTimezoneAuthority;
   "migrations/migrateAmountsToPesewas": typeof migrations_migrateAmountsToPesewas;
@@ -953,6 +963,10 @@ declare const fullApi: ApiFromModules<{
   "reports/sweeper": typeof reports_sweeper;
   "reports/transactionCounts": typeof reports_transactionCounts;
   "reports/verify": typeof reports_verify;
+  "reports/weekly": typeof reports_weekly;
+  "reports/weeklyInventory": typeof reports_weeklyInventory;
+  "reports/weeklyPeriods": typeof reports_weeklyPeriods;
+  "reports/weeklyRepair": typeof reports_weeklyRepair;
   "schemas/automation": typeof schemas_automation;
   "schemas/contextTracking": typeof schemas_contextTracking;
   "schemas/customerMessaging/customerMessageDelivery": typeof schemas_customerMessaging_customerMessageDelivery;

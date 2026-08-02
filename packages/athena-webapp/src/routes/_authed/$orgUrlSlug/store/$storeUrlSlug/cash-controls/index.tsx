@@ -22,7 +22,7 @@ export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/"
 )({
   component: CashControlsDashboard,
-  notFoundComponent: ({ data }) => {
+  notFoundComponent: function CashControlsNotFound({ data }) {
     const { orgUrlSlug, storeUrlSlug } = Route.useParams();
     const org = hasOrgNotFoundPayload(data);
 

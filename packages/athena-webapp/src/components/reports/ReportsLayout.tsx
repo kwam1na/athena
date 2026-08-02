@@ -7,12 +7,31 @@ import {
   PageWorkspace,
 } from "@/components/common/PageLevelHeader";
 import { cn } from "@/lib/utils";
+import { ReportsCatalogLookup } from "./ReportsCatalogLookup";
+import {
+  dateRangeForItemsPeriod,
+  dateRangeForOverviewWindow,
+  REPORT_PERIOD_TYPES,
+  todayOperatingDateGuess,
+  type ReportPeriodType,
+} from "./reportPeriodKeys";
+import {
+  overviewSearchFromWeeklyReturn,
+  reportsOverviewSearchSchema,
+  reportsWeeklySearchSchema,
+  weeklyReturnSearchFromOverview,
+} from "./reportRouteSearch";
 
 const REPORT_TABS = [
   {
     label: "Overview",
     suffix: "",
     to: "/$orgUrlSlug/store/$storeUrlSlug/reports",
+  },
+  {
+    label: "Week",
+    suffix: "/weekly",
+    to: "/$orgUrlSlug/store/$storeUrlSlug/reports/weekly",
   },
   {
     label: "Items",
@@ -25,6 +44,37 @@ export function ReportsLayout() {
   const location = useLocation();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
   const isSkuDetail = /\/reports\/items\/[^/]+\/?$/.test(location.pathname);
+  const isOverview = /\/reports\/?$/.test(location.pathname);
+  const isWeekly = /\/reports\/weekly\/?$/.test(location.pathname);
+  const isItems = /\/reports\/items\/?$/.test(location.pathname);
+  const overviewSearch = reportsOverviewSearchSchema.safeParse(
+    location.search,
+  ).data;
+  const weeklySearch = reportsWeeklySearchSchema.safeParse(
+    location.search,
+  ).data;
+  const rawPeriodType = location.search.periodType;
+  const itemPeriodType = REPORT_PERIOD_TYPES.includes(
+    rawPeriodType as ReportPeriodType,
+  )
+    ? (rawPeriodType as ReportPeriodType)
+    : "day";
+  const rawPeriodDate = location.search.periodDate;
+  const itemPeriodDate =
+    typeof rawPeriodDate === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(rawPeriodDate)
+      ? rawPeriodDate
+      : todayOperatingDateGuess();
+  const catalogRange = isOverview
+    ? dateRangeForOverviewWindow(
+        overviewSearch?.window ?? "today",
+        todayOperatingDateGuess(),
+      )
+    : isItems
+      ? dateRangeForItemsPeriod(itemPeriodType, itemPeriodDate)
+      : isWeekly
+        ? dateRangeForItemsPeriod("week", todayOperatingDateGuess())
+        : null;
 
   return (
     <View hideBorder hideHeaderBottomBorder scrollMode="page">
@@ -37,6 +87,12 @@ export function ReportsLayout() {
                 title="Reports"
                 description="Review sales and product performance."
               />
+              {catalogRange ? (
+                <ReportsCatalogLookup
+                  endDate={catalogRange.endDate}
+                  startDate={catalogRange.startDate}
+                />
+              ) : null}
               <nav
                 aria-label="Reports views"
                 className="overflow-x-auto border-b border-border"
@@ -44,8 +100,26 @@ export function ReportsLayout() {
                 <div className="flex min-w-max gap-layout-lg" role="list">
                   {REPORT_TABS.map((tab) => {
                     const active = tab.suffix
-                      ? location.pathname.includes(`/reports${tab.suffix}`)
+                      ? location.pathname
+                          .replace(/\/+$/, "")
+                          .endsWith(`/reports${tab.suffix}`)
                       : /\/reports\/?$/.test(location.pathname);
+                    /**
+                     * The tab for the route already showing is a self-link, so
+                     * it must carry the route's own validated search through
+                     * untouched. Rebuilding it from the other tab's schema
+                     * strips everything that schema does not describe — on
+                     * Weekly that silently discards the selected report,
+                     * history cursors, and the carried Overview return
+                     * context the operator arrived with.
+                     */
+                    const search = active
+                      ? location.search
+                      : tab.suffix === "/weekly"
+                        ? weeklyReturnSearchFromOverview(overviewSearch ?? {})
+                        : tab.suffix === ""
+                          ? overviewSearchFromWeeklyReturn(weeklySearch ?? {})
+                          : undefined;
                     return (
                       <Link
                         aria-current={active ? "page" : undefined}
@@ -58,6 +132,7 @@ export function ReportsLayout() {
                           orgUrlSlug: orgUrlSlug!,
                           storeUrlSlug: storeUrlSlug!,
                         }}
+                        search={search}
                         to={tab.to}
                       >
                         {tab.label}

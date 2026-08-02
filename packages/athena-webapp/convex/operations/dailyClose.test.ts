@@ -3357,7 +3357,7 @@ describe("end-of-day review backend foundation", () => {
           transactionNumber: "TXN-1",
         },
       ],
-      store: [store],
+      store: [{ ...store, currency: " ghs " }],
     });
 
     const result = await completeDailyCloseWithCtx(
@@ -3599,6 +3599,12 @@ describe("end-of-day review backend foundation", () => {
       metadata: {
         localRegisterSessionId: "register-local-1",
         localTransactionId,
+        skippedMutationItems: [
+          {
+            productSkuId: "sku-1",
+            requestedQuantity: id === "work-1" ? 2 : 1,
+          },
+        ],
         terminalId: "terminal-1",
       },
       organizationId: "org-1",
@@ -3668,6 +3674,20 @@ describe("end-of-day review backend foundation", () => {
                 memberWorkItemIds: ["work-1", "work-2"],
                 type: "synced_sale_inventory_review",
               }),
+            ],
+            frozenSyncedSaleInventoryReviewGroups: [
+              {
+                affectedUnitCount: 3,
+                key: "synced_sale_inventory_review:store-1:sku-1",
+                memberCount: 2,
+                members: [
+                  { createdAt: 1, workItemId: "work-1" },
+                  { createdAt: 2, workItemId: "work-2" },
+                ],
+                membershipCompleteness: "complete",
+                oldestActionableAt: 1,
+                productSkuId: "sku-1",
+              },
             ],
             carryForwardItems: [
               expect.objectContaining({
@@ -6165,6 +6185,13 @@ describe("end-of-day review backend foundation", () => {
       automationRunId: "automation-run-1",
       policyReviewedItemKeys: [],
     });
+    expect(Array.from(tables.get("reportDirtyDay")?.values() ?? [])).toEqual([
+      expect.objectContaining({
+        operatingDate: "2026-05-07",
+        reason: "late_fact",
+        storeId: "store-1",
+      }),
+    ]);
 
     await db.patch("posTransaction", "txn-1", {
       total: 99000,
@@ -6199,6 +6226,7 @@ describe("end-of-day review backend foundation", () => {
       "operationalEvent",
       "dailyClose",
       "operationalEvent",
+      "reportDirtyDay",
     ]);
     expect(
       inserts.find(

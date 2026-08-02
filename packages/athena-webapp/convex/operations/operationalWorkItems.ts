@@ -32,6 +32,8 @@ const QUEUE_LANE_PROBE_LIMIT = 1_000;
 const ACTIVE_REPAIR_PROBE_LIMIT = 1_000;
 const OPEN_WORK_COUNT_ITEM_PROBE_LIMIT = 500;
 const OPEN_WORK_COUNT_REPAIR_PROBE_LIMIT = 100;
+export const WEEKLY_INVENTORY_OPEN_WORK_ITEM_LIMIT = 500;
+export const WEEKLY_INVENTORY_OPEN_WORK_REPAIR_LIMIT = 100;
 const PENDING_APPROVAL_COUNT_PROBE_LIMIT = 100;
 const APPROVAL_REQUEST_PROBE_LIMIT = MAX_QUEUE_ITEMS + 1;
 const OPEN_WORK_ITEM_STATUSES = ["open", "in_progress"] as const;
@@ -602,6 +604,86 @@ export const listOpenOperationalWorkItems = internalQuery({
     return workItems.flat();
   },
 });
+
+/**
+ * The weekly inventory projection reads only the two indexed open-work lanes
+ * for synced-sale inventory reviews. The shared item budget and one-row probe
+ * make its result either exact or an explicit lower bound; it never silently
+ * chooses a subset of groups.
+ */
+export async function listOpenSyncedSaleInventoryReviewGroupsWithCompleteness(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  storeId: Id<"store">,
+  options: {
+    itemLimit?: number;
+    repairLimit?: number;
+  } = {},
+) {
+  const itemLimit = options.itemLimit ?? WEEKLY_INVENTORY_OPEN_WORK_ITEM_LIMIT;
+  const repairLimit =
+    options.repairLimit ?? WEEKLY_INVENTORY_OPEN_WORK_REPAIR_LIMIT;
+  const items: Array<Doc<"operationalWorkItem">> = [];
+  let remainingItemBudget = itemLimit;
+  let itemOverflow = false;
+
+  for (const status of OPEN_WORK_ITEM_STATUSES) {
+    const lane = await ctx.db
+      .query("operationalWorkItem")
+      .withIndex("by_storeId_type_status", (q) =>
+        q
+          .eq("storeId", storeId)
+          .eq("type", "synced_sale_inventory_review")
+          .eq("status", status),
+      )
+      .take(remainingItemBudget + 1);
+    const acceptedItems = lane.slice(0, remainingItemBudget);
+
+    itemOverflow ||= lane.length > remainingItemBudget;
+    items.push(...acceptedItems);
+    remainingItemBudget -= acceptedItems.length;
+  }
+
+  const repairs: Array<Doc<"oversizedOperationalWorkRepair">> = [];
+  let remainingRepairBudget = repairLimit;
+  let repairOverflow = false;
+  for (const status of ["pending", "running", "paused"] as const) {
+    const lane = await ctx.db
+      .query("oversizedOperationalWorkRepair")
+      .withIndex("by_storeId_status", (q) =>
+        q.eq("storeId", storeId).eq("status", status),
+      )
+      .take(remainingRepairBudget + 1);
+    const acceptedRepairs = lane.slice(0, remainingRepairBudget);
+
+    repairOverflow ||= lane.length > remainingRepairBudget;
+    repairs.push(...acceptedRepairs);
+    remainingRepairBudget -= acceptedRepairs.length;
+  }
+
+  const sourceIncomplete = itemOverflow || repairOverflow;
+  const logicalWork = projectLogicalOperationalWork({
+    incompleteTypes: sourceIncomplete
+      ? new Set(["synced_sale_inventory_review"])
+      : undefined,
+    items,
+    remediationSourceIdentitiesByGroupKey: new Map(
+      repairs.map((repair) => [
+        repair.groupKey,
+        new Set(repair.sourceIdentities),
+      ]),
+    ),
+    sourceCompleteness: sourceIncomplete ? "incomplete" : "complete",
+  });
+
+  return {
+    completeness: logicalWork.completeness,
+    groups: logicalWork.groups.filter(
+      (group) => group.representative.type === "synced_sale_inventory_review",
+    ),
+    observedCount: logicalWork.observedCount,
+    overflow: sourceIncomplete,
+  };
+}
 
 export const getQueueSnapshot = query({
   args: {

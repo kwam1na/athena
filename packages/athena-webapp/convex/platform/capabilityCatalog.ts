@@ -57,6 +57,103 @@ export const ATHENA_CAPABILITY_CATALOG = [
 
 export type AthenaCapability = (typeof ATHENA_CAPABILITY_CATALOG)[number]["id"];
 
+/** Store-scoped, fail-closed rollout for the weekly Reports surface. */
+export const WEEKLY_REPORT_STORE_ALLOWLIST_ENV =
+  "REPORTS_WEEKLY_STORE_ALLOWLIST";
+
+export function hasCompletedWeeklyObservedAtVerification(
+  store:
+    | { weeklyObservedAtVerification?: { status: string } }
+    | null
+    | undefined,
+): boolean {
+  return store?.weeklyObservedAtVerification?.status === "complete";
+}
+
+/**
+ * Every schedule version this store has ever had carries an explicit reporting
+ * anchor.
+ *
+ * Absent evidence is NOT "probably fine": a version without
+ * `reportingCycleStartsOn` resolves to Monday by default, so an unverified
+ * store can be shown a seven-date frame it never agreed to. Written only by
+ * `verifyStoreReportingCycleStartWithCtx`.
+ */
+export function hasCompletedWeeklyReportingCycleAnchorVerification(
+  store:
+    | { weeklyReportingCycleAnchorVerification?: { status: string } }
+    | null
+    | undefined,
+): boolean {
+  return (
+    store?.weeklyReportingCycleAnchorVerification?.status === "complete"
+  );
+}
+
+/**
+ * A close completed before the store's weekly activation may not derive an
+ * accepted baseline: "accepted EOW history begins when this lifecycle ships",
+ * so recovery reconciliation must not manufacture retrospective acceptance
+ * from pre-feature closes. A store without a floor is legacy-permissive.
+ */
+export function isCloseWithinWeeklyAcceptanceFloor(
+  store: { weeklyReportingAcceptanceFloor?: number } | null | undefined,
+  closeCompletedAt: number | undefined,
+): boolean {
+  const floor = store?.weeklyReportingAcceptanceFloor;
+  if (floor === undefined) return true;
+  return closeCompletedAt !== undefined && closeCompletedAt >= floor;
+}
+
+/**
+ * The store-scoped weekly Reports gate.
+ *
+ * Three independent conditions, all fail-closed: an explicit allowlist entry,
+ * a store-wide `observedAt` verification (the acceptance cutoff is meaningless
+ * without it), and a store-wide reporting-anchor verification (the frame
+ * itself is a guess without it). Prefer `isWeeklyReportingEnabledForStoreDoc`
+ * at call sites that already hold the store document.
+ */
+export function isWeeklyReportingEnabledForStore(
+  storeId: string,
+  rawAllowlist: string | undefined = process.env[
+    WEEKLY_REPORT_STORE_ALLOWLIST_ENV
+  ],
+  observedAtVerificationComplete = false,
+  reportingCycleAnchorVerificationComplete = false,
+): boolean {
+  if (!rawAllowlist) return false;
+  if (!observedAtVerificationComplete) return false;
+  if (!reportingCycleAnchorVerificationComplete) return false;
+  return rawAllowlist
+    .split(",")
+    .map((candidate) => candidate.trim())
+    .filter(Boolean)
+    .includes(storeId);
+}
+
+/** The same gate, reading both migration evidences off the store document. */
+export function isWeeklyReportingEnabledForStoreDoc(
+  storeId: string,
+  store:
+    | {
+        weeklyObservedAtVerification?: { status: string };
+        weeklyReportingCycleAnchorVerification?: { status: string };
+      }
+    | null
+    | undefined,
+  rawAllowlist: string | undefined = process.env[
+    WEEKLY_REPORT_STORE_ALLOWLIST_ENV
+  ],
+): boolean {
+  return isWeeklyReportingEnabledForStore(
+    storeId,
+    rawAllowlist,
+    hasCompletedWeeklyObservedAtVerification(store),
+    hasCompletedWeeklyReportingCycleAnchorVerification(store),
+  );
+}
+
 export const SHARED_DEMO_ALLOWED_CAPABILITIES = [
   "approvals.manage",
   "cash.control.write",

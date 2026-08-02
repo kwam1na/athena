@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="9699b291a6900a92d1e3017762f7da8fa41a23dc717dcb256b4f040cea1eaa35" data-athena-report-base="origin/main" data-athena-report-head="codex/eow-report-plan working tree">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Schedule-aware end-of-week reporting</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
+      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
+      h2 { font-size: 28px; margin: 0 0 16px; }
+      p { margin: 0 0 14px; }
+      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
+      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
+      @media (hover: hover) and (pointer: fine) {
+        label:hover { border-color: #b6c5d8; }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 700;
+        padding: 11px 16px;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:active { transform: scale(0.97); }
+      button.secondary { background: #475569; }
+      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      #quizResult { font-weight: 700; }
+      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
+      .answer-detail.visible { display: block; }
+      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
+      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
+      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
+      @media (max-width: 820px) { h1 { font-size: 32px; } main { padding: 32px 16px 56px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Schedule-aware end-of-week reporting</h1>
+        <p class="lede">How Athena turns bounded Reports projections into an operator briefing without rewriting accepted history</p>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch codex/eow-report-plan</span><span class="pill">Base 43b0c77c</span><span class="pill">Linear V26-1142–V26-1152</span><span class="pill">Local merge gate pending</span><span class="pill">No PR or production deploy</span><span class="pill">Dev Convex repaired</span><span class="pill">No screenshots</span></div>
+      </header>
+      <section class="panel"><h2>Executive Summary</h2>
+<p>Athena adds Weekly as a sibling tab between Overview and Items. For verified, allowlisted stores, full administrators can see net sales, units, payment posture, variance, prior-period context, and inventory attention from Reports-owned projections. Weekly is disabled by default; Overview remains the default and keeps its existing behavior.</p>
+<p>The reporting frame comes from the effective Store Schedule cycle anchor, closed weekdays, and date exceptions. Operating hours never filter financial facts. Activity on non-operational dates is disclosed outside the reporting schedule instead of being discarded.</p>
+<p>A live singleton shows current truth. The final scheduled Daily Close can preserve an immutable accepted baseline, while late facts, reopen, and successor-close changes appear as one current amendment and independent close posture.</p>
+</section>
+<section class="panel"><h2>Problem and Context</h2>
+<p>Operators currently have to calculate end-of-week performance manually because source data is too disparate to reason about safely. The briefing must answer five operational questions: money brought in, units moved, payment posture, variances, and inventory uncertainty.</p>
+<p>The design had to respect Athena&#x27;s simplified Reports model and database read discipline. That ruled out client aggregation, source-domain subscriptions, a new reporting generation system, chunk orchestration, and a second scheduler.</p>
+</section>
+<section class="panel"><h2>Mental Model</h2>
+<p>Think of the weekly report as three layers of truth. Schedule truth decides which dates are headline dates. Accepted truth records what Athena knew when the final scheduled close was accepted. Current truth records what Athena knows now. These layers are related but never silently overwrite one another.</p>
+<pre><code>Store Schedule dates
+  -&gt; reportDay folds + bounded Open Work groups
+  -&gt; reportDirtyWeek -&gt; existing Reports sweeper
+  -&gt; reportWeekCurrent
+
+Final scheduled Daily Close + cutoff facts
+  -&gt; immutable reportWeekAccepted
+
+Late facts / reopen / successor close
+  -&gt; current replacement + one amendment</code></pre>
+</section>
+<section class="panel"><h2>Before and After</h2>
+
+<ul>
+<li>Before: Overview and Items existed, but there was no schedule-aware weekly briefing or accepted weekly record.</li>
+<li>After: Weekly is additive; /reports still opens Overview, and validated namespaced search state survives a Weekly round trip.</li>
+<li>Before: operators reconciled sales, payments, variance, and inventory work across domains.</li>
+<li>After: the server projects those postures together while keeping their meanings distinct and linking back to their owning workspaces.</li>
+<li>Before: a late fact could only be understood from current source truth.</li>
+<li>After: the accepted baseline remains intact and current deltas are labeled as an amendment.</li>
+</ul>
+</section>
+<section class="panel"><h2>Layer-by-Layer Mechanics</h2>
+
+<ul>
+<li>Schedule: reportingCycleStartsOn is effective-dated. Anchor-changing edits stage at the next boundary under the old anchor; Store Hours shows active and pending anchors and the effective date.</li>
+<li>Facts and days: observedAt is server-owned, payment allocation posture folds into reportDay, and missing live activity can occupy an explicit zero slot without masking folded evidence gaps.</li>
+<li>Weekly lifecycle: one current singleton, immutable accepted rows, and one dirty marker are drained by the existing Reports sweeper. The singleton stores available or unavailable posture plus server-owned lifecycle and amendment state.</li>
+<li>Inventory: live attention uses the canonical bounded synced-sale review grouping; accepted history uses evidence frozen by the final close.</li>
+<li>Reads: active, paginated history, and exact accepted detail are protected, store-scoped, capability-gated projection queries. Public Weekly reads never hydrate Store Schedule or operational domains.</li>
+<li>UI: one active-or-detail subscription plus optional lazy history; React formats server-shaped values and does not calculate report meaning.</li>
+</ul>
+</section>
+<section class="panel"><h2>Failure Boundaries</h2>
+
+<ul>
+<li>Missing schedule or timezone authority produces unavailable posture.</li>
+<li>Mixed currency, unknown payment coverage, legacy facts without observedAt, incomplete inventory grouping, and cap overflow stay incomplete rather than becoming exact zero.</li>
+<li>Currency codes use the shared Reports normalizer at Daily Close emission and again at incremental and authoritative fold comparisons. Case-only drift such as <code>ghs</code> versus <code>GHS</code> remains one currency, while a genuinely foreign code still fails closed.</li>
+<li>A failed rebuild keeps the last verified current projection and re-marks work for retry. Its stored posture names materializing or cap-specific incomplete state without discarding verified values.</li>
+<li>Acceptance inserts only after the complete bounded cutoff fold succeeds; repair cannot manufacture accepted history.</li>
+<li>Authorization and the fail-closed store capability check happen before weekly projection reads.</li>
+<li>An allowlisted store remains unavailable until the store-wide observedAt verifier records durable zero-missing evidence. Destructive reseed raises a store barrier so partial replay cannot publish current truth, acceptance, or amendments.</li>
+<li>Daily Close commits independently. A weekly materialization failure cannot roll it back; durable close/day evidence and the existing sweeper retry reporting reconciliation.</li>
+<li>Store and organization deletion remove weekly rows through bounded scheduled continuations and preserve other stores.</li>
+</ul>
+</section>
+<section class="panel"><h2>What Intentionally Did Not Change</h2>
+
+<ul>
+<li>Overview remains the default route with its existing controls, query timing, and hierarchy.</li>
+<li>Items remains a sibling workspace.</li>
+<li>Recognized sales, payment allocation, and register variance remain distinct concepts.</li>
+<li>Reports does not mutate payments, stock, Daily Close, or Open Work.</li>
+<li>V1 does not add payment-method mix, accounting net profit, cross-store rollups, notifications, generations, chunking, or another scheduler.</li>
+<li>No screenshot artifact or Cloudflare-hosted plan is part of delivery.</li>
+</ul>
+</section>
+<section class="panel"><h2>Validation and Review Evidence</h2>
+<p>Passed local evidence before the heavy merge sensor: bun run build; bun run typecheck; bun run lint:convex:changed; bun run lint:frontend:changed with zero errors and two route fast-refresh warnings; bun run pre-commit:generated-artifacts; bun run graphify:rebuild/check; bun run compound:check; bun run landed-report:check; git diff --check; and focused backend/frontend suites covering weekly materialization, queries, verification, scale, lifecycle, owner returns, reseed, sweeper, and resumable deletion. Constrained correctness, architecture/scope, read/data/security, and UI/testing reviewers approved the implementation after their plan-backed findings were remediated.</p>
+<p>The scale fixture uses the documented de-identified 93-fact peak for its fact lane and proves exactness, cap behavior, grouped Open Work, multiple history pages, store isolation, public handler read shapes, projection-only repair, independent verification, and a 20-sample harness p95 below two seconds. Open Work and history cardinalities remain deterministic placeholders because no de-identified observed maxima artifact exists; wider capability rollout remains blocked until those maxima and representative operator acceptance are captured. The Apple-design review matrix below records the code-verifiable rows as complete and names the rows that still require a live browser. The full bun run pr:athena merge sensor remains pending. No merge, deploy, PR, or root alignment is claimed.</p>
+<p>The currency regression was reproduced with lowercase Daily Close facts and fixed through the existing shared canonicalization boundary. Focused Daily Close, ingestion, and deterministic-fold tests pass; a store-scoped dev reseed and refold changed the current Weekly projection from <code>mixed_currency</code> to <code>complete</code> while preserving a real foreign-currency regression. Production was not mutated.</p>
+</section>
+<section class="panel">
+  <h2>Apple-Design Review Matrix</h2>
+  <p><code>.agents/skills/apple-design/SKILL.md</code> was read before the Weekly UI review pass, as U7 requires. The decisions it produced are recorded below, followed by the review matrix itself. Rows are marked complete only where a Vitest assertion or the source itself proves them; rows that genuinely need a rendering browser are named as pending human verification and are not claimed.</p>
+
+  <h3>Design decisions taken from the skill</h3>
+  <ul>
+    <li><strong>Restraint over motion (principle 1, Purpose; §14).</strong> The Weekly briefing deliberately contains no springs, gesture-driven transitions, parallax, or translucent material layers. A weekly report is read, not manipulated, so motion would decorate rather than clarify state or hierarchy. This restraint is the design decision, recorded here rather than left as an omission — which is also why the reduced-motion and reduced-transparency rows below are not applicable rather than unverified.</li>
+    <li><strong>Wayfinding and self-links (§16, Familiarity).</strong> The workspace tab for the route already showing is now a state-preserving self-link. Rebuilding the active tab's search from the sibling tab's schema silently discarded the selected report, history cursors, and carried Overview return context — a control that looks inert but destroys state is exactly the unpredictability the skill warns against. Covered by <code>ReportsLayout.test.tsx</code>.</li>
+    <li><strong>Feedback must not contradict itself (§16, tactical feedback rules).</strong> When completeness reports <code>mixed_currency</code> or <code>fact_cap_exceeded</code>, every figure derived from the withheld totals now renders as an explicit unavailable value instead of printing numbers beneath a sentence saying totals are withheld. Section structure and headings survive so the report stays navigable.</li>
+    <li><strong>Direct, specific labels (§16).</strong> Metric labels no longer say "Current" for an accepted, unamended week. The prefix is derived from posture: "Current" only when an amendment supplies later truth, "Accepted" after acceptance, "Week to date" while the week is still live.</li>
+    <li><strong>Typography and grouping over a KPI grid (§15, §16 Simplicity).</strong> Net sales stays the single headline at display size with tight leading and negative tracking; supporting lanes use uniform small-caps metric labels and a numeric face, so hierarchy comes from size, weight, and whitespace rather than equally weighted cards. Withheld headline values drop to a smaller muted treatment so an "Unavailable" string does not occupy display-headline space.</li>
+    <li><strong>The headline must be true for the range it is labelled with (§16, Responsibility).</strong> Net sales now prints the combined week — scheduled plus outside-schedule — because the label directly above it names seven dates. On the dev store the scheduled-only headline read GH₵101,933 while GH₵31,480 of real sales sat outside it on Sunday: the most prominent number on the screen understated the labelled period, and any reader who did not scroll to Disclosures carried that figure away. The lanes are not merged away — scheduled and outside-schedule stay labelled directly beneath the headline, and variance stays explicitly scheduled-only ("Scheduled close variance") because only a scheduled day has a Daily Close to disagree with.</li>
+    <li><strong>A disclosure belongs beside what it qualifies (§16, Grouping and mapping; Simplicity).</strong> The outside-schedule fact moved from the foot of the page to immediately under the headline block. Proximity is what makes a qualifier read as part of the number rather than as a footnote; a fact that changes how a total should be understood cannot sit six sections below it. It states the amount and names the dates in one restrained sentence, appears only when outside-schedule sales exist (a "GH₵0 outside schedule" line would be noise on every ordinary week), and is no longer repeated in Disclosures.</li>
+    <li><strong>Confirmation only where the action is genuinely consequential (§16, Agency).</strong> Store Hours now confirms before a save that moves the reporting-cycle anchor, because that save silently defers every other submitted field to a future date. Operational-only saves stay uninterrupted — the skill explicitly warns that overused confirmations train people to click through.</li>
+    <li><strong>Respect the user's text size (§15).</strong> Touch-facing report controls are sized with the repo's <code>--control-height-standard</code> (2.75rem / 44px) token rather than a fixed compact height, so the control scales with the type system instead of pinning a pixel box.</li>
+    <li><strong>Status without duplication (§16, Wayfinding).</strong> The polite status region announces the weekday-qualified reporting dates plus lifecycle posture, distinct from the plain range printed in the briefing, and is mounted during initial load so the first "Loading" announcement is actually spoken.</li>
+  </ul>
+
+  <h3>Review matrix</h3>
+  <table>
+    <thead><tr><th>Check</th><th>Result</th><th>Evidence</th></tr></thead>
+    <tbody>
+      <tr><td>Semantic and heading order (desktop)</td><td>Complete</td><td><code>ReportsWeeklyView.test.tsx</code> asserts the exact heading sequence: Net sales, Financial performance, Units moved, Payment posture, Variance, Inventory attention, Disclosures.</td></tr>
+      <tr><td>Semantic and keyboard order unchanged at compact widths</td><td>Complete (structural)</td><td>Layout is a single stacked column with wrapping control rows and no breakpoint-dependent reordering, so DOM order is the tab order at every width. <code>weekly.lifecycle.test.tsx</code> asserts no element in the Weekly subtree opts into horizontal overflow and that history controls wrap.</td></tr>
+      <tr><td>No horizontal page scrolling at narrow viewports</td><td>Complete</td><td>Structural Vitest check plus a rendered check against the dev deployment (Wigclub, 2026-08-02): <code>scrollWidth === clientWidth</code> at 375&times;812 and at 640px; sections stack in priority order with the net-sales headline intact.</td></tr>
+      <tr><td>Touch targets on history, pagination, history toggle, and tabs</td><td>Complete</td><td>Controls carry <code>h-control-standard</code> (2.75rem / 44px); asserted in <code>weekly.lifecycle.test.tsx</code>.</td></tr>
+      <tr><td>Baseline and amendment values stay adjacent</td><td>Complete</td><td>Amendment lines render immediately beside the accepted figures in the same section, never replacing them; covered by the amendment and outside-schedule cases in <code>ReportsWeeklyView.test.tsx</code>.</td></tr>
+      <tr><td>Keyboard order reaches history and owner routes</td><td>Complete</td><td>All history controls are native buttons and all owner routes are links in document order; focus retention on the initiating selector is asserted in <code>weekly.lifecycle.test.tsx</code>.</td></tr>
+      <tr><td>Polite status region: loading then settled dates plus lifecycle, non-duplicative</td><td>Complete</td><td><code>weekly.lifecycle.test.tsx</code> asserts the region mounts during initial load with the loading text, settles to the weekday-qualified range plus lifecycle, and does not repeat the visible range verbatim.</td></tr>
+      <tr><td>Comparison direction and lifecycle understandable without color</td><td>Complete</td><td>Direction, lifecycle, amendment posture, comparability, and coverage are all rendered as words, not as color or iconography alone.</td></tr>
+      <tr><td>Motion / interruptibility / spatial-origin checks</td><td>Not applicable — restraint recorded</td><td>The implementation contains no springs, gesture-driven transitions, or animated state changes. Recorded above as a deliberate design decision, not an oversight.</td></tr>
+      <tr><td>Reduced motion (<code>prefers-reduced-motion</code>)</td><td>Not applicable — restraint recorded</td><td>No motion exists to reduce. The only transitions are the shared Button component's color transitions, which are non-vestibular.</td></tr>
+      <tr><td>Reduced transparency (<code>prefers-reduced-transparency</code>)</td><td>Not applicable — restraint recorded</td><td>Weekly uses no translucent or <code>backdrop-filter</code> surfaces, and therefore stacks none.</td></tr>
+      <tr><td>Increased contrast (<code>prefers-contrast: more</code>) rendering</td><td>Pending human browser verification</td><td>Requires a rendering browser with the OS signal set; not claimed.</td></tr>
+      <tr><td>200% zoom and large text</td><td>Complete (zoom-equivalent reflow)</td><td>Rendered check against the dev deployment at a 640px viewport (the 1280px/200% reflow equivalent): no horizontal scroll, full hierarchy preserved. OS-level large-text remains a nice-to-have manual pass.</td></tr>
+      <tr><td>Desktop and compact visual review across live, accepted, amended, and incomplete fixtures</td><td>Substantially complete</td><td>Rendered review against the dev deployment (Wigclub, 2026-08-02) covered live/awaiting-final-close, accepted-with-amendment, zero-activity scheduled dates, outside-schedule disclosure, prior-period unavailable, partial variance coverage, and carried-forward inventory, at desktop and 375px in both dark and light themes. Touch targets measured 44&ndash;46px live. Remaining fixtures (reopened, cap-exceeded, mixed-currency) reviewed in Vitest only.</td></tr>
+    </tbody>
+  </table>
+</section>
+<section class="panel"><h2>Next-Time Guidance</h2>
+
+<ul>
+<li>Extend the existing fact/day/current/accepted/dirty/sweeper path before proposing new reporting infrastructure.</li>
+<li>Put period meaning, prior comparisons, completeness, and owner routes in server projections; keep React presentational.</li>
+<li>Use schedule dates and exceptions for membership, never opening-minute windows for financial eligibility.</li>
+<li>When historical evidence cannot prove a claim, publish incomplete or unavailable and keep rollout disabled.</li>
+<li>Run focused sensors during iteration, require constrained reviewer agreement, then spend the full merge gate once.</li>
+</ul>
+</section>
+
+<section class="panel">
+  <h2>Key Files</h2>
+  <table>
+    <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
+    <tbody><tr><td><code>docs/plans/2026-08-01-002-feat-end-of-week-report-plan.md</code></td><td>Approved requirements, simplicity constraints, acceptance examples, and rollout contract.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/reports/weeklyPeriods.ts</code></td><td>Resolves effective schedule-day membership without operating-hour filtering.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/reports/weekly.ts</code></td><td>Builds current projections, cutoff-accepted baselines, amendments, prior periods, variance, and inventory posture.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/schemas/reports/derived.ts</code></td><td>Defines the current, accepted, and dirty weekly storage contracts.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/reports/queries.ts</code></td><td>Owns the three bounded protected weekly read surfaces and owner routes.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/reports/sweeper.ts</code></td><td>Reuses the one Reports sweeper for current rebuild, acceptance recovery, and amendment refresh.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/platform/capabilityCatalog.ts</code></td><td>Keeps Weekly disabled by default and enables only verified store IDs.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/schemas/inventory/store.ts</code></td><td>Stores internal observedAt verification evidence and the destructive-reseed publication barrier.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/migrations/backfillReportingCycleStart.ts</code></td><td>Backfills the reporting anchor with bounded dry-run, apply, and verification posture.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/migrations/backfillReportFactObservedAt.ts</code></td><td>Backfills legacy server-observation time required for trustworthy accepted cutoffs.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/reports/verify.ts</code></td><td>Independently verifies source-reachable reporting lanes before capability rollout.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/operations/dailyClose.ts</code></td><td>Freezes inventory-review evidence at the accepted close boundary.</td></tr>
+<tr><td><code>packages/athena-webapp/src/components/reports/ReportsWeeklyView.tsx</code></td><td>Presents server-shaped money, units, payments, variance, inventory, and disclosures.</td></tr>
+<tr><td><code>packages/athena-webapp/src/components/store-configuration/components/StoreHoursView.tsx</code></td><td>Shows and stages the effective reporting-cycle anchor alongside store schedule configuration.</td></tr></tbody>
+  </table>
+</section>
+
+
+<section class="panel">
+  <h2>Subagent Evidence</h2>
+  <ul><li><strong>session context — delivery_session_context:</strong> Recovered prior plan/reviewer decisions, simplicity corrections, Linear state, finish-line changes, and durable documentation context.</li>
+<li><strong>delivered diff — delivery_diff_context:</strong> Mapped the cross-layer implementation and identified concrete plan gaps that triggered the final Terra remediation wave.</li>
+<li><strong>schedule and migration implementers:</strong> Implemented the schedule anchor, effective staging, observedAt compatibility, repair, verifier, scale, and deletion work.</li>
+<li><strong>payment and weekly projection implementers:</strong> Implemented payment posture, daily folds, current/accepted lifecycle, prior periods, variance, and frozen inventory evidence.</li>
+<li><strong>query and UI implementers:</strong> Implemented protected bounded reads, additive Weekly routing, calm hierarchy, owner links, and Store Hours pending-anchor presentation.</li>
+<li><strong>session refresh — report_session_context:</strong> Recovered the earlier lowercase-store-currency incident and confirmed the durable rule that each aggregation boundary must explicitly use the shared normalizer.</li>
+<li><strong>final diff refresh — report_diff_context:</strong> Re-mapped the 94-file delivery candidate, verified that the currency repair stays inside the existing Reports flow, and identified the remaining browser and merge-gate evidence boundaries.</li>
+<li><strong>correctness refresh — correctness_recheck:</strong> Approved the narrow currency diff against the plan after confirming canonical case handling, genuine foreign-currency exclusion, and focused regression coverage.</li></ul>
+</section>
+
+
+<section id="quiz" class="panel">
+  <h2>Quiz: Pass Required</h2>
+  <p>You must score at least 8 out of 10 to pass.</p>
+  <form id="changeQuiz" data-threshold="8">
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>1. What determines whether a date belongs in headline weekly totals?</legend>
+    <label><input type="radio" name="q1" value="0" /> Configured opening minutes</label>
+<label><input type="radio" name="q1" value="1" /> The effective cycle anchor, closed days, and date exceptions</label>
+<label><input type="radio" name="q1" value="2" /> Whether a sale occurred</label>
+  </fieldset>
+  <div class="answer-detail">Schedule-day membership comes from effective schedule dates and exceptions; operating hours never filter financial facts.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>2. Where should late facts appear after a week is accepted?</legend>
+    <label><input type="radio" name="q2" value="0" /> By rewriting the accepted row</label>
+<label><input type="radio" name="q2" value="1" /> Only in source tables</label>
+<label><input type="radio" name="q2" value="2" /> In current truth and one explicit amendment</label>
+  </fieldset>
+  <div class="answer-detail">Accepted truth is immutable; later knowledge is exposed as current truth and an amendment.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>3. What happens if weekly materialization fails after Daily Close succeeds?</legend>
+    <label><input type="radio" name="q3" value="0" /> Daily Close is rolled back</label>
+<label><input type="radio" name="q3" value="1" /> Daily Close remains committed and reporting reconciliation retries</label>
+<label><input type="radio" name="q3" value="2" /> The browser reconstructs the report from sources</label>
+  </fieldset>
+  <div class="answer-detail">Operational close completion is independent; durable evidence lets the existing Reports sweeper recover missed weekly intent.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>4. What may a public Weekly query read?</legend>
+    <label><input type="radio" name="q4" value="0" /> Reports-owned weekly projections</label>
+<label><input type="radio" name="q4" value="1" /> Payment, schedule, and inventory source tables</label>
+<label><input type="radio" name="q4" value="2" /> All report facts for the selected week</label>
+  </fieldset>
+  <div class="answer-detail">Public reads are bounded and projection-only.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>5. How is accepted inventory attention preserved?</legend>
+    <label><input type="radio" name="q5" value="0" /> It is recomputed from today&#x27;s Open Work</label>
+<label><input type="radio" name="q5" value="1" /> It is frozen from final-close evidence</label>
+<label><input type="radio" name="q5" value="2" /> It is entered manually</label>
+  </fieldset>
+  <div class="answer-detail">Accepted history uses inventory-review membership frozen by the final scheduled close.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>6. How should unknown payment allocation coverage render?</legend>
+    <label><input type="radio" name="q6" value="0" /> As zero unsettled value</label>
+<label><input type="radio" name="q6" value="1" /> As incomplete or unavailable</label>
+<label><input type="radio" name="q6" value="2" /> By estimating from net sales</label>
+  </fieldset>
+  <div class="answer-detail">Unknown evidence never becomes an exact-looking zero or estimate.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>7. What happens to Overview?</legend>
+    <label><input type="radio" name="q7" value="0" /> It is replaced by Weekly</label>
+<label><input type="radio" name="q7" value="1" /> It becomes a summary inside Weekly</label>
+<label><input type="radio" name="q7" value="2" /> It remains the default with existing behavior</label>
+  </fieldset>
+  <div class="answer-detail">Weekly is an additive sibling tab; Overview stays unchanged.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>8. What does a reporting anchor change do mid-cycle?</legend>
+    <label><input type="radio" name="q8" value="0" /> Reframes the current week immediately</label>
+<label><input type="radio" name="q8" value="1" /> Stages at the next old-anchor boundary</label>
+<label><input type="radio" name="q8" value="2" /> Deletes the prior schedule</label>
+  </fieldset>
+  <div class="answer-detail">Staging prevents overlapping or orphaned weekly frames.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>9. What proves merge readiness for this task?</legend>
+    <label><input type="radio" name="q9" value="0" /> Focused tests alone</label>
+<label><input type="radio" name="q9" value="1" /> A screenshot review</label>
+<label><input type="radio" name="q9" value="2" /> Unanimous constrained review followed by bun run pr:athena passing locally</label>
+  </fieldset>
+  <div class="answer-detail">The stated delivery gate requires all selected reviewers to approve the same candidate before the deferred local merge sensor runs and passes.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>10. Which extension follows the established model?</legend>
+    <label><input type="radio" name="q10" value="0" /> Add another scheduler and chunk table</label>
+<label><input type="radio" name="q10" value="1" /> Add server-shaped fields to bounded current/accepted projections</label>
+<label><input type="radio" name="q10" value="2" /> Aggregate facts in React</label>
+  </fieldset>
+  <div class="answer-detail">The current Reports model is extended through its existing bounded projections and sweeper.</div>
+</div>
+
+    <div class="quiz-actions">
+      <button type="button" id="gradeQuiz">Grade quiz</button>
+      <button type="button" class="secondary" id="resetQuiz">Reset</button>
+      <span id="quizResult" aria-live="polite"></span>
+    </div>
+  </form>
+</section>
+
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
+          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
+          if (isCorrect) score += 1;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>

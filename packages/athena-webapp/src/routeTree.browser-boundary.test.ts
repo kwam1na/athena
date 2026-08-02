@@ -27,6 +27,10 @@ const ALLOWED_CONVEX_IMPORT_PATTERNS = [
   // `convex/values`), so they are safe to pull into the browser bundle.
   /(?:^|\/)convex\/schemas\/notifications$/,
   /(?:^|\/)convex\/notifications\/deliveryPolicy$/,
+  // Pure schedule math (no imports at all): the Store Hours UI shares the
+  // reporting-cycle boundary calculation with the schedule mutation so the
+  // staged-anchor confirmation names the same effective date the server uses.
+  /(?:^|\/)convex\/lib\/storeScheduleTime$/,
 ];
 
 function collectSourceFiles(directory: string): string[] {

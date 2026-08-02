@@ -6,6 +6,7 @@ import {
   getOpenWorkCountSummary,
   getPendingApprovalCountSummary,
   getQueueSnapshot,
+  listOpenSyncedSaleInventoryReviewGroupsWithCompleteness,
 } from "./operationalWorkItems";
 import * as athenaUserAuth from "../lib/athenaUserAuth";
 import * as sharedDemoActor from "../sharedDemo/actor";
@@ -450,6 +451,97 @@ describe("getPendingApprovalCountSummary", () => {
     expect(result).toEqual({
       completeness: "incomplete",
       count: 0,
+    });
+  });
+});
+
+describe("listOpenSyncedSaleInventoryReviewGroupsWithCompleteness", () => {
+  it("uses the canonical Open Work grouping and reports a lower bound after its probe", async () => {
+    const ctx = createQueueContext({
+      workItems: [
+        workItem({
+          _id: "same-sku-a" as Id<"operationalWorkItem">,
+          metadata: { localTransactionId: "sale-a" },
+          productSkuId: "sku-1" as Id<"productSku">,
+          type: "synced_sale_inventory_review",
+        }),
+        workItem({
+          _id: "same-sku-b" as Id<"operationalWorkItem">,
+          metadata: { localTransactionId: "sale-b" },
+          productSkuId: "sku-1" as Id<"productSku">,
+          type: "synced_sale_inventory_review",
+        }),
+        workItem({
+          _id: "probe-overflow" as Id<"operationalWorkItem">,
+          metadata: { localTransactionId: "sale-c" },
+          productSkuId: "sku-2" as Id<"productSku">,
+          status: "in_progress",
+          type: "synced_sale_inventory_review",
+        }),
+      ],
+    });
+
+    const result =
+      await listOpenSyncedSaleInventoryReviewGroupsWithCompleteness(
+        ctx as never,
+        "store-1" as Id<"store">,
+        { itemLimit: 2 },
+      );
+
+    expect(result).toMatchObject({
+      completeness: "incomplete",
+      overflow: true,
+      groups: [
+        expect.objectContaining({
+          key: "synced_sale_inventory_review:store-1:sku-1",
+          productSkuId: "sku-1",
+        }),
+      ],
+    });
+    expect(result.groups[0].items.map((item) => item._id)).toEqual([
+      "same-sku-a",
+      "same-sku-b",
+    ]);
+  });
+
+  it("marks inventory groups incomplete when its bounded repair membership probe overflows", async () => {
+    const ctx = createQueueContext({
+      oversizedRepairs: [
+        {
+          _id: "repair-a",
+          groupKey: "synced_sale_inventory_review:store-1:sku-1",
+          sourceIdentities: ["source-a"],
+          status: "pending",
+          storeId: "store-1",
+        },
+        {
+          _id: "repair-b",
+          groupKey: "synced_sale_inventory_review:store-1:sku-2",
+          sourceIdentities: ["source-b"],
+          status: "running",
+          storeId: "store-1",
+        },
+      ],
+      workItems: [
+        workItem({
+          metadata: { localTransactionId: "sale-a" },
+          productSkuId: "sku-1" as Id<"productSku">,
+          type: "synced_sale_inventory_review",
+        }),
+      ],
+    });
+
+    const result =
+      await listOpenSyncedSaleInventoryReviewGroupsWithCompleteness(
+        ctx as never,
+        "store-1" as Id<"store">,
+        { repairLimit: 1 },
+      );
+
+    expect(result).toMatchObject({
+      completeness: "incomplete",
+      overflow: true,
+      groups: [expect.objectContaining({ completeness: "incomplete" })],
     });
   });
 });
