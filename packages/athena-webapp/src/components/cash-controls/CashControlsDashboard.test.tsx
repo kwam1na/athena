@@ -5,6 +5,7 @@ import {
   CashControlsDashboardContent,
   prioritizeCashControlsSessionsForTerminal,
 } from "./CashControlsDashboard";
+import { formatRegisterSessionTimestamp } from "./registerSessionTimestamps";
 
 describe("prioritizeCashControlsSessionsForTerminal", () => {
   it("places this browser terminal's sessions first without reordering peers", () => {
@@ -281,10 +282,7 @@ describe("CashControlsDashboardContent", () => {
 
   it("renders overview metrics and register activity", () => {
     const closedAt = new Date("2026-04-20T19:45:00.000Z").getTime();
-    const expectedClosedAt = new Date(closedAt).toLocaleString("en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
+    const expectedClosedAt = formatRegisterSessionTimestamp(closedAt);
 
     render(
       <CashControlsDashboardContent
@@ -678,13 +676,8 @@ describe("CashControlsDashboardContent", () => {
 
   it("replaces the closed-session preview table with a recent closeout snapshot when all drawers are closed", () => {
     const latestClosedAt = new Date("2026-04-21T15:15:00.000Z").getTime();
-    const latestClosedAtLabel = new Date(latestClosedAt).toLocaleString(
-      "en-US",
-      {
-        dateStyle: "medium",
-        timeStyle: "short",
-      },
-    );
+    const latestClosedAtLabel =
+      formatRegisterSessionTimestamp(latestClosedAt);
 
     render(
       <CashControlsDashboardContent

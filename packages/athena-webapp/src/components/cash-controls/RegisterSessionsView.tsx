@@ -29,6 +29,11 @@ import type {
   CashControlsDashboardSession,
   CashControlsDashboardSnapshot,
 } from "./CashControlsDashboard";
+import {
+  formatRegisterSessionDate,
+  formatRegisterSessionDayAndTime,
+  formatRegisterSessionTimestamp,
+} from "./registerSessionTimestamps";
 
 type RegisterSessionsViewContentProps = {
   currency: string;
@@ -74,29 +79,9 @@ function formatStatusLabel(status: string) {
   return capitalizeWords(status.replaceAll("_", " "));
 }
 
-function formatTimestamp(timestamp: number) {
-  return new Date(timestamp).toLocaleString("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
-
-function formatTimelineLabel(timestamp: number) {
-  return new Date(timestamp).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function formatTimelineDate(timestamp: number) {
-  return new Date(timestamp).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
+const formatTimestamp = formatRegisterSessionTimestamp;
+const formatTimelineLabel = formatRegisterSessionDayAndTime;
+const formatTimelineDate = formatRegisterSessionDate;
 
 function formatTimelineTime(timestamp: number) {
   return new Date(timestamp).toLocaleTimeString("en-US", {

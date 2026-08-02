@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RegisterSessionsViewContent } from "./RegisterSessionsView";
+import { formatRegisterSessionDate } from "./registerSessionTimestamps";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -41,14 +42,7 @@ describe("RegisterSessionsViewContent", () => {
   it("renders all register sessions in a ledger table", () => {
     const closedAt = new Date("2026-04-29T18:30:00.000Z").getTime();
     const openedAt = new Date("2026-04-29T07:40:00.000Z").getTime();
-    const expectedTimelineDate = new Date(openedAt).toLocaleDateString(
-      "en-US",
-      {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      },
-    );
+    const expectedTimelineDate = formatRegisterSessionDate(openedAt);
     const expectedTimelineRange = `${new Date(openedAt).toLocaleTimeString(
       "en-US",
       {

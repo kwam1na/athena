@@ -34,6 +34,7 @@ import {
   CommandApprovalProofResult,
 } from "@/components/operations/CommandApprovalDialog";
 import { toApprovalRequesterBindingArg } from "@/components/operations/approvalRequesterBinding";
+import { formatRegisterSessionTimestamp } from "./registerSessionTimestamps";
 import { useApprovedCommand } from "@/components/operations/useApprovedCommand";
 import {
   isApprovalRequiredResult,
@@ -4063,7 +4064,7 @@ export function RegisterSessionViewContent({
   const shouldShowCloseoutSummary = Boolean(closeoutState);
   const closeoutTimestamp =
     registerSession?.status === "closed" && registerSession.closedAt
-      ? formatTimestamp(registerSession.closedAt)
+      ? formatRegisterSessionTimestamp(registerSession.closedAt)
       : undefined;
   const closeoutActorLine = isRegisterCloseoutSyncReview
     ? "Synced closeout not applied yet; manager approval is required."
@@ -5186,7 +5187,9 @@ export function RegisterSessionViewContent({
                           Opened
                         </dt>
                         <dd className="text-sm font-medium text-foreground">
-                          {formatTimestamp(registerSession.openedAt)}
+                          {formatRegisterSessionTimestamp(
+                            registerSession.openedAt,
+                          )}
                         </dd>
                         <dd className="text-xs text-muted-foreground">
                           {openedByLine}
