@@ -17,7 +17,7 @@ import { expenseReportColumns, ExpenseReportRow } from "./expenseReportColumns";
 import { toExpenseReportRows } from "./expenseReportRows";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getOrigin } from "~/src/lib/navigationUtils";
-import { getRelativeTime } from "~/src/lib/utils";
+import { RelativeTimestamp } from "../../ui/relative-timestamp";
 
 // Helper to check if timestamp is today
 const isToday = (timestamp: number) => {
@@ -147,7 +147,7 @@ function ExpenseReportMobileCard({ report }: { report: ExpenseReportRow }) {
             Completed
           </dt>
           <dd className="min-w-0 truncate text-right text-sm leading-5 text-foreground">
-            {getRelativeTime(report.completedAt)}
+            <RelativeTimestamp value={report.completedAt} />
           </dd>
         </div>
         {report.notes ? (

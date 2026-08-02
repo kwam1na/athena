@@ -54,7 +54,8 @@ import { getOrigin } from "@/lib/navigationUtils";
 import { normalizeSkuSearchQuery } from "@/lib/stockOps/skuSearch";
 import type { CommandResult } from "~/shared/commandResult";
 import { currencyFormatter } from "~/shared/currencyFormatter";
-import { capitalizeWords, cn, getRelativeTime } from "@/lib/utils";
+import { capitalizeWords, cn } from "@/lib/utils";
+import { RelativeTimestamp } from "@/components/ui/relative-timestamp";
 import { StockAdjustmentWorkspaceContent } from "./StockAdjustmentWorkspace";
 import type {
   CycleCountDraftSummary,
@@ -1036,11 +1037,13 @@ function QueueWorkItemCard({
         },
         {
           label: "Scheduled",
-          value: item.dueAt ? getRelativeTime(item.dueAt) : "Not scheduled",
+          value: (
+            <RelativeTimestamp fallback="Not scheduled" value={item.dueAt} />
+          ),
         },
         {
           label: "Created",
-          value: getRelativeTime(item.createdAt),
+          value: <RelativeTimestamp value={item.createdAt} />,
         },
       ]
       : [
@@ -1054,11 +1057,13 @@ function QueueWorkItemCard({
         },
         {
           label: "Created",
-          value: getRelativeTime(item.createdAt),
+          value: <RelativeTimestamp value={item.createdAt} />,
         },
         {
           label: "Due",
-          value: item.dueAt ? getRelativeTime(item.dueAt) : "Not scheduled",
+          value: (
+            <RelativeTimestamp fallback="Not scheduled" value={item.dueAt} />
+          ),
         },
       ];
   const purchaseOrderCollapsedMetadataEntries: OperationReviewMetadataEntry[] =
@@ -1105,7 +1110,7 @@ function QueueWorkItemCard({
       },
       {
         label: "Created",
-        value: getRelativeTime(item.createdAt),
+        value: <RelativeTimestamp value={item.createdAt} />,
       },
     ];
   const dailyCloseCollapsedMetadataEntries: OperationReviewMetadataEntry[] = [
@@ -1127,7 +1132,7 @@ function QueueWorkItemCard({
     },
     {
       label: "Created",
-      value: getRelativeTime(item.createdAt),
+      value: <RelativeTimestamp value={item.createdAt} />,
     },
   ];
   const unsupportedCollapsedMetadataEntries: OperationReviewMetadataEntry[] = [
@@ -1141,7 +1146,7 @@ function QueueWorkItemCard({
     },
     {
       label: "Created",
-      value: getRelativeTime(item.createdAt),
+      value: <RelativeTimestamp value={item.createdAt} />,
     },
   ];
   const catalogTaxonomyCollapsedMetadataEntries: OperationReviewMetadataEntry[] =
@@ -1160,7 +1165,7 @@ function QueueWorkItemCard({
       },
       {
         label: "Created",
-        value: getRelativeTime(item.createdAt),
+        value: <RelativeTimestamp value={item.createdAt} />,
       },
     ];
   const pendingCheckoutCollapsedMetadataEntries: OperationReviewMetadataEntry[] =
@@ -1205,7 +1210,7 @@ function QueueWorkItemCard({
     },
     {
       label: "Created",
-      value: getRelativeTime(item.createdAt),
+      value: <RelativeTimestamp value={item.createdAt} />,
     },
   ];
   const collapsedMetadataEntries =
@@ -1350,7 +1355,7 @@ function SyncedSaleInventoryReviewGroupCard({
     },
     {
       label: "Oldest",
-      value: getRelativeTime(oldestCreatedAt),
+      value: <RelativeTimestamp value={oldestCreatedAt} />,
     },
   ];
   const highestPriority = items.some((item) => item.priority === "high")
@@ -1430,7 +1435,7 @@ function SyncedSaleInventoryReviewGroupCard({
                     {lineCount !== undefined ? (
                       <span>{formatOptionalLineCount(lineCount)} affected</span>
                     ) : null}
-                    <span>{getRelativeTime(item.createdAt)}</span>
+                    <RelativeTimestamp value={item.createdAt} />
                   </span>
                 </li>
               );

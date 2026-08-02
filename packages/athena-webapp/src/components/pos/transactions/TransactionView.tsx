@@ -23,6 +23,7 @@ import { ComposedPageHeader } from "../../common/PageHeader";
 import { api } from "~/convex/_generated/api";
 import { Badge } from "../../ui/badge";
 import { capitalizeWords, getRelativeTime } from "~/src/lib/utils";
+import { RelativeTimestamp } from "../../ui/relative-timestamp";
 import { PosPaymentMethod } from "~/src/lib/pos/domain";
 import { OrderSummary } from "../OrderSummary";
 import type { ReceiptDeliveryHistoryEntry } from "../receipt/PosReceiptShareControl";
@@ -964,9 +965,7 @@ export function TransactionView() {
     registerAllowsVoid &&
     !hasPendingVoidApprovalRequest;
   const transactionStatusLabel = isVoidedTransaction ? "Voided" : "Completed";
-  const transactionStatusTime = getRelativeTime(
-    transactionVoidedAt ?? transaction.completedAt,
-  );
+  const transactionStatusAt = transactionVoidedAt ?? transaction.completedAt;
 
   async function authenticateCorrectionStaff(args: {
     pinHash: string;
@@ -1578,7 +1577,7 @@ export function TransactionView() {
                       )}
                       {transactionStatusLabel}
                       <p className="text-xs text-muted-foreground">
-                        {transactionStatusTime}
+                        <RelativeTimestamp value={transactionStatusAt} />
                       </p>
                     </Badge>
                   </div>
@@ -1826,7 +1825,7 @@ export function TransactionView() {
                       <div className="flex items-center justify-between gap-3">
                         <dt className="text-muted-foreground">Voided</dt>
                         <dd className="font-medium text-foreground">
-                          {getRelativeTime(transactionVoidedAt)}
+                          <RelativeTimestamp value={transactionVoidedAt} />
                         </dd>
                       </div>
                     ) : null}
