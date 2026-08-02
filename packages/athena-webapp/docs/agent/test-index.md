@@ -256,6 +256,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/reports/rollups.test.ts`](../../convex/reports/rollups.test.ts)
 - [`convex/reports/sweeper.test.ts`](../../convex/reports/sweeper.test.ts)
 - [`convex/reports/verify.test.ts`](../../convex/reports/verify.test.ts)
+- [`convex/reports/weeklyPeriods.test.ts`](../../convex/reports/weeklyPeriods.test.ts)
 - [`convex/schemas/pos/posTerminal.test.ts`](../../convex/schemas/pos/posTerminal.test.ts)
 - [`convex/schemas/pos/posTransactionServiceLine.test.ts`](../../convex/schemas/pos/posTransactionServiceLine.test.ts)
 - [`convex/serviceOps/catalogAppointments.test.ts`](../../convex/serviceOps/catalogAppointments.test.ts)

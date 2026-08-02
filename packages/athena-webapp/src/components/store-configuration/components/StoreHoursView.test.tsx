@@ -134,6 +134,7 @@ describe("StoreHoursView", () => {
                 }),
               ]),
               timezone: "Africa/Accra",
+              reportingCycleStartsOn: 1,
               weeklyClosedDays: expect.arrayContaining([0]),
               weeklyWindows: expect.arrayContaining([
                 expect.objectContaining({
@@ -149,6 +150,29 @@ describe("StoreHoursView", () => {
     },
     15_000,
   );
+
+  it("saves the reporting-cycle weekday without using store hours as a report filter", async () => {
+    const user = userEvent.setup();
+    render(<StoreHoursView />);
+
+    await user.click(
+      screen.getByRole("combobox", { name: "Reporting cycle starts" }),
+    );
+    await user.click(await screen.findByRole("option", { name: "Wednesday" }));
+    await user.click(screen.getByLabelText("Confirm suggested store hours"));
+    await user.click(screen.getByRole("button", { name: "Save store hours" }));
+
+    await waitFor(() =>
+      expect(mockUpdateSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({
+          schedule: expect.objectContaining({ reportingCycleStartsOn: 3 }),
+        }),
+      ),
+    );
+    expect(
+      screen.getByText("Report sales are included by scheduled day, not store hours."),
+    ).toBeInTheDocument();
+  });
 
   it("keeps non-full-admin accounts in a read-only summary state", () => {
     mockHasFullAdminAccess = false;

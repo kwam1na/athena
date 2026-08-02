@@ -7,7 +7,7 @@ topic: reports-workspace
 
 ## Summary
 
-Athena should add a store-scoped Reports workspace for full administrators. The workspace should provide a balanced, week-to-date view of business performance across POS products, POS services, storefront orders, and service cases, with SKU-first inventory and item analysis beneath the business totals. A shared catalog lookup should let an administrator find a product by name, SKU, or barcode and open the relevant SKU report directly.
+Athena should add a store-scoped Reports workspace for full administrators. The workspace should provide a balanced, schedule-aware week-to-date view of business performance across POS products, POS services, storefront orders, and service cases, then preserve that view as a close-aware end-of-week report after the final scheduled operating day's Daily Close. SKU-first inventory and item analysis should sit beneath the business totals, and a shared catalog lookup should let an administrator find a product by name, SKU, or barcode and open the relevant SKU report directly.
 
 Reports should explain what changed, disclose when data is incomplete, and route the administrator to the existing Athena workflow that owns corrective action. It should not become another work queue, a general ledger, or an accounting system.
 
@@ -22,6 +22,8 @@ The current Analytics route is narrower than its name suggests. It communicates 
 The product must also avoid presenting false precision. SKU cost is optional today, POS and storefront sale lines do not preserve an immutable cost basis, receiving does not calculate moving weighted-average cost, ordinary trusted SKU sale history lacks the dedicated lookup path already available for provisional SKU evidence, and inventory movement history is not yet complete enough for every historical valuation claim. These are requirements-level foundations, not details that planning may silently omit.
 
 Administrators also have no direct way to start with a product they already have in mind. Finding one SKU's report currently depends on encountering it in the selected period's item results, which makes quiet, inactive, or historically relevant catalog items difficult to investigate.
+
+Full administrators currently calculate weekly performance manually because the required sales, payments, variance, Daily Close, and inventory-review evidence is spread across unrelated Athena surfaces. A calendar week also does not faithfully describe every store: which dates belong to the operating week comes from Store Schedule, while financial activity can still occur outside configured operating hours or on a date the store marks non-operational.
 
 ---
 
@@ -41,6 +43,8 @@ Administrators also have no direct way to start with a product they already have
 | Data integrity             | Daily Close preserves source completeness; POS runtime and terminal state expose delayed or uncertain synchronization.                                                                                           | Every report must expose freshness, completeness, and omitted-value reasons.                                                                                 |
 | Expense data               | Expense transactions represent inventory items consumed at recorded item cost.                                                                                                                                   | Label this as inventory expense or inventory consumed, not general operating expense.                                                                        |
 | Catalog SKU lookup         | Athena can search the active store's product catalog by product name, SKU, and barcode and return variant identity.                                                                                              | Reports can use catalog identity to navigate to a SKU report even when that SKU has no activity in the selected period.                                      |
+| Store Schedule             | Store Schedule is effective-dated and distinguishes recurring operating days, date-specific closures, timezone, and operating windows.                                                                          | Reporting-day membership should follow the effective scheduled dates, while opening and closing times must never filter financial activity.                  |
+| Synced inventory review    | Open Work owns grouped synced-sale inventory reviews when units moved but authoritative inventory could not be updated safely.                                                                                    | The weekly briefing should surface open review groups as its inventory-attention posture instead of inventing a generic low-stock model.                       |
 
 ---
 
@@ -95,6 +99,20 @@ Administrators also have no direct way to start with a product they already have
   - **Steps:** From either primary Reports tab, the administrator searches by product name, SKU, or barcode, chooses a variant from product-grouped results, and opens that SKU's report for the currently selected period.
   - **Outcome:** The administrator reaches the intended SKU report without scanning the item table or leaving Reports; returning restores the originating tab and period with the lookup cleared.
   - **Covered by:** R64-R74
+
+- F7. Review and preserve the operating week
+  - **Trigger:** A full administrator opens Reports during the week, or Daily Close completes on the final scheduled operating date.
+  - **Actors:** A1, A2
+  - **Steps:** Athena resolves the dates included by the effective Store Schedule, counts all recognized activity on those local dates regardless of operating hour, compares the same elapsed scheduled dates with the preceding equivalent week, and preserves the completed briefing after the final scheduled date closes.
+  - **Outcome:** The administrator can replace manual weekly reconciliation with one live briefing and later return to the accepted EOW record without losing visible amendments.
+  - **Covered by:** R75-R91
+
+- F8. Review weekly controls and inventory uncertainty
+  - **Trigger:** The administrator scans the payments, variance, or inventory-attention sections of the weekly briefing.
+  - **Actors:** A1, A2, A3
+  - **Steps:** Athena separates sales from payment collection, presents cash/register and close-to-current variances, groups open synced-sale inventory reviews into new and carried-forward work, and links each issue to its owning operational workflow.
+  - **Outcome:** The administrator understands whether the week's value was collected and which inventory results remain untrustworthy without Reports becoming an action queue.
+  - **Covered by:** R92-R103
 
 ---
 
@@ -204,6 +222,46 @@ Administrators also have no direct way to start with a product they already have
 - R73. Returning from the drill-down must restore the originating Reports tab and reporting period while clearing the prior query and result list.
 - R74. A catalog SKU with no activity in the inherited period must still open successfully and show a clear no-activity state rather than being omitted or treated as an error.
 
+### Schedule-Aware Weekly Reporting
+
+- R75. Store Schedule must own a configurable reporting-cycle start weekday, defaulting to Monday, and the effective schedule must determine which store-local dates are included within each seven-day cycle.
+- R76. Monday through Saturday is the initial result for stores whose reporting cycle starts Monday and whose operational days are configured Monday through Saturday, not a permanent product constant.
+- R77. Recurring non-operational weekdays and date-specific closures must be excluded from headline weekly totals and disclosed as outside-schedule dates when reportable activity exists.
+- R78. Opening time, closing time, split windows, and cross-midnight operating hours must not filter recognized financial activity on a scheduled local date.
+- R79. The live week-to-date comparison must use the same elapsed scheduled dates from the immediately preceding equivalent reporting week.
+- R80. Once the week is complete, the comparison must use the full immediately preceding equivalent scheduled period.
+- R81. Scheduled dates with zero activity must remain visible and distinguishable from missing, provisional, stale, or incomplete data.
+- R82. A later Store Schedule change must affect future reporting periods without silently changing the date membership of preserved historical reports.
+- R83. Activity on an outside-schedule date must remain visible as a separately labeled amount and must not be rolled into either adjacent reporting week.
+- R84. Report period and comparison labels must communicate the resolved scheduled dates rather than imply a fixed ISO or calendar week.
+- R84a. Changing the configured reporting-cycle start or operational-day membership must be effective-dated so future periods use the new definition without reinterpreting preserved historical periods.
+
+### End-of-Week Briefing Lifecycle
+
+- R85. Reports must provide a live week-to-date briefing that becomes the EOW report after Daily Close completes on the final scheduled operating date of the effective week.
+- R86. Completing the final scheduled date's Daily Close must create or accept the historical EOW record automatically; manual report finalization is not required.
+- R87. A preserved EOW report must retain the schedule context, accepted Daily Close evidence, metric definitions, source-completeness posture, and comparison period used at completion.
+- R88. Valid activity learned after EOW completion must update current reporting truth through a separately identified amendment without rewriting the accepted EOW values.
+- R89. Historical EOW reports must remain available to full administrators for the selected store.
+- R90. The briefing must be read-only and route investigation or resolution to the existing Athena workflow that owns the evidence.
+- R91. The briefing must distinguish scheduled zero-activity dates, unsettled live dates, accepted closed dates, and amended dates.
+
+### Weekly Performance and Control Posture
+
+- R92. Unified net sales must be the primary weekly financial headline, with gross sales and refunds shown as supporting values.
+- R93. Net sales, gross sales, refunds, merchandise gross profit, merchandise gross margin, and payment collection must show their change from the applicable prior period when both periods support the comparison.
+- R94. Merchandise gross profit and margin must be withheld when cost coverage is insufficient and must never use current catalog cost to estimate missing historical cost.
+- R95. The units-moved section must show merchandise units sold, units returned or corrected, and net units moved.
+- R96. Payment posture must show collected, refunded, allocated, and unsettled value while keeping sales recognition distinct from settlement.
+- R97. Payment-method mix may support the payment posture only when its covered sources and omitted value are disclosed and it reconciles to the displayed payment total.
+- R98. Variance posture must include cash/register variance and any difference between accepted Daily Close values and the latest reporting truth.
+- R99. Inventory attention must use open synced-sale inventory review groups rather than generic low-stock, velocity, or days-of-cover signals in the EOW briefing.
+- R100. Open synced-sale inventory review groups must be separated into work created during the reporting week and work carried forward from an earlier period.
+- R101. Repeated open synced-sale review items for the same affected SKU must follow the existing operational grouping semantics rather than inflating the inventory-attention count.
+- R102. Each payment, variance, or inventory-attention section must preserve a route to the workflow that owns resolution without allowing the report to mutate that workflow's records.
+- R103. All weekly sections must disclose omitted, stale, incomplete, provisional, or amended evidence that could materially change the presented conclusion.
+- R104. Reports must expose the live and historical weekly briefing in an additive Weekly workspace tab beside Overview and Items. Overview remains the default route and retains its existing period controls, search state, query behavior, and visual hierarchy.
+
 ---
 
 ## Metric Contract
@@ -225,6 +283,10 @@ Administrators also have no direct way to start with a product they already have
 | Purchase commitment      | Remaining ordered quantity and value for purchase orders that have not been fully received or cancelled, separated by planned versus inbound state.             |
 | Refund activity          | Financial refund value processed during the selected period, regardless of original sale date.                                                                  |
 | Adjusted SKU performance | SKU outcome with later refunds, returns, and applied corrections attributed to the original sale for product-performance analysis.                              |
+| Payment posture          | Collected, refunded, allocated, and unsettled payment value for the reporting period, kept distinct from recognized sales and qualified by source coverage.      |
+| Outside-schedule activity | Recognized activity on a store-local date the effective Store Schedule marks non-operational, disclosed separately and excluded from weekly headline totals.      |
+| Weekly variance posture  | Cash/register variance plus the difference between accepted close evidence and the latest reconciled reporting truth.                                            |
+| Inventory review posture | Open synced-sale inventory review groups, split between work created during the reporting week and work carried forward from an earlier period.                  |
 
 ---
 
@@ -243,6 +305,12 @@ Administrators also have no direct way to start with a product they already have
 - AE11. **Covers R64-R71.** Given an administrator is on Overview and searches a product name shared by several variants, Reports groups the results under the product, shows enough variant identity to distinguish them, and opens the selected SKU's existing drill-down.
 - AE12. **Covers R65, R67, R70, R74.** Given a catalog SKU has no activity in the selected period, an exact SKU or barcode query still places it ahead of broader matches, and selecting it opens a no-activity SKU report rather than returning no result.
 - AE13. **Covers R72, R73.** Given an administrator searches from the Items tab while viewing trailing 30 days, the selected SKU opens with trailing 30 days preserved; returning restores Items and trailing 30 days with the lookup cleared.
+- AE14. **Covers R75-R78, R83, R84, R84a.** Given the effective Store Schedule starts its reporting cycle Monday, marks Monday through Saturday operational, and marks Sunday non-operational, a Saturday sale after configured closing time remains in the weekly headline while a Sunday sale appears only as outside-schedule activity. If a later effective schedule makes Sunday operational or changes the cycle start, future reports use that definition without rewriting preserved reports.
+- AE15. **Covers R79-R81, R92-R95.** Given the administrator opens Reports on Thursday and Wednesday had zero sales, the live briefing shows the scheduled zero-activity Wednesday and compares Monday through Thursday with the same scheduled dates from the preceding week.
+- AE16. **Covers R85-R91.** Given Daily Close completes on the final scheduled operating date, Athena preserves the EOW report automatically. A late-synchronized sale for an included date leaves the accepted values intact and appears as an explicit amendment to current truth.
+- AE17. **Covers R96-R98, R102, R103.** Given sales were recognized but part of the payment value remains unallocated and one register has a variance, the briefing keeps sales and settlement separate, shows the unsettled value and register variance, discloses incomplete coverage, and links to the owning workflows.
+- AE18. **Covers R99-R102.** Given two synced-sale inventory review items for the same SKU were created this week and one group remains open from a prior week, the briefing follows existing SKU grouping, shows one new group and one carried-forward group, and routes both to Open Work without changing stock.
+- AE19. **Covers R104.** Given a full administrator opens Reports, Overview remains the default and behaves as it did before the EOW feature. Selecting Weekly opens the live or historical weekly briefing on its own route, and returning to Overview restores its independent period state without starting a weekly query there.
 
 ---
 
@@ -256,6 +324,10 @@ Administrators also have no direct way to start with a product they already have
 - Reports reliably routes attention to existing operational workspaces and does not duplicate their mutation behavior.
 - The metric contract is stable enough for later service-cost and organization-rollup work without changing the meaning of the initial merchandise metrics.
 - Planning can proceed without inventing access, time-window, cost, refund, evidence, or workflow-ownership semantics.
+- A full administrator can replace manual weekly calculations with one live briefing and one preserved EOW record.
+- The same report behavior follows each store's effective scheduled dates without hard-coded weekday rules or operating-hour filtering.
+- Payment collection, operational variances, and inventory uncertainty remain understandable without conflating settlement, close evidence, or open work with recognized sales.
+- The Weekly briefing is additive to the Reports workspace; the current Overview remains the default and is unchanged apart from the shared navigation gaining the Weekly tab.
 
 ---
 
@@ -271,6 +343,9 @@ Administrators also have no direct way to start with a product they already have
 - Operator-configurable goals and thresholds are deferred; initial attention signals are deterministic and grounded in existing Athena facts or explicitly defined report rules.
 - Catalog lookup is a navigation aid, not a filter for overview cards or the Items table, and it does not add an inline analytics preview to search results.
 - Restoring a prior lookup query or result list after returning from SKU detail is excluded from the initial behavior.
+- The EOW briefing does not use generic low-stock thresholds, sales velocity, estimated days of cover, or manually selected SKUs as its inventory-attention source.
+- Outside-schedule activity is disclosed but is not reassigned to an adjacent reporting week.
+- The report does not require manual finalization and does not resolve payments, cash variance, or inventory review work directly.
 - Implementation-level schemas, indexes, query decomposition, backfill mechanics, component structure, and deployment sequencing belong to planning.
 
 ---
@@ -291,6 +366,11 @@ Administrators also have no direct way to start with a product they already have
 - Product-grouped variant selection: Results lead with the product name while preserving exact SKU selection for report accuracy.
 - Period continuity without query persistence: The selected reporting context survives drill-down navigation, while the transient lookup clears on return.
 - Storefront Analytics becomes subordinate: Engagement remains useful context but no longer occupies the top-level business-reporting identity.
+- Schedule-derived reporting dates: Store Schedule decides which local dates participate; operating windows provide operational context but never filter financial facts.
+- Configurable cycle anchor: Store Schedule owns the reporting-cycle start weekday, defaulting to Monday, so seven-day periods remain deterministic for irregular and seven-day operating schedules.
+- Close-aware weekly lifecycle: The briefing remains live during the week, is accepted automatically after the final scheduled date's Daily Close, and preserves later changes as amendments.
+- Sales and settlement stay separate: Unified net sales leads the report, while collection, refund, allocation, and unsettled value form a distinct payment posture.
+- Existing inventory uncertainty owns attention: Open synced-sale inventory reviews replace speculative low-stock or velocity alerts in the EOW briefing.
 
 ---
 
@@ -303,6 +383,10 @@ Administrators also have no direct way to start with a product they already have
 - Historical data without a trustworthy cost basis will remain visibly incomplete rather than being silently estimated.
 - Product and category rollups can be derived from stable SKU identity even when display names or merchandising attributes change later.
 - Store catalog identity remains available independently of reporting-period activity, including for inactive or historically relevant SKUs.
+- Store Schedule can resolve recurring operational days, date-specific closures, and the final scheduled operating date for both current and historical periods.
+- Store Schedule can preserve an effective-dated reporting-cycle start alongside its operational-day configuration.
+- Daily Close completion and preserved close evidence remain authoritative lifecycle inputs without preventing later reporting amendments.
+- Existing Open Work grouping and ownership for synced-sale inventory reviews remain authoritative.
 
 ---
 
@@ -321,6 +405,10 @@ Administrators also have no direct way to start with a product they already have
 - [Affects R39-R42][Technical] Define the durable trusted-SKU transaction lookup across POS and storefront sale lines.
 - [Affects R42, R46][Technical] Define how live partial-day facts and completed Daily Close snapshots combine without double counting or silently rewriting a closed day.
 - [Affects R64-R74][Technical] Define the URL and navigation-state contract that preserves the originating Reports tab and selected period without persisting the transient lookup.
+- [Affects R75-R84][Technical] Define bounded, effective-dated schedule resolution for current, comparison, and preserved historical report periods, including weeks with date-specific closures or no scheduled dates.
+- [Affects R85-R91][Technical] Define idempotent EOW acceptance, historical retrieval, and amendment behavior when the final scheduled Daily Close is reopened, superseded, or followed by late activity.
+- [Affects R92-R98][Technical] Define the bounded projection contract that composes weekly reporting metrics, payment posture, accepted close evidence, and current variance without double counting.
+- [Affects R99-R102][Technical] Define the store-scoped read contract that reuses Open Work's grouped synced-sale inventory-review lifecycle and classifies new versus carried-forward groups.
 
 ---
 

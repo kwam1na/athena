@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import {
   getMissingStoreScheduleContext,
+  nextReportingCycleBoundary,
   resolveStoreScheduleContext,
   validateStoreScheduleDraft,
   type StoreScheduleDraft,
@@ -270,6 +271,28 @@ describe("store schedule resolver", () => {
 });
 
 describe("store schedule validation", () => {
+  it("defaults legacy schedules to a Monday reporting-cycle start", () => {
+    expect(baseSchedule().reportingCycleStartsOn).toBeUndefined();
+    expect(
+      validateStoreScheduleDraft(baseSchedule({ reportingCycleStartsOn: 7 })),
+    ).toMatchObject({
+      ok: false,
+      fields: {
+        reportingCycleStartsOn: ["Choose a valid reporting-cycle weekday."],
+      },
+    });
+  });
+
+  it("stages anchor changes at the next boundary under the current anchor", () => {
+    expect(
+      nextReportingCycleBoundary({
+        at: Date.parse("2026-07-01T16:00:00.000Z"),
+        reportingCycleStartsOn: 1,
+        timezone: "America/New_York",
+      }),
+    ).toBe(Date.parse("2026-07-06T04:00:00.000Z"));
+  });
+
   it("rejects invalid timezones and overlapping weekly windows", () => {
     const result = validateStoreScheduleDraft(
       baseSchedule({
