@@ -1,7 +1,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 
 import { DataTableColumnHeader } from "~/src/components/base/table/data-table-column-header";
-import { getRelativeTime } from "@/lib/utils";
+import { RelativeTimestamp } from "@/components/ui/relative-timestamp";
 import { Link } from "@tanstack/react-router";
 import { OnlineOrder } from "~/types";
 import {
@@ -242,7 +242,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
           search={{ orderStatus: s, o: getOrigin() }}
         >
           <p className="text-muted-foreground">
-            {getRelativeTime(row.getValue<number>("placedAt"))}
+            <RelativeTimestamp value={row.getValue<number>("placedAt")} />
           </p>
         </Link>
       );

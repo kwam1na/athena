@@ -8,6 +8,7 @@ import {
   RegisterSessionView,
   RegisterSessionViewContent,
 } from "./RegisterSessionView";
+import { formatRegisterSessionTimestamp } from "./registerSessionTimestamps";
 
 const routerMocks = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -2854,10 +2855,7 @@ describe("RegisterSessionViewContent", () => {
 
   it("communicates when a register session has closed", () => {
     const closedAt = new Date("2026-04-21T19:45:00.000Z").getTime();
-    const expectedClosedAt = new Date(closedAt).toLocaleString("en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
+    const expectedClosedAt = formatRegisterSessionTimestamp(closedAt);
 
     render(
       <RegisterSessionViewContent
@@ -3047,10 +3045,7 @@ describe("RegisterSessionViewContent", () => {
 
   it("keeps closed metadata structured when closer staff is missing", () => {
     const closedAt = new Date("2026-04-21T19:45:00.000Z").getTime();
-    const expectedClosedAt = new Date(closedAt).toLocaleString("en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
+    const expectedClosedAt = formatRegisterSessionTimestamp(closedAt);
 
     render(
       <RegisterSessionViewContent

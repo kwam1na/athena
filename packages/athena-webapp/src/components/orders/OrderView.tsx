@@ -20,11 +20,8 @@ import { LoadingButton } from "../ui/loading-button";
 import { useState } from "react";
 import { useAction, useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
-import {
-  currencyFormatter,
-  getRelativeTime,
-  slugToWords,
-} from "~/src/lib/utils";
+import { currencyFormatter, slugToWords } from "~/src/lib/utils";
+import { RelativeTimestamp } from "../ui/relative-timestamp";
 import { toast } from "sonner";
 
 import {
@@ -483,7 +480,7 @@ const Header = () => {
                 hour: "numeric",
                 minute: "2-digit",
               })}{" "}
-              · {getRelativeTime(orderPlacedAt)}
+              · <RelativeTimestamp value={orderPlacedAt} />
             </p>
           </div>
         </div>

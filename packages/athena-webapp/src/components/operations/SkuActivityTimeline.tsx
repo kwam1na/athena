@@ -1,6 +1,7 @@
 import { AlertTriangle, Circle, PackageSearch } from "lucide-react";
 
-import { capitalizeWords, cn, getRelativeTime } from "~/src/lib/utils";
+import { capitalizeWords, cn } from "~/src/lib/utils";
+import { RelativeTimestamp } from "../ui/relative-timestamp";
 import { Badge } from "../ui/badge";
 
 export type SkuActivitySourceType =
@@ -463,7 +464,7 @@ export function SkuActivityTimeline({
                     </div>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {getRelativeTime(row.occurredAt)} ·{" "}
+                    <RelativeTimestamp value={row.occurredAt} /> ·{" "}
                     {formatBackendLabel(row.sourceType)}
                   </p>
                 </div>

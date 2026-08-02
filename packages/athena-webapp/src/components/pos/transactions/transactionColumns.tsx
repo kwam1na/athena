@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Banknote, CreditCardIcon, Smartphone, WalletCards } from "lucide-react";
 
 import { DataTableColumnHeader } from "../../base/table/data-table-column-header";
-import { getRelativeTime } from "~/src/lib/utils";
+import { RelativeTimestamp } from "../../ui/relative-timestamp";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import type { Id } from "~/convex/_generated/dataModel";
 import { WorkflowTraceRouteLink } from "../../traces/WorkflowTraceRouteLink";
@@ -173,7 +173,7 @@ export const transactionColumns: ColumnDef<CompletedTransactionRow>[] = [
         search={{ o: getOrigin() }}
         className="text-muted-foreground text-sm"
       >
-        {getRelativeTime(row.original.completedAt)}
+        <RelativeTimestamp value={row.original.completedAt} />
       </Link>
     ),
     enableSorting: false,

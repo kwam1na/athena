@@ -108,6 +108,8 @@ export const reportOverviewSchema = v.object({
       status: dayStatus,
       // Optional during the rolling overview-document migration.
       unitsSold: v.optional(v.number()),
+      // Absent for days with no register close; see ReportTrendPoint.
+      transactionCount: v.optional(v.number()),
     }),
   ),
   trust: v.object({

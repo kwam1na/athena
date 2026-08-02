@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 import { Link } from "@tanstack/react-router";
 import {
@@ -13,7 +14,8 @@ import {
 } from "lucide-react";
 
 import { getOrigin } from "~/src/lib/navigationUtils";
-import { cn, getRelativeTime } from "~/src/lib/utils";
+import { cn } from "~/src/lib/utils";
+import { RelativeTimestamp } from "../ui/relative-timestamp";
 import { ListPagination } from "../common/ListPagination";
 import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
 import { Badge } from "../ui/badge";
@@ -400,7 +402,10 @@ function SourceList({
                     </span>{" "}
                     completed
                   </span>
-                  <span>Latest sale {getRelativeTime(source.lastActivityAt)}</span>
+                  <RelativeTimestamp
+                    prefix="Latest sale"
+                    value={source.lastActivityAt}
+                  />
                 </div>
                 <p className="break-all text-xs leading-5 text-muted-foreground">
                   {source.lookupLabel ?? "No lookup recorded"}
@@ -429,7 +434,7 @@ function SummaryMetric({
 }: {
   helper?: string;
   label: string;
-  value: string;
+  value: ReactNode;
 }) {
   return (
     <div className="rounded-md border border-border bg-background/70 px-3 py-2">
@@ -535,7 +540,7 @@ function SelectedSourceDetail({
             <SummaryMetric
               helper="Completed sale evidence"
               label="Latest sale"
-              value={getRelativeTime(loadingSource.lastActivityAt)}
+              value={<RelativeTimestamp value={loadingSource.lastActivityAt} />}
             />
           </div>
         </div>
@@ -647,7 +652,9 @@ function SelectedSourceDetail({
           <SummaryMetric
             helper="Completed sale evidence"
             label="Latest sale"
-            value={getRelativeTime(selected.source.lastActivityAt)}
+            value={
+              <RelativeTimestamp value={selected.source.lastActivityAt} />
+            }
           />
         </div>
       </div>
@@ -692,7 +699,7 @@ function SelectedSourceDetail({
                         </span>
                       </Link>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {getRelativeTime(row.completedAt)}
+                        <RelativeTimestamp value={row.completedAt} />
                       </p>
                     </div>
                     <div className="shrink-0 text-left sm:text-right">

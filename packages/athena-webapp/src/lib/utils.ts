@@ -50,6 +50,16 @@ export function snakeCaseToWords(input: string): string {
   return input.replace(/_/g, " ");
 }
 
+export function formatAbsoluteTimestamp(
+  timestamp: number,
+  precision: "datetime" | "date" = "datetime",
+) {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    ...(precision === "datetime" ? { timeStyle: "short" as const } : {}),
+  }).format(new Date(timestamp));
+}
+
 export function getRelativeTime(timestamp: number) {
   const now = Date.now();
   const diff = now - timestamp; // Difference in milliseconds

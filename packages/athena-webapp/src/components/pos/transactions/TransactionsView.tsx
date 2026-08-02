@@ -30,7 +30,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { formatRegisterSessionCode } from "~/src/lib/pos/presentation/registerSessionCode";
-import { getRelativeTime } from "~/src/lib/utils";
+import { RelativeTimestamp } from "../../ui/relative-timestamp";
 import type { Id } from "~/convex/_generated/dataModel";
 import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import { createSharedDemoTransactionFixtures } from "@/components/shared-demo/sharedDemoTransactionsFixture";
@@ -363,7 +363,7 @@ function TransactionMobileCard({
             Completed
           </dt>
           <dd className="min-w-0 truncate text-right text-sm leading-5 text-foreground">
-            {getRelativeTime(transaction.completedAt)}
+            <RelativeTimestamp value={transaction.completedAt} />
           </dd>
         </div>
       </dl>

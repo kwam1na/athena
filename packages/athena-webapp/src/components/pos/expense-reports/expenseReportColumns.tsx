@@ -2,7 +2,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Link } from "@tanstack/react-router";
 
 import { DataTableColumnHeader } from "../../base/table/data-table-column-header";
-import { getRelativeTime } from "~/src/lib/utils";
+import { RelativeTimestamp } from "../../ui/relative-timestamp";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import type { Id } from "~/convex/_generated/dataModel";
 
@@ -110,7 +110,7 @@ export const expenseReportColumns: ColumnDef<ExpenseReportRow>[] = [
         search={{ o: getOrigin() }}
         className="text-muted-foreground text-sm"
       >
-        {getRelativeTime(row.original.completedAt)}
+        <RelativeTimestamp value={row.original.completedAt} />
       </Link>
     ),
     enableSorting: false,

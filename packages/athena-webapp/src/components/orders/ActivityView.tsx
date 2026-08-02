@@ -2,10 +2,10 @@ import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
 import {
   currencyFormatter,
-  getRelativeTime,
   slugToWords,
   snakeCaseToWords,
 } from "~/src/lib/utils";
+import { RelativeTimestamp } from "../ui/relative-timestamp";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { Circle } from "lucide-react";
 import { useMemo } from "react";
@@ -162,7 +162,7 @@ function ActivityItem({
         </div>
         {activity.date ? (
           <div className="ml-4 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-            <span>{getRelativeTime(activity.date)}</span>
+            <RelativeTimestamp value={activity.date} />
           </div>
         ) : null}
       </div>

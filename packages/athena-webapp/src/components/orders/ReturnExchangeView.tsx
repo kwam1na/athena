@@ -18,7 +18,8 @@ import { api } from "~/convex/_generated/api";
 import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 import { runCommand } from "~/src/lib/errors/runCommand";
-import { currencyFormatter, getRelativeTime } from "~/src/lib/utils";
+import { currencyFormatter } from "~/src/lib/utils";
+import { RelativeTimestamp } from "../ui/relative-timestamp";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import type { Id } from "~/convex/_generated/dataModel";
 import { getProductName } from "~/src/lib/productUtils";
@@ -446,7 +447,7 @@ export function ReturnExchangeViewContent({
                 <div>
                   <p className="text-sm font-medium">{event.message}</p>
                   <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                    <span>{getRelativeTime(event.createdAt)}</span>
+                    <RelativeTimestamp value={event.createdAt} />
                   </div>
                 </div>
               </div>

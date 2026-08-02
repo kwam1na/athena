@@ -10,14 +10,9 @@ import {
   type RegisterSessionIdentityModel,
 } from "../common/RegisterSessionIdentity";
 import { NotFoundView } from "../states/not-found/NotFoundView";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "../ui/tooltip";
+import { RelativeTimestamp } from "../ui/relative-timestamp";
 import { api } from "~/convex/_generated/api";
-import { capitalizeWords, getRelativeTime } from "~/src/lib/utils";
+import { capitalizeWords } from "~/src/lib/utils";
 import { useGetTerminal } from "@/hooks/useGetTerminal";
 
 export type WorkflowTraceHeaderModel = {
@@ -51,31 +46,6 @@ export type WorkflowTraceViewModel = {
 
 function formatTraceLabel(value: string) {
   return capitalizeWords(value.replaceAll("_", " ").replaceAll("-", " "));
-}
-
-function formatTraceTimestamp(timestamp: number) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(timestamp));
-}
-
-function RelativeTraceTimestamp({ timestamp }: { timestamp: number }) {
-  const relativeTimestamp = getRelativeTime(timestamp);
-  const fullTimestamp = formatTraceTimestamp(timestamp);
-
-  return (
-    <TooltipProvider delayDuration={150}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="cursor-default">{relativeTimestamp}</span>
-        </TooltipTrigger>
-        <TooltipContent className="px-2 py-1 text-xs">
-          {fullTimestamp}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
 }
 
 export function WorkflowTraceHeader({
@@ -137,7 +107,7 @@ export function WorkflowTraceTimeline({
                 </p>
               </div>
               <p className="text-xs ml-4 text-muted-foreground">
-                <RelativeTraceTimestamp timestamp={event.occurredAt} />
+                <RelativeTimestamp value={event.occurredAt} />
                 {` · ${formatTraceLabel(event.status)} · ${formatTraceLabel(event.kind)}`}
               </p>
             </div>

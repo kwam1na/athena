@@ -369,6 +369,7 @@ import type * as reports_reseed from "../reports/reseed.js";
 import type * as reports_reseedTestSupport from "../reports/reseedTestSupport.js";
 import type * as reports_rollups from "../reports/rollups.js";
 import type * as reports_sweeper from "../reports/sweeper.js";
+import type * as reports_transactionCounts from "../reports/transactionCounts.js";
 import type * as reports_verify from "../reports/verify.js";
 import type * as schemas_automation from "../schemas/automation.js";
 import type * as schemas_contextTracking from "../schemas/contextTracking.js";
@@ -950,6 +951,7 @@ declare const fullApi: ApiFromModules<{
   "reports/reseedTestSupport": typeof reports_reseedTestSupport;
   "reports/rollups": typeof reports_rollups;
   "reports/sweeper": typeof reports_sweeper;
+  "reports/transactionCounts": typeof reports_transactionCounts;
   "reports/verify": typeof reports_verify;
   "schemas/automation": typeof schemas_automation;
   "schemas/contextTracking": typeof schemas_contextTracking;

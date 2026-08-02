@@ -44,6 +44,7 @@ import {
   type PosReconciliationItem,
   type PosSyncStatusPresentation,
 } from "@/lib/pos/presentation/syncStatusPresentation";
+import { formatRegisterSessionTimestamp } from "./registerSessionTimestamps";
 
 const CLOSED_SESSION_PREVIEW_LIMIT = 3;
 
@@ -172,12 +173,7 @@ function formatStatusLabel(status: string) {
   return capitalizeWords(status.replaceAll("_", " "));
 }
 
-function formatTimestamp(timestamp: number) {
-  return new Date(timestamp).toLocaleString("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
+const formatTimestamp = formatRegisterSessionTimestamp;
 
 function formatRegisterName(registerNumber?: string | null) {
   const trimmedRegisterNumber = registerNumber?.trim();

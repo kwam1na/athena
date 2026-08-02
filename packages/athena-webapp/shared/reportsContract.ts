@@ -293,6 +293,13 @@ export type ReportTrendPoint = {
   status: ReportDayStatus;
   /** Optional while existing overview documents are refreshed by the sweeper. */
   unitsSold?: number;
+  /**
+   * Completed POS transactions for the day, read from the register close
+   * summary. Absent until the day is closed — an in-progress day has no
+   * settled count to report, and deriving one live would cost the overview
+   * read budget it exists to protect.
+   */
+  transactionCount?: number;
 };
 
 export type ReportTrustSummary = {
