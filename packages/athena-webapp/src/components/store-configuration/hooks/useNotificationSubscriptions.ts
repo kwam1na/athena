@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import { SUBSCRIPTION_RESOLUTION_CAP } from "~/convex/notifications/deliveryPolicy";
 import { notificationCategoryValidator } from "~/convex/schemas/notifications";
 import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { runCommand } from "~/src/lib/errors/runCommand";
@@ -51,13 +52,12 @@ export const NOTIFICATION_CATEGORY_COPY: Record<
 };
 
 /**
- * Mirrors SUBSCRIPTION_RESOLUTION_CAP in convex/notifications/dispatch.ts. The
- * server stays authoritative — this copy only lets the surface stop an operator
- * before a doomed write. It is not imported from dispatch.ts because that
- * module registers Convex functions and cannot be pulled into the browser
- * bundle.
+ * Re-exported from convex/notifications/deliveryPolicy.ts, which is pure
+ * (no Convex server imports) and safe to pull into the browser bundle. The
+ * server stays authoritative — this alias only lets the surface stop an
+ * operator before a doomed write, under the name existing call sites use.
  */
-export const SUBSCRIPTION_CATEGORY_RECIPIENT_CAP = 200;
+export const SUBSCRIPTION_CATEGORY_RECIPIENT_CAP = SUBSCRIPTION_RESOLUTION_CAP;
 
 const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

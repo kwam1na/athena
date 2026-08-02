@@ -29,6 +29,11 @@ export const DELIVERY_LEASE_MAX_MS = 9 * 60_000;
 export const MAX_DELIVERIES_PER_DISPATCH = 25;
 export const SWEEPER_INTENT_PICKUP_DELAY_MS = 60_000;
 
+// Single source of truth for the per-(org, category) subscription bound: the
+// dispatch audience read budget AND the server-side cap the subscriptions
+// write API enforces. Do not duplicate the literal.
+export const SUBSCRIPTION_RESOLUTION_CAP = 200;
+
 // Abandonment is wall-clock based, not pickup-count based: the sweep cadence
 // differs per environment (5 min in prod, 60 elsewhere), so a pickup count
 // would mean a different grace period in each. Six hours is comfortably longer

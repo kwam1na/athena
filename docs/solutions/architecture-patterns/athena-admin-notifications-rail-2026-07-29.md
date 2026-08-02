@@ -17,7 +17,7 @@ tags:
   - delivery-ledger
   - mailersend
   - subscriptions
-delivery_diff_fingerprint: 55a1ca8b58336d1762c52b061d1cdbaab75c488aaf6f4603ba4fb43cc8bcb18b
+delivery_diff_fingerprint: 3ce734c95c6149e8414caefb926a293fd471240b52e541dfdc7a530333a1d51b
 ---
 
 # Athena Admin Notifications Rail
@@ -266,6 +266,32 @@ caught downstream — twice, to a defect introduced by the previous round's fix.
 - `NOTIFICATIONS_DEV_RECIPIENT` is not present in any `.env` template, so a
   fresh non-prod environment silently runs in suppressed mode until someone
   sets it by hand.
+
+## Update (2026-08-01)
+
+- **First public surface** (`convex/notifications/subscriptions.ts`): the rail
+  is no longer dashboard-only. `listSubscriptionsForOrganization`,
+  `addSubscription`, `setSubscriptionEnabled`, `removeSubscription`, and
+  `listOrganizationMemberRecipientCandidates` (the member picker query) are
+  admitted public Convex functions, row-bound to `full_admin` via the same
+  auth posture as `convex/reports/access.ts` — a single opaque error for every
+  failure mode, so a caller cannot distinguish "doesn't exist" from "not
+  yours."
+- **New `approvals` category and `approvals.request_created` kind**: emitted
+  at the `insertApprovalRequestWithCtx` choke point, the single call site
+  every approval-request creation path already runs through. `prepareEmail`
+  suppresses when the request is no longer `pending` (approved/denied/expired
+  before the intent dispatched), and the `variance_review` request type is
+  carved out of this kind — register closeout variance review still goes
+  through its existing dedicated notification path, not through
+  `approvals.request_created`.
+- **"Seeding is manual dashboard-only" is superseded.** The known-gap entry
+  below about `seedAdminSubscriptions` having no operator surface now applies
+  only to the general admin seed. Approvals-category audiences get a purpose-
+  built path: the `NotificationsView` settings surface (list/add/toggle/
+  remove subscribers, member picker) plus `seedApprovalsManagerSubscriptions`
+  for bootstrapping a new org's approvals audience. `ADMIN_EMAILS` fallback
+  behavior for orgs with zero subscription rows is unchanged.
 
 Related: [Athena EOD Automation Manager Report Emails](athena-eod-automation-manager-report-emails-2026-07-04.md)
 (superseded delivery mechanics; payload assembly guidance still applies).

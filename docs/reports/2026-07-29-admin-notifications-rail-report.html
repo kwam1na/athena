@@ -2,7 +2,7 @@
 <html
   lang="en"
   data-athena-landed-change-report="v1"
-  data-athena-report-diff-fingerprint="55a1ca8b58336d1762c52b061d1cdbaab75c488aaf6f4603ba4fb43cc8bcb18b"
+  data-athena-report-diff-fingerprint="3ce734c95c6149e8414caefb926a293fd471240b52e541dfdc7a530333a1d51b"
   data-athena-report-base="origin/main"
   data-athena-report-head="539e37cb"
 >
@@ -538,6 +538,23 @@
           <code>notifications sweep</code> cron (5 min in prod, 60 elsewhere) as
           the only backstop. Adding a new communication = one registry entry plus
           one template. Call sites never touch email again.
+        </div>
+        <div class="callout">
+          <strong>Final integration update (V26-1140):</strong> this branch's
+          closing unit added the <code>approvals</code> category and
+          <code>approvals.request_created</code> kind, emitted from the single
+          <code>insertApprovalRequestWithCtx</code> choke point (with a
+          <code>variance_review</code> carve-out so register closeout keeps its
+          own notification lane). It also shipped the rail's first public
+          surface, <code>convex/notifications/subscriptions.ts</code>
+          (list/add/toggle/remove + member picker, <code>full_admin</code>
+          row-bound auth) and the <code>NotificationsView</code> settings UI
+          that consumes it, so the "seeding is dashboard-only" gap below is
+          superseded for the approvals category by
+          <code>seedApprovalsManagerSubscriptions</code>. Housekeeping:
+          <code>SUBSCRIPTION_RESOLUTION_CAP</code> moved to the pure
+          <code>deliveryPolicy.ts</code> module so it has one definition
+          instead of a browser-side mirror and a stale test comment.
         </div>
       </section>
 
@@ -1249,6 +1266,23 @@ prepareEmail throws        → transient fault (read limit, OCC, missing row)
               files (one such run reported 353 across 18 files instead of 465
               across 22). Per suite: 282 across the nine affected suites plus 183
               across the 13 reports suites = <strong>465</strong>.</p>
+          </article>
+          <article class="card">
+            <h3>V26-1140 addendum · editorial refresh, not a full regeneration</h3>
+            <p>
+              The "Final integration update" callout above and the diff
+              fingerprint were updated by the ticket that closed the batch
+              (V26-1140: cap consolidation, docs, generated artifacts, and the
+              delivery gate). This was a targeted addendum reflecting the
+              approvals category, the subscriptions public surface, and the
+              cap single-sourcing landed by the seven preceding units — not a
+              fresh subagent-driven regeneration of the whole report. The
+              original delivered-diff analysis and adversarial-review evidence
+              above still describe the rail as it stood before this ticket's
+              additions; see <code>docs/solutions/architecture-patterns/athena-admin-notifications-rail-2026-07-29.md</code>
+              for the dated update entry with the approvals-category and
+              public-surface specifics.
+            </p>
           </article>
         </div>
       </section>

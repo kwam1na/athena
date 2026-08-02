@@ -12,6 +12,7 @@ import {
   INTENT_ABANDON_AFTER_MS,
   MAX_DELIVERIES_PER_DISPATCH,
   MAX_DELIVERY_ATTEMPTS,
+  SUBSCRIPTION_RESOLUTION_CAP,
   SWEEPER_INTENT_PICKUP_DELAY_MS,
   computeDeliveryLeaseMs,
   deliveryDedupeKey,
@@ -46,10 +47,6 @@ const modules = Object.fromEntries(
 );
 
 const NOW = Date.parse("2026-07-29T12:00:00Z");
-
-// Mirrors the (unexported) cap in convex/notifications/dispatch.ts. If that
-// constant moves, this test's overflow row stops being an overflow row.
-const SUBSCRIPTION_RESOLUTION_CAP = 200;
 
 const NORMALIZED_ADMIN_EMAILS = ADMIN_EMAILS.map((recipient) =>
   recipient.email.trim().toLowerCase(),

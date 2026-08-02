@@ -34,8 +34,10 @@ import {
 } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { operationalRoleValidator } from "../operations/staffRoles";
-import { normalizeRecipientEmail } from "./deliveryPolicy";
-import { SUBSCRIPTION_RESOLUTION_CAP } from "./dispatch";
+import {
+  normalizeRecipientEmail,
+  SUBSCRIPTION_RESOLUTION_CAP,
+} from "./deliveryPolicy";
 import type { NotificationCategory } from "./registry";
 
 /**

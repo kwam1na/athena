@@ -9,7 +9,7 @@ import type { MutationCtx } from "../_generated/server";
 import { ADMIN_EMAILS } from "../constants/email";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import schema from "../schema";
-import { SUBSCRIPTION_RESOLUTION_CAP } from "./dispatch";
+import { SUBSCRIPTION_RESOLUTION_CAP } from "./deliveryPolicy";
 import {
   SUBSCRIPTION_LIST_READ_BUDGET,
   addSubscription,

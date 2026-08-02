@@ -23,6 +23,10 @@ const ALLOWED_CONVEX_IMPORT_PATTERNS = [
   /(?:^|\/)convex\/utils$/,
   /(?:^|\/)convex\/inventory\/utils$/,
   /(?:^|\/)convex\/emails\//,
+  // Pure validator/policy modules: no Convex server imports (only
+  // `convex/values`), so they are safe to pull into the browser bundle.
+  /(?:^|\/)convex\/schemas\/notifications$/,
+  /(?:^|\/)convex\/notifications\/deliveryPolicy$/,
 ];
 
 function collectSourceFiles(directory: string): string[] {
