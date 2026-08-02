@@ -46,6 +46,7 @@ import type * as customerMessaging_webhookSecurity from "../customerMessaging/we
 import type * as customerMessaging_whatsappClient from "../customerMessaging/whatsappClient.js";
 import type * as customerMessaging_whatsappConfig from "../customerMessaging/whatsappConfig.js";
 import type * as devPatchBadTransaction from "../devPatchBadTransaction.js";
+import type * as emails_ApprovalRequestPending from "../emails/ApprovalRequestPending.js";
 import type * as emails_DailyManagerReport from "../emails/DailyManagerReport.js";
 import type * as emails_DailyManagerReportBordered from "../emails/DailyManagerReportBordered.js";
 import type * as emails_DailyManagerReportComparisonPreview from "../emails/DailyManagerReportComparisonPreview.js";
@@ -199,6 +200,7 @@ import type * as notifications_dispatch from "../notifications/dispatch.js";
 import type * as notifications_emit from "../notifications/emit.js";
 import type * as notifications_registry from "../notifications/registry.js";
 import type * as notifications_seed from "../notifications/seed.js";
+import type * as notifications_subscriptions from "../notifications/subscriptions.js";
 import type * as notifications_sweeper from "../notifications/sweeper.js";
 import type * as notifications_transport from "../notifications/transport.js";
 import type * as operationAdmission_actors from "../operationAdmission/actors.js";
@@ -216,6 +218,7 @@ import type * as operationAdmission_types from "../operationAdmission/types.js";
 import type * as operations_approvalActions from "../operations/approvalActions.js";
 import type * as operations_approvalAuditEvents from "../operations/approvalAuditEvents.js";
 import type * as operations_approvalProofs from "../operations/approvalProofs.js";
+import type * as operations_approvalRequestEmail from "../operations/approvalRequestEmail.js";
 import type * as operations_approvalRequestHelpers from "../operations/approvalRequestHelpers.js";
 import type * as operations_approvalRequesterChallenges from "../operations/approvalRequesterChallenges.js";
 import type * as operations_approvalRequests from "../operations/approvalRequests.js";
@@ -624,6 +627,7 @@ declare const fullApi: ApiFromModules<{
   "customerMessaging/whatsappClient": typeof customerMessaging_whatsappClient;
   "customerMessaging/whatsappConfig": typeof customerMessaging_whatsappConfig;
   devPatchBadTransaction: typeof devPatchBadTransaction;
+  "emails/ApprovalRequestPending": typeof emails_ApprovalRequestPending;
   "emails/DailyManagerReport": typeof emails_DailyManagerReport;
   "emails/DailyManagerReportBordered": typeof emails_DailyManagerReportBordered;
   "emails/DailyManagerReportComparisonPreview": typeof emails_DailyManagerReportComparisonPreview;
@@ -777,6 +781,7 @@ declare const fullApi: ApiFromModules<{
   "notifications/emit": typeof notifications_emit;
   "notifications/registry": typeof notifications_registry;
   "notifications/seed": typeof notifications_seed;
+  "notifications/subscriptions": typeof notifications_subscriptions;
   "notifications/sweeper": typeof notifications_sweeper;
   "notifications/transport": typeof notifications_transport;
   "operationAdmission/actors": typeof operationAdmission_actors;
@@ -794,6 +799,7 @@ declare const fullApi: ApiFromModules<{
   "operations/approvalActions": typeof operations_approvalActions;
   "operations/approvalAuditEvents": typeof operations_approvalAuditEvents;
   "operations/approvalProofs": typeof operations_approvalProofs;
+  "operations/approvalRequestEmail": typeof operations_approvalRequestEmail;
   "operations/approvalRequestHelpers": typeof operations_approvalRequestHelpers;
   "operations/approvalRequesterChallenges": typeof operations_approvalRequesterChallenges;
   "operations/approvalRequests": typeof operations_approvalRequests;

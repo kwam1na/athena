@@ -1,7 +1,7 @@
 import type { Id, TableNames } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import { isRegisterSessionConflictBlockingStatus } from "../../../../shared/registerSessionStatus";
-import { buildApprovalRequest } from "../../../operations/approvalRequestHelpers";
+import { insertApprovalRequestWithCtx } from "../../../operations/approvalRequestHelpers";
 import { areRegisterSessionCloseoutReviewFactsEquivalent } from "../../../operations/registerSessionCloseoutGate";
 import { recordRegisterSessionTraceBestEffort } from "../../../operations/registerSessionTracing";
 import {
@@ -863,34 +863,31 @@ export function createConvexLocalSyncRepository(
         };
       }
 
-      const approvalRequestId = await ctx.db.insert(
-        "approvalRequest",
-        buildApprovalRequest({
-          metadata: {
-            countedCash: input.countedCash,
-            expectedCash: input.expectedCash,
-            gateDecision: "approval_required",
-            gateDecisionReason: input.gateDecisionReason,
-            localEventId: input.localEventId,
-            localRegisterSessionId: input.localRegisterSessionId,
-            notes,
-            closeoutOccurredAt: input.closeoutOccurredAt,
-            syncOrigin: "local_sync",
-            terminalId: input.terminalId,
-            variance: input.variance,
-          },
+      const approvalRequestId = await insertApprovalRequestWithCtx(ctx, {
+        metadata: {
+          countedCash: input.countedCash,
+          expectedCash: input.expectedCash,
+          gateDecision: "approval_required",
+          gateDecisionReason: input.gateDecisionReason,
+          localEventId: input.localEventId,
+          localRegisterSessionId: input.localRegisterSessionId,
           notes,
-          organizationId: input.organizationId,
-          reason: input.gateDecisionReason,
-          registerSessionId: input.registerSessionId,
-          requestType: "variance_review",
-          requestedByStaffProfileId: input.requestedByStaffProfileId,
-          requestedByUserId: input.requestedByUserId,
-          storeId: input.storeId,
-          subjectId: input.registerSessionId,
-          subjectType: "register_session",
-        }),
-      );
+          closeoutOccurredAt: input.closeoutOccurredAt,
+          syncOrigin: "local_sync",
+          terminalId: input.terminalId,
+          variance: input.variance,
+        },
+        notes,
+        organizationId: input.organizationId,
+        reason: input.gateDecisionReason,
+        registerSessionId: input.registerSessionId,
+        requestType: "variance_review",
+        requestedByStaffProfileId: input.requestedByStaffProfileId,
+        requestedByUserId: input.requestedByUserId,
+        storeId: input.storeId,
+        subjectId: input.registerSessionId,
+        subjectType: "register_session",
+      });
       const approvalRequest = await ctx.db.get(
         "approvalRequest",
         approvalRequestId,

@@ -3,11 +3,18 @@ import { internal } from "../_generated/api";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { joinKeyComponents } from "./deliveryPolicy";
+import ApprovalRequestPending, {
+  buildApprovalRequestPendingSubject,
+} from "../emails/ApprovalRequestPending";
 import DailyManagerReport from "../emails/DailyManagerReport";
 import PosTerminalHealthAlert from "../emails/PosTerminalHealthAlert";
 import RegisterCloseoutVarianceAlert from "../emails/RegisterCloseoutVarianceAlert";
 
-export type NotificationCategory = "cash_controls" | "eod" | "system_health";
+export type NotificationCategory =
+  | "cash_controls"
+  | "eod"
+  | "system_health"
+  | "approvals";
 export type NotificationChannel = "email" | "in_app";
 export type NotificationPayload = Record<string, unknown>;
 export type PreparedNotificationEmail = { subject: string; html: string };
@@ -42,6 +49,14 @@ type TerminalHealthPayload = {
 
 type CloseoutVariancePayload = { approvalRequestId: Id<"approvalRequest"> };
 
+// Refs only, never rendered content: the email is built from a FRESH read of
+// the approval request at send time via the internal payload query.
+type ApprovalRequestCreatedPayload = {
+  approvalRequestId: Id<"approvalRequest">;
+  storeId: Id<"store">;
+  requestType: string;
+};
+
 type CloseoutMatchPayload = {
   registerSessionId: Id<"registerSession">;
   localEventId: string;
@@ -62,6 +77,33 @@ type DailyManagerReportPayload = {
 };
 
 const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
+  "approvals.request_created": {
+    category: "approvals",
+    channels: ["email"],
+    dedupeKey: (payload) => {
+      const p = payload as ApprovalRequestCreatedPayload;
+      return joinKeyComponents([
+        "approvals.request_created",
+        String(p.approvalRequestId),
+      ]);
+    },
+    prepareEmail: async (ctx, payload) => {
+      const p = payload as ApprovalRequestCreatedPayload;
+      const report = await ctx.runQuery(
+        internal.operations.approvalRequestEmail
+          .getApprovalRequestPendingPayload,
+        { approvalRequestId: p.approvalRequestId },
+      );
+      // A null payload means the request is gone or already decided — the
+      // "approval needed" email is no longer true, so suppress rather than
+      // send stale content.
+      if (!report) return null;
+      return {
+        subject: buildApprovalRequestPendingSubject(report),
+        html: await render(ApprovalRequestPending(report)),
+      };
+    },
+  },
   "pos.terminal_health": {
     category: "system_health",
     channels: ["email"],

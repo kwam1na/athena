@@ -1,7 +1,7 @@
 import type { Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import type { ApprovalRequirement } from "../../../../shared/approvalPolicy";
-import { buildApprovalRequest } from "../../../operations/approvalRequestHelpers";
+import { insertApprovalRequestWithCtx } from "../../../operations/approvalRequestHelpers";
 import { createApprovalRequesterChallengeWithCtx } from "../../../operations/approvalRequesterChallenges";
 import {
   APPROVAL_ACTIONS,
@@ -481,55 +481,52 @@ async function createApprovalRequestForAdjustment(
     throw new Error(requesterBindingResult.error.message);
   }
 
-  const approvalRequestId = await ctx.db.insert(
-    "approvalRequest",
-    buildApprovalRequest({
-      metadata: {
-        actionKey: ITEM_ADJUSTMENT_ACTION_KEY,
+  const approvalRequestId = await insertApprovalRequestWithCtx(ctx, {
+    metadata: {
+      actionKey: ITEM_ADJUSTMENT_ACTION_KEY,
+      correctedTotal: args.plan.correctedTotal,
+      deltaTotal: args.plan.deltaTotal,
+      originalTotal: args.plan.originalTotal,
+      payload: {
         correctedTotal: args.plan.correctedTotal,
-        deltaTotal: args.plan.deltaTotal,
+        lines: args.plan.lines.map((line) => ({
+          adjustedQuantity: line.correctedQuantity,
+          inventoryDelta: line.inventoryDelta,
+          originalQuantity: line.originalQuantity,
+          originalTransactionItemId: line.originalTransactionItemId,
+          productId: line.productId,
+          productName: line.productName,
+          productSku: line.productSku,
+          productSkuId: line.productSkuId,
+          pendingCheckoutItemId: line.pendingCheckoutItemId,
+          unitPrice: line.unitPrice,
+        })),
         originalTotal: args.plan.originalTotal,
-        payload: {
-          correctedTotal: args.plan.correctedTotal,
-          lines: args.plan.lines.map((line) => ({
-            adjustedQuantity: line.correctedQuantity,
-            inventoryDelta: line.inventoryDelta,
-            originalQuantity: line.originalQuantity,
-            originalTransactionItemId: line.originalTransactionItemId,
-            productId: line.productId,
-            productName: line.productName,
-            productSku: line.productSku,
-            productSkuId: line.productSkuId,
-            pendingCheckoutItemId: line.pendingCheckoutItemId,
-            unitPrice: line.unitPrice,
-          })),
-          originalTotal: args.plan.originalTotal,
-          settlementAmount: args.plan.settlementAmount,
-          settlementDirection: args.plan.settlementDirection,
-          settlementMethod: args.plan.settlementMethod,
-        },
-        payloadFingerprint: args.plan.fingerprint,
-        payloadSubject: args.plan.payloadSubject,
         settlementAmount: args.plan.settlementAmount,
         settlementDirection: args.plan.settlementDirection,
         settlementMethod: args.plan.settlementMethod,
-        transactionId: args.transaction._id,
-        transactionNumber: args.transaction.transactionNumber,
       },
-      notes: args.reason,
-      organizationId: store?.organizationId,
-      posTransactionId: args.transaction._id,
-      reason:
-        "Manager approval is required to adjust items on a completed transaction.",
-      registerSessionId: args.transaction.registerSessionId,
-      requestType: ITEM_ADJUSTMENT_REQUEST_TYPE,
-      requestedByStaffProfileId: args.actorStaffProfileId,
-      requestedByUserId: args.actorUserId,
-      storeId: args.transaction.storeId,
-      subjectId: args.plan.payloadSubject,
-      subjectType: ITEM_ADJUSTMENT_SUBJECT_TYPE,
-    }),
-  );
+      payloadFingerprint: args.plan.fingerprint,
+      payloadSubject: args.plan.payloadSubject,
+      settlementAmount: args.plan.settlementAmount,
+      settlementDirection: args.plan.settlementDirection,
+      settlementMethod: args.plan.settlementMethod,
+      transactionId: args.transaction._id,
+      transactionNumber: args.transaction.transactionNumber,
+    },
+    notes: args.reason,
+    organizationId: store?.organizationId,
+    posTransactionId: args.transaction._id,
+    reason:
+      "Manager approval is required to adjust items on a completed transaction.",
+    registerSessionId: args.transaction.registerSessionId,
+    requestType: ITEM_ADJUSTMENT_REQUEST_TYPE,
+    requestedByStaffProfileId: args.actorStaffProfileId,
+    requestedByUserId: args.actorUserId,
+    storeId: args.transaction.storeId,
+    subjectId: args.plan.payloadSubject,
+    subjectType: ITEM_ADJUSTMENT_SUBJECT_TYPE,
+  });
 
   await recordItemAdjustmentRegisterSessionTrace(ctx, {
     actorStaffProfileId: args.actorStaffProfileId,

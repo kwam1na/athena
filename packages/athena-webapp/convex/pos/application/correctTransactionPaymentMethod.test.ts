@@ -58,6 +58,10 @@ vi.mock("../../reports/ingest", () => ({
   recordFacts: vi.fn(),
 }));
 
+vi.mock("../../notifications/emit", () => ({
+  emitNotificationWithCtx: vi.fn(),
+}));
+
 vi.mock("../infrastructure/repositories/transactionRepository", () => ({
   getStoreById: vi.fn(),
   getPosTransactionById: vi.fn(),

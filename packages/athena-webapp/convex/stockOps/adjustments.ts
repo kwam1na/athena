@@ -25,7 +25,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
-import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
+import { insertApprovalRequestWithCtx } from "../operations/approvalRequestHelpers";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import {
   createOperationalWorkItemWithCtx,
@@ -1585,29 +1585,26 @@ export async function submitStockAdjustmentBatchWithCtx(
     workItemId = workItem?._id;
 
     if (workItemId) {
-      approvalRequestId = await ctx.db.insert(
-        "approvalRequest",
-        buildApprovalRequest({
-          metadata: {
-            adjustmentBatchId: stockAdjustmentBatchId,
-            adjustmentType: args.adjustmentType,
-            approvalThreshold: STOCK_ADJUSTMENT_APPROVAL_THRESHOLD,
-            largestAbsoluteDelta: summary.largestAbsoluteDelta,
-            lineItems: normalizedLineItems,
-            netQuantityDelta: summary.netQuantityDelta,
-            reasonCode: args.reasonCode,
-          },
-          notes,
-          organizationId: store.organizationId,
-          reason: "Inventory variance exceeded the approval threshold.",
-          requestType: "inventory_adjustment_review",
-          requestedByUserId: createdByUser._id,
-          storeId: args.storeId,
-          subjectId: String(stockAdjustmentBatchId),
-          subjectType: "stock_adjustment_batch",
-          workItemId,
-        }),
-      );
+      approvalRequestId = await insertApprovalRequestWithCtx(ctx, {
+        metadata: {
+          adjustmentBatchId: stockAdjustmentBatchId,
+          adjustmentType: args.adjustmentType,
+          approvalThreshold: STOCK_ADJUSTMENT_APPROVAL_THRESHOLD,
+          largestAbsoluteDelta: summary.largestAbsoluteDelta,
+          lineItems: normalizedLineItems,
+          netQuantityDelta: summary.netQuantityDelta,
+          reasonCode: args.reasonCode,
+        },
+        notes,
+        organizationId: store.organizationId,
+        reason: "Inventory variance exceeded the approval threshold.",
+        requestType: "inventory_adjustment_review",
+        requestedByUserId: createdByUser._id,
+        storeId: args.storeId,
+        subjectId: String(stockAdjustmentBatchId),
+        subjectType: "stock_adjustment_batch",
+        workItemId,
+      });
 
       await ctx.db.patch("operationalWorkItem", workItemId, {
         approvalRequestId,

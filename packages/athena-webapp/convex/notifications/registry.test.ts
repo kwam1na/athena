@@ -2,6 +2,7 @@ import { getFunctionName } from "convex/server";
 import { describe, expect, it } from "vitest";
 
 import type { Id } from "../_generated/dataModel";
+import { approvalRequestPendingPreviewProps } from "../emails/ApprovalRequestPending";
 import { dailyManagerReportPreviewProps } from "../emails/DailyManagerReport";
 import { posTerminalHealthAlertPreviewProps } from "../emails/PosTerminalHealthAlert";
 import { registerCloseoutVarianceAlertPreviewProps } from "../emails/RegisterCloseoutVarianceAlert";
@@ -68,13 +69,17 @@ const dailyReport = {
 };
 
 describe("registry catalog", () => {
-  it("registers exactly the four shipped kinds with their categories and channels", () => {
+  it("registers exactly the five shipped kinds with their categories and channels", () => {
     expect(listNotificationKinds().sort()).toEqual([
+      "approvals.request_created",
       "eod.daily_manager_report",
       "pos.terminal_health",
       "register.closeout_match",
       "register.closeout_variance",
     ]);
+    expect(getNotificationKind("approvals.request_created").category).toBe(
+      "approvals",
+    );
     expect(getNotificationKind("pos.terminal_health").category).toBe(
       "system_health",
     );
@@ -159,6 +164,69 @@ describe("registry subjects", () => {
     expect(prepared?.subject).toBe("Accra register closed - Register 2 - 2026-07-28");
     expect(calls).toEqual([
       "operations/registerCloseoutVarianceEmail:getRegisterCloseoutMatchReportPayload",
+    ]);
+  });
+
+  it("builds the pending approval subject from fresh payload data", async () => {
+    const { prepared, calls } = await prepare(
+      "approvals.request_created",
+      {
+        approvalRequestId: APPROVAL_REQUEST_ID,
+        storeId: STORE_ID,
+        requestType: "pos_transaction_void",
+      },
+      [approvalRequestPendingPreviewProps],
+    );
+
+    expect(prepared?.subject).toBe(
+      "Wigclub approval needed - Transaction void - TXN-1048",
+    );
+    expect(prepared?.html).toContain("TXN-1048");
+    expect(calls).toEqual([
+      "operations/approvalRequestEmail:getApprovalRequestPendingPayload",
+    ]);
+  });
+
+  it("falls back to the generic approval descriptor for an unmapped request type", async () => {
+    const { prepared } = await prepare(
+      "approvals.request_created",
+      {
+        approvalRequestId: APPROVAL_REQUEST_ID,
+        storeId: STORE_ID,
+        requestType: "register_sync_review",
+      },
+      [
+        {
+          ...approvalRequestPendingPreviewProps,
+          requestType: "register_sync_review",
+          identifier: "2026-07-28",
+          data: {},
+        },
+      ],
+    );
+
+    // Unmapped types must still send a clear generic email, never drop.
+    expect(prepared?.subject).toBe(
+      "Wigclub approval needed - Approval request - 2026-07-28",
+    );
+  });
+
+  it("suppresses the pending approval email when the payload query returns null", async () => {
+    const { prepared, calls } = await prepare(
+      "approvals.request_created",
+      {
+        approvalRequestId: APPROVAL_REQUEST_ID,
+        storeId: STORE_ID,
+        requestType: "pos_transaction_void",
+      },
+      [null],
+    );
+
+    // Null from the payload query means missing-or-decided: genuinely no
+    // longer sendable, so prepareEmail suppresses instead of rendering.
+    expect(prepared).toBeNull();
+    expect(calls).toEqual([
+      "operations/approvalRequestEmail:getApprovalRequestPendingPayload",
     ]);
   });
 
@@ -354,6 +422,19 @@ describe("registry dedupe key recipes", () => {
         localEventId: "evt:1",
       }),
     ).toBe(`register.closeout_match:${REGISTER_SESSION_ID}:evt%3A1`);
+  });
+
+  it("keys the pending approval by the approval request with the kind prefix", () => {
+    // The documented kind-prefixed joined shape shared by every recipe:
+    // "approvals.request_created:{approvalRequestId}" with percent-encoded
+    // components.
+    expect(
+      dedupeKey("approvals.request_created", {
+        approvalRequestId: APPROVAL_REQUEST_ID,
+        storeId: STORE_ID,
+        requestType: "pos_transaction_void",
+      }),
+    ).toBe(`approvals.request_created:${APPROVAL_REQUEST_ID}`);
   });
 
   it("keys the daily report by store, operating date, and status bucket", () => {

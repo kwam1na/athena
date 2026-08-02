@@ -11,6 +11,7 @@ import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import {
   MAX_DELIVERIES_PER_DISPATCH,
   MAX_DELIVERY_ATTEMPTS,
+  SUBSCRIPTION_RESOLUTION_CAP,
   computeDeliveryLeaseMs,
   nextDispatchDelayMs,
   deliveryDedupeKey,
@@ -22,8 +23,6 @@ import {
   type PreparedNotificationEmail,
 } from "./registry";
 import { sendNotificationEmail } from "./transport";
-
-const SUBSCRIPTION_RESOLUTION_CAP = 200;
 
 type LeasedDelivery = {
   deliveryId: Id<"notificationDelivery">;

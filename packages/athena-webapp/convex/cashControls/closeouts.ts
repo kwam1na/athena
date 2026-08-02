@@ -10,7 +10,7 @@ import {
 } from "../operationAdmission/definitions";
 import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
 import type { OperationMutationCtx } from "../operationAdmission/types";
-import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
+import { insertApprovalRequestWithCtx } from "../operations/approvalRequestHelpers";
 import {
   APPROVAL_ACTIONS,
   consumeCommandApprovalProofWithCtx,
@@ -1362,26 +1362,23 @@ export const submitRegisterSessionCloseout = mutation({
           });
         }
 
-        const approvalRequestId = await ctx.db.insert(
-          "approvalRequest",
-          buildApprovalRequest({
-            metadata: {
-              countedCash: args.countedCash,
-              expectedCash: registerSession.expectedCash,
-              variance: closeoutReview.variance,
-            },
-            notes: trimOptional(args.notes),
-            organizationId: registerSession.organizationId,
-            reason: closeoutReview.reason,
-            registerSessionId: registerSession._id,
-            requestType: "variance_review",
-            requestedByStaffProfileId: closeoutSubmitActorStaffProfileId,
-            requestedByUserId: actorUserId,
-            storeId: args.storeId,
-            subjectId: registerSession._id,
-            subjectType: "register_session",
-          }),
-        );
+        const approvalRequestId = await insertApprovalRequestWithCtx(ctx, {
+          metadata: {
+            countedCash: args.countedCash,
+            expectedCash: registerSession.expectedCash,
+            variance: closeoutReview.variance,
+          },
+          notes: trimOptional(args.notes),
+          organizationId: registerSession.organizationId,
+          reason: closeoutReview.reason,
+          registerSessionId: registerSession._id,
+          requestType: "variance_review",
+          requestedByStaffProfileId: closeoutSubmitActorStaffProfileId,
+          requestedByUserId: actorUserId,
+          storeId: args.storeId,
+          subjectId: registerSession._id,
+          subjectType: "register_session",
+        });
         const approvalRequest = await ctx.db.get(
           "approvalRequest",
           approvalRequestId,

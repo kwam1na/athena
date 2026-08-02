@@ -1510,7 +1510,7 @@ describe("stock ops adjustments", () => {
     expect(source).toContain(
       'withIndex("by_storeId_adjustmentType_submissionKey"',
     );
-    expect(source).toContain("buildApprovalRequest");
+    expect(source).toContain("insertApprovalRequestWithCtx");
     expect(source).toContain("applyInventoryEffectWithCtx");
     expect(source).not.toContain('ctx.db.patch("productSku"');
   });

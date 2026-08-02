@@ -668,6 +668,32 @@ export const listCostOverlayRowsReadDefinition = defineInventoryCostOverlayRead(
 export const getCostOverlayUndoPreviewReadDefinition =
   defineInventoryCostOverlayRead("getCostOverlayUndoPreview");
 
+// Notification subscription reads expose recipient email lists, so shared
+// demo is denied; the handler additionally requires full_admin membership of
+// the requested organization.
+export const listNotificationSubscriptionsReadDefinition = defineReadOperation({
+  functionName: "notifications/subscriptions:listSubscriptionsForOrganization",
+  operationId:
+    "notifications.subscriptions.listSubscriptionsForOrganization.read",
+  access: { kind: "read", intent: "notifications.subscriptions.view" },
+  scope: { kind: "organization", organizationIdArg: "organizationId" },
+  actors: { normalUser: "admit", sharedDemo: "deny" },
+});
+
+// Recipient-picker membership read exposes member emails, so shared demo is
+// denied; the handler additionally requires full_admin membership of the
+// requested organization, mirroring listNotificationSubscriptionsReadDefinition.
+export const listOrganizationMemberRecipientCandidatesReadDefinition =
+  defineReadOperation({
+    functionName:
+      "notifications/subscriptions:listOrganizationMemberRecipientCandidates",
+    operationId:
+      "notifications.subscriptions.listOrganizationMemberRecipientCandidates.read",
+    access: { kind: "read", intent: "notifications.subscriptions.view" },
+    scope: { kind: "organization", organizationIdArg: "organizationId" },
+    actors: { normalUser: "admit", sharedDemo: "deny" },
+  });
+
 export const OPERATION_READ_ADMISSION_DEFINITIONS = [
   getDailyOperationsSnapshotReadDefinition,
   getDailyOperationsDetailSnapshotReadDefinition,
@@ -748,6 +774,8 @@ export const OPERATION_READ_ADMISSION_DEFINITIONS = [
   listRecentCostOverlayRunsReadDefinition,
   listCostOverlayRowsReadDefinition,
   getCostOverlayUndoPreviewReadDefinition,
+  listNotificationSubscriptionsReadDefinition,
+  listOrganizationMemberRecipientCandidatesReadDefinition,
 ] as const;
 
 export function validateReadOperationDefinition(

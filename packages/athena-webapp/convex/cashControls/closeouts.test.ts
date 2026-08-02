@@ -513,7 +513,7 @@ describe("cash control closeouts", () => {
   it("writes through approval, register-session, and operational-event rails", () => {
     const source = getSource("./closeouts.ts");
 
-    expect(source).toContain("buildApprovalRequest");
+    expect(source).toContain("insertApprovalRequestWithCtx");
     expect(source).toContain("buildRegisterSessionVarianceApprovalRequirement");
     expect(source).toContain("recordOperationalEventWithCtx");
     expect(source).toContain("consumeCommandApprovalProofWithCtx");

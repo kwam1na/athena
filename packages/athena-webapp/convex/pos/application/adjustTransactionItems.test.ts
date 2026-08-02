@@ -24,6 +24,11 @@ import {
   reportingLineCostFromEffect,
 } from "../../inventoryLedger/commerceEffects";
 import { appendPosLifecycleJournalWithCtx } from "../infrastructure/posLifecycleJournal";
+import { emitNotificationWithCtx } from "../../notifications/emit";
+
+vi.mock("../../notifications/emit", () => ({
+  emitNotificationWithCtx: vi.fn(),
+}));
 
 vi.mock("../infrastructure/posLifecycleJournal", () => ({
   appendPosLifecycleJournalWithCtx: vi.fn(),
@@ -472,6 +477,18 @@ describe("adjustTransactionItems", () => {
         transactionId: "txn-1",
       }),
     });
+    expect(emitNotificationWithCtx).toHaveBeenCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        kind: "approvals.request_created",
+        storeId: "store-1",
+        payload: expect.objectContaining({
+          approvalRequestId: "approvalRequest-1",
+          requestType: "pos_item_adjustment",
+          storeId: "store-1",
+        }),
+      }),
+    );
     expect(createApprovalRequesterChallengeWithCtx).toHaveBeenCalledWith(
       ctx as never,
       expect.objectContaining({
