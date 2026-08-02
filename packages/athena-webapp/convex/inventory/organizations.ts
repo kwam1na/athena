@@ -1,4 +1,6 @@
-import { mutation, query } from "../_generated/server";
+import { internal } from "../_generated/api";
+import { internalMutation, mutation, query } from "../_generated/server";
+import type { MutationCtx } from "../_generated/server";
 import { v } from "convex/values";
 import { organizationSchema } from "../schemas/inventory";
 import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
@@ -9,8 +11,79 @@ import {
 } from "../operationAdmission/readDefinitions";
 import type { OperationQueryCtx } from "../operationAdmission/types";
 import type { Id } from "../_generated/dataModel";
+import { deleteWeeklyReportingForStoreWithCtx } from "./stores";
 
 const entity = "organization";
+const ORGANIZATION_STORE_DELETE_BATCH_SIZE = 10;
+
+async function removeOrganizationBatchWithCtx(
+  ctx: MutationCtx,
+  organizationId: Id<"organization">,
+  cursor: string | null,
+): Promise<boolean> {
+  const organization = await ctx.db.get("organization", organizationId);
+  if (!organization) return true;
+
+  const stores = await ctx.db
+    .query("store")
+    .withIndex("by_organizationId_slug", (q) =>
+      q.eq("organizationId", organizationId),
+    )
+    .paginate({ cursor, numItems: ORGANIZATION_STORE_DELETE_BATCH_SIZE });
+  if (stores.page.length === 0) {
+    if (stores.isDone) {
+      await ctx.db.delete("organization", organizationId);
+      return true;
+    }
+    await ctx.scheduler.runAfter(
+      0,
+      internal.inventory.organizations.continueOrganizationRemoval,
+      { organizationId, cursor: stores.continueCursor },
+    );
+    return false;
+  }
+
+  let storeHasMoreWeeklyRows = false;
+  for (const store of stores.page) {
+    const cleanup = await deleteWeeklyReportingForStoreWithCtx(ctx, store._id);
+    storeHasMoreWeeklyRows ||= cleanup.hasMore;
+  }
+  if (storeHasMoreWeeklyRows) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.inventory.organizations.continueOrganizationRemoval,
+      { organizationId, cursor },
+    );
+    return false;
+  }
+
+  if (stores.isDone) {
+    await ctx.db.delete("organization", organizationId);
+    return true;
+  }
+  await ctx.scheduler.runAfter(
+    0,
+    internal.inventory.organizations.continueOrganizationRemoval,
+    { organizationId, cursor: stores.continueCursor },
+  );
+  return false;
+}
+
+export async function removeOrganizationWithCtx(
+  ctx: MutationCtx,
+  organizationId: Id<"organization">,
+): Promise<boolean> {
+  return removeOrganizationBatchWithCtx(ctx, organizationId, null);
+}
+
+export const continueOrganizationRemoval = internalMutation({
+  args: {
+    organizationId: v.id("organization"),
+    cursor: v.union(v.string(), v.null()),
+  },
+  handler: async (ctx, args) =>
+    removeOrganizationBatchWithCtx(ctx, args.organizationId, args.cursor),
+});
 
 export const getAll = query({
   args: {
@@ -121,7 +194,7 @@ export const remove = mutation({
   },
   handler: async (ctx, args) => {
     requireNonDemoFoundationMutation({ organizationId: args.id });
-    await ctx.db.delete("organization", args.id);
+    await removeOrganizationWithCtx(ctx, args.id);
 
     return { message: "OK" };
   },

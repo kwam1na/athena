@@ -136,7 +136,9 @@ function compatibilityMetadata(args: {
 }): CompatibilityMetadata {
   return {
     ...(isValidMinute(args.openingPolicy?.openingLocalStartMinutes)
-      ? { openingLocalStartMinutes: args.openingPolicy.openingLocalStartMinutes }
+      ? {
+          openingLocalStartMinutes: args.openingPolicy.openingLocalStartMinutes,
+        }
       : {}),
     ...(typeof args.openingPolicy?.operatingTimezoneOffsetMinutes === "number"
       ? {
@@ -281,6 +283,7 @@ async function buildBackfillRow(
     weeklyWindows,
     weeklyClosedDays: [],
     dateExceptions: [],
+    reportingCycleStartsOn: 1,
     effectiveFrom: args.effectiveFrom,
     status: "candidate",
     source: "seed",
@@ -351,7 +354,8 @@ export async function backfillStoreSchedulesFromLegacyPolicyWithCtx(
         row.action === "would_insert_candidate" ||
         row.action === "inserted_candidate",
     ).length,
-    insertedCount: rows.filter((row) => row.action === "inserted_candidate").length,
+    insertedCount: rows.filter((row) => row.action === "inserted_candidate")
+      .length,
     skippedExistingScheduleCount: rows.filter(
       (row) => row.action === "skipped_existing_schedule",
     ).length,

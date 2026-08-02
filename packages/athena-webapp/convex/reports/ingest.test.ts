@@ -10,6 +10,7 @@ import {
   REPORTS_FOLD_VERSION,
   type NewReportFact,
 } from "../../shared/reportsContract";
+import { factFingerprint, LEGACY_REPORTS_FINGERPRINT_VERSION } from "./fingerprint";
 import { recordFacts } from "./ingest";
 
 const modules = import.meta.glob("../**/*.ts");
@@ -138,15 +139,16 @@ describe("recordFacts — identity and replay", () => {
       expect(facts).toHaveLength(1);
       expect(facts[0]).toMatchObject({
         factKind: "sale",
-        fingerprintVersion: 1,
+        fingerprintVersion: 2,
         lineId: "line_1",
         operatingDate: TODAY,
+        observedAt: NOW,
         recordedAt: NOW,
         sourceDomain: "pos",
         sourceId: "txn_1",
         taxAmountMinor: 500,
       });
-      expect(facts[0].fingerprint).toMatch(/^v1:[0-9a-f]{8}$/);
+      expect(facts[0].fingerprint).toMatch(/^v2:[0-9a-f]{8}$/);
       expect(facts[0].quarantine).toBeUndefined();
     });
   });
@@ -165,6 +167,48 @@ describe("recordFacts — identity and replay", () => {
       const day = await readDay(ctx, storeId, TODAY);
       // The replay must not double-count the open day either.
       expect(day).toMatchObject({ factCount: 1, netSalesMinor: 9_000 });
+    });
+  });
+
+  it("replays a legacy payment fact under its stored fingerprint version", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { storeId } = await seed(ctx);
+      const payment = saleFact({
+        sourceDomain: "payments",
+        sourceId: "allocation_legacy",
+        lineId: "",
+        factKind: "payment",
+        grossAmountMinor: 2_000,
+        netAmountMinor: 2_000,
+        quantity: 0,
+      });
+      const { productSkuId: _productSkuId, ...legacyPayment } = payment;
+      await ctx.db.insert("reportFact", {
+        ...legacyPayment,
+        fingerprint: factFingerprint(payment, LEGACY_REPORTS_FINGERPRINT_VERSION),
+        fingerprintVersion: LEGACY_REPORTS_FINGERPRINT_VERSION,
+        operatingDate: TODAY,
+        recordedAt: NOW,
+        storeId,
+      });
+
+      await recordFacts(ctx, storeId, [
+        {
+          ...payment,
+          paymentAllocationCoverage: "known",
+          paymentAllocationMinor: 2_000,
+        },
+      ]);
+
+      // The new fields are intentionally ignored for v1 identity comparison;
+      // routine replay never upgrades or quarantines historical lineage.
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      const facts = await ctx.db.query("reportFact").collect();
+      expect(facts).toHaveLength(1);
+      expect(facts[0].quarantine).toBeUndefined();
+      expect(facts[0].paymentAllocationCoverage).toBeUndefined();
     });
   });
 
@@ -251,6 +295,8 @@ describe("recordFacts — open-day incremental math", () => {
           productSkuId: undefined,
           quantity: 0,
           sourceId: "pay_1",
+          paymentAllocationCoverage: "known",
+          paymentAllocationMinor: 14_000,
         },
       ]);
 
@@ -279,6 +325,10 @@ describe("recordFacts — open-day incremental math", () => {
         hasUncostedRevenue: false,
         mixedCurrency: false,
         quarantinedFactCount: 0,
+      });
+      expect(day?.paymentPosture).toMatchObject({
+        allocationCoverage: "complete",
+        unsettledMinor: 0,
       });
 
       // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query

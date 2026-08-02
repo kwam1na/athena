@@ -65,7 +65,9 @@ describe("useStoreScheduleUpdate", () => {
       });
     });
 
-    expect(mockedUseMutation).toHaveBeenCalledWith("upsertStoreScheduleCommand");
+    expect(mockedUseMutation).toHaveBeenCalledWith(
+      "upsertStoreScheduleCommand",
+    );
     expect(upsertStoreSchedule).toHaveBeenCalledWith({
       dateExceptions: [],
       effectiveFrom: 1_782_528_000_000,
@@ -104,6 +106,7 @@ describe("useStoreScheduleUpdate", () => {
         schedule: {
           dateExceptions: [],
           effectiveFrom: 1_782_528_000_000,
+          reportingCycleStartsOn: 1,
           timezone: "",
           weeklyClosedDays: [],
           weeklyWindows: [],

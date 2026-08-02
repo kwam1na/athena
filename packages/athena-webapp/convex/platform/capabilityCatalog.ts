@@ -57,6 +57,34 @@ export const ATHENA_CAPABILITY_CATALOG = [
 
 export type AthenaCapability = (typeof ATHENA_CAPABILITY_CATALOG)[number]["id"];
 
+/** Store-scoped, fail-closed rollout for the weekly Reports surface. */
+export const WEEKLY_REPORT_STORE_ALLOWLIST_ENV =
+  "REPORTS_WEEKLY_STORE_ALLOWLIST";
+
+export function hasCompletedWeeklyObservedAtVerification(
+  store:
+    | { weeklyObservedAtVerification?: { status: string } }
+    | null
+    | undefined,
+): boolean {
+  return store?.weeklyObservedAtVerification?.status === "complete";
+}
+
+export function isWeeklyReportingEnabledForStore(
+  storeId: string,
+  rawAllowlist: string | undefined = process.env[
+    WEEKLY_REPORT_STORE_ALLOWLIST_ENV
+  ],
+  observedAtVerificationComplete = false,
+): boolean {
+  if (!rawAllowlist || !observedAtVerificationComplete) return false;
+  return rawAllowlist
+    .split(",")
+    .map((candidate) => candidate.trim())
+    .filter(Boolean)
+    .includes(storeId);
+}
+
 export const SHARED_DEMO_ALLOWED_CAPABILITIES = [
   "approvals.manage",
   "cash.control.write",

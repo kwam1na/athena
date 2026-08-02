@@ -1,12 +1,18 @@
 import { v } from "convex/values";
 
-import { mutation, query, type MutationCtx, type QueryCtx } from "../_generated/server";
+import {
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import {
   getMissingStoreScheduleContext,
   resolveStoreOperatingRangeForDate,
   resolveStoreScheduleContext,
+  nextReportingCycleBoundary,
   validateNoEffectiveRangeOverlap,
   validateStoreScheduleDraft,
   type StoreScheduleDraft,
@@ -41,6 +47,7 @@ type StoreScheduleInput = {
     }>;
     note?: string;
   }>;
+  reportingCycleStartsOn?: number;
   effectiveFrom: number;
   effectiveTo?: number;
   status?: "active" | "superseded" | "candidate";
@@ -58,6 +65,7 @@ const storeScheduleInputValidator = {
   weeklyWindows: v.array(storeScheduleWindowSchema),
   weeklyClosedDays: v.array(v.number()),
   dateExceptions: v.array(storeScheduleDateExceptionSchema),
+  reportingCycleStartsOn: v.optional(v.number()),
   effectiveFrom: v.number(),
   effectiveTo: v.optional(v.number()),
   status: v.optional(storeScheduleStatusSchema),
@@ -72,6 +80,7 @@ const publicStoreScheduleInputValidator = {
   weeklyWindows: v.array(storeScheduleWindowSchema),
   weeklyClosedDays: v.array(v.number()),
   dateExceptions: v.array(storeScheduleDateExceptionSchema),
+  reportingCycleStartsOn: v.optional(v.number()),
   effectiveFrom: v.number(),
   effectiveTo: v.optional(v.number()),
   supersedesScheduleId: v.optional(v.id("storeSchedule")),
@@ -85,6 +94,7 @@ const storeScheduleSummaryValidator = v.object({
   weeklyWindows: v.array(storeScheduleWindowSchema),
   weeklyClosedDays: v.array(v.number()),
   dateExceptions: v.array(storeScheduleDateExceptionSchema),
+  reportingCycleStartsOn: v.number(),
   effectiveFrom: v.number(),
   effectiveTo: v.union(v.number(), v.null()),
   status: storeScheduleStatusSchema,
@@ -141,7 +151,10 @@ const storeScheduleSummaryResultValidator = v.object({
 
 const storeScheduleAdminResultValidator = v.object({
   adminConfirmed: v.boolean(),
-  confirmationStatus: v.union(v.literal("candidate"), v.literal("admin_confirmed")),
+  confirmationStatus: v.union(
+    v.literal("candidate"),
+    v.literal("admin_confirmed"),
+  ),
   exceptions: v.array(
     v.object({
       closed: v.boolean(),
@@ -157,6 +170,7 @@ const storeScheduleAdminResultValidator = v.object({
   ),
   nextCloseLabel: v.union(v.string(), v.null()),
   nextOpenLabel: v.union(v.string(), v.null()),
+  reportingCycleStartsOn: v.number(),
   source: v.string(),
   scheduleVersionId: v.union(v.id("storeSchedule"), v.null()),
   summary: v.object({
@@ -201,6 +215,7 @@ function toDraft(
     weeklyWindows: args.weeklyWindows,
     weeklyClosedDays: args.weeklyClosedDays,
     dateExceptions: args.dateExceptions,
+    reportingCycleStartsOn: args.reportingCycleStartsOn ?? 1,
     effectiveFrom: args.effectiveFrom,
     effectiveTo: args.effectiveTo,
     status: args.status ?? "active",
@@ -212,7 +227,9 @@ function toDraft(
   };
 }
 
-function toSummary(schedule: Doc<"storeSchedule"> | (StoreScheduleDraft & { _id: string })) {
+function toSummary(
+  schedule: Doc<"storeSchedule"> | (StoreScheduleDraft & { _id: string }),
+) {
   return {
     scheduleVersionId: schedule._id,
     organizationId: schedule.organizationId,
@@ -221,6 +238,7 @@ function toSummary(schedule: Doc<"storeSchedule"> | (StoreScheduleDraft & { _id:
     weeklyWindows: schedule.weeklyWindows,
     weeklyClosedDays: schedule.weeklyClosedDays,
     dateExceptions: schedule.dateExceptions,
+    reportingCycleStartsOn: schedule.reportingCycleStartsOn ?? 1,
     effectiveFrom: schedule.effectiveFrom,
     effectiveTo: schedule.effectiveTo ?? null,
     status: schedule.status,
@@ -249,22 +267,26 @@ function minutesToTimeInput(minute: number) {
 
 function toAdminResult(
   schedule: Doc<"storeSchedule"> | null,
-  context: ReturnType<typeof resolveStoreScheduleContext> | ReturnType<typeof getMissingStoreScheduleContext>,
+  context:
+    | ReturnType<typeof resolveStoreScheduleContext>
+    | ReturnType<typeof getMissingStoreScheduleContext>,
 ) {
   const weeklyHours = DAY_LABELS.slice(1)
     .concat(DAY_LABELS.slice(0, 1))
     .map((day) => {
       const dayOfWeek = DAY_LABELS.indexOf(day);
-      const windows = schedule?.weeklyWindows
-        .filter((window) => window.dayOfWeek === dayOfWeek)
-        .map((window) => ({
-          openTime: minutesToTimeInput(window.startMinute),
-          closeTime: minutesToTimeInput(window.endMinute),
-        })) ?? [];
+      const windows =
+        schedule?.weeklyWindows
+          .filter((window) => window.dayOfWeek === dayOfWeek)
+          .map((window) => ({
+            openTime: minutesToTimeInput(window.startMinute),
+            closeTime: minutesToTimeInput(window.endMinute),
+          })) ?? [];
 
       return {
         closed: schedule
-          ? schedule.weeklyClosedDays.includes(dayOfWeek) || windows.length === 0
+          ? schedule.weeklyClosedDays.includes(dayOfWeek) ||
+            windows.length === 0
           : day === "sunday",
         day,
         windows,
@@ -295,16 +317,22 @@ function toAdminResult(
     (context.isOpen ? context.currentWindow?.localStartLabel : null) ??
     null;
   const nextCloseLabel =
-    context.currentWindow?.localEndLabel ?? context.nextWindow?.localEndLabel ?? null;
+    context.currentWindow?.localEndLabel ??
+    context.nextWindow?.localEndLabel ??
+    null;
   const timezone = schedule?.timezone ?? context.timezone ?? "America/New_York";
-  const adminConfirmed = schedule?.status === "active" && schedule.source === "admin";
+  const adminConfirmed =
+    schedule?.status === "active" && schedule.source === "admin";
 
   return {
     adminConfirmed,
-    confirmationStatus: adminConfirmed ? "admin_confirmed" as const : "candidate" as const,
+    confirmationStatus: adminConfirmed
+      ? ("admin_confirmed" as const)
+      : ("candidate" as const),
     exceptions,
     nextCloseLabel,
     nextOpenLabel,
+    reportingCycleStartsOn: schedule?.reportingCycleStartsOn ?? 1,
     source: schedule?.source ?? "missing_schedule",
     scheduleVersionId: schedule?._id ?? null,
     summary: {
@@ -351,7 +379,8 @@ async function findActiveScheduleForStoreAt(
       .filter(
         (schedule) =>
           schedule.effectiveFrom <= args.at &&
-          (schedule.effectiveTo === undefined || args.at < schedule.effectiveTo),
+          (schedule.effectiveTo === undefined ||
+            args.at < schedule.effectiveTo),
       )
       .sort((left, right) => right.effectiveFrom - left.effectiveFrom)[0] ??
     null
@@ -434,21 +463,17 @@ export async function upsertStoreScheduleCommandWithCtx(
   }
 
   const now = Date.now();
-  const draft = toDraft(store, { ...args, actorUserId }, now);
-  const validation = validateStoreScheduleDraft(draft);
-
-  if (!validation.ok) {
-    return userError({
-      code: "validation_failed",
-      message: "Store hours were not saved. Review the highlighted fields.",
-      fields: validation.fields,
-    });
-  }
+  let draft = toDraft(store, { ...args, actorUserId }, now);
 
   if (draft.status === "active") {
-    const activeSchedules = await listActiveSchedulesForStore(ctx, args.storeId);
+    const activeSchedules = await listActiveSchedulesForStore(
+      ctx,
+      args.storeId,
+    );
     const supersededSchedule = args.supersedesScheduleId
-      ? activeSchedules.find((schedule) => schedule._id === args.supersedesScheduleId)
+      ? activeSchedules.find(
+          (schedule) => schedule._id === args.supersedesScheduleId,
+        )
       : null;
 
     if (args.supersedesScheduleId && !supersededSchedule) {
@@ -458,25 +483,64 @@ export async function upsertStoreScheduleCommandWithCtx(
       });
     }
 
-    if (activeSchedulesOverlap(draft, activeSchedules, args.supersedesScheduleId)) {
+    if (
+      supersededSchedule &&
+      (supersededSchedule.reportingCycleStartsOn ?? 1) !==
+        draft.reportingCycleStartsOn
+    ) {
+      const effectiveFrom = nextReportingCycleBoundary({
+        at: now,
+        reportingCycleStartsOn: supersededSchedule.reportingCycleStartsOn,
+        timezone: supersededSchedule.timezone,
+      });
+      if (effectiveFrom === null) {
+        return userError({
+          code: "validation_failed",
+          message: "Store hours were not saved. Review the highlighted fields.",
+          fields: {
+            reportingCycleStartsOn: ["Choose a valid store timezone."],
+          },
+        });
+      }
+      draft = { ...draft, effectiveFrom };
+    }
+
+    if (
+      activeSchedulesOverlap(draft, activeSchedules, args.supersedesScheduleId)
+    ) {
       return userError({
         code: "conflict",
         message: "Store schedule effective dates overlap an active version.",
         fields: {
-          effectiveFrom: ["Schedule effective dates overlap an active version."],
+          effectiveFrom: [
+            "Schedule effective dates overlap an active version.",
+          ],
         },
       });
     }
+  }
+
+  const validation = validateStoreScheduleDraft(draft);
+  if (!validation.ok) {
+    return userError({
+      code: "validation_failed",
+      message: "Store hours were not saved. Review the highlighted fields.",
+      fields: validation.fields,
+    });
   }
 
   const scheduleId = await ctx.db.insert(entity, draft);
 
   if (args.supersedesScheduleId) {
     await ctx.db.patch(entity, args.supersedesScheduleId, {
-      status: "superseded",
-      effectiveTo: args.effectiveFrom,
-      supersededAt: now,
-      supersededByScheduleId: scheduleId,
+      effectiveTo: draft.effectiveFrom,
+      ...(draft.effectiveFrom <= now
+        ? {
+            status: "superseded" as const,
+            supersededAt: now,
+            supersededByScheduleId: scheduleId,
+          }
+        : {}),
       updatedAt: now,
       updatedByUserId: actorUserId,
     });
@@ -531,10 +595,11 @@ export const getStoreScheduleSummary = query({
   returns: storeScheduleSummaryResultValidator,
   handler: async (ctx, args) => {
     const at = args.at ?? Date.now();
-    const { schedule, context } = await getStoreScheduleContextForStoreAtWithCtx(ctx, {
-      storeId: args.storeId,
-      at,
-    });
+    const { schedule, context } =
+      await getStoreScheduleContextForStoreAtWithCtx(ctx, {
+        storeId: args.storeId,
+        at,
+      });
 
     if (!schedule) {
       return {
@@ -566,7 +631,9 @@ export const listStoreScheduleVersions = query({
               .eq("organizationId", args.organizationId)
               .eq("storeId", args.storeId)
               .eq("status", args.status)
-          : schedule.eq("organizationId", args.organizationId).eq("storeId", args.storeId),
+          : schedule
+              .eq("organizationId", args.organizationId)
+              .eq("storeId", args.storeId),
       )
       .take(STORE_SCHEDULE_VERSION_READ_LIMIT);
 
@@ -585,10 +652,11 @@ export const getStoreScheduleForAdmin = query({
   handler: async (ctx, args) => {
     await requireStoreFullAdminAccess(ctx, args.storeId);
     const at = args.at ?? Date.now();
-    const { schedule, context } = await getStoreScheduleContextForStoreAtWithCtx(ctx, {
-      storeId: args.storeId,
-      at,
-    });
+    const { schedule, context } =
+      await getStoreScheduleContextForStoreAtWithCtx(ctx, {
+        storeId: args.storeId,
+        at,
+      });
 
     return toAdminResult(schedule, context);
   },

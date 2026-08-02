@@ -47,6 +47,7 @@ export type StoreScheduleUpsertPayload = {
     }>;
   }>;
   effectiveFrom: number;
+  reportingCycleStartsOn: number;
   supersedesScheduleId?: Id<"storeSchedule">;
   timezone: string;
   weeklyClosedDays: number[];
@@ -57,10 +58,17 @@ export type StoreScheduleUpsertPayload = {
   }>;
 };
 
+export type StoreScheduleVersion = {
+  effectiveFrom: number;
+  reportingCycleStartsOn: number;
+  scheduleVersionId: string;
+  timezone: string;
+};
+
 type UpdateScheduleOptions = {
   errorMessage?: string;
   onError?: (error: Error) => void;
-  onSuccess?: () => void;
+  onSuccess?: (schedule: StoreScheduleVersion) => void;
   schedule: StoreScheduleUpsertPayload;
   storeId: Id<"store">;
   successMessage?: string;
@@ -70,7 +78,7 @@ type UpsertStoreScheduleCommand = FunctionReference<
   "mutation",
   "public",
   { storeId: Id<"store"> } & StoreScheduleUpsertPayload,
-  CommandResult<unknown>
+  CommandResult<StoreScheduleVersion>
 >;
 
 const storeScheduleApi = (
@@ -114,7 +122,7 @@ export const useStoreScheduleUpdate = () => {
       }
 
       toast.success(successMessage, { position: "top-right" });
-      onSuccess?.();
+      onSuccess?.(result.data);
     } catch (error) {
       console.error(error);
       toast.error(errorMessage, {

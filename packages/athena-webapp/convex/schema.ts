@@ -185,6 +185,9 @@ import {
   reportOverviewSchema,
   reportPeriodSkuRollupSchema,
   reportDirtyDaySchema,
+  reportDirtyWeekSchema,
+  reportWeekAcceptedSchema,
+  reportWeekCurrentSchema,
   reportRangeResultSchema,
 } from "./schemas/reports";
 import {
@@ -1639,6 +1642,11 @@ const schema = defineSchema({
       "factKind",
     ])
     .index("by_storeId_operatingDate", ["storeId", "operatingDate"])
+    .index("by_storeId_operatingDate_observedAt", [
+      "storeId",
+      "operatingDate",
+      "observedAt",
+    ])
     .index("by_storeId_productSkuId_operatingDate", [
       "storeId",
       "productSkuId",
@@ -1680,6 +1688,15 @@ const schema = defineSchema({
     ]),
   reportDirtyDay: defineTable(reportDirtyDaySchema)
     .index("by_storeId_operatingDate", ["storeId", "operatingDate"])
+    .index("by_markedAt", ["markedAt"]),
+  reportWeekCurrent: defineTable(reportWeekCurrentSchema).index("by_storeId", [
+    "storeId",
+  ]),
+  reportWeekAccepted: defineTable(reportWeekAcceptedSchema)
+    .index("by_storeId_cycleStartDate", ["storeId", "cycleStartDate"])
+    .index("by_storeId_acceptedAt", ["storeId", "acceptedAt"]),
+  reportDirtyWeek: defineTable(reportDirtyWeekSchema)
+    .index("by_storeId", ["storeId"])
     .index("by_markedAt", ["markedAt"]),
   reportRangeResult: defineTable(reportRangeResultSchema)
     .index("by_storeId_requestKey", ["storeId", "requestKey"])

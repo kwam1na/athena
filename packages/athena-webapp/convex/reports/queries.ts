@@ -1,7 +1,12 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { query } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import {
+  hasCompletedWeeklyObservedAtVerification,
+  isWeeklyReportingEnabledForStore,
+} from "../platform/capabilityCatalog";
 import { requireReportsStoreAccess } from "./access";
 import {
   dayPeriodKey,
@@ -20,7 +25,10 @@ import type {
   ReportSkuPeriodRow,
   ReportSkuSortBy,
   ReportSkuTransactionEvidence,
+  ReportWeekMetrics,
+  ReportWeekSummary,
 } from "../../shared/reportsContract";
+import type { ReportWeekChangeDirection } from "../../shared/reportsContract";
 import { emptySnapshot, snapshotForDays } from "./overview";
 import { addDaysToDate, periodDateRange } from "./rollups";
 import { transactionCountFromCloseSummary } from "./transactionCounts";
@@ -39,6 +47,224 @@ const RANGE_SKU_MIX_VISIBLE_LIMIT = 5;
 const SKU_DAY_EVIDENCE_FACT_LIMIT = 500;
 const ITEMS_PERIOD_MAX_DAYS = 31;
 const ITEMS_UNCLOSED_DAY_FACT_LIMIT = 2_000;
+const WEEKLY_HISTORY_PAGE_MAX = 24;
+const WEEKLY_REPORT_ID_PREFIX = "week:";
+
+type WeeklyHistoryPagination = {
+  cursor: string | null;
+  numItems: number;
+};
+
+function requireWeeklyHistoryPagination(
+  paginationOpts: WeeklyHistoryPagination,
+): void {
+  if (
+    !Number.isInteger(paginationOpts.numItems) ||
+    paginationOpts.numItems < 1 ||
+    paginationOpts.numItems > WEEKLY_HISTORY_PAGE_MAX
+  ) {
+    throw new Error(
+      `Weekly history page size must be between 1 and ${WEEKLY_HISTORY_PAGE_MAX}.`,
+    );
+  }
+  if (
+    paginationOpts.cursor !== null &&
+    typeof paginationOpts.cursor !== "string"
+  ) {
+    throw new Error("Weekly history cursor is invalid.");
+  }
+}
+
+/** Stable, store-scoped accepted-report identity; never a source record id. */
+function weeklyReportId(cycleStartDate: string): string {
+  return `${WEEKLY_REPORT_ID_PREFIX}${cycleStartDate}`;
+}
+
+function cycleStartDateForWeeklyReportId(reportId: string): string {
+  const match = /^week:(\d{4}-\d{2}-\d{2})$/.exec(reportId);
+  if (!match) throw new Error("Weekly report id is invalid.");
+  return match[1]!;
+}
+
+function weeklySummary(metrics: ReportWeekMetrics): ReportWeekSummary {
+  return {
+    grossSalesMinor: metrics.grossSalesMinor,
+    merchandiseMarginMinor: metrics.grossProfitMinor,
+    netSalesMinor: metrics.netSalesMinor,
+    netUnits: metrics.unitsSold - metrics.unitsReturned,
+    paymentAllocatedMinor: metrics.paymentAllocatedMinor,
+    paymentAllocationCoverage: metrics.paymentAllocationCoverage,
+    paymentUnsettledMinor: metrics.paymentUnsettledMinor,
+    paymentsCollectedMinor: metrics.paymentsCollectedMinor,
+    paymentsRefundedMinor: metrics.paymentsRefundedMinor,
+    refundsMinor: metrics.refundsMinor,
+    unitsReturned: metrics.unitsReturned,
+    unitsSold: metrics.unitsSold,
+  };
+}
+
+function priorNetSalesChange(currentMinor: number, priorMinor: number) {
+  const amountMinor = Math.abs(currentMinor - priorMinor);
+  const direction: ReportWeekChangeDirection =
+    currentMinor > priorMinor
+      ? "higher"
+      : currentMinor < priorMinor
+        ? "lower"
+        : "unchanged";
+  return { amountMinor, direction };
+}
+
+function priorPeriodProjection(
+  current: ReportWeekMetrics,
+  priorPeriod: Doc<"reportWeekCurrent">["priorPeriod"],
+) {
+  if (!priorPeriod) return undefined;
+  return {
+    ...priorPeriod,
+    summary: priorPeriod.values ? weeklySummary(priorPeriod.values) : null,
+    netSalesChange:
+      priorPeriod.comparabilityReason === "comparable" && priorPeriod.values
+        ? priorNetSalesChange(current.netSalesMinor, priorPeriod.values.netSalesMinor)
+        : null,
+  };
+}
+
+function finalScheduledDate(
+  scheduleLineage: {
+    included: boolean;
+    localDate: string;
+  }[],
+): string | null {
+  return (
+    scheduleLineage.filter((date) => date.included).at(-1)?.localDate ?? null
+  );
+}
+
+function weeklyOwnerRoutes(args: {
+  cycleEndDate: string;
+  cycleStartDate: string;
+  historical: boolean;
+  scheduleLineage: { included: boolean; localDate: string }[];
+}) {
+  const finalDate = finalScheduledDate(args.scheduleLineage);
+  return {
+    transactions: {
+      to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions" as const,
+      search: {
+        startDate: args.cycleStartDate,
+        endDate: args.cycleEndDate,
+        order: "oldestFirst" as const,
+      },
+    },
+    // Daily Close owns the final included schedule date, never the calendar
+    // frame end (which can be a closed date).
+    dailyClose: finalDate
+      ? args.historical
+        ? {
+            to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history" as const,
+            search: { day: finalDate },
+          }
+        : {
+            to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close" as const,
+            search: { operatingDate: finalDate },
+          }
+      : null,
+    cashControls: {
+      to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls" as const,
+    },
+    openWork: {
+      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work" as const,
+      search: { workType: "synced_sale_inventory_review" as const },
+    },
+  };
+}
+
+function toWeeklyCurrentProjection(doc: Doc<"reportWeekCurrent">) {
+  return {
+    cycleStartDate: doc.cycleStartDate,
+    cycleEndDate: doc.cycleEndDate,
+    currency: doc.currency,
+    metricVersion: doc.metricVersion,
+    materializedAt: doc.materializedAt,
+    included: doc.included,
+    summary: weeklySummary(doc.included),
+    outsideSchedule: doc.outsideSchedule,
+    scheduleLineage: doc.scheduleLineage,
+    completeness: doc.completeness,
+    lifecyclePosture: doc.lifecyclePosture!,
+    amendmentPosture: doc.amendmentPosture!,
+    inventoryAttention: doc.inventoryAttention,
+    closePosture: doc.closePosture,
+    amendment: doc.amendment
+      ? {
+          ...doc.amendment,
+          summary: weeklySummary(doc.amendment.included),
+          outsideScheduleSummary: weeklySummary(doc.amendment.outsideSchedule),
+        }
+      : undefined,
+    priorPeriod: priorPeriodProjection(doc.included, doc.priorPeriod),
+    variancePosture: doc.variancePosture,
+    ownerRoutes: weeklyOwnerRoutes({
+      cycleStartDate: doc.cycleStartDate,
+      cycleEndDate: doc.cycleEndDate,
+      historical: false,
+      scheduleLineage: doc.scheduleLineage,
+    }),
+  };
+}
+
+function toAcceptedWeeklyProjection(doc: Doc<"reportWeekAccepted">) {
+  const lifecyclePosture =
+    doc.lifecyclePosture ?? doc.closePosture?.status ?? "accepted";
+  const amendmentPosture =
+    doc.amendmentPosture ?? (doc.amendment ? "amended" : "none");
+  const current = doc.amendment
+    ? {
+        included: doc.amendment.included,
+        summary: weeklySummary(doc.amendment.included),
+        includedNetSalesDeltaMinor: doc.amendment.includedNetSalesDeltaMinor,
+        outsideSchedule: doc.amendment.outsideSchedule,
+        outsideScheduleSummary: weeklySummary(doc.amendment.outsideSchedule),
+        outsideScheduleNetSalesDeltaMinor:
+          doc.amendment.outsideScheduleNetSalesDeltaMinor,
+      }
+    : undefined;
+  return {
+    reportId: weeklyReportId(doc.cycleStartDate),
+    cycleStartDate: doc.cycleStartDate,
+    cycleEndDate: doc.cycleEndDate,
+    currency: doc.currency,
+    metricVersion: doc.metricVersion,
+    acceptedAt: doc.acceptedAt,
+    cutoffObservedAt: doc.cutoffObservedAt,
+    closeId: doc.closeId,
+    included: doc.included,
+    summary: weeklySummary(doc.included),
+    outsideSchedule: doc.outsideSchedule,
+    scheduleLineage: doc.scheduleLineage,
+    completeness: doc.completeness,
+    lifecyclePosture,
+    amendmentPosture,
+    inventoryAttention: doc.inventoryAttention,
+    closePosture: doc.closePosture,
+    current,
+    amendment: doc.amendment
+      ? {
+          ...doc.amendment,
+          summary: weeklySummary(doc.amendment.included),
+          outsideScheduleSummary: weeklySummary(doc.amendment.outsideSchedule),
+        }
+      : undefined,
+    priorPeriod: priorPeriodProjection(doc.included, doc.priorPeriod),
+    variancePosture: doc.variancePosture,
+    ownerRoutes: weeklyOwnerRoutes({
+      cycleStartDate: doc.cycleStartDate,
+      cycleEndDate: doc.cycleEndDate,
+      historical: true,
+      scheduleLineage: doc.scheduleLineage,
+    }),
+  };
+}
 
 /** Inclusive day count between two "YYYY-MM-DD" operating-date labels. */
 function inclusiveDaySpan(startDate: string, endDate: string): number {
@@ -129,10 +355,7 @@ export const getOverview = query({
       anchorDate
     ) {
       const trailing3MonthsStart = trailingThreeMonthsStart(anchorDate);
-      const priorTrailing3MonthsEnd = addDaysToDate(
-        trailing3MonthsStart,
-        -1,
-      );
+      const priorTrailing3MonthsEnd = addDaysToDate(trailing3MonthsStart, -1);
       const startDate =
         !priorTrailing30 || !priorTrailing3Months
           ? trailingThreeMonthsStart(priorTrailing3MonthsEnd)
@@ -201,6 +424,145 @@ export const getOverview = query({
       dailyTrend,
       trust: doc.trust,
     };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Weekly projections
+// ---------------------------------------------------------------------------
+
+/**
+ * The live weekly tab's single summary subscription. It reads only the
+ * Reports-owned singleton and, when linked, one immutable accepted baseline:
+ * authorization and the fail-closed capability check run first; then <=1
+ * `reportWeekCurrent` via `by_storeId` and <=1 `reportWeekAccepted` via
+ * `by_storeId_cycleStartDate`. No source or report-day reads occur here.
+ */
+export const getActiveWeeklyBriefing = query({
+  args: { storeId: v.id("store") },
+  handler: async (ctx, args) => {
+    const { store } = await requireReportsStoreAccess(ctx, args.storeId);
+    if (
+      !isWeeklyReportingEnabledForStore(
+        String(args.storeId),
+        undefined,
+        hasCompletedWeeklyObservedAtVerification(store),
+      )
+    ) {
+      return {
+        status: "unavailable" as const,
+        reason: "capability_disabled" as const,
+      };
+    }
+
+    const current = await ctx.db
+      .query("reportWeekCurrent")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .unique();
+    if (!current) {
+      return {
+        status: "unavailable" as const,
+        reason: "missing_projection" as const,
+      };
+    }
+    if (current.availability === "unavailable") {
+      return {
+        status: "unavailable" as const,
+        reason: current.unavailableReason,
+      };
+    }
+    if (!current.lifecyclePosture || !current.amendmentPosture) {
+      return {
+        status: "unavailable" as const,
+        reason: "missing_projection" as const,
+      };
+    }
+
+    const baseline = current.acceptedBaselineId
+      ? await ctx.db
+          .query("reportWeekAccepted")
+          .withIndex("by_storeId_cycleStartDate", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("cycleStartDate", current.cycleStartDate),
+          )
+          .unique()
+      : null;
+
+    return {
+      status: "available" as const,
+      current: toWeeklyCurrentProjection(current),
+      acceptedBaseline: baseline ? toAcceptedWeeklyProjection(baseline) : null,
+    };
+  },
+});
+
+/**
+ * Lazy accepted-history read. After authorization and the fail-closed
+ * capability check, it pages at most 24 stored `reportWeekAccepted` rows
+ * (plus Convex's continuation probe) through the newest-first
+ * `by_storeId_acceptedAt` index. Invalid page bounds fail before projection
+ * reads; no source-domain data is hydrated.
+ */
+export const listAcceptedWeeklyHistory = query({
+  args: {
+    storeId: v.id("store"),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    requireWeeklyHistoryPagination(args.paginationOpts);
+    const { store } = await requireReportsStoreAccess(ctx, args.storeId);
+    if (
+      !isWeeklyReportingEnabledForStore(
+        String(args.storeId),
+        undefined,
+        hasCompletedWeeklyObservedAtVerification(store),
+      )
+    ) {
+      return { page: [], isDone: true, continueCursor: "" };
+    }
+
+    const page = await ctx.db
+      .query("reportWeekAccepted")
+      .withIndex("by_storeId_acceptedAt", (q) => q.eq("storeId", args.storeId))
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    return {
+      ...page,
+      page: page.page.map(toAcceptedWeeklyProjection),
+    };
+  },
+});
+
+/**
+ * Historical detail is one exact, store-prefixed accepted projection lookup:
+ * authorization and the fail-closed capability check run first; then <=1
+ * `reportWeekAccepted` through `by_storeId_cycleStartDate`. The stable report
+ * id is validated before any projection read, and another store's row is
+ * indistinguishable from missing.
+ */
+export const getAcceptedWeeklyDetail = query({
+  args: { storeId: v.id("store"), reportId: v.string() },
+  handler: async (ctx, args) => {
+    const cycleStartDate = cycleStartDateForWeeklyReportId(args.reportId);
+    const { store } = await requireReportsStoreAccess(ctx, args.storeId);
+    if (
+      !isWeeklyReportingEnabledForStore(
+        String(args.storeId),
+        undefined,
+        hasCompletedWeeklyObservedAtVerification(store),
+      )
+    )
+      return null;
+
+    const accepted = await ctx.db
+      .query("reportWeekAccepted")
+      .withIndex("by_storeId_cycleStartDate", (q) =>
+        q.eq("storeId", args.storeId).eq("cycleStartDate", cycleStartDate),
+      )
+      .unique();
+    return accepted ? toAcceptedWeeklyProjection(accepted) : null;
   },
 });
 
@@ -296,9 +658,7 @@ export const listRangeSkuMix = query({
           key: String(row.productSkuId),
           productSkuId: String(row.productSkuId),
           label:
-            identity?.sku ??
-            identity?.displayName ??
-            String(row.productSkuId),
+            identity?.sku ?? identity?.displayName ?? String(row.productSkuId),
           unitsSold: row.unitsSold,
           shareBasisPoints:
             totalUnitsSold === 0
@@ -534,13 +894,13 @@ export const listPeriodSkus = query({
 
     const filtered = cursorCtx
       ? candidates.filter((row) => {
-        const key = row[sortField];
-        if (key > cursorCtx!.lastSortKey) return true;
-        if (key === cursorCtx!.lastSortKey) {
-          return row.productSkuId > cursorCtx!.lastSkuId;
-        }
-        return false;
-      })
+          const key = row[sortField];
+          if (key > cursorCtx!.lastSortKey) return true;
+          if (key === cursorCtx!.lastSortKey) {
+            return row.productSkuId > cursorCtx!.lastSkuId;
+          }
+          return false;
+        })
       : candidates;
 
     const page = filtered.slice(0, REPORT_SKU_PAGE_SIZE);
@@ -550,12 +910,12 @@ export const listPeriodSkus = query({
     const continueCursor =
       hasMore && last
         ? encodeCursor({
-          storeId: args.storeId,
-          periodKey: args.periodKey,
-          sortBy: args.sortBy,
-          lastSortKey: last[sortField],
-          lastSkuId: last.productSkuId,
-        })
+            storeId: args.storeId,
+            periodKey: args.periodKey,
+            sortBy: args.sortBy,
+            lastSortKey: last[sortField],
+            lastSkuId: last.productSkuId,
+          })
         : null;
 
     // The bounded day read keeps period totals independent of SKU pagination
@@ -573,25 +933,25 @@ export const listPeriodSkus = query({
         .first(),
       periodRange
         ? ctx.db
-          .query("reportDay")
-          .withIndex("by_storeId_operatingDate", (q) =>
-            q
-              .eq("storeId", args.storeId)
-              .gte("operatingDate", periodRange.startDate)
-              .lte("operatingDate", periodRange.endDate),
-          )
-          .take(ITEMS_PERIOD_MAX_DAYS)
+            .query("reportDay")
+            .withIndex("by_storeId_operatingDate", (q) =>
+              q
+                .eq("storeId", args.storeId)
+                .gte("operatingDate", periodRange.startDate)
+                .lte("operatingDate", periodRange.endDate),
+            )
+            .take(ITEMS_PERIOD_MAX_DAYS)
         : Promise.resolve([]),
       priorRange
         ? ctx.db
-          .query("reportDay")
-          .withIndex("by_storeId_operatingDate", (q) =>
-            q
-              .eq("storeId", args.storeId)
-              .gte("operatingDate", priorRange.startDate)
-              .lte("operatingDate", priorRange.endDate),
-          )
-          .take(ITEMS_PERIOD_MAX_DAYS)
+            .query("reportDay")
+            .withIndex("by_storeId_operatingDate", (q) =>
+              q
+                .eq("storeId", args.storeId)
+                .gte("operatingDate", priorRange.startDate)
+                .lte("operatingDate", priorRange.endDate),
+            )
+            .take(ITEMS_PERIOD_MAX_DAYS)
         : Promise.resolve([]),
     ]);
     const [periodTransactionCounts, priorPeriodTransactionCounts] =
@@ -894,10 +1254,10 @@ export const listSkuDayTransactions = query({
           );
           const costMinor = hasCompleteCost
             ? costFacts.reduce(
-              (total, fact) =>
-                total + fact.quantity * (fact.unitCostMinor ?? 0),
-              0,
-            )
+                (total, fact) =>
+                  total + fact.quantity * (fact.unitCostMinor ?? 0),
+                0,
+              )
             : null;
           const occurredAt = Math.max(
             ...sourceFacts.map((fact) => fact.occurredAt),

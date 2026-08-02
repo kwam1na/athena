@@ -165,6 +165,25 @@ export function paymentAllocationReportingIdentity(
   return `payment_allocation:${String(allocation._id)}:${allocation.status}`;
 }
 
+/**
+ * The allocation record is the payment source of truth, so it can state
+ * allocation coverage without exposing a tender method to Reports.
+ */
+export function paymentAllocationReportingDimensions(
+  allocation: Pick<Doc<"paymentAllocation">, "amount" | "direction" | "status">,
+) {
+  const amountMinor = Math.abs(allocation.amount);
+  const isReversal = allocation.status === "voided";
+  const isRefund = allocation.direction === "out" && !isReversal;
+
+  return {
+    factKind: isReversal || isRefund ? ("payment_refund" as const) : ("payment" as const),
+    amountMinor,
+    paymentAllocationMinor: isReversal || isRefund ? -amountMinor : amountMinor,
+    paymentAllocationCoverage: "known" as const,
+  };
+}
+
 async function ensurePaymentAllocationReportingWithCtx(
   ctx: MutationCtx,
   allocation: Doc<"paymentAllocation">,
@@ -172,9 +191,19 @@ async function ensurePaymentAllocationReportingWithCtx(
   const store = await ctx.db.get("store", allocation.storeId);
   if (!store) throw new Error("Payment allocation store is unavailable.");
   const organizationId = allocation.organizationId ?? store.organizationId;
-  const isReversal = allocation.status === "voided";
-  const isRefund = allocation.direction === "out" && !isReversal;
-  const amountMinor = Math.abs(allocation.amount);
+  const posture = paymentAllocationReportingDimensions(allocation);
+  // A legacy voided row does not say when the reversal happened. Do not file
+  // it under the original collection time; independent verification keeps its
+  // allocation coverage unknown until source-proven maintenance is possible.
+  if (allocation.status === "voided" && allocation.voidedAt === undefined) {
+    return;
+  }
+  // The fact contract can represent a payment refund, but not a later reversal
+  // of that refund without falsely calling it a new collection. Preserve the
+  // domain transition and let independent verification keep coverage unknown.
+  if (allocation.status === "voided" && allocation.direction === "out") {
+    return;
+  }
   const currencyCode = (allocation.currency ?? store.currency)
     ?.trim()
     .toUpperCase();
@@ -183,17 +212,40 @@ async function ensurePaymentAllocationReportingWithCtx(
     sourceDomain: "payments",
     sourceId: String(allocation._id),
     lineId: "",
-    factKind: isReversal || isRefund ? "payment_refund" : "payment",
-    occurredAt: allocation.recordedAt,
+    factKind: posture.factKind,
+    occurredAt:
+      allocation.status === "voided"
+        ? allocation.voidedAt!
+        : allocation.recordedAt,
     currency: currencyCode ?? store.currency,
-    grossAmountMinor: amountMinor,
-    netAmountMinor: amountMinor,
+    grossAmountMinor: posture.amountMinor,
+    netAmountMinor: posture.amountMinor,
     taxAmountMinor: 0,
     discountAmountMinor: 0,
     quantity: 0,
+    paymentAllocationMinor: posture.paymentAllocationMinor,
+    paymentAllocationCoverage: posture.paymentAllocationCoverage,
   };
 
   await recordFacts(ctx, allocation.storeId, [fact]);
+}
+
+export async function voidPaymentAllocationWithCtx(
+  ctx: MutationCtx,
+  allocationId: Id<"paymentAllocation">,
+) {
+  const allocation = await ctx.db.get("paymentAllocation", allocationId);
+  if (!allocation) throw new Error("Payment allocation was not found.");
+  if (allocation.status === "voided") return allocation;
+
+  const voidedAt = Date.now();
+  await ctx.db.patch("paymentAllocation", allocation._id, {
+    status: "voided",
+    voidedAt,
+  });
+  const voidedAllocation = { ...allocation, status: "voided" as const, voidedAt };
+  await ensurePaymentAllocationReportingWithCtx(ctx, voidedAllocation);
+  return voidedAllocation;
 }
 
 export async function recordPaymentAllocationWithCtx(
@@ -372,6 +424,12 @@ export const recordPaymentAllocation = internalMutation({
     recordedAt: v.optional(v.number()),
   },
   handler: (ctx, args) => recordPaymentAllocationWithCtx(ctx, args),
+});
+
+export const voidPaymentAllocation = internalMutation({
+  args: { paymentAllocationId: v.id("paymentAllocation") },
+  handler: (ctx, args) =>
+    voidPaymentAllocationWithCtx(ctx, args.paymentAllocationId),
 });
 
 export const listPaymentAllocationsForTarget = internalQuery({

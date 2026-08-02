@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { DailyCloseHistoryView } from "~/src/components/operations/DailyCloseHistoryView";
+import { ReportsWeeklyReturnLink } from "~/src/components/reports/ReportsWeeklyReturnLink";
 
 const dailyCloseHistorySearchSchema = z.object({
   day: z.string().optional(),
@@ -16,5 +17,10 @@ export const Route = createFileRoute(
 });
 
 function DailyCloseHistoryRoute() {
-  return <DailyCloseHistoryView />;
+  return (
+    <>
+      <ReportsWeeklyReturnLink />
+      <DailyCloseHistoryView />
+    </>
+  );
 }

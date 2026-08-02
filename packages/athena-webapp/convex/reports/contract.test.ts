@@ -6,6 +6,8 @@ import {
   reportOverviewSchema,
   reportPeriodSkuRollupSchema,
   reportRangeResultSchema,
+  reportWeekAcceptedSchema,
+  reportWeekCurrentSchema,
 } from "../schemas/reports";
 import {
   REPORT_DAY_METRIC_KEYS,
@@ -13,6 +15,7 @@ import {
   REPORT_DAY_STATUSES,
   REPORT_FACT_KINDS,
   REPORT_SOURCE_DOMAINS,
+  REPORT_WEEK_METRIC_KEYS,
 } from "../../shared/reportsContract";
 import { reportFactSchema } from "../schemas/reports/facts";
 
@@ -117,5 +120,31 @@ describe("reports contract ↔ schema parity", () => {
     expect(new Set(unionLiterals(fields.sourceDomain))).toEqual(
       new Set(REPORT_SOURCE_DOMAINS),
     );
+  });
+
+  it("keeps payment allocation lineage optional for legacy fact compatibility", () => {
+    const fields = fieldsOf(reportFactSchema);
+    expect(fields.paymentAllocationMinor.isOptional).toBe("optional");
+    expect(fields.paymentAllocationCoverage.isOptional).toBe("optional");
+  });
+
+  it("keeps knowledge time optional only during the explicit fact migration", () => {
+    expect(fieldsOf(reportFactSchema).observedAt.isOptional).toBe("optional");
+  });
+
+  it("weekly current and accepted snapshots carry every weekly metric field", () => {
+    const currentAvailableSchema = (reportWeekCurrentSchema as AnyValidator)
+      .members!.find((member) => member.fields?.included);
+    expect(currentAvailableSchema).toBeDefined();
+    for (const schema of [currentAvailableSchema!, reportWeekAcceptedSchema]) {
+      const fields = fieldsOf(schema);
+      for (const snapshotName of ["included", "outsideSchedule"] as const) {
+        const snapshot = fieldsOf(fields[snapshotName]);
+        for (const key of REPORT_WEEK_METRIC_KEYS) {
+          expect(snapshot[key], `${snapshotName} is missing ${key}`).toBeDefined();
+          expect(snapshot[key].isOptional).toBe("required");
+        }
+      }
+    }
   });
 });

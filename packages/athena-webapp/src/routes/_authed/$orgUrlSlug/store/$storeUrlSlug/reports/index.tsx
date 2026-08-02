@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { z } from "zod";
 
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useStableReportQuery } from "@/components/reports/useStableReportQuery";
@@ -9,25 +8,15 @@ import { api } from "~/convex/_generated/api";
 import { ReportsCatalogLookup } from "@/components/reports/ReportsCatalogLookup";
 import { ReportDaysPanel } from "@/components/reports/ReportDaysPanel";
 import { ReportsOverviewView } from "@/components/reports/ReportsOverviewView";
+import { reportsOverviewSearchSchema } from "@/components/reports/reportRouteSearch";
 import {
   dateRangeForOverviewWindow,
-  REPORT_OVERVIEW_WINDOWS,
   tableRangeIncludingSelection,
   todayOperatingDateGuess,
   type ReportOverviewWindow,
 } from "@/components/reports/reportPeriodKeys";
 
-const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-
-export const reportsOverviewSearchSchema = z.object({
-  window: z.enum(REPORT_OVERVIEW_WINDOWS).optional(),
-  daysStart: dateSchema.optional(),
-  daysEnd: dateSchema.optional(),
-  daysTableStart: dateSchema.optional(),
-  daysTableEnd: dateSchema.optional(),
-  daysPage: z.coerce.number().int().positive().optional(),
-  selectedDay: dateSchema.optional(),
-});
+export { reportsOverviewSearchSchema } from "@/components/reports/reportRouteSearch";
 
 function isoDateOffset(days: number): string {
   const date = new Date();

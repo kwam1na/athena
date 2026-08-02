@@ -12,7 +12,11 @@
  */
 
 export const REPORTS_FOLD_VERSION = 1 as const;
-export const REPORTS_FINGERPRINT_VERSION = 1 as const;
+/**
+ * Version 2 adds the source-derived allocation dimensions carried by payment
+ * facts. Replays hash with the version already stored on a fact.
+ */
+export const REPORTS_FINGERPRINT_VERSION = 2 as const;
 
 export const REPORT_SOURCE_DOMAINS = [
   "pos",
@@ -116,6 +120,115 @@ export type ReportDayFlags = {
   quarantinedFactCount: number;
 };
 
+/**
+ * Settlement is a payment-only view. It never restates recognised sales and
+ * contains no tender-method identity.
+ */
+export type ReportPaymentPosture = {
+  collectedMinor: number;
+  refundedMinor: number;
+  allocatedMinor: number;
+  unsettledMinor: number | null;
+  allocationCoverage: "complete" | "unknown";
+  allocationOmittedMinor: number;
+  hasInvalidAllocation: boolean;
+};
+
+/** The explicit metric fields materialized on each weekly projection. */
+export type ReportWeekMetrics = ReportDayMetrics & {
+  paymentUnsettledMinor: number | null;
+  paymentAllocationCoverage: "complete" | "unknown";
+};
+
+/**
+ * Presentation-ready weekly values. Reports queries own these aliases and
+ * net-unit calculation so clients only render a reporting conclusion.
+ */
+export type ReportWeekSummary = {
+  grossSalesMinor: number;
+  merchandiseMarginMinor: number | null;
+  netSalesMinor: number;
+  netUnits: number;
+  paymentAllocatedMinor: number;
+  paymentAllocationCoverage: "complete" | "unknown";
+  paymentUnsettledMinor: number | null;
+  paymentsCollectedMinor: number;
+  paymentsRefundedMinor: number;
+  refundsMinor: number;
+  unitsReturned: number;
+  unitsSold: number;
+};
+
+export const REPORT_WEEK_METRIC_KEYS = [
+  ...REPORT_DAY_METRIC_KEYS,
+  "paymentUnsettledMinor",
+  "paymentAllocationCoverage",
+] as const satisfies readonly (keyof ReportWeekMetrics)[];
+
+export type ReportWeekCompletenessReason =
+  | "complete"
+  | "missing_schedule"
+  | "missing_timezone"
+  | "schedule_history_cap"
+  | "missing_day_fold"
+  | "mixed_currency"
+  | "payment_coverage_unknown"
+  | "fact_cap_exceeded"
+  | "legacy_fact_without_observed_at";
+
+export type ReportWeekCompleteness = {
+  complete: boolean;
+  reason: ReportWeekCompletenessReason;
+};
+
+export type ReportWeekLineage = {
+  localDate: string;
+  included: boolean;
+  scheduleVersionId: string | null;
+  dayStatus: ReportDayStatus | null;
+  dayAvailable: boolean;
+  activityPosture: "recorded" | "zero_activity" | "unavailable";
+};
+
+export type ReportWeekLifecyclePosture =
+  | "live"
+  | "awaiting_final_close"
+  | "materializing"
+  | "accepted"
+  | "reopened_awaiting_successor"
+  | "successor_accepted";
+
+export type ReportWeekAmendmentPosture =
+  | "none"
+  | "pending_recompute"
+  | "amended";
+
+export type ReportWeekChangeDirection = "higher" | "lower" | "unchanged";
+
+export function derivePaymentPosture(args: {
+  collectedMinor: number;
+  refundedMinor: number;
+  allocatedMinor: number;
+  allocationOmittedMinor: number;
+}): ReportPaymentPosture {
+  const eligibleMinor = Math.max(0, args.collectedMinor - args.refundedMinor);
+  const hasUnknownCoverage = args.allocationOmittedMinor > 0;
+  const hasInvalidAllocation =
+    args.allocatedMinor < 0 || args.allocatedMinor > eligibleMinor;
+
+  return {
+    collectedMinor: args.collectedMinor,
+    refundedMinor: args.refundedMinor,
+    allocatedMinor: args.allocatedMinor,
+    unsettledMinor: hasUnknownCoverage
+      ? null
+      : Math.max(0, eligibleMinor - Math.max(0, args.allocatedMinor)),
+    allocationCoverage: hasUnknownCoverage ? "unknown" : "complete",
+    allocationOmittedMinor: args.allocationOmittedMinor,
+    hasInvalidAllocation,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Fold interface (slice A implements; slices C and F call)
 // ---------------------------------------------------------------------------
@@ -137,6 +250,8 @@ export type FoldFact = {
   quantity: number;
   productSkuId?: string;
   unitCostMinor?: number;
+  paymentAllocationMinor?: number;
+  paymentAllocationCoverage?: "known" | "unknown";
   quarantined: boolean;
 };
 
@@ -156,6 +271,7 @@ export type DayFoldResult = {
     lastFactRecordedAt: number;
     closeVarianceMinor?: number;
     postCloseNetSalesDeltaMinor?: number;
+    paymentPosture: ReportPaymentPosture;
   };
   /** Keyed by productSkuId. Only SKUs with activity appear. */
   skuDays: Map<string, SkuDayFoldResult>;
@@ -196,6 +312,9 @@ export type NewReportFact = {
   quantity: number;
   productSkuId?: string;
   unitCostMinor?: number;
+  /** Source-proven signed allocation; omitted on legacy payment facts. */
+  paymentAllocationMinor?: number;
+  paymentAllocationCoverage?: "known" | "unknown";
 };
 
 export type ReportSkuTransactionEvidence = {

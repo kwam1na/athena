@@ -66,6 +66,24 @@ const dailyCloseFrozenCarryForwardGroupValidator = v.object({
   memberCount: v.number(),
 });
 
+const dailyCloseFrozenSyncedSaleInventoryReviewGroupValidator = v.object({
+  affectedUnitCount: v.optional(v.number()),
+  key: v.string(),
+  memberCount: v.optional(v.number()),
+  members: v.array(
+    v.object({
+      createdAt: v.number(),
+      workItemId: v.id("operationalWorkItem"),
+    }),
+  ),
+  membershipCompleteness: v.union(
+    v.literal("complete"),
+    v.literal("incomplete"),
+  ),
+  oldestActionableAt: v.number(),
+  productSkuId: v.union(v.id("productSku"), v.null()),
+});
+
 const dailyCloseReportSnapshotValidator = v.object({
   snapshotContractVersion: v.optional(v.literal(2)),
   closeMetadata: v.object({
@@ -106,6 +124,9 @@ const dailyCloseReportSnapshotValidator = v.object({
   carryForwardItems: v.array(dailyCloseReportItemValidator),
   carryForwardGroups: v.optional(
     v.array(dailyCloseFrozenCarryForwardGroupValidator),
+  ),
+  frozenSyncedSaleInventoryReviewGroups: v.optional(
+    v.array(dailyCloseFrozenSyncedSaleInventoryReviewGroupValidator),
   ),
   readyItems: v.array(dailyCloseReportItemValidator),
   openWorkMembership: v.optional(

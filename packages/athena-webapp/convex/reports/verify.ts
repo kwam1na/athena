@@ -2,7 +2,10 @@ import { v } from "convex/values";
 import { internalQuery } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import type { ReportDayStatus } from "../../shared/reportsContract";
+import type {
+  ReportDayStatus,
+  ReportWeekMetrics,
+} from "../../shared/reportsContract";
 import { getDiscountValue } from "../inventory/utils";
 import { resolveOperatingDate } from "./operatingDay";
 // Readers, not mappers: `loadOnlineOrderLines` answers "where does this order
@@ -11,6 +14,14 @@ import { resolveOperatingDate } from "./operatingDay";
 // them would only let the verifier read a DIFFERENT set of lines than the one
 // that exists, which is noise rather than independence.
 import { loadOnlineOrderLines, toDiscountItems } from "./reseed";
+import { resolveWeeklyPeriod } from "./weeklyPeriods";
+import { localDateStartAt } from "../lib/storeScheduleTime";
+import { listOpenSyncedSaleInventoryReviewGroupsWithCompleteness } from "../operations/operationalWorkItems";
+import { projectLiveWeeklyInventoryAttention } from "./weeklyInventory";
+import {
+  computeWeeklyVariancePosture,
+  resolveAcceptedWeekClosePosture,
+} from "./weekly";
 
 /**
  * Source-truth verifier — the second opinion on a folded day.
@@ -75,6 +86,7 @@ export const VERIFY_MAX_DOCS_PER_DOMAIN = 500;
 export const VERIFY_MAX_LINES_PER_DOC = 500;
 /** Day docs examined by the store summary. */
 export const VERIFY_MAX_DAYS = 400;
+export const VERIFY_MAX_SCHEDULES = 100;
 
 /**
  * Slack around the UTC day, wide enough for any real timezone offset (±14h)
@@ -104,6 +116,8 @@ export type VerifiedMetrics = {
   unitsSold: number;
   unitsReturned: number;
   paymentsCollectedMinor: number;
+  paymentsRefundedMinor: number;
+  paymentAllocatedMinor: number;
 };
 
 export const VERIFIED_METRIC_KEYS = [
@@ -113,7 +127,35 @@ export const VERIFIED_METRIC_KEYS = [
   "unitsSold",
   "unitsReturned",
   "paymentsCollectedMinor",
+  "paymentsRefundedMinor",
+  "paymentAllocatedMinor",
 ] as const satisfies readonly (keyof VerifiedMetrics)[];
+
+export type VerifyPaymentPosture = {
+  outcome: "complete" | "incomplete";
+  reason:
+    | "complete"
+    | "source_cap_exceeded"
+    | "legacy_void_missing_timestamp"
+    | "voided_refund_unsupported"
+    | "invalid_allocation";
+  eligibleMinor: number;
+  coveredMinor: number;
+  omittedMinor: number;
+  unsettledMinor: number | null;
+  allocationCoverage: "complete" | "unknown";
+  hasInvalidAllocation: boolean;
+};
+
+export type VerifyPaymentDifference = {
+  field:
+    | "paymentUnsettledMinor"
+    | "paymentAllocationCoverage"
+    | "paymentAllocationOmittedMinor"
+    | "paymentHasInvalidAllocation";
+  expected: number | string | boolean | null;
+  actual: number | string | boolean | null;
+};
 
 export type VerifyDifference = {
   field: keyof VerifiedMetrics;
@@ -128,6 +170,8 @@ export type VerifyDayResult = {
   factCount: number;
   dayStatus: ReportDayStatus | "missing";
   expected: VerifiedMetrics;
+  paymentPosture: VerifyPaymentPosture;
+  paymentDifferences: VerifyPaymentDifference[];
   /** A domain scan hit its bound; `expected` is a lower bound, not a total. */
   truncated: boolean;
 };
@@ -140,15 +184,63 @@ export type VerifyStoreSummary = {
   truncated: boolean;
 };
 
+export type VerifyCurrentWeekResult =
+  | {
+      outcome: "unavailable";
+      reason:
+        | "missing_projection"
+        | "missing_schedule"
+        | "missing_timezone"
+        | "schedule_history_cap"
+        | "no_scheduled_dates"
+        | "missing_day_fold";
+    }
+  | {
+      outcome: "incomplete";
+      reason:
+        | "payment_source_incomplete"
+        | "source_cap_exceeded"
+        | "invalid_payment_allocation";
+      cycleStartDate: string;
+      cycleEndDate: string;
+      daysChecked: number;
+    }
+  | {
+      outcome: "verified";
+      cycleStartDate: string;
+      cycleEndDate: string;
+      daysChecked: number;
+      matches: boolean;
+      scheduleMatches: boolean;
+      includedDifferences: VerifyDifference[];
+      outsideScheduleDifferences: VerifyDifference[];
+      includedPaymentDifferences: VerifyPaymentDifference[];
+      outsideSchedulePaymentDifferences: VerifyPaymentDifference[];
+      truncated: boolean;
+      varianceMatches: boolean;
+      closeMatches: boolean;
+      amendmentMatches: boolean;
+      inventoryMatches: boolean;
+    };
+
 function zeroMetrics(): VerifiedMetrics {
   return {
     grossSalesMinor: 0,
     netSalesMinor: 0,
     paymentsCollectedMinor: 0,
+    paymentsRefundedMinor: 0,
+    paymentAllocatedMinor: 0,
     refundsMinor: 0,
     unitsReturned: 0,
     unitsSold: 0,
   };
+}
+
+function addMetrics(
+  total: VerifiedMetrics,
+  contribution: VerifiedMetrics,
+): void {
+  for (const field of VERIFIED_METRIC_KEYS) total[field] += contribution[field];
 }
 
 // ---------------------------------------------------------------------------
@@ -181,7 +273,11 @@ export async function computeExpectedDay(
   ctx: QueryCtx,
   storeId: Id<"store">,
   operatingDate: string,
-): Promise<{ expected: VerifiedMetrics; truncated: boolean }> {
+): Promise<{
+  expected: VerifiedMetrics;
+  paymentPosture: VerifyPaymentPosture;
+  truncated: boolean;
+}> {
   const expected = zeroMetrics();
   const { endAt, startAt } = candidateWindow(operatingDate);
   let truncated = false;
@@ -202,12 +298,15 @@ export async function computeExpectedDay(
         .gte("completedAt", startAt)
         .lte("completedAt", endAt),
     )
-    .take(VERIFY_MAX_DOCS_PER_DOMAIN);
-  if (completedTransactions.length === VERIFY_MAX_DOCS_PER_DOMAIN) {
+    .take(VERIFY_MAX_DOCS_PER_DOMAIN + 1);
+  if (completedTransactions.length > VERIFY_MAX_DOCS_PER_DOMAIN) {
     truncated = true;
   }
 
-  for (const transaction of completedTransactions) {
+  for (const transaction of completedTransactions.slice(
+    0,
+    VERIFY_MAX_DOCS_PER_DOMAIN,
+  )) {
     if (!(await onTargetDay(transaction.completedAt))) continue;
     const revenue = transaction.subtotal + transaction.tax;
     expected.grossSalesMinor += revenue;
@@ -218,8 +317,10 @@ export async function computeExpectedDay(
       .withIndex("by_transactionId", (q) =>
         q.eq("transactionId", transaction._id),
       )
-      .take(VERIFY_MAX_LINES_PER_DOC);
-    for (const item of items) expected.unitsSold += item.quantity;
+      .take(VERIFY_MAX_LINES_PER_DOC + 1);
+    if (items.length > VERIFY_MAX_LINES_PER_DOC) truncated = true;
+    for (const item of items.slice(0, VERIFY_MAX_LINES_PER_DOC))
+      expected.unitsSold += item.quantity;
   }
 
   // --- POS voids -----------------------------------------------------------
@@ -231,12 +332,15 @@ export async function computeExpectedDay(
     .withIndex("by_storeId_status_completedAt", (q) =>
       q.eq("storeId", storeId).eq("status", "void"),
     )
-    .take(VERIFY_MAX_DOCS_PER_DOMAIN);
-  if (voidedTransactions.length === VERIFY_MAX_DOCS_PER_DOMAIN) {
+    .take(VERIFY_MAX_DOCS_PER_DOMAIN + 1);
+  if (voidedTransactions.length > VERIFY_MAX_DOCS_PER_DOMAIN) {
     truncated = true;
   }
 
-  for (const transaction of voidedTransactions) {
+  for (const transaction of voidedTransactions.slice(
+    0,
+    VERIFY_MAX_DOCS_PER_DOMAIN,
+  )) {
     const voidedAt = transaction.voidedAt ?? transaction.completedAt;
 
     // The underlying sale still counts on the day it was rung up.
@@ -249,8 +353,10 @@ export async function computeExpectedDay(
         .withIndex("by_transactionId", (q) =>
           q.eq("transactionId", transaction._id),
         )
-        .take(VERIFY_MAX_LINES_PER_DOC);
-      for (const item of soldItems) expected.unitsSold += item.quantity;
+        .take(VERIFY_MAX_LINES_PER_DOC + 1);
+      if (soldItems.length > VERIFY_MAX_LINES_PER_DOC) truncated = true;
+      for (const item of soldItems.slice(0, VERIFY_MAX_LINES_PER_DOC))
+        expected.unitsSold += item.quantity;
     }
 
     if (!(await onTargetDay(voidedAt))) continue;
@@ -262,8 +368,10 @@ export async function computeExpectedDay(
       .withIndex("by_transactionId", (q) =>
         q.eq("transactionId", transaction._id),
       )
-      .take(VERIFY_MAX_LINES_PER_DOC);
-    for (const item of items) expected.unitsSold -= item.quantity;
+      .take(VERIFY_MAX_LINES_PER_DOC + 1);
+    if (items.length > VERIFY_MAX_LINES_PER_DOC) truncated = true;
+    for (const item of items.slice(0, VERIFY_MAX_LINES_PER_DOC))
+      expected.unitsSold -= item.quantity;
   }
 
   // --- POS corrections -----------------------------------------------------
@@ -278,10 +386,10 @@ export async function computeExpectedDay(
         .gte("appliedAt", startAt)
         .lte("appliedAt", endAt),
     )
-    .take(VERIFY_MAX_DOCS_PER_DOMAIN);
-  if (adjustments.length === VERIFY_MAX_DOCS_PER_DOMAIN) truncated = true;
+    .take(VERIFY_MAX_DOCS_PER_DOMAIN + 1);
+  if (adjustments.length > VERIFY_MAX_DOCS_PER_DOMAIN) truncated = true;
 
-  for (const adjustment of adjustments) {
+  for (const adjustment of adjustments.slice(0, VERIFY_MAX_DOCS_PER_DOMAIN)) {
     const appliedAt = adjustment.appliedAt ?? adjustment.updatedAt;
     if (!(await onTargetDay(appliedAt))) continue;
     expected.grossSalesMinor += adjustment.deltaTotal;
@@ -290,8 +398,10 @@ export async function computeExpectedDay(
     const lines = await ctx.db
       .query("posTransactionAdjustmentLine")
       .withIndex("by_adjustmentId", (q) => q.eq("adjustmentId", adjustment._id))
-      .take(VERIFY_MAX_LINES_PER_DOC);
-    for (const line of lines) expected.unitsSold += line.quantityDelta;
+      .take(VERIFY_MAX_LINES_PER_DOC + 1);
+    if (lines.length > VERIFY_MAX_LINES_PER_DOC) truncated = true;
+    for (const line of lines.slice(0, VERIFY_MAX_LINES_PER_DOC))
+      expected.unitsSold += line.quantityDelta;
   }
 
   // --- Storefront ----------------------------------------------------------
@@ -307,19 +417,20 @@ export async function computeExpectedDay(
           .gte("completedAt", startAt - STOREFRONT_REFUND_LOOKBACK_MS)
           .lte("completedAt", endAt),
       )
-      .take(VERIFY_MAX_DOCS_PER_DOMAIN);
-    if (orders.length === VERIFY_MAX_DOCS_PER_DOMAIN) truncated = true;
+      .take(VERIFY_MAX_DOCS_PER_DOMAIN + 1);
+    if (orders.length > VERIFY_MAX_DOCS_PER_DOMAIN) truncated = true;
 
-    for (const order of orders) {
+    for (const order of orders.slice(0, VERIFY_MAX_DOCS_PER_DOMAIN)) {
       const items = await loadOnlineOrderLines(ctx, order);
-      if (items.length === 0) continue;
+      if (items.capExceeded) truncated = true;
+      if (items.lines.length === 0) continue;
 
       const fulfilledAt =
         order.completedAt ?? order.updatedAt ?? order._creationTime;
       if (await onTargetDay(fulfilledAt)) {
         const deliveryFee = Math.max(0, Math.round(order.deliveryFee ?? 0));
         let merchandise = 0;
-        for (const item of items) {
+        for (const item of items.lines) {
           merchandise += item.price * item.quantity;
           expected.unitsSold += item.quantity;
         }
@@ -328,7 +439,9 @@ export async function computeExpectedDay(
         // Reinterpreting it here would invent a second discount policy.
         const discount = Math.max(
           0,
-          Math.round(getDiscountValue(toDiscountItems(items), order.discount)),
+          Math.round(
+            getDiscountValue(toDiscountItems(items.lines), order.discount),
+          ),
         );
         expected.grossSalesMinor += merchandise + deliveryFee;
         expected.netSalesMinor += merchandise + deliveryFee - discount;
@@ -355,10 +468,10 @@ export async function computeExpectedDay(
         .gte("completedAt", startAt)
         .lte("completedAt", endAt),
     )
-    .take(VERIFY_MAX_DOCS_PER_DOMAIN);
-  if (serviceCases.length === VERIFY_MAX_DOCS_PER_DOMAIN) truncated = true;
+    .take(VERIFY_MAX_DOCS_PER_DOMAIN + 1);
+  if (serviceCases.length > VERIFY_MAX_DOCS_PER_DOMAIN) truncated = true;
 
-  for (const serviceCase of serviceCases) {
+  for (const serviceCase of serviceCases.slice(0, VERIFY_MAX_DOCS_PER_DOMAIN)) {
     const completedAt = serviceCase.completedAt ?? serviceCase.updatedAt;
     if (!(await onTargetDay(completedAt))) continue;
 
@@ -379,34 +492,98 @@ export async function computeExpectedDay(
       .withIndex("by_serviceCaseId", (q) =>
         q.eq("serviceCaseId", serviceCase._id),
       )
-      .take(VERIFY_MAX_LINES_PER_DOC);
+      .take(VERIFY_MAX_LINES_PER_DOC + 1);
+    if (lineItems.length > VERIFY_MAX_LINES_PER_DOC) truncated = true;
     if (lineItems.length === 0) {
       expected.unitsSold += 1;
     } else {
-      for (const lineItem of lineItems) expected.unitsSold += lineItem.quantity;
+      for (const lineItem of lineItems.slice(0, VERIFY_MAX_LINES_PER_DOC))
+        expected.unitsSold += lineItem.quantity;
     }
   }
 
   // --- Payments ------------------------------------------------------------
-  // Collections only: inbound and not reversed. Outbound and voided rows are
-  // refunds and belong to `paymentsRefundedMinor`, which this module does not
-  // claim.
+  // This is deliberately source-direct arithmetic over paymentAllocation. It
+  // does not consult report facts or the fold's posture helper. A voided row
+  // preserves its original event at recordedAt and contributes a separate
+  // reversal only at the server-stamped voidedAt.
   const allocations = await ctx.db
     .query("paymentAllocation")
-    .withIndex("by_storeId_recordedAt", (q) =>
-      q.eq("storeId", storeId).gte("recordedAt", startAt).lte("recordedAt", endAt),
-    )
-    .take(VERIFY_MAX_DOCS_PER_DOMAIN);
-  if (allocations.length === VERIFY_MAX_DOCS_PER_DOMAIN) truncated = true;
+    .withIndex("by_storeId_recordedAt", (q) => q.eq("storeId", storeId))
+    .take(VERIFY_MAX_DOCS_PER_DOMAIN + 1);
+  const paymentCapExceeded = allocations.length > VERIFY_MAX_DOCS_PER_DOMAIN;
+  if (paymentCapExceeded) truncated = true;
 
-  for (const allocation of allocations) {
-    if (allocation.status !== "recorded") continue;
-    if (allocation.direction !== "in") continue;
-    if (!(await onTargetDay(allocation.recordedAt))) continue;
-    expected.paymentsCollectedMinor += Math.abs(allocation.amount);
+  let paymentIncompleteReason: VerifyPaymentPosture["reason"] | null =
+    paymentCapExceeded ? "source_cap_exceeded" : null;
+  let paymentOmittedMinor = 0;
+
+  for (const allocation of allocations.slice(0, VERIFY_MAX_DOCS_PER_DOMAIN)) {
+    const amountMinor = Math.abs(allocation.amount);
+    const originalIsOnTargetDay = await onTargetDay(allocation.recordedAt);
+
+    if (allocation.direction === "in") {
+      if (originalIsOnTargetDay) {
+        expected.paymentsCollectedMinor += amountMinor;
+        if (
+          allocation.status === "recorded" ||
+          allocation.voidedAt !== undefined
+        ) {
+          expected.paymentAllocatedMinor += amountMinor;
+        } else {
+          paymentOmittedMinor += amountMinor;
+        }
+      }
+    } else if (originalIsOnTargetDay) {
+      expected.paymentsRefundedMinor += amountMinor;
+      expected.paymentAllocatedMinor -= amountMinor;
+    }
+
+    if (allocation.status !== "voided") continue;
+    if (allocation.direction === "out") {
+      paymentIncompleteReason ??= "voided_refund_unsupported";
+      paymentOmittedMinor += amountMinor;
+      continue;
+    }
+    if (allocation.voidedAt === undefined) {
+      paymentIncompleteReason ??= "legacy_void_missing_timestamp";
+      // The reversal could belong to any period, so no date is invented.
+      if (!originalIsOnTargetDay) paymentOmittedMinor += amountMinor;
+      continue;
+    }
+    if (await onTargetDay(allocation.voidedAt)) {
+      expected.paymentsRefundedMinor += amountMinor;
+      expected.paymentAllocatedMinor -= amountMinor;
+    }
   }
 
-  return { expected, truncated };
+  const eligibleMinor = Math.max(
+    0,
+    expected.paymentsCollectedMinor - expected.paymentsRefundedMinor,
+  );
+  const coveredMinor = Math.min(
+    eligibleMinor,
+    Math.max(0, expected.paymentAllocatedMinor),
+  );
+  const hasInvalidAllocation =
+    expected.paymentAllocatedMinor < 0 ||
+    expected.paymentAllocatedMinor > eligibleMinor;
+  if (hasInvalidAllocation) paymentIncompleteReason ??= "invalid_allocation";
+  const paymentComplete = paymentIncompleteReason === null;
+  const paymentPosture: VerifyPaymentPosture = {
+    outcome: paymentComplete ? "complete" : "incomplete",
+    reason: paymentIncompleteReason ?? "complete",
+    eligibleMinor,
+    coveredMinor,
+    omittedMinor: paymentOmittedMinor,
+    unsettledMinor: paymentComplete
+      ? Math.max(0, eligibleMinor - coveredMinor)
+      : null,
+    allocationCoverage: paymentComplete ? "complete" : "unknown",
+    hasInvalidAllocation,
+  };
+
+  return { expected, paymentPosture, truncated };
 }
 
 // ---------------------------------------------------------------------------
@@ -421,10 +598,60 @@ export function diffMetrics(
   const differences: VerifyDifference[] = [];
   for (const field of VERIFIED_METRIC_KEYS) {
     if (expected[field] !== actual[field]) {
-      differences.push({ actual: actual[field], expected: expected[field], field });
+      differences.push({
+        actual: actual[field],
+        expected: expected[field],
+        field,
+      });
     }
   }
   return differences;
+}
+
+function diffPaymentPosture(
+  expected: VerifyPaymentPosture,
+  actual: {
+    paymentUnsettledMinor: number | null;
+    paymentAllocationCoverage: "complete" | "unknown";
+    paymentAllocationOmittedMinor: number;
+    paymentHasInvalidAllocation: boolean;
+  } | null,
+): VerifyPaymentDifference[] {
+  const normalized = actual ?? {
+    paymentUnsettledMinor: null,
+    paymentAllocationCoverage: "unknown" as const,
+    paymentAllocationOmittedMinor: 0,
+    paymentHasInvalidAllocation: false,
+  };
+  const comparisons: Array<{
+    field: VerifyPaymentDifference["field"];
+    expected: VerifyPaymentDifference["expected"];
+    actual: VerifyPaymentDifference["actual"];
+  }> = [
+    {
+      field: "paymentUnsettledMinor",
+      expected: expected.unsettledMinor,
+      actual: normalized.paymentUnsettledMinor,
+    },
+    {
+      field: "paymentAllocationCoverage",
+      expected: expected.allocationCoverage,
+      actual: normalized.paymentAllocationCoverage,
+    },
+    {
+      field: "paymentAllocationOmittedMinor",
+      expected: expected.omittedMinor,
+      actual: normalized.paymentAllocationOmittedMinor,
+    },
+    {
+      field: "paymentHasInvalidAllocation",
+      expected: expected.hasInvalidAllocation,
+      actual: normalized.paymentHasInvalidAllocation,
+    },
+  ];
+  return comparisons.filter(
+    (comparison) => comparison.actual !== comparison.expected,
+  );
 }
 
 function foldedMetrics(day: Doc<"reportDay"> | null): VerifiedMetrics {
@@ -433,9 +660,26 @@ function foldedMetrics(day: Doc<"reportDay"> | null): VerifiedMetrics {
     grossSalesMinor: day.grossSalesMinor,
     netSalesMinor: day.netSalesMinor,
     paymentsCollectedMinor: day.paymentsCollectedMinor,
+    paymentsRefundedMinor: day.paymentsRefundedMinor,
+    paymentAllocatedMinor: day.paymentAllocatedMinor,
     refundsMinor: day.refundsMinor,
     unitsReturned: day.unitsReturned,
     unitsSold: day.unitsSold,
+  };
+}
+
+function weeklyVerifiedMetrics(
+  metrics: ReportWeekMetrics,
+): VerifiedMetrics {
+  return {
+    grossSalesMinor: metrics.grossSalesMinor,
+    netSalesMinor: metrics.netSalesMinor,
+    paymentsCollectedMinor: metrics.paymentsCollectedMinor,
+    paymentsRefundedMinor: metrics.paymentsRefundedMinor,
+    paymentAllocatedMinor: metrics.paymentAllocatedMinor,
+    refundsMinor: metrics.refundsMinor,
+    unitsReturned: metrics.unitsReturned,
+    unitsSold: metrics.unitsSold,
   };
 }
 
@@ -451,19 +695,37 @@ export async function verifyDayWithCtx(
     )
     .unique();
 
-  const { expected, truncated } = await computeExpectedDay(
+  const { expected, paymentPosture, truncated } = await computeExpectedDay(
     ctx,
     storeId,
     operatingDate,
   );
   const differences = diffMetrics(expected, foldedMetrics(day));
+  const paymentDifferences = diffPaymentPosture(
+    paymentPosture,
+    day?.paymentPosture
+      ? {
+          paymentUnsettledMinor: day.paymentPosture.unsettledMinor,
+          paymentAllocationCoverage: day.paymentPosture.allocationCoverage,
+          paymentAllocationOmittedMinor:
+            day.paymentPosture.allocationOmittedMinor,
+          paymentHasInvalidAllocation: day.paymentPosture.hasInvalidAllocation,
+        }
+      : null,
+  );
 
   return {
     dayStatus: day?.status ?? "missing",
     differences,
     expected,
+    paymentDifferences,
+    paymentPosture,
     factCount: day?.factCount ?? 0,
-    matches: differences.length === 0,
+    matches:
+      !truncated &&
+      differences.length === 0 &&
+      paymentDifferences.length === 0 &&
+      paymentPosture.outcome === "complete",
     operatingDate,
     truncated,
   };
@@ -492,11 +754,13 @@ export async function verifyStoreSummaryWithCtx(
   ctx: QueryCtx,
   storeId: Id<"store">,
 ): Promise<VerifyStoreSummary> {
-  const days = await ctx.db
+  const dayProbe = await ctx.db
     .query("reportDay")
     .withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", storeId))
     .order("desc")
-    .take(VERIFY_MAX_DAYS);
+    .take(VERIFY_MAX_DAYS + 1);
+  const truncated = dayProbe.length > VERIFY_MAX_DAYS;
+  const days = dayProbe.slice(0, VERIFY_MAX_DAYS);
 
   const mismatches: VerifyDayResult[] = [];
   let daysMatching = 0;
@@ -511,7 +775,316 @@ export async function verifyStoreSummaryWithCtx(
     daysChecked: days.length,
     daysMatching,
     mismatches,
-    truncated: days.length === VERIFY_MAX_DAYS,
+    truncated,
+  };
+}
+
+/**
+ * Recompute the current weekly headline fields directly from source domains.
+ *
+ * This intentionally does not read facts or call either weekly fold helper.
+ * The schedule resolver remains shared authority for period membership, while
+ * the financial arithmetic is independently accumulated day by day here.
+ */
+export async function verifyCurrentWeekWithCtx(
+  ctx: QueryCtx,
+  storeId: Id<"store">,
+): Promise<VerifyCurrentWeekResult> {
+  const current = await ctx.db
+    .query("reportWeekCurrent")
+    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+    .unique();
+  if (!current) return { outcome: "unavailable", reason: "missing_projection" };
+  if (current.availability === "unavailable") {
+    return { outcome: "unavailable", reason: current.unavailableReason };
+  }
+
+  const scheduleProbe = await ctx.db
+    .query("storeSchedule")
+    .withIndex("by_storeId_status_effectiveFrom", (q) =>
+      q.eq("storeId", storeId),
+    )
+    .take(VERIFY_MAX_SCHEDULES + 1);
+  if (scheduleProbe.length > VERIFY_MAX_SCHEDULES) {
+    return {
+      cycleEndDate: current.cycleEndDate,
+      cycleStartDate: current.cycleStartDate,
+      daysChecked: 0,
+      outcome: "incomplete",
+      reason: "source_cap_exceeded",
+    };
+  }
+  const schedules = scheduleProbe.filter(
+    (schedule) => schedule.status !== "candidate",
+  );
+  const activeSchedule = schedules
+    .filter(
+      (schedule) =>
+        schedule.effectiveFrom <= current.materializedAt &&
+        (schedule.effectiveTo === undefined ||
+          current.materializedAt < schedule.effectiveTo),
+    )
+    .sort((left, right) => right.effectiveFrom - left.effectiveFrom)[0];
+  if (!activeSchedule)
+    return { outcome: "unavailable", reason: "missing_schedule" };
+
+  const period = resolveWeeklyPeriod({
+    referenceAt: current.materializedAt,
+    schedules,
+    timezone: activeSchedule.timezone || null,
+  });
+  if (period.kind !== "resolved")
+    return { outcome: "unavailable", reason: "missing_schedule" };
+
+  const included = zeroMetrics();
+  const outsideSchedule = zeroMetrics();
+  let includedPaymentUnsettledMinor = 0;
+  let outsideSchedulePaymentUnsettledMinor = 0;
+  for (const date of period.dates) {
+    const result = await computeExpectedDay(ctx, storeId, date.localDate);
+    if (result.truncated) {
+      return {
+        cycleEndDate: current.cycleEndDate,
+        cycleStartDate: current.cycleStartDate,
+        daysChecked: period.dates.length,
+        outcome: "incomplete",
+        reason: "source_cap_exceeded",
+      };
+    }
+    addMetrics(date.included ? included : outsideSchedule, result.expected);
+    if (result.paymentPosture.outcome === "incomplete") {
+      return {
+        cycleEndDate: current.cycleEndDate,
+        cycleStartDate: current.cycleStartDate,
+        daysChecked: period.dates.length,
+        outcome: "incomplete",
+        reason:
+          result.paymentPosture.reason === "source_cap_exceeded"
+            ? "source_cap_exceeded"
+            : result.paymentPosture.reason === "invalid_allocation"
+              ? "invalid_payment_allocation"
+              : "payment_source_incomplete",
+      };
+    }
+    if (date.included) {
+      includedPaymentUnsettledMinor +=
+        result.paymentPosture.unsettledMinor ?? 0;
+    } else {
+      outsideSchedulePaymentUnsettledMinor +=
+        result.paymentPosture.unsettledMinor ?? 0;
+    }
+  }
+
+  const projectedIncluded = weeklyVerifiedMetrics(current.included);
+  const projectedOutside = weeklyVerifiedMetrics(current.outsideSchedule);
+  const includedDifferences = diffMetrics(included, projectedIncluded);
+  const outsideScheduleDifferences = diffMetrics(
+    outsideSchedule,
+    projectedOutside,
+  );
+  const includedPaymentDifferences = diffPaymentPosture(
+    {
+      outcome: "complete",
+      reason: "complete",
+      eligibleMinor: Math.max(
+        0,
+        included.paymentsCollectedMinor - included.paymentsRefundedMinor,
+      ),
+      coveredMinor: Math.max(0, included.paymentAllocatedMinor),
+      omittedMinor: 0,
+      unsettledMinor: includedPaymentUnsettledMinor,
+      allocationCoverage: "complete",
+      hasInvalidAllocation: false,
+    },
+    {
+      paymentUnsettledMinor: current.included.paymentUnsettledMinor,
+      paymentAllocationCoverage: current.included.paymentAllocationCoverage,
+      paymentAllocationOmittedMinor: 0,
+      paymentHasInvalidAllocation: false,
+    },
+  );
+  const outsideSchedulePaymentDifferences = diffPaymentPosture(
+    {
+      outcome: "complete",
+      reason: "complete",
+      eligibleMinor: Math.max(
+        0,
+        outsideSchedule.paymentsCollectedMinor -
+          outsideSchedule.paymentsRefundedMinor,
+      ),
+      coveredMinor: Math.max(0, outsideSchedule.paymentAllocatedMinor),
+      omittedMinor: 0,
+      unsettledMinor: outsideSchedulePaymentUnsettledMinor,
+      allocationCoverage: "complete",
+      hasInvalidAllocation: false,
+    },
+    {
+      paymentUnsettledMinor: current.outsideSchedule.paymentUnsettledMinor,
+      paymentAllocationCoverage:
+        current.outsideSchedule.paymentAllocationCoverage,
+      paymentAllocationOmittedMinor: 0,
+      paymentHasInvalidAllocation: false,
+    },
+  );
+  const scheduleMatches =
+    current.cycleStartDate === period.startDate &&
+    current.cycleEndDate === period.endDate &&
+    current.scheduleLineage.length === period.dates.length &&
+    period.dates.every((date, index) => {
+      const projected = current.scheduleLineage[index];
+      return (
+        projected?.localDate === date.localDate &&
+        projected.included === date.included &&
+        String(projected.scheduleVersionId) === String(date.scheduleVersionId)
+      );
+    });
+
+  const dayProbe = await ctx.db
+    .query("reportDay")
+    .withIndex("by_storeId_operatingDate", (q) =>
+      q
+        .eq("storeId", storeId)
+        .gte("operatingDate", period.startDate)
+        .lte("operatingDate", period.endDate),
+    )
+    .take(period.dates.length + 1);
+  if (dayProbe.length > period.dates.length) {
+    return {
+      cycleEndDate: current.cycleEndDate,
+      cycleStartDate: current.cycleStartDate,
+      daysChecked: period.dates.length,
+      outcome: "incomplete",
+      reason: "source_cap_exceeded",
+    };
+  }
+  const expectedVariance = computeWeeklyVariancePosture(period, dayProbe);
+  const varianceMatches =
+    JSON.stringify(current.variancePosture) ===
+    JSON.stringify(expectedVariance);
+
+  const frameScheduleVersionId = period.dates[0]?.scheduleVersionId;
+  const frameSchedule = schedules.find(
+    (schedule) => String(schedule._id) === String(frameScheduleVersionId),
+  );
+  const frameStartAt = frameSchedule?.timezone
+    ? localDateStartAt(period.startDate, frameSchedule.timezone)
+    : null;
+  if (frameStartAt === null) {
+    return { outcome: "unavailable", reason: "missing_schedule" };
+  }
+  const logicalWork =
+    await listOpenSyncedSaleInventoryReviewGroupsWithCompleteness(ctx, storeId);
+  if (logicalWork.overflow) {
+    return {
+      cycleEndDate: current.cycleEndDate,
+      cycleStartDate: current.cycleStartDate,
+      daysChecked: period.dates.length,
+      outcome: "incomplete",
+      reason: "source_cap_exceeded",
+    };
+  }
+  const expectedInventory = projectLiveWeeklyInventoryAttention({
+    frameStartAt,
+    logicalWork,
+  });
+  const inventoryMatches =
+    JSON.stringify(current.inventoryAttention) ===
+    JSON.stringify(expectedInventory);
+
+  const accepted = current.acceptedBaselineId
+    ? await ctx.db.get("reportWeekAccepted", current.acceptedBaselineId)
+    : null;
+  const expectedClosePosture = accepted
+    ? await resolveAcceptedWeekClosePosture(
+        ctx,
+        accepted,
+        period.finalScheduledDate,
+      )
+    : undefined;
+  if (accepted && !expectedClosePosture) {
+    return {
+      cycleEndDate: current.cycleEndDate,
+      cycleStartDate: current.cycleStartDate,
+      daysChecked: period.dates.length,
+      outcome: "incomplete",
+      reason: "source_cap_exceeded",
+    };
+  }
+  const closeMatches = accepted
+    ? current.closePosture?.acceptedCloseId ===
+        expectedClosePosture?.acceptedCloseId &&
+      current.closePosture?.currentCloseId ===
+        expectedClosePosture?.currentCloseId &&
+      current.closePosture?.changedAt === expectedClosePosture?.changedAt &&
+      current.closePosture?.status === expectedClosePosture?.status
+    : current.acceptedBaselineId === undefined &&
+      current.closePosture === undefined;
+  const acceptedIncludedDifferences = accepted
+    ? diffMetrics(included, weeklyVerifiedMetrics(accepted.included))
+    : [];
+  const acceptedOutsideDifferences = accepted
+    ? diffMetrics(
+        outsideSchedule,
+        weeklyVerifiedMetrics(accepted.outsideSchedule),
+      )
+    : [];
+  const expectedCurrentCloseId = expectedClosePosture?.currentCloseId;
+  const expectsAmendment = Boolean(
+    accepted &&
+    (acceptedIncludedDifferences.length > 0 ||
+      acceptedOutsideDifferences.length > 0 ||
+      (expectedCurrentCloseId !== undefined &&
+        expectedCurrentCloseId !== accepted.closeId)),
+  );
+  const amendmentMatches = !accepted
+    ? current.acceptedBaselineId === undefined &&
+      current.amendment === undefined
+    : !expectsAmendment
+      ? current.amendment === undefined
+      : current.amendment !== undefined &&
+        diffMetrics(included, weeklyVerifiedMetrics(current.amendment.included))
+          .length === 0 &&
+        diffMetrics(
+          outsideSchedule,
+          weeklyVerifiedMetrics(current.amendment.outsideSchedule),
+        ).length === 0 &&
+        current.amendment.includedNetSalesDeltaMinor ===
+          included.netSalesMinor - accepted.included.netSalesMinor &&
+        current.amendment.outsideScheduleNetSalesDeltaMinor ===
+          outsideSchedule.netSalesMinor -
+            accepted.outsideSchedule.netSalesMinor &&
+        String(current.amendment.sourceCloseId) ===
+          String(expectedCurrentCloseId) &&
+        current.amendment.sourceCloseAcceptedAt ===
+          (expectedCurrentCloseId
+            ? expectedClosePosture?.changedAt
+            : undefined);
+
+  return {
+    amendmentMatches,
+    closeMatches,
+    cycleEndDate: current.cycleEndDate,
+    cycleStartDate: current.cycleStartDate,
+    daysChecked: period.dates.length,
+    includedDifferences,
+    includedPaymentDifferences,
+    inventoryMatches,
+    matches:
+      scheduleMatches &&
+      varianceMatches &&
+      closeMatches &&
+      amendmentMatches &&
+      inventoryMatches &&
+      includedDifferences.length === 0 &&
+      outsideScheduleDifferences.length === 0 &&
+      includedPaymentDifferences.length === 0 &&
+      outsideSchedulePaymentDifferences.length === 0,
+    outcome: "verified",
+    outsideScheduleDifferences,
+    outsideSchedulePaymentDifferences,
+    scheduleMatches,
+    truncated: false,
+    varianceMatches,
   };
 }
 
@@ -525,4 +1098,11 @@ export const verifyStoreSummary = internalQuery({
   args: { storeId: v.id("store") },
   handler: async (ctx, args): Promise<VerifyStoreSummary> =>
     verifyStoreSummaryWithCtx(ctx, args.storeId),
+});
+
+/** Minimal, aggregate-only diagnostics: no source IDs or customer data. */
+export const verifyCurrentWeekAgainstSources = internalQuery({
+  args: { storeId: v.id("store") },
+  handler: async (ctx, args): Promise<VerifyCurrentWeekResult> =>
+    verifyCurrentWeekWithCtx(ctx, args.storeId),
 });

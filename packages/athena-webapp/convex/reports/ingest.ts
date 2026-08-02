@@ -5,6 +5,7 @@ import {
   type NewReportFact,
   type ReportDayMetrics,
   type ReportSkuDayMetrics,
+  derivePaymentPosture,
   normalizeCurrencyCode,
 } from "../../shared/reportsContract";
 import { factFingerprint, REPORTS_FINGERPRINT_VERSION } from "./fingerprint";
@@ -179,24 +180,34 @@ export function factDeltas(fact: NewReportFact): FactSignedDeltas {
     }
     case "payment": {
       const amount = Math.abs(net);
+      const allocated =
+        fact.paymentAllocationCoverage === "known" &&
+        fact.paymentAllocationMinor !== undefined
+          ? fact.paymentAllocationMinor
+          : 0;
       return {
         contributes: true,
         uncosted: false,
         day: {
           paymentsCollectedMinor: amount,
-          paymentAllocatedMinor: amount,
+          paymentAllocatedMinor: allocated,
         },
         sku: {},
       };
     }
     case "payment_refund": {
       const amount = Math.abs(net);
+      const allocated =
+        fact.paymentAllocationCoverage === "known" &&
+        fact.paymentAllocationMinor !== undefined
+          ? fact.paymentAllocationMinor
+          : 0;
       return {
         contributes: true,
         uncosted: false,
         day: {
           paymentsRefundedMinor: amount,
-          paymentAllocatedMinor: -amount,
+          paymentAllocatedMinor: allocated,
         },
         sku: {},
       };
@@ -217,6 +228,7 @@ function toFactDoc(
   fact: NewReportFact,
   operatingDate: string,
   recordedAt: number,
+  observedAt: number,
 ) {
   return {
     storeId,
@@ -228,6 +240,9 @@ function toFactDoc(
     fingerprintVersion: REPORTS_FINGERPRINT_VERSION,
     occurredAt: fact.occurredAt,
     recordedAt,
+    // This is deliberately not part of NewReportFact. Acceptance cutoffs are
+    // knowledge-time boundaries, so callers and reseed cannot backdate them.
+    observedAt,
     operatingDate,
     currency: fact.currency,
     grossAmountMinor: fact.grossAmountMinor,
@@ -237,6 +252,8 @@ function toFactDoc(
     quantity: fact.quantity,
     productSkuId: fact.productSkuId as Id<"productSku"> | undefined,
     unitCostMinor: fact.unitCostMinor,
+    paymentAllocationMinor: fact.paymentAllocationMinor,
+    paymentAllocationCoverage: fact.paymentAllocationCoverage,
   };
 }
 
@@ -410,6 +427,28 @@ async function applyToOpenDay(
     factCount,
     lastFactRecordedAt,
     flags,
+    paymentPosture: derivePaymentPosture({
+      collectedMinor: next.paymentsCollectedMinor,
+      refundedMinor: next.paymentsRefundedMinor,
+      allocatedMinor: next.paymentAllocatedMinor,
+      allocationOmittedMinor:
+        existing?.paymentPosture?.allocationOmittedMinor ??
+        (existing
+          ? Math.abs(base.paymentsCollectedMinor) +
+            Math.abs(base.paymentsRefundedMinor)
+          : 0) +
+          applied.reduce(
+            (total, { fact }) =>
+              total +
+              ((fact.factKind === "payment" ||
+                fact.factKind === "payment_refund") &&
+              (fact.paymentAllocationCoverage !== "known" ||
+                fact.paymentAllocationMinor === undefined)
+                ? Math.abs(fact.netAmountMinor)
+                : 0),
+            0,
+          ),
+    }),
   };
 
   if (existing) {
@@ -487,12 +526,12 @@ export async function recordFacts(
   ctx: MutationCtx,
   storeId: Id<"store">,
   facts: NewReportFact[],
-): Promise<void> {
+): Promise<{ outcome: "recorded" | "contained_failure" }> {
   const touchedDates = new Set<string>();
   let currentOperatingDate: string | undefined;
 
   try {
-    if (facts.length === 0) return;
+    if (facts.length === 0) return { outcome: "recorded" };
 
     const now = Date.now();
     currentOperatingDate = await resolveOperatingDate(ctx, storeId, now);
@@ -514,7 +553,7 @@ export async function recordFacts(
       touchedDates.add(operatingDate);
 
       const existing = await findExistingFact(ctx, storeId, fact);
-      const fingerprint = factFingerprint(fact);
+      const fingerprint = factFingerprint(fact, existing?.fingerprintVersion);
 
       if (existing) {
         if (existing.fingerprint === fingerprint) continue; // replay — no-op
@@ -538,7 +577,7 @@ export async function recordFacts(
       const recordedAt = fact.recordedAt ?? Date.now();
       await ctx.db.insert(
         "reportFact",
-        toFactDoc(storeId, fact, operatingDate, recordedAt),
+        toFactDoc(storeId, fact, operatingDate, recordedAt, now),
       );
 
       if (operatingDate === currentOperatingDate) {
@@ -563,6 +602,7 @@ export async function recordFacts(
     // Standing mark for the open day: the sweeper refolds it every pass so the
     // provisional incremental numbers converge on the fold's answer.
     await markDirty(ctx, storeId, currentOperatingDate, "day_open");
+    return { outcome: "recorded" };
   } catch {
     // Containment. A reporting failure must never abort the domain mutation;
     // it degrades to "this day needs a rebuild". If THIS write also fails the
@@ -574,5 +614,6 @@ export async function recordFacts(
     for (const date of dates) {
       await markDirty(ctx, storeId, date, "write_failure");
     }
+    return { outcome: "contained_failure" };
   }
 }

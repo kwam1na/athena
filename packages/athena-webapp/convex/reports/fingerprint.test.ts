@@ -7,6 +7,7 @@ import {
 import {
   factFingerprint,
   fingerprintPayload,
+  LEGACY_REPORTS_FINGERPRINT_VERSION,
   stableStringHash,
 } from "./fingerprint";
 
@@ -53,7 +54,7 @@ describe("factFingerprint", () => {
       fact({ occurredAt: 1_700_000_000_001 }),
       fact({ productSkuId: "sku_1" }),
       fact({ unitCostMinor: 4_000 }),
-    ].map(factFingerprint);
+    ].map((candidate) => factFingerprint(candidate));
     for (const value of drifted) expect(value).not.toBe(baseline);
     expect(new Set(drifted).size).toBe(drifted.length);
   });
@@ -76,7 +77,22 @@ describe("factFingerprint", () => {
       2,
       "sku_1",
       null,
+      null,
+      null,
     ]);
+  });
+
+  it("keeps legacy replays on their stored field set", () => {
+    const legacy = factFingerprint(fact(), LEGACY_REPORTS_FINGERPRINT_VERSION);
+    expect(
+      factFingerprint(
+        fact({ paymentAllocationCoverage: "known", paymentAllocationMinor: 9_000 }),
+        LEGACY_REPORTS_FINGERPRINT_VERSION,
+      ),
+    ).toBe(legacy);
+    expect(
+      factFingerprint(fact({ paymentAllocationCoverage: "known", paymentAllocationMinor: 9_000 })),
+    ).not.toBe(factFingerprint(fact()));
   });
 
   it("hashes stably to unsigned 8-char hex", () => {

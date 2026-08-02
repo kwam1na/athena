@@ -14,6 +14,7 @@ import {
   reseedStep,
   type ReseedCursor,
 } from "./reseed";
+import { rebuildCurrentWeek } from "./weekly";
 import {
   seedDailyClose,
   seedOnlineOrder,
@@ -184,6 +185,22 @@ async function seedFullDay(ctx: MutationCtx): Promise<SeededStore> {
 }
 
 describe("reseed — fact reconstruction", () => {
+  it("does not accept caller-supplied observation time", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(seedStore);
+    const invokeWithInvalidArgs = t.mutation as unknown as (
+      reference: typeof RESEED_MUTATION,
+      args: unknown,
+    ) => Promise<unknown>;
+
+    await expect(
+      invokeWithInvalidArgs(RESEED_MUTATION, {
+        observedAt: 1,
+        storeId: seeded.storeId,
+      }),
+    ).rejects.toThrow();
+  });
+
   it("rebuilds one fact per domain line with structural identity", async () => {
     vi.spyOn(Date, "now").mockReturnValue(NOW);
     const t = convexTest(schema, modules);
@@ -222,7 +239,101 @@ describe("reseed — fact reconstruction", () => {
       expect(facts.every((fact) => fact.recordedAt === fact.occurredAt)).toBe(
         true,
       );
+      expect(facts.every((fact) => fact.observedAt === NOW)).toBe(true);
       expect(facts.every((fact) => fact.quarantine === undefined)).toBe(true);
+      expect(
+        facts
+          .filter((fact) => fact.sourceDomain === "payments")
+          .map((fact) => ({
+            factKind: fact.factKind,
+            paymentAllocationCoverage: fact.paymentAllocationCoverage,
+            paymentAllocationMinor: fact.paymentAllocationMinor,
+          })),
+      ).toEqual([
+        {
+          factKind: "payment",
+          paymentAllocationCoverage: "known",
+          paymentAllocationMinor: 9_000,
+        },
+        {
+          factKind: "payment_refund",
+          paymentAllocationCoverage: "known",
+          paymentAllocationMinor: -1_000,
+        },
+      ]);
+    });
+  });
+
+  it("reconstructs a timed void and leaves a legacy void coverage-unknown", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      await ctx.db.insert("paymentAllocation", {
+        allocationType: "retail_sale",
+        amount: 2_500,
+        collectedInStore: true,
+        currency: "GHS",
+        direction: "in",
+        method: "cash",
+        organizationId: store.organizationId,
+        recordedAt: at("09:00"),
+        status: "voided",
+        storeId: store.storeId,
+        targetId: "timed",
+        targetType: "pos_transaction",
+        voidedAt: at("10:00"),
+      });
+      await ctx.db.insert("paymentAllocation", {
+        allocationType: "retail_sale",
+        amount: 1_000,
+        collectedInStore: true,
+        currency: "GHS",
+        direction: "in",
+        method: "cash",
+        organizationId: store.organizationId,
+        recordedAt: at("11:00"),
+        status: "voided",
+        storeId: store.storeId,
+        targetId: "legacy",
+        targetType: "pos_transaction",
+      });
+      return store;
+    });
+
+    await runReseed(t, seeded.storeId);
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      const payments = (await ctx.db.query("reportFact").collect())
+        .filter((fact) => fact.sourceDomain === "payments")
+        .sort((left, right) => left.occurredAt - right.occurredAt);
+      expect(
+        payments.map((fact) => ({
+          factKind: fact.factKind,
+          occurredAt: fact.occurredAt,
+          coverage: fact.paymentAllocationCoverage,
+          allocated: fact.paymentAllocationMinor,
+        })),
+      ).toEqual([
+        {
+          factKind: "payment",
+          occurredAt: at("09:00"),
+          coverage: "known",
+          allocated: 2_500,
+        },
+        {
+          factKind: "payment_refund",
+          occurredAt: at("10:00"),
+          coverage: "known",
+          allocated: -2_500,
+        },
+        {
+          factKind: "payment",
+          occurredAt: at("11:00"),
+          coverage: "unknown",
+          allocated: undefined,
+        },
+      ]);
     });
   });
 
@@ -389,7 +500,8 @@ describe("reseed — fact reconstruction", () => {
         .query("onlineOrderItem")
         .withIndex("by_orderId", (q) => q.eq("orderId", orderId))
         .collect();
-      for (const item of stored) await ctx.db.delete("onlineOrderItem", item._id);
+      for (const item of stored)
+        await ctx.db.delete("onlineOrderItem", item._id);
       await ctx.db.patch("onlineOrder", orderId, {
         items: stored.map(({ _creationTime, _id, ...rest }) => rest) as never,
       });
@@ -569,6 +681,54 @@ describe("reseed — purge", () => {
 });
 
 describe("reseed — dirty marks", () => {
+  it("keeps weekly current truth unavailable until the full source replay completes", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      await ctx.db.insert("storeSchedule", {
+        organizationId: store.organizationId,
+        storeId: store.storeId,
+        timezone: "UTC",
+        weeklyWindows: [],
+        weeklyClosedDays: [0],
+        dateExceptions: [],
+        reportingCycleStartsOn: 1,
+        effectiveFrom: Date.parse("2026-01-01T00:00:00Z"),
+        status: "active",
+        source: "admin",
+        createdAt: NOW,
+        updatedAt: NOW,
+      });
+      return store;
+    });
+
+    await t.run(async (ctx: MutationCtx) => {
+      await reseedStep(ctx, seeded.storeId, normalizeReseedCursor(undefined));
+      expect(await rebuildCurrentWeek(ctx, seeded.storeId, NOW)).toBe(
+        "unavailable",
+      );
+      expect(
+        (await ctx.db.get("store", seeded.storeId))?.reportingReseedStartedAt,
+      ).toBe(NOW);
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test singleton assertion
+      expect(await ctx.db.query("reportWeekCurrent").collect()).toHaveLength(0);
+    });
+
+    await runReseed(t, seeded.storeId);
+    await t.run(async (ctx) => {
+      expect(
+        (await ctx.db.get("store", seeded.storeId))?.reportingReseedStartedAt,
+      ).toBeUndefined();
+      expect(
+        await ctx.db
+          .query("reportDirtyWeek")
+          .withIndex("by_storeId", (q) => q.eq("storeId", seeded.storeId))
+          .unique(),
+      ).not.toBeNull();
+    });
+  });
+
   it("marks every operating date it touched for a rebuild", async () => {
     vi.spyOn(Date, "now").mockReturnValue(NOW);
     const t = convexTest(schema, modules);
@@ -601,6 +761,89 @@ describe("reseed — dirty marks", () => {
 });
 
 describe("reseed — idempotence and resumption", () => {
+  it("retries the same source page after a contained fact-write failure", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(seedStore);
+    await t.run((ctx) =>
+      seedPosSale(ctx, seeded, {
+        completedAt: at("10:00"),
+        lines: [{ quantity: 1, unitPrice: 500 }],
+        transactionNumber: "write-failure",
+      }),
+    );
+    const cursor: ReseedCursor = {
+      pageCursor: null,
+      phase: "pos_sale",
+      purgeTableIndex: 0,
+    };
+
+    const failed = await t.run(async (ctx) => {
+      const db = new Proxy(ctx.db, {
+        get(target, property, receiver) {
+          if (property === "insert") {
+            return async (table: string, ...args: unknown[]) => {
+              if (table === "reportFact")
+                throw new Error("injected fact write failure");
+              return (
+                Reflect.get(target, property, receiver) as (
+                  ...args: unknown[]
+                ) => unknown
+              ).apply(target, [table, ...args]);
+            };
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      });
+      return reseedStep(
+        { ...ctx, db } as unknown as MutationCtx,
+        seeded.storeId,
+        cursor,
+      );
+    });
+
+    expect(failed.cursor).toEqual(cursor);
+    expect(failed.retrying).toBe("fact_write_failure");
+
+    const retried = await t.run((ctx: MutationCtx) =>
+      reseedStep(ctx, seeded.storeId, cursor),
+    );
+    expect(retried.retrying).toBeUndefined();
+    expect(retried.cursor).not.toEqual(cursor);
+    expect(await factSignature(t)).toHaveLength(1);
+  });
+
+  it("stops reseed before reconstructing a source with more than 500 child rows", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(seedStore);
+    await t.run((ctx) =>
+      seedPosSale(ctx, seeded, {
+        completedAt: at("10:00"),
+        lines: Array.from({ length: 501 }, () => ({
+          quantity: 1,
+          unitPrice: 1,
+        })),
+        transactionNumber: "oversized-transaction",
+      }),
+    );
+
+    const progress = await t.run((ctx: MutationCtx) =>
+      reseedStep(ctx, seeded.storeId, {
+        pageCursor: null,
+        phase: "pos_sale",
+        purgeTableIndex: 0,
+      }),
+    );
+
+    expect(progress.cursor).toBeNull();
+    expect(progress.incomplete).toEqual({
+      reason: "source_cap_exceeded",
+      source: "pos_transaction_items",
+    });
+    expect(await factSignature(t)).toEqual([]);
+  });
+
   it("produces an identical fact set when run twice", async () => {
     vi.spyOn(Date, "now").mockReturnValue(NOW);
     const t = convexTest(schema, modules);

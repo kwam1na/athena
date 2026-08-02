@@ -85,6 +85,23 @@ describe("cash-control payment allocation attribution", () => {
     ]);
   });
 
+  it("preserves an outbound reversal direction for the payment allocation emitter", () => {
+    const [allocation] = buildInStorePaymentAllocations({
+      allocationType: "retail_sale_void",
+      direction: "out",
+      payments: [{ amount: 2_000, method: "cash", timestamp: 1 }],
+      storeId: "store_1" as Id<"store">,
+      targetId: "transaction_1",
+      targetType: "pos_transaction",
+    });
+
+    expect(allocation).toMatchObject({
+      amount: 2_000,
+      collectedInStore: true,
+      direction: "out",
+    });
+  });
+
   it("prefers an explicit session and refuses ambiguous actor-owned sessions", () => {
     const explicitSessionId = selectRegisterSessionForAttribution({
       actorUserId: "user_1" as Id<"athenaUser">,

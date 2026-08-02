@@ -11,8 +11,10 @@ vi.mock("../reports/ingest", () => ({
 import {
   buildPaymentAllocation,
   findSameAmountSinglePaymentAllocation,
+  paymentAllocationReportingDimensions,
   recordPaymentAllocationWithCtx,
   summarizePaymentAllocations,
+  voidPaymentAllocationWithCtx,
 } from "./paymentAllocations";
 
 function paymentContext(initial: Array<Record<string, unknown>> = []) {
@@ -70,6 +72,125 @@ function paymentContext(initial: Array<Record<string, unknown>> = []) {
 }
 
 describe("payment allocation helpers", () => {
+  it("characterizes signed aggregate reporting dimensions without tender identity", () => {
+    expect(
+      paymentAllocationReportingDimensions({ amount: 2_500, direction: "in", status: "recorded" }),
+    ).toEqual({
+      factKind: "payment",
+      amountMinor: 2_500,
+      paymentAllocationMinor: 2_500,
+      paymentAllocationCoverage: "known",
+    });
+    expect(
+      paymentAllocationReportingDimensions({ amount: 2_500, direction: "out", status: "recorded" }),
+    ).toMatchObject({ factKind: "payment_refund", paymentAllocationMinor: -2_500 });
+  });
+
+  it("stamps a new incoming-allocation void without changing collection time", async () => {
+    const recordedAt = 1_700_000_000_000;
+    const voidedAt = recordedAt + 60_000;
+    const now = vi.spyOn(Date, "now").mockReturnValue(voidedAt);
+    const { ctx, patch } = paymentContext([
+      {
+        _id: "allocation_1",
+        allocationType: "retail_sale",
+        amount: 2_500,
+        collectedInStore: true,
+        direction: "in",
+        method: "cash",
+        recordedAt,
+        status: "recorded",
+        storeId: "store_1",
+        targetId: "transaction_1",
+        targetType: "pos_transaction",
+      },
+    ]);
+
+    const allocation = await voidPaymentAllocationWithCtx(
+      ctx as never,
+      "allocation_1" as Id<"paymentAllocation">,
+    );
+
+    expect(patch).toHaveBeenCalledWith("paymentAllocation", "allocation_1", {
+      status: "voided",
+      voidedAt,
+    });
+    expect(allocation).toMatchObject({ recordedAt, status: "voided", voidedAt });
+    expect(reportingMocks.recordFacts).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "store_1",
+      [
+        expect.objectContaining({
+          factKind: "payment_refund",
+          occurredAt: voidedAt,
+          paymentAllocationMinor: -2_500,
+        }),
+      ],
+    );
+    now.mockRestore();
+  });
+
+  it("does not invent a reversal time for a legacy voided allocation", async () => {
+    reportingMocks.recordFacts.mockClear();
+    const { ctx, patch } = paymentContext([
+      {
+        _id: "allocation_1",
+        allocationType: "retail_sale",
+        amount: 2_500,
+        collectedInStore: true,
+        direction: "in",
+        method: "cash",
+        recordedAt: 1_700_000_000_000,
+        status: "voided",
+        storeId: "store_1",
+        targetId: "transaction_1",
+        targetType: "pos_transaction",
+      },
+    ]);
+
+    const allocation = await voidPaymentAllocationWithCtx(
+      ctx as never,
+      "allocation_1" as Id<"paymentAllocation">,
+    );
+
+    expect(allocation.voidedAt).toBeUndefined();
+    expect(patch).not.toHaveBeenCalled();
+    expect(reportingMocks.recordFacts).not.toHaveBeenCalled();
+  });
+
+  it("preserves an outbound-refund void while withholding unsupported reporting", async () => {
+    reportingMocks.recordFacts.mockClear();
+    const voidedAt = 1_700_000_060_000;
+    const now = vi.spyOn(Date, "now").mockReturnValue(voidedAt);
+    const { ctx, patch } = paymentContext([
+      {
+        _id: "allocation_1",
+        allocationType: "retail_refund",
+        amount: 2_500,
+        collectedInStore: true,
+        direction: "out",
+        method: "cash",
+        recordedAt: 1_700_000_000_000,
+        status: "recorded",
+        storeId: "store_1",
+        targetId: "transaction_1",
+        targetType: "pos_transaction",
+      },
+    ]);
+
+    await expect(
+      voidPaymentAllocationWithCtx(
+        ctx as never,
+        "allocation_1" as Id<"paymentAllocation">,
+      ),
+    ).resolves.toMatchObject({ status: "voided", voidedAt });
+    expect(patch).toHaveBeenCalledWith("paymentAllocation", "allocation_1", {
+      status: "voided",
+      voidedAt,
+    });
+    expect(reportingMocks.recordFacts).not.toHaveBeenCalled();
+    now.mockRestore();
+  });
   it("builds incoming payment allocations with store-collection metadata", () => {
     const allocation = buildPaymentAllocation({
       storeId: "store_1" as Id<"store">,
@@ -358,6 +479,8 @@ describe("payment allocation helpers", () => {
           taxAmountMinor: 0,
           discountAmountMinor: 0,
           quantity: 0,
+          paymentAllocationCoverage: "known",
+          paymentAllocationMinor: -2_500,
         }),
       ],
     );
@@ -387,6 +510,8 @@ describe("payment allocation helpers", () => {
           factKind: "payment",
           currency: "GHS",
           netAmountMinor: 5_000,
+          paymentAllocationCoverage: "known",
+          paymentAllocationMinor: 5_000,
         }),
       ],
     );

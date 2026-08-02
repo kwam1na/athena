@@ -3,6 +3,8 @@ import {
   type NewReportFact,
 } from "../../shared/reportsContract";
 
+export const LEGACY_REPORTS_FINGERPRINT_VERSION = 1 as const;
+
 /**
  * Content fingerprints for reportFact rows.
  *
@@ -17,9 +19,12 @@ import {
 
 /** Fixed-order content projection. Identity fields are NOT included: identity
  * is structural (the by_identity index), the fingerprint covers content only. */
-export function fingerprintPayload(fact: NewReportFact): unknown[] {
-  return [
-    REPORTS_FINGERPRINT_VERSION,
+export function fingerprintPayload(
+  fact: NewReportFact,
+  version: number = REPORTS_FINGERPRINT_VERSION,
+): unknown[] {
+  const payload = [
+    version,
     fact.currency,
     fact.occurredAt,
     fact.grossAmountMinor,
@@ -30,6 +35,16 @@ export function fingerprintPayload(fact: NewReportFact): unknown[] {
     fact.productSkuId ?? null,
     fact.unitCostMinor ?? null,
   ];
+
+  if (version === LEGACY_REPORTS_FINGERPRINT_VERSION) return payload;
+  if (version === REPORTS_FINGERPRINT_VERSION) {
+    return [
+      ...payload,
+      fact.paymentAllocationMinor ?? null,
+      fact.paymentAllocationCoverage ?? null,
+    ];
+  }
+  throw new Error(`Unsupported report fact fingerprint version: ${version}`);
 }
 
 /** FNV-1a (32-bit), returned as unsigned hex. Stable across runtimes. */
@@ -47,9 +62,12 @@ export function stableStringHash(input: string): string {
  * Deterministic content fingerprint. Prefixed with the version so a stored
  * value is self-describing in logs and in the quarantine trail.
  */
-export function factFingerprint(fact: NewReportFact): string {
-  const serialized = JSON.stringify(fingerprintPayload(fact));
-  return `v${REPORTS_FINGERPRINT_VERSION}:${stableStringHash(serialized)}`;
+export function factFingerprint(
+  fact: NewReportFact,
+  version: number = REPORTS_FINGERPRINT_VERSION,
+): string {
+  const serialized = JSON.stringify(fingerprintPayload(fact, version));
+  return `v${version}:${stableStringHash(serialized)}`;
 }
 
 export { REPORTS_FINGERPRINT_VERSION };

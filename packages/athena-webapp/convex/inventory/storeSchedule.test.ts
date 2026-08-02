@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -51,6 +51,8 @@ const baseSchedule = (
   ...overrides,
 });
 
+afterEach(() => vi.useRealTimers());
+
 describe("store schedule resolver", () => {
   it("keeps public store schedule returns aligned with exported validators", () => {
     const context = resolveStoreScheduleContext({
@@ -65,6 +67,7 @@ describe("store schedule resolver", () => {
       weeklyWindows: [{ dayOfWeek: 1, startMinute: 540, endMinute: 1080 }],
       weeklyClosedDays: [0],
       dateExceptions: [],
+      reportingCycleStartsOn: 1,
       effectiveFrom: Date.parse("2026-01-01T00:00:00.000Z"),
       effectiveTo: null,
       status: "active",
@@ -107,6 +110,7 @@ describe("store schedule resolver", () => {
         exceptions: [],
         nextCloseLabel: "6:00 PM",
         nextOpenLabel: "9:00 AM",
+        reportingCycleStartsOn: 1,
         source: "admin",
         scheduleVersionId: "schedule-1",
         summary: {
@@ -291,6 +295,54 @@ describe("store schedule validation", () => {
         timezone: "America/New_York",
       }),
     ).toBe(Date.parse("2026-07-06T04:00:00.000Z"));
+  });
+
+  it("keeps the old schedule active until a changed anchor reaches its boundary", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T16:00:00.000Z"));
+    const current = baseSchedule({
+      effectiveFrom: Date.parse("2026-01-01T00:00:00.000Z"),
+      timezone: "America/New_York",
+    });
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string, id: string) =>
+          table === "store" ? { _id: id, organizationId: "org-1" } : null,
+        ),
+        query: vi.fn(() => ({
+          withIndex: vi.fn(() => ({ take: vi.fn(async () => [current]) })),
+        })),
+        insert: vi.fn(async () => "next-schedule"),
+        patch: vi.fn(),
+      },
+    } as any;
+
+    await upsertStoreScheduleCommandWithCtx(ctx, {
+      storeId: "store-1" as any,
+      timezone: "America/New_York",
+      weeklyClosedDays: [0],
+      weeklyWindows: [{ dayOfWeek: 1, startMinute: 540, endMinute: 1020 }],
+      dateExceptions: [],
+      effectiveFrom: Date.now(),
+      reportingCycleStartsOn: 3,
+      supersedesScheduleId: "schedule-1" as any,
+    });
+
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "storeSchedule",
+      expect.objectContaining({
+        effectiveFrom: Date.parse("2026-07-06T04:00:00.000Z"),
+        reportingCycleStartsOn: 3,
+      }),
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "storeSchedule",
+      "schedule-1",
+      expect.objectContaining({
+        effectiveTo: Date.parse("2026-07-06T04:00:00.000Z"),
+      }),
+    );
+    expect(ctx.db.patch.mock.calls[0][2]).not.toHaveProperty("status");
   });
 
   it("rejects invalid timezones and overlapping weekly windows", () => {
