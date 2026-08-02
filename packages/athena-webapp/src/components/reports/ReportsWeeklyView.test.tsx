@@ -1,26 +1,32 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("@/components/ui/tooltip", () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => children,
+  TooltipContent: ({ children }: { children: React.ReactNode }) => (
+    <div role="tooltip">{children}</div>
+  ),
+  TooltipProvider: ({ children }: { children: React.ReactNode }) => children,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
-    search: _search,
+    search,
     params: _params,
-    state,
     to,
     ...props
   }: {
     children?: React.ReactNode;
     params?: unknown;
     search?: unknown;
-    state?: unknown;
     to: string;
   }) => {
     void _params;
-    void _search;
     return (
       <a
-        data-router-state={state ? JSON.stringify(state) : undefined}
+        data-search={search ? JSON.stringify(search) : undefined}
         href={to}
         {...props}
       >
@@ -81,6 +87,18 @@ const outsideScheduleSummary = {
   unitsSold: 1,
 };
 
+/** Both lanes combined — what the headline now prints. */
+const totalSummary = {
+  ...summary,
+  grossSalesMinor: 124_000,
+  merchandiseMarginMinor: 41_500,
+  netSalesMinor: 104_000,
+  netUnits: 17,
+  paymentAllocatedMinor: 104_000,
+  paymentsCollectedMinor: 104_000,
+  unitsSold: 19,
+};
+
 const report: WeeklyReportProjection = {
   reportId: "week:2026-07-06",
   cycleStartDate: "2026-07-06",
@@ -104,6 +122,9 @@ const report: WeeklyReportProjection = {
   },
   summary,
   outsideSchedule,
+  outsideScheduleSummary,
+  total: totalSummary,
+  totalCompleteness: { complete: true, reason: "complete" },
   scheduleLineage: [
     {
       localDate: "2026-07-06",
@@ -132,10 +153,12 @@ const report: WeeklyReportProjection = {
     changedAt: 1,
     currentFingerprint: "amended",
     includedNetSalesDeltaMinor: 1_500,
+    netSalesDeltaMinor: 1_500,
     outsideSchedule,
     outsideScheduleNetSalesDeltaMinor: 0,
     outsideScheduleSummary,
     summary: { ...summary, netSalesMinor: 101_500 },
+    totalSummary: { ...totalSummary, netSalesMinor: 105_500 },
   },
   inventoryAttention: {
     newCount: 2,
@@ -174,6 +197,18 @@ const report: WeeklyReportProjection = {
       unitsReturned: 1,
       unitsSold: 16,
     },
+    totalSummary: {
+      ...summary,
+      grossSalesMinor: 114_000,
+      merchandiseMarginMinor: 36_500,
+      netSalesMinor: 94_000,
+      netUnits: 16,
+      paymentAllocatedMinor: 94_000,
+      paymentsCollectedMinor: 94_000,
+      unitsReturned: 1,
+      unitsSold: 17,
+    },
+    // Total vs total: 104,000 − 94,000.
     netSalesChange: { amountMinor: 10_000, direction: "higher" },
   },
   variancePosture: {
@@ -181,6 +216,9 @@ const report: WeeklyReportProjection = {
     coverage: "partial",
     coveredIncludedDayCount: 1,
     includedDayCount: 2,
+    scheduledVarianceMinor: -250,
+    outsideScheduleVarianceMinor: 0,
+    outsideScheduleCoveredDayCount: 0,
   },
   ownerRoutes: {
     transactions: {
@@ -212,16 +250,25 @@ describe("ReportsWeeklyView", () => {
     expect(
       screen.getByRole("heading", { name: "Net sales" }),
     ).toBeInTheDocument();
+    // The headline is the combined week, not the scheduled lane alone.
     expect(screen.getByTestId("weekly-net-sales-value")).toHaveTextContent(
-      "$1,000",
+      "$1,040",
     );
-    expect(screen.getByTestId("weekly-prior-net-sales-delta")).toHaveTextContent(
-      "Higher than the prior period by $100",
+    expect(screen.getByTestId("weekly-net-sales-flip")).toHaveAttribute(
+      "data-motion",
+      "flip",
     );
-    expect(screen.getByText("Lifecycle:")).toBeInTheDocument();
-    expect(screen.getByText("Accepted week")).toBeInTheDocument();
-    expect(screen.getByText("Amendment:")).toBeInTheDocument();
-    expect(screen.getByText("Amended")).toBeInTheDocument();
+    expect(screen.getByTestId("weekly-net-sales-flip")).toHaveAttribute(
+      "data-value",
+      "$1,040",
+    );
+    expect(
+      screen.getByTestId("weekly-prior-net-sales-delta"),
+    ).toHaveTextContent("Higher than the prior period by $100");
+    expect(screen.getByText("Week status:")).toBeInTheDocument();
+    expect(screen.getByText("Final Daily Close accepted")).toBeInTheDocument();
+    expect(screen.getByText("Report changes:")).toBeInTheDocument();
+    expect(screen.getByText("Updated after close")).toBeInTheDocument();
 
     expect(
       screen.getAllByRole("heading").map((heading) => heading.textContent),
@@ -229,26 +276,37 @@ describe("ReportsWeeklyView", () => {
       "Net sales",
       "Financial performance",
       "Units moved",
-      "Payment posture",
+      "Payments",
       "Variance",
       "Inventory attention",
-      "Disclosures",
+      "Reporting details",
     ]);
     expect(
-      screen.getByText("$15 scheduled · $0 outside schedule since acceptance"),
+      screen.getByText(
+        "$15 since acceptance ($15 scheduled · $0 outside schedule)",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("Current net units")).toBeInTheDocument();
     expect(screen.getByText("Prior net units")).toBeInTheDocument();
-    expect(screen.getByText("Current allocated")).toBeInTheDocument();
-    expect(screen.getByText("Prior allocated")).toBeInTheDocument();
+    expect(
+      screen.getByText("Current payments accounted for"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Prior period payments accounted for"),
+    ).toBeInTheDocument();
     expect(screen.getByText("2 new review groups")).toBeInTheDocument();
     expect(
       screen.getByText("1 carried-forward review group"),
     ).toBeInTheDocument();
+    // Only the current lane is restated in Reporting details; the accepted
+    // outside-schedule figure lives under the headline it qualifies.
     expect(
       screen.getAllByText(/outside the reporting schedule:/i),
-    ).toHaveLength(2);
-    expect(screen.getAllByText(/\$900/)).not.toHaveLength(0);
+    ).toHaveLength(1);
+    expect(
+      screen.queryByText(/Accepted outside the reporting schedule/),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText(/\$940/)).not.toHaveLength(0);
     expect(
       screen.getByText("Comparable scheduled positions."),
     ).toBeInTheDocument();
@@ -260,10 +318,93 @@ describe("ReportsWeeklyView", () => {
       screen.getByRole("link", { name: "View transaction evidence" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Review Daily Close" }),
+      screen.getByRole("link", { name: "View EOD Review" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Open inventory review" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("list", { name: "Scheduled days" }).firstElementChild,
+    ).toHaveClass(
+      "grid",
+      "sm:grid-cols-[minmax(0,1fr)_auto]",
+      "sm:items-baseline",
+    );
+  });
+
+  it("discloses the variance lanes only when an outside-schedule close moved the figure", () => {
+    const { rerender } = render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          variancePosture: {
+            closeVarianceMinor: -1_050,
+            coverage: "partial",
+            coveredIncludedDayCount: 1,
+            includedDayCount: 2,
+            scheduledVarianceMinor: -250,
+            outsideScheduleVarianceMinor: -800,
+            outsideScheduleCoveredDayCount: 1,
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Close variance")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Scheduled close variance"),
+    ).not.toBeInTheDocument();
+    const split = screen.getByTestId("weekly-variance-split");
+    expect(split).toHaveTextContent("Scheduled: -$2.50");
+    expect(split).toHaveTextContent("Outside schedule: -$8");
+    // Coverage stays a scheduled-day expectation; the outside close is not a
+    // gap and must not move this line.
+    expect(
+      screen.getByText("Partial coverage: 1 of 2 scheduled days."),
+    ).toBeInTheDocument();
+
+    rerender(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          variancePosture: {
+            closeVarianceMinor: -250,
+            coverage: "partial",
+            coveredIncludedDayCount: 1,
+            includedDayCount: 2,
+            scheduledVarianceMinor: -250,
+            outsideScheduleVarianceMinor: 0,
+            outsideScheduleCoveredDayCount: 0,
+          },
+        }}
+      />,
+    );
+    expect(
+      screen.queryByTestId("weekly-variance-split"),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          variancePosture: {
+            closeVarianceMinor: -250,
+            coverage: "partial",
+            coveredIncludedDayCount: 1,
+            includedDayCount: 2,
+            scheduledVarianceMinor: null,
+            outsideScheduleVarianceMinor: null,
+            outsideScheduleCoveredDayCount: null,
+          },
+        }}
+      />,
+    );
+    expect(
+      screen.queryByTestId("weekly-variance-split"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Close variance")).toBeInTheDocument();
+    expect(
+      screen.getByText("Partial coverage: 1 of 2 scheduled days."),
     ).toBeInTheDocument();
   });
 
@@ -284,7 +425,7 @@ describe("ReportsWeeklyView", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/current amendment/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/since acceptance/i)).not.toBeInTheDocument();
-    expect(screen.getByText("No amendment")).toBeInTheDocument();
+    expect(screen.getByText("None")).toBeInTheDocument();
   });
 
   it("distinguishes scheduled zero activity from missing materialization", () => {
@@ -336,42 +477,42 @@ describe("ReportsWeeklyView", () => {
       />,
     );
 
-    expect(screen.getByText("Live week to date")).toBeInTheDocument();
+    expect(screen.getByText("In progress")).toBeInTheDocument();
     expect(
       screen.getByText(
         "No scheduled activity has been recorded for this reporting week.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("Scheduled · No activity recorded")).toBeInTheDocument();
+    expect(screen.getByText("No activity recorded")).toBeInTheDocument();
     expect(screen.queryByText(/still materializing/i)).not.toBeInTheDocument();
   });
 
   it.each([
     {
       name: "awaiting final close",
-      expectedLifecycle: "Awaiting final Daily Close",
+      expectedLifecycle: "Waiting for final Daily Close",
       lifecyclePosture: "awaiting_final_close" as const,
       completeness: { complete: true, reason: "complete" as const },
       closePosture: undefined,
       finalDay: { dayAvailable: true, dayStatus: "open" as const },
       amendment: undefined,
-      expectedAmendment: "No amendment",
+      expectedAmendment: "None",
       amendmentPosture: "none" as const,
     },
     {
       name: "materializing",
-      expectedLifecycle: "Materializing scheduled activity",
+      expectedLifecycle: "Updating report",
       lifecyclePosture: "materializing" as const,
       completeness: { complete: false, reason: "missing_day_fold" as const },
       closePosture: undefined,
       finalDay: { dayAvailable: false, dayStatus: null },
       amendment: undefined,
-      expectedAmendment: "No amendment",
+      expectedAmendment: "None",
       amendmentPosture: "none" as const,
     },
     {
       name: "reopened and amended",
-      expectedLifecycle: "Reopened — awaiting a successor close",
+      expectedLifecycle: "Daily Close reopened",
       lifecyclePosture: "reopened_awaiting_successor" as const,
       completeness: { complete: true, reason: "complete" as const },
       closePosture: {
@@ -381,18 +522,18 @@ describe("ReportsWeeklyView", () => {
       },
       finalDay: { dayAvailable: true, dayStatus: "amended" as const },
       amendment: report.amendment,
-      expectedAmendment: "Amended",
+      expectedAmendment: "Updated after close",
       amendmentPosture: "amended" as const,
     },
     {
       name: "accepted while an amendment recomputes",
-      expectedLifecycle: "Accepted week",
+      expectedLifecycle: "Final Daily Close accepted",
       lifecyclePosture: "accepted" as const,
       completeness: { complete: false, reason: "missing_day_fold" as const },
       closePosture: report.closePosture,
       finalDay: { dayAvailable: true, dayStatus: "reconciled" as const },
       amendment: undefined,
-      expectedAmendment: "Recomputing amendment",
+      expectedAmendment: "Updating",
       amendmentPosture: "pending_recompute" as const,
     },
   ])(
@@ -422,8 +563,9 @@ describe("ReportsWeeklyView", () => {
                 localDate: "2026-07-12",
                 included: true,
                 scheduleVersionId: "schedule-1",
-                activityPosture:
-                  finalDay.dayAvailable ? "recorded" : "unavailable",
+                activityPosture: finalDay.dayAvailable
+                  ? "recorded"
+                  : "unavailable",
                 ...finalDay,
               },
             ],
@@ -455,6 +597,8 @@ describe("ReportsWeeklyView", () => {
         report={{
           ...report,
           completeness: { complete: false, reason },
+          // A scheduled-lane limitation always reaches the combined verdict.
+          totalCompleteness: { complete: false, reason },
         }}
       />,
     );
@@ -462,24 +606,354 @@ describe("ReportsWeeklyView", () => {
     expect(screen.getByRole("status")).toHaveTextContent(guidance);
   });
 
-  it("carries the selected Weekly context into every owner link", () => {
-    const ownerReturnContext = {
-      reportId: "week:2026-07-06",
-      history: true,
-      historyCursor: "cursor-2",
-      historyCursorTrail: [null, "cursor-1"],
-    };
+  it.each(["mixed_currency", "fact_cap_exceeded"] as const)(
+    "withholds every total when completeness says totals are withheld for %s",
+    (reason) => {
+      render(
+        <ReportsWeeklyView
+          report={{
+            ...report,
+            completeness: { complete: false, reason },
+            totalCompleteness: { complete: false, reason },
+          }}
+        />,
+      );
+
+      expect(screen.getByTestId("weekly-net-sales-value")).toHaveTextContent(
+        "Unavailable",
+      );
+      expect(
+        screen.queryByTestId("weekly-outside-schedule-disclosure"),
+      ).not.toBeInTheDocument();
+      // No figure derived from the withheld totals may survive anywhere.
+      expect(screen.queryByText(/\$1,000/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/\$1,200/)).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("weekly-prior-net-sales-delta"),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/since acceptance/i)).not.toBeInTheDocument();
+      expect(document.body.textContent).not.toMatch(/\$\d/);
+
+      // The structure and the guidance both survive.
+      expect(
+        screen.getAllByRole("heading").map((heading) => heading.textContent),
+      ).toEqual([
+        "Net sales",
+        "Financial performance",
+        "Units moved",
+        "Payments",
+        "Variance",
+        "Inventory attention",
+        "Reporting details",
+      ]);
+      expect(screen.getByRole("status").textContent).toMatch(
+        reason === "mixed_currency" ? /more than one currency/ : /withheld/,
+      );
+      expect(screen.getAllByText("Unavailable").length).toBeGreaterThanOrEqual(
+        6,
+      );
+    },
+  );
+
+  it("keeps totals visible when the week is complete", () => {
+    render(<ReportsWeeklyView report={report} />);
+
+    expect(screen.getByTestId("weekly-net-sales-value")).toHaveTextContent(
+      "$1,040",
+    );
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("labels values Accepted when no amendment supplies later truth", () => {
     render(
       <ReportsWeeklyView
-        ownerReturnContext={ownerReturnContext}
-        report={report}
+        report={{
+          ...report,
+          amendment: undefined,
+          amendmentPosture: "none",
+          current: undefined,
+        }}
       />,
     );
 
-    for (const link of screen.getAllByRole("link")) {
-      expect(link).toHaveAttribute(
-        "data-router-state",
-        JSON.stringify({ reportsWeeklyReturn: ownerReturnContext }),
+    expect(screen.getByText("Accepted net units")).toBeInTheDocument();
+    expect(
+      screen.getByText("Accepted payments accounted for"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Current net units")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Current payments accounted for"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("labels values Current only while an amendment exists", () => {
+    render(<ReportsWeeklyView report={report} />);
+
+    expect(screen.getByText("Current net units")).toBeInTheDocument();
+    expect(
+      screen.getByText("Current payments accounted for"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Accepted net units")).not.toBeInTheDocument();
+  });
+
+  it("renders the unavailable inventory lane as unavailable, never as proven zero counts", () => {
+    render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          inventoryAttention: {
+            newCount: 0,
+            carriedForwardCount: 0,
+            completeness: "unavailable",
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Inventory review is unavailable for this reporting record.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/review groups?$/)).not.toBeInTheDocument();
+    expect(screen.queryByText("0 new review groups")).not.toBeInTheDocument();
+  });
+
+  it("labels a live week's values as week to date rather than accepted", () => {
+    render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          amendment: undefined,
+          amendmentPosture: "none",
+          closePosture: undefined,
+          current: undefined,
+          lifecyclePosture: "live",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Week to date net units")).toBeInTheDocument();
+    expect(
+      screen.getByText("Week to date payments received"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Week to date refunds issued")).toBeInTheDocument();
+    expect(
+      screen.getByText("Week to date payments accounted for"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Week to date payments to reconcile"),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    {
+      label: "About current payments received",
+      copy: "Money collected from customers during this reporting period, before refunds.",
+    },
+    {
+      label: "About current payments accounted for",
+      copy: "Payments Athena can match to recorded sales and refunds for this reporting period.",
+    },
+    {
+      label: "About current payments to reconcile",
+      copy: "Payments received, less refunds, that are not yet matched to recorded sales or refunds.",
+    },
+    {
+      label: "About prior period payments accounted for",
+      copy: "Payments Athena could match to recorded sales and refunds in the prior reporting period.",
+    },
+  ])("explains $label in operator-facing language", ({ copy, label }) => {
+    render(<ReportsWeeklyView report={report} />);
+
+    expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+    expect(screen.getByText(copy)).toBeInTheDocument();
+  });
+
+  it("covers AE14: a Monday–Saturday week keeps after-hours Saturday sales in the headline and labels Sunday outside schedule", () => {
+    const week = [
+      "2026-07-06",
+      "2026-07-07",
+      "2026-07-08",
+      "2026-07-09",
+      "2026-07-10",
+      "2026-07-11",
+    ];
+
+    render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          amendment: undefined,
+          amendmentPosture: "none",
+          current: undefined,
+          scheduleLineage: [
+            ...week.map((localDate) => ({
+              localDate,
+              included: true,
+              scheduleVersionId: "schedule-1",
+              dayStatus: "reconciled" as const,
+              dayAvailable: true,
+              activityPosture: "recorded" as const,
+            })),
+            {
+              localDate: "2026-07-12",
+              included: false,
+              scheduleVersionId: "schedule-1",
+              dayStatus: "reconciled" as const,
+              dayAvailable: true,
+              activityPosture: "recorded" as const,
+            },
+          ],
+        }}
+      />,
+    );
+
+    const scheduledList = screen.getByRole("list");
+    expect(scheduledList.querySelectorAll("li")).toHaveLength(6);
+    expect(scheduledList).toHaveTextContent("Sat, Jul 11, 2026");
+    expect(scheduledList).not.toHaveTextContent("Jul 12");
+
+    // The Saturday after-hours sale is inside the headline total, not a
+    // separate line, and Sunday reads as outside schedule with no
+    // Sunday-specific copy anywhere.
+    expect(screen.getByTestId("weekly-net-sales-value")).toHaveTextContent(
+      "$1,040",
+    );
+    expect(
+      screen.getByTestId("weekly-outside-schedule-disclosure"),
+    ).toHaveTextContent(
+      "$40 of this total was recorded on Sun, Jul 12, outside your operating schedule.",
+    );
+    expect(document.body.textContent).not.toMatch(/Sunday/i);
+    expect(document.body.textContent).not.toMatch(/after hours/i);
+  });
+
+  it("puts the outside-schedule disclosure directly after the headline, naming its dates and both lanes", () => {
+    render(<ReportsWeeklyView report={report} />);
+
+    const disclosure = screen.getByTestId("weekly-outside-schedule-disclosure");
+    expect(disclosure).toHaveTextContent(
+      "$40 of this total was recorded on Sun, Jul 12, outside your operating schedule.",
+    );
+
+    // Both lanes stay inspectable beside the total.
+    expect(disclosure).toHaveTextContent("Scheduled: $1,000");
+    expect(disclosure).toHaveTextContent("Outside schedule: $40");
+
+    // Position, not just presence: after the headline value, before the first
+    // section heading — never at the foot of the page.
+    const headline = screen.getByTestId("weekly-net-sales-value");
+    const financial = screen.getByRole("heading", {
+      name: "Financial performance",
+    });
+    const disclosures = screen.getByRole("heading", {
+      name: "Reporting details",
+    });
+    expect(
+      headline.compareDocumentPosition(disclosure) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      disclosure.compareDocumentPosition(financial) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      disclosure.compareDocumentPosition(disclosures) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("says nothing about outside schedule when no outside-schedule sales exist", () => {
+    render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          amendment: undefined,
+          amendmentPosture: "none",
+          current: undefined,
+          outsideSchedule: { ...outsideSchedule, netSalesMinor: 0 },
+          outsideScheduleSummary: {
+            ...outsideScheduleSummary,
+            netSalesMinor: 0,
+          },
+          total: { ...totalSummary, netSalesMinor: 100_000 },
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("weekly-net-sales-value")).toHaveTextContent(
+      "$1,000",
+    );
+    expect(
+      screen.queryByTestId("weekly-outside-schedule-disclosure"),
+    ).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/outside/i);
+  });
+
+  it("withholds the total when only the outside-schedule lane is incomplete", () => {
+    render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          completeness: { complete: true, reason: "complete" },
+          totalCompleteness: {
+            complete: false,
+            reason: "mixed_currency",
+            outsideSchedule: { complete: false, reason: "mixed_currency" },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("weekly-net-sales-value")).toHaveTextContent(
+      "Unavailable",
+    );
+    expect(
+      screen.queryByTestId("weekly-outside-schedule-disclosure"),
+    ).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/\$\d/);
+  });
+
+  it("compares the total against the prior period's total", () => {
+    render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          priorPeriod: {
+            ...report.priorPeriod!,
+            netSalesChange: { amountMinor: 4_000, direction: "lower" },
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByTestId("weekly-prior-net-sales-delta"),
+    ).toHaveTextContent("Lower than the prior period by $40");
+    // The prior line prints the prior TOTAL, never its scheduled lane alone.
+    expect(screen.getByText(/\$940 net sales/)).toBeInTheDocument();
+    expect(screen.queryByText(/\$900 net sales/)).not.toBeInTheDocument();
+  });
+
+  it("carries an origin param into every owner link", () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/acme/store/downtown/reports/weekly?reportId=week%3A2026-07-06",
+    );
+    render(<ReportsWeeklyView report={report} />);
+
+    const links = screen.getAllByRole("link");
+    expect(links).toHaveLength(4);
+    for (const link of links) {
+      const search = JSON.parse(link.getAttribute("data-search")!);
+      // The app's standard return convention: the owning surface reads `o`
+      // and renders the back control in its own page header.
+      expect(search.o).toBe(
+        encodeURIComponent(
+          "/acme/store/downtown/reports/weekly?reportId=week%3A2026-07-06",
+        ),
       );
     }
   });
@@ -492,6 +966,7 @@ describe("ReportsWeeklyView", () => {
           amendment: {
             ...report.amendment!,
             includedNetSalesDeltaMinor: 0,
+            netSalesDeltaMinor: 2_500,
             outsideSchedule: {
               ...outsideSchedule,
               netSalesMinor: 6_500,
@@ -502,13 +977,17 @@ describe("ReportsWeeklyView", () => {
               netSalesMinor: 6_500,
             },
             summary,
+            totalSummary: { ...totalSummary, netSalesMinor: 106_500 },
           },
         }}
       />,
     );
 
+    // The combined delta leads; the lanes explain where it came from.
     expect(
-      screen.getByText("$0 scheduled · $25 outside schedule since acceptance"),
+      screen.getByText(
+        "$25 since acceptance ($0 scheduled · $25 outside schedule)",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/Current outside the reporting schedule: \$65/),
@@ -533,10 +1012,23 @@ describe("ReportsWeeklyView", () => {
             paymentAllocationCoverage: "unknown",
             paymentUnsettledMinor: null,
           },
+          // An unknown on either lane poisons the combined total.
+          total: {
+            ...report.total,
+            merchandiseMarginMinor: null,
+            paymentAllocationCoverage: "unknown",
+            paymentUnsettledMinor: null,
+          },
           amendment: {
             ...report.amendment!,
             summary: {
               ...report.amendment!.summary,
+              merchandiseMarginMinor: null,
+              paymentAllocationCoverage: "unknown",
+              paymentUnsettledMinor: null,
+            },
+            totalSummary: {
+              ...report.amendment!.totalSummary,
               merchandiseMarginMinor: null,
               paymentAllocationCoverage: "unknown",
               paymentUnsettledMinor: null,
@@ -563,6 +1055,7 @@ describe("ReportsWeeklyView", () => {
             comparabilityReason: "scheduled_membership_changed",
             values: null,
             summary: null,
+            totalSummary: null,
             netSalesChange: null,
           },
           variancePosture: {
@@ -570,6 +1063,9 @@ describe("ReportsWeeklyView", () => {
             coverage: "unavailable",
             coveredIncludedDayCount: 0,
             includedDayCount: 2,
+            scheduledVarianceMinor: 0,
+            outsideScheduleVarianceMinor: 0,
+            outsideScheduleCoveredDayCount: 0,
           },
         }}
       />,

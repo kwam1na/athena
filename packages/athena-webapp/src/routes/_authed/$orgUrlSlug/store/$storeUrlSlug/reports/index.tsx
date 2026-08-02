@@ -5,14 +5,11 @@ import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useStableReportQuery } from "@/components/reports/useStableReportQuery";
 import { api } from "~/convex/_generated/api";
 
-import { ReportsCatalogLookup } from "@/components/reports/ReportsCatalogLookup";
 import { ReportDaysPanel } from "@/components/reports/ReportDaysPanel";
 import { ReportsOverviewView } from "@/components/reports/ReportsOverviewView";
 import { reportsOverviewSearchSchema } from "@/components/reports/reportRouteSearch";
 import {
-  dateRangeForOverviewWindow,
   tableRangeIncludingSelection,
-  todayOperatingDateGuess,
   type ReportOverviewWindow,
 } from "@/components/reports/reportPeriodKeys";
 
@@ -41,7 +38,7 @@ function ReportsOverviewRoute() {
    * content needs, deduplicated by the Convex client, so no extra read —
    * keeps the report sections from painting at different moments.
    */
-  const { data: overview, isInitialLoad } = useStableReportQuery(
+  const { isInitialLoad } = useStableReportQuery(
     useQuery(
       api.reports.queries.getOverview,
       activeStore?._id ? { storeId: activeStore._id } : "skip",
@@ -57,21 +54,10 @@ function ReportsOverviewRoute() {
   const canResetDaysRange =
     daysStart !== defaultDaysStart || daysEnd !== defaultDaysEnd;
   const selectedWindow = search.window ?? "today";
-  const overviewAnchorDate =
-    overview?.dailyTrend.at(-1)?.operatingDate ?? todayOperatingDateGuess();
-  const detailRange = dateRangeForOverviewWindow(
-    selectedWindow,
-    overviewAnchorDate,
-  );
-
   if (activeStore === null || isInitialLoad) return null;
 
   return (
     <div className="space-y-layout-xl md:space-y-layout-2xl">
-      <ReportsCatalogLookup
-        endDate={detailRange.endDate}
-        startDate={detailRange.startDate}
-      />
       <ReportsOverviewView
         onSelectedWindowChange={(window: ReportOverviewWindow) =>
           void navigate({

@@ -4,8 +4,6 @@ import {
   overviewSearchFromWeeklyReturn,
   reportsOverviewSearchSchema,
   reportsWeeklySearchSchema,
-  reportsWeeklyReturnFromState,
-  weeklyOwnerReturnState,
   weeklyReturnSearchFromOverview,
 } from "./reportRouteSearch";
 
@@ -51,54 +49,6 @@ describe("report route search", () => {
     expect(overviewSearchFromWeeklyReturn(weeklySearch)).toEqual(
       overviewSearch,
     );
-  });
-
-  it("preserves only validated Weekly selection in owner workflow history", () => {
-    expect(
-      weeklyOwnerReturnState({
-        reportId: "week:2026-07-07",
-        history: true,
-        historyCursor: "cursor-2",
-        historyCursorTrail: [null, "cursor-1"],
-      }),
-    ).toEqual({
-      reportsWeeklyReturn: {
-        reportId: "week:2026-07-07",
-        history: true,
-        historyCursor: "cursor-2",
-        historyCursorTrail: [null, "cursor-1"],
-      },
-    });
-  });
-
-  it("restores validated active and historical Weekly selections", () => {
-    expect(
-      reportsWeeklyReturnFromState({
-        reportsWeeklyReturn: {
-          reportId: "week:2026-07-07",
-          history: true,
-          ignored: "discarded",
-        },
-      }),
-    ).toEqual({ reportId: "week:2026-07-07", history: true });
-    expect(
-      reportsWeeklyReturnFromState({
-        reportsWeeklyReturn: {
-          history: true,
-          overviewWindow: "weekToDate",
-          ignored: "discarded",
-        },
-      }),
-    ).toEqual({ history: true, overviewWindow: "weekToDate" });
-    expect(
-      reportsWeeklyReturnFromState({ reportsWeeklyReturn: {} }),
-    ).toEqual({});
-    expect(
-      reportsWeeklyReturnFromState({
-        reportsWeeklyReturn: { reportId: "not-a-week" },
-      }),
-    ).toBeNull();
-    expect(reportsWeeklyReturnFromState({})).toBeNull();
   });
 
   it("returns Overview defaults when no valid return context exists", () => {

@@ -767,7 +767,7 @@ function hasConvexReturnContractProofForExport(
   ).test(executableContents);
 }
 
-function stripTypeScriptNonCode(contents: string) {
+export function stripTypeScriptNonCode(contents: string) {
   let output = "";
   let index = 0;
   let quote: '"' | "'" | "`" | null = null;
@@ -823,7 +823,18 @@ function stripTypeScriptNonCode(contents: string) {
     index += 1;
   }
 
-  return output;
+  // Collapse horizontal whitespace runs, keeping newlines.
+  //
+  // Blanking a string or comment above emits one space per source character,
+  // so a long doc comment becomes a long run of spaces. The Convex boundary
+  // patterns below chain several `\s*` groups in a row, and every such run can
+  // be partitioned among them in combinatorially many ways — which is real
+  // ReDoS, not a slow regex: `hasWriteLikeMethodCall` never returned on a
+  // 36KB stripped surface built from convex/reports/verify.ts, hanging the
+  // whole merge gate. Every consumer here matches whitespace with `\s*`/`\s+`,
+  // for which a run of N spaces and a single space are equivalent, so this
+  // preserves each pattern's meaning while removing the ambiguity.
+  return output.replace(/[^\S\n]+/g, " ");
 }
 
 async function collectConvexReturnValidatorContractFindings(

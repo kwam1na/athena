@@ -3,11 +3,11 @@ import { z } from "zod";
 
 import { DailyCloseView } from "~/src/components/operations/DailyCloseView";
 import { useDailyCloseFixture } from "~/src/stories/operations/devFixtureActivation";
-import { ReportsWeeklyReturnLink } from "~/src/components/reports/ReportsWeeklyReturnLink";
 
 const dailyCloseSearchSchema = z.object({
   // Development-only screenshot fixtures; inert in production builds.
   fixture: z.string().optional(),
+  o: z.string().optional(),
   operatingDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -33,10 +33,5 @@ function DailyCloseRoute() {
   // Convex path and issues the queries the fixture exists to avoid.
   if (isResolving) return null;
 
-  return (
-    <>
-      <ReportsWeeklyReturnLink />
-      <DailyCloseView fixture={fixture} />
-    </>
-  );
+  return <DailyCloseView fixture={fixture} />;
 }

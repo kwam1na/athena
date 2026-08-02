@@ -234,6 +234,7 @@ export const ATHENA_VIEW_SURFACE_CATALOG = {
       "/:orgUrlSlug/store/:storeUrlSlug/reports",
       "/:orgUrlSlug/store/:storeUrlSlug/reports/items",
       "/:orgUrlSlug/store/:storeUrlSlug/reports/items/:productSkuId",
+      "/:orgUrlSlug/store/:storeUrlSlug/reports/weekly",
     ],
   },
   "services.operations": {

@@ -269,6 +269,38 @@ describe("foldDay — per-kind golden semantics", () => {
     });
   });
 
+  it("clamps unsettled value to zero when refunds exceed eligible collection", () => {
+    const { day } = foldDay("GHS", [
+      fact({
+        factId: "collect",
+        sourceDomain: "payments",
+        factKind: "payment",
+        netAmountMinor: 5_000,
+        paymentAllocationCoverage: "known",
+        paymentAllocationMinor: 5_000,
+      }),
+      fact({
+        factId: "over-refund",
+        sourceDomain: "payments",
+        factKind: "payment_refund",
+        netAmountMinor: 8_000,
+        paymentAllocationCoverage: "known",
+        paymentAllocationMinor: -8_000,
+      }),
+    ]);
+    expect(day.paymentPosture).toEqual({
+      collectedMinor: 5_000,
+      refundedMinor: 8_000,
+      // Net allocation went negative: real, disclosed, and never clamped away.
+      allocatedMinor: -3_000,
+      unsettledMinor: 0,
+      allocationCoverage: "complete",
+      allocationOmittedMinor: 0,
+      hasInvalidAllocation: true,
+    });
+    expect(day.paymentPosture.unsettledMinor).not.toBeLessThan(0);
+  });
+
   it("close_snapshot, inventory_issue and procurement_receipt contribute no metrics", () => {
     const inert: ReportFactKind[] = [
       "close_snapshot",
@@ -280,6 +312,7 @@ describe("foldDay — per-kind golden semantics", () => {
         factId: `f${i}`,
         factKind,
         sourceDomain: factKind === "close_snapshot" ? "daily_close" : "inventory",
+        currency: "ghs",
         grossAmountMinor: 5_000,
         netAmountMinor: 5_000,
         quantity: 7,
@@ -293,6 +326,7 @@ describe("foldDay — per-kind golden semantics", () => {
     expect(day.unitsSold).toBe(0);
     expect(day.grossProfitMinor).toBe(0);
     expect(day.factCount).toBe(3);
+    expect(day.flags.mixedCurrency).toBe(false);
     expect(skuDays.size).toBe(0);
   });
 });

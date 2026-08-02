@@ -562,7 +562,12 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
     result.rangesComputed += await computePendingRanges(ctx, storeId);
     // A day fold is the sole normal signal for current weekly truth. The
     // singleton is still built from reportDay only, not from source domains.
-    await markWeekDirty(ctx, storeId, "day_folded", now);
+    // The folded dates ride on the marker rather than on this tick's memory:
+    // a store whose marker falls outside the weekly page below would otherwise
+    // lose its exact historical amendment handoff to page-boundary timing.
+    await markWeekDirty(ctx, storeId, "day_folded", now, {
+      foldedDates: [...(foldedDatesByStore.get(String(storeId)) ?? [])],
+    });
   }
 
   const dirtyWeeks = await ctx.db
@@ -574,6 +579,10 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
     if (!allowlist.has(String(mark.storeId))) continue;
     const store = await ctx.db.get("store", mark.storeId);
     if (!store || store.reportingReseedStartedAt !== undefined) continue;
+    // Drained with the mark: the dates and the acceptance intent are durable
+    // work, so a failed tick puts both back rather than losing the handoff.
+    const foldedDates = mark.foldedDates ?? [];
+    const intent = mark.intent;
     await ctx.db.delete("reportDirtyWeek", mark._id);
     try {
       const status = await rebuildCurrentWeek(ctx, mark.storeId, now);
@@ -583,9 +592,7 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
         mark.storeId,
         now,
       );
-      for (const operatingDate of foldedDatesByStore.get(
-        String(mark.storeId),
-      ) ?? []) {
+      for (const operatingDate of foldedDates) {
         result.weeksRefreshed += await refreshAcceptedWeekForDate(
           ctx,
           mark.storeId,
@@ -595,7 +602,10 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
       }
     } catch {
       result.weekFailures += 1;
-      await markWeekDirty(ctx, mark.storeId, "write_failure", now);
+      await markWeekDirty(ctx, mark.storeId, "write_failure", now, {
+        foldedDates,
+        ...(intent ? { intent } : {}),
+      });
     }
   }
 

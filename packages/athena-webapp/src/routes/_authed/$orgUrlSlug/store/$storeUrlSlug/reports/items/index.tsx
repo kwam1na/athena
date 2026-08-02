@@ -2,9 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { ReportsItemsView } from "@/components/reports/ReportsItemsView";
-import { ReportsCatalogLookup } from "@/components/reports/ReportsCatalogLookup";
 import {
-  dateRangeForItemsPeriod,
   REPORT_PERIOD_TYPES,
   todayOperatingDateGuess,
 } from "@/components/reports/reportPeriodKeys";
@@ -38,14 +36,8 @@ function ReportsItemsRoute() {
   const navigate = Route.useNavigate();
   const periodDate = search.periodDate ?? todayOperatingDateGuess();
   const periodType = search.periodType ?? "day";
-  const detailRange = dateRangeForItemsPeriod(periodType, periodDate);
-
   return (
     <div className="space-y-layout-xl md:space-y-layout-2xl">
-      <ReportsCatalogLookup
-        endDate={detailRange.endDate}
-        startDate={detailRange.startDate}
-      />
       <ReportsItemsView
         cursor={search.cursor}
         cursorTrail={search.cursorTrail ?? []}

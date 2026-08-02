@@ -1,4 +1,5 @@
 import {
+  normalizeCurrencyCode,
   REPORTS_FINGERPRINT_VERSION,
   type NewReportFact,
 } from "../../shared/reportsContract";
@@ -18,7 +19,10 @@ export const LEGACY_REPORTS_FINGERPRINT_VERSION = 1 as const;
  */
 
 /** Fixed-order content projection. Identity fields are NOT included: identity
- * is structural (the by_identity index), the fingerprint covers content only. */
+ * is structural (the by_identity index), the fingerprint covers content only.
+ * Values are hashed exactly as given — normalisation belongs at the ingestion
+ * boundary, so a stored legacy row can still be re-hashed as it was written
+ * (see `matchesStoredFingerprint`). */
 export function fingerprintPayload(
   fact: NewReportFact,
   version: number = REPORTS_FINGERPRINT_VERSION,
@@ -68,6 +72,35 @@ export function factFingerprint(
 ): string {
   const serialized = JSON.stringify(fingerprintPayload(fact, version));
   return `v${version}:${stableStringHash(serialized)}`;
+}
+
+/**
+ * Replay equality against a stored row.
+ *
+ * Ingestion normalises currency before hashing, but rows written before that
+ * carry the source's raw spelling in BOTH `currency` and `fingerprint`. The
+ * stored spelling is re-hashed as a fallback when it normalises to the same
+ * code, so legacy lineage keeps validating instead of being quarantined as
+ * content drift. Any other field difference is still drift.
+ */
+export function matchesStoredFingerprint(
+  fact: NewReportFact,
+  stored: {
+    currency: string;
+    fingerprint: string;
+    fingerprintVersion?: number;
+  },
+): boolean {
+  const version = stored.fingerprintVersion ?? REPORTS_FINGERPRINT_VERSION;
+  if (stored.fingerprint === factFingerprint(fact, version)) return true;
+  if (stored.currency === fact.currency) return false;
+  if (normalizeCurrencyCode(stored.currency) !== normalizeCurrencyCode(fact.currency)) {
+    return false;
+  }
+  return (
+    stored.fingerprint ===
+    factFingerprint({ ...fact, currency: stored.currency }, version)
+  );
 }
 
 export { REPORTS_FINGERPRINT_VERSION };

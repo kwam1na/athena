@@ -65,7 +65,10 @@ import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import type { AutomationDecisionEvidence } from "../automation/runLedger";
 import { recordFacts } from "../reports/ingest";
 import { resolveOperatingDate } from "../reports/operatingDay";
-import type { NewReportFact } from "../../shared/reportsContract";
+import {
+  normalizeCurrencyCode,
+  type NewReportFact,
+} from "../../shared/reportsContract";
 
 export { buildAdjustmentReportTotals, listAppliedTransactionAdjustmentsForDay };
 
@@ -3947,7 +3950,7 @@ async function recordDailyCloseCompletedReportFacts(
     lineId: "",
     factKind: "close_snapshot",
     occurredAt,
-    currency: store.currency,
+    currency: normalizeCurrencyCode(store.currency),
     grossAmountMinor: 0,
     netAmountMinor: acceptedNetSalesMinor,
     taxAmountMinor: 0,

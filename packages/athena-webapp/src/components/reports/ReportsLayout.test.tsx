@@ -36,6 +36,10 @@ vi.mock("@tanstack/react-router", () => ({
   useParams: () => ({ orgUrlSlug: "acme", storeUrlSlug: "downtown" }),
 }));
 
+vi.mock("./ReportsCatalogLookup", () => ({
+  ReportsCatalogLookup: () => <div data-testid="reports-catalog-lookup" />,
+}));
+
 import { ReportsLayout } from "./ReportsLayout";
 
 describe("ReportsLayout", () => {
@@ -44,20 +48,33 @@ describe("ReportsLayout", () => {
     routerState.search = {};
   });
 
-  it("renders the Overview, Weekly, and Items tabs in workspace order", () => {
+  it("renders the Overview, Week, and Items tabs in workspace order", () => {
     render(<ReportsLayout />);
     expect(
-      screen.getByText(
-        "Review sales and product performance.",
-      ),
+      screen.getByText("Review sales and product performance."),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Overview" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Weekly" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Week" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Items" })).toBeInTheDocument();
-    expect(
-      screen.getAllByRole("link").map((link) => link.textContent),
-    ).toEqual(["Overview", "Weekly", "Items"]);
+    expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual(
+      ["Overview", "Week", "Items"],
+    );
     expect(screen.getByTestId("reports-outlet")).toBeInTheDocument();
+    expect(screen.getByTestId("reports-catalog-lookup")).toBeInTheDocument();
+  });
+
+  it("shares one product search across Overview, Week, and Items", () => {
+    const { rerender } = render(<ReportsLayout />);
+
+    expect(screen.getAllByTestId("reports-catalog-lookup")).toHaveLength(1);
+
+    routerState.pathname = "/acme/store/downtown/reports/items";
+    rerender(<ReportsLayout />);
+    expect(screen.getAllByTestId("reports-catalog-lookup")).toHaveLength(1);
+
+    routerState.pathname = "/acme/store/downtown/reports/weekly";
+    rerender(<ReportsLayout />);
+    expect(screen.getAllByTestId("reports-catalog-lookup")).toHaveLength(1);
   });
 
   it("marks the Overview tab active on the base reports path", () => {
@@ -80,7 +97,7 @@ describe("ReportsLayout", () => {
     };
 
     const { rerender } = render(<ReportsLayout />);
-    expect(screen.getByRole("link", { name: "Weekly" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Week" })).toHaveAttribute(
       "data-search",
       JSON.stringify({
         overviewWindow: "weekToDate",
@@ -95,11 +112,11 @@ describe("ReportsLayout", () => {
 
     routerState.pathname = "/acme/store/downtown/reports/weekly";
     routerState.search = JSON.parse(
-      screen.getByRole("link", { name: "Weekly" }).getAttribute("data-search")!,
+      screen.getByRole("link", { name: "Week" }).getAttribute("data-search")!,
     );
     rerender(<ReportsLayout />);
 
-    expect(screen.getByRole("link", { name: "Weekly" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Week" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -117,9 +134,90 @@ describe("ReportsLayout", () => {
     );
   });
 
+  it("keeps the Weekly tab a state-preserving self-link while Weekly is active", () => {
+    routerState.pathname = "/acme/store/downtown/reports/weekly";
+    routerState.search = {
+      reportId: "week:2026-07-06",
+      history: true,
+      historyCursor: "cursor-2",
+      historyCursorTrail: [null, "cursor-1"],
+      overviewWindow: "trailing30",
+      overviewSelectedDay: "2026-07-16",
+    };
+
+    render(<ReportsLayout />);
+
+    expect(
+      JSON.parse(
+        screen
+          .getByRole("link", { name: "Week" })
+          .getAttribute("data-search")!,
+      ),
+    ).toEqual(routerState.search);
+    expect(
+      JSON.parse(
+        screen
+          .getByRole("link", { name: "Overview" })
+          .getAttribute("data-search")!,
+      ),
+    ).toEqual({
+      window: "trailing30",
+      selectedDay: "2026-07-16",
+    });
+  });
+
+  it("keeps the Overview tab a state-preserving self-link while Overview is active", () => {
+    routerState.search = {
+      window: "trailing30",
+      daysPage: 3,
+      selectedDay: "2026-07-16",
+    };
+
+    render(<ReportsLayout />);
+
+    expect(
+      JSON.parse(
+        screen
+          .getByRole("link", { name: "Overview" })
+          .getAttribute("data-search")!,
+      ),
+    ).toEqual(routerState.search);
+  });
+
+  it("marks only the active tab with aria-current", () => {
+    routerState.pathname = "/acme/store/downtown/reports/weekly";
+
+    render(<ReportsLayout />);
+
+    expect(screen.getByRole("link", { name: "Week" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    for (const label of ["Overview", "Items"]) {
+      expect(screen.getByRole("link", { name: label })).not.toHaveAttribute(
+        "aria-current",
+      );
+    }
+  });
+
+  it("marks only Items on the Items route", () => {
+    routerState.pathname = "/acme/store/downtown/reports/items";
+
+    render(<ReportsLayout />);
+
+    expect(screen.getByRole("link", { name: "Items" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    for (const label of ["Overview", "Week"]) {
+      expect(screen.getByRole("link", { name: label })).not.toHaveAttribute(
+        "aria-current",
+      );
+    }
+  });
+
   it("lets an SKU detail route own the page title and navigation", () => {
-    routerState.pathname =
-      "/acme/store/downtown/reports/items/product-sku-1";
+    routerState.pathname = "/acme/store/downtown/reports/items/product-sku-1";
 
     render(<ReportsLayout />);
 

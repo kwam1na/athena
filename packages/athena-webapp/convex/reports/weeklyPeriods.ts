@@ -72,7 +72,6 @@ export type WeeklyPeriod =
       includedDates: string[];
       finalScheduledDate: string | null;
       automaticFinalizationReason: "no_scheduled_dates" | null;
-      outsideScheduleFactDates: string[];
       dates: Array<{
         localDate: string;
         included: boolean;
@@ -83,12 +82,16 @@ export type WeeklyPeriod =
 /**
  * Resolves weekly report membership from schedule days and exceptions only.
  * Operating-hour windows deliberately do not participate in financial totals.
+ *
+ * Fact dates are deliberately not an input: partitioning observed activity into
+ * included versus outside-schedule buckets belongs to the folder in `weekly.ts`,
+ * which walks the resolved seven-date frame and can tell "outside the frame"
+ * apart from "inside the frame but not scheduled".
  */
 export function resolveWeeklyPeriod(args: {
   referenceAt: number;
   timezone: string | null;
   schedules: WeeklySchedule[];
-  factDates?: string[];
 }): WeeklyPeriod {
   if (!args.timezone)
     return { kind: "unavailable", reason: "missing_timezone" };
@@ -126,7 +129,6 @@ export function resolveWeeklyPeriod(args: {
   const includedDates = dates
     .filter((date) => date.included)
     .map((date) => date.localDate);
-  const includedDateSet = new Set(includedDates);
 
   return {
     kind: "resolved",
@@ -137,8 +139,5 @@ export function resolveWeeklyPeriod(args: {
     finalScheduledDate: includedDates.at(-1) ?? null,
     automaticFinalizationReason:
       includedDates.length === 0 ? "no_scheduled_dates" : null,
-    outsideScheduleFactDates: [...new Set(args.factDates ?? [])].filter(
-      (date) => !includedDateSet.has(date),
-    ),
   };
 }

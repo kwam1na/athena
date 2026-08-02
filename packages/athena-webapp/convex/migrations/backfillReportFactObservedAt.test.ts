@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import type { Validator } from "convex/values";
 import type { Id } from "../_generated/dataModel";
+import { reportFactSchema } from "../schemas/reports/facts";
 
 import {
   backfillReportFactObservedAtWithCtx,
@@ -44,10 +46,17 @@ function createCtx(initialFacts: Fact[]) {
     ),
   }));
 
-  return { ctx: { db: { patch, query } } as any, facts, patch };
+  const runAfter = vi.fn(async (..._args: unknown[]) => "job" as never);
+  return {
+    ctx: { db: { patch, query }, scheduler: { runAfter } } as any,
+    facts,
+    patch,
+    runAfter,
+  };
 }
 
 function createStoreVerificationCtx(initialFacts: Fact[]) {
+  const storeRunAfter = vi.fn(async (..._args: unknown[]) => "job" as never);
   const facts = structuredClone(initialFacts);
   const store = { _id: "store-1" } as {
     _id: string;
@@ -74,9 +83,13 @@ function createStoreVerificationCtx(initialFacts: Fact[]) {
     })),
   }));
   return {
-    ctx: { db: { get: vi.fn(async () => store), patch, query } } as any,
+    ctx: {
+      db: { get: vi.fn(async () => store), patch, query },
+      scheduler: { runAfter: storeRunAfter },
+    } as any,
     facts,
     store,
+    runAfter: storeRunAfter,
   };
 }
 
@@ -115,6 +128,65 @@ async function finishVerification(ctx: ReturnType<typeof createCtx>["ctx"]) {
 }
 
 describe("report-fact observedAt backfill", () => {
+  it("drives itself to completion when autoContinue is set", async () => {
+    const harness = createCtx([
+      { _creationTime: 100, _id: "fact-1" },
+      { _creationTime: 200, _id: "fact-2" },
+      { _creationTime: 300, _id: "fact-3", observedAt: 300 },
+    ]);
+
+    const first = await backfillReportFactObservedAtWithCtx(harness.ctx, {
+      autoContinue: true,
+      dryRun: false,
+      limit: 2,
+    });
+
+    expect(first.isDone).toBe(false);
+    // The chain carries the cursor and the running totals, so the last batch
+    // can report the whole job rather than its own slice.
+    expect(harness.runAfter).toHaveBeenCalledTimes(1);
+    const [, , scheduledArgs] = harness.runAfter.mock.calls[0]!;
+    expect(scheduledArgs).toMatchObject({
+      autoContinue: true,
+      changedSoFar: 2,
+      cursor: first.continueCursor,
+      dryRun: false,
+      limit: 2,
+      processedSoFar: 2,
+    });
+
+    const second = await backfillReportFactObservedAtWithCtx(
+      harness.ctx,
+      scheduledArgs as never,
+    );
+    expect(second.isDone).toBe(true);
+    expect(second.totals).toEqual({
+      changedCount: 2,
+      missingCount: 2,
+      processedCount: 3,
+    });
+    expect(harness.facts.map((fact) => fact.observedAt)).toEqual([
+      100, 200, 300,
+    ]);
+    // A finished chain must not schedule another link.
+    expect(harness.runAfter).toHaveBeenCalledTimes(1);
+  });
+
+  it("never self-schedules unless autoContinue is requested", async () => {
+    const harness = createCtx([
+      { _creationTime: 100, _id: "fact-1" },
+      { _creationTime: 200, _id: "fact-2" },
+    ]);
+
+    const result = await backfillReportFactObservedAtWithCtx(harness.ctx, {
+      dryRun: true,
+      limit: 1,
+    });
+
+    expect(result.isDone).toBe(false);
+    expect(harness.runAfter).not.toHaveBeenCalled();
+  });
+
   it("previews, resumes, and applies immutable creation time exactly once", async () => {
     const harness = createCtx([
       { _creationTime: 100, _id: "fact-1" },
@@ -185,5 +257,66 @@ describe("report-fact observedAt backfill", () => {
       status: "complete",
       missingCount: 0,
     });
+  });
+});
+
+describe("report-fact observedAt narrowing gate", () => {
+  function observedAtField() {
+    return (
+      reportFactSchema as unknown as {
+        fields: Record<string, Validator<any, any, any> & { isOptional: string }>;
+      }
+    ).fields.observedAt;
+  }
+
+  it("keeps knowledge time widened while the backfill is still the mechanism", () => {
+    expect(observedAtField().isOptional).toBe("optional");
+  });
+
+  it("continues a store verification to completion under autoContinue", async () => {
+    const harness = createStoreVerificationCtx([
+      { _creationTime: 100, _id: "fact-1", observedAt: 100 },
+      { _creationTime: 200, _id: "fact-2", observedAt: 200 },
+    ]);
+
+    const first = await verifyStoreReportFactObservedAtWithCtx(harness.ctx, {
+      autoContinue: true,
+      limit: 1,
+      storeId: "store-1" as Id<"store">,
+    });
+    expect(first.isDone).toBe(false);
+    expect(harness.runAfter).toHaveBeenCalledTimes(1);
+    const [, , scheduledArgs] = harness.runAfter.mock.calls[0]!;
+    expect(scheduledArgs).toMatchObject({
+      autoContinue: true,
+      cursor: first.continueCursor,
+      storeId: "store-1",
+    });
+
+    const second = await verifyStoreReportFactObservedAtWithCtx(
+      harness.ctx,
+      scheduledArgs as never,
+    );
+    expect(second).toMatchObject({ complete: true, isDone: true });
+    // Terminal batch stops the chain.
+    expect(harness.runAfter).toHaveBeenCalledTimes(1);
+  });
+
+  it("GUARD: narrowing must not land while the completion check can still find stragglers", async () => {
+    await expect(
+      finishVerification(createCtx([{ _creationTime: 1, _id: "legacy" }]).ctx),
+    ).resolves.toEqual({ complete: false, missingCount: 1 });
+    await expect(
+      finishVerification(
+        createCtx([{ _creationTime: 1, _id: "stamped", observedAt: 1 }]).ctx,
+      ),
+    ).resolves.toEqual({ complete: true, missingCount: 0 });
+
+    // The check still tells the two worlds apart, so production may still hold
+    // un-backfilled facts. Making `observedAt` required before every
+    // deployment reports zero would reject writes to rows the migration has
+    // not reached. Retire the completion check in the same change, or this
+    // guard fails.
+    expect(observedAtField().isOptional).toBe("optional");
   });
 });

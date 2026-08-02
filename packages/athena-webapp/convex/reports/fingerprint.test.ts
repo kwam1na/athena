@@ -8,6 +8,7 @@ import {
   factFingerprint,
   fingerprintPayload,
   LEGACY_REPORTS_FINGERPRINT_VERSION,
+  matchesStoredFingerprint,
   stableStringHash,
 } from "./fingerprint";
 
@@ -93,6 +94,42 @@ describe("factFingerprint", () => {
     expect(
       factFingerprint(fact({ paymentAllocationCoverage: "known", paymentAllocationMinor: 9_000 })),
     ).not.toBe(factFingerprint(fact()));
+  });
+
+  it("accepts a legacy row whose stored currency spelling was never normalised", () => {
+    const stored = {
+      currency: " ghs ",
+      fingerprint: factFingerprint(fact({ currency: " ghs " })),
+      fingerprintVersion: REPORTS_FINGERPRINT_VERSION,
+    };
+    // The replay arrives normalised (ingestion normalises before hashing).
+    expect(matchesStoredFingerprint(fact({ currency: "GHS" }), stored)).toBe(true);
+    // Only currency spelling is forgiven; real content drift is still drift.
+    expect(
+      matchesStoredFingerprint(fact({ currency: "GHS", quantity: 3 }), stored),
+    ).toBe(false);
+    expect(matchesStoredFingerprint(fact({ currency: "USD" }), stored)).toBe(false);
+  });
+
+  it("matches a normalised stored row and honours its stored version", () => {
+    const normalized = fact();
+    expect(
+      matchesStoredFingerprint(normalized, {
+        currency: "GHS",
+        fingerprint: factFingerprint(normalized),
+        fingerprintVersion: REPORTS_FINGERPRINT_VERSION,
+      }),
+    ).toBe(true);
+    expect(
+      matchesStoredFingerprint(
+        { ...normalized, paymentAllocationCoverage: "known" },
+        {
+          currency: "GHS",
+          fingerprint: factFingerprint(normalized, LEGACY_REPORTS_FINGERPRINT_VERSION),
+          fingerprintVersion: LEGACY_REPORTS_FINGERPRINT_VERSION,
+        },
+      ),
+    ).toBe(true);
   });
 
   it("hashes stably to unsigned 8-char hex", () => {

@@ -489,7 +489,6 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/reports/ReportsLayout.test.tsx`](../../src/components/reports/ReportsLayout.test.tsx)
 - [`src/components/reports/ReportsOverviewView.test.tsx`](../../src/components/reports/ReportsOverviewView.test.tsx)
 - [`src/components/reports/ReportsSkuDetailView.test.tsx`](../../src/components/reports/ReportsSkuDetailView.test.tsx)
-- [`src/components/reports/ReportsWeeklyReturnLink.test.tsx`](../../src/components/reports/ReportsWeeklyReturnLink.test.tsx)
 - [`src/components/reports/ReportsWeeklyView.test.tsx`](../../src/components/reports/ReportsWeeklyView.test.tsx)
 - [`src/components/reports/reportFormat.test.ts`](../../src/components/reports/reportFormat.test.ts)
 - [`src/components/reports/reportPeriodKeys.test.ts`](../../src/components/reports/reportPeriodKeys.test.ts)

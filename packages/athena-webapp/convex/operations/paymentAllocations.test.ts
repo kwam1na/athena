@@ -1,11 +1,22 @@
+/// <reference types="vite/client" />
+
+import { convexTest } from "convex-test";
 import { describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
+import type { MutationCtx } from "../_generated/server";
+import schema from "../schema";
+import { foldDay } from "../reports/foldDay";
+
+const modules = import.meta.glob("../**/*.ts");
 
 const reportingMocks = vi.hoisted(() => ({
   recordFacts: vi.fn(async (..._args: unknown[]) => undefined),
 }));
 
-vi.mock("../reports/ingest", () => ({
+// Only the emission boundary is stubbed; the rest of the module stays real so
+// the integration case below can hand the mock the genuine implementation.
+vi.mock("../reports/ingest", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../reports/ingest")>()),
   recordFacts: reportingMocks.recordFacts,
 }));
 import {
@@ -158,7 +169,60 @@ describe("payment allocation helpers", () => {
     expect(reportingMocks.recordFacts).not.toHaveBeenCalled();
   });
 
-  it("preserves an outbound-refund void while withholding unsupported reporting", async () => {
+  it("records a legacy voided allocation as omitted coverage, matching reseed", async () => {
+    reportingMocks.recordFacts.mockClear();
+    const recordedAt = 1_700_000_000_000;
+    const { ctx } = paymentContext([
+      {
+        _id: "allocation_1",
+        allocationType: "retail_sale",
+        amount: 2_500,
+        collectedInStore: true,
+        direction: "in",
+        method: "cash",
+        recordedAt,
+        status: "voided",
+        storeId: "store_1",
+        targetId: "transaction_1",
+        targetType: "pos_transaction",
+      },
+    ]);
+
+    await recordPaymentAllocationWithCtx(ctx as never, {
+      allocationType: "retail_sale",
+      amount: 2_500,
+      collectedInStore: true,
+      direction: "in",
+      method: "cash",
+      storeId: "store_1" as Id<"store">,
+      targetId: "transaction_1",
+      targetType: "pos_transaction",
+    });
+
+    // No reversal time exists, so the collection is disclosed at its own time
+    // with unknown coverage rather than dropped from the day entirely.
+    expect(reportingMocks.recordFacts).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "store_1",
+      [
+        expect.objectContaining({
+          factKind: "payment",
+          netAmountMinor: 2_500,
+          occurredAt: recordedAt,
+          paymentAllocationCoverage: "unknown",
+        }),
+      ],
+    );
+    expect(
+      reportingMocks.recordFacts.mock.calls.at(-1)?.[2] as Array<
+        Record<string, unknown>
+      >,
+    ).toEqual([
+      expect.not.objectContaining({ paymentAllocationMinor: expect.anything() }),
+    ]);
+  });
+
+  it("preserves an outbound-refund void as omitted coverage, not a new collection", async () => {
     reportingMocks.recordFacts.mockClear();
     const voidedAt = 1_700_000_060_000;
     const now = vi.spyOn(Date, "now").mockReturnValue(voidedAt);
@@ -188,7 +252,19 @@ describe("payment allocation helpers", () => {
       status: "voided",
       voidedAt,
     });
-    expect(reportingMocks.recordFacts).not.toHaveBeenCalled();
+    // A reversal of a refund has no fact kind of its own; reseed and the live
+    // path both fall back to the refund at its own time, coverage unknown.
+    expect(reportingMocks.recordFacts).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "store_1",
+      [
+        expect.objectContaining({
+          factKind: "payment_refund",
+          occurredAt: 1_700_000_000_000,
+          paymentAllocationCoverage: "unknown",
+        }),
+      ],
+    );
     now.mockRestore();
   });
   it("builds incoming payment allocations with store-collection metadata", () => {
@@ -514,6 +590,125 @@ describe("payment allocation helpers", () => {
           paymentAllocationMinor: 5_000,
         }),
       ],
+    );
+  });
+});
+
+describe("payment allocation reporting — end to end through real ingestion", () => {
+  /** 23:30 UTC is already the NEXT store-local day in Tokyo. */
+  const NOW = Date.parse("2026-03-10T23:30:00Z");
+  const STORE_LOCAL_DATE = "2026-03-11";
+
+  async function seedStore(ctx: MutationCtx) {
+    const userId = await ctx.db.insert("athenaUser", {
+      email: "admin@example.test",
+    });
+    const organizationId = await ctx.db.insert("organization", {
+      createdByUserId: userId,
+      name: "Org",
+      slug: "org",
+    });
+    return await ctx.db.insert("store", {
+      config: { timezone: "Asia/Tokyo" },
+      createdByUserId: userId,
+      currency: "GHS",
+      name: "Store",
+      organizationId,
+      slug: "store",
+    });
+  }
+
+  async function withRealIngestion<T>(run: () => Promise<T>): Promise<T> {
+    const actual =
+      await vi.importActual<typeof import("../reports/ingest")>(
+        "../reports/ingest",
+      );
+    reportingMocks.recordFacts.mockImplementation(
+      actual.recordFacts as unknown as (..._args: unknown[]) => Promise<never>,
+    );
+    try {
+      return await run();
+    } finally {
+      reportingMocks.recordFacts.mockImplementation(async () => undefined);
+    }
+  }
+
+  it("emits canonical payment evidence once and folds to the same posture", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await withRealIngestion(() =>
+      t.run(async (ctx) => {
+        const storeId = await seedStore(ctx);
+        const args = {
+          allocationType: "retail_sale",
+          amount: 5_000,
+          businessEventKey: "pos:transaction_1:payment:0",
+          direction: "in" as const,
+          method: "cash",
+          storeId,
+          targetId: "transaction_1",
+          targetType: "pos_transaction",
+        };
+
+        const allocation = await recordPaymentAllocationWithCtx(ctx, args);
+        // A replayed domain write must not double-count the payment.
+        await recordPaymentAllocationWithCtx(ctx, args);
+
+        // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+        const facts = await ctx.db.query("reportFact").collect();
+        expect(facts).toHaveLength(1);
+        expect(facts[0]).toMatchObject({
+          currency: "GHS",
+          factKind: "payment",
+          lineId: "",
+          netAmountMinor: 5_000,
+          // Dated by the store's own calendar, not UTC.
+          operatingDate: STORE_LOCAL_DATE,
+          paymentAllocationCoverage: "known",
+          paymentAllocationMinor: 5_000,
+          sourceDomain: "payments",
+          sourceId: String(allocation._id),
+        });
+
+        const day = await ctx.db
+          .query("reportDay")
+          .withIndex("by_storeId_operatingDate", (q) =>
+            q.eq("storeId", storeId).eq("operatingDate", STORE_LOCAL_DATE),
+          )
+          .unique();
+        expect(day?.paymentPosture).toMatchObject({
+          allocatedMinor: 5_000,
+          allocationCoverage: "complete",
+          allocationOmittedMinor: 0,
+          collectedMinor: 5_000,
+          unsettledMinor: 0,
+        });
+
+        // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+        const dirty = await ctx.db
+          .query("reportDirtyDay")
+          .withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", storeId))
+          .collect();
+        expect(
+          dirty.map((row) => ({
+            operatingDate: row.operatingDate,
+            reason: row.reason,
+          })),
+        ).toEqual([{ operatingDate: STORE_LOCAL_DATE, reason: "day_open" }]);
+
+        // The fold is the authority: refolding the same facts reproduces the
+        // preview's posture exactly, so the close replaces without moving it.
+        const { day: folded } = foldDay(
+          "GHS",
+          facts.map((row) => ({
+            ...row,
+            factId: String(row._id),
+            quarantined: row.quarantine !== undefined,
+          })),
+        );
+        expect(folded.paymentPosture).toEqual(day?.paymentPosture);
+        expect(folded.paymentsCollectedMinor).toBe(5_000);
+      }),
     );
   });
 });

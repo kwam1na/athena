@@ -12,6 +12,7 @@ import {
   computeExpectedDay,
   diffMetrics,
   VERIFY_MAX_DAYS,
+  VERIFY_MAX_DOCS_PER_DOMAIN,
   verifyDayWithCtx,
   verifyStoreSummaryWithCtx,
 } from "./verify";
@@ -597,6 +598,76 @@ describe("verify — payment posture", () => {
         omittedMinor: 1_000,
         outcome: "incomplete",
         reason: "legacy_void_missing_timestamp",
+        unsettledMinor: null,
+      });
+    });
+  });
+
+  it("bounds the allocation scan to the period, not the store's lifetime", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      // Far outside the verified period's lookback. Before this scan was date
+      // bounded these alone exhausted the per-domain cap, and every later day
+      // in the store's life verified as permanently incomplete.
+      for (let index = 0; index <= VERIFY_MAX_DOCS_PER_DOMAIN; index += 1) {
+        await seedPaymentAllocation(ctx, store, {
+          amount: 100,
+          recordedAt: Date.parse("2025-01-01T10:00:00Z") + index,
+          targetId: `ancient-${index}`,
+        });
+      }
+      for (const [index, amount] of [1_000, 2_000, 3_000].entries()) {
+        await seedPaymentAllocation(ctx, store, {
+          amount,
+          recordedAt: at("09:00") + index,
+          targetId: `inside-${index}`,
+        });
+      }
+      return store;
+    });
+
+    await t.run(async (ctx: QueryCtx) => {
+      const { expected, paymentPosture, truncated } = await computeExpectedDay(
+        ctx,
+        seeded.storeId,
+        DAY1,
+      );
+      expect(truncated).toBe(false);
+      expect(expected.paymentsCollectedMinor).toBe(6_000);
+      expect(expected.paymentAllocatedMinor).toBe(6_000);
+      expect(paymentPosture).toMatchObject({
+        allocationCoverage: "complete",
+        omittedMinor: 0,
+        outcome: "complete",
+        reason: "complete",
+      });
+    });
+  });
+
+  it("refuses a period that itself exceeds the allocation cap", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      for (let index = 0; index <= VERIFY_MAX_DOCS_PER_DOMAIN; index += 1) {
+        await seedPaymentAllocation(ctx, store, {
+          amount: 100,
+          recordedAt: at("09:00") + index,
+          targetId: `inside-${index}`,
+        });
+      }
+      return store;
+    });
+
+    await t.run(async (ctx: QueryCtx) => {
+      const result = await verifyDayWithCtx(ctx, seeded.storeId, DAY1);
+      // A capped read is a lower bound, never a total that happens to agree.
+      expect(result.truncated).toBe(true);
+      expect(result.matches).toBe(false);
+      expect(result.paymentPosture).toMatchObject({
+        allocationCoverage: "unknown",
+        outcome: "incomplete",
+        reason: "source_cap_exceeded",
         unsettledMinor: null,
       });
     });

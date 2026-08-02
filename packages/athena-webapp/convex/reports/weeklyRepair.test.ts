@@ -109,9 +109,23 @@ describe("weekly projection repair", () => {
         .query("reportFact")
         .withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", storeId))
         .take(10);
-      expect(factsAfter.map((fact) => fact._id)).toEqual(
-        factsBefore.map((fact) => fact._id),
-      );
+      // Identity is not enough: a repair that silently re-fingerprinted or
+      // re-stamped knowledge time would keep every `_id` and still destroy the
+      // acceptance cutoff. Compare the ledger's audit columns too.
+      const ledgerIdentity = (facts: typeof factsAfter) =>
+        facts.map((fact) => ({
+          _id: fact._id,
+          fingerprint: fact.fingerprint,
+          fingerprintVersion: fact.fingerprintVersion,
+          observedAt: fact.observedAt,
+        }));
+      expect(ledgerIdentity(factsAfter)).toEqual(ledgerIdentity(factsBefore));
+      expect(factsAfter).toHaveLength(1);
+      expect(factsAfter[0]).toMatchObject({
+        fingerprint: "fp",
+        fingerprintVersion: 2,
+        observedAt: NOW,
+      });
       expect(
         await ctx.db
           .query("reportWeekAccepted")

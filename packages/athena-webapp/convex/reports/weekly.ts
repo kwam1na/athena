@@ -23,7 +23,10 @@ import {
   projectLiveWeeklyInventoryAttention,
 } from "./weeklyInventory";
 import { resolveWeeklyPeriod, type WeeklyPeriod } from "./weeklyPeriods";
-import { hasCompletedWeeklyObservedAtVerification } from "../platform/capabilityCatalog";
+import {
+  hasCompletedWeeklyObservedAtVerification,
+  isCloseWithinWeeklyAcceptanceFloor,
+} from "../platform/capabilityCatalog";
 
 /**
  * Active/candidate schedule versions read to resolve one seven-date reporting
@@ -60,6 +63,8 @@ const ZERO_WEEK_METRICS: ReportWeekMetrics = {
   paymentAllocatedMinor: 0,
   paymentUnsettledMinor: 0,
   paymentAllocationCoverage: "complete",
+  paymentAllocationOmittedMinor: 0,
+  paymentHasInvalidAllocation: false,
 };
 
 type WeekDay = Pick<
@@ -82,6 +87,19 @@ type WeekDay = Pick<
   | "unitsReturned"
   | "unitsSold"
 >;
+
+/** The verified member of the current weekly union. */
+export type AvailableWeekCurrent = Extract<
+  Doc<"reportWeekCurrent">,
+  { included: unknown }
+>;
+
+/** Narrow a current weekly singleton to its verified member, or nothing. */
+export function availableWeekCurrent(
+  doc: Doc<"reportWeekCurrent"> | null,
+): AvailableWeekCurrent | null {
+  return doc && doc.availability !== "unavailable" ? doc : null;
+}
 
 export type WeekFold = {
   included: ReportWeekMetrics;
@@ -126,6 +144,12 @@ function addDay(total: ReportWeekMetrics, day: WeekDay): ReportWeekMetrics {
       total.paymentAllocationCoverage === "unknown" || paymentUnknown
         ? "unknown"
         : "complete",
+    paymentAllocationOmittedMinor:
+      (total.paymentAllocationOmittedMinor ?? 0) +
+      (payment?.allocationOmittedMinor ?? 0),
+    paymentHasInvalidAllocation:
+      (total.paymentHasInvalidAllocation ?? false) ||
+      (payment?.hasInvalidAllocation ?? false),
   };
 }
 
@@ -134,6 +158,11 @@ function firstIncompleteReason(args: {
 }): ReportWeekCompleteness {
   if (args.days.some((day) => day.flags.mixedCurrency)) {
     return { complete: false, reason: "mixed_currency" };
+  }
+  // An over-allocated day cannot roll into a week reported complete: the
+  // allocated total exceeds what the payment universe can settle.
+  if (args.days.some((day) => day.paymentPosture?.hasInvalidAllocation)) {
+    return { complete: false, reason: "payment_invalid_allocation" };
   }
   if (
     args.days.some(
@@ -151,6 +180,10 @@ function firstIncompleteReason(args: {
  * Pure composition of seven `reportDay` rows. Missing scheduled rows are
  * explicit zero-activity slots; folded evidence still carries its own
  * fail-closed completeness. Outside-schedule activity stays separately named.
+ *
+ * Completeness is scoped to the positions actually composed: days read outside
+ * this frame — and excluded dates, which have their own lane — never withhold
+ * the headline week.
  */
 export function foldWeekFromDays(args: {
   period: Extract<WeeklyPeriod, { kind: "resolved" }>;
@@ -159,12 +192,19 @@ export function foldWeekFromDays(args: {
   const byDate = new Map(args.days.map((day) => [day.operatingDate, day]));
   let included = zeroWeekMetrics();
   let outsideSchedule = zeroWeekMetrics();
+  const includedDays: WeekDay[] = [];
+  const outsideScheduleDays: WeekDay[] = [];
 
   for (const date of args.period.dates) {
     const day = byDate.get(date.localDate);
     if (!day) continue;
-    if (date.included) included = addDay(included, day);
-    else outsideSchedule = addDay(outsideSchedule, day);
+    if (date.included) {
+      included = addDay(included, day);
+      includedDays.push(day);
+    } else {
+      outsideSchedule = addDay(outsideSchedule, day);
+      outsideScheduleDays.push(day);
+    }
   }
 
   return {
@@ -184,9 +224,10 @@ export function foldWeekFromDays(args: {
             : "recorded",
       };
     }),
-    completeness: firstIncompleteReason({
-      days: args.days,
-    }),
+    completeness: {
+      ...firstIncompleteReason({ days: includedDays }),
+      outsideSchedule: firstIncompleteReason({ days: outsideScheduleDays }),
+    },
   };
 }
 
@@ -271,6 +312,10 @@ export function foldWeekFromAcceptedFacts(args: {
       completeness: {
         complete: false,
         reason: "legacy_fact_without_observed_at",
+        outsideSchedule: {
+          complete: false,
+          reason: "legacy_fact_without_observed_at",
+        },
       },
     };
   }
@@ -379,12 +424,19 @@ async function resolvePeriodForOperatingDate(
   });
 }
 
+type WeekDaysRead =
+  | { status: "ok"; days: Doc<"reportDay">[] }
+  /** A fold for a frame date is still queued or failed; zeros are not truth. */
+  | { status: "pending_fold" }
+  /** More day rows than the frame can hold — the read cannot be trusted. */
+  | { status: "day_row_drift" };
+
 async function readWeekDays(
   ctx: MutationCtx,
   storeId: Id<"store">,
   startDate: string,
   endDate: string,
-) {
+): Promise<WeekDaysRead> {
   // A missing reportDay is a supported zero only when no day fold for this
   // frame is still queued. Fold failures reinsert their dirty mark, so this
   // indexed probe keeps stale or failed source posture from looking complete.
@@ -397,7 +449,7 @@ async function readWeekDays(
         .lte("operatingDate", endDate),
     )
     .take(1);
-  if (pendingDay.length > 0) return null;
+  if (pendingDay.length > 0) return { status: "pending_fold" };
 
   const days = await ctx.db
     .query("reportDay")
@@ -408,7 +460,9 @@ async function readWeekDays(
         .lte("operatingDate", endDate),
     )
     .take(WEEKLY_DAY_READ_LIMIT);
-  return days.length >= WEEKLY_DAY_READ_LIMIT ? null : days;
+  return days.length >= WEEKLY_DAY_READ_LIMIT
+    ? { status: "day_row_drift" }
+    : { status: "ok", days };
 }
 
 function weekTruthFingerprint(args: {
@@ -483,28 +537,46 @@ function deriveWeeklyAmendment(args: {
   };
 }
 
+/**
+ * Close variance across the whole resolved frame.
+ *
+ * Closes are recorded on non-operational dates too, so restricting the total
+ * to scheduled dates drops real register discrepancies without disclosure. The
+ * scheduled figure stays available beside the total because that is what Daily
+ * Close and Cash Controls evidence reconciles against.
+ *
+ * Coverage stays a scheduled-expectation ratio: a scheduled date without a
+ * close is a gap, an outside-schedule date without one is not.
+ */
 export function computeWeeklyVariancePosture(
   period: Extract<WeeklyPeriod, { kind: "resolved" }>,
   days: readonly WeekDay[],
 ) {
   const included = new Set(period.includedDates);
-  const includedDays = days.filter((day) => included.has(day.operatingDate));
-  const covered = includedDays.filter(
-    (day) => day.closeVarianceMinor !== undefined,
+  const covered = days.filter((day) => day.closeVarianceMinor !== undefined);
+  const scheduledCovered = covered.filter((day) =>
+    included.has(day.operatingDate),
   );
+  const outsideCovered = covered.filter(
+    (day) => !included.has(day.operatingDate),
+  );
+  const totalVariance = (rows: readonly WeekDay[]) =>
+    rows.reduce((total, day) => total + (day.closeVarianceMinor ?? 0), 0);
+  const scheduledVarianceMinor = totalVariance(scheduledCovered);
+  const outsideScheduleVarianceMinor = totalVariance(outsideCovered);
   return {
-    closeVarianceMinor: covered.reduce(
-      (total, day) => total + (day.closeVarianceMinor ?? 0),
-      0,
-    ),
+    closeVarianceMinor: scheduledVarianceMinor + outsideScheduleVarianceMinor,
     coverage:
-      covered.length === 0
+      scheduledCovered.length === 0
         ? ("unavailable" as const)
-        : covered.length === period.includedDates.length
+        : scheduledCovered.length === period.includedDates.length
           ? ("complete" as const)
           : ("partial" as const),
-    coveredIncludedDayCount: covered.length,
+    coveredIncludedDayCount: scheduledCovered.length,
     includedDayCount: period.includedDates.length,
+    scheduledVarianceMinor,
+    outsideScheduleVarianceMinor,
+    outsideScheduleCoveredDayCount: outsideCovered.length,
   };
 }
 
@@ -602,23 +674,29 @@ async function priorPeriodPosture(args: {
       (offset, index) =>
         offset === scheduledOffsets(prior.startDate, priorDates)[index],
     );
-  const days = await readWeekDays(
+  const priorDays = await readWeekDays(
     args.ctx,
     args.storeId,
     prior.startDate,
     prior.endDate,
   );
-  if (!days) {
+  if (priorDays.status !== "ok") {
     return {
       cycleStartDate: prior.startDate,
       cycleEndDate: prior.endDate,
-      comparabilityReason: "prior_incomplete" as const,
+      // A queued or failed prior fold is a named comparison qualification, not
+      // the generic incomplete bucket the row-drift refusal falls into.
+      comparabilityReason:
+        priorDays.status === "pending_fold"
+          ? ("missing_prior_day_fold" as const)
+          : ("prior_incomplete" as const),
       currentScheduledPositionCount: currentDates.length,
       equivalentScheduledPositions,
       priorScheduledPositionCount: priorDates.length,
       values: null,
     };
   }
+  const days = priorDays.days;
   const liveCurrentScheduledDate =
     !args.fullCurrentPeriod &&
     currentLocalDate !== null &&
@@ -691,9 +769,22 @@ async function priorPeriodPosture(args: {
     ];
   }
   const selected = new Set(priorDates);
+  // The comparison frame mirrors the elapsed portion of the current week: the
+  // matched scheduled positions, plus every excluded date the same elapsed
+  // window covers. A full current period mirrors the whole prior week, so its
+  // outside-schedule lane is the prior week's real one — which is what the
+  // headline's total-vs-total comparison needs. The included lane's membership
+  // is unchanged, so `values` and comparability are untouched by this.
+  const outsideCutoffDate = args.fullCurrentPeriod
+    ? prior.endDate
+    : (priorDates.at(-1) ?? prior.startDate);
   const comparisonPeriod = {
     ...prior,
-    dates: prior.dates.filter((date) => selected.has(date.localDate)),
+    dates: prior.dates.filter((date) =>
+      date.included
+        ? selected.has(date.localDate)
+        : date.localDate <= outsideCutoffDate,
+    ),
     includedDates: priorDates,
   };
   const folded = foldWeekFromDays({
@@ -704,9 +795,13 @@ async function priorPeriodPosture(args: {
     ? ("scheduled_membership_changed" as const)
     : folded.completeness.complete
       ? ("comparable" as const)
-      : folded.completeness.reason === "missing_day_fold"
-        ? ("missing_prior_day_fold" as const)
-        : ("prior_incomplete" as const);
+      : ("prior_incomplete" as const);
+  // The prior total is only as trustworthy as its weaker lane. An incomplete
+  // outside-schedule lane would understate the prior week silently, so the
+  // lane is withheld and the read withholds the comparison with it.
+  const outsideScheduleComplete =
+    folded.completeness.complete &&
+    (folded.completeness.outsideSchedule?.complete ?? false);
   return {
     cycleStartDate: prior.startDate,
     cycleEndDate: prior.endDate,
@@ -715,6 +810,11 @@ async function priorPeriodPosture(args: {
     equivalentScheduledPositions,
     priorScheduledPositionCount: priorDates.length,
     values: folded.completeness.complete ? folded.included : null,
+    // The same fold already carries this lane — no extra read — and it is what
+    // makes the headline's total-vs-total comparison like-for-like.
+    outsideScheduleValues: outsideScheduleComplete
+      ? folded.outsideSchedule
+      : null,
   };
 }
 
@@ -729,6 +829,35 @@ async function priorPeriodPosture(args: {
  * shared across its indexed lanes, each with one overflow probe). No facts
  * or payments are read.
  */
+/**
+ * Disclose an incomplete posture on the current weekly singleton while keeping
+ * the previously verified values. Nothing partial is ever published, and the
+ * operator still sees why the week is not complete.
+ */
+async function persistWeeklyIncompleteness(
+  ctx: MutationCtx,
+  storeId: Id<"store">,
+  reason: ReportWeekCompleteness["reason"],
+): Promise<boolean> {
+  const current = await ctx.db
+    .query("reportWeekCurrent")
+    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+    .unique();
+  if (!current || current.availability === "unavailable") return false;
+  const lifecyclePosture: ReportWeekLifecyclePosture =
+    current.acceptedBaselineId
+      ? (current.closePosture?.status ?? "accepted")
+      : "materializing";
+  const amendmentPosture: ReportWeekAmendmentPosture =
+    current.acceptedBaselineId ? "pending_recompute" : "none";
+  await ctx.db.patch("reportWeekCurrent", current._id, {
+    completeness: { complete: false, reason },
+    lifecyclePosture,
+    amendmentPosture,
+  });
+  return true;
+}
+
 export async function rebuildCurrentWeek(
   ctx: MutationCtx,
   storeId: Id<"store">,
@@ -755,27 +884,7 @@ export async function rebuildCurrentWeek(
       existing.availability !== "unavailable" &&
       unavailableReason !== "no_scheduled_dates"
     ) {
-      const lifecyclePosture: ReportWeekLifecyclePosture =
-        existing.acceptedBaselineId
-          ? (existing.closePosture?.status ?? "accepted")
-          : "materializing";
-      const amendmentPosture: ReportWeekAmendmentPosture =
-        existing.acceptedBaselineId ? "pending_recompute" : "none";
-      await ctx.db.patch("reportWeekCurrent", existing._id, {
-        lifecyclePosture,
-        amendmentPosture,
-        ...(unavailableReason === "missing_schedule" ||
-        unavailableReason === "missing_timezone" ||
-        unavailableReason === "schedule_history_cap" ||
-        unavailableReason === "missing_day_fold"
-          ? {
-              completeness: {
-                complete: false,
-                reason: unavailableReason,
-              },
-            }
-          : {}),
-      });
+      await persistWeeklyIncompleteness(ctx, storeId, unavailableReason);
       return;
     }
     const amendmentPosture: ReportWeekAmendmentPosture =
@@ -805,16 +914,17 @@ export async function rebuildCurrentWeek(
     await persistUnavailable("no_scheduled_dates");
     return "unavailable";
   }
-  const days = await readWeekDays(
+  const weekDays = await readWeekDays(
     ctx,
     storeId,
     period.startDate,
     period.endDate,
   );
-  if (!days) {
+  if (weekDays.status !== "ok") {
     await persistUnavailable("missing_day_fold");
     return "unavailable";
   }
+  const days = weekDays.days;
 
   const folded = foldWeekFromDays({ period, days });
   const frameStartAt = await periodStartAt(ctx, period);
@@ -905,12 +1015,31 @@ export async function rebuildCurrentWeek(
   return "rebuilt";
 }
 
-/** Upsert the per-store marker consumed by the one existing Reports sweeper. */
+export type WeeklyAcceptanceIntent = NonNullable<
+  Doc<"reportDirtyWeek">["intent"]
+>;
+
+/** Folded dates carried on one marker. Bounded: two frames of daily work. */
+export const WEEKLY_MARK_FOLDED_DATE_LIMIT = 16;
+
+/**
+ * Upsert the per-store marker consumed by the one existing Reports sweeper.
+ *
+ * `foldedDates` accumulate on the marker instead of being handed over in
+ * memory, so a store whose marker misses one weekly page still replays the
+ * exact historical dates on the next tick. A recorded acceptance intent is
+ * preserved across re-marks and never rewritten by a later mark.
+ */
 export async function markWeekDirty(
   ctx: MutationCtx,
   storeId: Id<"store">,
   reason: Doc<"reportDirtyWeek">["reason"],
   now: number,
+  opts?: {
+    acceptanceBlockedReason?: Doc<"reportDirtyWeek">["acceptanceBlockedReason"];
+    foldedDates?: readonly string[];
+    intent?: WeeklyAcceptanceIntent;
+  },
 ): Promise<void> {
   const current = await ctx.db
     .query("reportWeekCurrent")
@@ -941,14 +1070,116 @@ export async function markWeekDirty(
     .query("reportDirtyWeek")
     .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
     .unique();
+  const foldedDates = [
+    ...new Set([...(existing?.foldedDates ?? []), ...(opts?.foldedDates ?? [])]),
+  ]
+    .sort()
+    .slice(-WEEKLY_MARK_FOLDED_DATE_LIMIT);
+  const intent = existing?.intent ?? opts?.intent;
+  const acceptanceBlockedReason =
+    opts?.acceptanceBlockedReason ??
+    (intent ? undefined : existing?.acceptanceBlockedReason);
   if (existing) {
     await ctx.db.patch("reportDirtyWeek", existing._id, {
       reason,
       markedAt: now,
+      intent,
+      acceptanceBlockedReason,
+      ...(foldedDates.length > 0 ? { foldedDates } : {}),
     });
     return;
   }
-  await ctx.db.insert("reportDirtyWeek", { storeId, reason, markedAt: now });
+  await ctx.db.insert("reportDirtyWeek", {
+    storeId,
+    reason,
+    markedAt: now,
+    ...(intent ? { intent } : {}),
+    ...(acceptanceBlockedReason ? { acceptanceBlockedReason } : {}),
+    ...(foldedDates.length > 0 ? { foldedDates } : {}),
+  });
+}
+
+/**
+ * Read — or write once — the durable acceptance identity for one cycle.
+ *
+ * The stored cutoff always wins: a close patched between materialization
+ * attempts cannot move the knowledge boundary of an immutable baseline. When
+ * nothing is stored (a mark raised before this record existed, or drained by
+ * the sweeper), the cutoff is derived from `completedAt` ONLY. `updatedAt` is
+ * mutable and would make the boundary depend on retry timing, so a completed
+ * close without `completedAt` records a retryable blocked reason instead.
+ *
+ * One marker per store means a second cycle's intent replaces the first's.
+ * That is safe: identity is structural, so re-derivation from the same close
+ * reproduces the same cutoff.
+ */
+async function resolveWeeklyAcceptanceIntent(
+  ctx: MutationCtx,
+  args: {
+    close: Doc<"dailyClose">;
+    cycleStartDate: string;
+    now: number;
+    storeId: Id<"store">;
+  },
+): Promise<WeeklyAcceptanceIntent | null> {
+  const marker = await ctx.db
+    .query("reportDirtyWeek")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .unique();
+  const stored = marker?.intent;
+  if (
+    stored &&
+    stored.cycleStartDate === args.cycleStartDate &&
+    stored.closeId === args.close._id
+  ) {
+    return stored;
+  }
+  const cutoffObservedAt = args.close.completedAt;
+  if (cutoffObservedAt === undefined) {
+    await markWeekDirty(ctx, args.storeId, "acceptance_requested", args.now, {
+      acceptanceBlockedReason: "close_missing_completed_at",
+    });
+    return null;
+  }
+  const intent: WeeklyAcceptanceIntent = {
+    closeId: args.close._id,
+    cycleStartDate: args.cycleStartDate,
+    cutoffObservedAt,
+  };
+  if (marker) {
+    await ctx.db.patch("reportDirtyWeek", marker._id, {
+      intent,
+      acceptanceBlockedReason: undefined,
+    });
+  } else {
+    await ctx.db.insert("reportDirtyWeek", {
+      storeId: args.storeId,
+      reason: "acceptance_requested",
+      markedAt: args.now,
+      intent,
+    });
+  }
+  return intent;
+}
+
+/** The intent has produced its baseline; the work item is no longer pending. */
+async function clearWeeklyAcceptanceIntent(
+  ctx: MutationCtx,
+  storeId: Id<"store">,
+  intent: WeeklyAcceptanceIntent,
+) {
+  const marker = await ctx.db
+    .query("reportDirtyWeek")
+    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+    .unique();
+  if (
+    !marker?.intent ||
+    marker.intent.cycleStartDate !== intent.cycleStartDate ||
+    marker.intent.closeId !== intent.closeId
+  ) {
+    return;
+  }
+  await ctx.db.patch("reportDirtyWeek", marker._id, { intent: undefined });
 }
 
 type FrozenInventoryGroup = Parameters<
@@ -1024,10 +1255,12 @@ async function localDateForPeriod(
  * baseline.
  */
 export async function materializeAcceptedWeek(args: {
-  acceptedAt: number;
+  /** Repair/inspection override. Normal callers take both from the intent. */
+  acceptedAt?: number;
   closeId: Id<"dailyClose">;
   ctx: MutationCtx;
-  cutoffObservedAt: number;
+  cutoffObservedAt?: number;
+  now?: number;
   storeId: Id<"store">;
 }): Promise<"created" | "existing" | "incomplete" | "unavailable"> {
   const store = await args.ctx.db.get("store", args.storeId);
@@ -1059,22 +1292,6 @@ export async function materializeAcceptedWeek(args: {
   ) {
     return "unavailable";
   }
-  const finalDay = await args.ctx.db
-    .query("reportDay")
-    .withIndex("by_storeId_operatingDate", (q) =>
-      q
-        .eq("storeId", args.storeId)
-        .eq("operatingDate", period.finalScheduledDate!),
-    )
-    .unique();
-  if (
-    !finalDay ||
-    finalDay.closeId !== args.closeId ||
-    finalDay.foldedAt === undefined ||
-    finalDay.foldedAt < args.acceptedAt
-  ) {
-    return "unavailable";
-  }
   const existing = await args.ctx.db
     .query("reportWeekAccepted")
     .withIndex("by_storeId_cycleStartDate", (q) =>
@@ -1090,6 +1307,32 @@ export async function materializeAcceptedWeek(args: {
     }
     return "existing";
   }
+  const intent = await resolveWeeklyAcceptanceIntent(args.ctx, {
+    close,
+    cycleStartDate: period.startDate,
+    now: args.now ?? Date.now(),
+    storeId: args.storeId,
+  });
+  if (!intent) return "unavailable";
+  const acceptedAt = args.acceptedAt ?? intent.cutoffObservedAt;
+  const cutoffObservedAt = args.cutoffObservedAt ?? intent.cutoffObservedAt;
+
+  const finalDay = await args.ctx.db
+    .query("reportDay")
+    .withIndex("by_storeId_operatingDate", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("operatingDate", period.finalScheduledDate!),
+    )
+    .unique();
+  if (
+    !finalDay ||
+    finalDay.closeId !== args.closeId ||
+    finalDay.foldedAt === undefined ||
+    finalDay.foldedAt < acceptedAt
+  ) {
+    return "unavailable";
+  }
 
   const factsByDate = new Map<string, Doc<"reportFact">[]>();
   let remaining = MAX_WEEKLY_FACTS;
@@ -1100,10 +1343,19 @@ export async function materializeAcceptedWeek(args: {
         q
           .eq("storeId", args.storeId)
           .eq("operatingDate", date)
-          .lte("observedAt", args.cutoffObservedAt),
+          .lte("observedAt", cutoffObservedAt),
       )
       .take(remaining + 1);
-    if (facts.length > remaining) return "incomplete";
+    if (facts.length > remaining) {
+      // Publish nothing, but make the refusal operator-visible: a shared-cap
+      // breach is a structural limit, not a transient write failure.
+      await persistWeeklyIncompleteness(
+        args.ctx,
+        args.storeId,
+        "fact_cap_exceeded",
+      );
+      return "incomplete";
+    }
     remaining -= facts.length;
     factsByDate.set(date, facts);
   }
@@ -1113,22 +1365,30 @@ export async function materializeAcceptedWeek(args: {
     factsByDate,
     period,
   });
-  if (!folded.completeness.complete) return "incomplete";
+  if (!folded.completeness.complete) {
+    await persistWeeklyIncompleteness(
+      args.ctx,
+      args.storeId,
+      folded.completeness.reason,
+    );
+    return "incomplete";
+  }
   const frameStartAt = await periodStartAt(args.ctx, period);
   if (frameStartAt === null) return "unavailable";
-  const acceptedDays = await readWeekDays(
+  const acceptedRead = await readWeekDays(
     args.ctx,
     args.storeId,
     period.startDate,
     period.endDate,
   );
-  if (!acceptedDays) return "incomplete";
+  if (acceptedRead.status !== "ok") return "incomplete";
+  const acceptedDays = acceptedRead.days;
   const currentFolded = foldWeekFromDays({ period, days: acceptedDays });
   if (!currentFolded.completeness.complete) return "incomplete";
   const closePosture = await resolveAcceptedWeekClosePosture(
     args.ctx,
     {
-      acceptedAt: args.acceptedAt,
+      acceptedAt,
       closeId: args.closeId,
       storeId: args.storeId,
     },
@@ -1154,14 +1414,14 @@ export async function materializeAcceptedWeek(args: {
     currency: normalizeCurrencyCode(store.currency),
     ctx: args.ctx,
     fullCurrentPeriod: true,
-    now: args.acceptedAt,
+    now: acceptedAt,
     period,
     storeId: args.storeId,
   });
 
   const fingerprint = stableStringHash(
     JSON.stringify({
-      cutoffObservedAt: args.cutoffObservedAt,
+      cutoffObservedAt,
       included: folded.included,
       outsideSchedule: folded.outsideSchedule,
       scheduleLineage: folded.scheduleLineage,
@@ -1173,8 +1433,8 @@ export async function materializeAcceptedWeek(args: {
     cycleEndDate: period.endDate,
     currency: normalizeCurrencyCode(store.currency),
     metricVersion: 1,
-    acceptedAt: args.acceptedAt,
-    cutoffObservedAt: args.cutoffObservedAt,
+    acceptedAt,
+    cutoffObservedAt,
     closeId: args.closeId,
     baselineFingerprint: fingerprint,
     included: folded.included,
@@ -1205,6 +1465,7 @@ export async function materializeAcceptedWeek(args: {
       amendmentPosture: amendment ? "amended" : "none",
     });
   }
+  await clearWeeklyAcceptanceIntent(args.ctx, args.storeId, intent);
   return "created";
 }
 
@@ -1230,7 +1491,6 @@ function acceptedPeriod(
     finalScheduledDate: includedDates.at(-1) ?? null,
     automaticFinalizationReason:
       includedDates.length === 0 ? "no_scheduled_dates" : null,
-    outsideScheduleFactDates: [],
   };
 }
 
@@ -1307,13 +1567,14 @@ async function refreshAcceptedWeek(
   now: number,
 ) {
   const period = acceptedPeriod(accepted);
-  const days = await readWeekDays(
+  const read = await readWeekDays(
     ctx,
     accepted.storeId,
     accepted.cycleStartDate,
     accepted.cycleEndDate,
   );
-  if (!days) return false;
+  if (read.status !== "ok") return false;
+  const days = read.days;
   const folded = foldWeekFromDays({ period, days });
   if (!folded.completeness.complete) return false;
 
@@ -1428,7 +1689,16 @@ export async function refreshAcceptedWeekForDate(
     operatingDate,
   );
   if (period.kind !== "resolved") {
-    await retainAcceptedWeekDateRetry(ctx, storeId, operatingDate, now);
+    // `missing_schedule` is the one unresolvable reason waiting cannot fix: a
+    // date older than the store's oldest schedule version stays uncovered
+    // because new versions are effective-dated forward. Re-marking it would
+    // requeue the date on every sweep forever — observed on a real store whose
+    // facts predate its schedule history by weeks. The day fold itself already
+    // succeeded and is durable. A capped history or an absent timezone IS
+    // remediable, so those keep their retry.
+    if (period.reason !== "missing_schedule") {
+      await retainAcceptedWeekDateRetry(ctx, storeId, operatingDate, now);
+    }
     return 0;
   }
   if (period.finalScheduledDate !== operatingDate) {
@@ -1461,13 +1731,15 @@ export async function refreshAcceptedWeekForDate(
     await retainAcceptedWeekDateRetry(ctx, storeId, operatingDate, now);
     return 0;
   }
+  // A pre-activation close will never become acceptable; do not retry it.
+  if (!isCloseWithinWeeklyAcceptanceFloor(store, close.completedAt)) {
+    return 0;
+  }
 
-  const acceptedAt = close.completedAt ?? close.updatedAt;
   const result = await materializeAcceptedWeek({
-    acceptedAt,
     closeId: close._id,
     ctx,
-    cutoffObservedAt: acceptedAt,
+    now,
     storeId,
   });
   if (result === "created") return 1;
@@ -1508,11 +1780,12 @@ export async function reconcileRecentAcceptedWeeksForStore(
   for (const close of closes) {
     if (
       close.status !== "completed" ||
-      close.lifecycleStatus === "superseded"
+      close.lifecycleStatus === "superseded" ||
+      // Pre-activation closes never gain retrospective accepted baselines.
+      !isCloseWithinWeeklyAcceptanceFloor(store, close.completedAt)
     ) {
       continue;
     }
-    const acceptedAt = close.completedAt ?? close.updatedAt;
     const period = await resolvePeriodForOperatingDate(
       ctx,
       storeId,
@@ -1530,18 +1803,19 @@ export async function reconcileRecentAcceptedWeeksForStore(
         q.eq("storeId", storeId).eq("operatingDate", close.operatingDate),
       )
       .unique();
+    // A completed close without `completedAt` still reaches materialization:
+    // it records the retryable blocked reason rather than inventing a cutoff.
     if (
       finalDay?.closeId !== close._id ||
       finalDay.foldedAt === undefined ||
-      finalDay.foldedAt < acceptedAt
+      (close.completedAt !== undefined && finalDay.foldedAt < close.completedAt)
     ) {
       continue;
     }
     const result = await materializeAcceptedWeek({
-      acceptedAt,
       closeId: close._id,
       ctx,
-      cutoffObservedAt: acceptedAt,
+      now,
       storeId,
     });
     if (result === "created") created += 1;

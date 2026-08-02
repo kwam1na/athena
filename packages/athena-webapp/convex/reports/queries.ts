@@ -3,12 +3,11 @@ import { paginationOptsValidator } from "convex/server";
 import { query } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import {
-  hasCompletedWeeklyObservedAtVerification,
-  isWeeklyReportingEnabledForStore,
-} from "../platform/capabilityCatalog";
+import { isWeeklyReportingEnabledForStoreDoc } from "../platform/capabilityCatalog";
 import { requireReportsStoreAccess } from "./access";
 import {
+  addWeekMetrics,
+  combineWeekCompleteness,
   dayPeriodKey,
   isReportingTodayInProgress,
   monthPeriodKey,
@@ -28,8 +27,21 @@ import type {
   ReportWeekMetrics,
   ReportWeekSummary,
 } from "../../shared/reportsContract";
-import type { ReportWeekChangeDirection } from "../../shared/reportsContract";
+import type {
+  ReportWeekAcceptedProjection,
+  ReportWeekAmendmentPosture,
+  ReportWeekBriefing,
+  ReportWeekChangeDirection,
+  ReportWeekCurrentProjection,
+  ReportWeekHistoryPage,
+  ReportWeekInventoryAttention,
+  ReportWeekLifecyclePosture,
+  ReportWeekOwnerRoutes,
+  ReportWeekPriorPeriod,
+  ReportWeekVariancePosture,
+} from "../../shared/reportsContract";
 import { emptySnapshot, snapshotForDays } from "./overview";
+import { UNAVAILABLE_WEEKLY_INVENTORY_ATTENTION } from "./weeklyInventory";
 import { addDaysToDate, periodDateRange } from "./rollups";
 import { transactionCountFromCloseSummary } from "./transactionCounts";
 
@@ -114,18 +126,99 @@ function priorNetSalesChange(currentMinor: number, priorMinor: number) {
   return { amountMinor, direction };
 }
 
+/**
+ * The rollout normalization for the inventory-attention lane. A projection
+ * materialized before the lane landed has no stored evidence, and an absent
+ * field would reach the client as `undefined` — indistinguishable from a lane
+ * that does not exist. Normalize it to the explicit unavailable posture so the
+ * shared contract stays required.
+ */
+function inventoryAttentionProjection(
+  inventoryAttention:
+    | Doc<"reportWeekAccepted">["inventoryAttention"]
+    | undefined,
+): ReportWeekInventoryAttention {
+  return inventoryAttention ?? UNAVAILABLE_WEEKLY_INVENTORY_ATTENTION;
+}
+
+/**
+ * The rollout normalization for the variance split. A row written before the
+ * split landed carries a scheduled-only `closeVarianceMinor`, and its outside
+ * lane is not knowable from the row — reporting it as zero would assert that
+ * no outside-schedule close existed. The split is withheld instead, and the
+ * next rebuild republishes it.
+ */
+function variancePostureProjection(
+  variancePosture: Doc<"reportWeekAccepted">["variancePosture"],
+): ReportWeekVariancePosture | undefined {
+  if (!variancePosture) return undefined;
+  const split =
+    variancePosture.scheduledVarianceMinor !== undefined &&
+    variancePosture.outsideScheduleVarianceMinor !== undefined &&
+    variancePosture.outsideScheduleCoveredDayCount !== undefined;
+  return {
+    ...variancePosture,
+    scheduledVarianceMinor: split
+      ? variancePosture.scheduledVarianceMinor!
+      : null,
+    outsideScheduleVarianceMinor: split
+      ? variancePosture.outsideScheduleVarianceMinor!
+      : null,
+    outsideScheduleCoveredDayCount: split
+      ? variancePosture.outsideScheduleCoveredDayCount!
+      : null,
+  };
+}
+
+/**
+ * The prior period as read.
+ *
+ * The comparison is total-against-total: the headline states the whole
+ * labelled range, so its counterpart must too. A prior record written before
+ * the outside-schedule lane was persisted cannot produce a total, and a
+ * scheduled-lane fallback would silently compare unlike things — so the
+ * comparison is withheld instead. Live projections rebuild continuously, so
+ * that gap closes on the next sweep.
+ */
 function priorPeriodProjection(
-  current: ReportWeekMetrics,
-  priorPeriod: Doc<"reportWeekCurrent">["priorPeriod"],
-) {
+  currentTotal: ReportWeekMetrics,
+  // Both weekly tables persist the same prior-period validator; the accepted
+  // document is the single-shape one, so it names the type for both.
+  priorPeriod: Doc<"reportWeekAccepted">["priorPeriod"],
+): ReportWeekPriorPeriod | undefined {
   if (!priorPeriod) return undefined;
+  const priorTotal =
+    priorPeriod.values && priorPeriod.outsideScheduleValues
+      ? addWeekMetrics(priorPeriod.values, priorPeriod.outsideScheduleValues)
+      : null;
   return {
     ...priorPeriod,
     summary: priorPeriod.values ? weeklySummary(priorPeriod.values) : null,
+    totalSummary: priorTotal ? weeklySummary(priorTotal) : null,
     netSalesChange:
-      priorPeriod.comparabilityReason === "comparable" && priorPeriod.values
-        ? priorNetSalesChange(current.netSalesMinor, priorPeriod.values.netSalesMinor)
+      priorPeriod.comparabilityReason === "comparable" && priorTotal
+        ? priorNetSalesChange(
+            currentTotal.netSalesMinor,
+            priorTotal.netSalesMinor,
+          )
         : null,
+  };
+}
+
+/** Both lanes of an amendment as one read-time conclusion plus its evidence. */
+function weeklyAmendmentProjection(
+  amendment: NonNullable<Doc<"reportWeekAccepted">["amendment"]>,
+) {
+  return {
+    ...amendment,
+    summary: weeklySummary(amendment.included),
+    outsideScheduleSummary: weeklySummary(amendment.outsideSchedule),
+    totalSummary: weeklySummary(
+      addWeekMetrics(amendment.included, amendment.outsideSchedule),
+    ),
+    netSalesDeltaMinor:
+      amendment.includedNetSalesDeltaMinor +
+      amendment.outsideScheduleNetSalesDeltaMinor,
   };
 }
 
@@ -145,7 +238,7 @@ function weeklyOwnerRoutes(args: {
   cycleStartDate: string;
   historical: boolean;
   scheduleLineage: { included: boolean; localDate: string }[];
-}) {
+}): ReportWeekOwnerRoutes {
   const finalDate = finalScheduledDate(args.scheduleLineage);
   return {
     transactions: {
@@ -179,7 +272,33 @@ function weeklyOwnerRoutes(args: {
   };
 }
 
-function toWeeklyCurrentProjection(doc: Doc<"reportWeekCurrent">) {
+/** The available member of the current weekly union. Callers narrow first. */
+type AvailableWeekCurrent = Extract<
+  Doc<"reportWeekCurrent">,
+  { included: unknown }
+>;
+
+/**
+ * An available projection that also carries both postures. They are optional
+ * on the stored document only for rows written before the posture contract
+ * landed; the briefing withholds such a row rather than inventing a posture,
+ * so the projection function never has to.
+ */
+type MaterializedWeekCurrent = AvailableWeekCurrent & {
+  amendmentPosture: ReportWeekAmendmentPosture;
+  lifecyclePosture: ReportWeekLifecyclePosture;
+};
+
+function hasWeeklyPostures(
+  doc: AvailableWeekCurrent,
+): doc is MaterializedWeekCurrent {
+  return Boolean(doc.lifecyclePosture) && Boolean(doc.amendmentPosture);
+}
+
+function toWeeklyCurrentProjection(
+  doc: MaterializedWeekCurrent,
+): ReportWeekCurrentProjection {
+  const total = addWeekMetrics(doc.included, doc.outsideSchedule);
   return {
     cycleStartDate: doc.cycleStartDate,
     cycleEndDate: doc.cycleEndDate,
@@ -189,21 +308,20 @@ function toWeeklyCurrentProjection(doc: Doc<"reportWeekCurrent">) {
     included: doc.included,
     summary: weeklySummary(doc.included),
     outsideSchedule: doc.outsideSchedule,
+    outsideScheduleSummary: weeklySummary(doc.outsideSchedule),
+    total: weeklySummary(total),
+    totalCompleteness: combineWeekCompleteness(doc.completeness),
     scheduleLineage: doc.scheduleLineage,
     completeness: doc.completeness,
-    lifecyclePosture: doc.lifecyclePosture!,
-    amendmentPosture: doc.amendmentPosture!,
-    inventoryAttention: doc.inventoryAttention,
+    lifecyclePosture: doc.lifecyclePosture,
+    amendmentPosture: doc.amendmentPosture,
+    inventoryAttention: inventoryAttentionProjection(doc.inventoryAttention),
     closePosture: doc.closePosture,
     amendment: doc.amendment
-      ? {
-          ...doc.amendment,
-          summary: weeklySummary(doc.amendment.included),
-          outsideScheduleSummary: weeklySummary(doc.amendment.outsideSchedule),
-        }
+      ? weeklyAmendmentProjection(doc.amendment)
       : undefined,
-    priorPeriod: priorPeriodProjection(doc.included, doc.priorPeriod),
-    variancePosture: doc.variancePosture,
+    priorPeriod: priorPeriodProjection(total, doc.priorPeriod),
+    variancePosture: variancePostureProjection(doc.variancePosture),
     ownerRoutes: weeklyOwnerRoutes({
       cycleStartDate: doc.cycleStartDate,
       cycleEndDate: doc.cycleEndDate,
@@ -213,11 +331,14 @@ function toWeeklyCurrentProjection(doc: Doc<"reportWeekCurrent">) {
   };
 }
 
-function toAcceptedWeeklyProjection(doc: Doc<"reportWeekAccepted">) {
+function toAcceptedWeeklyProjection(
+  doc: Doc<"reportWeekAccepted">,
+): ReportWeekAcceptedProjection {
   const lifecyclePosture =
     doc.lifecyclePosture ?? doc.closePosture?.status ?? "accepted";
   const amendmentPosture =
     doc.amendmentPosture ?? (doc.amendment ? "amended" : "none");
+  const total = addWeekMetrics(doc.included, doc.outsideSchedule);
   const current = doc.amendment
     ? {
         included: doc.amendment.included,
@@ -226,6 +347,12 @@ function toAcceptedWeeklyProjection(doc: Doc<"reportWeekAccepted">) {
         outsideSchedule: doc.amendment.outsideSchedule,
         outsideScheduleSummary: weeklySummary(doc.amendment.outsideSchedule),
         outsideScheduleNetSalesDeltaMinor:
+          doc.amendment.outsideScheduleNetSalesDeltaMinor,
+        totalSummary: weeklySummary(
+          addWeekMetrics(doc.amendment.included, doc.amendment.outsideSchedule),
+        ),
+        netSalesDeltaMinor:
+          doc.amendment.includedNetSalesDeltaMinor +
           doc.amendment.outsideScheduleNetSalesDeltaMinor,
       }
     : undefined;
@@ -241,22 +368,21 @@ function toAcceptedWeeklyProjection(doc: Doc<"reportWeekAccepted">) {
     included: doc.included,
     summary: weeklySummary(doc.included),
     outsideSchedule: doc.outsideSchedule,
+    outsideScheduleSummary: weeklySummary(doc.outsideSchedule),
+    total: weeklySummary(total),
+    totalCompleteness: combineWeekCompleteness(doc.completeness),
     scheduleLineage: doc.scheduleLineage,
     completeness: doc.completeness,
     lifecyclePosture,
     amendmentPosture,
-    inventoryAttention: doc.inventoryAttention,
+    inventoryAttention: inventoryAttentionProjection(doc.inventoryAttention),
     closePosture: doc.closePosture,
     current,
     amendment: doc.amendment
-      ? {
-          ...doc.amendment,
-          summary: weeklySummary(doc.amendment.included),
-          outsideScheduleSummary: weeklySummary(doc.amendment.outsideSchedule),
-        }
+      ? weeklyAmendmentProjection(doc.amendment)
       : undefined,
-    priorPeriod: priorPeriodProjection(doc.included, doc.priorPeriod),
-    variancePosture: doc.variancePosture,
+    priorPeriod: priorPeriodProjection(total, doc.priorPeriod),
+    variancePosture: variancePostureProjection(doc.variancePosture),
     ownerRoutes: weeklyOwnerRoutes({
       cycleStartDate: doc.cycleStartDate,
       cycleEndDate: doc.cycleEndDate,
@@ -440,14 +566,10 @@ export const getOverview = query({
  */
 export const getActiveWeeklyBriefing = query({
   args: { storeId: v.id("store") },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<ReportWeekBriefing> => {
     const { store } = await requireReportsStoreAccess(ctx, args.storeId);
     if (
-      !isWeeklyReportingEnabledForStore(
-        String(args.storeId),
-        undefined,
-        hasCompletedWeeklyObservedAtVerification(store),
-      )
+      !isWeeklyReportingEnabledForStoreDoc(String(args.storeId), store)
     ) {
       return {
         status: "unavailable" as const,
@@ -471,7 +593,7 @@ export const getActiveWeeklyBriefing = query({
         reason: current.unavailableReason,
       };
     }
-    if (!current.lifecyclePosture || !current.amendmentPosture) {
+    if (!hasWeeklyPostures(current)) {
       return {
         status: "unavailable" as const,
         reason: "missing_projection" as const,
@@ -509,15 +631,11 @@ export const listAcceptedWeeklyHistory = query({
     storeId: v.id("store"),
     paginationOpts: paginationOptsValidator,
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<ReportWeekHistoryPage> => {
     requireWeeklyHistoryPagination(args.paginationOpts);
     const { store } = await requireReportsStoreAccess(ctx, args.storeId);
     if (
-      !isWeeklyReportingEnabledForStore(
-        String(args.storeId),
-        undefined,
-        hasCompletedWeeklyObservedAtVerification(store),
-      )
+      !isWeeklyReportingEnabledForStoreDoc(String(args.storeId), store)
     ) {
       return { page: [], isDone: true, continueCursor: "" };
     }
@@ -544,15 +662,11 @@ export const listAcceptedWeeklyHistory = query({
  */
 export const getAcceptedWeeklyDetail = query({
   args: { storeId: v.id("store"), reportId: v.string() },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<ReportWeekAcceptedProjection | null> => {
     const cycleStartDate = cycleStartDateForWeeklyReportId(args.reportId);
     const { store } = await requireReportsStoreAccess(ctx, args.storeId);
     if (
-      !isWeeklyReportingEnabledForStore(
-        String(args.storeId),
-        undefined,
-        hasCompletedWeeklyObservedAtVerification(store),
-      )
+      !isWeeklyReportingEnabledForStoreDoc(String(args.storeId), store)
     )
       return null;
 

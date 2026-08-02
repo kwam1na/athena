@@ -6,6 +6,7 @@ import type {
   ReportDayStatus,
   ReportWeekMetrics,
 } from "../../shared/reportsContract";
+import { normalizeWeekMetrics } from "../../shared/reportsContract";
 import { getDiscountValue } from "../inventory/utils";
 import { resolveOperatingDate } from "./operatingDay";
 // Readers, not mappers: `loadOnlineOrderLines` answers "where does this order
@@ -14,14 +15,14 @@ import { resolveOperatingDate } from "./operatingDay";
 // them would only let the verifier read a DIFFERENT set of lines than the one
 // that exists, which is noise rather than independence.
 import { loadOnlineOrderLines, toDiscountItems } from "./reseed";
-import { resolveWeeklyPeriod } from "./weeklyPeriods";
-import { localDateStartAt } from "../lib/storeScheduleTime";
-import { listOpenSyncedSaleInventoryReviewGroupsWithCompleteness } from "../operations/operationalWorkItems";
-import { projectLiveWeeklyInventoryAttention } from "./weeklyInventory";
+import { localDateAt, localDateStartAt } from "../lib/storeScheduleTime";
+// Identity constants, not projection logic: how a synced-sale review group is
+// NAMED is a contract shared by everything that talks about the group. What the
+// weekly report CONCLUDES about those groups is recomputed below.
 import {
-  computeWeeklyVariancePosture,
-  resolveAcceptedWeekClosePosture,
-} from "./weekly";
+  canonicalSyncedSaleInventoryReviewSkuId,
+  stableOperationalWorkItemSourceIdentity,
+} from "../operations/logicalOperationalWork";
 
 /**
  * Source-truth verifier — the second opinion on a folded day.
@@ -42,6 +43,13 @@ import {
  *     rather than the billed lines, `posTransactionAdjustment.deltaTotal`
  *     rather than the adjustment lines. Agreement then means two independently
  *     maintained columns agree, not that one column was copied correctly.
+ *  4. The weekly lanes import NOTHING from `weekly.ts`, `weeklyPeriods.ts` or
+ *     `weeklyInventory.ts`. Schedule membership, close lineage, Open Work
+ *     recounting and close variance are all re-derived here from schedule
+ *     versions, `dailyClose` and `operationalWorkItem` rows. Calling the same
+ *     helpers the projection calls would only prove that a stored row still
+ *     matches what the projection would write today — never that the
+ *     projection's own reasoning is right.
  *
  * The single deliberate exception is `resolveOperatingDate`: which day an
  * instant belongs to is an authority, not an opinion. A verifier that re-derived
@@ -87,6 +95,10 @@ export const VERIFY_MAX_LINES_PER_DOC = 500;
 /** Day docs examined by the store summary. */
 export const VERIFY_MAX_DAYS = 400;
 export const VERIFY_MAX_SCHEDULES = 100;
+/** Close versions inspected for one frame date, per weekly lane. */
+export const VERIFY_MAX_CLOSE_VERSIONS = 8;
+/** Open Work rows recounted per store by the weekly inventory lane. */
+export const VERIFY_MAX_OPEN_WORK_ITEMS = 500;
 
 /**
  * Slack around the UTC day, wide enough for any real timezone offset (±14h)
@@ -103,6 +115,25 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * and `onlineOrder` has no index on refund time.
  */
 const STOREFRONT_REFUND_LOOKBACK_MS = 90 * DAY_MS;
+
+/**
+ * How far back an allocation may have been RECORDED and still contribute to the
+ * target day.
+ *
+ * `paymentAllocation` is indexed on `recordedAt` only, but a row contributes to
+ * the day at two instants: its original event at `recordedAt`, and — when it is
+ * voided with a server timestamp — its reversal at `voidedAt`. A row voided
+ * today may therefore have been recorded well before today. This lookback is
+ * the same device the storefront refund scan already uses: it keeps the read
+ * bounded to the VERIFIED PERIOD rather than to the store's lifetime, so a
+ * store's five-hundredth allocation ever does not make every later day
+ * permanently unverifiable.
+ *
+ * KNOWN BLIND SPOT (deliberate): a reversal of a row recorded more than this
+ * far in the past is invisible to the verifier. That is bounded staleness, not
+ * a silent partial total — the same trade the storefront lane documents.
+ */
+const PAYMENT_VOID_LOOKBACK_MS = 90 * DAY_MS;
 
 // ---------------------------------------------------------------------------
 // Result shapes
@@ -200,7 +231,13 @@ export type VerifyCurrentWeekResult =
       reason:
         | "payment_source_incomplete"
         | "source_cap_exceeded"
-        | "invalid_payment_allocation";
+        | "invalid_payment_allocation"
+        /**
+         * An oversized-group repair is actively re-keying Open Work. Group
+         * identity is mid-flight, so an independent recount would compare two
+         * different naming schemes and report a difference that is not one.
+         */
+        | "inventory_remediation_in_progress";
       cycleStartDate: string;
       cycleEndDate: string;
       daysChecked: number;
@@ -509,7 +546,12 @@ export async function computeExpectedDay(
   // reversal only at the server-stamped voidedAt.
   const allocations = await ctx.db
     .query("paymentAllocation")
-    .withIndex("by_storeId_recordedAt", (q) => q.eq("storeId", storeId))
+    .withIndex("by_storeId_recordedAt", (q) =>
+      q
+        .eq("storeId", storeId)
+        .gte("recordedAt", startAt - PAYMENT_VOID_LOOKBACK_MS)
+        .lte("recordedAt", endAt),
+    )
     .take(VERIFY_MAX_DOCS_PER_DOMAIN + 1);
   const paymentCapExceeded = allocations.length > VERIFY_MAX_DOCS_PER_DOMAIN;
   if (paymentCapExceeded) truncated = true;
@@ -608,8 +650,20 @@ export function diffMetrics(
   return differences;
 }
 
+/**
+ * Exactly the four payment facts a projection persists, and therefore exactly
+ * the four this module is able to contradict. Anything computed here that is
+ * not in this shape would be a comparison that cannot fail.
+ */
+export type VerifyPaymentComparable = {
+  unsettledMinor: number | null;
+  allocationCoverage: "complete" | "unknown";
+  omittedMinor: number;
+  hasInvalidAllocation: boolean;
+};
+
 function diffPaymentPosture(
-  expected: VerifyPaymentPosture,
+  expected: VerifyPaymentComparable,
   actual: {
     paymentUnsettledMinor: number | null;
     paymentAllocationCoverage: "complete" | "unknown";
@@ -779,12 +833,470 @@ export async function verifyStoreSummaryWithCtx(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Independent weekly lanes
+//
+// Everything below re-derives, from source rows, something the weekly
+// projection also derives. None of it calls the projection's own helpers.
+// ---------------------------------------------------------------------------
+
+type VerifiedFrameDate = {
+  localDate: string;
+  included: boolean;
+  scheduleVersionId: string | null;
+};
+
+type VerifiedFrame = {
+  startDate: string;
+  endDate: string;
+  dates: VerifiedFrameDate[];
+  includedDates: string[];
+  finalScheduledDate: string | null;
+};
+
+function isoWeekday(localDate: string): number {
+  return new Date(`${localDate}T12:00:00.000Z`).getUTCDay();
+}
+
+/** Noon-anchored so a date shift can never cross a DST edge. */
+function shiftLocalDate(localDate: string, days: number): string {
+  return new Date(Date.parse(`${localDate}T12:00:00.000Z`) + days * DAY_MS)
+    .toISOString()
+    .slice(0, 10);
+}
+
+/** The newest non-candidate version whose effective window covers the date. */
+function scheduleGoverning(
+  schedules: readonly Doc<"storeSchedule">[],
+  localDate: string,
+  timezone: string,
+): Doc<"storeSchedule"> | null {
+  const at = localDateStartAt(localDate, timezone);
+  if (at === null) return null;
+  let governing: Doc<"storeSchedule"> | null = null;
+  for (const schedule of schedules) {
+    if (schedule.effectiveFrom > at) continue;
+    if (schedule.effectiveTo !== undefined && at >= schedule.effectiveTo) {
+      continue;
+    }
+    if (!governing || schedule.effectiveFrom > governing.effectiveFrom) {
+      governing = schedule;
+    }
+  }
+  return governing;
+}
+
+/**
+ * Membership, re-derived: a dated exception overrides the weekly closed-day
+ * pattern, and nothing else participates. Operating-hour windows deliberately
+ * do not decide whether a date is reported.
+ */
+function scheduleIncludesDate(
+  schedule: Doc<"storeSchedule">,
+  localDate: string,
+): boolean {
+  for (const exception of schedule.dateExceptions) {
+    if (exception.localDate === localDate) return exception.closed !== true;
+  }
+  return !schedule.weeklyClosedDays.includes(isoWeekday(localDate));
+}
+
+/**
+ * The seven-date reporting frame, resolved WITHOUT `resolveWeeklyPeriod`.
+ *
+ * Same inputs, separately written arithmetic: find the reference date's
+ * governing version, walk back to its reporting anchor weekday, then ask each
+ * of the seven dates' own governing version whether it is scheduled.
+ */
+function resolveVerifiedFrame(args: {
+  referenceAt: number;
+  schedules: readonly Doc<"storeSchedule">[];
+  timezone: string;
+}): VerifiedFrame | null {
+  const referenceDate = localDateAt(args.referenceAt, args.timezone);
+  const referenceSchedule = scheduleGoverning(
+    args.schedules,
+    referenceDate,
+    args.timezone,
+  );
+  if (!referenceSchedule) return null;
+
+  const anchor = referenceSchedule.reportingCycleStartsOn ?? 1;
+  const startDate = shiftLocalDate(
+    referenceDate,
+    -((isoWeekday(referenceDate) - anchor + 7) % 7),
+  );
+  const dates: VerifiedFrameDate[] = [];
+  for (let offset = 0; offset < 7; offset += 1) {
+    const localDate = shiftLocalDate(startDate, offset);
+    const schedule = scheduleGoverning(args.schedules, localDate, args.timezone);
+    if (!schedule) return null;
+    dates.push({
+      localDate,
+      included: scheduleIncludesDate(schedule, localDate),
+      scheduleVersionId: String(schedule._id),
+    });
+  }
+
+  const includedDates = dates
+    .filter((date) => date.included)
+    .map((date) => date.localDate);
+  return {
+    startDate,
+    endDate: shiftLocalDate(startDate, 6),
+    dates,
+    includedDates,
+    finalScheduledDate: includedDates.at(-1) ?? null,
+  };
+}
+
+type VerifiedClosePosture = {
+  acceptedCloseId: Id<"dailyClose">;
+  currentCloseId?: Id<"dailyClose">;
+  changedAt: number;
+  status: "accepted" | "reopened_awaiting_successor" | "successor_accepted";
+};
+
+/**
+ * Close lineage for one accepted frame, read straight off `dailyClose`.
+ *
+ * `null` means the final date carries more close versions than this lane will
+ * read; the caller reports incomplete rather than a lineage it cannot see.
+ */
+async function verifyAcceptedClosePosture(
+  ctx: QueryCtx,
+  accepted: Pick<
+    Doc<"reportWeekAccepted">,
+    "acceptedAt" | "closeId" | "storeId"
+  >,
+  finalScheduledDate: string | null,
+): Promise<VerifiedClosePosture | null> {
+  const original = await ctx.db.get("dailyClose", accepted.closeId);
+  if (!original || !finalScheduledDate) {
+    return {
+      acceptedCloseId: accepted.closeId,
+      changedAt: accepted.acceptedAt,
+      status: "accepted",
+    };
+  }
+  const versions = await ctx.db
+    .query("dailyClose")
+    .withIndex("by_storeId_operatingDate", (q) =>
+      q.eq("storeId", accepted.storeId).eq("operatingDate", finalScheduledDate),
+    )
+    .take(VERIFY_MAX_CLOSE_VERSIONS + 1);
+  if (versions.length > VERIFY_MAX_CLOSE_VERSIONS) return null;
+
+  const liveAt = (close: Doc<"dailyClose">) =>
+    close.completedAt ?? close.updatedAt;
+  let successor: Doc<"dailyClose"> | null = null;
+  let reopenSuccessorPending = false;
+  for (const close of versions) {
+    if (
+      close.reopenedFromDailyCloseId === accepted.closeId &&
+      close.status === "open"
+    ) {
+      reopenSuccessorPending = true;
+    }
+    if (close._id === accepted.closeId) continue;
+    if (close.status !== "completed") continue;
+    if (close.lifecycleStatus === "superseded") continue;
+    if (!successor || liveAt(close) > liveAt(successor)) successor = close;
+  }
+
+  if (successor) {
+    return {
+      acceptedCloseId: accepted.closeId,
+      currentCloseId: successor._id,
+      changedAt: liveAt(successor),
+      status: "successor_accepted",
+    };
+  }
+  if (
+    original.lifecycleStatus === "reopened" ||
+    original.lifecycleStatus === "superseded" ||
+    reopenSuccessorPending
+  ) {
+    return {
+      acceptedCloseId: accepted.closeId,
+      changedAt: original.reopenedAt ?? original.updatedAt,
+      status: "reopened_awaiting_successor",
+    };
+  }
+  return {
+    acceptedCloseId: accepted.closeId,
+    currentCloseId: accepted.closeId,
+    changedAt: accepted.acceptedAt,
+    status: "accepted",
+  };
+}
+
+type VerifiedInventoryGroup = {
+  key: string;
+  classification: "carried_forward" | "new_this_week";
+  evidenceLimited: boolean;
+  hasNewActivity: boolean;
+  memberCount: number;
+  productSkuId: string | null;
+};
+
+type VerifiedInventoryRecount =
+  | { outcome: "remediation_in_progress" }
+  | {
+      outcome: "ok";
+      groups: VerifiedInventoryGroup[];
+      overflow: boolean;
+    };
+
+/**
+ * Recount the open synced-sale inventory review groups from work-item rows.
+ *
+ * The group KEY comes from the shared identity contract — a group's name is
+ * not an opinion — but the grouping, the member counts and the
+ * carried-forward/new classification are all re-derived here.
+ */
+async function recountOpenInventoryReviewGroups(
+  ctx: QueryCtx,
+  storeId: Id<"store">,
+  frameStartAt: number,
+): Promise<VerifiedInventoryRecount> {
+  for (const status of ["pending", "running", "paused"] as const) {
+    const repair = await ctx.db
+      .query("oversizedOperationalWorkRepair")
+      .withIndex("by_storeId_status", (q) =>
+        q.eq("storeId", storeId).eq("status", status),
+      )
+      .take(1);
+    if (repair.length > 0) return { outcome: "remediation_in_progress" };
+  }
+
+  const items: Doc<"operationalWorkItem">[] = [];
+  let remaining = VERIFY_MAX_OPEN_WORK_ITEMS;
+  let overflow = false;
+  for (const status of ["open", "in_progress"] as const) {
+    const lane = await ctx.db
+      .query("operationalWorkItem")
+      .withIndex("by_storeId_type_status", (q) =>
+        q
+          .eq("storeId", storeId)
+          .eq("type", "synced_sale_inventory_review")
+          .eq("status", status),
+      )
+      .take(remaining + 1);
+    overflow ||= lane.length > remaining;
+    const accepted = lane.slice(0, remaining);
+    items.push(...accepted);
+    remaining -= accepted.length;
+  }
+
+  const byKey = new Map<
+    string,
+    { createdAts: number[]; productSkuId: string | null }
+  >();
+  for (const item of items) {
+    const productSkuId = canonicalSyncedSaleInventoryReviewSkuId(item);
+    const key = productSkuId
+      ? `synced_sale_inventory_review:${item.storeId}:${productSkuId}`
+      : stableOperationalWorkItemSourceIdentity(item);
+    const entry = byKey.get(key);
+    if (entry) entry.createdAts.push(item.createdAt ?? 0);
+    else {
+      byKey.set(key, {
+        createdAts: [item.createdAt ?? 0],
+        productSkuId: productSkuId ? String(productSkuId) : null,
+      });
+    }
+  }
+
+  return {
+    outcome: "ok",
+    overflow,
+    groups: [...byKey.entries()].map(([key, entry]) => ({
+      key,
+      classification: entry.createdAts.some(
+        (createdAt) => createdAt < frameStartAt,
+      )
+        ? ("carried_forward" as const)
+        : ("new_this_week" as const),
+      evidenceLimited: overflow || entry.productSkuId === null,
+      hasNewActivity: entry.createdAts.some(
+        (createdAt) => createdAt >= frameStartAt,
+      ),
+      memberCount: entry.createdAts.length,
+      productSkuId: entry.productSkuId,
+    })),
+  };
+}
+
+/** Order is presentation; identity and counts are truth. */
+function inventoryAttentionAgrees(
+  stored: NonNullable<
+    Extract<Doc<"reportWeekCurrent">, { included: unknown }>["inventoryAttention"]
+  > | undefined,
+  recount: Extract<VerifiedInventoryRecount, { outcome: "ok" }>,
+): boolean {
+  if (!stored) return false;
+  const expectedCompleteness = recount.overflow ? "incomplete" : "complete";
+  if (stored.completeness !== expectedCompleteness) return false;
+  if (stored.overflow !== recount.overflow) return false;
+  if (stored.observedCount !== recount.groups.length) return false;
+  if (stored.groups.length !== recount.groups.length) return false;
+  if (
+    stored.carriedForwardCount !==
+    recount.groups.filter((group) => group.classification === "carried_forward")
+      .length
+  ) {
+    return false;
+  }
+  if (
+    stored.newCount !==
+    recount.groups.filter((group) => group.classification === "new_this_week")
+      .length
+  ) {
+    return false;
+  }
+  const storedByKey = new Map(stored.groups.map((group) => [group.key, group]));
+  return recount.groups.every((group) => {
+    const projected = storedByKey.get(group.key);
+    return (
+      projected !== undefined &&
+      projected.classification === group.classification &&
+      projected.evidenceLimited === group.evidenceLimited &&
+      projected.hasNewActivity === group.hasNewActivity &&
+      projected.memberCount === group.memberCount &&
+      (projected.productSkuId === null
+        ? group.productSkuId === null
+        : String(projected.productSkuId) === group.productSkuId)
+    );
+  });
+}
+
+type VerifiedVariancePosture = {
+  closeVarianceMinor: number;
+  coverage: "complete" | "partial" | "unavailable";
+  coveredIncludedDayCount: number;
+  includedDayCount: number;
+  scheduledVarianceMinor: number;
+  outsideScheduleVarianceMinor: number;
+  outsideScheduleCoveredDayCount: number;
+};
+
+/**
+ * Close variance, recomputed from the close's OWN accepted sales column and
+ * this module's independently derived net sales for the same date.
+ *
+ * Which close a date was reconciled against is read from the day row's
+ * `closeId` — an identity, not an amount — so the value under test
+ * (`netSales - acceptedSales`) is never sourced from the projection that
+ * published it.
+ *
+ * Every frame date is walked, not only the scheduled ones: closes exist on
+ * non-operational dates, and a lane that skipped them could only ever mirror
+ * the omission it exists to catch. Worst case is one `dailyClose` read per
+ * frame date — seven, up from the scheduled-date count.
+ */
+async function recomputeVerifiedVariance(args: {
+  ctx: QueryCtx;
+  days: readonly Doc<"reportDay">[];
+  expectedNetByDate: ReadonlyMap<string, number>;
+  frame: VerifiedFrame;
+}): Promise<VerifiedVariancePosture> {
+  const dayByDate = new Map(
+    args.days.map((day) => [day.operatingDate, day] as const),
+  );
+  let scheduledVarianceMinor = 0;
+  let outsideScheduleVarianceMinor = 0;
+  let coveredIncludedDayCount = 0;
+  let outsideScheduleCoveredDayCount = 0;
+
+  for (const date of args.frame.dates) {
+    const closeId = dayByDate.get(date.localDate)?.closeId;
+    if (!closeId) continue;
+    const close = await args.ctx.db.get("dailyClose", closeId);
+    if (!close) continue;
+    const salesTotal =
+      typeof close.summary.salesTotal === "number" ? close.summary.salesTotal : 0;
+    const acceptedNetSalesMinor =
+      typeof close.summary.adjustedSalesTotal === "number"
+        ? close.summary.adjustedSalesTotal
+        : salesTotal;
+    const variance =
+      (args.expectedNetByDate.get(date.localDate) ?? 0) - acceptedNetSalesMinor;
+    if (date.included) {
+      scheduledVarianceMinor += variance;
+      coveredIncludedDayCount += 1;
+    } else {
+      outsideScheduleVarianceMinor += variance;
+      outsideScheduleCoveredDayCount += 1;
+    }
+  }
+
+  return {
+    closeVarianceMinor: scheduledVarianceMinor + outsideScheduleVarianceMinor,
+    // Coverage measures scheduled expectation only; an outside-schedule date
+    // without a close is not a gap, so it never enters this ratio.
+    coverage:
+      coveredIncludedDayCount === 0
+        ? "unavailable"
+        : coveredIncludedDayCount === args.frame.includedDates.length
+          ? "complete"
+          : "partial",
+    coveredIncludedDayCount,
+    includedDayCount: args.frame.includedDates.length,
+    scheduledVarianceMinor,
+    outsideScheduleVarianceMinor,
+    outsideScheduleCoveredDayCount,
+  };
+}
+
+/** The four persisted payment facts, accumulated across a frame's days. */
+function accumulatePayment(
+  total: VerifyPaymentComparable,
+  posture: VerifyPaymentPosture,
+): VerifyPaymentComparable {
+  return {
+    unsettledMinor:
+      total.unsettledMinor === null || posture.unsettledMinor === null
+        ? null
+        : total.unsettledMinor + posture.unsettledMinor,
+    allocationCoverage:
+      total.allocationCoverage === "unknown" ||
+      posture.allocationCoverage === "unknown"
+        ? "unknown"
+        : "complete",
+    omittedMinor: total.omittedMinor + posture.omittedMinor,
+    hasInvalidAllocation:
+      total.hasInvalidAllocation || posture.hasInvalidAllocation,
+  };
+}
+
+function zeroPaymentComparable(): VerifyPaymentComparable {
+  return {
+    unsettledMinor: 0,
+    allocationCoverage: "complete",
+    omittedMinor: 0,
+    hasInvalidAllocation: false,
+  };
+}
+
+/** Read the persisted weekly payment lane through the rollout normalizer. */
+function storedWeeklyPayment(metrics: ReportWeekMetrics) {
+  const normalized = normalizeWeekMetrics(metrics);
+  return {
+    paymentUnsettledMinor: normalized.paymentUnsettledMinor,
+    paymentAllocationCoverage: normalized.paymentAllocationCoverage,
+    paymentAllocationOmittedMinor: normalized.paymentAllocationOmittedMinor,
+    paymentHasInvalidAllocation: normalized.paymentHasInvalidAllocation,
+  };
+}
+
 /**
  * Recompute the current weekly headline fields directly from source domains.
  *
- * This intentionally does not read facts or call either weekly fold helper.
- * The schedule resolver remains shared authority for period membership, while
- * the financial arithmetic is independently accumulated day by day here.
+ * This reads no facts and calls no weekly fold helper. Schedule membership,
+ * close lineage, Open Work attention and close variance are re-derived from
+ * source rows by the lanes above; the financial arithmetic is accumulated day
+ * by day from `computeExpectedDay`.
  */
 export async function verifyCurrentWeekWithCtx(
   ctx: QueryCtx,
@@ -828,18 +1340,21 @@ export async function verifyCurrentWeekWithCtx(
   if (!activeSchedule)
     return { outcome: "unavailable", reason: "missing_schedule" };
 
-  const period = resolveWeeklyPeriod({
+  if (!activeSchedule.timezone) {
+    return { outcome: "unavailable", reason: "missing_timezone" };
+  }
+  const period = resolveVerifiedFrame({
     referenceAt: current.materializedAt,
     schedules,
-    timezone: activeSchedule.timezone || null,
+    timezone: activeSchedule.timezone,
   });
-  if (period.kind !== "resolved")
-    return { outcome: "unavailable", reason: "missing_schedule" };
+  if (!period) return { outcome: "unavailable", reason: "missing_schedule" };
 
   const included = zeroMetrics();
   const outsideSchedule = zeroMetrics();
-  let includedPaymentUnsettledMinor = 0;
-  let outsideSchedulePaymentUnsettledMinor = 0;
+  let includedPayment = zeroPaymentComparable();
+  let outsideSchedulePayment = zeroPaymentComparable();
+  const expectedNetByDate = new Map<string, number>();
   for (const date of period.dates) {
     const result = await computeExpectedDay(ctx, storeId, date.localDate);
     if (result.truncated) {
@@ -852,6 +1367,7 @@ export async function verifyCurrentWeekWithCtx(
       };
     }
     addMetrics(date.included ? included : outsideSchedule, result.expected);
+    expectedNetByDate.set(date.localDate, result.expected.netSalesMinor);
     if (result.paymentPosture.outcome === "incomplete") {
       return {
         cycleEndDate: current.cycleEndDate,
@@ -867,11 +1383,15 @@ export async function verifyCurrentWeekWithCtx(
       };
     }
     if (date.included) {
-      includedPaymentUnsettledMinor +=
-        result.paymentPosture.unsettledMinor ?? 0;
+      includedPayment = accumulatePayment(
+        includedPayment,
+        result.paymentPosture,
+      );
     } else {
-      outsideSchedulePaymentUnsettledMinor +=
-        result.paymentPosture.unsettledMinor ?? 0;
+      outsideSchedulePayment = accumulatePayment(
+        outsideSchedulePayment,
+        result.paymentPosture,
+      );
     }
   }
 
@@ -882,49 +1402,16 @@ export async function verifyCurrentWeekWithCtx(
     outsideSchedule,
     projectedOutside,
   );
+  // Both sides are live: the expectation is accumulated from the day postures
+  // recomputed above, and the actual side is what the weekly projection
+  // persisted. Every one of the four comparisons can fail.
   const includedPaymentDifferences = diffPaymentPosture(
-    {
-      outcome: "complete",
-      reason: "complete",
-      eligibleMinor: Math.max(
-        0,
-        included.paymentsCollectedMinor - included.paymentsRefundedMinor,
-      ),
-      coveredMinor: Math.max(0, included.paymentAllocatedMinor),
-      omittedMinor: 0,
-      unsettledMinor: includedPaymentUnsettledMinor,
-      allocationCoverage: "complete",
-      hasInvalidAllocation: false,
-    },
-    {
-      paymentUnsettledMinor: current.included.paymentUnsettledMinor,
-      paymentAllocationCoverage: current.included.paymentAllocationCoverage,
-      paymentAllocationOmittedMinor: 0,
-      paymentHasInvalidAllocation: false,
-    },
+    includedPayment,
+    storedWeeklyPayment(current.included),
   );
   const outsideSchedulePaymentDifferences = diffPaymentPosture(
-    {
-      outcome: "complete",
-      reason: "complete",
-      eligibleMinor: Math.max(
-        0,
-        outsideSchedule.paymentsCollectedMinor -
-          outsideSchedule.paymentsRefundedMinor,
-      ),
-      coveredMinor: Math.max(0, outsideSchedule.paymentAllocatedMinor),
-      omittedMinor: 0,
-      unsettledMinor: outsideSchedulePaymentUnsettledMinor,
-      allocationCoverage: "complete",
-      hasInvalidAllocation: false,
-    },
-    {
-      paymentUnsettledMinor: current.outsideSchedule.paymentUnsettledMinor,
-      paymentAllocationCoverage:
-        current.outsideSchedule.paymentAllocationCoverage,
-      paymentAllocationOmittedMinor: 0,
-      paymentHasInvalidAllocation: false,
-    },
+    outsideSchedulePayment,
+    storedWeeklyPayment(current.outsideSchedule),
   );
   const scheduleMatches =
     current.cycleStartDate === period.startDate &&
@@ -957,10 +1444,35 @@ export async function verifyCurrentWeekWithCtx(
       reason: "source_cap_exceeded",
     };
   }
-  const expectedVariance = computeWeeklyVariancePosture(period, dayProbe);
+  const expectedVariance = await recomputeVerifiedVariance({
+    ctx,
+    days: dayProbe,
+    expectedNetByDate,
+    frame: period,
+  });
+  // The split fields are compared only when the stored row carries them: a row
+  // written before the split landed has no lane values to disagree with, and
+  // its scheduled-only total is still caught by the total comparison above it.
+  const storedVarianceSplit =
+    current.variancePosture?.scheduledVarianceMinor !== undefined &&
+    current.variancePosture.outsideScheduleVarianceMinor !== undefined &&
+    current.variancePosture.outsideScheduleCoveredDayCount !== undefined;
   const varianceMatches =
-    JSON.stringify(current.variancePosture) ===
-    JSON.stringify(expectedVariance);
+    current.variancePosture !== undefined &&
+    current.variancePosture.closeVarianceMinor ===
+      expectedVariance.closeVarianceMinor &&
+    current.variancePosture.coverage === expectedVariance.coverage &&
+    current.variancePosture.coveredIncludedDayCount ===
+      expectedVariance.coveredIncludedDayCount &&
+    current.variancePosture.includedDayCount ===
+      expectedVariance.includedDayCount &&
+    (!storedVarianceSplit ||
+      (current.variancePosture.scheduledVarianceMinor ===
+        expectedVariance.scheduledVarianceMinor &&
+        current.variancePosture.outsideScheduleVarianceMinor ===
+          expectedVariance.outsideScheduleVarianceMinor &&
+        current.variancePosture.outsideScheduleCoveredDayCount ===
+          expectedVariance.outsideScheduleCoveredDayCount));
 
   const frameScheduleVersionId = period.dates[0]?.scheduleVersionId;
   const frameSchedule = schedules.find(
@@ -972,9 +1484,21 @@ export async function verifyCurrentWeekWithCtx(
   if (frameStartAt === null) {
     return { outcome: "unavailable", reason: "missing_schedule" };
   }
-  const logicalWork =
-    await listOpenSyncedSaleInventoryReviewGroupsWithCompleteness(ctx, storeId);
-  if (logicalWork.overflow) {
+  const recount = await recountOpenInventoryReviewGroups(
+    ctx,
+    storeId,
+    frameStartAt,
+  );
+  if (recount.outcome === "remediation_in_progress") {
+    return {
+      cycleEndDate: current.cycleEndDate,
+      cycleStartDate: current.cycleStartDate,
+      daysChecked: period.dates.length,
+      outcome: "incomplete",
+      reason: "inventory_remediation_in_progress",
+    };
+  }
+  if (recount.overflow) {
     return {
       cycleEndDate: current.cycleEndDate,
       cycleStartDate: current.cycleStartDate,
@@ -983,23 +1507,16 @@ export async function verifyCurrentWeekWithCtx(
       reason: "source_cap_exceeded",
     };
   }
-  const expectedInventory = projectLiveWeeklyInventoryAttention({
-    frameStartAt,
-    logicalWork,
-  });
-  const inventoryMatches =
-    JSON.stringify(current.inventoryAttention) ===
-    JSON.stringify(expectedInventory);
+  const inventoryMatches = inventoryAttentionAgrees(
+    current.inventoryAttention,
+    recount,
+  );
 
   const accepted = current.acceptedBaselineId
     ? await ctx.db.get("reportWeekAccepted", current.acceptedBaselineId)
     : null;
   const expectedClosePosture = accepted
-    ? await resolveAcceptedWeekClosePosture(
-        ctx,
-        accepted,
-        period.finalScheduledDate,
-      )
+    ? await verifyAcceptedClosePosture(ctx, accepted, period.finalScheduledDate)
     : undefined;
   if (accepted && !expectedClosePosture) {
     return {

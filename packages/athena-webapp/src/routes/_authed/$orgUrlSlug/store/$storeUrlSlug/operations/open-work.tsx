@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { OperationsQueueView } from "~/src/components/operations/OperationsQueueView";
 import type { OpenWorkSearchPatch } from "~/src/components/operations/OperationsQueueView";
-import { ReportsWeeklyReturnLink } from "~/src/components/reports/ReportsWeeklyReturnLink";
 
 const openWorkSearchSchema = z.object({
   o: z.string().optional(),
@@ -42,13 +41,10 @@ function OpenWorkRoute() {
   };
 
   return (
-    <>
-      <ReportsWeeklyReturnLink />
-      <OperationsQueueView
-        activeWorkflow="queue"
-        onOpenWorkSearchChange={handleOpenWorkSearchChange}
-        openWorkSearch={search}
-      />
-    </>
+    <OperationsQueueView
+      activeWorkflow="queue"
+      onOpenWorkSearchChange={handleOpenWorkSearchChange}
+      openWorkSearch={search}
+    />
   );
 }

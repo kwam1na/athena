@@ -1,7 +1,12 @@
+/// <reference types="vite/client" />
+
+import { convexTest } from "convex-test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import schema from "../schema";
+import type { Id } from "../_generated/dataModel";
 import {
   getMissingStoreScheduleContext,
   nextReportingCycleBoundary,
@@ -12,6 +17,7 @@ import {
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import { backfillStoreSchedulesFromLegacyPolicyWithCtx } from "../migrations/backfillStoreSchedules";
 import {
+  getStoreScheduleContextForStoreAtWithCtx,
   getStoreScheduleForAdmin,
   getStoreDayContext,
   getStoreScheduleSummary,
@@ -21,6 +27,7 @@ import {
   upsertStoreScheduleCommandWithCtx,
 } from "./storeSchedule";
 
+const modules = import.meta.glob("../**/*.ts");
 const projectRoot = process.cwd();
 
 const readProjectFile = (...segments: string[]) =>
@@ -579,6 +586,342 @@ describe("store schedule version resolution", () => {
       startAt: Date.parse("2026-06-08T12:00:00.000Z"),
       endAt: Date.parse("2026-06-08T13:00:00.000Z"),
     });
+  });
+});
+
+describe("store schedule version staging and coexistence", () => {
+  const SCHEDULE_TIMEZONE = "America/New_York";
+
+  async function seedStore(t: ReturnType<typeof convexTest>) {
+    return t.run(async (ctx) => {
+      const createdByUserId = await ctx.db.insert("athenaUser", {
+        email: "schedule-versioning@test",
+      });
+      const organizationId = await ctx.db.insert("organization", {
+        createdByUserId,
+        name: "schedule-versioning",
+        slug: "schedule-versioning",
+      });
+      const storeId = await ctx.db.insert("store", {
+        createdByUserId,
+        currency: "GHS",
+        name: "schedule-versioning",
+        organizationId,
+        slug: "schedule-versioning",
+      });
+      return { organizationId, storeId };
+    });
+  }
+
+  async function insertVersion(
+    t: ReturnType<typeof convexTest>,
+    args: {
+      organizationId: Id<"organization">;
+      storeId: Id<"store">;
+      effectiveFrom: number;
+      effectiveTo?: number;
+      reportingCycleStartsOn?: number;
+      status?: "active" | "superseded" | "candidate";
+      weeklyClosedDays?: number[];
+    },
+  ) {
+    return t.run(async (ctx) =>
+      ctx.db.insert("storeSchedule", {
+        organizationId: args.organizationId,
+        storeId: args.storeId,
+        timezone: SCHEDULE_TIMEZONE,
+        weeklyWindows: [
+          { dayOfWeek: 1, startMinute: 9 * 60, endMinute: 18 * 60 },
+        ],
+        weeklyClosedDays: args.weeklyClosedDays ?? [0],
+        dateExceptions: [],
+        reportingCycleStartsOn: args.reportingCycleStartsOn ?? 1,
+        effectiveFrom: args.effectiveFrom,
+        effectiveTo: args.effectiveTo,
+        status: args.status ?? "active",
+        source: "admin",
+        createdAt: args.effectiveFrom,
+        updatedAt: args.effectiveFrom,
+      }),
+    );
+  }
+
+  const resolveAt = (
+    t: ReturnType<typeof convexTest>,
+    storeId: Id<"store">,
+    at: number,
+  ) =>
+    t.run(async (ctx) =>
+      getStoreScheduleContextForStoreAtWithCtx(ctx, { storeId, at }),
+    );
+
+  const listVersions = (t: ReturnType<typeof convexTest>) =>
+    t.run(async (ctx) =>
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      ctx.db.query("storeSchedule").collect(),
+    );
+
+  it("hands over at the boundary even when the truncated version keeps a stale active status", async () => {
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t);
+    const boundary = Date.parse("2026-07-06T04:00:00.000Z");
+    // Deliberately stale: the truncated version is still `active`, as it is
+    // between the staging write and its boundary, and as it would remain if
+    // status cleanup never ran. Effective ranges, not status, decide handover.
+    const currentId = await insertVersion(t, {
+      organizationId,
+      storeId,
+      effectiveFrom: Date.parse("2026-01-01T00:00:00.000Z"),
+      effectiveTo: boundary,
+      reportingCycleStartsOn: 1,
+      status: "active",
+    });
+    const futureId = await insertVersion(t, {
+      organizationId,
+      storeId,
+      effectiveFrom: boundary,
+      reportingCycleStartsOn: 3,
+      status: "active",
+    });
+
+    expect(
+      (await listVersions(t)).every((version) => version.status === "active"),
+    ).toBe(true);
+
+    const before = await resolveAt(t, storeId, boundary - 1);
+    const atBoundary = await resolveAt(t, storeId, boundary);
+    const after = await resolveAt(t, storeId, boundary + 60_000);
+
+    expect(before.schedule?._id).toBe(currentId);
+    expect(before.schedule?.reportingCycleStartsOn).toBe(1);
+    expect(atBoundary.schedule?._id).toBe(futureId);
+    expect(after.schedule?._id).toBe(futureId);
+    expect(after.schedule?.reportingCycleStartsOn).toBe(3);
+    // Coexistence never means ambiguity: every instant resolves one version.
+    expect(before.context.kind).toBe("resolved");
+    expect(after.context.kind).toBe("resolved");
+  });
+
+  it("stops resolving a truncated version past its end even while it reads active", async () => {
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t);
+    const boundary = Date.parse("2026-07-06T04:00:00.000Z");
+    // The successor is missing, so only the `effectiveTo` bound - not the
+    // index's `effectiveFrom` ordering - can keep a stale `active` version
+    // from answering for time it no longer covers.
+    await insertVersion(t, {
+      organizationId,
+      storeId,
+      effectiveFrom: Date.parse("2026-01-01T00:00:00.000Z"),
+      effectiveTo: boundary,
+      status: "active",
+    });
+
+    expect((await resolveAt(t, storeId, boundary - 1)).schedule).not.toBeNull();
+    expect((await resolveAt(t, storeId, boundary)).schedule).toBeNull();
+    expect((await resolveAt(t, storeId, boundary)).context).toMatchObject({
+      kind: "missing_schedule",
+    });
+  });
+
+  it("stages every submitted operational field with an anchor change, not just the anchor", async () => {
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t);
+    const currentId = await insertVersion(t, {
+      organizationId,
+      storeId,
+      effectiveFrom: Date.parse("2026-01-01T00:00:00.000Z"),
+      reportingCycleStartsOn: 1,
+    });
+
+    const now = Date.now();
+    const expectedBoundary = nextReportingCycleBoundary({
+      at: now,
+      reportingCycleStartsOn: 1,
+      timezone: SCHEDULE_TIMEZONE,
+    });
+    const submittedWindows = [
+      { dayOfWeek: 2, startMinute: 8 * 60, endMinute: 12 * 60 },
+      { dayOfWeek: 4, startMinute: 13 * 60, endMinute: 21 * 60 },
+    ];
+    const submittedExceptions = [
+      { localDate: "2026-12-25", closed: true, windows: [], note: "Holiday" },
+    ];
+
+    const result = await t.run(async (ctx) =>
+      upsertStoreScheduleCommandWithCtx(ctx, {
+        storeId,
+        timezone: SCHEDULE_TIMEZONE,
+        weeklyClosedDays: [0, 3],
+        weeklyWindows: submittedWindows,
+        dateExceptions: submittedExceptions,
+        effectiveFrom: now,
+        reportingCycleStartsOn: 3,
+        supersedesScheduleId: currentId,
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    const versions = await listVersions(t);
+    const staged = versions.find((version) => version._id !== currentId);
+    expect(staged).toMatchObject({
+      effectiveFrom: expectedBoundary,
+      reportingCycleStartsOn: 3,
+      // The whole submission rides the boundary; hours and closed days do not
+      // silently apply ahead of the anchor they were saved with.
+      weeklyClosedDays: [0, 3],
+      weeklyWindows: submittedWindows,
+      dateExceptions: submittedExceptions,
+    });
+
+    const truncated = versions.find((version) => version._id === currentId);
+    expect(truncated?.effectiveTo).toBe(expectedBoundary);
+    expect(truncated?.status).toBe("active");
+    expect((await resolveAt(t, storeId, now)).schedule?._id).toBe(currentId);
+    expect((await resolveAt(t, storeId, expectedBoundary!)).schedule?._id).toBe(
+      staged?._id,
+    );
+  });
+
+  it("applies an operational-only save immediately at the submitted effective instant", async () => {
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t);
+    const currentId = await insertVersion(t, {
+      organizationId,
+      storeId,
+      effectiveFrom: Date.parse("2026-01-01T00:00:00.000Z"),
+      reportingCycleStartsOn: 1,
+    });
+
+    const now = Date.now();
+    const result = await t.run(async (ctx) =>
+      upsertStoreScheduleCommandWithCtx(ctx, {
+        storeId,
+        timezone: SCHEDULE_TIMEZONE,
+        weeklyClosedDays: [0, 2],
+        weeklyWindows: [
+          { dayOfWeek: 1, startMinute: 7 * 60, endMinute: 15 * 60 },
+        ],
+        dateExceptions: [],
+        effectiveFrom: now,
+        reportingCycleStartsOn: 1,
+        supersedesScheduleId: currentId,
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    const versions = await listVersions(t);
+    const saved = versions.find((version) => version._id !== currentId);
+    // No anchor change means no staging: the edit is live from `now`.
+    expect(saved?.effectiveFrom).toBe(now);
+    expect(saved?.weeklyClosedDays).toEqual([0, 2]);
+    const superseded = versions.find((version) => version._id === currentId);
+    expect(superseded).toMatchObject({
+      effectiveTo: now,
+      status: "superseded",
+      supersededByScheduleId: saved?._id,
+    });
+    expect((await resolveAt(t, storeId, now)).schedule?._id).toBe(saved?._id);
+    // The truncated range still covers the instant before the save, but the
+    // resolver reads the `active` index only, so a superseded version stops
+    // answering for its own past. Pinned as current behaviour: historical
+    // resolution across a same-instant supersede is not served here.
+    expect(superseded?.effectiveTo).toBe(now);
+    expect((await resolveAt(t, storeId, now - 1)).schedule).toBeNull();
+  });
+
+  it("leaves the prior version fully resolvable with no effective-range gap when a save is rejected", async () => {
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t);
+    const currentId = await insertVersion(t, {
+      organizationId,
+      storeId,
+      effectiveFrom: Date.parse("2026-01-01T00:00:00.000Z"),
+      reportingCycleStartsOn: 1,
+    });
+    const now = Date.now();
+
+    // Validation runs before any write, so the insert/truncate pair is never
+    // half-applied on a rejected draft. Convex mutations are additionally
+    // transactional, so a failure between the insert and the patch rolls both
+    // back - partial state is not constructible here by design, and the
+    // observable guarantee is the one asserted below.
+    const rejected = await t.run(async (ctx) =>
+      upsertStoreScheduleCommandWithCtx(ctx, {
+        storeId,
+        timezone: SCHEDULE_TIMEZONE,
+        weeklyClosedDays: [],
+        weeklyWindows: [
+          { dayOfWeek: 1, startMinute: 9 * 60, endMinute: 12 * 60 },
+          { dayOfWeek: 1, startMinute: 11 * 60, endMinute: 15 * 60 },
+        ],
+        dateExceptions: [],
+        effectiveFrom: now,
+        reportingCycleStartsOn: 1,
+        supersedesScheduleId: currentId,
+      }),
+    );
+
+    expect(rejected).toMatchObject({
+      kind: "user_error",
+      error: { code: "validation_failed" },
+    });
+
+    const versions = await listVersions(t);
+    expect(versions).toHaveLength(1);
+    expect(versions[0]).toMatchObject({
+      _id: currentId,
+      status: "active",
+    });
+    expect(versions[0].effectiveTo).toBeUndefined();
+
+    for (const at of [
+      Date.parse("2026-01-01T00:00:00.000Z"),
+      now,
+      now + 365 * 86_400_000,
+    ]) {
+      const resolved = await resolveAt(t, storeId, at);
+      expect(resolved.schedule?._id).toBe(currentId);
+      expect(resolved.context.kind).toBe("resolved");
+    }
+  });
+
+  it("rolls back the staged insert and the truncation together when the mutation fails", async () => {
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t);
+    const currentId = await insertVersion(t, {
+      organizationId,
+      storeId,
+      effectiveFrom: Date.parse("2026-01-01T00:00:00.000Z"),
+      reportingCycleStartsOn: 1,
+    });
+    const now = Date.now();
+
+    await expect(
+      t.run(async (ctx) => {
+        const result = await upsertStoreScheduleCommandWithCtx(ctx, {
+          storeId,
+          timezone: SCHEDULE_TIMEZONE,
+          weeklyClosedDays: [0],
+          weeklyWindows: [
+            { dayOfWeek: 1, startMinute: 9 * 60, endMinute: 18 * 60 },
+          ],
+          dateExceptions: [],
+          effectiveFrom: now,
+          reportingCycleStartsOn: 3,
+          supersedesScheduleId: currentId,
+        });
+        expect(result.kind).toBe("ok");
+        // Fail after the insert+truncate pair has been written.
+        throw new Error("post-write failure");
+      }),
+    ).rejects.toThrow("post-write failure");
+
+    const versions = await listVersions(t);
+    expect(versions).toHaveLength(1);
+    expect(versions[0]._id).toBe(currentId);
+    expect(versions[0].effectiveTo).toBeUndefined();
+    expect((await resolveAt(t, storeId, now)).schedule?._id).toBe(currentId);
   });
 });
 

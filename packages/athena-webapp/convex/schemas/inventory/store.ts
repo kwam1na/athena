@@ -24,6 +24,33 @@ export const storeSchema = v.object({
       completedAt: v.optional(v.number()),
     }),
   ),
+  /**
+   * Internal migration evidence for the reporting-cycle anchor.
+   *
+   * A schedule version without `reportingCycleStartsOn` silently defaults to
+   * Monday, which would publish a weekly frame the store never agreed to. Like
+   * the cutoff evidence above, only the migration verifier writes this.
+   */
+  weeklyReportingCycleAnchorVerification: v.optional(
+    v.object({
+      status: v.union(
+        v.literal("running"),
+        v.literal("incomplete"),
+        v.literal("complete"),
+      ),
+      missingCount: v.number(),
+      startedAt: v.number(),
+      completedAt: v.optional(v.number()),
+    }),
+  ),
+  /**
+   * The instant weekly reporting activated for this store — stamped once when
+   * the second of the two verifications above completes. Acceptance is derived
+   * only for closes completed at/after it, so recovery reconciliation can
+   * never manufacture retrospective accepted baselines for pre-feature weeks.
+   * Absent on stores verified before this field shipped (legacy-permissive).
+   */
+  weeklyReportingAcceptanceFloor: v.optional(v.number()),
   /** Internal barrier while destructive reporting source reconstruction runs. */
   reportingReseedStartedAt: v.optional(v.number()),
 });

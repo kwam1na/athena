@@ -9,6 +9,7 @@ import type { MutationCtx } from "../_generated/server";
 import { WEEKLY_INVENTORY_OPEN_WORK_ITEM_LIMIT } from "../operations/operationalWorkItems";
 import {
   MAX_WEEKLY_FACTS,
+  availableWeekCurrent,
   materializeAcceptedWeek,
   rebuildCurrentWeek,
 } from "./weekly";
@@ -63,6 +64,8 @@ const INCLUDED_DATES = [
   "2026-07-03",
   "2026-07-04",
 ];
+const REPRESENTATIVE_FACTS_PER_DAY =
+  REPRESENTATIVE_FACTS / INCLUDED_DATES.length;
 
 vi.mock("./access", () => ({
   requireReportsStoreAccess: vi.fn(),
@@ -71,9 +74,9 @@ import { requireReportsStoreAccess } from "./access";
 
 vi.mock("../platform/capabilityCatalog", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../platform/capabilityCatalog")>()),
-  isWeeklyReportingEnabledForStore: vi.fn(),
+  isWeeklyReportingEnabledForStoreDoc: vi.fn(),
 }));
-import { isWeeklyReportingEnabledForStore } from "../platform/capabilityCatalog";
+import { isWeeklyReportingEnabledForStoreDoc } from "../platform/capabilityCatalog";
 
 function handlerOf(fn: unknown): (...args: any[]) => Promise<any> {
   return (fn as unknown as { _handler: (...args: any[]) => Promise<any> })
@@ -82,7 +85,7 @@ function handlerOf(fn: unknown): (...args: any[]) => Promise<any> {
 
 beforeEach(() => {
   vi.mocked(requireReportsStoreAccess).mockResolvedValue({} as never);
-  vi.mocked(isWeeklyReportingEnabledForStore).mockReturnValue(true);
+  vi.mocked(isWeeklyReportingEnabledForStoreDoc).mockReturnValue(true);
 });
 
 async function seedStore(ctx: MutationCtx, slug: string) {
@@ -99,6 +102,12 @@ async function seedStore(ctx: MutationCtx, slug: string) {
     organizationId,
     slug,
     weeklyObservedAtVerification: {
+      status: "complete",
+      missingCount: 0,
+      startedAt: NOW,
+      completedAt: NOW,
+    },
+    weeklyReportingCycleAnchorVerification: {
       status: "complete",
       missingCount: 0,
       startedAt: NOW,
@@ -501,7 +510,9 @@ describe("weekly accepted scale proof", () => {
           carryForwardCount: 0,
           readyCount: 0,
         },
-        summary: {},
+        // The close accepted exactly what the day's sources add up to, so the
+        // independently recomputed variance lane expects zero.
+        summary: { salesTotal: REPRESENTATIVE_FACTS_PER_DAY * 100 },
         sourceSubjects: [],
         carryForwardWorkItemIds: [],
         reportSnapshot: {
@@ -539,7 +550,8 @@ describe("weekly accepted scale proof", () => {
         completedAt: NOW,
       });
       for (const operatingDate of [...INCLUDED_DATES, "2026-07-05"]) {
-        const factCount = operatingDate === "2026-07-05" ? 0 : 155;
+        const factCount =
+          operatingDate === "2026-07-05" ? 0 : REPRESENTATIVE_FACTS_PER_DAY;
         await ctx.db.insert("reportDay", {
           storeId: primaryStoreId,
           operatingDate,
@@ -570,7 +582,12 @@ describe("weekly accepted scale proof", () => {
             quarantinedFactCount: 0,
           },
           ...(operatingDate === "2026-07-04"
-            ? { closeId, closeAcceptedAt: NOW, foldedAt: NOW + 1 }
+            ? {
+                closeId,
+                closeAcceptedAt: NOW,
+                closeVarianceMinor: 0,
+                foldedAt: NOW + 1,
+              }
             : {}),
           foldVersion: 1,
           factCount,
@@ -630,10 +647,12 @@ describe("weekly accepted scale proof", () => {
         });
       }
       expect(await rebuildCurrentWeek(ctx, storeId, NOW)).toBe("rebuilt");
-      const current = await ctx.db
-        .query("reportWeekCurrent")
-        .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
-        .unique();
+      const current = availableWeekCurrent(
+        await ctx.db
+          .query("reportWeekCurrent")
+          .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+          .unique(),
+      );
       expect(current?.inventoryAttention).toMatchObject({
         completeness: "complete",
         newCount: 1,
@@ -653,9 +672,23 @@ describe("weekly accepted scale proof", () => {
         .query("reportFact")
         .withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", storeId))
         .take(REPRESENTATIVE_FACTS + 1);
-      expect(factsAfterRepair.map((fact) => fact._id)).toEqual(
-        factsBeforeRepair.map((fact) => fact._id),
+      // Fact IDs, fingerprints and knowledge time all survive a repair: an
+      // acceptance cutoff is only as immutable as the columns it reads.
+      const ledgerIdentity = (facts: typeof factsAfterRepair) =>
+        facts.map((fact) => ({
+          _id: fact._id,
+          fingerprint: fact.fingerprint,
+          fingerprintVersion: fact.fingerprintVersion,
+          observedAt: fact.observedAt,
+        }));
+      expect(ledgerIdentity(factsAfterRepair)).toEqual(
+        ledgerIdentity(factsBeforeRepair),
       );
+      expect(
+        factsAfterRepair.every(
+          (fact) => fact.observedAt !== undefined && fact.fingerprint.length > 0,
+        ),
+      ).toBe(true);
       if (!accepted) throw new Error("missing accepted scale fixture");
       expect(
         await ctx.db

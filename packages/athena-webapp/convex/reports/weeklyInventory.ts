@@ -18,6 +18,11 @@ type WeeklyInventoryAttentionGroup = {
   productSkuId: Id<"productSku"> | null;
 };
 
+/**
+ * The persisted lane never carries a route. Routing is a presentation concern
+ * the read queries build per request (`weeklyOwnerRoutes` in queries.ts), so an
+ * immutable accepted baseline can never freeze a stale link target.
+ */
 type WeeklyInventoryAttention = {
   carriedForwardCount: number;
   completeness: WeeklyInventoryCompleteness;
@@ -25,10 +30,6 @@ type WeeklyInventoryAttention = {
   newCount: number;
   observedCount: number;
   overflow: boolean;
-  route: {
-    search: { workType: "synced_sale_inventory_review" };
-    to: "/operations";
-  };
 };
 
 export type FrozenWeeklyInventoryReviewGroup = {
@@ -37,10 +38,20 @@ export type FrozenWeeklyInventoryReviewGroup = {
   productSkuId: Id<"productSku"> | null;
 };
 
-const OPEN_WORK_ROUTE = {
-  search: { workType: "synced_sale_inventory_review" as const },
-  to: "/operations" as const,
-};
+/**
+ * The explicit "no lane evidence" posture. Read queries substitute it for a
+ * projection written before the lane landed, so the client contract is always
+ * present and an absent field can never silently hide the lane.
+ */
+export const UNAVAILABLE_WEEKLY_INVENTORY_ATTENTION: WeeklyInventoryAttention =
+  {
+    carriedForwardCount: 0,
+    completeness: "unavailable",
+    groups: [],
+    newCount: 0,
+    observedCount: 0,
+    overflow: false,
+  };
 
 function classifyWeeklyInventoryGroup(args: {
   createdAts: number[];
@@ -84,7 +95,6 @@ function summarizeWeeklyInventoryAttention(args: {
     ).length,
     observedCount: args.groups.length,
     overflow: args.overflow,
-    route: OPEN_WORK_ROUTE,
   };
 }
 
@@ -140,11 +150,7 @@ export function projectFrozenWeeklyInventoryAttention(args: {
     args.membershipCompleteness !== "complete" ||
     args.groups.some((group) => group.members.length === 0)
   ) {
-    return summarizeWeeklyInventoryAttention({
-      completeness: "unavailable",
-      groups: [],
-      overflow: false,
-    });
+    return UNAVAILABLE_WEEKLY_INVENTORY_ATTENTION;
   }
 
   return summarizeWeeklyInventoryAttention({

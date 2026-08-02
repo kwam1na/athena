@@ -16,6 +16,13 @@ import {
   REPORT_FACT_KINDS,
   REPORT_SOURCE_DOMAINS,
   REPORT_WEEK_METRIC_KEYS,
+  REPORT_WEEK_ROLLOUT_METRIC_KEYS,
+  addWeekMetrics,
+  combineWeekCompleteness,
+} from "../../shared/reportsContract";
+import type {
+  ReportWeekCompleteness,
+  ReportWeekMetrics,
 } from "../../shared/reportsContract";
 import { reportFactSchema } from "../schemas/reports/facts";
 
@@ -146,5 +153,223 @@ describe("reports contract ↔ schema parity", () => {
         }
       }
     }
+  });
+
+  it("keeps weekly payment posture optional only during its rollout", () => {
+    const currentAvailableSchema = (reportWeekCurrentSchema as AnyValidator)
+      .members!.find((member) => member.fields?.included);
+    for (const schema of [currentAvailableSchema!, reportWeekAcceptedSchema]) {
+      const fields = fieldsOf(schema);
+      for (const snapshotName of ["included", "outsideSchedule"] as const) {
+        const snapshot = fieldsOf(fields[snapshotName]);
+        for (const key of REPORT_WEEK_ROLLOUT_METRIC_KEYS) {
+          expect(snapshot[key], `${snapshotName} is missing ${key}`)
+            .toBeDefined();
+          expect(snapshot[key].isOptional).toBe("optional");
+        }
+      }
+    }
+  });
+
+  it("gives the outside-schedule lane its own completeness verdict", () => {
+    const fields = fieldsOf(reportWeekAcceptedSchema);
+    const completeness = fieldsOf(fields.completeness);
+    expect(completeness.outsideSchedule.isOptional).toBe("optional");
+    expect(new Set(unionLiterals(completeness.reason))).toEqual(
+      new Set(unionLiterals(fieldsOf(completeness.outsideSchedule).reason)),
+    );
+  });
+
+  it("persists the prior period's outside-schedule lane, optional during rollout", () => {
+    for (const schema of [
+      reportWeekAcceptedSchema,
+      (reportWeekCurrentSchema as AnyValidator).members!.find(
+        (member) => member.fields?.included,
+      )!,
+    ]) {
+      const priorPeriod = fieldsOf(fieldsOf(schema).priorPeriod);
+      expect(priorPeriod.outsideScheduleValues).toBeDefined();
+      expect(priorPeriod.outsideScheduleValues.isOptional).toBe("optional");
+      // The prior lane must carry the same metric vocabulary as `values`, or
+      // the total-vs-total comparison would be summing unlike shapes.
+      const lane = priorPeriod.outsideScheduleValues.members!.find(
+        (member) => member.kind === "object",
+      )!;
+      for (const key of REPORT_WEEK_METRIC_KEYS) {
+        expect(lane.fields![key], `prior outside lane is missing ${key}`)
+          .toBeDefined();
+      }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Total-lane combination — the read-time arithmetic behind the headline. The
+// lanes stay stored and separate; these functions are the only place the two
+// are ever joined, so unknowns must poison rather than quietly disappear.
+// ---------------------------------------------------------------------------
+
+const laneMetrics: ReportWeekMetrics = {
+  grossSalesMinor: 1_000,
+  netSalesMinor: 900,
+  refundsMinor: 100,
+  unitsSold: 10,
+  unitsReturned: 1,
+  uncostedRevenueMinor: 25,
+  grossProfitMinor: 300,
+  paymentsCollectedMinor: 900,
+  paymentsRefundedMinor: 100,
+  paymentAllocatedMinor: 800,
+  paymentUnsettledMinor: 50,
+  paymentAllocationCoverage: "complete",
+  paymentAllocationOmittedMinor: 0,
+  paymentHasInvalidAllocation: false,
+};
+
+describe("addWeekMetrics", () => {
+  it("sums every additive lane field", () => {
+    expect(
+      addWeekMetrics(laneMetrics, { ...laneMetrics, netSalesMinor: 100 }),
+    ).toMatchObject({
+      grossSalesMinor: 2_000,
+      netSalesMinor: 1_000,
+      refundsMinor: 200,
+      unitsSold: 20,
+      unitsReturned: 2,
+      uncostedRevenueMinor: 50,
+      grossProfitMinor: 600,
+      paymentsCollectedMinor: 1_800,
+      paymentsRefundedMinor: 200,
+      paymentAllocatedMinor: 1_600,
+      paymentUnsettledMinor: 100,
+    });
+  });
+
+  it("poisons merchandise margin when either lane is uncosted", () => {
+    expect(
+      addWeekMetrics(laneMetrics, {
+        ...laneMetrics,
+        grossProfitMinor: null,
+      }).grossProfitMinor,
+    ).toBeNull();
+    expect(
+      addWeekMetrics({ ...laneMetrics, grossProfitMinor: null }, laneMetrics)
+        .grossProfitMinor,
+    ).toBeNull();
+  });
+
+  it("poisons unsettled payments when either lane is unknown", () => {
+    expect(
+      addWeekMetrics(laneMetrics, {
+        ...laneMetrics,
+        paymentUnsettledMinor: null,
+      }).paymentUnsettledMinor,
+    ).toBeNull();
+    expect(
+      addWeekMetrics(
+        { ...laneMetrics, paymentUnsettledMinor: null },
+        laneMetrics,
+      ).paymentUnsettledMinor,
+    ).toBeNull();
+  });
+
+  it("propagates unknown allocation coverage from either lane", () => {
+    expect(
+      addWeekMetrics(laneMetrics, {
+        ...laneMetrics,
+        paymentAllocationCoverage: "unknown",
+      }).paymentAllocationCoverage,
+    ).toBe("unknown");
+    expect(
+      addWeekMetrics(laneMetrics, laneMetrics).paymentAllocationCoverage,
+    ).toBe("complete");
+  });
+
+  it("reads both lanes through the rollout normalization", () => {
+    // A lane written before the omitted total landed is unknown coverage, not
+    // a proven zero — the combined total must inherit that, not erase it.
+    const legacy = { ...laneMetrics };
+    delete (legacy as Partial<ReportWeekMetrics>).paymentAllocationOmittedMinor;
+    delete (legacy as Partial<ReportWeekMetrics>).paymentHasInvalidAllocation;
+    const total = addWeekMetrics(legacy, {
+      ...laneMetrics,
+      paymentAllocationOmittedMinor: 40,
+    });
+    expect(total.paymentAllocationCoverage).toBe("unknown");
+    expect(total.paymentAllocationOmittedMinor).toBe(40);
+    expect(total.paymentHasInvalidAllocation).toBe(false);
+  });
+
+  it("sums omitted allocation and ORs the invalid-allocation flag", () => {
+    const total = addWeekMetrics(
+      { ...laneMetrics, paymentAllocationOmittedMinor: 15 },
+      {
+        ...laneMetrics,
+        paymentAllocationOmittedMinor: 25,
+        paymentHasInvalidAllocation: true,
+      },
+    );
+    expect(total.paymentAllocationOmittedMinor).toBe(40);
+    expect(total.paymentHasInvalidAllocation).toBe(true);
+  });
+});
+
+describe("combineWeekCompleteness", () => {
+  const complete: ReportWeekCompleteness = {
+    complete: true,
+    reason: "complete",
+  };
+
+  it("is complete only when both lanes are complete", () => {
+    expect(
+      combineWeekCompleteness({
+        ...complete,
+        outsideSchedule: { complete: true, reason: "complete" },
+      }),
+    ).toEqual({
+      complete: true,
+      reason: "complete",
+      outsideSchedule: { complete: true, reason: "complete" },
+    });
+  });
+
+  it("reports the failing lane's reason", () => {
+    expect(
+      combineWeekCompleteness({
+        ...complete,
+        outsideSchedule: { complete: false, reason: "mixed_currency" },
+      }),
+    ).toMatchObject({ complete: false, reason: "mixed_currency" });
+    expect(
+      combineWeekCompleteness({
+        complete: false,
+        reason: "fact_cap_exceeded",
+        outsideSchedule: { complete: true, reason: "complete" },
+      }),
+    ).toMatchObject({ complete: false, reason: "fact_cap_exceeded" });
+  });
+
+  it("prefers the scheduled lane's reason when both lanes fail", () => {
+    expect(
+      combineWeekCompleteness({
+        complete: false,
+        reason: "missing_day_fold",
+        outsideSchedule: { complete: false, reason: "mixed_currency" },
+      }),
+    ).toMatchObject({ complete: false, reason: "missing_day_fold" });
+  });
+
+  it("treats an absent outside verdict as no recorded limitation", () => {
+    expect(combineWeekCompleteness(complete)).toEqual({
+      complete: true,
+      reason: "complete",
+      outsideSchedule: undefined,
+    });
+    expect(
+      combineWeekCompleteness({
+        complete: false,
+        reason: "payment_coverage_unknown",
+      }),
+    ).toMatchObject({ complete: false, reason: "payment_coverage_unknown" });
   });
 });

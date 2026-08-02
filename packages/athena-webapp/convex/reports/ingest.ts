@@ -8,7 +8,11 @@ import {
   derivePaymentPosture,
   normalizeCurrencyCode,
 } from "../../shared/reportsContract";
-import { factFingerprint, REPORTS_FINGERPRINT_VERSION } from "./fingerprint";
+import {
+  factFingerprint,
+  matchesStoredFingerprint,
+  REPORTS_FINGERPRINT_VERSION,
+} from "./fingerprint";
 import { resolveOperatingDate } from "./operatingDay";
 
 /**
@@ -244,6 +248,8 @@ function toFactDoc(
     // knowledge-time boundaries, so callers and reseed cannot backdate them.
     observedAt,
     operatingDate,
+    // Already normalised at the ingestion boundary (see `recordFacts`), so the
+    // stored code and its fingerprint never carry a source's raw spelling.
     currency: fact.currency,
     grossAmountMinor: fact.grossAmountMinor,
     netAmountMinor: fact.netAmountMinor,
@@ -355,6 +361,8 @@ async function applyToOpenDay(
   const flags = { ...base.flags };
   let factCount = base.factCount;
   let lastFactRecordedAt = base.lastFactRecordedAt;
+  /** Payment value this batch could not attribute — mirrors the fold's rule. */
+  let batchAllocationOmittedMinor = 0;
 
   // SKU deltas are accumulated in memory so a batch touching one SKU several
   // times costs one read + one write, not one per fact.
@@ -367,10 +375,21 @@ async function applyToOpenDay(
     factCount += 1;
     lastFactRecordedAt = Math.max(lastFactRecordedAt, recordedAt);
 
-    if (fact.currency !== base.currency) {
+    if (normalizeCurrencyCode(fact.currency) !== base.currency) {
       // Foreign-currency facts are counted but never mixed into totals.
       flags.mixedCurrency = true;
       continue;
+    }
+
+    // Accumulated after the foreign-currency `continue` above and over newly
+    // inserted (never quarantined) facts only — the same exclusions the fold
+    // applies, so incremental and folded omissions agree.
+    if (
+      (fact.factKind === "payment" || fact.factKind === "payment_refund") &&
+      (fact.paymentAllocationCoverage !== "known" ||
+        fact.paymentAllocationMinor === undefined)
+    ) {
+      batchAllocationOmittedMinor += Math.abs(fact.netAmountMinor);
     }
 
     const deltas = factDeltas(fact);
@@ -419,6 +438,16 @@ async function applyToOpenDay(
     }
   }
 
+  // Omissions accumulate: whatever the day already disclosed, plus this batch.
+  // A day doc written before payment posture existed carries no coverage
+  // evidence at all, so its whole payment volume counts as unknown.
+  const priorAllocationOmittedMinor =
+    existing?.paymentPosture?.allocationOmittedMinor ??
+    (existing
+      ? Math.abs(base.paymentsCollectedMinor) +
+        Math.abs(base.paymentsRefundedMinor)
+      : 0);
+
   const dayPatch = {
     ...next,
     currency: base.currency,
@@ -432,22 +461,7 @@ async function applyToOpenDay(
       refundedMinor: next.paymentsRefundedMinor,
       allocatedMinor: next.paymentAllocatedMinor,
       allocationOmittedMinor:
-        existing?.paymentPosture?.allocationOmittedMinor ??
-        (existing
-          ? Math.abs(base.paymentsCollectedMinor) +
-            Math.abs(base.paymentsRefundedMinor)
-          : 0) +
-          applied.reduce(
-            (total, { fact }) =>
-              total +
-              ((fact.factKind === "payment" ||
-                fact.factKind === "payment_refund") &&
-              (fact.paymentAllocationCoverage !== "known" ||
-                fact.paymentAllocationMinor === undefined)
-                ? Math.abs(fact.netAmountMinor)
-                : 0),
-            0,
-          ),
+        priorAllocationOmittedMinor + batchAllocationOmittedMinor,
     }),
   };
 
@@ -544,7 +558,14 @@ export async function recordFacts(
       [];
     const lateDates = new Set<string>();
 
-    for (const fact of facts) {
+    for (const incoming of facts) {
+      // Currency is normalised ONCE, here, so the stored code, the fingerprint
+      // and every downstream comparison see the same spelling. A source that
+      // emits " ghs " today and "GHS" on replay must not read as drift.
+      const fact: NewReportFact = {
+        ...incoming,
+        currency: normalizeCurrencyCode(incoming.currency),
+      };
       const operatingDate = await resolveOperatingDate(
         ctx,
         storeId,
@@ -553,10 +574,9 @@ export async function recordFacts(
       touchedDates.add(operatingDate);
 
       const existing = await findExistingFact(ctx, storeId, fact);
-      const fingerprint = factFingerprint(fact, existing?.fingerprintVersion);
 
       if (existing) {
-        if (existing.fingerprint === fingerprint) continue; // replay — no-op
+        if (matchesStoredFingerprint(fact, existing)) continue; // replay — no-op
         // Content drift on a recorded fact. Park it, never overwrite; the fold
         // excludes quarantined facts and the day is rebuilt from what remains.
         if (!existing.quarantine) {

@@ -6,6 +6,12 @@ import type { FunctionReference } from "convex/server";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
@@ -22,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { nextReportingCycleBoundary } from "~/convex/lib/storeScheduleTime";
 import { usePermissions } from "@/hooks/usePermissions";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
@@ -29,6 +36,7 @@ import type { Id } from "~/convex/_generated/dataModel";
 import type {
   StoreScheduleDayKey,
   StoreScheduleExceptionInput,
+  StoreScheduleUpsertPayload,
   StoreScheduleVersion,
   StoreScheduleWeeklyDayInput,
 } from "../hooks/useStoreScheduleUpdate";
@@ -796,7 +804,10 @@ export const StoreHoursView = () => {
   ) as StoreScheduleQueryResult | null | undefined;
   const scheduleVersions = useQuery(
     storeScheduleApi.listStoreScheduleVersions,
-    !isLoading && hasFullAdminAccess && activeStore?._id && activeStore.organizationId
+    !isLoading &&
+      hasFullAdminAccess &&
+      activeStore?._id &&
+      activeStore.organizationId
       ? {
           organizationId: activeStore.organizationId,
           status: "active",
@@ -816,6 +827,16 @@ export const StoreHoursView = () => {
     [],
   );
   const [confirmCandidate, setConfirmCandidate] = useState(false);
+  /**
+   * A submission that moves the reporting-cycle anchor is staged, not
+   * immediate — and because the schedule is one versioned aggregate, every
+   * other field in the same submission is staged with it. The operator sees
+   * that before the mutation runs, never after.
+   */
+  const [stagedAnchorSave, setStagedAnchorSave] = useState<{
+    effectiveDateLabel: string;
+    schedule: StoreScheduleUpsertPayload;
+  } | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [message, setMessage] = useState<{
     kind: "error" | "success";
@@ -892,6 +913,7 @@ export const StoreHoursView = () => {
     setWeeklyHours(normalizeWeeklyHours(schedule?.weeklyHours));
     setExceptions((schedule?.exceptions ?? []).map(normalizeException));
     setConfirmCandidate(false);
+    setStagedAnchorSave(null);
     setIsDirty(false);
     setMessage(null);
   }, [schedule]);
@@ -948,6 +970,7 @@ export const StoreHoursView = () => {
     setWeeklyHours(normalizeWeeklyHours(schedule?.weeklyHours));
     setExceptions((schedule?.exceptions ?? []).map(normalizeException));
     setConfirmCandidate(false);
+    setStagedAnchorSave(null);
     setIsDirty(false);
     setMessage(null);
   };
@@ -962,6 +985,36 @@ export const StoreHoursView = () => {
     }
 
     return null;
+  };
+
+  const runSave = async (nextSchedule: StoreScheduleUpsertPayload) => {
+    if (!activeStore?._id) return;
+
+    await updateSchedule({
+      storeId: activeStore._id,
+      schedule: nextSchedule,
+      onError: () => {
+        setMessage({
+          kind: "error",
+          text: "Store hours were not saved. Review the highlighted fields.",
+        });
+      },
+      onSuccess: (savedSchedule) => {
+        setIsDirty(false);
+        setConfirmCandidate(false);
+        const reportingCycleChanged =
+          savedSchedule.reportingCycleStartsOn !==
+          (schedule?.reportingCycleStartsOn ?? 1);
+        const isStaged = savedSchedule.effectiveFrom > Date.now();
+        setMessage({
+          kind: "success",
+          text:
+            reportingCycleChanged && isStaged
+              ? `Reporting cycle change staged for ${formatEffectiveDate(savedSchedule.effectiveFrom, savedSchedule.timezone)}.`
+              : "Store hours saved.",
+        });
+      },
+    });
   };
 
   const handleSave = async () => {
@@ -995,31 +1048,34 @@ export const StoreHoursView = () => {
       return;
     }
 
-    await updateSchedule({
-      storeId: activeStore._id,
-      schedule: nextSchedule,
-      onError: () => {
-        setMessage({
-          kind: "error",
-          text: "Store hours were not saved. Review the highlighted fields.",
+    const activeAnchor = schedule?.reportingCycleStartsOn ?? 1;
+    const anchorChanged =
+      Boolean(schedule?.scheduleVersionId) &&
+      reportingCycleStartsOn !== activeAnchor;
+
+    if (anchorChanged) {
+      // Resolve the boundary under the anchor still in force, matching how
+      // the schedule mutation stages the replacement version.
+      const effectiveFrom = nextReportingCycleBoundary({
+        at: Date.now(),
+        reportingCycleStartsOn: activeAnchor,
+        timezone: schedule?.timezone || timezone.trim(),
+      });
+
+      if (effectiveFrom !== null) {
+        setMessage(null);
+        setStagedAnchorSave({
+          effectiveDateLabel: formatEffectiveDate(
+            effectiveFrom,
+            schedule?.timezone || timezone.trim(),
+          ),
+          schedule: nextSchedule,
         });
-      },
-      onSuccess: (savedSchedule) => {
-        setIsDirty(false);
-        setConfirmCandidate(false);
-        const reportingCycleChanged =
-          savedSchedule.reportingCycleStartsOn !==
-          (schedule?.reportingCycleStartsOn ?? 1);
-        const isStaged = savedSchedule.effectiveFrom > Date.now();
-        setMessage({
-          kind: "success",
-          text:
-            reportingCycleChanged && isStaged
-              ? `Reporting cycle change staged for ${formatEffectiveDate(savedSchedule.effectiveFrom, savedSchedule.timezone)}.`
-              : "Store hours saved.",
-        });
-      },
-    });
+        return;
+      }
+    }
+
+    await runSave(nextSchedule);
   };
 
   if (isLoading || schedule === undefined) {
@@ -1140,7 +1196,8 @@ export const StoreHoursView = () => {
                     <dd className="mt-layout-2xs font-medium text-foreground">
                       {reportingCycleDayLabel(
                         pendingSchedule.reportingCycleStartsOn,
-                      )} from {" "}
+                      )}{" "}
+                      from{" "}
                       {formatEffectiveDate(
                         pendingSchedule.effectiveFrom,
                         pendingSchedule.timezone,
@@ -1446,6 +1503,57 @@ export const StoreHoursView = () => {
                 {message.text}
               </div>
             ) : null}
+
+            <Dialog
+              onOpenChange={(open) => {
+                if (!open) setStagedAnchorSave(null);
+              }}
+              open={stagedAnchorSave !== null}
+            >
+              <DialogContent className="w-[min(calc(100vw-2rem),34rem)] space-y-layout-lg">
+                <div className="space-y-layout-xs">
+                  <DialogTitle>Stage this reporting-cycle change?</DialogTitle>
+                  <DialogDescription>
+                    The reporting cycle moves to{" "}
+                    {reportingCycleDayLabel(reportingCycleStartsOn)} on{" "}
+                    {stagedAnchorSave?.effectiveDateLabel}. Reports keep the
+                    current cycle until then.
+                  </DialogDescription>
+                </div>
+                <div className="space-y-layout-xs text-sm leading-6 text-muted-foreground">
+                  <p>
+                    Every change in this save — timezone, weekly hours, and date
+                    exceptions — is staged to{" "}
+                    {stagedAnchorSave?.effectiveDateLabel} with it.
+                  </p>
+                  <p>
+                    To change an operational day now, cancel, save that change
+                    on its own, then stage the reporting cycle.
+                  </p>
+                </div>
+                <div className="flex flex-wrap justify-end gap-layout-sm">
+                  <Button
+                    onClick={() => setStagedAnchorSave(null)}
+                    type="button"
+                    variant="outline"
+                  >
+                    Cancel
+                  </Button>
+                  <LoadingButton
+                    disabled={isUpdating}
+                    isLoading={isUpdating}
+                    onClick={() => {
+                      const staged = stagedAnchorSave;
+                      setStagedAnchorSave(null);
+                      if (staged) void runSave(staged.schedule);
+                    }}
+                    variant="default"
+                  >
+                    Stage change
+                  </LoadingButton>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             <div className="flex flex-wrap gap-layout-sm border-t border-border pt-layout-md">
               <LoadingButton

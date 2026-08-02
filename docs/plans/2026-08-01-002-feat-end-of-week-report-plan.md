@@ -15,6 +15,23 @@ Extend Athena's deterministic report-day read model into a schedule-aware weekly
 
 ---
 
+## Amendments
+
+### 2026-08-02 — Headline totals cover the whole labeled frame
+
+Approved by the product owner after reviewing the first live reporting week on the development store.
+
+- **Changed.** The weekly headline (net sales, and the financial, units, and payment figures under it) now covers every date in the resolved seven-date frame, including outside-schedule dates. The outside-schedule amount and its dates are disclosed immediately beneath the headline instead of at the foot of the page, and the scheduled-only figure remains separately visible.
+- **Why.** The live week rendered GH₵101,933 beneath a "Jul 27–Aug 2, 2026" label while GH₵31,480 of real sales inside that range appeared only in a bottom-of-page disclosure. A total that excludes activity from its own stated period reads as wrong rather than as a deliberate boundary.
+- **Origin requirements.** R77 amended by R77a; AE14 restated. R83 is unchanged and still binding.
+- **Unchanged guarantees.** Outside-schedule activity is still never reassigned to an adjacent week. Both lanes remain stored separately as evidence. The total is derived at read time from the two stored lanes, so accepted baselines keep their original values and fingerprints and require no migration; independent verification continues to check each lane against source truth.
+- **Consequential fix.** Prior-period comparison now resolves total against total. It previously compared the current included lane against the prior included lane; leaving it unchanged would have compared this week's total against last week's scheduled-only figure.
+- **Migration ergonomics.** Both backfills and both per-store verifications accept an opt-in `autoContinue` flag that schedules the next page from the cursor just committed, carrying running totals so the final batch reports the whole job. Without it a production-sized `reportFact` table needs one manual invocation per hundred rows. Opt-in, so a dry run can still be taken one bounded page at a time; the read-only global verify queries cannot self-schedule and stay manual spot checks.
+- **Still scheduled-day concepts.** Daily Close evidence routing remains scheduled-day based, because acceptance is triggered by the final scheduled date's close.
+- **Variance extended the same way.** Register variance now covers every frame date carrying close evidence, with the scheduled and outside-schedule amounts disclosed beside the total, and the metric relabelled back to "Close variance". The premise that closes exist only for operational dates is false: on the development store, whose schedule marks Sunday non-operational, eight completed Sunday `dailyClose` records exist and the day row for Sun 2026-07-19 carries both a `closeId` and a `closeVarianceMinor`. A register discrepancy on such a date was dropped from the weekly figure with no disclosure. Coverage keeps its scheduled-only meaning — a scheduled date without a close is a gap, an outside-schedule date without one is not — so the ratio denominator is unchanged. The independent verifier shared the same `includedDates` assumption and so could only mirror the omission rather than detect it; it now walks the whole frame and asserts the split on its own.
+
+---
+
 ## Problem Frame
 
 Operators currently calculate the business's weekly performance manually because the necessary facts are distributed across Reports, payments, Daily Close, Cash Controls, and Open Work. The implementation must replace that reconciliation work without turning Reports into an accounting system or allowing schedule hours to exclude legitimate financial activity. Product behavior and metric boundaries are defined in the [origin requirements](../../docs/brainstorms/2026-07-09-reports-workspace-requirements.md).
@@ -363,7 +380,7 @@ flowchart TB
 - Retry determinism: repeated baseline attempts use the stored cutoff and produce the same fingerprint even after newer facts and report-day folds exist.
 - Financials: net/gross/recognized-sales-refunds/payment collection expose prior values and basis-point or unavailable changes; merchandise profit/margin remain null when cost coverage is insufficient.
 - Units: sold, returned/corrected, and net units compose across included days and stay separate from financial refund timing.
-- Outside schedule: facts on excluded dates appear in a separately labeled total, never in headline or adjacent-week totals.
+- Outside schedule: facts on excluded dates appear in a separately labeled total and never in adjacent-week totals. Per the 2026-08-02 amendment they also contribute to the headline total for their own frame, which is derived at read time from the two stored lanes.
 - Outside-schedule cutoff: an excluded-date fact with `observedAt` before the acceptance cutoff enters the accepted outside-schedule baseline; the same fact observed afterward appears only in current outside-schedule truth/amendment.
 - Edge case: current and prior membership differ; raw values remain inspectable, but affected comparisons carry a qualification or are withheld according to comparability rules.
 - Edge case: all dates closed, missing schedule/timezone, mixed currency, a missing day fold, or a global cap breach returns its specific unavailable/incomplete state without publishing partial values.

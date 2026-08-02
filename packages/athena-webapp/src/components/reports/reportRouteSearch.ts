@@ -48,24 +48,6 @@ export const reportsWeeklySearchSchema = z.object({
 
 export type ReportsWeeklySearch = z.infer<typeof reportsWeeklySearchSchema>;
 
-export const reportsWeeklyReturnStateSchema = z.object({
-  reportsWeeklyReturn: reportsWeeklySearchSchema,
-});
-
-/** Reject malformed state before an owning workflow renders a Weekly return. */
-export function reportsWeeklyReturnFromState(state: unknown) {
-  const parsed = reportsWeeklyReturnStateSchema.safeParse(state);
-  if (!parsed.success) return null;
-  return parsed.data.reportsWeeklyReturn;
-}
-
-/** Preserve the validated Weekly selection on owner-workflow history entries. */
-export function weeklyOwnerReturnState(search: ReportsWeeklySearch) {
-  return reportsWeeklyReturnStateSchema.parse({
-    reportsWeeklyReturn: reportsWeeklySearchSchema.parse(search),
-  });
-}
-
 export function weeklyReturnSearchFromOverview(
   search: ReportsOverviewSearch,
 ): Pick<

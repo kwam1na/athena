@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatBasisPoints,
   formatOperatingDate,
+  formatOperatingDateList,
   formatOptionalMoney,
   formatReportMoney,
   formatReportProfit,
@@ -15,6 +16,17 @@ import {
 describe("reportFormat", () => {
   it("includes the weekday in report dates", () => {
     expect(formatOperatingDate("2026-07-17")).toBe("Fri, Jul 17, 2026");
+  });
+
+  it("names disclosure dates in sentence form without repeating the year", () => {
+    expect(formatOperatingDateList([])).toBe("");
+    expect(formatOperatingDateList(["2026-08-02"])).toBe("Sun, Aug 2");
+    expect(formatOperatingDateList(["2026-08-01", "2026-08-02"])).toBe(
+      "Sat, Aug 1 and Sun, Aug 2",
+    );
+    expect(
+      formatOperatingDateList(["2026-07-31", "2026-08-01", "2026-08-02"]),
+    ).toBe("Jul 31, Aug 1, and Aug 2");
   });
 
   it("formats minor-unit money using the store currency", () => {
@@ -52,7 +64,12 @@ describe("reportFormat", () => {
   });
 
   it("covers every contract day status with a presentation", () => {
-    for (const status of ["open", "provisional", "reconciled", "amended"] as const) {
+    for (const status of [
+      "open",
+      "provisional",
+      "reconciled",
+      "amended",
+    ] as const) {
       expect(reportDayStatusPresentation(status).label).toBeTruthy();
     }
   });
@@ -61,7 +78,10 @@ describe("reportFormat", () => {
 describe("formatSkuDisplayName", () => {
   it("normalizes an operator-entered product name", () => {
     expect(
-      formatSkuDisplayName({ displayName: "oshe", sku: "6N2Y-JY3-5G6" }, "sku-1"),
+      formatSkuDisplayName(
+        { displayName: "oshe", sku: "6N2Y-JY3-5G6" },
+        "sku-1",
+      ),
     ).toBe("Oshe");
     expect(
       formatSkuDisplayName(
@@ -82,8 +102,13 @@ describe("formatSkuDisplayName", () => {
 
   it("leaves an id fallback untouched", () => {
     expect(
-      formatSkuDisplayName({ displayName: "kx70hda5jszy", sku: undefined }, "kx70hda5jszy"),
+      formatSkuDisplayName(
+        { displayName: "kx70hda5jszy", sku: undefined },
+        "kx70hda5jszy",
+      ),
     ).toBe("kx70hda5jszy");
-    expect(formatSkuDisplayName(undefined, "kx70hda5jszy")).toBe("kx70hda5jszy");
+    expect(formatSkuDisplayName(undefined, "kx70hda5jszy")).toBe(
+      "kx70hda5jszy",
+    );
   });
 });

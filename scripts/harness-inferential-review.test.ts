@@ -8,6 +8,7 @@ import {
   formatInferentialFailureDiagnostic,
   parseHarnessInferentialReviewArgs,
   runHarnessInferentialReview,
+  stripTypeScriptNonCode,
 } from "./harness-inferential-review";
 
 const tempRoots: string[] = [];
@@ -3513,6 +3514,32 @@ describe("runHarnessInferentialReview", () => {
     expect(result.exitCode).toBe(0);
     expect(result.machine.status).toBe("pass");
     expect(result.machine.findings).toEqual([]);
+  });
+
+  it("collapses horizontal whitespace runs when blanking comments and strings", () => {
+    // Blanking emits one space per source character, so a long comment used to
+    // become a long run of spaces. The convex boundary patterns chain several
+    // `\\s*` groups, and a run of N spaces can be split among them in
+    // combinatorially many ways — that ambiguity hung `hasWriteLikeMethodCall`
+    // indefinitely on the stripped surface of convex/reports/verify.ts and with
+    // it the whole merge gate. Guard the invariant that makes the blowup
+    // impossible rather than timing a specific input.
+    const source = [
+      "/**",
+      ` * ${"prose that blanks into spaces ".repeat(8)}`,
+      " */",
+      'const label = "a string that also blanks into spaces";',
+      "export const value = 1;",
+    ].join("\n");
+
+    const stripped = stripTypeScriptNonCode(source);
+
+    expect(stripped).not.toMatch(/[^\S\n]{2,}/);
+    // Line structure and real code must survive the collapse.
+    expect(stripped.split("\n")).toHaveLength(source.split("\n").length);
+    expect(stripped).toContain("export const value = 1;");
+    expect(stripped).not.toContain("prose that blanks");
+    expect(stripped).not.toContain("a string that also blanks");
   });
 
   it("accepts read-only helpers that accept QueryCtx or MutationCtx", async () => {

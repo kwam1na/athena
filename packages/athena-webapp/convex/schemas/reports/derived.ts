@@ -71,6 +71,10 @@ const weeklyMetrics = {
     v.literal("complete"),
     v.literal("unknown"),
   ),
+  // Optional-then-required: weekly documents written before weekly payment
+  // posture landed carry neither field. See normalizeWeekMetrics.
+  paymentAllocationOmittedMinor: v.optional(v.number()),
+  paymentHasInvalidAllocation: v.optional(v.boolean()),
 };
 
 const weeklyLineage = v.object({
@@ -86,19 +90,31 @@ const weeklyLineage = v.object({
   ),
 });
 
+const weeklyCompletenessReason = v.union(
+  v.literal("complete"),
+  v.literal("missing_schedule"),
+  v.literal("missing_timezone"),
+  v.literal("schedule_history_cap"),
+  v.literal("missing_day_fold"),
+  v.literal("mixed_currency"),
+  v.literal("payment_coverage_unknown"),
+  v.literal("payment_invalid_allocation"),
+  v.literal("fact_cap_exceeded"),
+  v.literal("legacy_fact_without_observed_at"),
+);
+
+/**
+ * Headline completeness covers the included dates only. The outside-schedule
+ * lane carries its own verdict so an excluded date can never withhold — or
+ * silently complete — the headline week.
+ */
 const weeklyCompleteness = v.object({
-  reason: v.union(
-    v.literal("complete"),
-    v.literal("missing_schedule"),
-    v.literal("missing_timezone"),
-    v.literal("schedule_history_cap"),
-    v.literal("missing_day_fold"),
-    v.literal("mixed_currency"),
-    v.literal("payment_coverage_unknown"),
-    v.literal("fact_cap_exceeded"),
-    v.literal("legacy_fact_without_observed_at"),
-  ),
+  reason: weeklyCompletenessReason,
   complete: v.boolean(),
+  // Optional while weekly documents written before the split are refreshed.
+  outsideSchedule: v.optional(
+    v.object({ reason: weeklyCompletenessReason, complete: v.boolean() }),
+  ),
 });
 
 const weeklyInventoryAttention = v.object({
@@ -124,12 +140,17 @@ const weeklyInventoryAttention = v.object({
   newCount: v.number(),
   observedCount: v.number(),
   overflow: v.boolean(),
-  route: v.object({
-    search: v.object({
-      workType: v.literal("synced_sale_inventory_review"),
+  // Deliberately no live route: routing is rebuilt per read (queries.ts
+  // `weeklyOwnerRoutes`), never frozen into an immutable accepted baseline.
+  // Deprecated: projections materialized before the route field was removed
+  // still carry it; nothing reads or writes it, and the next rebuild's
+  // replace drops it. Delete this validator once no stored row carries it.
+  route: v.optional(
+    v.object({
+      search: v.object({ workType: v.string() }),
+      to: v.string(),
     }),
-    to: v.literal("/operations"),
-  }),
+  ),
 });
 
 const weeklyClosePosture = v.object({
@@ -170,8 +191,22 @@ const weeklyPriorPeriod = v.object({
   equivalentScheduledPositions: v.boolean(),
   priorScheduledPositionCount: v.number(),
   values: v.union(v.object(weeklyMetrics), v.null()),
+  // The prior week's outside-schedule lane, so the total-vs-total comparison
+  // has a like-for-like counterpart. Optional only while rows written before
+  // the lane landed are rebuilt; an absent value withholds the comparison
+  // rather than falling back to the scheduled lane alone.
+  outsideScheduleValues: v.optional(v.union(v.object(weeklyMetrics), v.null())),
 });
 
+/**
+ * `closeVarianceMinor` is the whole-frame total; the scheduled/outside split
+ * states which lane produced it. Coverage counts remain scheduled-only, since
+ * only a scheduled date without a close is a coverage gap.
+ *
+ * The split fields are optional because rows written before the frame-wide
+ * total landed carry a scheduled-only `closeVarianceMinor` and no knowable
+ * split. Reads surface such a row's split as unavailable rather than zero.
+ */
 const weeklyVariancePosture = v.object({
   closeVarianceMinor: v.number(),
   coverage: v.union(
@@ -181,6 +216,9 @@ const weeklyVariancePosture = v.object({
   ),
   coveredIncludedDayCount: v.number(),
   includedDayCount: v.number(),
+  scheduledVarianceMinor: v.optional(v.number()),
+  outsideScheduleVarianceMinor: v.optional(v.number()),
+  outsideScheduleCoveredDayCount: v.optional(v.number()),
 });
 
 const weeklyLifecyclePosture = v.union(
@@ -233,6 +271,16 @@ export const reportWeekCurrentSchema = v.union(
     outsideSchedule: v.object(weeklyMetrics),
     scheduleLineage: v.array(weeklyLineage),
     completeness: weeklyCompleteness,
+    // Deprecated: rows written before the outside-schedule verdict moved
+    // inside `completeness.outsideSchedule` carry it top-level; nothing reads
+    // or writes it, and the next rebuild's replace drops it. Delete this
+    // validator once no stored row carries it.
+    outsideScheduleCompleteness: v.optional(
+      v.object({
+        complete: v.boolean(),
+        reason: weeklyCompletenessReason,
+      }),
+    ),
     lifecyclePosture: v.optional(weeklyLifecyclePosture),
     amendmentPosture: v.optional(weeklyAmendmentPosture),
     inventoryAttention: v.optional(weeklyInventoryAttention),
@@ -280,6 +328,33 @@ export const reportDirtyWeekSchema = v.object({
     v.literal("write_failure"),
   ),
   markedAt: v.number(),
+  /**
+   * The durable acceptance intent. Written once per (store, cycle, close) and
+   * never rewritten, so a close patched between materialization retries cannot
+   * move the knowledge cutoff of an immutable baseline. Optional for marks
+   * created before the intent record landed, and for ordinary day-fold marks.
+   */
+  intent: v.optional(
+    v.object({
+      cycleStartDate: v.string(),
+      closeId: v.id("dailyClose"),
+      cutoffObservedAt: v.number(),
+    }),
+  ),
+  /**
+   * Why no intent could be recorded yet. Retryable and operator-visible: a
+   * completed close with no `completedAt` has no immutable acceptance instant,
+   * and the mutable `updatedAt` must never stand in for one.
+   */
+  acceptanceBlockedReason: v.optional(
+    v.literal("close_missing_completed_at"),
+  ),
+  /**
+   * Dates folded since this marker was raised. Persisted rather than handed
+   * over in memory so a store whose marker misses the sweeper's weekly page
+   * still replays its exact historical amendments on a later tick.
+   */
+  foldedDates: v.optional(v.array(v.string())),
 });
 
 /** One doc per (store, operating day). The unit of trust and of rebuild. */

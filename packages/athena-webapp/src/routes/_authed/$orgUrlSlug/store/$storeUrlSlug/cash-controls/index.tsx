@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { CashControlsDashboard } from "~/src/components/cash-controls/CashControlsDashboard";
 import { NotFoundView } from "~/src/components/states/not-found/NotFoundView";
-import { ReportsWeeklyReturnLink } from "~/src/components/reports/ReportsWeeklyReturnLink";
 
 function hasOrgNotFoundPayload(data: unknown) {
   if (!data || typeof data !== "object" || !("data" in data)) {
@@ -22,7 +21,7 @@ function hasOrgNotFoundPayload(data: unknown) {
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/"
 )({
-  component: CashControlsRoute,
+  component: CashControlsDashboard,
   notFoundComponent: function CashControlsNotFound({ data }) {
     const { orgUrlSlug, storeUrlSlug } = Route.useParams();
     const org = hasOrgNotFoundPayload(data);
@@ -33,12 +32,3 @@ export const Route = createFileRoute(
     return <NotFoundView entity={entity} entityIdentifier={name} />;
   },
 });
-
-function CashControlsRoute() {
-  return (
-    <>
-      <ReportsWeeklyReturnLink />
-      <CashControlsDashboard />
-    </>
-  );
-}

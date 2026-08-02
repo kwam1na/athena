@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { FlipNumber } from "./FlipNumber";
+import { FlipNumber, FlipText } from "./FlipNumber";
 
 describe("FlipNumber", () => {
   it("exposes an accessible formatted value while its glyphs animate", () => {
@@ -57,8 +57,39 @@ describe("FlipNumber", () => {
 
     const number = screen.getByTestId("zero-fade-number");
     expect(number).toHaveAttribute("data-transition-from-zero", "fade");
+    expect(number.querySelector('[aria-hidden="true"]')).toHaveTextContent(
+      "24",
+    );
+  });
+});
+
+describe("FlipText", () => {
+  it("keeps one accessible string value while the visible text flips", () => {
+    const { rerender } = render(
+      <FlipText
+        delayMs={200}
+        testId="reusable-flip-text"
+        value="Loading report"
+      />,
+    );
+
+    const text = screen.getByTestId("reusable-flip-text");
+    expect(text).toHaveAttribute("data-motion", "flip");
+    expect(text).toHaveAttribute("data-variant", "text");
+    expect(text).toHaveAttribute("data-value", "Loading report");
+    expect(text).toHaveAttribute("data-switch-delay", "200");
+
+    rerender(
+      <FlipText
+        delayMs={200}
+        testId="reusable-flip-text"
+        value="Reporting week settled"
+      />,
+    );
+
+    expect(text).toHaveAttribute("data-value", "Reporting week settled");
     expect(
-      number.querySelector('[aria-hidden="true"]'),
-    ).toHaveTextContent("24");
+      screen.getByText("Reporting week settled", { selector: ".sr-only" }),
+    ).toBeInTheDocument();
   });
 });

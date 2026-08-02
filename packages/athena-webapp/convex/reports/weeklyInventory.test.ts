@@ -71,10 +71,6 @@ describe("projectLiveWeeklyInventoryAttention", () => {
       newCount: 1,
       observedCount: 2,
       overflow: false,
-      route: {
-        search: { workType: "synced_sale_inventory_review" },
-        to: "/operations",
-      },
     });
   });
 
@@ -128,8 +124,18 @@ describe("projectLiveWeeklyInventoryAttention", () => {
       completeness: "incomplete",
       observedCount: 1,
       overflow: true,
-      route: { to: "/operations" },
     });
+  });
+
+  it("never persists a route: routing is rebuilt per read, not frozen", () => {
+    const logicalWork = projectLogicalOperationalWork({
+      items: [inventoryReview()],
+      sourceCompleteness: "complete",
+    });
+
+    expect(
+      projectLiveWeeklyInventoryAttention({ frameStartAt: 0, logicalWork }),
+    ).not.toHaveProperty("route");
   });
 });
 
@@ -190,10 +196,6 @@ describe("projectFrozenWeeklyInventoryAttention", () => {
       newCount: 0,
       observedCount: 0,
       overflow: false,
-      route: {
-        search: { workType: "synced_sale_inventory_review" },
-        to: "/operations",
-      },
     });
   });
 

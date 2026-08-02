@@ -27,7 +27,7 @@ tags:
   - "amendments"
   - "dirty-marker"
   - "legacy-evidence"
-delivery_diff_fingerprint: c4ab7841220e0d0d200447d2daad93b0f061d702dfb8c923ef063c625d80bb54
+delivery_diff_fingerprint: 9699b291a6900a92d1e3017762f7da8fa41a23dc717dcb256b4f040cea1eaa35
 ---
 
 # Athena Weekly Reports Use a Schedule-Day-Driven Projection Lifecycle
@@ -93,6 +93,7 @@ machinery that Athena's deterministic report-day model removed.
 - Insert an accepted baseline only after the complete cutoff fold succeeds; never patch its financial values or lineage.
 - Treat later truth as one replaceable amendment and close posture, not a rewritten baseline or amendment ledger.
 - Preserve incomplete or unavailable evidence explicitly; do not convert unknown coverage, legacy observation time, mixed currency, or capacity overflow into zero.
+- Normalize store currency through the shared Reports helper both when facts are emitted and when incremental or authoritative folds compare legacy facts. Letter-case drift such as `ghs` versus `GHS` is not mixed currency; a genuinely different code still is.
 - Route normal rebuild and missed-intent recovery through `reportDirtyWeek` and the existing Reports sweeper.
 
 ## Examples
@@ -114,6 +115,11 @@ mixed-currency, payment-coverage, and other fail-closed posture. Accepted cutoff
 folds derive every slot from bounded facts, including empty fact sets. Legacy
 `observedAt` coverage is established by the bounded migration and independent
 verifier before the store capability is enabled.
+
+Legacy Daily Close snapshots may carry the store's lowercase configured code.
+The fold canonicalizes that code before comparison, while new snapshots emit
+the canonical form. This repairs existing evidence without weakening the
+fail-closed behavior for actual foreign-currency facts.
 
 ## Related
 

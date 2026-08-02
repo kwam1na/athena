@@ -7,7 +7,10 @@ import type {
   ReportDayMetrics,
   SkuDayFoldResult,
 } from "../../shared/reportsContract";
-import { derivePaymentPosture } from "../../shared/reportsContract";
+import {
+  derivePaymentPosture,
+  normalizeCurrencyCode,
+} from "../../shared/reportsContract";
 
 /**
  * The deterministic day fold — the correctness authority for reporting.
@@ -142,7 +145,8 @@ export const foldDay: FoldDayFn = (
 
     // Observations about the input hold whether or not the fact is countable.
     if (fact.quarantined) flags.quarantinedFactCount += 1;
-    if (fact.currency !== storeCurrency) flags.mixedCurrency = true;
+    const factCurrency = normalizeCurrencyCode(fact.currency);
+    if (factCurrency !== storeCurrency) flags.mixedCurrency = true;
 
     const isPostClose = close !== undefined && fact.recordedAt > close.acceptedAt;
     if (isPostClose) sawPostCloseFact = true;
@@ -150,7 +154,7 @@ export const foldDay: FoldDayFn = (
     // Excluded from every metric: quarantined facts and foreign-currency facts
     // (no FX rate lives in the fold; converting here would invent numbers).
     if (fact.quarantined) continue;
-    if (fact.currency !== storeCurrency) continue;
+    if (factCurrency !== storeCurrency) continue;
 
     const sku =
       fact.productSkuId !== undefined && REVENUE_KINDS.has(fact.factKind)

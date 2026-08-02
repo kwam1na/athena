@@ -80,6 +80,15 @@ const candidateSchedule = {
   ],
 };
 
+/** An already-confirmed, versioned schedule — the state a real store is in. */
+const activeSchedule = {
+  ...candidateSchedule,
+  adminConfirmed: true,
+  confirmationStatus: "admin_confirmed",
+  reportingCycleStartsOn: 1,
+  scheduleVersionId: "schedule-1",
+};
+
 describe("StoreHoursView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -208,29 +217,115 @@ describe("StoreHoursView", () => {
     ).toBeInTheDocument();
   });
 
-  it("confirms the effective date when a reporting-cycle change is staged", async () => {
-    const user = userEvent.setup();
-    mockUpdateSchedule.mockImplementation(async ({ onSuccess }) => {
-      onSuccess?.({
-        effectiveFrom: Date.now() + 86_400_000,
-        reportingCycleStartsOn: 3,
-        scheduleVersionId: "pending-schedule",
-        timezone: "America/New_York",
-      });
+  describe("staged reporting-cycle confirmation", () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.setSystemTime(new Date("2026-08-04T12:00:00.000Z"));
+      mockedUseQuery.mockReturnValue(activeSchedule as never);
     });
 
-    render(<StoreHoursView />);
+    const changeAnchorAndSave = async (
+      user: ReturnType<typeof userEvent.setup>,
+    ) => {
+      await user.click(
+        screen.getByRole("combobox", { name: "Reporting cycle starts" }),
+      );
+      await user.click(
+        await screen.findByRole("option", { name: "Wednesday" }),
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Save store hours" }),
+      );
+    };
 
-    await user.click(
-      screen.getByRole("combobox", { name: "Reporting cycle starts" }),
-    );
-    await user.click(await screen.findByRole("option", { name: "Wednesday" }));
-    await user.click(screen.getByLabelText("Confirm suggested store hours"));
-    await user.click(screen.getByRole("button", { name: "Save store hours" }));
+    it("names the effective date and the staged scope before the mutation runs", async () => {
+      const user = userEvent.setup();
+      render(<StoreHoursView />);
 
-    expect(
-      await screen.findByText(/Reporting cycle change staged for/),
-    ).toBeInTheDocument();
+      await changeAnchorAndSave(user);
+
+      const dialog = await screen.findByRole("dialog");
+      expect(
+        within(dialog).getByText("Stage this reporting-cycle change?"),
+      ).toBeInTheDocument();
+      // Tuesday 2026-08-04 in New York -> the next Monday boundary.
+      expect(dialog).toHaveTextContent("Wednesday on Aug 10, 2026");
+      expect(dialog).toHaveTextContent(
+        /Every change in this save .* is staged to Aug 10, 2026 with it\./,
+      );
+      expect(dialog).toHaveTextContent(
+        "To change an operational day now, cancel, save that change on its own, then stage the reporting cycle.",
+      );
+      expect(mockUpdateSchedule).not.toHaveBeenCalled();
+    });
+
+    it("returns to editing without mutating when the operator cancels", async () => {
+      const user = userEvent.setup();
+      render(<StoreHoursView />);
+
+      await changeAnchorAndSave(user);
+      await user.click(
+        within(await screen.findByRole("dialog")).getByRole("button", {
+          name: "Cancel",
+        }),
+      );
+
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+      );
+      expect(mockUpdateSchedule).not.toHaveBeenCalled();
+      expect(
+        screen.getByRole("combobox", { name: "Reporting cycle starts" }),
+      ).toHaveTextContent("Wednesday");
+    });
+
+    it("stages the change and keeps the post-save message on confirm", async () => {
+      const user = userEvent.setup();
+      mockUpdateSchedule.mockImplementation(async ({ onSuccess }) => {
+        onSuccess?.({
+          effectiveFrom: Date.now() + 86_400_000,
+          reportingCycleStartsOn: 3,
+          scheduleVersionId: "pending-schedule",
+          timezone: "America/New_York",
+        });
+      });
+
+      render(<StoreHoursView />);
+
+      await changeAnchorAndSave(user);
+      await user.click(
+        within(await screen.findByRole("dialog")).getByRole("button", {
+          name: "Stage change",
+        }),
+      );
+
+      await waitFor(() =>
+        expect(mockUpdateSchedule).toHaveBeenCalledWith(
+          expect.objectContaining({
+            schedule: expect.objectContaining({ reportingCycleStartsOn: 3 }),
+          }),
+        ),
+      );
+      expect(
+        await screen.findByText(/Reporting cycle change staged for/),
+      ).toBeInTheDocument();
+    });
+
+    it("saves an operational-only change immediately without a confirmation", async () => {
+      const user = userEvent.setup();
+      render(<StoreHoursView />);
+
+      await user.click(
+        screen.getByRole("combobox", { name: "Monday close time" }),
+      );
+      await user.click(await screen.findByRole("option", { name: "06:30 PM" }));
+      await user.click(
+        screen.getByRole("button", { name: "Save store hours" }),
+      );
+
+      await waitFor(() => expect(mockUpdateSchedule).toHaveBeenCalled());
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
   });
 
   it("keeps non-full-admin accounts in a read-only summary state", () => {

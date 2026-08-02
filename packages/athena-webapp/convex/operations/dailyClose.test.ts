@@ -3357,7 +3357,7 @@ describe("end-of-day review backend foundation", () => {
           transactionNumber: "TXN-1",
         },
       ],
-      store: [store],
+      store: [{ ...store, currency: " ghs " }],
     });
 
     const result = await completeDailyCloseWithCtx(
