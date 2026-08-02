@@ -1,7 +1,8 @@
 import { CheckIcon, Send } from "lucide-react";
 import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
-import { getRelativeTime, slugToWords } from "~/src/lib/utils";
+import { slugToWords } from "~/src/lib/utils";
+import { RelativeTimestamp } from "../ui/relative-timestamp";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { useAction } from "convex/react";
 import { api } from "~/convex/_generated/api";
@@ -126,9 +127,10 @@ export function EmailStatusView() {
             <div className="flex items-center gap-2 text-muted-foreground">
               <p className="text-xs">
                 Sent{" "}
-                {order.orderReceivedEmailSentAt
-                  ? getRelativeTime(order.orderReceivedEmailSentAt)
-                  : ""}
+                <RelativeTimestamp
+                  fallback=""
+                  value={order.orderReceivedEmailSentAt}
+                />
               </p>
               {!order.orderReceivedEmailSentAt && (
                 <CheckIcon className="h-3.5 w-3.5" />
@@ -161,9 +163,10 @@ export function EmailStatusView() {
             <div className="flex items-center gap-2 text-muted-foreground">
               <p className="text-xs">
                 Sent{" "}
-                {order.orderReadyEmailSentAt
-                  ? getRelativeTime(order.orderReadyEmailSentAt)
-                  : ""}
+                <RelativeTimestamp
+                  fallback=""
+                  value={order.orderReadyEmailSentAt}
+                />
               </p>
               {!order.orderReadyEmailSentAt && (
                 <CheckIcon className="h-3.5 w-3.5" />
@@ -191,9 +194,10 @@ export function EmailStatusView() {
             <div className="flex items-center gap-2 text-muted-foreground">
               <p className="text-xs">
                 Sent{" "}
-                {order.orderCompletedEmailSentAt
-                  ? getRelativeTime(order.orderCompletedEmailSentAt)
-                  : ""}
+                <RelativeTimestamp
+                  fallback=""
+                  value={order.orderCompletedEmailSentAt}
+                />
               </p>
               {!order.orderCompletedEmailSentAt && (
                 <CheckIcon className="h-3.5 w-3.5" />
