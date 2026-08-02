@@ -187,6 +187,30 @@ describe("buildOverviewData", () => {
     day("2026-07-28", { status: "open", netSalesMinor: 500, unitsSold: 5 }),
   ];
 
+  it("carries settled transaction counts onto the trend, leaving open days absent", () => {
+    const data = buildOverviewData({
+      days,
+      fallbackCurrency: "GHS",
+      now: 0,
+      transactionCountsByDate: new Map([
+        ["2026-07-26", 3],
+        ["2026-07-27", 12],
+      ]),
+    });
+
+    const countsByDate = new Map(
+      data.dailyTrend.map((point) => [
+        point.operatingDate,
+        point.transactionCount,
+      ]),
+    );
+
+    expect(countsByDate.get("2026-07-26")).toBe(3);
+    expect(countsByDate.get("2026-07-27")).toBe(12);
+    // The open day never closed, so it has no settled count to report.
+    expect(countsByDate.get("2026-07-28")).toBeUndefined();
+  });
+
   it("splits week-to-date from the prior ISO week", () => {
     const data = buildOverviewData({ days, fallbackCurrency: "GHS", now: 42 });
 
@@ -237,6 +261,11 @@ describe("buildOverviewData", () => {
       status: "open",
       unitsSold: 5,
     });
+    expect(
+      data.dailyTrend.every(
+        (point) => point.transactionCount === undefined,
+      ),
+    ).toBe(true);
     // The trailing-30 snapshot excludes the June day too.
     expect(data.trailing30.dayCount).toBe(5);
     expect(data.trailing30.netSalesMinor).toBe(1500);
@@ -342,5 +371,81 @@ describe("rebuildStoreOverview", () => {
     expect(overviews[0].updatedAt).toBe(2_000);
     expect(overviews[0].weekToDate.netSalesMinor).toBe(900);
     expect(overviews[0].dailyTrend).toHaveLength(2);
+  });
+
+  it("reads the trend's transaction counts from each day's register close", async () => {
+    const t = convexTest(schema, modules);
+
+    const { storeId } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("athenaUser", {
+        email: "counts@example.test",
+      });
+      const organizationId = await ctx.db.insert("organization", {
+        createdByUserId: userId,
+        name: "Counts",
+        slug: "counts",
+      });
+      const storeId = await ctx.db.insert("store", {
+        createdByUserId: userId,
+        currency: "GHS",
+        name: "Counts",
+        organizationId,
+        slug: "counts",
+      });
+
+      const closeId = await ctx.db.insert("dailyClose", {
+        storeId,
+        organizationId,
+        operatingDate: "2026-07-27",
+        status: "completed",
+        isCurrent: false,
+        readiness: {
+          status: "ready",
+          blockerCount: 0,
+          reviewCount: 0,
+          carryForwardCount: 0,
+          readyCount: 0,
+        },
+        summary: { transactionCount: 17 },
+        sourceSubjects: [],
+        carryForwardWorkItemIds: [],
+        createdAt: 0,
+        updatedAt: 0,
+      });
+
+      // The closed day resolves a count; the open day has no close at all.
+      await ctx.db.insert("reportDay", {
+        ...dayFields("2026-07-27", { netSalesMinor: 400 }),
+        closeId,
+        storeId,
+      });
+      await ctx.db.insert("reportDay", {
+        ...dayFields("2026-07-28", { netSalesMinor: 500, status: "open" }),
+        storeId,
+      });
+
+      return { storeId };
+    });
+
+    await t.run(async (ctx) => {
+      await rebuildStoreOverview(ctx, storeId, 1_000);
+    });
+
+    const trend = await t.run(async (ctx) => {
+      const overview = await ctx.db
+        .query("reportOverview")
+        .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+        .unique();
+      return overview?.dailyTrend ?? [];
+    });
+
+    expect(
+      trend.find((point) => point.operatingDate === "2026-07-27")
+        ?.transactionCount,
+    ).toBe(17);
+    expect(
+      trend.find((point) => point.operatingDate === "2026-07-28")
+        ?.transactionCount,
+    ).toBeUndefined();
   });
 });

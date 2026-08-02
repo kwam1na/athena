@@ -30,6 +30,32 @@ type TrendChartPoint = ReportTrendPoint & {
   chartIndex: number;
 };
 
+/**
+ * "12 transactions · 52 units". The transaction count is absent for days with
+ * no register close, so the units read stands on its own when it has to.
+ */
+function formatTrendVolume(point: TrendChartPoint) {
+  const parts: string[] = [];
+
+  if (point.transactionCount !== undefined) {
+    parts.push(
+      `${point.transactionCount.toLocaleString()} ${
+        point.transactionCount === 1 ? "transaction" : "transactions"
+      }`,
+    );
+  }
+
+  if (point.unitsSold !== undefined) {
+    parts.push(
+      `${point.unitsSold.toLocaleString()} ${
+        point.unitsSold === 1 ? "unit" : "units"
+      }`,
+    );
+  }
+
+  return parts.join(" · ");
+}
+
 type ActiveTrendDotProps = {
   cx?: number;
   cy?: number;
@@ -223,15 +249,15 @@ export function ReportTrendChart({
                       const presentation = reportDayStatusPresentation(
                         point.status,
                       );
+                      const volumeLabel = formatTrendVolume(point);
                       return (
                         <div className="grid gap-1">
                           <span className="font-numeric text-foreground">
                             {formatReportMoney(Number(value), currency)}
                           </span>
-                          {point.unitsSold !== undefined ? (
+                          {volumeLabel ? (
                             <span className="text-muted-foreground">
-                              {point.unitsSold.toLocaleString()}{" "}
-                              {point.unitsSold === 1 ? "unit" : "units"} sold
+                              {volumeLabel}
                             </span>
                           ) : null}
                           <span className="text-muted-foreground">

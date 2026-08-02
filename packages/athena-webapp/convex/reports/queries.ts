@@ -23,6 +23,7 @@ import type {
 } from "../../shared/reportsContract";
 import { emptySnapshot, snapshotForDays } from "./overview";
 import { addDaysToDate, periodDateRange } from "./rollups";
+import { transactionCountFromCloseSummary } from "./transactionCounts";
 
 /**
  * Slice D — read queries for the rebuilt reports layer.
@@ -370,17 +371,6 @@ function decodeCursor(cursor: string): ListPeriodSkusCursor {
  * than by a compound index (the derived schema is frozen).
  */
 const TIE_BREAK_OVERFETCH = 25;
-
-function transactionCountFromCloseSummary(
-  summary: Record<string, unknown>,
-): number {
-  const transactionCount = summary.transactionCount;
-  return typeof transactionCount === "number" &&
-    Number.isFinite(transactionCount) &&
-    transactionCount >= 0
-    ? Math.trunc(transactionCount)
-    : 0;
-}
 
 async function livePosTransactionCount(
   ctx: QueryCtx,

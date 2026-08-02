@@ -1,5 +1,5 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
 
 const trendPoint = {
   axisLabel: "Sat, Jul 11",
@@ -8,8 +8,20 @@ const trendPoint = {
   netSalesMinor: 75_00,
   operatingDate: "2026-07-11",
   status: "reconciled" as const,
+  transactionCount: undefined as number | undefined,
   unitsSold: 6,
 };
+
+/**
+ * The recharts mock renders whatever point the test under way is exercising;
+ * the real chart hands the hovered datum to the tooltip, and mocking a fixed
+ * payload would let the tooltip pass no matter what the props said.
+ */
+let activePoint: typeof trendPoint = trendPoint;
+
+beforeEach(() => {
+  activePoint = trendPoint;
+});
 
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 vi.mock("recharts", () => ({
@@ -19,7 +31,7 @@ vi.mock("recharts", () => ({
     activeDot?: (props: Record<string, unknown>) => React.ReactNode;
   }) =>
     typeof activeDot === "function"
-      ? activeDot({ cx: 40, cy: 30, payload: trendPoint })
+      ? activeDot({ cx: 40, cy: 30, payload: activePoint })
       : null,
   AreaChart: ({ children }: { children?: React.ReactNode }) => (
     <svg>{children}</svg>
@@ -48,9 +60,9 @@ vi.mock("@/components/ui/chart", () => ({
     ) => React.ReactNode;
   }) => (
     <div>
-      {labelFormatter("", [{ payload: trendPoint }])}
-      {formatter(trendPoint.netSalesMinor, "Net sales", {
-        payload: trendPoint,
+      {labelFormatter("", [{ payload: activePoint }])}
+      {formatter(activePoint.netSalesMinor, "Net sales", {
+        payload: activePoint,
       })}
     </div>
   ),
@@ -59,6 +71,43 @@ vi.mock("@/components/ui/chart", () => ({
 import { ReportTrendChart } from "./ReportTrendChart";
 
 describe("ReportTrendChart", () => {
+  function renderTrend(point: typeof trendPoint) {
+    activePoint = point;
+    render(
+      <ReportTrendChart
+        currency="USD"
+        dailyTrend={[
+          {
+            operatingDate: point.operatingDate,
+            netSalesMinor: point.netSalesMinor,
+            status: point.status,
+            transactionCount: point.transactionCount,
+            unitsSold: point.unitsSold,
+          },
+        ]}
+        onDaySelect={vi.fn()}
+      />,
+    );
+  }
+
+  it("pairs the transaction count with units on one line when the day has closed", () => {
+    renderTrend({ ...trendPoint, transactionCount: 12 });
+
+    expect(screen.getByText("12 transactions · 6 units")).toBeInTheDocument();
+  });
+
+  it("singularizes a lone transaction", () => {
+    renderTrend({ ...trendPoint, transactionCount: 1, unitsSold: 1 });
+
+    expect(screen.getByText("1 transaction · 1 unit")).toBeInTheDocument();
+  });
+
+  it("falls back to units alone when the day has no settled count", () => {
+    renderTrend({ ...trendPoint, transactionCount: undefined });
+
+    expect(screen.getByText("6 units")).toBeInTheDocument();
+  });
+
   it("shows units sold and opens the selected day from its active point", () => {
     const onDaySelect = vi.fn();
 
@@ -77,7 +126,7 @@ describe("ReportTrendChart", () => {
       />,
     );
 
-    expect(screen.getByText("6 units sold")).toBeInTheDocument();
+    expect(screen.getByText("6 units")).toBeInTheDocument();
     expect(screen.getByText("Reconciled")).toBeInTheDocument();
 
     const point = screen.getByRole("link", {
