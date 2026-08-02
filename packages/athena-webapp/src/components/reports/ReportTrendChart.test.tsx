@@ -93,13 +93,13 @@ describe("ReportTrendChart", () => {
   it("pairs the transaction count with units on one line when the day has closed", () => {
     renderTrend({ ...trendPoint, transactionCount: 12 });
 
-    expect(screen.getByText("12 transactions · 6 units")).toBeInTheDocument();
+    expect(screen.getByText("6 units · 12 transactions")).toBeInTheDocument();
   });
 
   it("singularizes a lone transaction", () => {
     renderTrend({ ...trendPoint, transactionCount: 1, unitsSold: 1 });
 
-    expect(screen.getByText("1 transaction · 1 unit")).toBeInTheDocument();
+    expect(screen.getByText("1 unit · 1 transaction")).toBeInTheDocument();
   });
 
   it("falls back to units alone when the day has no settled count", () => {

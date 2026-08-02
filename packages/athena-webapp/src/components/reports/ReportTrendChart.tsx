@@ -31,24 +31,24 @@ type TrendChartPoint = ReportTrendPoint & {
 };
 
 /**
- * "12 transactions · 52 units". The transaction count is absent for days with
+ * "52 units · 12 transactions". The transaction count is absent for days with
  * no register close, so the units read stands on its own when it has to.
  */
 function formatTrendVolume(point: TrendChartPoint) {
   const parts: string[] = [];
 
-  if (point.transactionCount !== undefined) {
-    parts.push(
-      `${point.transactionCount.toLocaleString()} ${
-        point.transactionCount === 1 ? "transaction" : "transactions"
-      }`,
-    );
-  }
-
   if (point.unitsSold !== undefined) {
     parts.push(
       `${point.unitsSold.toLocaleString()} ${
         point.unitsSold === 1 ? "unit" : "units"
+      }`,
+    );
+  }
+
+  if (point.transactionCount !== undefined) {
+    parts.push(
+      `${point.transactionCount.toLocaleString()} ${
+        point.transactionCount === 1 ? "transaction" : "transactions"
       }`,
     );
   }
