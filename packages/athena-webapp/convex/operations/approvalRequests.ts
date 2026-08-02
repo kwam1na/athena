@@ -23,7 +23,7 @@ import { requireOperationActorAthenaUserId } from "../operationAdmission/actors"
 import type {
   OperationMutationCtx,
 } from "../operationAdmission/types";
-import { buildApprovalRequest } from "./approvalRequestHelpers";
+import { insertApprovalRequestWithCtx } from "./approvalRequestHelpers";
 import {
   approvalRequired,
   ok,
@@ -599,10 +599,7 @@ export const createApprovalRequest = internalMutation({
     metadata: v.optional(v.record(v.string(), v.any())),
   },
   handler: async (ctx, args) => {
-    const requestId = await ctx.db.insert(
-      "approvalRequest",
-      buildApprovalRequest(args),
-    );
+    const requestId = await insertApprovalRequestWithCtx(ctx, args);
     return ctx.db.get("approvalRequest", requestId);
   },
 });

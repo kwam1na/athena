@@ -320,7 +320,7 @@ describe("online order return and exchange mutation wiring", () => {
     expect(onlineOrderSource).toContain("recordPaymentAllocationWithCtx");
     expect(onlineOrderSource).toContain("applyCommerceInventoryEffectWithCtx");
     expect(onlineOrderSource).toContain("recordOperationalEventWithCtx");
-    expect(onlineOrderSource).toContain("buildApprovalRequest");
+    expect(onlineOrderSource).toContain("insertApprovalRequestWithCtx");
     expect(onlineOrderSource).toContain(
       "buildOnlineOrderReportedReturns({",
     );

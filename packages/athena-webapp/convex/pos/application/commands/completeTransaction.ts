@@ -8,7 +8,7 @@ import {
   generateTransactionNumber,
 } from "../../../utils";
 import { toDisplayAmount } from "../../../lib/currency";
-import { buildApprovalRequest } from "../../../operations/approvalRequestHelpers";
+import { insertApprovalRequestWithCtx } from "../../../operations/approvalRequestHelpers";
 import { createApprovalRequesterChallengeWithCtx } from "../../../operations/approvalRequesterChallenges";
 import {
   APPROVAL_ACTIONS,
@@ -1794,28 +1794,25 @@ async function createVoidApprovalRequest(
     return requesterBindingResult;
   }
 
-  const approvalRequestId = await ctx.db.insert(
-    "approvalRequest",
-    buildApprovalRequest({
-      metadata: {
-        actionKey: TRANSACTION_VOID_ACTION.key,
-        transactionId: args.transaction._id,
-        transactionNumber: args.transaction.transactionNumber,
-        total: args.transaction.total,
-      },
-      ...(args.reason ? { notes: args.reason } : {}),
-      organizationId: store?.organizationId,
-      posTransactionId: args.transaction._id,
-      reason: "Manager approval is required to void a completed sale.",
-      registerSessionId: args.transaction.registerSessionId,
-      requestType: TRANSACTION_VOID_REQUEST_TYPE,
-      requestedByStaffProfileId: args.actorStaffProfileId,
-      requestedByUserId: args.actorUserId,
-      storeId: args.transaction.storeId,
-      subjectId: args.transaction._id,
-      subjectType: "pos_transaction",
-    }),
-  );
+  const approvalRequestId = await insertApprovalRequestWithCtx(ctx, {
+    metadata: {
+      actionKey: TRANSACTION_VOID_ACTION.key,
+      transactionId: args.transaction._id,
+      transactionNumber: args.transaction.transactionNumber,
+      total: args.transaction.total,
+    },
+    ...(args.reason ? { notes: args.reason } : {}),
+    organizationId: store?.organizationId,
+    posTransactionId: args.transaction._id,
+    reason: "Manager approval is required to void a completed sale.",
+    registerSessionId: args.transaction.registerSessionId,
+    requestType: TRANSACTION_VOID_REQUEST_TYPE,
+    requestedByStaffProfileId: args.actorStaffProfileId,
+    requestedByUserId: args.actorUserId,
+    storeId: args.transaction.storeId,
+    subjectId: args.transaction._id,
+    subjectType: "pos_transaction",
+  });
 
   await recordOperationalEventWithCtx(ctx, {
     actorStaffProfileId: args.actorStaffProfileId,

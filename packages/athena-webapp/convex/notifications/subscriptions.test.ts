@@ -13,6 +13,7 @@ import { SUBSCRIPTION_RESOLUTION_CAP } from "./dispatch";
 import {
   SUBSCRIPTION_LIST_READ_BUDGET,
   addSubscription,
+  listOrganizationMemberRecipientCandidates,
   listSubscriptionsForOrganization,
   removeSubscription,
   setSubscriptionEnabled,
@@ -123,6 +124,19 @@ function callList(
 ) {
   return t.run((ctx) =>
     getHandler(listSubscriptionsForOrganization)(asAdmitted(ctx, userId), args),
+  );
+}
+
+function callListMemberCandidates(
+  t: ReturnType<typeof convexTest>,
+  userId: Id<"athenaUser">,
+  args: Record<string, unknown>,
+) {
+  return t.run((ctx) =>
+    getHandler(listOrganizationMemberRecipientCandidates)(
+      asAdmitted(ctx, userId),
+      args,
+    ),
   );
 }
 
@@ -640,6 +654,98 @@ describe("notification subscriptions public API", () => {
           .take(10),
       );
       expect(deliveries).toHaveLength(0);
+    });
+  });
+
+  describe("listOrganizationMemberRecipientCandidates", () => {
+    it("lists org members with operationalRoles populated, including a manager", async () => {
+      const t = convexTest(schema, modules);
+      const fixture = await t.run(seedFixture);
+      await t.run(async (ctx) => {
+        const [adminMembership] = await ctx.db
+          .query("organizationMember")
+          .withIndex("by_organizationId_userId", (q) =>
+            q
+              .eq("organizationId", fixture.organizationA)
+              .eq("userId", fixture.adminA),
+          )
+          .take(1);
+        await ctx.db.patch("organizationMember", adminMembership!._id, {
+          operationalRoles: ["manager"],
+        });
+      });
+
+      const result = (await callListMemberCandidates(t, fixture.adminA, {
+        organizationId: fixture.organizationA,
+      })) as Array<{
+        userId: Id<"athenaUser">;
+        displayName: string;
+        email: string;
+        role: string;
+        operationalRoles: string[];
+      }>;
+
+      expect(result).toHaveLength(2);
+      const byUserId = new Map(result.map((row) => [row.userId, row]));
+      expect(byUserId.get(fixture.adminA)).toMatchObject({
+        email: "admin-a@example.com",
+        role: "full_admin",
+        operationalRoles: ["manager"],
+      });
+      // Only this org's members appear — org B's admin is never leaked.
+      expect(byUserId.has(fixture.adminB)).toBe(false);
+
+      assertConformsToExportedReturns(
+        listOrganizationMemberRecipientCandidates,
+        result,
+      );
+    });
+
+    it("still lists a member without operationalRoles, projected as []", async () => {
+      const t = convexTest(schema, modules);
+      const fixture = await t.run(seedFixture);
+
+      const result = (await callListMemberCandidates(t, fixture.adminA, {
+        organizationId: fixture.organizationA,
+      })) as Array<{ userId: Id<"athenaUser">; operationalRoles: string[] }>;
+
+      const posOnly = result.find((row) => row.userId === fixture.posOnlyA);
+      expect(posOnly).toBeDefined();
+      expect(posOnly!.operationalRoles).toEqual([]);
+      assertConformsToExportedReturns(
+        listOrganizationMemberRecipientCandidates,
+        result,
+      );
+    });
+
+    it("projects only the documented fields — no extra athenaUser columns", async () => {
+      const t = convexTest(schema, modules);
+      const fixture = await t.run(seedFixture);
+
+      const result = (await callListMemberCandidates(t, fixture.adminA, {
+        organizationId: fixture.organizationA,
+      })) as Array<Record<string, unknown>>;
+
+      for (const row of result) {
+        expect(Object.keys(row).sort()).toEqual(
+          ["displayName", "email", "operationalRoles", "role", "userId"].sort(),
+        );
+      }
+    });
+
+    it.each([
+      ["non-member", "outsider" as const],
+      ["pos_only member", "posOnlyA" as const],
+      ["full_admin of another org", "adminB" as const],
+    ])("rejects a %s", async (_label, who) => {
+      const t = convexTest(schema, modules);
+      const fixture = await t.run(seedFixture);
+
+      await expect(
+        callListMemberCandidates(t, fixture[who], {
+          organizationId: fixture.organizationA,
+        }),
+      ).rejects.toThrow(ACCESS_DENIED);
     });
   });
 

@@ -35,7 +35,7 @@ import {
 import { internal } from "../_generated/api";
 import { Doc, Id } from "../_generated/dataModel";
 import { getDiscountValue } from "../inventory/utils";
-import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
+import { insertApprovalRequestWithCtx } from "../operations/approvalRequestHelpers";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordPaymentAllocationWithCtx } from "../operations/paymentAllocations";
 import { markCatalogSummaryNeedsRefresh } from "../inventory/catalogSummary";
@@ -1686,28 +1686,25 @@ export const processReturnExchange = mutation({
         });
 
         if (plan.requiresApproval) {
-          const approvalRequestId = await ctx.db.insert(
-            "approvalRequest",
-            buildApprovalRequest({
-              metadata: {
-                operationType: args.operationType,
-                replacementItems: replacementItems.map((item) => ({
-                  productName: item.productName ?? item.skuLabel ?? null,
-                  productSkuId: item.productSkuId,
-                  quantity: item.quantity,
-                })),
-                returnItemIds: args.returnItemIds,
-              },
-              notes: args.notes,
-              organizationId: store?.organizationId,
-              reason: plan.approvalReason ?? undefined,
-              requestType: "online_order_return_review",
-              requestedByUserId: args.signedInAthenaUser?.id,
-              storeId: order.storeId,
-              subjectId: order._id,
-              subjectType: "online_order",
-            }),
-          );
+          const approvalRequestId = await insertApprovalRequestWithCtx(ctx, {
+            metadata: {
+              operationType: args.operationType,
+              replacementItems: replacementItems.map((item) => ({
+                productName: item.productName ?? item.skuLabel ?? null,
+                productSkuId: item.productSkuId,
+                quantity: item.quantity,
+              })),
+              returnItemIds: args.returnItemIds,
+            },
+            notes: args.notes,
+            organizationId: store?.organizationId,
+            reason: plan.approvalReason ?? undefined,
+            requestType: "online_order_return_review",
+            requestedByUserId: args.signedInAthenaUser?.id,
+            storeId: order.storeId,
+            subjectId: order._id,
+            subjectType: "online_order",
+          });
 
           const approvalEvent = await recordOperationalEventWithCtx(ctx, {
             actorUserId: args.signedInAthenaUser?.id,

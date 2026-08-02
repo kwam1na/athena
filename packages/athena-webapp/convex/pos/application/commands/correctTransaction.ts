@@ -2,7 +2,7 @@ import type { Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 import type { ApprovalRequirement } from "../../../../shared/approvalPolicy";
-import { buildApprovalRequest } from "../../../operations/approvalRequestHelpers";
+import { insertApprovalRequestWithCtx } from "../../../operations/approvalRequestHelpers";
 import { createApprovalRequesterChallengeWithCtx } from "../../../operations/approvalRequesterChallenges";
 import {
   APPROVAL_ACTIONS,
@@ -153,30 +153,27 @@ async function createPaymentMethodCorrectionApprovalRequest(
     throw new Error(requesterBindingResult.error.message);
   }
 
-  const approvalRequestId = await ctx.db.insert(
-    "approvalRequest",
-    buildApprovalRequest({
-      metadata: {
-        actionKey: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
-        amount: args.amount,
-        paymentMethod: args.paymentMethod,
-        previousPaymentMethod: args.previousPaymentMethod,
-        transactionId: args.transaction._id,
-        transactionNumber: args.transaction.transactionNumber,
-      },
-      notes: args.reason,
-      organizationId: store?.organizationId,
-      reason:
-        "Manager approval is required to correct a completed transaction payment method.",
-      registerSessionId: args.transaction.registerSessionId,
-      requestType: PAYMENT_METHOD_CORRECTION_REQUEST_TYPE,
-      requestedByStaffProfileId: args.actorStaffProfileId,
-      requestedByUserId: args.actorUserId,
-      storeId: args.transaction.storeId,
-      subjectId: args.transaction._id,
-      subjectType: "pos_transaction",
-    }),
-  );
+  const approvalRequestId = await insertApprovalRequestWithCtx(ctx, {
+    metadata: {
+      actionKey: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
+      amount: args.amount,
+      paymentMethod: args.paymentMethod,
+      previousPaymentMethod: args.previousPaymentMethod,
+      transactionId: args.transaction._id,
+      transactionNumber: args.transaction.transactionNumber,
+    },
+    notes: args.reason,
+    organizationId: store?.organizationId,
+    reason:
+      "Manager approval is required to correct a completed transaction payment method.",
+    registerSessionId: args.transaction.registerSessionId,
+    requestType: PAYMENT_METHOD_CORRECTION_REQUEST_TYPE,
+    requestedByStaffProfileId: args.actorStaffProfileId,
+    requestedByUserId: args.actorUserId,
+    storeId: args.transaction.storeId,
+    subjectId: args.transaction._id,
+    subjectType: "pos_transaction",
+  });
 
   await recordOperationalEventWithCtx(ctx, {
     actorStaffProfileId: args.actorStaffProfileId,

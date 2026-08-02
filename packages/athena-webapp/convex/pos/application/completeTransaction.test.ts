@@ -46,6 +46,7 @@ import { consumeCommandApprovalProofWithCtx } from "../../operations/approvalAct
 import { createApprovalRequesterChallengeWithCtx } from "../../operations/approvalRequesterChallenges";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 import { recordFacts } from "../../reports/ingest";
+import { emitNotificationWithCtx } from "../../notifications/emit";
 import { applyCommerceInventoryEffectWithCtx } from "../../inventoryLedger/commerceEffects";
 import { appendPosLifecycleJournalWithCtx } from "../infrastructure/posLifecycleJournal";
 
@@ -55,6 +56,10 @@ vi.mock("../infrastructure/posLifecycleJournal", () => ({
 
 vi.mock("../../reports/ingest", () => ({
   recordFacts: vi.fn(),
+}));
+
+vi.mock("../../notifications/emit", () => ({
+  emitNotificationWithCtx: vi.fn(),
 }));
 
 vi.mock("../../inventoryLedger/commerceEffects", () => ({
@@ -444,6 +449,19 @@ describe("voidTransaction", () => {
         requestType: "pos_transaction_void",
         subjectId: "txn-1",
         subjectType: "pos_transaction",
+      }),
+    );
+    expect(emitNotificationWithCtx).toHaveBeenCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        kind: "approvals.request_created",
+        storeId: "store-1",
+        subjectType: "approvalRequest",
+        payload: expect.objectContaining({
+          approvalRequestId: "approval-request-1",
+          requestType: "pos_transaction_void",
+          storeId: "store-1",
+        }),
       }),
     );
     expect(createApprovalRequesterChallengeWithCtx).toHaveBeenCalledWith(

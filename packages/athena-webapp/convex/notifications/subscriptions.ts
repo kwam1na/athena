@@ -11,7 +11,10 @@ import {
   removeNotificationSubscriptionOperationDefinition,
   setNotificationSubscriptionEnabledOperationDefinition,
 } from "../operationAdmission/definitions";
-import { listNotificationSubscriptionsReadDefinition } from "../operationAdmission/readDefinitions";
+import {
+  listNotificationSubscriptionsReadDefinition,
+  listOrganizationMemberRecipientCandidatesReadDefinition,
+} from "../operationAdmission/readDefinitions";
 import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
 import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
 import type {
@@ -30,6 +33,7 @@ import {
   type CommandResult,
 } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { operationalRoleValidator } from "../operations/staffRoles";
 import { normalizeRecipientEmail } from "./deliveryPolicy";
 import { SUBSCRIPTION_RESOLUTION_CAP } from "./dispatch";
 import type { NotificationCategory } from "./registry";
@@ -168,6 +172,92 @@ export const listSubscriptionsForOrganization = query({
           subscriptions: grouped.get(category) ?? [],
         })),
       };
+    },
+  ),
+});
+
+// Bounded read for the recipient picker: one organization's membership rows.
+// A named cap (not .collect()) keeps the read volume predictable even if an
+// organization's roster grows large; the picker is a UI convenience, not a
+// paginated directory.
+export const ORGANIZATION_MEMBER_CANDIDATE_READ_CAP = 500;
+
+const organizationMemberRecipientCandidateValidator = v.object({
+  userId: v.id("athenaUser"),
+  displayName: v.string(),
+  email: v.string(),
+  role: v.union(v.literal("full_admin"), v.literal("pos_only")),
+  operationalRoles: v.array(operationalRoleValidator),
+});
+
+const listOrganizationMemberRecipientCandidatesReturns = v.array(
+  organizationMemberRecipientCandidateValidator,
+);
+
+function memberDisplayName(user: {
+  firstName?: string;
+  lastName?: string;
+  email: string;
+}): string {
+  const name = [user.firstName, user.lastName]
+    .map((part) => part?.trim())
+    .filter((part): part is string => !!part)
+    .join(" ");
+  return name || user.email;
+}
+
+// Lists organization members for the notifications recipient picker. Joins
+// organizationMember -> athenaUser via the same by_organizationId_userId
+// index pattern as inventory/organizationMembers.ts:getAll (that query is
+// left untouched — this is a separate, narrower projection scoped to this
+// module's own auth posture and read admission). Manager-first ordering is
+// applied client-side; this query only carries operationalRoles.
+export const listOrganizationMemberRecipientCandidates = query({
+  args: { organizationId: v.id("organization") },
+  returns: listOrganizationMemberRecipientCandidatesReturns,
+  handler: withOperationReadAdmission(
+    listOrganizationMemberRecipientCandidatesReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { organizationId: Id<"organization"> },
+    ) => {
+      await requireOrganizationFullAdminWithCtx(ctx, args.organizationId);
+
+      const memberships = await ctx.db
+        .query("organizationMember")
+        .withIndex("by_organizationId_userId", (q) =>
+          q.eq("organizationId", args.organizationId),
+        )
+        .take(ORGANIZATION_MEMBER_CANDIDATE_READ_CAP);
+
+      const users = await Promise.all(
+        memberships.map((membership) =>
+          ctx.db.get("athenaUser", membership.userId),
+        ),
+      );
+
+      const candidates: Array<{
+        userId: Id<"athenaUser">;
+        displayName: string;
+        email: string;
+        role: "full_admin" | "pos_only";
+        operationalRoles: Array<
+          "manager" | "front_desk" | "stylist" | "technician" | "cashier"
+        >;
+      }> = [];
+      for (let index = 0; index < memberships.length; index += 1) {
+        const user = users[index];
+        if (!user) continue;
+        candidates.push({
+          userId: user._id,
+          displayName: memberDisplayName(user),
+          email: user.email,
+          role: memberships[index]!.role,
+          operationalRoles: memberships[index]!.operationalRoles ?? [],
+        });
+      }
+
+      return candidates;
     },
   ),
 });
