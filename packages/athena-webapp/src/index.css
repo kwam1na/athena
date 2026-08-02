@@ -313,7 +313,25 @@
      `h-svh`, which `zoom` would otherwise scale to 80% and clip. */
   @media (min-width: 768px) {
     html.app-scaled {
-      zoom: 0.95;
+      --app-zoom: 0.95;
+      zoom: var(--app-zoom);
+    }
+
+    /* Radix positions poppers with a `position: fixed` wrapper whose transform
+       is computed from `getBoundingClientRect` — which already accounts for the
+       root zoom — while the transform itself is then scaled by that same zoom.
+       The result drifts by (1 - zoom) of the distance from the origin, so a
+       tooltip in a right-hand table column lands ~70px off. Cancelling the zoom
+       on the wrapper puts the transform back in the coordinate space it was
+       measured in; the inner content re-applies it so poppers stay at app
+       scale. Affects every popper: tooltip, popover, dropdown, select, context
+       menu. */
+    html.app-scaled [data-radix-popper-content-wrapper] {
+      zoom: calc(1 / var(--app-zoom));
+    }
+
+    html.app-scaled [data-radix-popper-content-wrapper] > * {
+      zoom: var(--app-zoom);
     }
   }
 
