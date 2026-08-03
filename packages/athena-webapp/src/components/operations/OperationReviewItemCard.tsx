@@ -20,6 +20,7 @@ type OperationReviewItemCardProps = {
   contextLabelClassName?: string;
   description?: string | null;
   detailsSlot?: ReactNode;
+  density?: "compact" | "default";
   headerActionSlot?: ReactNode;
   itemId: string;
   metadataEntries?: OperationReviewMetadataEntry[];
@@ -41,6 +42,7 @@ export function OperationReviewItemCard({
   contextLabelClassName,
   description,
   detailsSlot,
+  density = "default",
   headerActionSlot,
   itemId,
   metadataEntries = [],
@@ -90,13 +92,15 @@ export function OperationReviewItemCard({
           "rounded-lg border border-border/80 bg-surface-raised p-layout-md shadow-surface transition-[border-color,box-shadow] duration-standard ease-standard hover:border-border",
         presentation === "list" &&
           cn(
-            "border-b border-border/70 px-layout-md py-layout-lg transition-colors duration-fast ease-standard last:border-b-0",
+            "border-b border-border/70 px-layout-md transition-colors duration-fast ease-standard last:border-b-0",
+            density === "compact" ? "py-layout-sm" : "py-layout-lg",
             isExpanded
               ? "bg-muted/20"
               : "bg-transparent hover:bg-muted/15",
           ),
         className,
       )}
+      data-density={density}
     >
       <div
         className={cn(
@@ -157,16 +161,33 @@ export function OperationReviewItemCard({
       {summaryEntries.length > 0 && !isExpanded ? (
         <dl
           className={cn(
-            "grid gap-x-layout-lg gap-y-layout-sm border-t border-border/60 text-sm sm:grid-cols-2 lg:grid-cols-4",
-            presentation === "list"
-              ? "mt-layout-md pt-layout-md"
-              : "mt-layout-sm pt-layout-sm",
+            density === "compact"
+              ? cn(
+                  "mt-layout-xs flex flex-wrap gap-x-layout-md gap-y-1 text-xs text-muted-foreground",
+                  selectionSlot && "pl-7",
+                )
+              : "grid gap-x-layout-lg gap-y-layout-sm border-t border-border/60 text-sm sm:grid-cols-2 lg:grid-cols-4",
+            density !== "compact" &&
+              (presentation === "list"
+                ? "mt-layout-md pt-layout-md"
+                : "mt-layout-sm pt-layout-sm"),
           )}
         >
           {summaryEntries.map((entry) => (
-            <div key={`${itemId}-summary-${entry.label}`} className="min-w-0">
+            <div
+              key={`${itemId}-summary-${entry.label}`}
+              className={cn(
+                "min-w-0",
+                density === "compact" && "flex items-baseline gap-1.5",
+              )}
+            >
               <dt className="text-xs text-muted-foreground">{entry.label}</dt>
-              <dd className="mt-1 truncate font-medium text-foreground">
+              <dd
+                className={cn(
+                  "font-medium text-foreground",
+                  density === "compact" ? "truncate" : "mt-1 truncate",
+                )}
+              >
                 {entry.value}
               </dd>
             </div>

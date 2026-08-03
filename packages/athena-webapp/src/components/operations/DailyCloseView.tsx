@@ -316,6 +316,7 @@ const bucketTabValues: BucketStatus[] = [
   "review",
 ];
 const DAILY_CLOSE_ITEMS_PER_PAGE = 5;
+const COMPACT_CARRY_FORWARD_ITEMS_PER_PAGE = 10;
 const TRANSACTION_REPORT_SEARCH_VALUE = "transactions";
 
 type BucketConfig = {
@@ -2443,6 +2444,7 @@ function DailyCloseItemCard({
   actionSlot,
   canViewFinancialDetails,
   currency,
+  density = "default",
   item,
   orgUrlSlug,
   selectable,
@@ -2453,6 +2455,7 @@ function DailyCloseItemCard({
   actionSlot?: ReactNode;
   canViewFinancialDetails: boolean;
   currency: string;
+  density?: "compact" | "default";
   item: DailyCloseItem;
   onSelectedChange?: (selected: boolean) => void;
   orgUrlSlug: string;
@@ -2517,6 +2520,7 @@ function DailyCloseItemCard({
       combinedHeading={rowHeading}
       contextLabel={contextLabel}
       description={description}
+      density={density}
       headerActionSlot={sourceAction}
       itemId={itemId}
       metadataEntries={showMetadataDetails ? metadataEntries : []}
@@ -2532,8 +2536,10 @@ function DailyCloseItemCard({
         ) : null
       }
       badgeSlot={badgeSlot}
-      showCollapsedDescription={showCollapsedDescription}
-      stackDescription
+      showCollapsedDescription={
+        density === "compact" ? false : showCollapsedDescription
+      }
+      stackDescription={density !== "compact"}
       title={title}
     />
   );
@@ -2839,14 +2845,17 @@ function BucketSection({
         : status === "carry-forward"
           ? RotateCcw
           : CheckCircle2;
-  const pageCount = Math.max(
-    Math.ceil(items.length / DAILY_CLOSE_ITEMS_PER_PAGE),
-    1,
-  );
+  const useCompactCarryForwardRows =
+    status === "carry-forward" &&
+    items.length > DAILY_CLOSE_ITEMS_PER_PAGE;
+  const itemsPerPage = useCompactCarryForwardRows
+    ? COMPACT_CARRY_FORWARD_ITEMS_PER_PAGE
+    : DAILY_CLOSE_ITEMS_PER_PAGE;
+  const pageCount = Math.max(Math.ceil(items.length / itemsPerPage), 1);
   const clampedPage = Math.min(page, pageCount);
   const paginatedItems = items.slice(
-    (clampedPage - 1) * DAILY_CLOSE_ITEMS_PER_PAGE,
-    clampedPage * DAILY_CLOSE_ITEMS_PER_PAGE,
+    (clampedPage - 1) * itemsPerPage,
+    clampedPage * itemsPerPage,
   );
   const handlePageChange = (nextPage: number) => {
     onPageChange(Math.min(Math.max(nextPage, 1), pageCount));
@@ -2876,7 +2885,10 @@ function BucketSection({
       </OperationReviewBucketHeader>
 
       <OperationReviewBucketBody
-        className={status === "ready" ? "pt-layout-md" : undefined}
+        className={cn(
+          status === "ready" && "pt-layout-md",
+          useCompactCarryForwardRows && "space-y-0 p-0",
+        )}
         hasItems={items.length > 0}
       >
         {items.length === 0 ? (
@@ -2929,6 +2941,7 @@ function BucketSection({
                 }
                 canViewFinancialDetails={canViewFinancialDetails}
                 currency={currency}
+                density={useCompactCarryForwardRows ? "compact" : "default"}
                 item={item}
                 key={getItemId(item)}
                 onSelectedChange={(isSelected) => {
@@ -2953,12 +2966,12 @@ function BucketSection({
           })
         )}
       </OperationReviewBucketBody>
-      {status !== "ready" && items.length > DAILY_CLOSE_ITEMS_PER_PAGE ? (
+      {status !== "ready" && items.length > itemsPerPage ? (
         <ListPagination
           onPageChange={handlePageChange}
           page={clampedPage}
           pageCount={pageCount}
-          pageSize={DAILY_CLOSE_ITEMS_PER_PAGE}
+          pageSize={itemsPerPage}
           totalItems={items.length}
         />
       ) : null}

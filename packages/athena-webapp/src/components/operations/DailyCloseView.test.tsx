@@ -2149,6 +2149,71 @@ describe("DailyCloseViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("compresses multi-page carry-forward work without hiding its context", () => {
+    const carryForwardItems = Array.from({ length: 11 }, (_, index) => ({
+      carryForwardWorkItemIds: [`carry-inventory-review-${index + 1}`],
+      category: "open_work",
+      id: `carry-inventory-review-group-${index + 1}`,
+      key: `carry-inventory-review-group-${index + 1}`,
+      message:
+        "Open operational work will carry forward after the end of day review.",
+      metadata: {
+        oldestActionableAt: Date.UTC(2026, 4, index + 1, 9),
+        priority: "high",
+        status: "open",
+        type: "synced_sale_inventory_review",
+      },
+      statusLabel: "Carry forward",
+      subject: {
+        id: `carry-inventory-review-${index + 1}`,
+        label: `Review inventory for product ${index + 1}`,
+        type: "logical_operational_work_group",
+      },
+      title: `Review inventory for product ${index + 1}`,
+    }));
+
+    renderContent({
+      ...readySnapshot,
+      carryForwardItems,
+      status: "carry_forward",
+      summary: {
+        ...baseSummary,
+        carryForwardCount: carryForwardItems.length,
+      },
+    });
+
+    const carryForwardRegion = screen.getByRole("region", {
+      name: "Carry-forward items",
+    });
+    const firstRow = within(carryForwardRegion)
+      .getByText("Review inventory for Product 1")
+      .closest("article");
+
+    expect(firstRow).not.toBeNull();
+    expect(firstRow).toHaveAttribute("data-density", "compact");
+    expect(
+      within(carryForwardRegion).queryByText(
+        "Open operational work will carry forward after the end of day review.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(within(firstRow as HTMLElement).getByText("High")).toBeInTheDocument();
+    expect(
+      within(firstRow as HTMLElement).getByText("Synced sale inventory"),
+    ).toBeInTheDocument();
+    expect(
+      within(firstRow as HTMLElement).getByText(/open since/i),
+    ).toBeInTheDocument();
+    expect(
+      within(carryForwardRegion).getByText("Review inventory for Product 10"),
+    ).toBeInTheDocument();
+    expect(
+      within(carryForwardRegion).queryByText("Review inventory for Product 11"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(carryForwardRegion).getByText("Showing 1-10 of 11"),
+    ).toBeInTheDocument();
+  });
+
   it("routes carry-forward item completion through the resolver action", async () => {
     const user = userEvent.setup();
     const onResolveCarryForward = vi.fn(async () =>
