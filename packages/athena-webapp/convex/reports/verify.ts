@@ -72,6 +72,17 @@ import {
  *    result.
  *
  * ---------------------------------------------------------------------------
+ * UNVERIFIED IS NOT MISMATCHED
+ * ---------------------------------------------------------------------------
+ * A field whose source-side expectation could not be established is reported
+ * on `unverifiedFields`, never in `differences`. `matches: true` means
+ * "everything CHECKED agreed" — read it together with `unverifiedFields`, and
+ * treat `matches: true` plus a non-empty list as partial verification. The
+ * alternative, which this module used to do, was to fall back to an expected
+ * value of 0 and emit a difference against the real folded total: monitoring
+ * output in which a cap and a genuine data discrepancy are indistinguishable.
+ *
+ * ---------------------------------------------------------------------------
  * ESCALATION — void sign convention
  * ---------------------------------------------------------------------------
  * The POS emitter carries `void` amounts as POSITIVE magnitudes
@@ -117,23 +128,63 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const STOREFRONT_REFUND_LOOKBACK_MS = 90 * DAY_MS;
 
 /**
- * How far back an allocation may have been RECORDED and still contribute to the
- * target day.
+ * How far back an allocation may have been RECORDED and still have its
+ * REVERSAL land on the target day.
  *
  * `paymentAllocation` is indexed on `recordedAt` only, but a row contributes to
  * the day at two instants: its original event at `recordedAt`, and — when it is
  * voided with a server timestamp — its reversal at `voidedAt`. A row voided
- * today may therefore have been recorded well before today. This lookback is
- * the same device the storefront refund scan already uses: it keeps the read
- * bounded to the VERIFIED PERIOD rather than to the store's lifetime, so a
- * store's five-hundredth allocation ever does not make every later day
- * permanently unverifiable.
+ * today may therefore have been recorded well before today.
+ *
+ * This lookback governs ONLY the reversal-detection read. The allocations that
+ * carry the period's own payment posture are read by their own in-period scan
+ * (see `VERIFY_MAX_PAYMENT_ALLOCATIONS_IN_PERIOD`), so exhausting this window
+ * costs reversal detection and nothing else.
  *
  * KNOWN BLIND SPOT (deliberate): a reversal of a row recorded more than this
  * far in the past is invisible to the verifier. That is bounded staleness, not
  * a silent partial total — the same trade the storefront lane documents.
  */
 const PAYMENT_VOID_LOOKBACK_MS = 90 * DAY_MS;
+
+/**
+ * Payment allocation ceilings.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY TWO NUMBERS AND NOT `VERIFY_MAX_DOCS_PER_DOMAIN`
+ * ---------------------------------------------------------------------------
+ * Until 2026-08-02 the payment lane read `[startAt - 90d, endAt]` under the
+ * 500-doc per-domain cap. Measured on production (Wigclub, store
+ * nn7byz68a3j4tfjvgdf9evpt3n78kk38, 2026-08-02) that window held 1,050 rows —
+ * roughly 12 allocations/day — so EVERY day of the week returned
+ * `incomplete/source_cap_exceeded` and the whole payment posture became
+ * unreadable, even though the rows the period actually needed numbered in the
+ * dozens. One over-wide read was costing the entire lane.
+ *
+ * The scan is now two reads with separate bounds, because they answer
+ * different questions and fail differently:
+ *
+ *  - IN-PERIOD (`recordedAt` within the candidate window): the rows that carry
+ *    the period's payment posture. The candidate window is one operating day
+ *    plus ±18h of slack, i.e. ~2.5 days ≈ 30 rows at the measured rate. The
+ *    ceiling is 5,000 — ~2,000 allocations/day, ~165x the measured rate and
+ *    10x the old per-domain cap. Exceeding it is an honest `incomplete`,
+ *    because a partial in-period read is a lower bound, never a total.
+ *
+ *  - REVERSAL LOOKBACK (`recordedAt` before the window, back
+ *    `PAYMENT_VOID_LOOKBACK_MS`): read newest-first, since a row voided in the
+ *    period is far likelier to be recent. 90 days at the measured 12/day is
+ *    ~1,080 rows; the ceiling is 3,000 — ~33/day, ~2.8x measured. Exceeding it
+ *    degrades ONLY reversal detection (see `VerifyPaymentPosture.reversalLookback`),
+ *    never the in-period posture.
+ *
+ * Read budget for the payment lane, per day: at most
+ * (5,000 + 1) + (3,000 + 1) index-backed documents, and in practice the
+ * measured ~30. Both reads are `.take`-bounded range scans on
+ * `by_storeId_recordedAt`; neither collects.
+ */
+export const VERIFY_MAX_PAYMENT_ALLOCATIONS_IN_PERIOD = 5_000;
+export const VERIFY_MAX_PAYMENT_REVERSAL_LOOKBACK_DOCS = 3_000;
 
 // ---------------------------------------------------------------------------
 // Result shapes
@@ -176,6 +227,21 @@ export type VerifyPaymentPosture = {
   unsettledMinor: number | null;
   allocationCoverage: "complete" | "unknown";
   hasInvalidAllocation: boolean;
+  /**
+   * The reversal-detection lane, reported on its own so that a store with a
+   * long allocation history still gets a verified IN-PERIOD posture.
+   *
+   * `incomplete` means: allocations recorded before the period exceeded
+   * `VERIFY_MAX_PAYMENT_REVERSAL_LOOKBACK_DOCS`, so a void landing in the
+   * period against an older allocation may have gone unseen. Everything
+   * derived from in-period rows alone (`paymentsCollectedMinor`) still holds;
+   * everything a missed reversal could move is reported as unverified rather
+   * than as a difference.
+   */
+  reversalLookback: {
+    outcome: "complete" | "incomplete";
+    reason: "complete" | "lookback_cap_exceeded";
+  };
 };
 
 export type VerifyPaymentDifference = {
@@ -194,8 +260,66 @@ export type VerifyDifference = {
   actual: number;
 };
 
+/**
+ * Fields whose source-side expectation can be UNKNOWN rather than wrong.
+ *
+ * An unchecked field is not a differing field. Everything named here is
+ * payment-side, because the payment lane is the only one whose expectation can
+ * be withheld while the rest of the day still verifies.
+ */
+export const VERIFY_PAYMENT_METRIC_KEYS = [
+  "paymentsCollectedMinor",
+  "paymentsRefundedMinor",
+  "paymentAllocatedMinor",
+] as const satisfies readonly (keyof VerifiedMetrics)[];
+
+export const VERIFY_PAYMENT_POSTURE_FIELDS = [
+  "paymentUnsettledMinor",
+  "paymentAllocationCoverage",
+  "paymentAllocationOmittedMinor",
+  "paymentHasInvalidAllocation",
+] as const satisfies readonly VerifyPaymentDifference["field"][];
+
+export type VerifyUnverifiedField =
+  | (typeof VERIFY_PAYMENT_METRIC_KEYS)[number]
+  | (typeof VERIFY_PAYMENT_POSTURE_FIELDS)[number];
+
+/**
+ * Which fields this posture declines to make a claim about.
+ *
+ * Two distinct degradations, deliberately unequal:
+ *  - the in-period lane did not complete → nothing payment-side was checked;
+ *  - only the reversal lookback was exhausted → in-period COLLECTION still
+ *    holds (it cannot be moved by an unseen historical void), but anything a
+ *    missed reversal could move — refunds, allocation, and every posture field
+ *    derived from them — is withheld.
+ */
+export function unverifiedPaymentFields(
+  posture: VerifyPaymentPosture,
+): VerifyUnverifiedField[] {
+  if (posture.outcome === "incomplete") {
+    return [...VERIFY_PAYMENT_METRIC_KEYS, ...VERIFY_PAYMENT_POSTURE_FIELDS];
+  }
+  if (posture.reversalLookback.outcome === "incomplete") {
+    return [
+      ...VERIFY_PAYMENT_METRIC_KEYS.filter(
+        (field) => field !== "paymentsCollectedMinor",
+      ),
+      ...VERIFY_PAYMENT_POSTURE_FIELDS,
+    ];
+  }
+  return [];
+}
+
 export type VerifyDayResult = {
   operatingDate: string;
+  /**
+   * Everything CHECKED agreed.
+   *
+   * `matches: true` with a non-empty `unverifiedFields` is PARTIAL
+   * verification, not a clean bill of health: the named fields were never
+   * compared. Alerting must read the two together.
+   */
   matches: boolean;
   differences: VerifyDifference[];
   factCount: number;
@@ -203,6 +327,13 @@ export type VerifyDayResult = {
   expected: VerifiedMetrics;
   paymentPosture: VerifyPaymentPosture;
   paymentDifferences: VerifyPaymentDifference[];
+  /**
+   * Fields no comparison was made on, because the source side could not be
+   * established. These NEVER appear in `differences` or `paymentDifferences`
+   * and never flip `matches` — "we could not check payments" must not be
+   * readable as "payments are wrong".
+   */
+  unverifiedFields: VerifyUnverifiedField[];
   /** A domain scan hit its bound; `expected` is a lower bound, not a total. */
   truncated: boolean;
 };
@@ -229,9 +360,7 @@ export type VerifyCurrentWeekResult =
   | {
       outcome: "incomplete";
       reason:
-        | "payment_source_incomplete"
         | "source_cap_exceeded"
-        | "invalid_payment_allocation"
         /**
          * An oversized-group repair is actively re-keying Open Work. Group
          * identity is mid-flight, so an independent recount would compare two
@@ -247,12 +376,21 @@ export type VerifyCurrentWeekResult =
       cycleStartDate: string;
       cycleEndDate: string;
       daysChecked: number;
+      /**
+       * Everything CHECKED agreed. As on `VerifyDayResult`, `matches: true`
+       * alongside a non-empty `unverifiedFields` is partial verification.
+       */
       matches: boolean;
       scheduleMatches: boolean;
       includedDifferences: VerifyDifference[];
       outsideScheduleDifferences: VerifyDifference[];
       includedPaymentDifferences: VerifyPaymentDifference[];
       outsideSchedulePaymentDifferences: VerifyPaymentDifference[];
+      /**
+       * Union across the frame's days of the fields no comparison was made
+       * on. Excluded from every difference list above by construction.
+       */
+      unverifiedFields: VerifyUnverifiedField[];
       truncated: boolean;
       varianceMatches: boolean;
       closeMatches: boolean;
@@ -544,23 +682,51 @@ export async function computeExpectedDay(
   // does not consult report facts or the fold's posture helper. A voided row
   // preserves its original event at recordedAt and contributes a separate
   // reversal only at the server-stamped voidedAt.
-  const allocations = await ctx.db
+  //
+  // TWO reads, bounded independently — see the ceiling constants for the
+  // production arithmetic behind the numbers. The in-period read carries the
+  // period's posture; the lookback read exists solely to catch a void that
+  // lands in-period against an older allocation, and its exhaustion is
+  // reported as a reversal-detection limitation rather than as an unverifiable
+  // payment lane.
+  const inPeriodAllocations = await ctx.db
+    .query("paymentAllocation")
+    .withIndex("by_storeId_recordedAt", (q) =>
+      q
+        .eq("storeId", storeId)
+        .gte("recordedAt", startAt)
+        .lte("recordedAt", endAt),
+    )
+    .take(VERIFY_MAX_PAYMENT_ALLOCATIONS_IN_PERIOD + 1);
+  const inPeriodCapExceeded =
+    inPeriodAllocations.length > VERIFY_MAX_PAYMENT_ALLOCATIONS_IN_PERIOD;
+  // A partial in-period read is a lower bound, never a total that happens to
+  // agree, so it degrades the whole day the way any capped domain scan does.
+  if (inPeriodCapExceeded) truncated = true;
+
+  // Newest-first: a row voided during the period is far likelier to be recent,
+  // so when this read caps out the rows it keeps are the ones that matter.
+  const reversalLookbackProbe = await ctx.db
     .query("paymentAllocation")
     .withIndex("by_storeId_recordedAt", (q) =>
       q
         .eq("storeId", storeId)
         .gte("recordedAt", startAt - PAYMENT_VOID_LOOKBACK_MS)
-        .lte("recordedAt", endAt),
+        .lt("recordedAt", startAt),
     )
-    .take(VERIFY_MAX_DOCS_PER_DOMAIN + 1);
-  const paymentCapExceeded = allocations.length > VERIFY_MAX_DOCS_PER_DOMAIN;
-  if (paymentCapExceeded) truncated = true;
+    .order("desc")
+    .take(VERIFY_MAX_PAYMENT_REVERSAL_LOOKBACK_DOCS + 1);
+  const reversalLookbackCapExceeded =
+    reversalLookbackProbe.length > VERIFY_MAX_PAYMENT_REVERSAL_LOOKBACK_DOCS;
 
   let paymentIncompleteReason: VerifyPaymentPosture["reason"] | null =
-    paymentCapExceeded ? "source_cap_exceeded" : null;
+    inPeriodCapExceeded ? "source_cap_exceeded" : null;
   let paymentOmittedMinor = 0;
 
-  for (const allocation of allocations.slice(0, VERIFY_MAX_DOCS_PER_DOMAIN)) {
+  for (const allocation of inPeriodAllocations.slice(
+    0,
+    VERIFY_MAX_PAYMENT_ALLOCATIONS_IN_PERIOD,
+  )) {
     const amountMinor = Math.abs(allocation.amount);
     const originalIsOnTargetDay = await onTargetDay(allocation.recordedAt);
 
@@ -599,6 +765,30 @@ export async function computeExpectedDay(
     }
   }
 
+  // Rows recorded BEFORE the window contribute nothing but their reversal:
+  // their original event belongs to an earlier day by construction.
+  for (const allocation of reversalLookbackProbe.slice(
+    0,
+    VERIFY_MAX_PAYMENT_REVERSAL_LOOKBACK_DOCS,
+  )) {
+    if (allocation.status !== "voided") continue;
+    const amountMinor = Math.abs(allocation.amount);
+    if (allocation.direction === "out") {
+      paymentIncompleteReason ??= "voided_refund_unsupported";
+      paymentOmittedMinor += amountMinor;
+      continue;
+    }
+    if (allocation.voidedAt === undefined) {
+      paymentIncompleteReason ??= "legacy_void_missing_timestamp";
+      paymentOmittedMinor += amountMinor;
+      continue;
+    }
+    if (await onTargetDay(allocation.voidedAt)) {
+      expected.paymentsRefundedMinor += amountMinor;
+      expected.paymentAllocatedMinor -= amountMinor;
+    }
+  }
+
   const eligibleMinor = Math.max(
     0,
     expected.paymentsCollectedMinor - expected.paymentsRefundedMinor,
@@ -623,6 +813,12 @@ export async function computeExpectedDay(
       : null,
     allocationCoverage: paymentComplete ? "complete" : "unknown",
     hasInvalidAllocation,
+    reversalLookback: {
+      outcome: reversalLookbackCapExceeded ? "incomplete" : "complete",
+      reason: reversalLookbackCapExceeded
+        ? "lookback_cap_exceeded"
+        : "complete",
+    },
   };
 
   return { expected, paymentPosture, truncated };
@@ -754,7 +950,13 @@ export async function verifyDayWithCtx(
     storeId,
     operatingDate,
   );
-  const differences = diffMetrics(expected, foldedMetrics(day));
+  // Withheld before diffing, not filtered after: a field the source side could
+  // not establish is never a candidate for disagreement.
+  const unverifiedFields = unverifiedPaymentFields(paymentPosture);
+  const unverified = new Set<string>(unverifiedFields);
+  const differences = diffMetrics(expected, foldedMetrics(day)).filter(
+    (difference) => !unverified.has(difference.field),
+  );
   const paymentDifferences = diffPaymentPosture(
     paymentPosture,
     day?.paymentPosture
@@ -766,7 +968,7 @@ export async function verifyDayWithCtx(
           paymentHasInvalidAllocation: day.paymentPosture.hasInvalidAllocation,
         }
       : null,
-  );
+  ).filter((difference) => !unverified.has(difference.field));
 
   return {
     dayStatus: day?.status ?? "missing",
@@ -774,12 +976,16 @@ export async function verifyDayWithCtx(
     expected,
     paymentDifferences,
     paymentPosture,
+    unverifiedFields,
     factCount: day?.factCount ?? 0,
+    // "Everything checked agreed". An incomplete payment lane no longer flips
+    // this on its own — it withdraws those fields from the comparison and says
+    // so in `unverifiedFields` instead. A capped in-period read still sets
+    // `truncated`, and a lower bound can never be blessed as a total.
     matches:
       !truncated &&
       differences.length === 0 &&
-      paymentDifferences.length === 0 &&
-      paymentPosture.outcome === "complete",
+      paymentDifferences.length === 0,
     operatingDate,
     truncated,
   };
@@ -1355,6 +1561,10 @@ export async function verifyCurrentWeekWithCtx(
   let includedPayment = zeroPaymentComparable();
   let outsideSchedulePayment = zeroPaymentComparable();
   const expectedNetByDate = new Map<string, number>();
+  // Union across the frame: one day that could not establish its payment
+  // source withholds that field for the week, because the weekly total is the
+  // sum of the days.
+  const unverified = new Set<VerifyUnverifiedField>();
   for (const date of period.dates) {
     const result = await computeExpectedDay(ctx, storeId, date.localDate);
     if (result.truncated) {
@@ -1368,19 +1578,11 @@ export async function verifyCurrentWeekWithCtx(
     }
     addMetrics(date.included ? included : outsideSchedule, result.expected);
     expectedNetByDate.set(date.localDate, result.expected.netSalesMinor);
-    if (result.paymentPosture.outcome === "incomplete") {
-      return {
-        cycleEndDate: current.cycleEndDate,
-        cycleStartDate: current.cycleStartDate,
-        daysChecked: period.dates.length,
-        outcome: "incomplete",
-        reason:
-          result.paymentPosture.reason === "source_cap_exceeded"
-            ? "source_cap_exceeded"
-            : result.paymentPosture.reason === "invalid_allocation"
-              ? "invalid_payment_allocation"
-              : "payment_source_incomplete",
-      };
+    // A day whose payment lane could not complete no longer sinks the whole
+    // week: it withdraws the fields it could not establish and the rest of the
+    // frame is still verified against sources.
+    for (const field of unverifiedPaymentFields(result.paymentPosture)) {
+      unverified.add(field);
     }
     if (date.included) {
       includedPayment = accumulatePayment(
@@ -1397,22 +1599,34 @@ export async function verifyCurrentWeekWithCtx(
 
   const projectedIncluded = weeklyVerifiedMetrics(current.included);
   const projectedOutside = weeklyVerifiedMetrics(current.outsideSchedule);
-  const includedDifferences = diffMetrics(included, projectedIncluded);
-  const outsideScheduleDifferences = diffMetrics(
+  const unverifiedFields = [...unverified];
+  const isChecked = (field: string) =>
+    !unverified.has(field as VerifyUnverifiedField);
+  /** Metric diffs with the withheld fields removed before anyone reads them. */
+  const checkedDifferences = (
+    expectedMetrics: VerifiedMetrics,
+    actualMetrics: VerifiedMetrics,
+  ): VerifyDifference[] =>
+    diffMetrics(expectedMetrics, actualMetrics).filter((difference) =>
+      isChecked(difference.field),
+    );
+  const includedDifferences = checkedDifferences(included, projectedIncluded);
+  const outsideScheduleDifferences = checkedDifferences(
     outsideSchedule,
     projectedOutside,
   );
   // Both sides are live: the expectation is accumulated from the day postures
   // recomputed above, and the actual side is what the weekly projection
-  // persisted. Every one of the four comparisons can fail.
+  // persisted. Every one of the four comparisons can fail — unless the day
+  // lanes withheld it, in which case it is unverified, not differing.
   const includedPaymentDifferences = diffPaymentPosture(
     includedPayment,
     storedWeeklyPayment(current.included),
-  );
+  ).filter((difference) => isChecked(difference.field));
   const outsideSchedulePaymentDifferences = diffPaymentPosture(
     outsideSchedulePayment,
     storedWeeklyPayment(current.outsideSchedule),
-  );
+  ).filter((difference) => isChecked(difference.field));
   const scheduleMatches =
     current.cycleStartDate === period.startDate &&
     current.cycleEndDate === period.endDate &&
@@ -1536,11 +1750,13 @@ export async function verifyCurrentWeekWithCtx(
       current.closePosture?.status === expectedClosePosture?.status
     : current.acceptedBaselineId === undefined &&
       current.closePosture === undefined;
+  // Withheld fields cannot argue for an amendment either: an amendment is a
+  // claim that the week MOVED, and a field nobody checked has not moved.
   const acceptedIncludedDifferences = accepted
-    ? diffMetrics(included, weeklyVerifiedMetrics(accepted.included))
+    ? checkedDifferences(included, weeklyVerifiedMetrics(accepted.included))
     : [];
   const acceptedOutsideDifferences = accepted
-    ? diffMetrics(
+    ? checkedDifferences(
         outsideSchedule,
         weeklyVerifiedMetrics(accepted.outsideSchedule),
       )
@@ -1559,9 +1775,11 @@ export async function verifyCurrentWeekWithCtx(
     : !expectsAmendment
       ? current.amendment === undefined
       : current.amendment !== undefined &&
-        diffMetrics(included, weeklyVerifiedMetrics(current.amendment.included))
-          .length === 0 &&
-        diffMetrics(
+        checkedDifferences(
+          included,
+          weeklyVerifiedMetrics(current.amendment.included),
+        ).length === 0 &&
+        checkedDifferences(
           outsideSchedule,
           weeklyVerifiedMetrics(current.amendment.outsideSchedule),
         ).length === 0 &&
@@ -1601,6 +1819,7 @@ export async function verifyCurrentWeekWithCtx(
     outsideSchedulePaymentDifferences,
     scheduleMatches,
     truncated: false,
+    unverifiedFields,
     varianceMatches,
   };
 }

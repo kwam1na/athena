@@ -575,7 +575,13 @@ describe("weekly source verification", () => {
     });
   });
 
-  it("keeps the weekly gate incomplete for an untimed legacy payment void", async () => {
+  /**
+   * REGRESSION — production, 2026-08-02. A day whose payment lane cannot
+   * complete used to sink the entire week to `incomplete`, discarding six
+   * verified lanes to say nothing about one. It now withholds the payment
+   * fields by name and verifies the rest.
+   */
+  it("withholds payment fields for an untimed legacy void, keeping the rest verified", async () => {
     const t = convexTest(schema, modules);
     const seeded = await t.run(async (ctx) => {
       const store = await seedStore(ctx);
@@ -616,12 +622,27 @@ describe("weekly source verification", () => {
       );
     });
     await t.run(async (ctx) => {
-      expect(await verifyCurrentWeekWithCtx(ctx, seeded.storeId)).toMatchObject(
-        {
-          daysChecked: 7,
-          outcome: "incomplete",
-          reason: "payment_source_incomplete",
-        },
+      const result = await verifyCurrentWeekWithCtx(ctx, seeded.storeId);
+      expect(result).toMatchObject({
+        daysChecked: 7,
+        includedPaymentDifferences: [],
+        outcome: "verified",
+        scheduleMatches: true,
+      });
+      if (result.outcome !== "verified") throw new Error("unreachable");
+      // The 2_000 collection the legacy void sits on is NOT reported as a
+      // discrepancy against the projection's 0 — it is reported as unchecked.
+      expect(
+        result.includedDifferences.filter((difference) =>
+          difference.field.startsWith("payment"),
+        ),
+      ).toEqual([]);
+      expect(result.unverifiedFields).toEqual(
+        expect.arrayContaining([
+          "paymentAllocatedMinor",
+          "paymentUnsettledMinor",
+          "paymentsCollectedMinor",
+        ]),
       );
     });
   });
