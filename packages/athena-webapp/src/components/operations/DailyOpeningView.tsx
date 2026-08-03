@@ -225,6 +225,7 @@ const bucketTabValues: BucketStatus[] = [
   "ready",
 ];
 const OPENING_REVIEW_ITEMS_PER_PAGE = 5;
+const COMPACT_OPENING_CARRY_FORWARD_ITEMS_PER_PAGE = 10;
 
 const statusCopy: Record<
   DailyOpeningStatus,
@@ -440,12 +441,22 @@ function formatMetadataValue(value: ReactNode, currency: string) {
 }
 
 function getMetadataLabel(item: DailyOpeningItem, label: string) {
+  const normalizedLabel = normalizeMetadataLabel(label);
+
   if (label === "operatingDate") {
     if (item.key === "daily_close:prior:missing") {
       return "Store day being opened";
     }
 
     return "Store day";
+  }
+
+  if (normalizedLabel === "oldestactionableat") {
+    return "Open since";
+  }
+
+  if (normalizedLabel === "type") {
+    return "Work type";
   }
 
   return humanizeMetadataLabel(label);
@@ -1084,6 +1095,7 @@ function ItemLink({
 
 function OpeningItemCard({
   currency,
+  density = "default",
   item,
   orgUrlSlug,
   requiresAcknowledgement,
@@ -1093,6 +1105,7 @@ function OpeningItemCard({
   onSelectedChange,
 }: {
   currency: string;
+  density?: "compact" | "default";
   item: DailyOpeningItem;
   onSelectedChange?: (selected: boolean) => void;
   orgUrlSlug: string;
@@ -1130,6 +1143,7 @@ function OpeningItemCard({
       contextLabel={contextLabel}
       collapsedMetadataEntries={metadataEntries}
       description={description}
+      density={density}
       itemId={itemId}
       presentation="list"
       selectionSlot={
@@ -1143,8 +1157,10 @@ function OpeningItemCard({
           />
         ) : null
       }
-      showCollapsedDescription={showCollapsedDescription}
-      stackDescription
+      showCollapsedDescription={
+        density === "compact" ? false : showCollapsedDescription
+      }
+      stackDescription={density !== "compact"}
       title={title}
     />
   );
@@ -1181,14 +1197,17 @@ function BucketSection({
   storeUrlSlug: string;
   title: string;
 }) {
-  const pageCount = Math.max(
-    Math.ceil(items.length / OPENING_REVIEW_ITEMS_PER_PAGE),
-    1,
-  );
+  const useCompactCarryForwardRows =
+    status === "carry-forward" &&
+    items.length > OPENING_REVIEW_ITEMS_PER_PAGE;
+  const itemsPerPage = useCompactCarryForwardRows
+    ? COMPACT_OPENING_CARRY_FORWARD_ITEMS_PER_PAGE
+    : OPENING_REVIEW_ITEMS_PER_PAGE;
+  const pageCount = Math.max(Math.ceil(items.length / itemsPerPage), 1);
   const clampedPage = Math.min(page, pageCount);
   const visibleItems = items.slice(
-    (clampedPage - 1) * OPENING_REVIEW_ITEMS_PER_PAGE,
-    clampedPage * OPENING_REVIEW_ITEMS_PER_PAGE,
+    (clampedPage - 1) * itemsPerPage,
+    clampedPage * itemsPerPage,
   );
   const handlePageChange = (nextPage: number) => {
     onPageChange(Math.min(Math.max(nextPage, 1), pageCount));
@@ -1230,7 +1249,10 @@ function BucketSection({
         </Badge>
       </OperationReviewBucketHeader>
 
-      <OperationReviewBucketBody hasItems={items.length > 0}>
+      <OperationReviewBucketBody
+        className={useCompactCarryForwardRows ? "space-y-0 p-0" : undefined}
+        hasItems={items.length > 0}
+      >
         {items.length === 0 ? (
           <p className="px-layout-md text-sm leading-6 text-muted-foreground">
             {emptyText}
@@ -1242,6 +1264,7 @@ function BucketSection({
             return (
               <OpeningItemCard
                 currency={currency}
+                density={useCompactCarryForwardRows ? "compact" : "default"}
                 item={item}
                 key={getItemId(item)}
                 onSelectedChange={(isSelected) => {
@@ -1262,12 +1285,12 @@ function BucketSection({
           })
         )}
       </OperationReviewBucketBody>
-      {items.length > OPENING_REVIEW_ITEMS_PER_PAGE ? (
+      {items.length > itemsPerPage ? (
         <ListPagination
           onPageChange={handlePageChange}
           page={clampedPage}
           pageCount={pageCount}
-          pageSize={OPENING_REVIEW_ITEMS_PER_PAGE}
+          pageSize={itemsPerPage}
           totalItems={items.length}
         />
       ) : null}
