@@ -756,21 +756,24 @@ describe("DailyOpeningViewContent", () => {
 
     expect(screen.queryByText("Member Count")).not.toBeInTheDocument();
     expect(screen.queryByText("Source Count")).not.toBeInTheDocument();
-    // Operator-facing metadata still renders (Opening humanizes oldestActionableAt to
-    // "Oldest Actionable At"; the "Open since" label is EOD Review's rewrite).
+    // Operator-facing metadata still renders using the same concise labels as EOD Review.
     expect(screen.getAllByText("Priority").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Oldest Actionable At").length).toBeGreaterThan(
-      0,
-    );
+    expect(screen.getAllByText("Open since").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Work type").length).toBeGreaterThan(0);
   });
 
-  it("paginates opening tab content in five-item pages", async () => {
+  it("compresses multi-page carry-forward work into ten-item pages", async () => {
     const user = userEvent.setup();
-    const carryForwardItems = Array.from({ length: 7 }, (_, index) => ({
+    const carryForwardItems = Array.from({ length: 11 }, (_, index) => ({
       category: "operational_work_item",
       description: `Carry-forward detail ${index + 1}.`,
       id: `carry-${index + 1}`,
       key: `work-${index + 1}`,
+      metadata: {
+        oldestActionableAt: Date.UTC(2026, 6, index + 1, 9),
+        priority: "high",
+        type: "synced_sale_inventory_review",
+      },
       statusLabel: "Open",
       title: `Carry-forward item ${index + 1}`,
     }));
@@ -799,13 +802,28 @@ describe("DailyOpeningViewContent", () => {
       within(carryForwardRegion).getByText("Carry-forward item 1"),
     ).toBeInTheDocument();
     expect(
-      within(carryForwardRegion).getByText("Carry-forward item 5"),
+      within(carryForwardRegion).getByText("Carry-forward item 10"),
     ).toBeInTheDocument();
     expect(
-      within(carryForwardRegion).queryByText("Carry-forward item 6"),
+      within(carryForwardRegion).queryByText("Carry-forward item 11"),
     ).not.toBeInTheDocument();
     expect(
-      within(carryForwardRegion).getByText("Showing 1-5 of 7"),
+      within(carryForwardRegion).getByText("Showing 1-10 of 11"),
+    ).toBeInTheDocument();
+    const firstRow = within(carryForwardRegion)
+      .getByText("Carry-forward item 1")
+      .closest("article");
+    expect(firstRow).not.toBeNull();
+    expect(firstRow).toHaveAttribute("data-density", "compact");
+    expect(
+      within(firstRow as HTMLElement).queryByText("Carry-forward detail 1."),
+    ).not.toBeInTheDocument();
+    expect(within(firstRow as HTMLElement).getByText("High")).toBeInTheDocument();
+    expect(
+      within(firstRow as HTMLElement).getByText("Synced sale inventory"),
+    ).toBeInTheDocument();
+    expect(
+      within(firstRow as HTMLElement).getByText(/open since/i),
     ).toBeInTheDocument();
 
     const nextPageButton = within(carryForwardRegion).getByRole("button", {
@@ -844,13 +862,10 @@ describe("DailyOpeningViewContent", () => {
       within(restoredCarryForwardRegion).queryByText("Carry-forward item 1"),
     ).not.toBeInTheDocument();
     expect(
-      within(restoredCarryForwardRegion).getByText("Carry-forward item 6"),
+      within(restoredCarryForwardRegion).getByText("Carry-forward item 11"),
     ).toBeInTheDocument();
     expect(
-      within(restoredCarryForwardRegion).getByText("Carry-forward item 7"),
-    ).toBeInTheDocument();
-    expect(
-      within(restoredCarryForwardRegion).getByText("Showing 6-7 of 7"),
+      within(restoredCarryForwardRegion).getByText("Showing 11-11 of 11"),
     ).toBeInTheDocument();
   });
 
