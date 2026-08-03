@@ -13,6 +13,8 @@ import {
   diffMetrics,
   VERIFY_MAX_DAYS,
   VERIFY_MAX_DOCS_PER_DOMAIN,
+  VERIFY_MAX_PAYMENT_ALLOCATIONS_IN_PERIOD,
+  VERIFY_MAX_PAYMENT_REVERSAL_LOOKBACK_DOCS,
   verifyDayWithCtx,
   verifyStoreSummaryWithCtx,
 } from "./verify";
@@ -645,11 +647,72 @@ describe("verify — payment posture", () => {
     });
   });
 
-  it("refuses a period that itself exceeds the allocation cap", async () => {
+  /**
+   * REGRESSION — production, 2026-08-02.
+   *
+   * The allocation scan used to read `[startAt - 90d, endAt]` under the
+   * 500-doc per-domain cap. On the live store that window held 1,050 rows, so
+   * every day of the week returned `incomplete/source_cap_exceeded` and the
+   * payment posture was unreadable. In-period volume alone, well past the old
+   * cap, must now verify.
+   */
+  it("verifies a day whose in-period allocations exceed the old 500 cap", async () => {
+    const COLLECTIONS = 1_200;
+    expect(COLLECTIONS).toBeGreaterThan(VERIFY_MAX_DOCS_PER_DOMAIN);
     const t = convexTest(schema, modules);
     const seeded = await t.run(async (ctx) => {
       const store = await seedStore(ctx);
-      for (let index = 0; index <= VERIFY_MAX_DOCS_PER_DOMAIN; index += 1) {
+      for (let index = 0; index < COLLECTIONS; index += 1) {
+        await seedPaymentAllocation(ctx, store, {
+          amount: 100,
+          recordedAt: at("09:00") + index,
+          targetId: `inside-${index}`,
+        });
+      }
+      await seedPaymentAllocation(ctx, store, {
+        amount: 5_000,
+        direction: "out",
+        recordedAt: at("16:00"),
+        targetId: "refund",
+      });
+      return store;
+    });
+
+    await t.run(async (ctx: QueryCtx) => {
+      const result = await verifyDayWithCtx(ctx, seeded.storeId, DAY1);
+      expect(result.truncated).toBe(false);
+      expect(result.expected).toMatchObject({
+        paymentAllocatedMinor: 115_000,
+        paymentsCollectedMinor: 120_000,
+        paymentsRefundedMinor: 5_000,
+      });
+      expect(result.paymentPosture).toMatchObject({
+        allocationCoverage: "complete",
+        coveredMinor: 115_000,
+        eligibleMinor: 115_000,
+        omittedMinor: 0,
+        outcome: "complete",
+        reason: "complete",
+        reversalLookback: { outcome: "complete", reason: "complete" },
+        unsettledMinor: 0,
+      });
+      // Nothing was withheld: this is a full verification, not a partial one.
+      expect(result.unverifiedFields).toEqual([]);
+    });
+    // Deliberately large fixtures: these three tests seed thousands of
+    // allocations to exercise the real ceilings, which outruns the default
+    // 5s budget when the whole suite is competing for workers.
+  }, 60_000);
+
+  it("refuses a period that exceeds the in-period allocation ceiling", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      for (
+        let index = 0;
+        index <= VERIFY_MAX_PAYMENT_ALLOCATIONS_IN_PERIOD;
+        index += 1
+      ) {
         await seedPaymentAllocation(ctx, store, {
           amount: 100,
           recordedAt: at("09:00") + index,
@@ -664,11 +727,110 @@ describe("verify — payment posture", () => {
       // A capped read is a lower bound, never a total that happens to agree.
       expect(result.truncated).toBe(true);
       expect(result.matches).toBe(false);
+      expect(result.expected.paymentsCollectedMinor).toBeLessThan(
+        (VERIFY_MAX_PAYMENT_ALLOCATIONS_IN_PERIOD + 1) * 100,
+      );
       expect(result.paymentPosture).toMatchObject({
         allocationCoverage: "unknown",
         outcome: "incomplete",
         reason: "source_cap_exceeded",
         unsettledMinor: null,
+      });
+      // Incomplete, therefore unverified — never presented as a difference.
+      expect(
+        result.differences.filter((difference) =>
+          difference.field.startsWith("payment"),
+        ),
+      ).toEqual([]);
+      expect(result.unverifiedFields).toContain("paymentsCollectedMinor");
+    });
+  }, 60_000);
+
+  it("degrades only reversal detection when the lookback bound is exhausted", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      // A long allocation history inside the reversal lookback window.
+      for (
+        let index = 0;
+        index <= VERIFY_MAX_PAYMENT_REVERSAL_LOOKBACK_DOCS;
+        index += 1
+      ) {
+        await seedPaymentAllocation(ctx, store, {
+          amount: 100,
+          recordedAt: at("09:00") - 30 * 86_400_000 + index,
+          targetId: `historical-${index}`,
+        });
+      }
+      await seedPaymentAllocation(ctx, store, {
+        amount: 9_000,
+        recordedAt: at("09:00"),
+        targetId: "inside",
+      });
+      return store;
+    });
+
+    await t.run(async (ctx: QueryCtx) => {
+      const result = await verifyDayWithCtx(ctx, seeded.storeId, DAY1);
+      // The in-period posture still verifies; only the reversal lane is bounded.
+      expect(result.truncated).toBe(false);
+      expect(result.expected.paymentsCollectedMinor).toBe(9_000);
+      expect(result.paymentPosture).toMatchObject({
+        outcome: "complete",
+        reason: "complete",
+        reversalLookback: {
+          outcome: "incomplete",
+          reason: "lookback_cap_exceeded",
+        },
+      });
+      // Collection cannot be moved by an unseen historical void; anything a
+      // missed reversal could move is withheld, and named.
+      expect(result.unverifiedFields).not.toContain("paymentsCollectedMinor");
+      expect(result.unverifiedFields).toEqual(
+        expect.arrayContaining([
+          "paymentAllocatedMinor",
+          "paymentAllocationCoverage",
+          "paymentsRefundedMinor",
+        ]),
+      );
+    });
+  }, 60_000);
+
+  it("detects a void landing in-period against an older allocation", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      await seedPaymentAllocation(ctx, store, {
+        amount: 5_000,
+        recordedAt: at("09:00"),
+        targetId: "inside",
+      });
+      const olderId = await seedPaymentAllocation(ctx, store, {
+        amount: 3_000,
+        recordedAt: at("09:00") - 30 * 86_400_000,
+        status: "voided",
+        targetId: "older",
+      });
+      await ctx.db.patch("paymentAllocation", olderId, {
+        voidedAt: at("11:00"),
+      });
+      return store;
+    });
+
+    await t.run(async (ctx: QueryCtx) => {
+      const { expected, paymentPosture } = await computeExpectedDay(
+        ctx,
+        seeded.storeId,
+        DAY1,
+      );
+      expect(expected).toMatchObject({
+        paymentAllocatedMinor: 2_000,
+        paymentsCollectedMinor: 5_000,
+        paymentsRefundedMinor: 3_000,
+      });
+      expect(paymentPosture).toMatchObject({
+        outcome: "complete",
+        reversalLookback: { outcome: "complete" },
       });
     });
   });
@@ -703,6 +865,122 @@ describe("verify — payment posture", () => {
         reason: "invalid_allocation",
         unsettledMinor: null,
       });
+    });
+  });
+});
+
+/**
+ * REGRESSION — production, 2026-08-02.
+ *
+ * With the payment lane incomplete, `expected` fell back to 0 and the diff
+ * emitted `{ field: "paymentsCollectedMinor", expected: 0, actual: 396000 }`
+ * with `matches: false`. "We could not check" read exactly like "this is
+ * wrong", and a real mismatch was indistinguishable from a cap. These two
+ * tests are the proof that the cases are now distinguishable.
+ */
+describe("verify — unverified is not mismatched", () => {
+  /** A folded day carrying real payment totals and nothing else. */
+  async function seedFoldedPaymentDay(
+    ctx: MutationCtx,
+    seeded: SeededStore,
+    paymentsCollectedMinor: number,
+  ): Promise<void> {
+    await ctx.db.insert("reportDay", {
+      currency: "GHS",
+      factCount: 1,
+      flags: {
+        hasUncostedRevenue: false,
+        mixedCurrency: false,
+        quarantinedFactCount: 0,
+      },
+      foldVersion: 1,
+      grossProfitMinor: 0,
+      grossSalesMinor: 0,
+      lastFactRecordedAt: NOW,
+      netSalesMinor: 0,
+      operatingDate: DAY1,
+      paymentAllocatedMinor: paymentsCollectedMinor,
+      paymentPosture: {
+        allocatedMinor: paymentsCollectedMinor,
+        allocationCoverage: "complete",
+        allocationOmittedMinor: 0,
+        collectedMinor: paymentsCollectedMinor,
+        hasInvalidAllocation: false,
+        refundedMinor: 0,
+        unsettledMinor: 0,
+      },
+      paymentsCollectedMinor,
+      paymentsRefundedMinor: 0,
+      refundsMinor: 0,
+      status: "open",
+      storeId: seeded.storeId,
+      uncostedRevenueMinor: 0,
+      unitsReturned: 0,
+      unitsSold: 0,
+    });
+  }
+
+  it("withholds payment fields rather than diffing them against a fallback 0", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      // An untimed legacy void: the payment lane cannot complete.
+      await seedPaymentAllocation(ctx, store, {
+        amount: 2_000,
+        recordedAt: at("09:00"),
+        status: "voided",
+        targetId: "legacy",
+      });
+      await seedFoldedPaymentDay(ctx, store, 396_000);
+      return store;
+    });
+
+    await t.run(async (ctx: QueryCtx) => {
+      const result = await verifyDayWithCtx(ctx, seeded.storeId, DAY1);
+      expect(result.paymentPosture.outcome).toBe("incomplete");
+      // Not one payment field may masquerade as a discrepancy.
+      expect(result.differences).toEqual([]);
+      expect(result.paymentDifferences).toEqual([]);
+      expect(result.unverifiedFields).toEqual(
+        expect.arrayContaining([
+          "paymentAllocatedMinor",
+          "paymentAllocationCoverage",
+          "paymentAllocationOmittedMinor",
+          "paymentHasInvalidAllocation",
+          "paymentUnsettledMinor",
+          "paymentsCollectedMinor",
+          "paymentsRefundedMinor",
+        ]),
+      );
+      // Everything CHECKED agreed — which is partial verification, not a
+      // clean bill of health, and the field list is what says so.
+      expect(result.matches).toBe(true);
+      expect(result.unverifiedFields.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("still reports a genuine payment mismatch when the lane completes", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      await seedPaymentAllocation(ctx, store, {
+        amount: 9_000,
+        recordedAt: at("09:00"),
+        targetId: "settled",
+      });
+      await seedFoldedPaymentDay(ctx, store, 396_000);
+      return store;
+    });
+
+    await t.run(async (ctx: QueryCtx) => {
+      const result = await verifyDayWithCtx(ctx, seeded.storeId, DAY1);
+      expect(result.paymentPosture.outcome).toBe("complete");
+      expect(result.unverifiedFields).toEqual([]);
+      expect(result.differences).toEqual([
+        { actual: 396_000, expected: 9_000, field: "paymentsCollectedMinor" },
+        { actual: 396_000, expected: 9_000, field: "paymentAllocatedMinor" },
+      ]);
+      expect(result.matches).toBe(false);
     });
   });
 });
