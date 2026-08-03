@@ -1,5 +1,6 @@
 import { useQuery } from "convex/react";
 import { Link, useParams } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { ArrowDown, ArrowUpRight, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
@@ -11,6 +12,12 @@ import { ListPagination } from "@/components/common/ListPagination";
 import { ReportDateRangeField } from "./ReportDateRangeField";
 import { ReportMetricComparisonCrossfade } from "./ReportMetricComparisonCrossfade";
 import { useStableReportQuery } from "./useStableReportQuery";
+import { useReportsSharedDemoMode } from "./useReportsSharedDemoMode";
+import {
+  createSharedDemoSkuDayTransactions,
+  createSharedDemoSkuDetail,
+  isSharedDemoReportsSkuId,
+} from "@/components/shared-demo/sharedDemoReportsFixture";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -68,25 +75,37 @@ export function ReportsSkuDetailView({
   const currency = activeStore?.currency ?? "USD";
   const rangeKey = `${startDate}:${endDate}`;
 
+  const { isSharedDemo, useLiveQuery } = useReportsSharedDemoMode();
+  // The SKU id is a route param, so it can be anything at all. Only a
+  // shared-demo id reaches the fixture; everything else resolves to `null`,
+  // which is the same "no activity" state the live query produces.
+  const isDemoSku = isSharedDemo && isSharedDemoReportsSkuId(productSkuId);
+  const liveDetail = useQuery(
+    api.reports.queries.getSkuDetail,
+    activeStore?._id && useLiveQuery
+      ? {
+        storeId: activeStore._id,
+        productSkuId: productSkuId as Id<"productSku">,
+        startDate,
+        endDate,
+      }
+      : "skip",
+  );
+  const demoDetail = useMemo(
+    () =>
+      isSharedDemo
+        ? isDemoSku
+          ? createSharedDemoSkuDetail({ productSkuId, startDate, endDate })
+          : null
+        : undefined,
+    [endDate, isDemoSku, isSharedDemo, productSkuId, startDate],
+  );
   const {
     data: detail,
     dataContext: settledRangeKey,
     isInitialLoad,
     isRefreshing,
-  } = useStableReportQuery(
-    useQuery(
-      api.reports.queries.getSkuDetail,
-      activeStore?._id
-        ? {
-          storeId: activeStore._id,
-          productSkuId: productSkuId as Id<"productSku">,
-          startDate,
-          endDate,
-        }
-        : "skip",
-    ),
-    rangeKey,
-  );
+  } = useStableReportQuery(isSharedDemo ? demoDetail : liveDetail, rangeKey);
   const comparisonKey = settledRangeKey ?? rangeKey;
   const comparisonHelper = (
     currentValue: number | null | undefined,
@@ -136,9 +155,9 @@ export function ReportsSkuDetailView({
     (currentPage - 1) * REPORT_SKU_DETAIL_PAGE_SIZE,
     currentPage * REPORT_SKU_DETAIL_PAGE_SIZE,
   );
-  const transactionEvidenceResult = useQuery(
+  const liveTransactionEvidence = useQuery(
     api.reports.queries.listSkuDayTransactions,
-    activeStore?._id && transactionDate
+    activeStore?._id && transactionDate && useLiveQuery
       ? {
         storeId: activeStore._id,
         productSkuId: productSkuId as Id<"productSku">,
@@ -146,6 +165,21 @@ export function ReportsSkuDetailView({
       }
       : "skip",
   );
+  const demoTransactionEvidence = useMemo(
+    () =>
+      isSharedDemo && transactionDate
+        ? isDemoSku
+          ? createSharedDemoSkuDayTransactions({
+              productSkuId,
+              operatingDate: transactionDate,
+            })
+          : { transactions: [], truncated: false }
+        : undefined,
+    [isDemoSku, isSharedDemo, productSkuId, transactionDate],
+  );
+  const transactionEvidenceResult = isSharedDemo
+    ? demoTransactionEvidence
+    : liveTransactionEvidence;
   const transactionEvidence = transactionDate
     ? transactionEvidenceResult
     : undefined;

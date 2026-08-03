@@ -1,5 +1,6 @@
 import { useQuery } from "convex/react";
 import { useNavigate, useParams } from "@tanstack/react-router";
+import { useMemo } from "react";
 
 import { EmptyState } from "@/components/states/empty/empty-state";
 import { FadeIn } from "@/components/common/FadeIn";
@@ -16,6 +17,8 @@ import { ReportPeriodMetrics } from "./ReportPeriodMetrics";
 import { ReportFreshness } from "./ReportFreshness";
 import { ReportTrendChart } from "./ReportTrendChart";
 import { ReportTrustStrip } from "./ReportTrustStrip";
+import { useReportsSharedDemoMode } from "./useReportsSharedDemoMode";
+import { createSharedDemoReportsOverview } from "@/components/shared-demo/sharedDemoReportsFixture";
 import { useStableReportQuery } from "./useStableReportQuery";
 import {
   dateRangeForOverviewWindow,
@@ -79,16 +82,22 @@ export function ReportsOverviewView({
   const { activeStore } = useGetActiveStore();
   const navigate = useNavigate();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
+  const { isSharedDemo, useLiveQuery } = useReportsSharedDemoMode();
+  const liveOverview = useQuery(
+    api.reports.queries.getOverview,
+    activeStore?._id && useLiveQuery ? { storeId: activeStore._id } : "skip",
+  );
+  // Same fixture call the route shell makes; it is cached per operating date,
+  // so both resolve to one projection exactly as Convex dedup does live.
+  const demoOverview = useMemo(
+    () => (isSharedDemo ? createSharedDemoReportsOverview() : undefined),
+    [isSharedDemo],
+  );
   const {
     data: overview,
     isInitialLoad,
     isRefreshing,
-  } = useStableReportQuery(
-    useQuery(
-      api.reports.queries.getOverview,
-      activeStore?._id ? { storeId: activeStore._id } : "skip",
-    ),
-  );
+  } = useStableReportQuery(isSharedDemo ? demoOverview : liveOverview);
 
   // Nothing until the first result settles: these queries resolve fast
   // enough that a skeleton appears and vanishes as a flash of its own.

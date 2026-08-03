@@ -1,5 +1,6 @@
 import { useQuery } from "convex/react";
 import { useParams } from "@tanstack/react-router";
+import { useMemo } from "react";
 
 import { AnimatedDataState } from "@/components/common/AnimatedDataState";
 import { FadeIn } from "@/components/common/FadeIn";
@@ -17,6 +18,8 @@ import {
   periodKeyForSelection,
   type ReportPeriodType,
 } from "./reportPeriodKeys";
+import { useReportsSharedDemoMode } from "./useReportsSharedDemoMode";
+import { createSharedDemoPeriodSkus } from "@/components/shared-demo/sharedDemoReportsFixture";
 import { useStableReportQuery } from "./useStableReportQuery";
 
 export function ReportsItemsView({
@@ -46,18 +49,29 @@ export function ReportsItemsView({
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
   const periodKey = periodKeyForSelection(periodType, periodDate);
   const currentPage = cursor ? cursorTrail.length + 2 : 1;
+  const { isSharedDemo, useLiveQuery } = useReportsSharedDemoMode();
+  const liveResult = useQuery(
+    api.reports.queries.listPeriodSkus,
+    activeStore?._id && useLiveQuery
+      ? { storeId: activeStore._id, periodKey, sortBy, cursor }
+      : "skip",
+  );
+  // `periodKey` comes from route search and is never trusted: the fixture
+  // answers an unparseable key with an empty period rather than throwing.
+  const demoResult = useMemo(
+    () =>
+      isSharedDemo
+        ? createSharedDemoPeriodSkus({ periodKey, sortBy, cursor })
+        : undefined,
+    [cursor, isSharedDemo, periodKey, sortBy],
+  );
   const {
     data: result,
     dataContext: settledPeriodKey,
     isInitialLoad,
     isRefreshing,
   } = useStableReportQuery(
-    useQuery(
-      api.reports.queries.listPeriodSkus,
-      activeStore?._id
-        ? { storeId: activeStore._id, periodKey, sortBy, cursor }
-        : "skip",
-    ),
+    isSharedDemo ? demoResult : liveResult,
     periodKey,
   );
 
