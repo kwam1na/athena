@@ -248,6 +248,38 @@ describe("createSharedDemoDailyOperationsFixture", () => {
     vi.useRealTimers();
   });
 
+  it("builds every pulse window on every weekday, including Monday", () => {
+    // The `this_week` window starts at Monday, so on a Monday it holds exactly
+    // one day. `buildStorePulseSummary` used to reach for `history.at(-2)!` and
+    // get `undefined`, throwing on `.salesTotal`. The pre-existing coverage
+    // pinned the clock to a Thursday, so it never saw this; CI hit it the first
+    // time the suite ran on a Monday. 2026-08-03 is a Monday.
+    const week = [
+      "2026-08-03",
+      "2026-08-04",
+      "2026-08-05",
+      "2026-08-06",
+      "2026-08-07",
+      "2026-08-08",
+      "2026-08-09",
+    ] as const;
+    const windows = ["today", "this_week", "this_month", "all_time"] as const;
+
+    for (const today of week) {
+      for (const pulseWindow of windows) {
+        const summary = createSharedDemoPointOfSaleStorePulseSummary(
+          pulseWindow,
+          today,
+        );
+        expect(summary, `${pulseWindow} on ${today}`).toBeDefined();
+        expect(
+          Number.isFinite(summary.totalSales),
+          `${pulseWindow} on ${today} totalSales`,
+        ).toBe(true);
+      }
+    }
+  });
+
   it("aligns shared-demo POS pulse chart windows to live period behavior", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 6, 23, 12));

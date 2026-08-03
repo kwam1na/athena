@@ -22,6 +22,7 @@ import {
 } from "./storeConfigV2";
 import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
 import { ok, userError } from "../../shared/commandResult";
+import { normalizeCurrencyCode } from "../../shared/reportsContract";
 import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
@@ -280,7 +281,16 @@ export const create = mutation({
   args: storeSchema,
   handler: async (ctx, args) => {
     requireNonDemoFoundationMutation({ organizationId: args.organizationId });
-    const id = await ctx.db.insert(entity, args);
+    // The store-creation form takes currency as free text, so it has shipped
+    // values like "ghs" and " GHS ". Daily Close stamps report facts from
+    // `store.currency` while POS facts carry the canonical uppercase code; a
+    // day holding both used to read as mixed-currency and get excluded, which
+    // blanked every weekly total. Normalize once, here, so the stored value is
+    // canonical and no downstream reader has to guess.
+    const id = await ctx.db.insert(entity, {
+      ...args,
+      currency: normalizeCurrencyCode(args.currency),
+    });
 
     return await ctx.db.get("store", id);
   },

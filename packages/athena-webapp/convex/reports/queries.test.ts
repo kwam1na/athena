@@ -2354,6 +2354,8 @@ describe("reports module public surface", () => {
     ]);
     // Acceptance, sweeping, reseeding, verification, and repair stay internal.
     expect(internalNames.sort()).toEqual([
+      "foldVersionRepair.countStaleFoldVersionDays",
+      "foldVersionRepair.markStaleFoldVersionDays",
       "reseed.reseedStoreReporting",
       "sweeper.sweep",
       "verify.verifyCurrentWeekAgainstSources",

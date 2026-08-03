@@ -189,6 +189,7 @@ import type * as marketing_walkthroughRequests from "../marketing/walkthroughReq
 import type * as migrations_backfillAthenaUserNormalizedEmail from "../migrations/backfillAthenaUserNormalizedEmail.js";
 import type * as migrations_backfillReportFactObservedAt from "../migrations/backfillReportFactObservedAt.js";
 import type * as migrations_backfillReportingCycleStart from "../migrations/backfillReportingCycleStart.js";
+import type * as migrations_backfillStoreCurrencyCase from "../migrations/backfillStoreCurrencyCase.js";
 import type * as migrations_backfillStoreSchedules from "../migrations/backfillStoreSchedules.js";
 import type * as migrations_backfillStoreTimezoneAuthority from "../migrations/backfillStoreTimezoneAuthority.js";
 import type * as migrations_migrateAmountsToPesewas from "../migrations/migrateAmountsToPesewas.js";
@@ -364,6 +365,7 @@ import type * as reports_access from "../reports/access.js";
 import type * as reports_customRange from "../reports/customRange.js";
 import type * as reports_fingerprint from "../reports/fingerprint.js";
 import type * as reports_foldDay from "../reports/foldDay.js";
+import type * as reports_foldVersionRepair from "../reports/foldVersionRepair.js";
 import type * as reports_ingest from "../reports/ingest.js";
 import type * as reports_operatingDay from "../reports/operatingDay.js";
 import type * as reports_overview from "../reports/overview.js";
@@ -778,6 +780,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/backfillAthenaUserNormalizedEmail": typeof migrations_backfillAthenaUserNormalizedEmail;
   "migrations/backfillReportFactObservedAt": typeof migrations_backfillReportFactObservedAt;
   "migrations/backfillReportingCycleStart": typeof migrations_backfillReportingCycleStart;
+  "migrations/backfillStoreCurrencyCase": typeof migrations_backfillStoreCurrencyCase;
   "migrations/backfillStoreSchedules": typeof migrations_backfillStoreSchedules;
   "migrations/backfillStoreTimezoneAuthority": typeof migrations_backfillStoreTimezoneAuthority;
   "migrations/migrateAmountsToPesewas": typeof migrations_migrateAmountsToPesewas;
@@ -953,6 +956,7 @@ declare const fullApi: ApiFromModules<{
   "reports/customRange": typeof reports_customRange;
   "reports/fingerprint": typeof reports_fingerprint;
   "reports/foldDay": typeof reports_foldDay;
+  "reports/foldVersionRepair": typeof reports_foldVersionRepair;
   "reports/ingest": typeof reports_ingest;
   "reports/operatingDay": typeof reports_operatingDay;
   "reports/overview": typeof reports_overview;

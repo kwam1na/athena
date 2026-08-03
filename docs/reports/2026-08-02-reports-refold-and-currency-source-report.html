@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="3f02ada70421128e0e91599ab9a40e2d9a49ccd66d3f2c03a4e0ab699d0721e4" data-athena-report-base="origin/main" data-athena-report-head="codex/reports-refold-and-currency-source 8daefe6f">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reports refold gap and store currency at the source</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
+      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
+      h2 { font-size: 28px; margin: 0 0 16px; }
+      h3 { font-size: 19px; margin: 22px 0 10px; }
+      p { margin: 0 0 14px; }
+      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
+      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+      .table-scroll { overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
+      @media (hover: hover) and (pointer: fine) {
+        label:hover { border-color: #b6c5d8; }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 700;
+        padding: 11px 16px;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:active { transform: scale(0.97); }
+      button.secondary { background: #475569; }
+      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      #quizResult { font-weight: 700; }
+      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
+      .answer-detail.visible { display: block; }
+      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
+      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
+      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
+      @media (max-width: 820px) { h1 { font-size: 32px; } main { padding: 32px 16px 56px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Reports refold gap and store currency at the source</h1>
+        <p class="lede">A stored fold version nobody read made every reporting change non-retroactive — and a lowercase currency code proved it by withholding an entire production briefing</p>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch codex/reports-refold-and-currency-source</span><span class="pill">Commit 8daefe6f</span><span class="pill">Base origin/main</span><span class="pill">Linear V26-1153</span><span class="pill">No PR opened</span><span class="pill">Merge gate pending</span><span class="pill">Production not mutated</span><span class="pill">Root alignment pending</span></div>
+      </header>
+
+      <section class="panel"><h2>Executive Summary</h2>
+        <p>Two follow-ups from enabling weekly reporting on production Wigclub, where a stale fold silently withheld every total on the newly enabled surface.</p>
+        <p><strong>The refold gap.</strong> <code>reportDay</code> rows stored a <code>foldVersion</code> and <code>reportDirtyDay</code> declared a <code>fold_version_bump</code> reason, but nothing ever produced that reason and nothing ever compared a stored row's version against <code>REPORTS_FOLD_VERSION</code>. Any change to what <code>foldDay</code> computes was therefore silently non-retroactive, and bumping the constant did nothing at all. This change bumps the version 1 &rarr; 2 and adds <code>reports/foldVersionRepair</code>, a bounded store-scoped idempotent pass that marks stale days dirty for the existing sweeper, plus a read-only stale count.</p>
+        <p><strong>The currency source.</strong> <code>stores.create</code> inserted the caller's currency verbatim, which is how production ended up with <code>ghs</code> against POS facts carrying <code>GHS</code>. The fold read two currencies, flagged the day <code>mixedCurrency</code>, and weekly completeness turned that into <code>mixed_currency</code> — for which the Weekly UI withholds every figure. This change normalizes on write through the existing shared helper and adds a dry-run-first migration for rows already stored.</p>
+        <p>Nine files, +397 source lines, one commit off <code>main</code>. Four of the nine files are new modules and their tests; the remaining edits are three lines of behavior and two lines of test-lock maintenance.</p>
+      </section>
+
+      <section class="panel"><h2>Problem and Context</h2>
+        <p>The visible failure was severe and misleading: on production Wigclub, the just-enabled Weekly briefing rendered no numbers. Every total read <code>Unavailable</code>. The mechanism is a fail-closed control behaving exactly as designed on a false premise.</p>
+        <p>Daily Close stamps its <code>close_snapshot</code> report facts with <code>store.currency</code>. That field held <code>ghs</code>; POS facts held <code>GHS</code>. The day fold compared the raw strings, concluded the day contained two currencies, set <code>flags.mixedCurrency</code>, and excluded the offending facts. Weekly completeness checks that flag first, ahead of allocation and fold-coverage reasons, and returns <code>mixed_currency</code>. The Weekly presentation layer lists <code>mixed_currency</code> among the reasons that withhold <strong>all</strong> totals.</p>
+        <p>Worth stating precisely, because it bounds the incident: <strong>only <code>close_snapshot</code> facts were affected, and those never contribute to sales totals.</strong> Revenue was never wrong. The damage was purely that the surface refused to show anything.</p>
+        <p>Fixing the comparison inside <code>foldDay</code> was necessary but, on its own, inert — which is how the second and more durable defect was found. The affected days had already been folded. Nothing would recompute them. And the mechanism that was supposed to handle exactly this case did not exist.</p>
+      </section>
+
+      <section class="panel"><h2>Mental Model</h2>
+        <p>Think of <code>foldVersion</code> as a receipt stapled to each materialized day: <em>this row was produced by computation version N</em>. A receipt is only useful if somebody reads it. Before this change, Athena wrote the receipt and never looked at it, and the schema even declared the word for what to do when the receipt is out of date &mdash; <code>fold_version_bump</code> &mdash; without anything ever saying it.</p>
+        <p>The circuit was described but never energized:</p>
+        <pre><code>Before
+  foldDay changes  -&gt;  REPORTS_FOLD_VERSION bumped  -&gt;  (nothing)
+  reportDay.foldVersion       written, never read
+  reason "fold_version_bump"  declared, never produced
+  Already-folded days keep their old values forever.
+
+After
+  foldDay changes  -&gt;  REPORTS_FOLD_VERSION bumped
+       -&gt;  foldVersionRepair.markStaleFoldVersionDays (per store, bounded, opt-in autoContinue)
+       -&gt;  reportDirtyDay { reason: "fold_version_bump" }
+       -&gt;  existing Reports sweeper  -&gt;  refold with its own caps and retries
+       -&gt;  reportDay stamped with the current version</code></pre>
+        <p>The second defect has the same shape one layer down. A value that must satisfy an invariant was accepted un-normalized at the write boundary, so every downstream comparison had to remember to normalize. Fix the writer, then run a bounded idempotent pass over what the old writer left behind.</p>
+      </section>
+
+      <section class="panel"><h2>Before and After</h2>
+        <ul>
+          <li>Before: bumping <code>REPORTS_FOLD_VERSION</code> had no observable effect anywhere. After: the bump is the signal, and <code>markStaleFoldVersionDays</code> is the mechanism that turns it into queued work.</li>
+          <li>Before: <code>fold_version_bump</code> was a schema literal with zero producers. After: it is produced by exactly one bounded maintenance path.</li>
+          <li>Before: <code>stores.create</code> stored the caller's currency string verbatim. After: it routes through the existing shared <code>normalizeCurrencyCode</code>, so a lowercase or padded code cannot be stored again.</li>
+          <li>Before: rows already holding <code>ghs</code> had no repair path. After: <code>backfillStoreCurrencyCase</code> normalizes them, dry-run by default, with a read-only verifier.</li>
+          <li>Unchanged: the sweeper remains the single fold authority. Nothing in this change refolds a day inline.</li>
+        </ul>
+      </section>
+
+      <section class="panel"><h2>Layer-by-Layer Mechanics</h2>
+
+        <h3>1. The version constant</h3>
+        <p><code>shared/reportsContract.ts</code> moves <code>REPORTS_FOLD_VERSION</code> from <code>1</code> to <code>2</code>, with a doc block recording what version 2 changes, that <code>mixedCurrency</code> feeds weekly completeness and withholds every total, and — explicitly — that <strong>a bump refolds nothing on its own</strong> and the repair must be run per store. The <code>normalizeCurrencyCode</code> helper itself is untouched.</p>
+
+        <h3>2. The repair pass</h3>
+        <p><code>reports/foldVersionRepair.ts</code> exposes <code>markStaleFoldVersionDays</code> (an <code>internalMutation</code>) and <code>countStaleFoldVersionDays</code> (an <code>internalQuery</code>), each fronting a plain ctx-taking core so the logic is directly testable. Pages come from <code>reportDay</code> via <code>by_storeId_operatingDate</code> scoped to one store, with a default page of 25 and a hard cap of 100.</p>
+        <p>Staleness is <code>day.foldVersion !== REPORTS_FOLD_VERSION</code> — not <code>&lt;</code>, so a row stamped by a newer version also counts. The predicate is applied <strong>in memory over each bounded page</strong>, because <code>reportDay</code>'s only index is <code>by_storeId_operatingDate</code>. That is a deliberate trade recorded in the source: adding an index to serve a one-shot maintenance path would tax every fold write forever, and the scan is bounded and non-recurring.</p>
+
+        <h3>3. Marking, not refolding</h3>
+        <p>For each stale day the pass looks up any existing <code>reportDirtyDay</code> mark. If one exists it writes <strong>nothing at all</strong> and counts the day as already queued. That is deliberate: the sweeper drains oldest-<code>markedAt</code> first, so refreshing recency would push an already-waiting day to the <em>back</em> of the queue and delay a pending <code>close_accepted</code> fold behind a bulk version repair; patching <code>reason</code> would erase that more specific cause; and inserting would duplicate the queue row and fold the day twice. Only when no mark exists does it insert <code>reason: "fold_version_bump"</code>.</p>
+        <p>Both halves matter. Overwriting the reason would erase a more specific pending cause such as <code>close_accepted</code>, and the day refolds either way, so there is nothing to gain. Inserting a second mark would duplicate the queue row and make the sweeper fold the day twice. This deliberately diverges from the sweeper's own newest-reason-wins upsert, because a maintenance pass has no claim to be the most informative reason on the queue.</p>
+
+        <h3>4. The currency write boundary</h3>
+        <p><code>inventory/stores.ts</code> normalizes in <code>create</code>. The tests exercise the real mutation through <code>convexTest</code> across <code>ghs</code>, padded <code>"  ghs  "</code>, <code>Usd</code>, empty string, and whitespace-only, asserting <code>GHS/GHS/USD/GHS/GHS</code>, plus an already-canonical <code>USD</code> passthrough.</p>
+
+        <h3>5. The migration</h3>
+        <p><code>migrations/backfillStoreCurrencyCase.ts</code> pages the <code>store</code> table and patches rows where <code>normalizeCurrencyCode(currency) !== currency</code> — a predicate shared with the verifier, which is what makes the pass idempotent by construction. <code>dryRun</code> defaults to <strong>true</strong>: only an explicit <code>dryRun: false</code> writes, and an omitted value stays a dry run across an entire <code>autoContinue</code> chain. In dry-run mode it still counts mismatches, so the operator sees the blast radius before committing to it.</p>
+        <p>Uppercasing stored values in place was cleared by a consumer audit first: the currency symbol formatter already keys on uppercase and looks up via <code>.toUpperCase()</code> (so lowercase was the fragile case, not the safe one), every currency equality comparison normalizes both sides, and currency appears in no Convex index, no <code>.eq()</code> filter, no URL, no filename, and no cache key.</p>
+
+        <h3>6. Continuation</h3>
+        <p>Both maintenance paths take the same opt-in <code>autoContinue</code> as the existing Reports migrations. When set and the page is not done, the batch self-schedules the next page with <code>ctx.scheduler.runAfter(0, ...)</code>, forwarding the cursor and running totals. The mutations return per-batch counts alongside a cumulative <code>totals</code> object, so one fire-and-forget call replaces one invocation per page. Without <code>autoContinue</code> they never self-schedule — asserted directly in both test files.</p>
+        <p>The reference implementation for this shape is <code>convex/migrations/backfillReportFactObservedAt.ts</code>, whose header comment defines <code>autoContinue</code> and whose deployment-ordering comment is the repo's de facto runbook for paged maintenance: run the pass dry first, run it to completion, then page the read-only verifier until it reports zero. There is no runbook document and no cron entry for any of these passes; the contract lives in code comments, and both new modules follow it deliberately.</p>
+      </section>
+
+      <section class="panel"><h2>Failure Boundaries</h2>
+        <ul>
+          <li><strong>The bump is inert until someone runs the repair.</strong> No cron invokes <code>markStaleFoldVersionDays</code> and no read path compares stored versions. Every existing <code>reportDay</code> in every store is now version-stale and keeps serving its stored flags until an operator runs the pass per store and per environment. This is stated in the contract doc block; it is an operational dependency, not self-healing.</li>
+          <li><strong>Repair does not reorder the sweeper queue.</strong> The sweeper drains marks oldest-<code>markedAt</code> first. An earlier draft refreshed <code>markedAt</code> on a pre-existing mark, which preserved the reason but pushed that day to the back of the queue and could delay a pending <code>close_accepted</code> fold behind a repair run. The pass now writes nothing when a day is already queued, so queue position is preserved; a regression test asserts both <code>markedAt</code> and <code>reason</code> are untouched, and fails if the patch is reinstated. Backlog volume is still unthrottled: marking a long history enqueues work that competes with live folds.</li>
+          <li><strong>A large backlog drains ahead of live folds.</strong> Marking a long history inserts many marks older than subsequent live <code>day_open</code> marks, and oldest-first draining processes the backlog first. Nothing throttles the marking side, so a store with a long history has a multi-tick tail.</li>
+          <li><strong>Non-allowlisted stores queue work that will not drain.</strong> The sweeper skips marks for stores outside the read allowlist and leaves them in place, so <code>countStaleFoldVersionDays</code> keeps reporting non-zero. That reading is indistinguishable from "queue still draining".</li>
+          <li><strong>The count query is per-page only.</strong> It returns no running totals and cannot self-schedule, so answering "is this store clean?" means paging every cursor by hand — asymmetric with the mutation's <code>totals</code>.</li>
+          <li><strong>Scan cost tracks total days, not stale days,</strong> because staleness is an in-memory filter. Bounded and one-shot, and explicitly justified in the source.</li>
+          <li><strong>Only <code>create</code> normalizes.</strong> Currency was normalized at the store-creation boundary; a future update path that writes <code>currency</code> without normalizing could reintroduce a non-canonical value.</li>
+          <li><strong>A genuinely foreign currency still fails closed.</strong> Version 2 canonicalizes letter case; it does not merge distinct currency codes. <code>ghs</code> versus <code>GHS</code> is one currency, <code>USD</code> versus <code>GHS</code> is still mixed.</li>
+        </ul>
+      </section>
+
+      <section class="panel"><h2>What Intentionally Did Not Change</h2>
+        <ul>
+          <li>The sweeper remains the single fold authority. Repair marks; it never folds inline, so caps, failure handling, and retries stay in one place.</li>
+          <li><code>foldDay</code> is untouched by this commit — it already normalized each fact's currency before comparing. The fix at the source is <code>stores.create</code> only.</li>
+          <li>No index was added to <code>reportDay</code>. A one-shot maintenance path does not justify a permanent write-path cost.</li>
+          <li>No cron entry was added. Repair is an explicit operator action, not a background behavior.</li>
+          <li>The public surface is unchanged. The new module registers two internal-only functions and adds nothing readable from the client.</li>
+          <li>The exact-equality public-surface assertion in <code>queries.test.ts</code> was <strong>not</strong> loosened. The new registrations tripped it; the fix was to extend the internal-only list, keeping the assertion exact.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>Key Files</h2>
+        <div class="table-scroll">
+        <table>
+          <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
+          <tbody>
+            <tr><td><code>packages/athena-webapp/shared/reportsContract.ts</code></td><td>Bumps <code>REPORTS_FOLD_VERSION</code> to 2 and documents that a bump alone refolds nothing.</td></tr>
+            <tr><td><code>packages/athena-webapp/convex/reports/foldVersionRepair.ts</code></td><td>New. Bounded store-scoped pass that marks version-stale days dirty, plus a read-only stale count.</td></tr>
+            <tr><td><code>packages/athena-webapp/convex/reports/foldVersionRepair.test.ts</code></td><td>Eight cases, including a fake ctx that throws on any table or index other than the two it should touch, so index drift fails loudly.</td></tr>
+            <tr><td><code>packages/athena-webapp/convex/inventory/stores.ts</code></td><td>Normalizes currency in <code>create</code> — the write boundary where the bad production value entered.</td></tr>
+            <tr><td><code>packages/athena-webapp/convex/inventory/stores.test.ts</code></td><td>Drives the real <code>create</code> mutation over lowercase, padded, mixed-case, empty, and whitespace-only input.</td></tr>
+            <tr><td><code>packages/athena-webapp/convex/migrations/backfillStoreCurrencyCase.ts</code></td><td>New. Idempotent dry-run-first migration plus verifier for rows already stored.</td></tr>
+            <tr><td><code>packages/athena-webapp/convex/migrations/backfillStoreCurrencyCase.test.ts</code></td><td>Six cases covering dry-run default, no-op re-run, continuation, and read-only verification.</td></tr>
+            <tr><td><code>packages/athena-webapp/convex/reports/queries.test.ts</code></td><td>The public-surface lock. Two internal names added; the assertion stays exact-equality.</td></tr>
+            <tr><td><code>packages/athena-webapp/convex/_generated/api.d.ts</code></td><td>Generated registrations for the two new modules.</td></tr>
+          </tbody>
+        </table>
+        </div>
+      </section>
+
+      <section class="panel"><h2>Validation and Review Evidence</h2>
+        <p><strong>Suites.</strong> Full local suite: 672 files, 7465 tests, 0 failures. <code>tsc --noEmit</code> clean. ESLint clean on all touched files.</p>
+        <p><strong>Falsification, run both ways.</strong> For the refold work: reverting <code>REPORTS_FOLD_VERSION</code> to <code>1</code> fails 6 of the 8 new tests, and — independently — removing just the staleness predicate fails 2. Two separate perturbations, two distinct failure sets, so neither half of the mechanism is carried by the other. For the currency work: reverting the normalization in <code>stores.create</code> fails 5 tests. These are executed reverts, not assertions about what would happen.</p>
+        <p><strong>Test-lock interaction.</strong> Registering the new module tripped the exact-equality public-surface assertion in <code>convex/reports/queries.test.ts</code>. The remedy was to extend the internal-only list rather than relax the comparison, so the lock still fails on any unintended public registration.</p>
+        <p><strong>Status.</strong> Delivery candidate on <code>codex/reports-refold-and-currency-source</code> at commit <code>8daefe6f</code>, one commit off <code>main</code>. No PR opened. Not merged. The full <code>bun run pr:athena</code> merge gate is pending. Production was not mutated: the migration defaults to dry run and neither maintenance path has been executed against production. Root/local alignment is pending. Linear V26-1153 is not claimed as Done.</p>
+      </section>
+
+      <section class="panel"><h2>Next-Time Guidance</h2>
+        <ul>
+          <li>A stored version stamp is an obligation. If a row records the computation version that produced it, some path must compare that stamp to the current one and enqueue repair. A stamp with no reader is worse than no stamp, because it looks like the problem is handled.</li>
+          <li>A declared enum literal with no producer is an unfinished feature. When adding a <code>reason</code>, <code>status</code>, or <code>kind</code> union member, grep for its producer before considering the schema done.</li>
+          <li>When changing what a fold or projection computes, ship the retroactivity plan in the same change: bump the version and name the maintenance call that must run, per store and per environment.</li>
+          <li>Never accept a clean dev environment as evidence about a staleness bug. Dev with rebuilt tables has no stale rows to find, so it cannot reproduce the failure and cannot confirm the fix.</li>
+          <li>Normalize operator-entered values at the write boundary, not at each comparison site. Every un-normalized comparison is a future defect waiting for a second writer.</li>
+          <li>Before rewriting a stored field in place, audit its consumers for index terms, <code>.eq()</code> filters, URLs, filenames, and cache keys. In-place normalization is safe only when nothing derives a key from the old form.</li>
+          <li>Make maintenance passes bounded, store-scoped, idempotent, dry-run-first, and <code>autoContinue</code>-capable, matching the existing migrations, so a production run is one call.</li>
+          <li>When a new registration trips an exact-equality surface lock, extend the allowed list. Loosening the assertion to a subset check destroys the only thing the test was protecting.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>Subagent Evidence</h2>
+        <ul>
+          <li><strong>delivered diff subagent (read-only codebase researcher):</strong> Mapped <code>git show 8daefe6f</code> against the files at HEAD. Confirmed the exported function kinds and argument shapes, the 25/100 page bounds, that <code>reportDay</code> carries exactly one index (<code>by_storeId_operatingDate</code>) so staleness must be an in-memory filter, the already-queued no-write behavior and how it diverges from the sweeper's newest-reason-wins upsert, the <code>dryRun</code> default of true, the two-line internal-list edit in <code>queries.test.ts</code>, and the full propagation path from <code>foldDay</code>'s <code>mixedCurrency</code> flag through weekly completeness into the presentation layer's withheld-totals set. Also supplied the failure boundaries in this report: sweeper queue reordering (since fixed), backlog starvation, allowlist interaction, and the per-page-only count query.</li>
+          <li><strong>session and documentation context subagent (read-only):</strong> Established the lineage. Confirmed <code>athena-reporting-read-optimized-redesign-2026-07-28.md</code> introduced the fact-ledger &rarr; fold &rarr; dirty-marker &rarr; single-sweeper model and <code>athena-schedule-day-driven-weekly-report-projection-lifecycle-2026-08-01.md</code> is the immediate predecessor whose refold semantics this commit found were never actually triggered by a version change. Also found that no plan references V26-1153 — this closes gaps left by the end-of-week plan rather than executing a plan of its own; that <code>crons.ts</code> schedules only the single reports sweep, so migrations are operator-invoked by design; that <code>backfillReportFactObservedAt.ts</code> carries the deployment-ordering contract the new modules follow; and that the public-surface lock asserts both the public and internal sorted lists with <code>toEqual</code> under the stated invariant that repair stays internal.</li>
+          <li><strong>Report review:</strong> No separate reviewer subagent was dispatched for this report. The change is two narrow backend modules with no UI surface, and every claim above traces to the commit, the files at HEAD, or the recorded validation runs.</li>
+        </ul>
+      </section>
+
+      <section id="quiz" class="panel">
+        <h2>Quiz: Pass Required</h2>
+        <p>You must score at least 8 out of 10 to pass.</p>
+        <form id="changeQuiz" data-threshold="8">
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>1. Before this change, what happened when someone bumped <code>REPORTS_FOLD_VERSION</code>?</legend>
+    <label><input type="radio" name="q1" value="0" /> Every stored day was refolded on the next sweeper tick</label>
+    <label><input type="radio" name="q1" value="1" /> Reads recomputed stale days lazily on access</label>
+    <label><input type="radio" name="q1" value="2" /> Nothing at all — no code compared a stored row's version to the constant</label>
+  </fieldset>
+  <div class="answer-detail">The version was written onto each <code>reportDay</code> and never read. The bump was decorative, so changes to <code>foldDay</code> were silently non-retroactive.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>2. Why does <code>markStaleFoldVersionDays</code> mark days dirty instead of refolding them inline?</legend>
+    <label><input type="radio" name="q2" value="0" /> Inline refolding would exceed a Convex mutation size limit</label>
+    <label><input type="radio" name="q2" value="1" /> So the sweeper stays the single fold authority, keeping its caps, failure handling, and retries in one place</label>
+    <label><input type="radio" name="q2" value="2" /> Because the repair pass runs as a query and cannot write</label>
+  </fieldset>
+  <div class="answer-detail">Marking feeds the existing dirty-day queue rather than introducing a second, parallel fold path with its own error handling.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>3. The pass finds a stale day that already has a <code>reportDirtyDay</code> mark with reason <code>close_accepted</code>. What does it do?</legend>
+    <label><input type="radio" name="q3" value="0" /> Patches only <code>markedAt</code>, leaving the existing reason intact</label>
+    <label><input type="radio" name="q3" value="1" /> Overwrites the reason with <code>fold_version_bump</code></label>
+    <label><input type="radio" name="q3" value="2" /> Inserts a second mark so both reasons are recorded</label>
+  </fieldset>
+  <div class="answer-detail">Overwriting would erase a more specific pending cause and the day refolds either way; inserting would duplicate the queue row and fold the day twice.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>4. Why is staleness filtered in memory per page rather than by an index?</legend>
+    <label><input type="radio" name="q4" value="0" /> Convex does not support indexing numeric fields</label>
+    <label><input type="radio" name="q4" value="1" /> In-memory filtering is faster at this table size</label>
+    <label><input type="radio" name="q4" value="2" /> <code>reportDay</code>'s only index is <code>by_storeId_operatingDate</code>, and adding one for a one-shot maintenance path would tax every fold write forever</label>
+  </fieldset>
+  <div class="answer-detail">It is a deliberate trade recorded in the source: a bounded, non-recurring scan is cheaper overall than a permanent write-path cost.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>5. How did a lowercase <code>ghs</code> end up hiding an entire weekly briefing?</legend>
+    <label><input type="radio" name="q5" value="0" /> Sales facts with the wrong case were dropped, zeroing revenue</label>
+    <label><input type="radio" name="q5" value="1" /> Close-snapshot facts looked like a second currency, so the day was flagged mixed, weekly completeness returned <code>mixed_currency</code>, and the UI withholds every total for that reason</label>
+    <label><input type="radio" name="q5" value="2" /> The currency formatter threw on an unknown code and the view failed to render</label>
+  </fieldset>
+  <div class="answer-detail">A fail-closed control working correctly on a false premise. Only <code>close_snapshot</code> facts were affected and those never contribute to sales totals — revenue was never wrong, only withheld.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>6. What does <code>backfillStoreCurrencyCase</code> do if you call it with no <code>dryRun</code> argument?</legend>
+    <label><input type="radio" name="q6" value="0" /> Runs as a dry run, counting mismatches without writing — and stays a dry run across the whole <code>autoContinue</code> chain</label>
+    <label><input type="radio" name="q6" value="1" /> Writes, because <code>dryRun</code> defaults to false like most migrations</label>
+    <label><input type="radio" name="q6" value="2" /> Throws, because <code>dryRun</code> is required</label>
+  </fieldset>
+  <div class="answer-detail">Only an explicit <code>dryRun: false</code> writes. The omitted value is forwarded raw through continuation, so a chain cannot silently start writing partway through.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>7. What made uppercasing stored currency values safe to do in place?</legend>
+    <label><input type="radio" name="q7" value="0" /> Only one store row existed, so the risk was negligible</label>
+    <label><input type="radio" name="q7" value="1" /> The migration keeps the original value in a shadow field for rollback</label>
+    <label><input type="radio" name="q7" value="2" /> A consumer audit: the symbol formatter already keys on uppercase and looks up via <code>.toUpperCase()</code>, comparisons normalize both sides, and currency appears in no index, filter, URL, filename, or cache key</label>
+  </fieldset>
+  <div class="answer-detail">In-place normalization is safe only when nothing derives a key from the old form. Lowercase was the fragile case, not the safe one.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>8. Registering the new module tripped the exact-equality public-surface assertion in <code>queries.test.ts</code>. What was the right fix?</legend>
+    <label><input type="radio" name="q8" value="0" /> Relax the assertion to check that the expected names are a subset of the actual ones</label>
+    <label><input type="radio" name="q8" value="1" /> Add the two new names to the internal-only list, keeping the assertion exact</label>
+    <label><input type="radio" name="q8" value="2" /> Move the new functions out of <code>reports/</code> so the lock does not see them</label>
+  </fieldset>
+  <div class="answer-detail">The exactness is the point — it is what catches an unintended public registration. Loosening it would destroy the only thing the test protects.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>9. What is the strongest evidence given that the refold mechanism actually works?</legend>
+    <label><input type="radio" name="q9" value="0" /> The full suite passes: 672 files, 7465 tests, 0 failures</label>
+    <label><input type="radio" name="q9" value="1" /> <code>tsc --noEmit</code> and ESLint are clean on all touched files</label>
+    <label><input type="radio" name="q9" value="2" /> Two independent executed reverts: restoring <code>REPORTS_FOLD_VERSION</code> to 1 fails 6 of 8 new tests, and separately removing the staleness predicate fails 2</label>
+  </fieldset>
+  <div class="answer-detail">A green suite shows nothing broke. Falsification run both ways shows the tests are actually load-bearing, and two distinct failure sets show neither half of the mechanism is carried by the other.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>10. After this lands, what still has to happen before production reports show corrected values?</legend>
+    <label><input type="radio" name="q10" value="0" /> An operator must run the currency migration with <code>dryRun: false</code> and then <code>markStaleFoldVersionDays</code> per store — no cron does it and no read path self-heals</label>
+    <label><input type="radio" name="q10" value="1" /> Nothing; the version bump triggers a refold on the next sweeper tick</label>
+    <label><input type="radio" name="q10" value="2" /> Nothing; reads compare stored and current versions and recompute on demand</label>
+  </fieldset>
+  <div class="answer-detail">The bump is the signal, not the mechanism. Repair is a deliberate operator action, per store and per environment — stated in the contract doc block and unchanged by this delivery, which has not been run against production.</div>
+</div>
+
+          <div class="quiz-actions">
+            <button type="button" id="gradeQuiz">Grade quiz</button>
+            <button type="button" class="secondary" id="resetQuiz">Reset</button>
+            <span id="quizResult" aria-live="polite"></span>
+          </div>
+        </form>
+      </section>
+
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
+          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
+          if (isCorrect) score += 1;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>
