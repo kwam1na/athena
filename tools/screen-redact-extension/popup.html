@@ -22,6 +22,21 @@
     display: block;
     color: #666;
   }
+  label.stack {
+    flex-direction: column;
+    gap: 6px;
+  }
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: inherit;
+    background: transparent;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 5px 6px;
+    resize: vertical;
+  }
   footer {
     color: #666;
     border-top: 1px solid #eee;
@@ -30,7 +45,7 @@
   @media (prefers-color-scheme: dark) {
     body { background: #1b1b1b; color: #eee; }
     span small, footer { color: #aaa; }
-    footer { border-color: #333; }
+    footer, textarea { border-color: #333; }
   }
 </style>
 <h1>Athena Screen Redact</h1>
@@ -46,5 +61,13 @@
   <input type="checkbox" id="blurMedia" />
   <span>Blur images and charts</span>
 </label>
-<footer>Toggle anytime with Alt+Shift+M.</footer>
+<label>
+  <input type="checkbox" id="hideDemoChrome" />
+  <span>Hide demo chrome<small>Demo controls, notices and boundaries</small></span>
+</label>
+<label class="stack">
+  <span>Also hide<small>Extra CSS selectors, one per line</small></span>
+  <textarea id="extraHideSelectors" rows="2" spellcheck="false"></textarea>
+</label>
+<footer>Toggle masking anytime with Alt+Shift+M.</footer>
 <script src="popup.js"></script>

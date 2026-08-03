@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Athena Screen Redact",
-  "version": "1.0.0",
-  "description": "Masks currency amounts with X's so the admin app can be screen-recorded safely.",
+  "version": "1.1.0",
+  "description": "Masks currency amounts and hides demo-only chrome so the admin app can be screen-recorded safely.",
   "permissions": ["storage", "scripting", "activeTab"],
   "host_permissions": [
     "https://athena.wigclub.store/*",
