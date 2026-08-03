@@ -190,6 +190,8 @@ describe("StoreHoursView", () => {
   });
 
   it("shows the active and pending reporting-cycle configuration", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-02T12:00:00.000Z"));
     mockedUseQuery.mockImplementation(((query: unknown) => {
       if (query === "listStoreScheduleVersions") {
         return [

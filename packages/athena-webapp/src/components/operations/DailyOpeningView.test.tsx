@@ -1150,9 +1150,12 @@ describe("DailyOpeningViewContent", () => {
     expect(
       within(openingReview).queryByText("Review inventory for Clogs"),
     ).not.toBeInTheDocument();
+    expect(
+      within(openingReview).getAllByRole("article")[0],
+    ).toHaveAttribute("data-density", "default");
   });
 
-  it("paginates automation review evidence at five items per page", async () => {
+  it("compacts and paginates long automation review evidence at ten items per page", async () => {
     const user = userEvent.setup();
     const reviewEvidence = Array.from({ length: 12 }, (_, index) => ({
       category: "operational_work_item",
@@ -1186,15 +1189,26 @@ describe("DailyOpeningViewContent", () => {
       .closest("section")!;
 
     expect(
-      within(openingReview).getByText("Showing 1-5 of 12"),
+      within(openingReview).getByText("Showing 1-10 of 12"),
     ).toBeInTheDocument();
-    expect(within(openingReview).getByText("Page 1 of 3")).toBeInTheDocument();
+    expect(within(openingReview).getByText("Page 1 of 2")).toBeInTheDocument();
     expect(
-      within(openingReview).getByText("Carry-forward review 5"),
+      within(openingReview).getByText("Carry-forward review 10"),
     ).toBeInTheDocument();
     expect(
-      within(openingReview).queryByText("Carry-forward review 6"),
+      within(openingReview).queryByText("Carry-forward review 11"),
     ).not.toBeInTheDocument();
+    expect(
+      within(openingReview).getAllByRole("article")[0],
+    ).toHaveAttribute("data-density", "compact");
+    expect(
+      within(openingReview).queryByText(
+        "Carry-forward work item 1 needs review.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      within(openingReview).getAllByRole("link", { name: "View open work" }),
+    ).toHaveLength(10);
 
     await user.click(
       within(openingReview).getByRole("button", {
@@ -1203,26 +1217,15 @@ describe("DailyOpeningViewContent", () => {
     );
 
     expect(
-      within(openingReview).getByText("Showing 6-10 of 12"),
-    ).toBeInTheDocument();
-    expect(within(openingReview).getByText("Page 2 of 3")).toBeInTheDocument();
-    expect(
-      within(openingReview).getByText("Carry-forward review 6"),
-    ).toBeInTheDocument();
-    expect(
-      within(openingReview).queryByText("Carry-forward review 5"),
-    ).not.toBeInTheDocument();
-
-    await user.click(
-      within(openingReview).getByRole("button", {
-        name: /go to last page/i,
-      }),
-    );
-
-    expect(
       within(openingReview).getByText("Showing 11-12 of 12"),
     ).toBeInTheDocument();
-    expect(within(openingReview).getByText("Page 3 of 3")).toBeInTheDocument();
+    expect(within(openingReview).getByText("Page 2 of 2")).toBeInTheDocument();
+    expect(
+      within(openingReview).getByText("Carry-forward review 11"),
+    ).toBeInTheDocument();
+    expect(
+      within(openingReview).queryByText("Carry-forward review 10"),
+    ).not.toBeInTheDocument();
     expect(
       within(openingReview).getByText("Carry-forward review 12"),
     ).toBeInTheDocument();
