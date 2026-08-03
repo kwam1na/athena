@@ -4,6 +4,11 @@ input.athena-redact-input {
   text-security: disc;
 }
 
+/* Demo-only chrome, taken out of layout so the surface reads as live. */
+[data-athena-redact-hidden] {
+  display: none !important;
+}
+
 /* Opt-in blurring for media and anything tagged data-redact="blur". */
 .athena-redact-blur-media img,
 .athena-redact-blur-media canvas,
