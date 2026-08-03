@@ -314,6 +314,40 @@ describe("HARNESS_BEHAVIOR_SCENARIOS", () => {
     ).rejects.toThrow("QA page did not render the Athena login email field");
   });
 
+  it("boots the Athena QA smoke at the login route rather than the root landing page", async () => {
+    const page = {
+      on: () => {},
+      waitForSelector: async () => {},
+      textContent: async () => "athena",
+    };
+
+    const visitedUrls: string[] = [];
+    const previousQaUrl = process.env.ATHENA_QA_URL;
+    process.env.ATHENA_QA_URL = "https://athena-qa.example/";
+
+    try {
+      await ATHENA_QA_LIVE_SMOKE_SCENARIO.browser({
+        runPlaywrightFlow: async ({ url, steps }: any) => {
+          visitedUrls.push(url);
+          return {
+            stepResult: await steps({ page } as any),
+            consoleMessages: [],
+          };
+        },
+      } as any);
+    } finally {
+      if (previousQaUrl === undefined) {
+        delete process.env.ATHENA_QA_URL;
+      } else {
+        process.env.ATHENA_QA_URL = previousQaUrl;
+      }
+    }
+
+    // The root route sends anonymous first-time visitors to the marketing
+    // landing page, which never mounts the login form the smoke asserts on.
+    expect(visitedUrls).toEqual(["https://athena-qa.example/login"]);
+  });
+
   it("asserts the Valkey proxy scenario round-trip contract", async () => {
     const validBrowserResult = {
       rootText: "Valkey proxy running",

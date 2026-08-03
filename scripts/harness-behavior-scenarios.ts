@@ -319,6 +319,10 @@ function stripUrlQuery(url: string) {
   }
 }
 
+// Route that mounts the Athena login form. Kept next to the diagnostics so the
+// selector assertion and the navigation target stay in sync.
+export const ATHENA_QA_LOGIN_PATH = "/login";
+
 export function diagnoseAthenaQaLiveSmoke(input: {
   observedText: string;
   hasEmailField: boolean;
@@ -1296,8 +1300,13 @@ export const ATHENA_QA_LIVE_SMOKE_SCENARIO: HarnessBehaviorScenario<AthenaQaLive
     readiness: [],
     browser: async ({ runPlaywrightFlow }) => {
       const observations: AthenaQaLiveObservation[] = [];
-      const qaUrl = process.env.ATHENA_QA_URL ?? "https://athena-qa.wigclub.store/";
-      const qaOrigin = new URL(qaUrl).origin;
+      const qaBaseUrl =
+        process.env.ATHENA_QA_URL ?? "https://athena-qa.wigclub.store/";
+      const qaOrigin = new URL(qaBaseUrl).origin;
+      // The root route dispatches anonymous first-time visitors to the public
+      // marketing landing page, so it no longer mounts the login form. Boot the
+      // smoke straight at the login surface, which is the app shell we assert on.
+      const qaUrl = new URL(ATHENA_QA_LOGIN_PATH, qaBaseUrl).toString();
 
       const flowResult = await runPlaywrightFlow({
         url: qaUrl,
