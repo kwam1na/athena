@@ -810,14 +810,18 @@ function OpeningAutomationReviewPanel({
   storeUrlSlug: string;
 }) {
   const [page, setPage] = useState(1);
+  const useCompactRows = items.length > OPENING_REVIEW_ITEMS_PER_PAGE;
+  const itemsPerPage = useCompactRows
+    ? COMPACT_OPENING_CARRY_FORWARD_ITEMS_PER_PAGE
+    : OPENING_REVIEW_ITEMS_PER_PAGE;
   const pageCount = Math.max(
-    Math.ceil(items.length / OPENING_REVIEW_ITEMS_PER_PAGE),
+    Math.ceil(items.length / itemsPerPage),
     1,
   );
   const clampedPage = Math.min(page, pageCount);
   const paginatedItems = items.slice(
-    (clampedPage - 1) * OPENING_REVIEW_ITEMS_PER_PAGE,
-    clampedPage * OPENING_REVIEW_ITEMS_PER_PAGE,
+    (clampedPage - 1) * itemsPerPage,
+    clampedPage * itemsPerPage,
   );
   const handlePageChange = (nextPage: number) => {
     setPage(Math.min(Math.max(nextPage, 1), pageCount));
@@ -852,10 +856,16 @@ function OpeningAutomationReviewPanel({
           {items.length} to review
         </Badge>
       </div>
-      <div className="mt-layout-md space-y-layout-xs">
+      <div
+        className={cn(
+          "mt-layout-md",
+          useCompactRows ? "space-y-0" : "space-y-layout-xs",
+        )}
+      >
         {paginatedItems.map((item) => (
           <OpeningItemCard
             currency={currency}
+            density={useCompactRows ? "compact" : "default"}
             item={item}
             key={getItemId(item)}
             orgUrlSlug={orgUrlSlug}
@@ -864,12 +874,12 @@ function OpeningAutomationReviewPanel({
           />
         ))}
       </div>
-      {items.length > OPENING_REVIEW_ITEMS_PER_PAGE ? (
+      {items.length > itemsPerPage ? (
         <ListPagination
           onPageChange={handlePageChange}
           page={clampedPage}
           pageCount={pageCount}
-          pageSize={OPENING_REVIEW_ITEMS_PER_PAGE}
+          pageSize={itemsPerPage}
           totalItems={items.length}
         />
       ) : null}
