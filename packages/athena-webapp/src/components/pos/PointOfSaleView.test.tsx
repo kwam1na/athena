@@ -1,8 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import PointOfSaleView from "./PointOfSaleView";
+import { setOperatingClockOverride } from "@/lib/operations/operatingDate";
 
 const useGetActiveOrganizationMock = vi.fn();
 const useGetActiveStoreMock = vi.fn();
@@ -133,7 +134,17 @@ vi.mock("../common/FadeIn", () => ({
 }));
 
 describe("PointOfSaleView", () => {
+  afterEach(() => {
+    setOperatingClockOverride(null);
+  });
+
   beforeEach(() => {
+    // Pin the operating clock. The shared-demo `this_week` window starts at
+    // Monday, so on a real Monday it holds only the current day and carries no
+    // history to assert against — which made these assertions pass six days a
+    // week and fail on the seventh. 2026-07-23 is a Thursday, matching the
+    // pinned date the fixture's own suite already uses.
+    setOperatingClockOverride(new Date("2026-07-23T12:00:00.000Z"));
     vi.clearAllMocks();
     useGetActiveStoreMock.mockReturnValue({
       activeStore: {

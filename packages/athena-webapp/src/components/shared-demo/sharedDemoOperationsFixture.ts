@@ -382,8 +382,17 @@ function buildStorePulseSummary(
     (sum, day) => sum + day.totalItemsSold,
     0,
   );
-  const yesterday = history.at(-1)!;
-  const dayBeforeYesterday = history.at(-2)!;
+  // A window can legitimately hold fewer than two days: the `this_week` window
+  // starts at Monday, so on a Monday it contains only the current day. The
+  // non-null assertions that used to stand here were false in exactly that
+  // case, and `dayBeforeYesterday` came back `undefined` — which threw while
+  // reading `.salesTotal` and failed CI every Monday. Fall back to a zeroed
+  // day so a short window compares against nothing rather than crashing.
+  const lastDay = history.at(-1);
+  const yesterday = lastDay ?? createEmptyMetric(getLocalOperatingDate());
+  const dayBeforeYesterday =
+    history.at(-2) ??
+    createEmptyMetric(shiftOperatingDate(yesterday.operatingDate, -1));
 
   return {
     averageTransaction: averageTransaction(totalSales, totalTransactions),

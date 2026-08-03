@@ -3,6 +3,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it, vi } from "vitest";
 
+import { api } from "../_generated/api";
 import { ok } from "../../shared/commandResult";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import schema from "../schema";
@@ -68,6 +69,50 @@ describe("admitted store public return contracts", () => {
       taxRate: 0,
       taxName: "Tax",
     });
+  });
+});
+
+describe("store creation currency normalization", () => {
+  async function createStoreWithCurrency(currency: string) {
+    const t = convexTest(schema, modules);
+    const owner = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("athenaUser", {
+        email: "owner@test",
+      });
+      const organizationId = await ctx.db.insert("organization", {
+        createdByUserId: userId,
+        name: "org",
+        slug: "org",
+      });
+      return { organizationId, userId };
+    });
+
+    return await t.mutation(api.inventory.stores.create, {
+      createdByUserId: owner.userId,
+      currency,
+      name: "Wigclub",
+      organizationId: owner.organizationId,
+      slug: "wigclub",
+    });
+  }
+
+  // The creation form takes currency as free text. A lowercase code here is
+  // what made Daily Close stamp report facts that the day fold read as a
+  // second currency, which blanked every weekly total.
+  it.each([
+    ["lowercase", "ghs", "GHS"],
+    ["padded", "  ghs  ", "GHS"],
+    ["mixed case", "Usd", "USD"],
+    ["empty", "", "GHS"],
+    ["whitespace only", "   ", "GHS"],
+  ])("normalizes a %s currency on write", async (_label, input, expected) => {
+    const store = await createStoreWithCurrency(input);
+    expect(store?.currency).toBe(expected);
+  });
+
+  it("leaves an already-canonical currency untouched", async () => {
+    const store = await createStoreWithCurrency("USD");
+    expect(store?.currency).toBe("USD");
   });
 });
 
