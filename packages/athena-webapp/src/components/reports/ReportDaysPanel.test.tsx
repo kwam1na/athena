@@ -4,8 +4,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getFunctionName } from "convex/server";
 
 const useQuery = vi.fn();
+/** `null` = a real store; see `useReportsSharedDemoMode`. */
+let sharedDemoContext: { kind: string } | null | undefined = null;
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQuery(...args),
+}));
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: () => sharedDemoContext,
 }));
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => ({
@@ -41,6 +46,12 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 import { ReportDaysPanel } from "./ReportDaysPanel";
+import {
+  createSharedDemoReportDays,
+  createSharedDemoReportSkuMix,
+} from "@/components/shared-demo/sharedDemoReportsFixture";
+import { getLocalOperatingDate } from "@/lib/operations/operatingDate";
+import { formatOperatingDate } from "./reportFormat";
 
 const baseProps = {
   startDate: "2026-07-15",
@@ -57,6 +68,70 @@ const baseProps = {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  sharedDemoContext = null;
+});
+
+function isoDateOffset(from: string, days: number): string {
+  const date = new Date(`${from}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+describe("ReportDaysPanel shared demo", () => {
+  const endDate = getLocalOperatingDate();
+  const startDate = isoDateOffset(endDate, -13);
+  const demoProps = {
+    ...baseProps,
+    endDate,
+    startDate,
+    tableEndDate: endDate,
+    tableStartDate: startDate,
+  };
+
+  it("renders demo days and product mix without either live read", () => {
+    sharedDemoContext = { kind: "shared_demo" };
+    useQuery.mockReturnValue(undefined);
+
+    render(<ReportDaysPanel {...demoProps} />);
+
+    expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
+
+    const days = createSharedDemoReportDays({ endDate, startDate });
+    expect(days.length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("link", {
+        name: formatOperatingDate(days.at(-1)!.operatingDate),
+      }),
+    ).toBeInTheDocument();
+
+    // The mix panel is fed from the same demo range, not left pending.
+    const mix = createSharedDemoReportSkuMix({ endDate, startDate });
+    expect(mix.rows.length).toBeGreaterThan(0);
+    expect(screen.queryByText("No products sold")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Product sales legend")).toBeInTheDocument();
+  });
+
+  it("keeps both live reads for a real store", () => {
+    useQuery.mockReturnValue([]);
+
+    render(<ReportDaysPanel {...demoProps} />);
+
+    expect(
+      useQuery.mock.calls.map((call) => call[1]).filter(Boolean),
+    ).toEqual([
+      { storeId: "store-1", startDate, endDate },
+      { storeId: "store-1", startDate, endDate },
+    ]);
+  });
+
+  it("opens neither read while the shared demo context is loading", () => {
+    sharedDemoContext = undefined;
+    useQuery.mockReturnValue(undefined);
+
+    render(<ReportDaysPanel {...demoProps} />);
+
+    expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
+  });
 });
 
 describe("ReportDaysPanel", () => {

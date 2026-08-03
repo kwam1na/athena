@@ -8,6 +8,8 @@ import type { ProductSkuSearchResultLike } from "@/lib/skuSearch/productSkuSearc
 const navigate = vi.fn();
 const useQuery = vi.fn();
 let activeStoreId = "store-1";
+let sharedDemoContext: { kind: string; storeId?: string } | null | undefined =
+  null;
 
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => navigate,
@@ -29,6 +31,11 @@ vi.mock("@/hooks/useGetActiveStore", () => ({
 vi.mock("@/hooks/useDebounce", () => ({
   useDebounce: <T,>(value: T) => value,
 }));
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: () => sharedDemoContext,
+}));
+
+import { SHARED_DEMO_PRODUCTS } from "~/shared/sharedDemoStory";
 
 import { ReportsCatalogLookup } from "./ReportsCatalogLookup";
 
@@ -69,6 +76,7 @@ function result(
 describe("ReportsCatalogLookup", () => {
   beforeEach(() => {
     activeStoreId = "store-1";
+    sharedDemoContext = null;
     navigate.mockReset();
     useQuery.mockReset();
     window.history.replaceState(
@@ -322,6 +330,82 @@ describe("ReportsCatalogLookup", () => {
       <ReportsCatalogLookup endDate="2026-07-29" startDate="2026-07-29" />,
     );
     expect(screen.getByText("No matching products")).toBeInTheDocument();
+  });
+
+  it("answers the shared demo from the local fixture without a live search", async () => {
+    const user = userEvent.setup();
+    sharedDemoContext = { kind: "shared_demo", storeId: "store-1" };
+    useQuery.mockReturnValue(undefined);
+
+    render(
+      <ReportsCatalogLookup endDate="2026-07-29" startDate="2026-07-29" />,
+    );
+    await user.type(
+      screen.getByRole("searchbox", { name: "Search products" }),
+      "kente",
+    );
+
+    expect(useQuery.mock.calls.at(-1)?.[1]).toBe("skip");
+    expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
+    expect(
+      screen.getByRole("heading", { name: "Kente Scarf" }),
+    ).toBeInTheDocument();
+
+    const kente = SHARED_DEMO_PRODUCTS.find(
+      (product) => product.slug === "demo-kente-scarf",
+    )!;
+    await user.click(
+      screen.getByRole("button", { name: new RegExp(kente.sku) }),
+    );
+
+    expect(navigate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          productSkuId: "shared-demo-sku-demo-kente-scarf",
+        }),
+      }),
+    );
+  });
+
+  it("keeps the live search subscription for a real store", async () => {
+    const user = userEvent.setup();
+    useQuery.mockReturnValue({
+      candidateOverflow: false,
+      limit: 25,
+      truncated: false,
+      results: [result()],
+    });
+
+    render(
+      <ReportsCatalogLookup endDate="2026-07-29" startDate="2026-07-29" />,
+    );
+    await user.type(
+      screen.getByRole("searchbox", { name: "Search products" }),
+      "body",
+    );
+
+    expect(useQuery.mock.calls.at(-1)?.[1]).toEqual({
+      limit: 25,
+      query: "body",
+      storeId: "store-1",
+    });
+  });
+
+  it("holds the live search while the shared demo context is loading", async () => {
+    const user = userEvent.setup();
+    sharedDemoContext = undefined;
+    useQuery.mockReturnValue(undefined);
+
+    render(
+      <ReportsCatalogLookup endDate="2026-07-29" startDate="2026-07-29" />,
+    );
+    await user.type(
+      screen.getByRole("searchbox", { name: "Search products" }),
+      "body",
+    );
+
+    expect(useQuery.mock.calls.at(-1)?.[1]).toBe("skip");
+    expect(screen.getByRole("status")).toHaveTextContent("Searching");
   });
 
   it("clears a query when the active store changes", async () => {

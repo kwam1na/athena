@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
+import { useMemo } from "react";
 
 import useGetActiveStore from "@/hooks/useGetActiveStore";
+import { useReportsSharedDemoMode } from "@/components/reports/useReportsSharedDemoMode";
 import { useStableReportQuery } from "@/components/reports/useStableReportQuery";
+import { createSharedDemoReportsOverview } from "@/components/shared-demo/sharedDemoReportsFixture";
 import { api } from "~/convex/_generated/api";
 
 import { ReportDaysPanel } from "@/components/reports/ReportDaysPanel";
@@ -33,16 +36,27 @@ function ReportsOverviewRoute() {
   const navigate = Route.useNavigate();
   const { activeStore } = useGetActiveStore();
 
+  const { isSharedDemo, useLiveQuery } = useReportsSharedDemoMode();
+
   /**
    * Gating the page on the overview query — the same document the header
    * content needs, deduplicated by the Convex client, so no extra read —
    * keeps the report sections from painting at different moments.
+   *
+   * The shared demo derives the same document in the browser. The fixture is
+   * cached per operating date, so the view issuing its own call resolves to
+   * the identical projection rather than a second, possibly divergent one.
    */
+  const liveOverview = useQuery(
+    api.reports.queries.getOverview,
+    activeStore?._id && useLiveQuery ? { storeId: activeStore._id } : "skip",
+  );
+  const demoOverview = useMemo(
+    () => (isSharedDemo ? createSharedDemoReportsOverview() : undefined),
+    [isSharedDemo],
+  );
   const { isInitialLoad } = useStableReportQuery(
-    useQuery(
-      api.reports.queries.getOverview,
-      activeStore?._id ? { storeId: activeStore._id } : "skip",
-    ),
+    isSharedDemo ? demoOverview : liveOverview,
   );
 
   const defaultDaysEnd = isoDateOffset(0);

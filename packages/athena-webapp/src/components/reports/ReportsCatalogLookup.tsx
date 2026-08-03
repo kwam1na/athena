@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
+import { createSharedDemoCatalogSearchResults } from "@/components/shared-demo/sharedDemoCatalogSearchFixture";
 import { getOrigin } from "@/lib/navigationUtils";
 import { cn } from "@/lib/utils";
 import {
@@ -24,6 +26,8 @@ type ProductSkuSearchResponse = {
   results: ProductSkuSearchResultLike[];
   truncated: boolean;
 };
+
+const SEARCH_LIMIT = 25;
 
 function capitalizeProductName(value: string): string {
   const trimmed = value.trim();
@@ -53,6 +57,7 @@ export function ReportsCatalogLookup({
   startDate: string;
 }) {
   const { activeStore } = useGetActiveStore();
+  const sharedDemoContext = useSharedDemoContext();
   const navigate = useNavigate();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
   const [query, setQuery] = useState("");
@@ -61,16 +66,40 @@ export function ReportsCatalogLookup({
   const trimmedQuery = query.trim();
   const trimmedDebouncedQuery = debouncedQuery.trim();
 
-  const searchResult = useQuery(
+  // The shared demo catalog is eight fixed products, so its lookup is answered
+  // locally. `undefined` means the context read has not settled yet: hold the
+  // live subscription until it does rather than opening one we would discard.
+  const isSharedDemo = sharedDemoContext?.kind === "shared_demo";
+  const isSharedDemoContextPending = sharedDemoContext === undefined;
+
+  const liveSearchResult = useQuery(
     api.inventory.skuSearch.searchProductSkus,
-    activeStore?._id && trimmedDebouncedQuery
+    activeStore?._id &&
+      trimmedDebouncedQuery &&
+      !isSharedDemo &&
+      !isSharedDemoContextPending
       ? {
-          limit: 25,
+          limit: SEARCH_LIMIT,
           query: trimmedDebouncedQuery,
           storeId: activeStore._id,
         }
       : "skip",
   ) as ProductSkuSearchResponse | undefined;
+
+  const sharedDemoStoreId = activeStore?._id;
+  const sharedDemoSearchResult = useMemo(
+    () =>
+      isSharedDemo && sharedDemoStoreId && trimmedDebouncedQuery
+        ? createSharedDemoCatalogSearchResults({
+            limit: SEARCH_LIMIT,
+            query: trimmedDebouncedQuery,
+            storeId: sharedDemoStoreId,
+          })
+        : undefined,
+    [isSharedDemo, sharedDemoStoreId, trimmedDebouncedQuery],
+  );
+
+  const searchResult = isSharedDemo ? sharedDemoSearchResult : liveSearchResult;
 
   const groups = useMemo(
     () =>

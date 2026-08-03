@@ -7,8 +7,13 @@ import type { ReportOverviewData } from "~/shared/reportsContract";
 
 const useQuery = vi.fn();
 const navigate = vi.fn();
+/** `null` = a real store; see `useReportsSharedDemoMode`. */
+let sharedDemoContext: { kind: string } | null | undefined = null;
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQuery(...args),
+}));
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: () => sharedDemoContext,
 }));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -162,6 +167,34 @@ function renderOverview(initialWindow: ReportOverviewWindow = "today") {
 describe("ReportsOverviewView", () => {
   beforeEach(() => {
     navigate.mockReset();
+    useQuery.mockReset();
+    sharedDemoContext = null;
+  });
+
+  it("keeps the live overview subscription for a real store", () => {
+    useQuery.mockReturnValue(fixture);
+    renderOverview();
+
+    expect(useQuery.mock.calls.at(-1)?.[1]).toEqual({ storeId: "store-1" });
+  });
+
+  it("paints the shared demo from the fixture without a live overview read", () => {
+    sharedDemoContext = { kind: "shared_demo" };
+    useQuery.mockReturnValue(undefined);
+    renderOverview();
+
+    expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
+    expect(screen.getByTestId("reports-overview")).toBeInTheDocument();
+    expect(screen.getByTestId("report-freshness")).toBeInTheDocument();
+  });
+
+  it("holds the live overview read while the shared demo context loads", () => {
+    sharedDemoContext = undefined;
+    useQuery.mockReturnValue(undefined);
+    renderOverview();
+
+    expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
+    expect(screen.queryByTestId("reports-overview")).not.toBeInTheDocument();
   });
 
   it("opens a selected chart day in the item sales workspace", async () => {

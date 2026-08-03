@@ -1,12 +1,17 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const useQuery = vi.fn();
 const navigateBackMock = vi.fn();
 const search = { current: {} as Record<string, unknown> };
+/** `null` = a real store; see `useReportsSharedDemoMode`. */
+let sharedDemoContext: { kind: string } | null | undefined = null;
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQuery(...args),
+}));
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: () => sharedDemoContext,
 }));
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => ({
@@ -45,6 +50,20 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 import { ReportsSkuDetailView } from "./ReportsSkuDetailView";
+import {
+  createSharedDemoSkuDayTransactions,
+  createSharedDemoSkuDetail,
+  SHARED_DEMO_REPORTS_SKU_ID_PREFIX,
+} from "@/components/shared-demo/sharedDemoReportsFixture";
+import { SHARED_DEMO_PRODUCTS } from "~/shared/sharedDemoStory";
+import { getLocalOperatingDate } from "@/lib/operations/operatingDate";
+import { formatOperatingDate } from "./reportFormat";
+
+function isoDateOffset(from: string, days: number): string {
+  const date = new Date(`${from}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
 
 const baseProps = {
   productSkuId: "sku-1",
@@ -55,6 +74,101 @@ const baseProps = {
   onTransactionDateChange: vi.fn(),
   page: 1,
 };
+
+describe("ReportsSkuDetailView shared demo", () => {
+  const endDate = getLocalOperatingDate();
+  const startDate = isoDateOffset(endDate, -29);
+  const demoSkuId = `${SHARED_DEMO_REPORTS_SKU_ID_PREFIX}${SHARED_DEMO_PRODUCTS[0]!.slug}`;
+  const demoProps = { ...baseProps, endDate, startDate };
+
+  afterEach(() => {
+    sharedDemoContext = null;
+  });
+
+  it("renders demo SKU detail and day evidence with no live reads", () => {
+    sharedDemoContext = { kind: "shared_demo" };
+    useQuery.mockReturnValue(undefined);
+
+    const detail = createSharedDemoSkuDetail({
+      productSkuId: demoSkuId,
+      startDate,
+      endDate,
+    })!;
+    expect(detail.days.length).toBeGreaterThan(0);
+    // Newest day the SKU actually moved on, so the evidence sheet has rows.
+    const evidenceDate = detail.days.at(-1)!.operatingDate;
+    const evidence = createSharedDemoSkuDayTransactions({
+      productSkuId: demoSkuId,
+      operatingDate: evidenceDate,
+    });
+    expect(evidence.transactions.length).toBeGreaterThan(0);
+
+    render(
+      <ReportsSkuDetailView
+        {...demoProps}
+        productSkuId={demoSkuId}
+        transactionDate={evidenceDate}
+      />,
+    );
+
+    expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
+    expect(screen.getByTestId("reports-sku-detail-name")).toHaveTextContent(
+      SHARED_DEMO_PRODUCTS[0]!.name,
+    );
+    expect(screen.queryByText("No activity")).not.toBeInTheDocument();
+
+    // Day evidence is answered locally too — the sheet never waits on a read.
+    expect(
+      screen.getByText(
+        `Transactions for ${formatOperatingDate(evidenceDate)}`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Loading transaction evidence/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        new RegExp(`^${evidence.transactions.length} transactions? attached to`),
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the empty state for a non-demo SKU id without throwing", () => {
+    sharedDemoContext = { kind: "shared_demo" };
+    useQuery.mockReturnValue(undefined);
+
+    expect(() =>
+      render(
+        <ReportsSkuDetailView {...demoProps} productSkuId="not-a-demo-sku" />,
+      ),
+    ).not.toThrow();
+
+    expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
+    expect(screen.getByText("No activity")).toBeInTheDocument();
+  });
+
+  it("keeps the live detail read for a real store", () => {
+    useQuery.mockReturnValue({ days: [], totals: null });
+
+    render(<ReportsSkuDetailView {...demoProps} />);
+
+    expect(useQuery.mock.calls[0]?.[1]).toEqual({
+      storeId: "store-1",
+      productSkuId: "sku-1",
+      startDate,
+      endDate,
+    });
+  });
+
+  it("opens no read while the shared demo context is loading", () => {
+    sharedDemoContext = undefined;
+    useQuery.mockReturnValue(undefined);
+
+    render(<ReportsSkuDetailView {...demoProps} productSkuId={demoSkuId} />);
+
+    expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
+  });
+});
 
 describe("ReportsSkuDetailView", () => {
   it("lets the product identity stand on its own", () => {

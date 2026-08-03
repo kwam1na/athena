@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   activeResponse: undefined as unknown,
+  /** `null` = a real store; see `useReportsSharedDemoMode`. */
+  sharedDemoContext: null as { kind: string } | null | undefined,
   navigationOptions: [] as Array<{ replace?: boolean }>,
   /** Simulates the first paint, before any Convex result has arrived. */
   pending: false,
@@ -12,6 +14,8 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-router", () => ({
+  // The demo briefing carries `ownerRoutes`, so the view renders real links.
+  Link: ({ children }: { children?: React.ReactNode }) => <a>{children}</a>,
   createFileRoute: () => (options: Record<string, unknown>) => ({
     ...options,
     useNavigate:
@@ -57,6 +61,10 @@ vi.mock("convex/react", () => ({
 
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => ({ activeStore: { _id: "store-1" } }),
+}));
+
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: () => state.sharedDemoContext,
 }));
 
 import { ReportsWeeklyRoute, reportsWeeklySearchSchema } from "./weekly";
@@ -151,6 +159,7 @@ const report = {
 describe("ReportsWeeklyRoute query lifecycle", () => {
   beforeEach(() => {
     state.activeResponse = undefined;
+    state.sharedDemoContext = null;
     state.pending = false;
     state.navigationOptions = [];
     state.queryArgs = [];
@@ -420,6 +429,54 @@ describe("ReportsWeeklyRoute query lifecycle", () => {
       storeId: "store-1",
       reportId: "week:2026-07-06",
     });
+  });
+
+  it("answers the shared demo from the fixture with no weekly subscription", async () => {
+    const user = userEvent.setup();
+    state.sharedDemoContext = { kind: "shared_demo" };
+    const { rerender } = render(<ReportsWeeklyRoute />);
+
+    // Fewer subscriptions than the live path, which opens one immediately.
+    expect(state.queryArgs).toEqual([]);
+    expect(screen.getByTestId("weekly-status")).toHaveTextContent(
+      /^Reporting week /,
+    );
+
+    // The drawer settles on the honest empty state rather than a spinner,
+    // and no cursor page is ever requested.
+    await user.click(screen.getByRole("button", { name: "Weekly history" }));
+    rerender(<ReportsWeeklyRoute />);
+
+    expect(screen.getByText("No accepted weeks yet.")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Loading weekly history."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Older accepted weeks" }),
+    ).not.toBeInTheDocument();
+    expect(state.queryArgs).toEqual([]);
+  });
+
+  it("settles a pasted accepted week as unavailable in the shared demo", () => {
+    state.sharedDemoContext = { kind: "shared_demo" };
+    state.search = { reportId: "week:2026-07-06" };
+    render(<ReportsWeeklyRoute />);
+
+    expect(state.queryArgs).toEqual([]);
+    expect(screen.getByText("Accepted week unavailable")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Loading reporting week..."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens no weekly subscription while the shared demo context is loading", () => {
+    state.sharedDemoContext = undefined;
+    render(<ReportsWeeklyRoute />);
+
+    expect(state.queryArgs).toEqual([]);
+    expect(screen.getByTestId("weekly-status")).toHaveTextContent(
+      "Loading reporting week...",
+    );
   });
 
   it.each([

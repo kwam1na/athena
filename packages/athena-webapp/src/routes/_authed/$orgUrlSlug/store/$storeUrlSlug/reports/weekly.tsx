@@ -1,13 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useMemo } from "react";
 
 import { EmptyState } from "@/components/states/empty/empty-state";
 import { FlipText } from "@/components/common/FlipNumber";
 import { ReportsWeeklyView } from "@/components/reports/ReportsWeeklyView";
 import { formatReportDateRange } from "@/components/reports/reportFormat";
 import { reportsWeeklySearchSchema } from "@/components/reports/reportRouteSearch";
+import { useReportsSharedDemoMode } from "@/components/reports/useReportsSharedDemoMode";
 import { useStableReportQuery } from "@/components/reports/useStableReportQuery";
+import { createSharedDemoWeeklyBriefing } from "@/components/shared-demo/sharedDemoReportsFixture";
 import { weeklyLifecycleLabel } from "@/components/reports/weeklyReportPresentation";
 import { Button } from "@/components/ui/button";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
@@ -97,6 +100,19 @@ function unavailableWeeklyCopy(reason: string | null) {
   };
 }
 
+/**
+ * The shared demo has no accepted weeks: a browser fixture has no register
+ * close to accept, so `createSharedDemoWeeklyBriefing` returns a live
+ * week-to-date projection with a `null` accepted baseline. History is
+ * therefore legitimately empty and already exhausted — not pending — so the
+ * drawer shows its empty state instead of a spinner and no cursor page fires.
+ */
+const SHARED_DEMO_WEEKLY_HISTORY = {
+  page: [] as never[],
+  isDone: true,
+  continueCursor: "",
+};
+
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/weekly",
 )({
@@ -114,21 +130,38 @@ export function ReportsWeeklyRoute() {
   // One projection query at a time: active OR selected historical detail.
   // History starts only when the operator opens the selector, keeping Weekly
   // at a maximum of two compact Reports subscriptions.
-  const active = useQuery(
+  const { isSharedDemo, useLiveQuery } = useReportsSharedDemoMode();
+  const liveActive = useQuery(
     api.reports.queries.getActiveWeeklyBriefing,
-    activeStore?._id && !selectedReportId
+    activeStore?._id && !selectedReportId && useLiveQuery
       ? { storeId: activeStore._id }
       : "skip",
   );
-  const selectedDetail = useQuery(
+  const demoActive = useMemo(
+    () =>
+      isSharedDemo && !selectedReportId
+        ? createSharedDemoWeeklyBriefing()
+        : undefined,
+    [isSharedDemo, selectedReportId],
+  );
+  const active = isSharedDemo ? demoActive : liveActive;
+  const liveSelectedDetail = useQuery(
     api.reports.queries.getAcceptedWeeklyDetail,
-    activeStore?._id && selectedReportId
+    activeStore?._id && selectedReportId && useLiveQuery
       ? { storeId: activeStore._id, reportId: selectedReportId }
       : "skip",
   );
-  const history = useQuery(
+  // A pasted `reportId` in the demo names a week that cannot exist: settle it
+  // as absent so the route renders its "unavailable" state rather than
+  // waiting forever on a read that was never opened.
+  const selectedDetail = isSharedDemo
+    ? selectedReportId
+      ? null
+      : undefined
+    : liveSelectedDetail;
+  const liveHistory = useQuery(
     api.reports.queries.listAcceptedWeeklyHistory,
-    activeStore?._id && search.history
+    activeStore?._id && search.history && useLiveQuery
       ? {
         storeId: activeStore._id,
         paginationOpts: {
@@ -138,6 +171,11 @@ export function ReportsWeeklyRoute() {
       }
       : "skip",
   );
+  const history: typeof liveHistory = isSharedDemo
+    ? search.history
+      ? SHARED_DEMO_WEEKLY_HISTORY
+      : undefined
+    : liveHistory;
   const stableActive = useStableReportQuery(active, "active");
   const stableDetail = useStableReportQuery(
     selectedDetail,

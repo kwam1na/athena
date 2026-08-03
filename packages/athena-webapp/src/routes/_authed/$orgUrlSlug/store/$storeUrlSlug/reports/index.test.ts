@@ -1,11 +1,13 @@
 import { createElement } from "react";
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const routerState = vi.hoisted(() => ({
   /** Every Convex query reference the Overview route tree subscribes to. */
   queryReferences: [] as unknown[],
   overviewResult: undefined as unknown,
+  /** `null` = a real store; see `useReportsSharedDemoMode`. */
+  sharedDemoContext: null as { kind: string } | null | undefined,
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -43,6 +45,10 @@ vi.mock("convex/react", () => ({
 
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => ({ activeStore: { _id: "store-1" } }),
+}));
+
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: () => routerState.sharedDemoContext,
 }));
 
 /**
@@ -114,6 +120,7 @@ describe("reports overview route query lifecycle (AE19)", () => {
   beforeEach(() => {
     routerState.queryReferences = [];
     routerState.overviewResult = { dailyTrend: [] };
+    routerState.sharedDemoContext = null;
   });
 
   it("starts no weekly query while Overview is the active route", () => {
@@ -134,5 +141,30 @@ describe("reports overview route query lifecycle (AE19)", () => {
     // subscriptions are part of what this assertion covers.
     expect(mounted.length).toBeGreaterThan(1);
     expect(mounted.filter((name) => /[Ww]eekly/.test(name))).toEqual([]);
+  });
+
+  it("skips every Reports read in the shared demo and still starts no weekly query", () => {
+    routerState.sharedDemoContext = { kind: "shared_demo" };
+    render(
+      createElement(
+        (Route as unknown as { component: () => JSX.Element }).component,
+      ),
+    );
+
+    // The day panel painted from the fixture, so this really is the mounted
+    // subtree and not an unrendered route shell.
+    expect(screen.getByTestId("report-days-panel")).toBeInTheDocument();
+    expect(routerState.queryReferences).toEqual([]);
+  });
+
+  it("opens no Reports read while the shared demo context is loading", () => {
+    routerState.sharedDemoContext = undefined;
+    render(
+      createElement(
+        (Route as unknown as { component: () => JSX.Element }).component,
+      ),
+    );
+
+    expect(routerState.queryReferences).toEqual([]);
   });
 });

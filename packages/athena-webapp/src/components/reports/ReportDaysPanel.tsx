@@ -15,6 +15,11 @@ import { cn } from "@/lib/utils";
 import { getOrigin } from "@/lib/navigationUtils";
 import { ListPagination } from "@/components/common/ListPagination";
 import { useStableReportQuery } from "./useStableReportQuery";
+import { useReportsSharedDemoMode } from "./useReportsSharedDemoMode";
+import {
+  createSharedDemoReportDays,
+  createSharedDemoReportSkuMix,
+} from "@/components/shared-demo/sharedDemoReportsFixture";
 import { EmptyState } from "@/components/states/empty/empty-state";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
@@ -78,43 +83,65 @@ export function ReportDaysPanel({
   const { activeStore } = useGetActiveStore();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
   const pendingRangeStart = useRef<string | null>(null);
+  const { isSharedDemo, useLiveQuery } = useReportsSharedDemoMode();
+  const liveDays = useQuery(
+    api.reports.queries.listDays,
+    activeStore?._id && useLiveQuery
+      ? {
+          storeId: activeStore._id,
+          startDate: tableStartDate,
+          endDate: tableEndDate,
+        }
+      : "skip",
+  );
+  const demoDays = useMemo(
+    () =>
+      isSharedDemo
+        ? createSharedDemoReportDays({
+            startDate: tableStartDate,
+            endDate: tableEndDate,
+          })
+        : undefined,
+    [isSharedDemo, tableEndDate, tableStartDate],
+  );
   const {
     data: days,
     dataContext: settledDaysPage,
     isInitialLoad,
     isRefreshing,
-  } = useStableReportQuery(
-    useQuery(
-      api.reports.queries.listDays,
-      activeStore?._id
-        ? {
-            storeId: activeStore._id,
-            startDate: tableStartDate,
-            endDate: tableEndDate,
-          }
-        : "skip",
-    ),
-    page,
-  );
+  } = useStableReportQuery(isSharedDemo ? demoDays : liveDays, page);
   const skuMixContext = useMemo(
     () => ({ endDate, selectedDate, startDate }),
     [endDate, selectedDate, startDate],
+  );
+  const skuMixStartDate = selectedDate ?? startDate;
+  const skuMixEndDate = selectedDate ?? endDate;
+  const liveSkuMix = useQuery(
+    api.reports.queries.listRangeSkuMix,
+    activeStore?._id && useLiveQuery
+      ? {
+          storeId: activeStore._id,
+          startDate: skuMixStartDate,
+          endDate: skuMixEndDate,
+        }
+      : "skip",
+  );
+  const demoSkuMix = useMemo(
+    () =>
+      isSharedDemo
+        ? createSharedDemoReportSkuMix({
+            startDate: skuMixStartDate,
+            endDate: skuMixEndDate,
+          })
+        : undefined,
+    [isSharedDemo, skuMixEndDate, skuMixStartDate],
   );
   const {
     data: skuMix,
     dataContext: settledSkuMixContext,
     isRefreshing: isSkuMixRefreshing,
   } = useStableReportQuery(
-    useQuery(
-      api.reports.queries.listRangeSkuMix,
-      activeStore?._id
-        ? {
-            storeId: activeStore._id,
-            startDate: selectedDate ?? startDate,
-            endDate: selectedDate ?? endDate,
-          }
-        : "skip",
-    ),
+    isSharedDemo ? demoSkuMix : liveSkuMix,
     skuMixContext,
   );
   const daysNewestFirst = days

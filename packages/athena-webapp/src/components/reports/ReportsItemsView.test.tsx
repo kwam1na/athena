@@ -1,13 +1,18 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const useQuery = vi.fn();
 const navigateBackMock = vi.fn();
 const search = { current: {} as Record<string, unknown> };
 const renderedLinkSearches: unknown[] = [];
+/** `null` = a real store; see `useReportsSharedDemoMode`. */
+let sharedDemoContext: { kind: string } | null | undefined = null;
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQuery(...args),
+}));
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: () => sharedDemoContext,
 }));
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => ({
@@ -48,6 +53,18 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 import { ReportsItemsView } from "./ReportsItemsView";
+import {
+  createSharedDemoPeriodSkus,
+  createSharedDemoReportDays,
+} from "@/components/shared-demo/sharedDemoReportsFixture";
+import { getLocalOperatingDate } from "@/lib/operations/operatingDate";
+import { formatSkuDisplayName } from "./reportFormat";
+
+function isoDateOffset(from: string, days: number): string {
+  const date = new Date(`${from}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
 
 const baseProps = {
   periodType: "day" as const,
@@ -60,6 +77,68 @@ const baseProps = {
   onSortByChange: vi.fn(),
   onCursorChange: vi.fn(),
 };
+
+describe("ReportsItemsView shared demo", () => {
+  const today = getLocalOperatingDate();
+  /** The most recent demo date that actually sold something. */
+  const demoDate = createSharedDemoReportDays({
+    endDate: today,
+    startDate: isoDateOffset(today, -13),
+  })
+    .filter((day) => day.unitsSold > 0)
+    .at(-1)!.operatingDate;
+  const demoProps = { ...baseProps, periodDate: demoDate };
+
+  afterEach(() => {
+    sharedDemoContext = null;
+  });
+
+  it("lists demo period SKUs without the live read", () => {
+    sharedDemoContext = { kind: "shared_demo" };
+    useQuery.mockReturnValue(undefined);
+
+    render(<ReportsItemsView {...demoProps} />);
+
+    expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
+
+    const expected = createSharedDemoPeriodSkus({
+      periodKey: `d:${demoDate}`,
+      sortBy: "revenue",
+    });
+    expect(expected.rows.length).toBeGreaterThan(0);
+    const table = screen.getByTestId("items-results-table");
+    expect(within(table).getAllByRole("link")).toHaveLength(
+      expected.rows.length,
+    );
+    expect(
+      within(table).getByText(
+        formatSkuDisplayName(expected.rows[0]!.identity, expected.rows[0]!.productSkuId),
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the live period read for a real store", () => {
+    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+
+    render(<ReportsItemsView {...demoProps} />);
+
+    expect(useQuery.mock.calls.at(-1)?.[1]).toEqual({
+      storeId: "store-1",
+      periodKey: `d:${demoDate}`,
+      sortBy: "revenue",
+      cursor: undefined,
+    });
+  });
+
+  it("opens no read while the shared demo context is loading", () => {
+    sharedDemoContext = undefined;
+    useQuery.mockReturnValue(undefined);
+
+    render(<ReportsItemsView {...demoProps} />);
+
+    expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
+  });
+});
 
 describe("ReportsItemsView", () => {
   it("shows total units sold for the selected period", () => {
