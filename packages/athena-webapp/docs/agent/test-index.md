@@ -138,6 +138,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/operationAdmission/readDefinitions.test.ts`](../../convex/operationAdmission/readDefinitions.test.ts)
 - [`convex/operations/approvalAuditEvents.test.ts`](../../convex/operations/approvalAuditEvents.test.ts)
 - [`convex/operations/approvalProofs.test.ts`](../../convex/operations/approvalProofs.test.ts)
+- [`convex/operations/approvalRequestEmail.test.ts`](../../convex/operations/approvalRequestEmail.test.ts)
 - [`convex/operations/approvalRequestHelpers.test.ts`](../../convex/operations/approvalRequestHelpers.test.ts)
 - [`convex/operations/approvalRequests.sharedDemo.test.ts`](../../convex/operations/approvalRequests.sharedDemo.test.ts)
 - [`convex/operations/approvalRequests.test.ts`](../../convex/operations/approvalRequests.test.ts)

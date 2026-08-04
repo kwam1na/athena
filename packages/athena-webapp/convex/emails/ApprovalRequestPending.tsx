@@ -57,6 +57,8 @@ export interface ApprovalRequestPendingProps {
   requesterName: string;
   createdAt: string;
   reason?: string;
+  /** Free text the requester attached to the request, when they wrote one. */
+  requesterNote?: string;
   queueUrl: string;
   data?: ApprovalRequestPendingData;
 }
@@ -180,14 +182,15 @@ export const approvalRequestPendingPreviewProps = {
   createdAt: "8:42 PM",
   data: {
     amount: "GH₵-42.18",
-    transactionNumber: "TXN-1048",
+    transactionNumber: "#532044",
   },
-  identifier: "TXN-1048",
+  identifier: "#532044",
   queueUrl:
     "https://athena.wigclub.store/wigclub/store/wigclub/operations/approvals",
   reason: "Cash refund exceeded the register's approval threshold.",
   requestType: "pos_transaction_void",
   requesterName: "Ama Mensah",
+  requesterNote: "Customer paid with card, I rang it as cash by mistake.",
   storeName: "Wigclub",
 } satisfies ApprovalRequestPendingProps;
 
@@ -198,6 +201,7 @@ export default function ApprovalRequestPending({
   requesterName,
   createdAt,
   reason,
+  requesterNote,
   queueUrl,
   data = {},
 }: ApprovalRequestPendingProps) {
@@ -246,6 +250,16 @@ export default function ApprovalRequestPending({
             <Section style={styles.section}>
               <SectionHeading title="Request details" />
               <FieldGrid fields={visibleFields} data={data} />
+            </Section>
+          ) : null}
+
+          {/* Above Reason on purpose: Reason is the same policy sentence for
+              every request of a given type, while the note is the one piece of
+              context unique to this request. */}
+          {requesterNote ? (
+            <Section style={styles.separatedSection}>
+              <SectionHeading title="Requester note" />
+              <Text style={styles.reasonText}>{requesterNote}</Text>
             </Section>
           ) : null}
 

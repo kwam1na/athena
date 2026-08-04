@@ -1159,7 +1159,7 @@ export async function buildDailyCloseLifecycleGateWithCtx(
   };
 }
 
-async function getPriorCompletedDailyClose(
+export async function getPriorCompletedDailyClose(
   ctx: Pick<QueryCtx, "db">,
   args: {
     operatingDate: string;
