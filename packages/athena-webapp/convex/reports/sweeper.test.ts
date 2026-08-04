@@ -690,6 +690,103 @@ describe("dirty-mark lifecycle", () => {
     expect(day?.foldedAt).toBeDefined();
   });
 
+  it("keeps the day in progress when a maintenance mark refolds it", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t, "sweep-repair-open-day");
+    allow(storeId);
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("reportDay", {
+        storeId,
+        operatingDate: "2026-07-28",
+        currency: "GHS",
+        status: "open",
+        grossSalesMinor: 0,
+        netSalesMinor: 0,
+        refundsMinor: 0,
+        unitsSold: 0,
+        unitsReturned: 0,
+        uncostedRevenueMinor: 0,
+        grossProfitMinor: 0,
+        paymentsCollectedMinor: 0,
+        paymentsRefundedMinor: 0,
+        paymentAllocatedMinor: 0,
+        foldVersion: REPORTS_FOLD_VERSION,
+        factCount: 0,
+        lastFactRecordedAt: 0,
+        flags: {
+          mixedCurrency: false,
+          hasUncostedRevenue: false,
+          quarantinedFactCount: 0,
+        },
+      });
+    });
+    // A version repair queues the store's current day like any other: the day
+    // lacks `skuDayRowCount`, which is exactly what the backfill looks for.
+    await mark(t, storeId, "2026-07-28", "fold_version_bump");
+
+    await sweep(t);
+
+    const day = await t.run(async (ctx) =>
+      ctx.db
+        .query("reportDay")
+        .withIndex("by_storeId_operatingDate", (q) =>
+          q.eq("storeId", storeId).eq("operatingDate", "2026-07-28"),
+        )
+        .unique(),
+    );
+    // The fold ran, but a maintenance refold has no lifecycle authority: it
+    // must not close the day the Overview is still calling "In progress".
+    expect(day?.foldedAt).toBeDefined();
+    expect(day?.status).toBe("open");
+  });
+
+  it("does not open a settled day when a maintenance mark refolds it", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t, "sweep-repair-past-day");
+    allow(storeId);
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("reportDay", {
+        storeId,
+        operatingDate: "2026-07-20",
+        currency: "GHS",
+        status: "provisional",
+        grossSalesMinor: 0,
+        netSalesMinor: 0,
+        refundsMinor: 0,
+        unitsSold: 0,
+        unitsReturned: 0,
+        uncostedRevenueMinor: 0,
+        grossProfitMinor: 0,
+        paymentsCollectedMinor: 0,
+        paymentsRefundedMinor: 0,
+        paymentAllocatedMinor: 0,
+        foldVersion: REPORTS_FOLD_VERSION,
+        factCount: 0,
+        lastFactRecordedAt: 0,
+        flags: {
+          mixedCurrency: false,
+          hasUncostedRevenue: false,
+          quarantinedFactCount: 0,
+        },
+      });
+    });
+    await mark(t, storeId, "2026-07-20", "fold_version_bump");
+
+    await sweep(t);
+
+    const day = await t.run(async (ctx) =>
+      ctx.db
+        .query("reportDay")
+        .withIndex("by_storeId_operatingDate", (q) =>
+          q.eq("storeId", storeId).eq("operatingDate", "2026-07-20"),
+        )
+        .unique(),
+    );
+    expect(day?.status).toBe("provisional");
+  });
+
   it("re-queues a day whose fold failed, under write_failure, and heals next tick", async () => {
     const t = convexTest(schema, modules);
     const { storeId, productSkuId } = await seedStore(t, "sweep-failure");

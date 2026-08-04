@@ -249,6 +249,31 @@ async function loadAcceptedClose(
 // ---------------------------------------------------------------------------
 
 /**
+ * Map a dirty-day reason to the authority its fold carries over `open`.
+ * Exhaustive on purpose: a new reason must state its lifecycle intent rather
+ * than inherit "the fold decides", which silently closes a day in progress.
+ */
+export function openPolicyForReason(
+  reason: Doc<"reportDirtyDay">["reason"],
+): "current-day" | "preserve-existing" | undefined {
+  switch (reason) {
+    // Ingestion asserts this is the store's day in progress.
+    case "day_open":
+      return "current-day";
+    // Maintenance and retries: recompute, change nothing about lifecycle.
+    case "fold_version_bump":
+    case "reseed":
+    case "write_failure":
+    case "fact_cap_exceeded":
+      return "preserve-existing";
+    // Lifecycle-bearing: rollover demotes a past open day, a close reconciles.
+    case "late_fact":
+    case "close_accepted":
+      return undefined;
+  }
+}
+
+/**
  * Replace every derived doc for one (store, operating day) from its facts.
  *
  * Wholesale replacement — not an adjustment — is what makes re-running the
@@ -262,12 +287,23 @@ export async function foldAndReplaceDay(
   now: number,
   opts?: {
     /**
-     * Keep the day's status `open` when the fold would say `provisional`.
-     * Used for `day_open`-reason folds: the store's current day is refolded
-     * for accuracy but is still in progress — only a close (fold returns
-     * `reconciled`/`amended`) or rollover moves it out of `open`.
+     * What this fold is allowed to say about the day's `open` status. The fold
+     * itself never returns `open` — it only knows `provisional`, `reconciled`
+     * and `amended` — so `open` survives a refold only by policy here.
+     *
+     * - `"current-day"`: the mark asserts this IS the store's day in progress
+     *   (`day_open`), so a `provisional` fold becomes `open` unconditionally.
+     *   That also re-opens a day some earlier lifecycle-free refold demoted.
+     * - `"preserve-existing"`: the mark carries no lifecycle meaning — a
+     *   version repair, a reseed, a retry of a fold that failed to write. It
+     *   recomputes metrics and must leave the lifecycle exactly as it found
+     *   it, so an `open` day stays `open` and nothing else is opened.
+     *
+     * Omitted for lifecycle-bearing marks (`late_fact`, `close_accepted`),
+     * where the fold's own answer is the authority: rollover demotes a
+     * still-open past day to `provisional`, and a close reconciles.
      */
-    preserveOpen?: boolean;
+    openPolicy?: "current-day" | "preserve-existing";
   },
 ): Promise<void> {
   const store = await ctx.db.get("store", storeId);
@@ -334,7 +370,10 @@ export async function foldAndReplaceDay(
     operatingDate,
     currency: storeCurrency,
     status:
-      opts?.preserveOpen === true && result.day.status === "provisional"
+      result.day.status === "provisional" &&
+      (opts?.openPolicy === "current-day" ||
+        (opts?.openPolicy === "preserve-existing" &&
+          existingDay?.status === "open"))
         ? ("open" as const)
         : result.day.status,
     grossSalesMinor: result.day.grossSalesMinor,
@@ -600,8 +639,15 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
       // The sweeper does NOT re-mark the open day itself: ingestion upserts a
       // fresh `day_open` mark with every current-day fact, so a quiet day
       // stops being refolded instead of looping one fold per tick forever.
+      //
+      // Maintenance reasons recompute metrics with no lifecycle authority, so
+      // they must not silently close the day in progress. They used to: the
+      // fold only ever answers `provisional`, so a version repair over a quiet
+      // store's current day demoted it out of `open` and the Overview lost
+      // "In progress" — the Daily Operations link and the newest-first
+      // transactions order both hang off that status.
       await foldAndReplaceDay(ctx, mark.storeId, mark.operatingDate, now, {
-        preserveOpen: mark.reason === "day_open",
+        openPolicy: openPolicyForReason(mark.reason),
       });
       const foldedDates = foldedDatesByStore.get(storeKey) ?? new Set<string>();
       foldedDates.add(mark.operatingDate);
