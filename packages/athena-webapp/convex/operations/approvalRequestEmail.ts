@@ -9,7 +9,7 @@ import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSche
 import { toDisplayAmount } from "../lib/currency";
 import type { StoreScheduleContext } from "../lib/storeScheduleTime";
 import { currencyFormatter } from "../utils";
-import { resolveAppUrl } from "./dailyManagerReportEmail";
+import { formatPaymentMethod, resolveAppUrl } from "./dailyManagerReportEmail";
 import { formatRegisterCloseoutVarianceAlertReason } from "./registerCloseoutVarianceEmail";
 
 export type ApprovalRequestPendingPayload = ApprovalRequestPendingProps & {
@@ -97,6 +97,11 @@ export const getApprovalRequestPendingPayload = internalQuery({
         currency,
         approvalRequest.reason,
       ),
+      // The requester's own words, from the server-validated column on the
+      // request row — not producer-controlled metadata. `reason` above is
+      // policy text explaining why approval is required; this is the context
+      // the cashier typed, and reviewers need both.
+      requesterNote: approvalRequest.notes?.trim() || undefined,
       queueUrl: buildApprovalsQueueUrl({ organization, store }),
       data,
     };
@@ -119,7 +124,9 @@ function buildApprovalRequestPendingData(args: {
   const data: ApprovalRequestPendingData = {};
 
   const transactionNumber = metadataString(metadata, "transactionNumber");
-  if (transactionNumber) data.transactionNumber = transactionNumber;
+  if (transactionNumber) {
+    data.transactionNumber = formatTransactionNumber(transactionNumber);
+  }
 
   const amount = metadataNumber(
     metadata,
@@ -136,9 +143,11 @@ function buildApprovalRequestPendingData(args: {
     metadata,
     "previousPaymentMethod",
   );
-  if (previousPaymentMethod) data.previousPaymentMethod = previousPaymentMethod;
+  if (previousPaymentMethod) {
+    data.previousPaymentMethod = formatPaymentMethod(previousPaymentMethod);
+  }
   const paymentMethod = metadataString(metadata, "paymentMethod");
-  if (paymentMethod) data.paymentMethod = paymentMethod;
+  if (paymentMethod) data.paymentMethod = formatPaymentMethod(paymentMethod);
 
   const serviceName = metadataString(metadata, "serviceName");
   if (serviceName) data.serviceName = serviceName;
@@ -222,6 +231,14 @@ function buildApprovalsQueueUrl(args: {
 }) {
   const orgSlug = args.organization?.slug ?? args.store.slug;
   return `${resolveAppUrl()}/${orgSlug}/store/${args.store.slug}/operations/approvals`;
+}
+
+// Applied once, in the builder, so the number reads identically in the
+// subject line, the header subtitle, and the Transaction row — all three
+// resolve from `data.transactionNumber`. Producers that already stamp a "#"
+// do not get a second one.
+function formatTransactionNumber(transactionNumber: string) {
+  return `#${transactionNumber.trim().replace(/^#+/, "")}`;
 }
 
 function metadataString(

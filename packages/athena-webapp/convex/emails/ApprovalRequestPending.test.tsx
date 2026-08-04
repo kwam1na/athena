@@ -161,4 +161,32 @@ describe("ApprovalRequestPending", () => {
       );
     });
   });
+
+  describe("requester note", () => {
+    it("renders the note above the policy reason", async () => {
+      const html = await render(
+        <ApprovalRequestPending
+          {...baseProps}
+          requesterNote="Customer paid with card, I rang it as cash."
+        />,
+      );
+
+      expect(html).toContain("Requester note");
+      expect(html).toContain(
+        "Customer paid with card, I rang it as cash.",
+      );
+      // The note is the context unique to this request; the reason is the
+      // same policy sentence on every request of the type.
+      expect(html.indexOf("Requester note")).toBeLessThan(
+        html.indexOf("Reason"),
+      );
+    });
+
+    it("omits the section entirely when the requester wrote no note", async () => {
+      const html = await render(<ApprovalRequestPending {...baseProps} />);
+
+      expect(html).not.toContain("Requester note");
+      expect(html).toContain("Reason");
+    });
+  });
 });

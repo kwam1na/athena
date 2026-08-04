@@ -179,9 +179,9 @@ describe("registry subjects", () => {
     );
 
     expect(prepared?.subject).toBe(
-      "Wigclub approval needed - Transaction void - TXN-1048",
+      "Wigclub approval needed - Transaction void - #532044",
     );
-    expect(prepared?.html).toContain("TXN-1048");
+    expect(prepared?.html).toContain("#532044");
     expect(calls).toEqual([
       "operations/approvalRequestEmail:getApprovalRequestPendingPayload",
     ]);

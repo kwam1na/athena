@@ -6,7 +6,10 @@ import { toDisplayAmount } from "../lib/currency";
 import { currencyFormatter } from "../utils";
 import { sendDailyManagerReportEmail } from "../mailersend";
 import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
-import { buildDailyCloseSnapshotWithCtx } from "./dailyClose";
+import {
+  buildDailyCloseSnapshotWithCtx,
+  getPriorCompletedDailyClose,
+} from "./dailyClose";
 import type {
   DailyManagerReportItem,
   DailyManagerReportMetric,
@@ -67,6 +70,19 @@ type RegisterCashPositionSummary = {
   registerVarianceCount: number;
 };
 
+/**
+ * Gross units sold for the closed day, plus the same figure for the prior
+ * completed close the rest of the email compares against.
+ *
+ * Either field is absent when the reports lane has not folded that day (see
+ * `readUnitsSoldForDay`). Absent means UNKNOWN, never zero, so the metric and
+ * its comparison are dropped independently rather than rendered wrong.
+ */
+type UnitsSoldSummary = {
+  unitsSold?: number;
+  priorUnitsSold?: number;
+};
+
 type PreparedDailyCloseSnapshot = Awaited<
   ReturnType<typeof buildDailyCloseSnapshotWithCtx>
 >;
@@ -107,6 +123,10 @@ export const getMostRecentDailyManagerReportPayload = internalQuery({
       startAt: snapshot.closeMetadata.startAt,
       storeId: store._id,
     });
+    const unitsSoldSummary = await buildUnitsSoldSummary(ctx, {
+      operatingDate: snapshot.closeMetadata.operatingDate,
+      storeId: store._id,
+    });
 
     return buildDailyManagerReportPayload({
       cashPositionSummary,
@@ -114,6 +134,7 @@ export const getMostRecentDailyManagerReportPayload = internalQuery({
       completedBy: completedBy ?? "Athena",
       completedTimezone,
       store,
+      unitsSoldSummary,
     });
   },
 });
@@ -174,6 +195,17 @@ export const getDailyManagerReportPayloadsForDateRange = internalQuery({
       }),
     );
 
+    const unitsSoldSummaries = await Promise.all(
+      dailyClosesWithSnapshots.map((dailyClose) => {
+        const snapshot = dailyClose.reportSnapshot as DailyCloseReportSnapshot;
+
+        return buildUnitsSoldSummary(ctx, {
+          operatingDate: snapshot.closeMetadata.operatingDate,
+          storeId: store._id,
+        });
+      }),
+    );
+
     return dailyClosesWithSnapshots.map((dailyClose, index) =>
       buildDailyManagerReportPayload({
         cashPositionSummary: cashPositionSummaries[index],
@@ -181,6 +213,7 @@ export const getDailyManagerReportPayloadsForDateRange = internalQuery({
         completedBy: completedByNames[index] ?? "Athena",
         completedTimezone: completedTimezones[index],
         store,
+        unitsSoldSummary: unitsSoldSummaries[index],
       }),
     );
   },
@@ -398,12 +431,63 @@ async function resolveStaffName(
   return staffProfile?.fullName ?? null;
 }
 
+/**
+ * Units sold for one operating day, read from the reports lane's `reportDay`.
+ *
+ * Existence of the row is the whole gate. `certifiedFoldRevision` is the
+ * MOVEMENT trust boundary — it exists so a day's SKU rows and its header can
+ * be proven to come from the same fold — and this is a single scalar off the
+ * header, so an unstamped legacy row's `unitsSold` is still exactly what the
+ * fold computed. Requiring a revision here would drop those days for nothing.
+ *
+ * A missing row is the real case to handle: `reportDay` is written by the
+ * reports sweeper on its own cron, and its store allowlist is fail-closed, so
+ * a store closing days normally can have no reports lane behind it at all.
+ * Undefined means UNKNOWN, never zero, and the caller drops the metric.
+ */
+async function readUnitsSoldForDay(
+  ctx: QueryCtx,
+  args: { operatingDate: string; storeId: Id<"store"> },
+): Promise<number | undefined> {
+  const reportDay = await ctx.db
+    .query("reportDay")
+    .withIndex("by_storeId_operatingDate", (q) =>
+      q.eq("storeId", args.storeId).eq("operatingDate", args.operatingDate),
+    )
+    .unique();
+
+  return reportDay?.unitsSold;
+}
+
+/**
+ * The prior day here is the prior COMPLETED close, not the prior calendar day,
+ * so this comparison lines up with the one every other summary metric makes.
+ */
+async function buildUnitsSoldSummary(
+  ctx: QueryCtx,
+  args: { operatingDate: string; storeId: Id<"store"> },
+): Promise<UnitsSoldSummary> {
+  const unitsSold = await readUnitsSoldForDay(ctx, args);
+  if (unitsSold === undefined) return {};
+
+  const priorClose = await getPriorCompletedDailyClose(ctx, args);
+  const priorUnitsSold = priorClose
+    ? await readUnitsSoldForDay(ctx, {
+        operatingDate: priorClose.operatingDate,
+        storeId: args.storeId,
+      })
+    : undefined;
+
+  return { unitsSold, priorUnitsSold };
+}
+
 function buildDailyManagerReportPayload(args: {
   cashPositionSummary?: RegisterCashPositionSummary;
   completedBy: string;
   completedTimezone: string;
   dailyClose: Doc<"dailyClose">;
   store: Doc<"store">;
+  unitsSoldSummary?: UnitsSoldSummary;
 }): DailyManagerReportPayload {
   const snapshot = args.dailyClose.reportSnapshot as DailyCloseReportSnapshot;
   const storeCurrency = normalizeCurrency(args.store.currency);
@@ -439,7 +523,12 @@ function buildDailyManagerReportPayload(args: {
     reviewedItems: buildReviewedItems(snapshot, money, priorDaySummary),
     carryForwardItems: buildCarryForwardItems(snapshot),
     blockers: buildBlockers(snapshot),
-    summaryMetrics: buildSummaryMetrics(summary, money, priorDaySummary),
+    summaryMetrics: buildSummaryMetrics(
+      summary,
+      money,
+      priorDaySummary,
+      args.unitsSoldSummary,
+    ),
     cashMetrics: buildCashMetrics(summary, money, priorDaySummary),
     paymentTotals: buildPaymentTotals(summary, money, priorDaySummary),
     notes: snapshot.closeMetadata.notes ?? args.dailyClose.notes,
@@ -768,6 +857,7 @@ export function buildSummaryMetrics(
   summary: Record<string, unknown>,
   money: (amount: number) => string,
   priorDaySummary?: Record<string, unknown>,
+  unitsSoldSummary?: UnitsSoldSummary,
 ): DailyManagerReportMetric[] {
   const voidedTransactionCount = numberFromSummary(
     summary,
@@ -793,6 +883,24 @@ export function buildSummaryMetrics(
         "transactionCount",
       ),
     },
+    // Omitted entirely when the reports lane has not folded the day — the
+    // comparison is built here rather than from priorDaySummary so an unknown
+    // prior day never reads as "No activity on prior day".
+    ...(unitsSoldSummary?.unitsSold !== undefined
+      ? [
+          {
+            label: "Units sold",
+            value: formatUnitCount(unitsSoldSummary.unitsSold),
+            comparison:
+              unitsSoldSummary.priorUnitsSold !== undefined
+                ? formatPriorDayComparison(
+                    unitsSoldSummary.unitsSold,
+                    unitsSoldSummary.priorUnitsSold,
+                  )
+                : undefined,
+          },
+        ]
+      : []),
     {
       label: "Expenses",
       value: money(numberFromSummary(summary, "expenseTotal")),
@@ -937,6 +1045,10 @@ function formatPriorDayComparison(
   return `${percentage}% ${current > prior ? "higher" : "lower"} vs prior day`;
 }
 
+function formatUnitCount(units: number) {
+  return units.toLocaleString("en-US");
+}
+
 function countLabel(count: number, singular: string) {
   return `${count} ${singular}${count === 1 ? "" : "s"}`;
 }
@@ -945,7 +1057,9 @@ function normalizeCurrency(currency?: string) {
   return currency?.trim().toUpperCase() || "GHS";
 }
 
-function formatPaymentMethod(method: string) {
+// Shared with the approvals email so a method reads the same wherever it is
+// surfaced: "mobile_money" and "mobile-money" both render "Mobile Money".
+export function formatPaymentMethod(method: string) {
   return method
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());

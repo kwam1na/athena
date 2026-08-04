@@ -247,6 +247,80 @@ describe("daily manager report email URLs", () => {
       },
     ]);
   });
+
+  it("places units sold after sales and compares it with the prior day", () => {
+    const money = (amount: number) => `GHS ${amount}`;
+    const summary = {
+      expenseTotal: 400,
+      expenseTransactionCount: 3,
+      salesTotal: 12000,
+      transactionCount: 10,
+      voidedTransactionCount: 0,
+    };
+
+    expect(
+      buildSummaryMetrics(summary, money, undefined, {
+        unitsSold: 1240,
+        priorUnitsSold: 992,
+      }).map((metric) => metric.label),
+    ).toEqual(["Sales", "Units sold", "Expenses"]);
+    expect(
+      buildSummaryMetrics(summary, money, undefined, {
+        unitsSold: 1240,
+        priorUnitsSold: 992,
+      }),
+    ).toContainEqual({
+      label: "Units sold",
+      value: "1,240",
+      comparison: "25% higher vs prior day",
+    });
+  });
+
+  it("omits units sold entirely when the reports lane has not folded the day", () => {
+    const money = (amount: number) => `GHS ${amount}`;
+    const summary = {
+      expenseTotal: 400,
+      expenseTransactionCount: 3,
+      salesTotal: 12000,
+      transactionCount: 10,
+      voidedTransactionCount: 0,
+    };
+
+    expect(
+      buildSummaryMetrics(summary, money).map((metric) => metric.label),
+    ).toEqual(["Sales", "Expenses"]);
+    expect(
+      buildSummaryMetrics(summary, money, undefined, {}).map(
+        (metric) => metric.label,
+      ),
+    ).toEqual(["Sales", "Expenses"]);
+  });
+
+  it("drops the comparison rather than reading an unknown prior day as zero", () => {
+    const money = (amount: number) => `GHS ${amount}`;
+
+    expect(
+      buildSummaryMetrics(
+        {
+          expenseTotal: 400,
+          expenseTransactionCount: 3,
+          salesTotal: 12000,
+          transactionCount: 10,
+          voidedTransactionCount: 0,
+        },
+        money,
+        // A prior day the rest of the email can compare against, but whose
+        // reportDay is missing or uncertified — "No activity on prior day"
+        // would be a lie here.
+        { salesTotal: 10000 },
+        { unitsSold: 1240 },
+      ),
+    ).toContainEqual({
+      label: "Units sold",
+      value: "1,240",
+      comparison: undefined,
+    });
+  });
 });
 
 describe("wasActionRequiredNotifiedBeforeRail", () => {
@@ -352,5 +426,199 @@ describe("wasActionRequiredNotifiedBeforeRail", () => {
     expect(await ask()).toBe(true);
     // Scoping stays intact: only the matching store-day flips.
     expect(await ask("2026-07-13")).toBe(false);
+  });
+});
+
+describe("units sold in the closed-day report payload", () => {
+  const OPERATING_DATE = "2026-07-16";
+  const PRIOR_OPERATING_DATE = "2026-07-15";
+
+  async function seedStore(ctx: MutationCtx) {
+    const userId = await ctx.db.insert("athenaUser", {
+      email: "owner@example.com",
+      normalizedEmail: "owner@example.com",
+    });
+    const organizationId = await ctx.db.insert("organization", {
+      createdByUserId: userId,
+      name: "Accra",
+      slug: "accra",
+    });
+    const storeId = await ctx.db.insert("store", {
+      createdByUserId: userId,
+      currency: "GHS",
+      name: "Accra",
+      organizationId,
+      slug: "accra",
+    });
+    return { organizationId, storeId };
+  }
+
+  async function insertCompletedClose(
+    ctx: MutationCtx,
+    seeded: { organizationId: Id<"organization">; storeId: Id<"store"> },
+    operatingDate: string,
+    priorDaySummary?: Record<string, unknown>,
+  ) {
+    const readiness = {
+      blockerCount: 0,
+      carryForwardCount: 0,
+      readyCount: 1,
+      reviewCount: 0,
+      status: "ready" as const,
+    };
+    const summary = { salesTotal: 12000, transactionCount: 10 };
+    return ctx.db.insert("dailyClose", {
+      carryForwardWorkItemIds: [],
+      completedAt: 1,
+      createdAt: 1,
+      isCurrent: true,
+      lifecycleStatus: "active",
+      operatingDate,
+      organizationId: seeded.organizationId,
+      readiness,
+      reportSnapshot: {
+        carryForwardItems: [],
+        closeMetadata: {
+          actorType: "automation",
+          carryForwardWorkItemIds: [],
+          completedAt: 1,
+          endAt: 2,
+          operatingDate,
+          organizationId: seeded.organizationId,
+          startAt: 0,
+          storeId: seeded.storeId,
+        },
+        readiness,
+        readyItems: [],
+        reviewedItems: [],
+        sourceSubjects: [],
+        ...(priorDaySummary ? { priorDaySummary } : {}),
+        summary,
+      },
+      sourceSubjects: [],
+      status: "completed",
+      storeId: seeded.storeId,
+      summary,
+      updatedAt: 1,
+    });
+  }
+
+  async function insertReportDay(
+    ctx: MutationCtx,
+    storeId: Id<"store">,
+    operatingDate: string,
+    unitsSold: number,
+    options: { certified?: boolean } = {},
+  ) {
+    return ctx.db.insert("reportDay", {
+      currency: "GHS",
+      factCount: 1,
+      flags: {
+        hasUncostedRevenue: false,
+        mixedCurrency: false,
+        quarantinedFactCount: 0,
+      },
+      foldVersion: 1,
+      grossProfitMinor: null,
+      grossSalesMinor: 0,
+      lastFactRecordedAt: 1,
+      netSalesMinor: 0,
+      operatingDate,
+      paymentAllocatedMinor: 0,
+      paymentsCollectedMinor: 0,
+      paymentsRefundedMinor: 0,
+      refundsMinor: 0,
+      status: "reconciled",
+      storeId,
+      uncostedRevenueMinor: 0,
+      unitsReturned: 40,
+      unitsSold,
+      ...(options.certified === false ? {} : { certifiedFoldRevision: 3 }),
+    });
+  }
+
+  const unitsMetric = (payloads: Array<{ summaryMetrics?: unknown }>) =>
+    (
+      (payloads[0].summaryMetrics ?? []) as Array<{
+        label: string;
+        value: string;
+        comparison?: string;
+      }>
+    ).find((metric) => metric.label === "Units sold");
+
+  const askForDay = (t: ReturnType<typeof convexTest>, storeId: Id<"store">) =>
+    t.query(
+      internal.operations.dailyManagerReportEmail
+        .getDailyManagerReportPayloadsForDateRange,
+      {
+        endOperatingDate: OPERATING_DATE,
+        startOperatingDate: OPERATING_DATE,
+        storeId,
+      },
+    );
+
+  it("reports gross units sold against the prior completed close", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(seedStore);
+    await t.run(async (ctx) => {
+      await insertCompletedClose(ctx, seeded, PRIOR_OPERATING_DATE);
+      await insertCompletedClose(ctx, seeded, OPERATING_DATE, {
+        salesTotal: 10000,
+      });
+      // Gross, not net: unitsReturned is 40 on both days and must not move
+      // the reported figure.
+      await insertReportDay(ctx, seeded.storeId, PRIOR_OPERATING_DATE, 800);
+      await insertReportDay(ctx, seeded.storeId, OPERATING_DATE, 1000);
+    });
+
+    expect(unitsMetric(await askForDay(t, seeded.storeId))).toEqual({
+      label: "Units sold",
+      value: "1,000",
+      comparison: "25% higher vs prior day",
+    });
+  });
+
+  it("reports an unstamped legacy day — certification gates movement, not this", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(seedStore);
+    await t.run(async (ctx) => {
+      await insertCompletedClose(ctx, seeded, OPERATING_DATE);
+      await insertReportDay(ctx, seeded.storeId, OPERATING_DATE, 1000, {
+        certified: false,
+      });
+    });
+
+    expect(unitsMetric(await askForDay(t, seeded.storeId))).toEqual({
+      label: "Units sold",
+      value: "1,000",
+      comparison: undefined,
+    });
+  });
+
+  it("omits the metric when the sweeper has not folded the day at all", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(seedStore);
+    await t.run((ctx) => insertCompletedClose(ctx, seeded, OPERATING_DATE));
+
+    expect(unitsMetric(await askForDay(t, seeded.storeId))).toBeUndefined();
+  });
+
+  it("reports units with no comparison when the prior day was never folded", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(seedStore);
+    await t.run(async (ctx) => {
+      await insertCompletedClose(ctx, seeded, PRIOR_OPERATING_DATE);
+      await insertCompletedClose(ctx, seeded, OPERATING_DATE, {
+        salesTotal: 10000,
+      });
+      // The prior close exists, but the reports lane has no row for it.
+      await insertReportDay(ctx, seeded.storeId, OPERATING_DATE, 1000);
+    });
+
+    expect(unitsMetric(await askForDay(t, seeded.storeId))).toEqual({
+      label: "Units sold",
+      value: "1,000",
+      comparison: undefined,
+    });
   });
 });

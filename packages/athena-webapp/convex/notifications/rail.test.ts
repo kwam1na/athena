@@ -2525,7 +2525,7 @@ describe("approvals.request_created rail", () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0]![1]!.body));
     // Store name + type label + identifier, built from a FRESH read.
     expect(body.subject).toBe(
-      "Accra approval needed - Transaction void - TXN-1048",
+      "Accra approval needed - Transaction void - #TXN-1048",
     );
     expect(body.html).toContain("Ama Mensah");
     // Queue-level link only: no per-request deep link.
