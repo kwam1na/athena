@@ -13,7 +13,15 @@ import { REPORTS_FOLD_VERSION } from "../../shared/reportsContract";
  * one thing the sweeper owns and cannot otherwise provoke: what happens when a
  * fold fails mid-sweep.
  */
-const foldControl = vi.hoisted(() => ({ shouldThrow: false }));
+const foldControl = vi.hoisted(() => ({
+  shouldThrow: false,
+  /**
+   * Fail only the day carrying this fact. The batch-rollup tests need ONE day
+   * of a multi-day sweep to fail; `shouldThrow` is all-or-nothing, and the day
+   * is not otherwise identifiable from `foldDay`'s arguments.
+   */
+  throwOnSourceId: null as string | null,
+}));
 
 vi.mock("./foldDay", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./foldDay")>();
@@ -21,7 +29,34 @@ vi.mock("./foldDay", async (importOriginal) => {
     ...actual,
     foldDay: (...args: Parameters<typeof actual.foldDay>) => {
       if (foldControl.shouldThrow) throw new Error("fold exploded");
+      if (
+        foldControl.throwOnSourceId !== null &&
+        args[1].some((fact) => fact.sourceId === foldControl.throwOnSourceId)
+      ) {
+        throw new Error("fold exploded");
+      }
       return actual.foldDay(...args);
+    },
+  };
+});
+
+/**
+ * Records every `rebuildRollupsForDates` call the sweep makes, delegating to
+ * the real implementation. The sweep's rollup cost is per PERIOD, so what these
+ * tests pin is the SHAPE of the call — one batched call carrying every folded
+ * date — not just the rollup rows it ends up producing.
+ */
+const rollupCalls = vi.hoisted(() => [] as string[][]);
+
+vi.mock("./rollups", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./rollups")>();
+  return {
+    ...actual,
+    rebuildRollupsForDates: (
+      ...args: Parameters<typeof actual.rebuildRollupsForDates>
+    ) => {
+      rollupCalls.push([...args[2]]);
+      return actual.rebuildRollupsForDates(...args);
     },
   };
 });
@@ -51,6 +86,7 @@ import {
   MAX_FACTS_PER_DAY,
   REPORTS_SWEEP_STORE_ALLOWLIST_ENV,
   WEEKLY_DIRTY_BATCH,
+  foldAndReplaceDay,
   parseStoreAllowlist,
   selectAcceptedClose,
   sweepWithCtx,
@@ -63,6 +99,8 @@ const modules = import.meta.glob("../**/*.ts");
 
 afterEach(() => {
   foldControl.shouldThrow = false;
+  foldControl.throwOnSourceId = null;
+  rollupCalls.length = 0;
   weeklyControl.shouldThrow = false;
   delete process.env[REPORTS_SWEEP_STORE_ALLOWLIST_ENV];
   vi.restoreAllMocks();
@@ -1284,6 +1322,238 @@ async function insertWeeklyCloseFixture(
     }),
   );
 }
+
+// ---------------------------------------------------------------------------
+// Batch rollups
+//
+// Rollup re-aggregation is per period, not per day: rebuilding `m:2026-07`
+// re-reads that whole month of `reportSkuDay` rows however many of its days
+// changed. Rebuilding once per folded day therefore re-read the same month
+// SWEEP_DIRTY_BATCH times in one mutation — the dominant read cost of a full
+// batch, and the reason a backfill drain ran at ~85% of Convex's per-execution
+// byte ceiling. The sweep defers rollups and rebuilds once over the batch.
+//
+// These pin both halves: that the batching actually happens (a shape a pure
+// output assertion cannot see, since both orders produce the same rows), and
+// that the rows stay correct across the days it now merges.
+// ---------------------------------------------------------------------------
+
+describe("batch rollups", () => {
+  it("rebuilds each touched period once per sweep, not once per folded day", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId, productSkuId } = await seedStore(t, "sweep-batch-rollup");
+    allow(storeId);
+
+    // Six same-month days, all inside one ISO week: folded one-by-one this is
+    // 6 rebuilds of `m:2026-07` and 6 of `w:2026-W29`.
+    const dates = [
+      "2026-07-13",
+      "2026-07-14",
+      "2026-07-15",
+      "2026-07-16",
+      "2026-07-17",
+      "2026-07-18",
+    ];
+    for (const [index, operatingDate] of dates.entries()) {
+      await insertSaleFact(t, {
+        storeId,
+        productSkuId,
+        operatingDate,
+        sourceId: `txn-${operatingDate}`,
+        netAmountMinor: 1_000,
+        quantity: 2,
+      });
+      await mark(t, storeId, operatingDate, "late_fact", 1_000 + index);
+    }
+
+    const result = await sweep(t);
+    expect(result.daysFolded).toBe(6);
+
+    // One call for the store, carrying the whole folded-date set.
+    expect(rollupCalls).toHaveLength(1);
+    expect([...rollupCalls[0]].sort()).toEqual(dates);
+
+    const rollups = await t.run(async (ctx) =>
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      ctx.db.query("reportPeriodSkuRollup").collect(),
+    );
+
+    // Every period the six days touch is still present — the batching collapses
+    // repeated rebuilds of a period, never the set of periods.
+    expect(rollups.map((row) => row.periodKey).sort()).toEqual([
+      ...dates.map((date) => `d:${date}`),
+      "m:2026-07",
+      "w:2026-W29",
+    ]);
+
+    // ...and the merged periods carry every day's contribution, not the last
+    // day's alone.
+    const month = rollups.find((row) => row.periodKey === "m:2026-07");
+    expect(month?.netSalesMinor).toBe(6_000);
+    expect(month?.unitsSold).toBe(12);
+    const week = rollups.find((row) => row.periodKey === "w:2026-W29");
+    expect(week?.netSalesMinor).toBe(6_000);
+    expect(week?.unitsSold).toBe(12);
+  });
+
+  it("excludes a day whose fold failed from the batch it rebuilds", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId, productSkuId } = await seedStore(t, "sweep-batch-partial");
+    allow(storeId);
+
+    for (const [index, operatingDate] of [
+      "2026-07-13",
+      "2026-07-14",
+      "2026-07-15",
+    ].entries()) {
+      await insertSaleFact(t, {
+        storeId,
+        productSkuId,
+        operatingDate,
+        sourceId: `txn-${operatingDate}`,
+        netAmountMinor: 1_000,
+        quantity: 2,
+      });
+      await mark(t, storeId, operatingDate, "late_fact", 1_000 + index);
+    }
+
+    foldControl.throwOnSourceId = "txn-2026-07-14";
+    const result = await sweep(t);
+    expect(result.daysFolded).toBe(2);
+    expect(result.foldFailures).toBe(1);
+
+    // The failed day wrote nothing, so it is not in the rebuilt set.
+    expect(rollupCalls).toHaveLength(1);
+    expect([...rollupCalls[0]].sort()).toEqual(["2026-07-13", "2026-07-15"]);
+
+    // Its period siblings still rebuilt, over the two days that did land.
+    const monthOf = async () =>
+      t.run(async (ctx) =>
+        ctx.db
+          .query("reportPeriodSkuRollup")
+          .withIndex("by_storeId_periodKey_productSkuId", (q) =>
+            q.eq("storeId", storeId).eq("periodKey", "m:2026-07"),
+          )
+          .unique(),
+      );
+    expect((await monthOf())?.netSalesMinor).toBe(2_000);
+
+    // The failure went back on the queue; the retry folds it and the month
+    // picks it up — no rollup is stranded by the day it skipped.
+    expect((await marksOf(t)).map((row) => row.operatingDate)).toEqual([
+      "2026-07-14",
+    ]);
+
+    foldControl.throwOnSourceId = null;
+    rollupCalls.length = 0;
+    const healed = await sweep(t);
+    expect(healed.daysFolded).toBe(1);
+    expect(rollupCalls).toEqual([["2026-07-14"]]);
+    expect((await monthOf())?.netSalesMinor).toBe(3_000);
+  });
+
+  it("batches per store, and keeps every period a multi-month batch spans", async () => {
+    const t = convexTest(schema, modules);
+    const first = await seedStore(t, "sweep-batch-store-a");
+    const second = await seedStore(t, "sweep-batch-store-b");
+    allow(first.storeId, second.storeId);
+
+    // Straddles a month AND an ISO-week boundary, so the batched call has to
+    // fan back out to four distinct period keys.
+    const plan = [
+      { store: first, operatingDate: "2026-06-29" },
+      { store: first, operatingDate: "2026-07-01" },
+      { store: second, operatingDate: "2026-07-15" },
+    ];
+    for (const [index, entry] of plan.entries()) {
+      await insertSaleFact(t, {
+        storeId: entry.store.storeId,
+        productSkuId: entry.store.productSkuId,
+        operatingDate: entry.operatingDate,
+        sourceId: `txn-${index}-${entry.operatingDate}`,
+        netAmountMinor: 1_000,
+        quantity: 1,
+      });
+      await mark(
+        t,
+        entry.store.storeId,
+        entry.operatingDate,
+        "late_fact",
+        1_000 + index,
+      );
+    }
+
+    const result = await sweep(t);
+    expect(result.daysFolded).toBe(3);
+    expect(result.storesTouched).toBe(2);
+
+    // One batched call per touched store — never one per day, never one global
+    // call mixing two stores' dates.
+    expect(rollupCalls).toHaveLength(2);
+    expect(rollupCalls.map((dates) => [...dates].sort()).sort()).toEqual([
+      ["2026-06-29", "2026-07-01"],
+      ["2026-07-15"],
+    ]);
+
+    const periodsFor = async (storeId: Id<"store">) =>
+      t.run(async (ctx) =>
+        (
+          await ctx.db
+            .query("reportPeriodSkuRollup")
+            .withIndex("by_storeId_periodKey_productSkuId", (q) =>
+              q.eq("storeId", storeId),
+            )
+            .take(50)
+        )
+          .map((row) => row.periodKey)
+          .sort(),
+      );
+
+    expect(await periodsFor(first.storeId)).toEqual([
+      "d:2026-06-29",
+      "d:2026-07-01",
+      "m:2026-06",
+      "m:2026-07",
+      "w:2026-W27",
+    ]);
+    expect(await periodsFor(second.storeId)).toEqual([
+      "d:2026-07-15",
+      "m:2026-07",
+      "w:2026-W29",
+    ]);
+  });
+
+  it("keeps the inline rebuild for callers that do not opt into batching", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId, productSkuId } = await seedStore(t, "sweep-inline-rollup");
+
+    await insertSaleFact(t, {
+      storeId,
+      productSkuId,
+      operatingDate: "2026-07-15",
+      sourceId: "txn-inline",
+      netAmountMinor: 1_000,
+      quantity: 1,
+    });
+
+    // `deferRollups` is an opt-in: a direct fold still rebuilds its own periods,
+    // so no caller outside the sweep has to learn about the batch.
+    await t.run(async (ctx) =>
+      foldAndReplaceDay(ctx, storeId, "2026-07-15", WEEKLY_NOW),
+    );
+
+    expect(rollupCalls).toEqual([["2026-07-15"]]);
+    const rollups = await t.run(async (ctx) =>
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      ctx.db.query("reportPeriodSkuRollup").collect(),
+    );
+    expect(rollups.map((row) => row.periodKey).sort()).toEqual([
+      "d:2026-07-15",
+      "m:2026-07",
+      "w:2026-W29",
+    ]);
+  });
+});
 
 describe("certified fold revisions", () => {
   it("stamps matching revisions on the day and all its SKU rows, and a refold advances them together", async () => {

@@ -51,6 +51,14 @@ import {
  *
  * Every read is bounded. Nothing here scans a table, and any work that does
  * not fit in a tick is left on the queue for the next one.
+ *
+ * "No wedged states" is a claim about FOLD errors, which are caught per day and
+ * re-marked. It does not extend to the mutation's own transaction limits: a
+ * sweep that reads past Convex's per-execution byte ceiling fails before it
+ * returns, so nothing commits (marks included — no day is lost or half-written)
+ * but the next tick reads the same marks and breaches identically. That wedge
+ * is invisible to `SweepResult`, which is why the batch's per-period read cost
+ * is kept flat rather than multiplied by SWEEP_DIRTY_BATCH — see `deferRollups`.
  */
 
 /** Dirty marks folded per tick. */
@@ -304,6 +312,22 @@ export async function foldAndReplaceDay(
      * still-open past day to `provisional`, and a close reconciles.
      */
     openPolicy?: "current-day" | "preserve-existing";
+    /**
+     * Leave the day's calendar rollups to the caller.
+     *
+     * Rollup re-aggregation is per PERIOD, not per day: rebuilding `m:2026-07`
+     * reads that whole month of `reportSkuDay` rows regardless of which day
+     * changed. Folding a batch of days one-by-one therefore re-reads the same
+     * month once per day — the batch's dominant read cost, and quadratic in
+     * `SWEEP_DIRTY_BATCH` for a run of same-month days. The sweep sets this and
+     * rebuilds once over the batch's whole folded-date set instead, where
+     * `affectedPeriodKeys` collapses those repeats into one key.
+     *
+     * Only an optimization: the periods rebuilt are identical either way, so a
+     * caller folding a single day (or one that wants the day self-contained)
+     * leaves this unset and keeps the inline rebuild.
+     */
+    deferRollups?: boolean;
   },
 ): Promise<void> {
   const store = await ctx.db.get("store", storeId);
@@ -447,7 +471,9 @@ export async function foldAndReplaceDay(
   }
 
   // --- rollups: re-aggregate the day's calendar periods ---------------------
-  await rebuildRollupsForDates(ctx, storeId, [operatingDate]);
+  if (opts?.deferRollups !== true) {
+    await rebuildRollupsForDates(ctx, storeId, [operatingDate]);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -648,6 +674,7 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
       // transactions order both hang off that status.
       await foldAndReplaceDay(ctx, mark.storeId, mark.operatingDate, now, {
         openPolicy: openPolicyForReason(mark.reason),
+        deferRollups: true,
       });
       const foldedDates = foldedDatesByStore.get(storeKey) ?? new Set<string>();
       foldedDates.add(mark.operatingDate);
@@ -679,6 +706,17 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
   }
 
   for (const storeId of touchedStores.values()) {
+    // Rollups for the WHOLE batch at once (see `deferRollups`): the folds above
+    // deliberately skipped them so a run of same-month days re-aggregates that
+    // month once instead of once per day.
+    //
+    // Driven by foldedDatesByStore, not by the marks: a day that threw wrote
+    // nothing, and rebuilding its periods here would fold the unchanged rows
+    // back over a rollup the failed day never touched. Failures already went
+    // back on the queue, so their periods rebuild when the fold succeeds.
+    await rebuildRollupsForDates(ctx, storeId, [
+      ...(foldedDatesByStore.get(String(storeId)) ?? []),
+    ]);
     await rebuildStoreOverview(ctx, storeId, now);
     result.rangesComputed += await computePendingRanges(ctx, storeId);
     // A day fold is the sole normal signal for current weekly truth. The
