@@ -150,6 +150,32 @@ describe("report route search", () => {
     });
   });
 
+  it("inherits the five-window vocabulary on both routes via z.enum(REPORT_OVERVIEW_WINDOWS)", () => {
+    // U2: the six-month window landed in the enum, and both route schemas
+    // validate through z.enum(REPORT_OVERVIEW_WINDOWS) — the new value is
+    // accepted with no per-route change, and unknown values still reject.
+    for (const window of [
+      "today",
+      "weekToDate",
+      "trailing30",
+      "trailing3Months",
+      "trailing6Months",
+    ] as const) {
+      expect(reportsOverviewSearchSchema.parse({ window })).toEqual({
+        window,
+      });
+      expect(
+        reportsWeeklySearchSchema.parse({ overviewWindow: window }),
+      ).toEqual({ overviewWindow: window });
+    }
+    expect(() =>
+      reportsOverviewSearchSchema.parse({ window: "trailing12Months" }),
+    ).toThrow();
+    expect(() =>
+      reportsWeeklySearchSchema.parse({ overviewWindow: "trailing12Months" }),
+    ).toThrow();
+  });
+
   it("returns Overview defaults when no valid return context exists", () => {
     expect(overviewSearchFromWeeklyReturn({})).toEqual({});
     expect(reportsWeeklySearchSchema.parse({ ignored: "unknown" })).toEqual({});

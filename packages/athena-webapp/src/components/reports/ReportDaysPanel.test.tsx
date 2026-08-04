@@ -1,16 +1,13 @@
-import {
-  act,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { StrictMode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getFunctionName } from "convex/server";
 
 const useQuery = vi.fn();
 const ensureMovementRange = vi.fn();
+const ensureMixRange = vi.fn();
+const retryMixRange = vi.fn();
 /** `null` = a real store; see `useReportsSharedDemoMode`. */
 let sharedDemoContext: { kind: string } | null | undefined = null;
 vi.mock("convex/react", () => ({
@@ -20,7 +17,12 @@ vi.mock("convex/react", () => ({
     // mockReturnValue a test installed for the panel's own reads.
     return args[1] === "skip" ? undefined : result;
   },
-  useMutation: () => ensureMovementRange,
+  useMutation: (reference: unknown) => {
+    const name = getFunctionName(reference as never);
+    if (name === "reports/skuMixRange:ensureMixRange") return ensureMixRange;
+    if (name === "reports/skuMixRange:retryMixRange") return retryMixRange;
+    return ensureMovementRange;
+  },
 }));
 vi.mock("@/hooks/useSharedDemoContext", () => ({
   useSharedDemoContext: () => sharedDemoContext,
@@ -64,7 +66,7 @@ import {
   createSharedDemoReportSkuMix,
 } from "@/components/shared-demo/sharedDemoReportsFixture";
 import { getLocalOperatingDate } from "@/lib/operations/operatingDate";
-import { formatOperatingDate } from "./reportFormat";
+import { formatOperatingDate, formatReportDateRange } from "./reportFormat";
 
 const baseProps = {
   startDate: "2026-07-15",
@@ -79,10 +81,21 @@ const baseProps = {
   page: 1,
 };
 
+beforeEach(() => {
+  // Never-settling by default: a multi-day mount may admit its mix request,
+  // but no lifecycle progresses unless a test asks for one, so unrelated
+  // tests see no async state updates.
+  ensureMixRange.mockImplementation(() => new Promise(() => {}));
+  retryMixRange.mockImplementation(() => new Promise(() => {}));
+});
+
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   sharedDemoContext = null;
   ensureMovementRange.mockReset();
+  ensureMixRange.mockReset();
+  retryMixRange.mockReset();
 });
 
 function isoDateOffset(from: string, days: number): string {
@@ -109,6 +122,10 @@ describe("ReportDaysPanel shared demo", () => {
     render(<ReportDaysPanel {...demoProps} />);
 
     expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
+    // Demo mode never consumes async admission: the multi-day demo mix is
+    // answered synchronously by the fixture, not by the ensure mutation
+    // (which the server independently denies for shared-demo actors).
+    expect(ensureMixRange).not.toHaveBeenCalled();
 
     const days = createSharedDemoReportDays({ endDate, startDate });
     expect(days.length).toBeGreaterThan(0);
@@ -125,17 +142,21 @@ describe("ReportDaysPanel shared demo", () => {
     expect(screen.getByLabelText("Product sales legend")).toBeInTheDocument();
   });
 
-  it("keeps both live reads for a real store", () => {
+  it("keeps the days read live and admits the multi-day mix for a real store", () => {
     useQuery.mockReturnValue([]);
 
     render(<ReportDaysPanel {...demoProps} />);
 
+    // The 14-day mix span routes through admission, not the sync reader,
+    // so the only live subscription on mount is the days table.
     expect(
-      useQuery.mock.calls.map((call) => call[1]).filter(Boolean),
-    ).toEqual([
-      { storeId: "store-1", startDate, endDate },
-      { storeId: "store-1", startDate, endDate },
-    ]);
+      useQuery.mock.calls.map((call) => call[1]).filter((a) => a !== "skip"),
+    ).toEqual([{ storeId: "store-1", startDate, endDate }]);
+    expect(ensureMixRange).toHaveBeenCalledWith({
+      storeId: "store-1",
+      startDate,
+      endDate,
+    });
   });
 
   it("opens neither read while the shared demo context is loading", () => {
@@ -231,9 +252,7 @@ describe("ReportDaysPanel", () => {
       ];
     });
 
-    render(
-      <ReportDaysPanel {...baseProps} selectedDate="2026-07-28" />,
-    );
+    render(<ReportDaysPanel {...baseProps} selectedDate="2026-07-28" />);
 
     const productsHeader = screen.getByTestId("report-products-sold-header");
     expect(
@@ -307,9 +326,7 @@ describe("ReportDaysPanel", () => {
     }));
     useQuery.mockReturnValue(initialDays);
 
-    const { rerender } = render(
-      <ReportDaysPanel {...baseProps} page={2} />,
-    );
+    const { rerender } = render(<ReportDaysPanel {...baseProps} page={2} />);
     expect(
       within(screen.getByRole("table")).getByText("Wed, Jul 1, 2026"),
     ).toBeInTheDocument();
@@ -735,19 +752,171 @@ describe("ReportDaysPanel", () => {
         getFunctionName(functionReference as never) ===
         "reports/queries:listDays",
     );
-    const skuMixQuery = useQuery.mock.calls.find(
-      ([functionReference]) =>
-        getFunctionName(functionReference as never) ===
-        "reports/queries:listRangeSkuMix",
-    );
     expect(daysQuery?.[1]).toMatchObject({
       startDate: "2026-07-01",
       endDate: "2026-07-28",
     });
-    expect(skuMixQuery?.[1]).toMatchObject({
+    // A six-day selection is past the sync threshold: the synchronous mix
+    // reader stays skipped and the range is admitted instead.
+    expect(
+      useQuery.mock.calls.some(
+        ([functionReference, args]) =>
+          args !== "skip" &&
+          getFunctionName(functionReference as never) ===
+            "reports/queries:listRangeSkuMix",
+      ),
+    ).toBe(false);
+    expect(ensureMixRange).toHaveBeenCalledWith({
+      storeId: "store-1",
       startDate: "2026-07-15",
       endDate: "2026-07-20",
     });
+  });
+
+  it("shows the building affordance over settled rows while a multi-day snapshot builds", async () => {
+    ensureMixRange.mockResolvedValue({
+      requestKey: MIX_REQUEST_KEY,
+      lifecycle: { state: "queued_pending" },
+    });
+    useQuery.mockImplementation((functionReference: unknown, args: unknown) => {
+      if (args === "skip") return undefined;
+      const functionName = getFunctionName(functionReference as never);
+      if (functionName === "reports/queries:listRangeSkuMix") {
+        return {
+          totalUnitsSold: 7,
+          skuCount: 1,
+          rows: [
+            {
+              key: "sku-1",
+              productSkuId: "sku-1",
+              label: "WIG-A",
+              unitsSold: 7,
+              shareBasisPoints: 10_000,
+              identity: { displayName: "Oshe", sku: "WIG-A" },
+            },
+          ],
+        };
+      }
+      if (functionName === "reports/queries:listDays") {
+        return [
+          {
+            operatingDate: "2026-07-28",
+            status: "reconciled",
+            currency: "USD",
+            netSalesMinor: 1_200,
+            unitsSold: 7,
+          },
+        ];
+      }
+      return undefined;
+    });
+
+    // A selected day settles through the sync reader: no admission, no
+    // building affordance.
+    const { rerender } = render(
+      <ReportDaysPanel {...baseProps} selectedDate="2026-07-28" />,
+    );
+    expect(screen.getByText("Oshe")).toBeInTheDocument();
+    expect(ensureMixRange).not.toHaveBeenCalled();
+    expect(
+      screen.queryByTestId("report-sku-mix-building"),
+    ).not.toBeInTheDocument();
+
+    // Clearing the selection widens to the 14-day async span; the ensure
+    // never settles (default mock), so the panel is mid-build.
+    rerender(<ReportDaysPanel {...baseProps} />);
+
+    expect(ensureMixRange).toHaveBeenCalledWith({
+      storeId: "store-1",
+      startDate: "2026-07-15",
+      endDate: "2026-07-28",
+    });
+    // The settled rows hold — muted in place, never replaced by a skeleton —
+    // while a visually hidden polite region names the incoming range.
+    expect(screen.getByText("Oshe")).toBeInTheDocument();
+    const status = screen.getByTestId("report-sku-mix-building");
+    expect(status).toHaveAttribute("role", "status");
+    expect(status).toHaveClass("sr-only");
+    await waitFor(() =>
+      expect(status).toHaveTextContent(
+        `Updating product mix for ${formatReportDateRange("2026-07-15", "2026-07-28")}`,
+      ),
+    );
+    expect(screen.getByTestId("report-sku-mix-graphic")).toHaveClass(
+      "saturate-50",
+    );
+    expect(screen.getByTestId("report-sku-mix-total")).not.toHaveClass(
+      "invisible",
+    );
+    expect(
+      screen.getByTestId("report-sku-mix-building-label"),
+    ).toHaveTextContent("Updating…");
+    expect(screen.getByTestId("report-sku-mix-chart")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    expect(
+      screen.queryByTestId("report-sku-mix-pending"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("never shows the building affordance on sync-path day clicks", () => {
+    useQuery.mockImplementation((functionReference: unknown, args: unknown) => {
+      if (args === "skip") return undefined;
+      const functionName = getFunctionName(functionReference as never);
+      if (functionName === "reports/queries:listRangeSkuMix") {
+        return {
+          totalUnitsSold: 3,
+          skuCount: 1,
+          rows: [
+            {
+              key: "sku-1",
+              productSkuId: "sku-1",
+              label: "WIG-A",
+              unitsSold: 3,
+              shareBasisPoints: 10_000,
+              identity: { displayName: "Oshe", sku: "WIG-A" },
+            },
+          ],
+        };
+      }
+      return [
+        {
+          operatingDate: "2026-07-28",
+          status: "reconciled",
+          currency: "USD",
+          netSalesMinor: 1_200,
+          unitsSold: 3,
+        },
+      ];
+    });
+
+    const syncProps = {
+      ...baseProps,
+      endDate: "2026-07-28",
+      startDate: "2026-07-27",
+    };
+    const { rerender } = render(
+      <ReportDaysPanel {...syncProps} selectedDate="2026-07-28" />,
+    );
+    // Day-to-day sync swaps resolve instantly; a building treatment here
+    // would flash on every click.
+    rerender(<ReportDaysPanel {...syncProps} selectedDate="2026-07-27" />);
+
+    expect(ensureMixRange).not.toHaveBeenCalled();
+    expect(
+      screen.queryByTestId("report-sku-mix-building"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("report-sku-mix-chart")).toHaveAttribute(
+      "data-building",
+      "false",
+    );
+    expect(screen.getByTestId("report-sku-mix-graphic")).not.toHaveClass(
+      "saturate-50",
+    );
+    expect(screen.getByTestId("report-sku-mix-total")).not.toHaveClass(
+      "invisible",
+    );
   });
 
   it("returns from a selected day to the current selected range", async () => {
@@ -930,8 +1099,17 @@ describe("ReportDaysPanel", () => {
       ];
     });
 
-    render(<ReportDaysPanel {...baseProps} />);
+    // A two-day selection is the widest span that stays on the synchronous
+    // reader (REPORT_SKU_MIX_SYNC_MAX_DAYS); this test pins that path.
+    render(
+      <ReportDaysPanel
+        {...baseProps}
+        endDate="2026-07-28"
+        startDate="2026-07-27"
+      />,
+    );
 
+    expect(ensureMixRange).not.toHaveBeenCalled();
     const daysCard = screen.getByTestId("report-days-table-card");
     const skuMixCard = screen.getByTestId("report-sku-mix-chart");
     expect(skuMixCard).toHaveAttribute("data-animation-active", "false");
@@ -939,9 +1117,7 @@ describe("ReportDaysPanel", () => {
       "invisible",
     );
     expect(observe).toHaveBeenCalledWith(skuMixCard);
-    expect(
-      screen.getByTestId("report-days-heading"),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("report-days-heading")).toBeInTheDocument();
     expect(
       screen.getByText("Net sales and units sold by operating date"),
     ).toBeInTheDocument();
@@ -980,11 +1156,9 @@ describe("ReportDaysPanel", () => {
     expect(JSON.parse(osheLink.dataset.search ?? "{}")).toEqual({
       endDate: "2026-07-28",
       o: expect.any(String),
-      startDate: "2026-07-15",
+      startDate: "2026-07-27",
     });
-    expect(
-      screen.getByText("Other SKUs").closest("a"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText("Other SKUs").closest("a")).not.toBeInTheDocument();
     expect(screen.getByTestId("sku-mix-swatch-other")).toHaveStyle({
       backgroundColor: "hsl(var(--muted-foreground) / 0.15)",
     });
@@ -1068,9 +1242,7 @@ describe("ReportDaysPanel", () => {
       ];
     });
 
-    render(
-      <ReportDaysPanel {...baseProps} selectedDate="2026-07-28" />,
-    );
+    render(<ReportDaysPanel {...baseProps} selectedDate="2026-07-28" />);
 
     const osheLink = screen.getByRole("link", { name: /Oshe.*WIG-A.*100%/ });
     expect(JSON.parse(osheLink.dataset.search ?? "{}")).toEqual({
@@ -1101,7 +1273,13 @@ describe("ReportDaysPanel", () => {
       ];
     });
 
-    render(<ReportDaysPanel {...baseProps} />);
+    render(
+      <ReportDaysPanel
+        {...baseProps}
+        endDate="2026-07-16"
+        startDate="2026-07-15"
+      />,
+    );
 
     expect(screen.getByTestId("report-sku-mix-empty")).toHaveClass(
       "absolute",
@@ -1117,13 +1295,9 @@ describe("ReportDaysPanel", () => {
       "data-transition-duration",
       "180",
     );
-    expect(screen.getByTestId("report-sku-mix-total")).toHaveClass(
-      "invisible",
-    );
+    expect(screen.getByTestId("report-sku-mix-total")).toHaveClass("invisible");
     expect(
-      screen.getByText(
-        "No product sales were recorded in this date range.",
-      ),
+      screen.getByText("No product sales were recorded in this date range."),
     ).toBeInTheDocument();
   });
 
@@ -1148,22 +1322,13 @@ describe("ReportDaysPanel", () => {
       ];
     });
 
-    render(
-      <ReportDaysPanel
-        {...baseProps}
-        selectedDate="2026-07-14"
-      />,
-    );
+    render(<ReportDaysPanel {...baseProps} selectedDate="2026-07-14" />);
 
     expect(
-      screen.getByText(
-        "No product sales were recorded on Tue, Jul 14, 2026.",
-      ),
+      screen.getByText("No product sales were recorded on Tue, Jul 14, 2026."),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText(
-        "No product sales were recorded in this date range.",
-      ),
+      screen.queryByText("No product sales were recorded in this date range."),
     ).not.toBeInTheDocument();
   });
 
@@ -1211,14 +1376,9 @@ describe("ReportDaysPanel", () => {
     });
 
     const { rerender } = render(
-      <ReportDaysPanel
-        {...baseProps}
-        selectedDate="2026-07-25"
-      />,
+      <ReportDaysPanel {...baseProps} selectedDate="2026-07-25" />,
     );
-    const settledChartSurface = screen.getByTestId(
-      "report-sku-mix-graphic",
-    );
+    const settledChartSurface = screen.getByTestId("report-sku-mix-graphic");
     expect(settledChartSurface).toHaveClass("invisible");
 
     act(() => {
@@ -1246,12 +1406,7 @@ describe("ReportDaysPanel", () => {
         },
       ],
     };
-    rerender(
-      <ReportDaysPanel
-        {...baseProps}
-        selectedDate="2026-07-29"
-      />,
-    );
+    rerender(<ReportDaysPanel {...baseProps} selectedDate="2026-07-29" />);
 
     expect(screen.getByTestId("report-sku-mix-chart")).toHaveAttribute(
       "data-animation-active",
@@ -1263,11 +1418,9 @@ describe("ReportDaysPanel", () => {
     expect(screen.getByTestId("report-sku-mix-graphic")).toBe(
       settledChartSurface,
     );
-    expect(screen.getByTestId("report-sku-mix-number")).toHaveTextContent(
-      "1",
-    );
+    expect(screen.getByTestId("report-sku-mix-number")).toHaveTextContent("1");
     expect(screen.getByTestId("report-sku-mix-total")).toHaveAccessibleName(
-      "1 unit sold",
+      "1 unit across products",
     );
   });
 
@@ -1317,10 +1470,7 @@ describe("ReportDaysPanel", () => {
     });
 
     const { rerender } = render(
-      <ReportDaysPanel
-        {...baseProps}
-        selectedDate="2026-07-29"
-      />,
+      <ReportDaysPanel {...baseProps} selectedDate="2026-07-29" />,
     );
     act(() => {
       intersectionCallback?.(
@@ -1334,12 +1484,7 @@ describe("ReportDaysPanel", () => {
       totalUnitsSold: 12,
       rows: [{ ...skuMix.rows[0], unitsSold: 12 }],
     };
-    rerender(
-      <ReportDaysPanel
-        {...baseProps}
-        selectedDate="2026-07-28"
-      />,
-    );
+    rerender(<ReportDaysPanel {...baseProps} selectedDate="2026-07-28" />);
     expect(screen.getByTestId("report-sku-mix-chart")).toHaveAttribute(
       "data-exiting",
       "false",
@@ -1350,12 +1495,7 @@ describe("ReportDaysPanel", () => {
       skuCount: 0,
       rows: [],
     };
-    rerender(
-      <ReportDaysPanel
-        {...baseProps}
-        selectedDate="2026-07-25"
-      />,
-    );
+    rerender(<ReportDaysPanel {...baseProps} selectedDate="2026-07-25" />);
 
     expect(screen.getByTestId("report-sku-mix-chart")).toHaveAttribute(
       "data-exiting",
@@ -1366,9 +1506,11 @@ describe("ReportDaysPanel", () => {
       "true",
     );
     expect(screen.getByTestId("report-sku-mix-total")).toHaveAccessibleName(
-      "12 units sold",
+      "12 units across products",
     );
-    expect(screen.queryByTestId("report-sku-mix-empty")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("report-sku-mix-empty"),
+    ).not.toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByTestId("report-sku-mix-chart")).toHaveAttribute(
@@ -1414,10 +1556,15 @@ describe("ReportDaysPanel", () => {
       ];
     });
 
-    const { rerender } = render(<ReportDaysPanel {...baseProps} />);
+    const twoDayProps = {
+      ...baseProps,
+      endDate: "2026-07-16",
+      startDate: "2026-07-15",
+    };
+    const { rerender } = render(<ReportDaysPanel {...twoDayProps} />);
 
     expect(screen.getByTestId("report-sku-mix-total")).toHaveAccessibleName(
-      "10 units sold",
+      "10 units across products",
     );
     expect(screen.getByTestId("report-sku-mix-number")).toHaveAttribute(
       "data-motion",
@@ -1441,10 +1588,10 @@ describe("ReportDaysPanel", () => {
     );
 
     totalUnitsSold = 7;
-    rerender(<ReportDaysPanel {...baseProps} />);
+    rerender(<ReportDaysPanel {...twoDayProps} />);
 
     expect(screen.getByTestId("report-sku-mix-total")).toHaveAccessibleName(
-      "7 units sold",
+      "7 units across products",
     );
     expect(screen.getByTestId("report-sku-mix-number")).toHaveAttribute(
       "data-value",
@@ -1478,7 +1625,7 @@ describe("ReportDaysPanel", () => {
     const olderDay = within(table).getByText("Mon, Jul 27, 2026");
     expect(
       recentDay.compareDocumentPosition(olderDay) &
-      Node.DOCUMENT_POSITION_FOLLOWING,
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
@@ -1491,5 +1638,459 @@ describe("ReportDaysPanel", () => {
     expect(screen.queryByTestId("report-days-loading")).not.toBeInTheDocument();
     // The panel's own controls stay put, so nothing jumps when data lands.
     expect(screen.getByTestId("report-days-panel")).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Span-routed SKU mix (U5): <=2 inclusive days stays on the synchronous
+// reader forever; longer spans use the admitted snapshot lifecycle.
+// ---------------------------------------------------------------------------
+
+const MIX_REQUEST_KEY = "mix:days-panel";
+
+const dayRows = [
+  {
+    operatingDate: "2026-07-28",
+    status: "provisional",
+    currency: "USD",
+    netSalesMinor: 1_200,
+    unitsSold: 10,
+  },
+];
+
+const rangeMixData = {
+  totalUnitsSold: 10,
+  skuCount: 7,
+  rows: [
+    {
+      key: "sku-1",
+      productSkuId: "sku-1",
+      label: "WIG-A",
+      unitsSold: 6,
+      shareBasisPoints: 6_000,
+      identity: { displayName: "Range Product", sku: "WIG-A" },
+    },
+    {
+      key: "other",
+      label: "Other SKUs",
+      unitsSold: 4,
+      shareBasisPoints: 4_000,
+    },
+  ],
+};
+
+const dayMixData = {
+  totalUnitsSold: 5,
+  skuCount: 1,
+  rows: [
+    {
+      key: "sku-9",
+      productSkuId: "sku-9",
+      label: "WIG-D",
+      unitsSold: 5,
+      shareBasisPoints: 10_000,
+      identity: { displayName: "Day Product", sku: "WIG-D" },
+    },
+  ],
+};
+
+const completedMixLifecycle = {
+  state: "completed" as const,
+  totals: { totalUnitsSold: 10, skuCount: 7 },
+  completedAt: 1_754_000_000_000,
+};
+
+function mixVisibleResult(
+  lifecycle: unknown,
+  data: unknown,
+  range: { startDate: string; endDate: string },
+) {
+  return {
+    requestKey: MIX_REQUEST_KEY,
+    startDate: range.startDate,
+    endDate: range.endDate,
+    lifecycle,
+    data,
+  };
+}
+
+/** Dispatch mocked Convex reads by function name, honoring "skip". */
+function installMixQueries(fixture: {
+  syncMix?: unknown;
+  mixVisible?: unknown;
+}) {
+  useQuery.mockImplementation((reference: unknown, args: unknown) => {
+    if (args === "skip") return undefined;
+    const name = getFunctionName(reference as never);
+    if (name === "reports/queries:listRangeSkuMix") return fixture.syncMix;
+    if (name === "reports/skuMixRange:getMixRangeVisible") {
+      return fixture.mixVisible;
+    }
+    if (name === "reports/queries:listDays") return dayRows;
+    return undefined;
+  });
+}
+
+function liveMixReaderCalls() {
+  return useQuery.mock.calls.filter(
+    ([reference, args]) =>
+      args !== "skip" &&
+      getFunctionName(reference as never) === "reports/queries:listRangeSkuMix",
+  );
+}
+
+describe("ReportDaysPanel SKU mix span routing", () => {
+  it("keeps one- and two-day selections synchronous with zero admission", () => {
+    installMixQueries({ syncMix: dayMixData });
+
+    // Single day (the ambient day click).
+    const { rerender } = render(
+      <ReportDaysPanel {...baseProps} selectedDate="2026-07-28" />,
+    );
+    expect(liveMixReaderCalls().map(([, args]) => args)).toContainEqual({
+      storeId: "store-1",
+      startDate: "2026-07-28",
+      endDate: "2026-07-28",
+    });
+
+    // Two-day range: still provably under the sync reader's row cap.
+    useQuery.mockClear();
+    rerender(
+      <ReportDaysPanel
+        {...baseProps}
+        endDate="2026-07-28"
+        startDate="2026-07-27"
+      />,
+    );
+    expect(liveMixReaderCalls().map(([, args]) => args)).toContainEqual({
+      storeId: "store-1",
+      startDate: "2026-07-27",
+      endDate: "2026-07-28",
+    });
+
+    // Day-clicking through many days consumes zero admission budget.
+    for (let offset = 0; offset < 10; offset += 1) {
+      rerender(
+        <ReportDaysPanel
+          {...baseProps}
+          selectedDate={isoDateOffset("2026-07-15", offset)}
+        />,
+      );
+    }
+    expect(ensureMixRange).not.toHaveBeenCalled();
+    expect(
+      useQuery.mock.calls.some(
+        ([reference, args]) =>
+          args !== "skip" &&
+          getFunctionName(reference as never) ===
+            "reports/skuMixRange:getMixRangeVisible",
+      ),
+    ).toBe(false);
+  });
+
+  it("routes a three-day range through the lifecycle and renders completed data", async () => {
+    ensureMixRange.mockResolvedValue({
+      requestKey: MIX_REQUEST_KEY,
+      lifecycle: { state: "queued_pending" },
+    });
+    installMixQueries({
+      mixVisible: mixVisibleResult(completedMixLifecycle, rangeMixData, {
+        startDate: "2026-07-26",
+        endDate: "2026-07-28",
+      }),
+    });
+
+    render(
+      <ReportDaysPanel
+        {...baseProps}
+        endDate="2026-07-28"
+        startDate="2026-07-26"
+      />,
+    );
+
+    expect(liveMixReaderCalls()).toHaveLength(0);
+    await waitFor(() =>
+      expect(screen.getByText("Range Product")).toBeInTheDocument(),
+    );
+    expect(ensureMixRange).toHaveBeenCalledTimes(1);
+    expect(ensureMixRange).toHaveBeenCalledWith({
+      storeId: "store-1",
+      startDate: "2026-07-26",
+      endDate: "2026-07-28",
+    });
+
+    // Rows, shares, and detail links all describe the settled range.
+    expect(screen.getByText("60%")).toBeInTheDocument();
+    const detailLink = screen.getByRole("link", { name: /Range Product/ });
+    expect(JSON.parse(detailLink.dataset.search ?? "{}")).toEqual({
+      endDate: "2026-07-28",
+      o: expect.any(String),
+      startDate: "2026-07-26",
+    });
+    // The Other bucket renders without a detail link, as today.
+    expect(screen.getByText("Other SKUs").closest("a")).toBeNull();
+    expect(
+      screen.queryByTestId("report-sku-mix-pending"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the calm pending state while queued, never partial data", async () => {
+    ensureMixRange.mockResolvedValue({
+      requestKey: MIX_REQUEST_KEY,
+      lifecycle: { state: "queued_pending" },
+    });
+    installMixQueries({
+      mixVisible: mixVisibleResult({ state: "queued_pending" }, null, {
+        startDate: "2026-07-26",
+        endDate: "2026-07-28",
+      }),
+    });
+
+    render(
+      <ReportDaysPanel
+        {...baseProps}
+        endDate="2026-07-28"
+        startDate="2026-07-26"
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("report-sku-mix-pending")).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("report-sku-mix-pending")).toHaveAttribute(
+      "role",
+      "status",
+    );
+    expect(screen.getByText("Preparing product mix")).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Product sales legend"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("report-sku-mix-total"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("surfaces a sanitized terminal error with a reference and retry", async () => {
+    const user = userEvent.setup();
+    ensureMixRange.mockResolvedValue({
+      requestKey: MIX_REQUEST_KEY,
+      lifecycle: { state: "queued_pending" },
+    });
+    retryMixRange.mockResolvedValue({
+      requestKey: MIX_REQUEST_KEY,
+      lifecycle: { state: "queued_pending" },
+    });
+    installMixQueries({
+      mixVisible: mixVisibleResult(
+        {
+          state: "terminal_error",
+          errorCode: "mix_worker_failed",
+          correlationId: "corr-77",
+        },
+        null,
+        { startDate: "2026-07-26", endDate: "2026-07-28" },
+      ),
+    });
+
+    render(
+      <ReportDaysPanel
+        {...baseProps}
+        endDate="2026-07-28"
+        startDate="2026-07-26"
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("report-sku-mix-error")).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("report-sku-mix-error")).toHaveAttribute(
+      "role",
+      "alert",
+    );
+    expect(screen.getByText("Reference: corr-77")).toBeInTheDocument();
+    // Internal error codes never reach the surface.
+    expect(screen.queryByText(/mix_worker_failed/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Product sales legend"),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    expect(retryMixRange).toHaveBeenCalledWith({
+      storeId: "store-1",
+      requestKey: MIX_REQUEST_KEY,
+    });
+  });
+
+  it("re-calls ensure on the server interval and stops on unmount", async () => {
+    vi.useFakeTimers();
+    ensureMixRange.mockImplementation(async () => ({
+      requestKey: null,
+      lifecycle: { state: "waiting", retryAfterMs: 15_000 },
+    }));
+    installMixQueries({});
+
+    const { unmount } = render(
+      <ReportDaysPanel
+        {...baseProps}
+        endDate="2026-07-28"
+        startDate="2026-07-26"
+      />,
+    );
+    await act(async () => {});
+    expect(ensureMixRange).toHaveBeenCalledTimes(1);
+    expect(ensureMixRange).toHaveBeenCalledWith({
+      storeId: "store-1",
+      startDate: "2026-07-26",
+      endDate: "2026-07-28",
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    expect(ensureMixRange).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    expect(ensureMixRange).toHaveBeenCalledTimes(3);
+
+    unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(ensureMixRange).toHaveBeenCalledTimes(3);
+  });
+
+  it("collapses to a single polling timer under StrictMode double effects", async () => {
+    vi.useFakeTimers();
+    ensureMixRange.mockImplementation(async () => ({
+      requestKey: null,
+      lifecycle: { state: "backpressure", retryAfterMs: 10_000 },
+    }));
+    installMixQueries({});
+
+    render(
+      <StrictMode>
+        <ReportDaysPanel
+          {...baseProps}
+          endDate="2026-07-28"
+          startDate="2026-07-26"
+        />
+      </StrictMode>,
+    );
+    await act(async () => {});
+    expect(screen.getByText("Taking a little longer")).toBeInTheDocument();
+    expect(screen.queryByText(/capacity/i)).not.toBeInTheDocument();
+    // The duplicated mount may call the idempotent ensure once per effect run.
+    const initialCalls = ensureMixRange.mock.calls.length;
+    expect(initialCalls).toBeLessThanOrEqual(2);
+
+    // But exactly ONE timer may fire per interval — never a stacked pair.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(ensureMixRange).toHaveBeenCalledTimes(initialCalls + 1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(ensureMixRange).toHaveBeenCalledTimes(initialCalls + 2);
+  });
+
+  it("keeps settled rows, links, and the units sheet range coherent across path transitions", async () => {
+    const user = userEvent.setup();
+    ensureMovementRange.mockResolvedValue({
+      requestKey: null,
+      lifecycle: { state: "waiting", retryAfterMs: 60_000 },
+    });
+    installMixQueries({ syncMix: dayMixData });
+
+    // Settle the synchronous single-day path first.
+    const { rerender } = render(
+      <ReportDaysPanel {...baseProps} selectedDate="2026-07-28" />,
+    );
+    expect(screen.getByText("Day Product")).toBeInTheDocument();
+    expect(
+      JSON.parse(
+        screen.getByRole("link", { name: /Day Product/ }).dataset.search ??
+          "{}",
+      ),
+    ).toEqual({
+      o: expect.any(String),
+      periodDate: "2026-07-28",
+      periodType: "day",
+    });
+
+    // Switch to a multi-day range whose snapshot never completes: the
+    // settled day data stays on screen and every label still describes it.
+    rerender(<ReportDaysPanel {...baseProps} />);
+    expect(screen.getByText("Day Product")).toBeInTheDocument();
+    expect(
+      JSON.parse(
+        screen.getByRole("link", { name: /Day Product/ }).dataset.search ??
+          "{}",
+      ),
+    ).toEqual({
+      o: expect.any(String),
+      periodDate: "2026-07-28",
+      periodType: "day",
+    });
+    // No competing pending skeleton while settled data is on screen.
+    expect(
+      screen.queryByTestId("report-sku-mix-pending"),
+    ).not.toBeInTheDocument();
+
+    // The Units moved sheet sources its range from the SAME settled pair.
+    await user.click(
+      screen.getByRole("button", { name: "View item movement" }),
+    );
+    await waitFor(() =>
+      expect(ensureMovementRange).toHaveBeenCalledWith({
+        storeId: "store-1",
+        startDate: "2026-07-28",
+        endDate: "2026-07-28",
+      }),
+    );
+  });
+
+  it("renders a revisited completed range without a pending state", async () => {
+    ensureMixRange.mockResolvedValue({
+      requestKey: MIX_REQUEST_KEY,
+      lifecycle: completedMixLifecycle,
+    });
+    installMixQueries({
+      syncMix: dayMixData,
+      mixVisible: mixVisibleResult(completedMixLifecycle, rangeMixData, {
+        startDate: "2026-07-26",
+        endDate: "2026-07-28",
+      }),
+    });
+
+    const threeDayProps = {
+      ...baseProps,
+      endDate: "2026-07-28",
+      startDate: "2026-07-26",
+    };
+    const { rerender } = render(<ReportDaysPanel {...threeDayProps} />);
+    await waitFor(() =>
+      expect(screen.getByText("Range Product")).toBeInTheDocument(),
+    );
+
+    // Detour through a day selection (sync), then revisit the same range.
+    rerender(<ReportDaysPanel {...threeDayProps} selectedDate="2026-07-28" />);
+    expect(screen.getByText("Day Product")).toBeInTheDocument();
+
+    rerender(<ReportDaysPanel {...threeDayProps} />);
+    // The settled day data holds until the deduped snapshot answers — the
+    // pending state never appears on a revisit.
+    expect(
+      screen.queryByTestId("report-sku-mix-pending"),
+    ).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText("Range Product")).toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByTestId("report-sku-mix-pending"),
+    ).not.toBeInTheDocument();
   });
 });

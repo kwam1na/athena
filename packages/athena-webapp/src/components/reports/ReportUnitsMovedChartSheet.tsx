@@ -181,10 +181,10 @@ function UnitMovementAxisTick({
   return (
     <g transform={`translate(${x},${y})`}>
       <foreignObject
-        height={44}
-        width={146}
-        x={-156}
-        y={row.sku ? -22 : -16}
+        height={row.sku ? 54 : 40}
+        width={174}
+        x={-184}
+        y={row.sku ? -27 : -20}
       >
         <div className="flex h-full items-center justify-end text-right">
           <Link
@@ -206,7 +206,7 @@ function UnitMovementAxisTick({
             }}
             to="/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId"
           >
-            <span className="max-w-full truncate text-xs font-medium text-foreground underline-offset-2 group-hover:underline group-focus-visible:underline">
+            <span className="line-clamp-2 max-w-full text-xs font-medium leading-4 text-foreground underline-offset-2 group-hover:underline group-focus-visible:underline">
               {row.productName}
             </span>
             {row.sku ? (
@@ -870,7 +870,7 @@ export function ReportUnitsMovedChartSheet({
         </Button>
       </SheetTrigger>
       <SheetContent
-        className="flex w-[min(100vw,36rem)] flex-col gap-0 overflow-y-auto p-0 sm:max-w-xl"
+        className="flex w-[min(100vw,42rem)] flex-col gap-0 overflow-y-auto p-0 sm:max-w-[42rem]"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           triggerRef.current?.focus({ preventScroll: true });
@@ -886,7 +886,7 @@ export function ReportUnitsMovedChartSheet({
           </SheetDescription>
         </SheetHeader>
 
-        <div className="space-y-layout-lg px-layout-xl py-layout-xl">
+        <div className="space-y-layout-lg px-layout-md py-layout-xl sm:px-layout-xl">
           <Tabs
             onValueChange={(value) =>
               setActiveTab(value as ReportUnitsMovedTab)
@@ -1103,7 +1103,7 @@ export function ReportUnitsMovedChartSheet({
                             }
                             tickLine={false}
                             type="category"
-                            width={156}
+                            width={184}
                           />
                           <ReferenceLine
                             stroke="hsl(var(--border))"

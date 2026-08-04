@@ -129,6 +129,14 @@ const fixture: ReportOverviewData = {
     grossProfitMinor: 20_00,
     refundsMinor: 5_00,
   }),
+  trailing6Months: snapshot({ dayCount: 170, netSalesMinor: 14000_00 }),
+  priorTrailing6Months: snapshot({
+    dayCount: 184,
+    netSalesMinor: 11000_00,
+    unitsSold: 10,
+    grossProfitMinor: 40_00,
+    refundsMinor: 5_00,
+  }),
   comparisons: {
     netSalesVsPriorWeekBp: 1250,
     unitsSoldVsPriorWeekBp: null,
@@ -288,6 +296,46 @@ describe("ReportsOverviewView", () => {
 
     await user.click(screen.getByRole("tab", { name: "Trailing 3 months" }));
     expect(screen.getByText("$7,000")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Trailing 6 months" }));
+    expect(screen.getByText("$14,000")).toBeInTheDocument();
+  });
+
+  it("compares the six-month window against its own prior six months", async () => {
+    const user = userEvent.setup();
+    useQuery.mockReturnValue(fixture);
+    renderOverview();
+
+    await user.click(screen.getByRole("tab", { name: "Trailing 6 months" }));
+
+    // 14,000 vs priorTrailing6Months 11,000 => +27%. Had the comparison
+    // silently fallen back to priorTrailing3Months (6,000) it would render
+    // +133% — a wrong number, which is exactly what U2 removes.
+    expect(screen.getByText("+27%")).toBeInTheDocument();
+    expect(screen.queryByText("+133%")).not.toBeInTheDocument();
+    expect(
+      screen.getAllByText(/previous 6 months/i).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText(/previous 3 months/i)).not.toBeInTheDocument();
+  });
+
+  it("fails visibly in dev for an unrecognized window instead of comparing silently", () => {
+    useQuery.mockReturnValue(fixture);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    try {
+      expect(() =>
+        render(
+          <ReportsOverviewView
+            onSelectedWindowChange={() => undefined}
+            selectedWindow={"trailing12Months" as ReportOverviewWindow}
+          />,
+        ),
+      ).toThrow(/window/i);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it("describes the current open day as in progress", () => {
@@ -384,6 +432,9 @@ describe("ReportsOverviewView", () => {
 
     await user.click(screen.getByRole("tab", { name: "Trailing 3 months" }));
     expectAnimatedMetrics("previous 3 months");
+
+    await user.click(screen.getByRole("tab", { name: "Trailing 6 months" }));
+    expectAnimatedMetrics("previous 6 months");
   });
 
   it("presents unsettled reporting state once at the period level", async () => {
@@ -528,6 +579,13 @@ describe("ReportsOverviewView", () => {
       endDate: "2026-07-30",
       order: "oldestFirst",
       startDate: "2026-05-01",
+    });
+
+    await user.click(screen.getByRole("tab", { name: "Trailing 6 months" }));
+    expect(linkedRange()).toEqual({
+      endDate: "2026-07-30",
+      order: "oldestFirst",
+      startDate: "2026-02-01",
     });
   });
 

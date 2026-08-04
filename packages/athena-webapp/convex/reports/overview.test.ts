@@ -5,11 +5,13 @@ import { describe, expect, it } from "vitest";
 
 import schema from "../schema";
 import type { Doc, Id } from "../_generated/dataModel";
+import { REPORT_TRAILING_SIX_MONTHS_MAX_DAYS } from "../../shared/reportsContract";
 import {
   anchorDate,
   buildOverviewData,
   comparisonBp,
   emptySnapshot,
+  OVERVIEW_DAY_SCAN_LIMIT,
   rebuildStoreOverview,
   snapshotForDays,
   trustSummaryForDays,
@@ -298,6 +300,47 @@ describe("buildOverviewData", () => {
     expect(data.trailing3Months.netSalesMinor).toBe(3_000);
   });
 
+  it("materializes six-month snapshots with calendar-correct boundaries", () => {
+    // Anchor 2026-08-01: the six-calendar-month window starts 2026-03-01;
+    // the prior window is 2025-09-01..2026-02-28 ("start minus one day,
+    // re-apply the helper"). 2026-02 is a leap-adjacent February (28 days).
+    const data = buildOverviewData({
+      days: [
+        day("2025-08-31", { netSalesMinor: 1 }), // before the prior window
+        day("2025-09-01", { netSalesMinor: 2 }), // first day of the prior window
+        day("2026-02-28", { netSalesMinor: 4 }), // last day of the prior window
+        day("2026-03-01", { netSalesMinor: 8 }), // first day of the current window
+        day("2026-08-01", { status: "open", netSalesMinor: 16 }),
+      ],
+      fallbackCurrency: "GHS",
+      now: 0,
+    });
+
+    expect(data.trailing6Months.netSalesMinor).toBe(24);
+    expect(data.trailing6Months.dayCount).toBe(2);
+    expect(data.priorTrailing6Months.netSalesMinor).toBe(6);
+    expect(data.priorTrailing6Months.dayCount).toBe(2);
+  });
+
+  it("keeps six-month boundaries correct across a leap day and a year boundary", () => {
+    // Anchor 2028-02-29 (leap day): window starts 2027-09-01; prior window is
+    // 2027-03-01..2027-08-31 — both cross the year boundary from the anchor.
+    const data = buildOverviewData({
+      days: [
+        day("2027-02-28", { netSalesMinor: 1 }), // before the prior window
+        day("2027-03-01", { netSalesMinor: 2 }), // first day of the prior window
+        day("2027-08-31", { netSalesMinor: 4 }), // last day of the prior window
+        day("2027-09-01", { netSalesMinor: 8 }), // first day of the current window
+        day("2028-02-29", { status: "open", netSalesMinor: 16 }),
+      ],
+      fallbackCurrency: "GHS",
+      now: 0,
+    });
+
+    expect(data.trailing6Months.netSalesMinor).toBe(24);
+    expect(data.priorTrailing6Months.netSalesMinor).toBe(6);
+  });
+
   it("is an empty-but-valid document for a store with no days", () => {
     const data = buildOverviewData({
       days: [],
@@ -316,10 +359,21 @@ describe("buildOverviewData", () => {
       priorTrailing30: emptySnapshot(),
       trailing3Months: emptySnapshot(),
       priorTrailing3Months: emptySnapshot(),
+      trailing6Months: emptySnapshot(),
+      priorTrailing6Months: emptySnapshot(),
       comparisons: { netSalesVsPriorWeekBp: null, unitsSoldVsPriorWeekBp: null },
       dailyTrend: [],
       trust: { reconciledDays: 0, provisionalDays: 0, amendedDays: 0 },
     });
+  });
+});
+
+describe("overview day scan limit", () => {
+  it("covers the current AND prior six-month windows (2 x 184 days)", () => {
+    expect(OVERVIEW_DAY_SCAN_LIMIT).toBe(
+      2 * REPORT_TRAILING_SIX_MONTHS_MAX_DAYS,
+    );
+    expect(OVERVIEW_DAY_SCAN_LIMIT).toBe(368);
   });
 });
 
@@ -371,6 +425,63 @@ describe("rebuildStoreOverview", () => {
     expect(overviews[0].updatedAt).toBe(2_000);
     expect(overviews[0].weekToDate.netSalesMinor).toBe(900);
     expect(overviews[0].dailyTrend).toHaveLength(2);
+  });
+
+  it("scans deep enough for a complete prior six-month comparison", async () => {
+    const t = convexTest(schema, modules);
+
+    const { storeId } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("athenaUser", {
+        email: "scan-depth@example.test",
+      });
+      const organizationId = await ctx.db.insert("organization", {
+        createdByUserId: userId,
+        name: "Scan depth",
+        slug: "scan-depth",
+      });
+      const storeId = await ctx.db.insert("store", {
+        createdByUserId: userId,
+        currency: "GHS",
+        name: "Scan depth",
+        organizationId,
+        slug: "scan-depth",
+      });
+
+      // 396 consecutive days ending 2026-07-31 — more history than the scan
+      // window, so a too-shallow read would silently truncate the prior
+      // six-month window (2025-08-01..2026-01-31).
+      const cursor = new Date("2025-07-01T00:00:00.000Z");
+      const end = new Date("2026-07-31T00:00:00.000Z");
+      while (cursor.getTime() <= end.getTime()) {
+        await ctx.db.insert("reportDay", {
+          ...dayFields(cursor.toISOString().slice(0, 10), {
+            netSalesMinor: 1,
+          }),
+          storeId,
+        });
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+
+      return { storeId };
+    });
+
+    await t.run(async (ctx) => {
+      await rebuildStoreOverview(ctx, storeId, 1_000);
+    });
+
+    const overview = await t.run(async (ctx) =>
+      ctx.db
+        .query("reportOverview")
+        .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+        .unique(),
+    );
+
+    // Current window 2026-02-01..2026-07-31 = 181 days; prior window
+    // 2025-08-01..2026-01-31 = 184 days — the calendar maximum, complete.
+    expect(overview?.trailing6Months?.dayCount).toBe(181);
+    expect(overview?.trailing6Months?.netSalesMinor).toBe(181);
+    expect(overview?.priorTrailing6Months?.dayCount).toBe(184);
+    expect(overview?.priorTrailing6Months?.netSalesMinor).toBe(184);
   });
 
   it("reads the trend's transaction counts from each day's register close", async () => {

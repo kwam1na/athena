@@ -412,6 +412,8 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     reason: LEGACY_REASON,
     functions: [
       "reports/customRange:requestRange",
+      "reports/skuMixRange:ensureMixRange",
+      "reports/skuMixRange:retryMixRange",
       "reports/skuMovementRange:ensureMovementRange",
       "reports/skuMovementRange:retryMovementRange",
     ],

@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="63749b40754273f4634b51fd9eb0cdce2bd5cde31ee0f0dcabbec0d7d14947c1" data-athena-report-base="origin/main" data-athena-report-head="feat/reports-trailing-six-months">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A trailing six-month period, and the span routing that made it affordable</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
+      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
+      h2 { font-size: 28px; margin: 0 0 16px; }
+      h3 { font-size: 19px; margin: 22px 0 10px; }
+      p { margin: 0 0 14px; }
+      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
+      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+      .table-scroll { overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
+      @media (hover: hover) and (pointer: fine) {
+        label:hover { border-color: #b6c5d8; }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 700;
+        padding: 11px 16px;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:active { transform: scale(0.97); }
+      button.secondary { background: #475569; }
+      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      #quizResult { font-weight: 700; }
+      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
+      .answer-detail.visible { display: block; }
+      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
+      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
+      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
+      @media (max-width: 820px) { h1 { font-size: 32px; } main { padding: 32px 16px 56px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>A trailing six-month period, and the span routing that made it affordable</h1>
+        <p class="lede">Adding a fifth period to Reports is a one-line enum change that would have shipped a preset the days table rejects, a tab with no snapshot behind it, and a mix chart that fails at half-year scale by design. This delivery lands the window last &mdash; after raising the drill-down reach, generalizing the range-snapshot lifecycle over its request kind, and moving multi-day SKU mix onto it while keeping single-day mix permanently synchronous.</p>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch feat/reports-trailing-six-months</span><span class="pill">Base origin/main</span><span class="pill">834 focused tests green</span><span class="pill">Merge gate: pr:athena</span><span class="pill">No schema migration</span><span class="pill">No fold-version bump</span></div>
+      </header>
+
+      <section class="panel"><h2>Executive Summary</h2>
+        <p>Reports offered four periods, the longest a quarter. Owners reviewing seasonality had no half-year view. The change adds <strong>Trailing 6 months</strong> as a first-class window, raises the drill-down span ceiling so the window is actually explorable, and moves multi-day SKU mix off a synchronous 5,000-row read onto the bounded resumable range-snapshot lifecycle. The three parts ship together because a six-month window that cannot be drilled into, or whose mix chart reliably fails, is worse than no window at all.</p>
+        <p><strong>The ceiling is 184 days, not 183.</strong> These windows are calendar-month aligned, so their length is a sum of six real month lengths. Mar&ndash;Aug, May&ndash;Oct, Jul&ndash;Dec and Aug&ndash;Jan each contain 184 inclusive days. A 183-day ceiling would have passed every test written outside those months and rejected real windows in production, date-dependently.</p>
+        <p><strong>Mix is ambient; movement is on-demand.</strong> The mix chart is the Overview's default content &mdash; it fires on every visit and every day click. Migrating it wholesale onto admission control and asynchrony would have regressed the workspace's most frequent interaction to fix its rarest. Instead mix is <em>routed by span</em>: spans of at most two days stay on the synchronous reader permanently, and only multi-day ranges reach the snapshot lifecycle.</p>
+        <p><strong>Nothing was copy-pasted.</strong> <code>skuMovementRange.ts</code> held exactly the machinery mix needed, bound to the <code>"sku_movement"</code> literal in every core function. It was generalized into <code>rangeSnapshotLifecycle.ts</code> behind one per-kind config first; mix then landed as configuration, and movement shrank by roughly 570 net lines onto the same rail with no behavior change.</p>
+      </section>
+
+      <section class="panel"><h2>Problem and Context</h2>
+        <p>Three things blocked the one-line version of this change.</p>
+        <p><strong>The enum is a fan-out.</strong> <code>REPORT_OVERVIEW_WINDOWS</code> drove the range-picker presets in <code>ReportDateRangeField</code> <em>and</em> the overview tabs in <code>ReportsOverviewView</code>. Appending the value before the surfaces were ready ships a preset that <code>listDays</code> throws on, a SKU-detail view that rejects the span, and a Units moved sheet whose per-kind ceiling denies admission.</p>
+        <p><strong>The overview could not see that far.</strong> Snapshots are an in-memory filter over one descending read bounded by <code>OVERVIEW_DAY_SCAN_LIMIT = 184</code> &mdash; an exact fit for a three-month window plus its comparison, not a margin. A six-month window alone can consume all 184; with its prior-period comparison it needs about 368.</p>
+        <p><strong>SKU mix fails at that scale by design.</strong> <code>listRangeSkuMix</code> reads <code>reportSkuDay</code> with a 5,000-row cap and throws past it. Production moved 391 distinct SKUs in 30 days (~1,033 rows). A 92-day range is already near the wall; six months clears it routinely.</p>
+      </section>
+
+      <section class="panel"><h2>Mental Model</h2>
+        <p>Three ideas carry the whole delivery.</p>
+        <h3>1. A period is only real when every surface it reaches admits its span</h3>
+        <p>The window enum, the preset list, the tab list, the days table, SKU detail, Units moved and SKU mix are seven surfaces reached by one value. The value lands last. To make that possible, presets were split out of the enum into an explicit <code>REPORT_DATE_RANGE_PRESET_WINDOWS</code> list, so the window could appear on tabs while the picker stayed narrow &mdash; and the six-month preset was appended only in the final unit.</p>
+        <h3>2. Ambient work and on-demand work deserve different mechanisms</h3>
+        <p>Units moved opens when an operator asks for it. Mix renders on arrival and on every day click. Admission control, asynchrony and a pending state are correct for the first and a regression for the second. Span routing separates them without a flag, a rollout, or a deprecation.</p>
+        <h3>3. Generalize at the second consumer, not the third</h3>
+        <p>The movement lifecycle's <em>shape</em> was generic; its <em>code</em> guarded on a literal in six core functions. Copying it for mix would have tripled fencing, admission, cleanup and backoff logic and guaranteed they diverge at the first fix applied to one copy.</p>
+      </section>
+
+      <section class="panel"><h2>Before and After</h2>
+        <div class="table-scroll">
+        <table>
+          <thead><tr><th>Concern</th><th>Before</th><th>After</th></tr></thead>
+          <tbody>
+            <tr><td>Longest period</td><td>Trailing 3 months</td><td>Trailing 6 months (calendar-aligned, with prior-period comparison)</td></tr>
+            <tr><td>Overview day scan</td><td><code>OVERVIEW_DAY_SCAN_LIMIT = 184</code>, a bare literal</td><td><code>2 * REPORT_TRAILING_SIX_MONTHS_MAX_DAYS</code> = 368, with the derivation written down and shared with the read-time backfill</td></tr>
+            <tr><td>Span validation</td><td>One <code>RANGE_MAX_SPAN_DAYS = 92</code> shared by four readers</td><td><code>requireValidDateRange(start, end, maxSpanDays)</code> &mdash; each query names its own ceiling; sync readers stay 92, drill-down surfaces move to 184</td></tr>
+            <tr><td>Multi-day SKU mix</td><td>Synchronous read, throws past 5,000 rows</td><td>Admitted, fenced, resumable snapshot; complete and correct at 184 days</td></tr>
+            <tr><td>Single-day SKU mix</td><td>Synchronous read</td><td>Synchronous read &mdash; permanently, and provably under the cap</td></tr>
+            <tr><td>Range lifecycle</td><td><code>skuMovementRange.ts</code>, bound to one kind literal</td><td><code>rangeSnapshotLifecycle.ts</code> + per-kind configs; movement and mix are both configuration</td></tr>
+            <tr><td>Sweeper skips</td><td><code>kind === "sku_movement"</code> in three places</td><td><code>kind !== undefined</code> &mdash; exhaustive, so a future kind cannot leak into the legacy summary lane</td></tr>
+            <tr><td>Admission budgets</td><td>Keys unscoped by kind</td><td>Kind-scoped keys (movement grandfathered); no migration, because 10-minute fixed windows age old keys out</td></tr>
+          </tbody>
+        </table>
+        </div>
+      </section>
+
+      <section class="panel"><h2>The 184-Day Arithmetic</h2>
+        <p>This is the detail most likely to be "simplified" by a later reader, so the constant carries its own proof:</p>
+        <pre><code>Mar–Aug: 31 + 30 + 31 + 30 + 31 + 31 = 184
+May–Oct: 31 + 30 + 31 + 31 + 30 + 31 = 184
+Jul–Dec: 31 + 31 + 30 + 31 + 30 + 31 = 184
+Aug–Jan: 31 + 30 + 31 + 30 + 31 + 31 = 184</code></pre>
+        <p><code>trailingSixMonthsStart</code> returns the first day of the month five months back, mirroring <code>trailingThreeMonthsStart</code>. The window is therefore a sum of month lengths, not a fixed day count, and <code>REPORT_TRAILING_SIX_MONTHS_MAX_DAYS = 184</code> is the true maximum. <code>REPORT_DRILLDOWN_RANGE_MAX_DAYS</code> and <code>REPORT_MIX_RANGE_MAX_DAYS</code> are both derived from it, so a single edit moves every dependent ceiling coherently.</p>
+      </section>
+
+      <section class="panel"><h2>Span Routing, and Why the Sync Path Is Permanent</h2>
+        <pre><code>const isSyncMixSpan =
+  inclusiveOperatingDaySpan(skuMixStartDate, skuMixEndDate) &lt;=
+  REPORT_SKU_MIX_SYNC_MAX_DAYS; // 2</code></pre>
+        <p>Two days is not a tuned guess. The fold bounds <code>reportSkuDay</code> at 2,000 rows per operating day, so a two-day span reads at most 4,000 rows &mdash; strictly under the synchronous reader's 5,000-row cap. The fast path's safety is <strong>derived from an invariant the fold already enforces</strong>, which is what makes it a permanent principled path rather than a deprecation waiting to happen.</p>
+        <p>The consequence at the product level: every day click stays instant and consumes no admission budget, and ambient request volume against the async lane is eliminated at the source rather than tuned around with budgets. The server does not rely on the client's routing &mdash; <code>listRangeSkuMix</code> keeps its own 92-day cap, and the async lane enforces 184 through <code>REPORT_RANGE_MAX_DAYS_BY_KIND.sku_mix</code>.</p>
+        <p>Multi-day mix reuses the sheet's poll-then-subscribe shape: <code>waiting</code> and <code>backpressure</code> write nothing durable, so there is no document to subscribe to. One timer per effect (StrictMode-safe), a server-supplied interval, and dedupe checked before admission budget is charged.</p>
+      </section>
+
+      <section class="panel"><h2>Generalizing the Lifecycle</h2>
+        <p><code>rangeSnapshotLifecycle.ts</code> owns the kind-generic seams: gate ordering (allowlist &rarr; validate &rarr; revision vector &rarr; dedupe &rarr; admission &rarr; insert + schedule), phase/fence transitions, retry and backoff, eligible-work scheduling, the sweeper backstop, child-first cleanup, and sanitized error mapping. A <code>RangeSnapshotKindConfig</code> supplies the rest.</p>
+        <p>Two decisions inside it are load-bearing:</p>
+        <ul>
+          <li><strong><code>hasRankingPhase</code>.</strong> A kind may transition <code>aggregating &rarr; completed</code> directly. Movement paginates by 20-row rank intervals and needs ranks; mix shows top 5 plus Other, has no ordinal addressing, and therefore has no rank field, no rank pass, and no rank index. Its totals accumulate during aggregation because there is no ranking pass to accumulate in.</li>
+          <li><strong>Historical column names are kept.</strong> <code>movementPhase</code>, <code>movementFence</code>, <code>movementTotals</code> and the <code>reportMovementAdmission</code> table are documented as the generic rail for any kind. Renaming stored columns is a migration for a comment's worth of benefit.</li>
+        </ul>
+        <p>The kind registry in the sweeper is deliberately a function, not a module-level const: the sweeper and the kind modules import each other, and a top-level read of a peer's export would race module initialization order.</p>
+      </section>
+
+      <section class="panel"><h2>Exhaustive Exclusion</h2>
+        <p>Three predicates changed from naming a member to testing the dimension:</p>
+        <pre><code>- if (request.kind === "sku_movement") return;
++ if (request.kind !== undefined) return;</code></pre>
+        <p>in <code>computeRange</code>, <code>computePendingRanges</code> and <code>expireRangeResults</code>. The old form was correct only while one kind existed. The new form means a kind added next quarter cannot leak into the legacy custom-summary lane by omission &mdash; and kindless rows, which are exactly the legacy custom summaries, keep their original semantics untouched.</p>
+      </section>
+
+      <section class="panel"><h2>The Quiet-Store Backfill</h2>
+        <p><code>getOverview</code> enriches legacy singleton documents at read time. The subtlety is that the sweeper refreshes a store's singleton only when that store has dirty days &mdash; so a quiet store's document may never be rewritten, and for that store the read-time backfill is the <em>only</em> source of the new six-month fields. It therefore computes them rather than defaulting to empty snapshots.</p>
+        <p>The backfill's start date is chosen by "deepest missing field wins": the prior six-month window reaches furthest back, then the prior three-month window, then the three-month window, then the trend. One bounded read of at most <code>OVERVIEW_DAY_SCAN_LIMIT</code> rows fills every shallower gap at once.</p>
+      </section>
+
+      <section class="panel"><h2>Data Model</h2>
+        <p><code>reportRangeMixSku</code> is a <strong>sibling</strong> of <code>reportRangeMovementSku</code>, not a reuse of it. Movement's <code>netUnits</code> and <code>absNetUnitsSortKey</code> encode signed movement semantics that mix does not have. Mix children carry <code>unitsSold</code> and a negated <code>unitsSoldSortKey</code> (ascending index order = descending units sold), exist only for SKUs with accumulated <code>unitsSold &gt; 0</code>, and carry their own <code>expiresAt</code> so cleanup finds them without loading a header.</p>
+        <p>Header totals (<code>totalUnitsSold</code>, <code>skuCount</code>) let the reader derive the Other bucket arithmetically as total minus visible &mdash; the Other row has no natural durable representation, and the complete result never crosses to the browser. The reader hydrates at most five SKU identities, after the visible subset is known.</p>
+      </section>
+
+      <section class="panel"><h2>What Intentionally Did Not Change</h2>
+        <ul>
+          <li><strong>No fold-version bump.</strong> Certified fold provenance is already stamped at <code>REPORTS_FOLD_VERSION = 3</code> across production history, so the new request kind reuses existing provenance. This was verified as a precondition before mix landed, not assumed.</li>
+          <li><strong>The synchronous <code>listRangeSkuMix</code> reader is retained permanently</strong> as the &le;2-day path, with its server-side validation unchanged. It is not scheduled for cleanup.</li>
+          <li><strong><code>ITEMS_PERIOD_MAX_DAYS = 31</code> is untouched.</strong> The Items tab is day/week/month scoped and unaffected.</li>
+          <li><strong>The custom-summary pipeline keeps its 366-day ceiling and 20,000-row behavior</strong>, and kindless rows keep their exact original lifecycle including failed-row reuse until TTL.</li>
+          <li><strong>The shared-demo horizon stays at 21 days.</strong> Demo's Trailing 3 months already renders from 21 days by convention; Trailing 6 months behaves identically, from derived fixtures, with no live read and no generation authority.</li>
+          <li><strong>No stored-column renames and no admission-table migration.</strong> Fixed 10-minute windows age superseded keys out within one window.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>Key Files</h2>
+        <div class="table-scroll">
+        <table>
+          <thead><tr><th>File</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td><code>shared/reportsContract.ts</code></td><td><code>trailingSixMonthsStart</code>, the 184-day constant and its proof, per-kind span ceilings, the <code>sku_mix</code> kind, mix request identity, sort key, totals and lifecycle derivation</td></tr>
+            <tr><td><code>convex/reports/rangeSnapshotLifecycle.ts</code></td><td>New. The kind-generic bounded-resumable-snapshot machinery behind one per-kind config</td></tr>
+            <tr><td><code>convex/reports/skuMixRange.ts</code></td><td>New. The mix kind config, aggregation, reader, ensure/retry surface &mdash; the first consumer without a ranking phase</td></tr>
+            <tr><td><code>convex/reports/skuMovementRange.ts</code></td><td>Rebased onto the generic rail; ~570 net lines removed, behavior unchanged</td></tr>
+            <tr><td><code>convex/reports/queries.ts</code></td><td>Per-caller span validation; drill-down surfaces widened to 184; sync readers pinned at 92; quiet-store overview backfill</td></tr>
+            <tr><td><code>convex/reports/overview.ts</code></td><td>Six-month and prior-six-month snapshots; scan limit derived as 2 &times; 184</td></tr>
+            <tr><td><code>convex/reports/sweeper.ts</code></td><td>Exhaustive kinded skips; kind registry as a function; backstop and cleanup over all registered kinds</td></tr>
+            <tr><td><code>convex/schema.ts</code>, <code>convex/schemas/reports/derived.ts</code></td><td><code>reportRangeMixSku</code> table and indexes; kinded header documentation</td></tr>
+            <tr><td><code>src/components/reports/ReportDaysPanel.tsx</code></td><td>Span routing, poll-then-subscribe for multi-day mix, settled-context preservation</td></tr>
+            <tr><td><code>src/components/reports/ReportSkuMixChart.tsx</code></td><td>Lifecycle-aware presentation across sync data, pending, and sanitized failure</td></tr>
+            <tr><td><code>src/components/reports/reportPeriodKeys.ts</code></td><td>The window enum, the decoupled preset list, and the widened table span</td></tr>
+          </tbody>
+        </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Subagent Evidence</h2>
+        <p>The validation below is what was actually executed for this delivery. Nothing here is a prediction.</p>
+        <ul>
+          <li><strong>Focused validation lane (executed).</strong> <code>50</code> test files, <code>834</code> tests, all passing, across <code>convex/reports</code>, <code>src/components/reports</code> and <code>src/components/shared-demo</code>. Coverage added by this change includes: the 184-day arithmetic and the six-month window helper; per-caller span validation at each of the four readers; the quiet-store overview backfill computing rather than defaulting; mix request identity and sort-key semantics; the mix lifecycle's aggregating&nbsp;&rarr;&nbsp;completed path with no ranking phase; span routing at the sync/async boundary including the exact 2-day threshold; the preset/tab decoupling; and shared-demo parity for the new window and the mix lifecycle.</li>
+          <li><strong>Movement regression coverage.</strong> The movement lifecycle's existing suite runs unchanged against the generalized machinery, which is the evidence that the ~570-line reduction was a rebasing rather than a rewrite.</li>
+          <li><strong>Merge gate.</strong> <code>bun run pr:athena</code> &mdash; prepare, preflight, validate (documentation check, workflow check, Convex audit, changed-file Convex and frontend lint, architecture check, <code>tsc --noEmit</code>, full coverage run, harness review, inferential review, harness audit, graphify check), record-proof, scorecard.</li>
+          <li><strong>Precondition verified, not assumed.</strong> Certified fold provenance at <code>REPORTS_FOLD_VERSION = 3</code> was confirmed present across production history before the mix kind was allowed to depend on it &mdash; the plan required this be checked rather than inferred, following the earlier refold-gap incident.</li>
+          <li><strong>Planning review corrections that shaped the code.</strong> Three claims in the original plan were falsified before implementation: the span ceiling was 183 (it is 184); mix could inherit movement's on-demand admission model (it is ambient and needed span routing); and the mix lifecycle needed a ranking phase (it does not &mdash; top 5 plus Other has no ordinal addressing).</li>
+        </ul>
+      </section>
+
+      <section class="panel"><h2>Next-Time Guidance</h2>
+        <ul>
+          <li>Treat a period or scope enum as a fan-out, not a vocabulary. Enumerate every surface that derives from it and land the value last; split "displayed" from "offered" if you need to stage it.</li>
+          <li>Derive calendar-aligned spans arithmetically and write the arithmetic at the constant. A ceiling that is one day short fails only in certain months and reproduces nowhere.</li>
+          <li>Never widen a shared ceiling constant. Parameterize the validator so each call site names its own ceiling, or you will silently widen readers that cannot serve the wider span.</li>
+          <li>Classify the workload as ambient or on-demand before choosing a mechanism. Asynchrony and admission control are correct for on-demand work and a regression for ambient work.</li>
+          <li>Route by span, and prove the fast path's bound from an invariant already enforced elsewhere. A fast path justified by "it usually fits" is a latent outage.</li>
+          <li>Generalize a bounded-work lifecycle at the second consumer, not the third. Copies of fencing, admission, cleanup and backoff diverge at the first fix applied to one copy.</li>
+          <li>Make exclusion predicates exhaustive over the open dimension. Naming known members fails by omission the moment the set grows.</li>
+          <li>A read-time backfill must compute, not default, whenever the background refresh is conditional on tenant activity.</li>
+          <li>Register cross-importing modules through a function, not a const, or module initialization order becomes a correctness dependency.</li>
+        </ul>
+      </section>
+
+      <section id="quiz" class="panel">
+        <h2>Quiz: Pass Required</h2>
+        <p>You must score at least 8 out of 10 to pass.</p>
+        <form id="changeQuiz" data-threshold="8">
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>1. Why is the trailing six-month span ceiling 184 days rather than 183?</legend>
+    <label><input type="radio" name="q1" value="0" /> 184 adds a one-day safety margin so boundary-inclusive arithmetic never rejects a valid window</label>
+    <label><input type="radio" name="q1" value="1" /> The window is calendar-month aligned, so its length is a sum of six real month lengths &mdash; Mar&ndash;Aug, May&ndash;Oct, Jul&ndash;Dec and Aug&ndash;Jan each contain 184 inclusive days</label>
+    <label><input type="radio" name="q1" value="2" /> The 184th slot holds the anchor day, which is stored outside the window</label>
+  </fieldset>
+  <div class="answer-detail">A 183-day ceiling would reject exactly those four runs &mdash; a date-dependent failure that looks random in production and reproduces in no test written outside those months. The constant carries the arithmetic so nobody "simplifies" it.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>2. Why was the six-month value appended to <code>REPORT_DATE_RANGE_PRESET_WINDOWS</code> in the final unit rather than with the window enum?</legend>
+    <label><input type="radio" name="q2" value="0" /> The preset list is generated at build time and could not be updated earlier</label>
+    <label><input type="radio" name="q2" value="1" /> Presets are user-facing and needed separate design review</label>
+    <label><input type="radio" name="q2" value="2" /> The enum drives the overview tabs while the preset list drives the range picker; decoupling them lets the window exist on tabs before the days table, SKU detail, Units moved and mix all admit 184 days</label>
+  </fieldset>
+  <div class="answer-detail">The invariant "no preset or tab may exist before every surface it reaches can serve it" then holds at every unit boundary, not merely at ship time.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>3. Why was <code>RANGE_MAX_SPAN_DAYS = 92</code> renamed and parameterized instead of simply raised to 184?</legend>
+    <label><input type="radio" name="q3" value="0" /> Four readers shared it with different capabilities; raising it would have widened the synchronous mix and movement readers past the single bounded 5,000-row read they can actually serve</label>
+    <label><input type="radio" name="q3" value="1" /> Convex forbids importing a mutable constant across the shared/convex boundary</label>
+    <label><input type="radio" name="q3" value="2" /> The constant was needed at two different values within the same query for the current and prior ranges</label>
+  </fieldset>
+  <div class="answer-detail"><code>requireValidDateRange</code> now takes an explicit <code>maxSpanDays</code>, so <code>listDays</code> and <code>getSkuDetail</code> widen to 184 while <code>listRangeSkuMix</code> and <code>listRangeSkuMovement</code> stay at 92 by construction rather than by luck.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>4. Why does SKU mix route by span instead of moving entirely onto the snapshot lifecycle like Units moved did?</legend>
+    <label><input type="radio" name="q4" value="0" /> The snapshot lifecycle cannot express a top-N-plus-Other presentation</label>
+    <label><input type="radio" name="q4" value="1" /> Shared demo cannot reach async lanes, so a synchronous path had to remain for it</label>
+    <label><input type="radio" name="q4" value="2" /> Mix is ambient &mdash; it renders on every workspace visit and every day click &mdash; so putting all of it behind admission control and a pending state would regress the most frequent interaction to fix the rarest</label>
+  </fieldset>
+  <div class="answer-detail">Units moved opens only when an operator asks for it. Span routing separates the two workloads without a flag, a rollout, or a deprecation.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>5. What makes the &le;2-day synchronous mix path <em>permanent</em> rather than transitional?</legend>
+    <label><input type="radio" name="q5" value="0" /> Telemetry shows two-day spans have never approached the row cap in production</label>
+    <label><input type="radio" name="q5" value="1" /> The fold bounds <code>reportSkuDay</code> at 2,000 rows per operating day, so a two-day span reads at most 4,000 rows &mdash; strictly under the 5,000-row cap, by an invariant already enforced</label>
+    <label><input type="radio" name="q5" value="2" /> The synchronous reader falls back to the async lane automatically if it exceeds its cap</label>
+  </fieldset>
+  <div class="answer-detail">A fast path justified only by "it usually fits" is a latent outage. This one is provable from a bound the fold already guarantees.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>6. Mix has no ranking phase. Why not?</legend>
+    <label><input type="radio" name="q6" value="0" /> Mix only ever shows top 5 plus Other, so there is no ordinal addressing &mdash; children carry a units-sold sort key and the reader takes the top rows through that index at read time</label>
+    <label><input type="radio" name="q6" value="1" /> Ranking is deferred to a follow-up unit once the aggregation lane is proven</label>
+    <label><input type="radio" name="q6" value="2" /> Convex indexes cannot support a rank field on a second child table</label>
+  </fieldset>
+  <div class="answer-detail">Movement needs ranks because it paginates by 20-row rank intervals. Because mix has no ranking pass to accumulate in, its header totals are accumulated during aggregation instead, and the last aggregation batch publishes directly.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>7. The sweeper's skips changed from <code>kind === "sku_movement"</code> to <code>kind !== undefined</code>. What does that buy?</legend>
+    <label><input type="radio" name="q7" value="0" /> It lets legacy custom-summary rows be reclassified as kinded rows over time</label>
+    <label><input type="radio" name="q7" value="1" /> It avoids a string comparison in a hot sweep loop</label>
+    <label><input type="radio" name="q7" value="2" /> It is exhaustive over the open dimension, so a kind added later cannot leak into the legacy summary compute and expiry lanes by omission</label>
+  </fieldset>
+  <div class="answer-detail">An exclusion that enumerates known members is correct only until the set grows. Kindless rows &mdash; exactly the legacy custom summaries &mdash; keep their original semantics untouched.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>8. Why must <code>getOverview</code>'s read-time backfill <em>compute</em> the new six-month snapshots rather than default them to empty?</legend>
+    <label><input type="radio" name="q8" value="0" /> Empty snapshots would fail schema validation on the overview singleton</label>
+    <label><input type="radio" name="q8" value="1" /> The sweeper refreshes a store's singleton only when that store has dirty days, so a quiet store's document may never be rewritten &mdash; the backfill is that store's only source of the new fields</label>
+    <label><input type="radio" name="q8" value="2" /> The tab would render before the singleton refresh completes, causing a visible flicker</label>
+  </fieldset>
+  <div class="answer-detail">Defaulting would make the new field permanently and silently zero for quiet stores. The backfill picks its start date by "deepest missing field wins", so one bounded read fills every shallower gap.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>9. Why is <code>reportRangeMixSku</code> a new table rather than a reuse of <code>reportRangeMovementSku</code>?</legend>
+    <label><input type="radio" name="q9" value="0" /> Movement's <code>netUnits</code> and <code>absNetUnitsSortKey</code> mean signed movement, which mix does not have; the sibling reuses the index pattern with honest names and no rank field</label>
+    <label><input type="radio" name="q9" value="1" /> Convex tables cannot carry rows from two different request kinds</label>
+    <label><input type="radio" name="q9" value="2" /> Sharing the table would have required a migration of existing movement children</label>
+  </fieldset>
+  <div class="answer-detail">Stored <em>column</em> names on the shared header were deliberately kept historical (<code>movementPhase</code>, <code>movementFence</code>) because renaming them is a migration for a comment's worth of benefit &mdash; a different trade-off from inventing false semantics in a new child table.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>10. Why is the sweeper's list of registered kind configs a function rather than a module-level constant?</legend>
+    <label><input type="radio" name="q10" value="0" /> So kinds can be enabled per store at runtime through the allowlist</label>
+    <label><input type="radio" name="q10" value="1" /> So tests can substitute a fake registry without module mocking</label>
+    <label><input type="radio" name="q10" value="2" /> The sweeper and the kind modules import each other, so a top-level read of a peer module's export would race module initialization order</label>
+  </fieldset>
+  <div class="answer-detail">A cyclic import graph makes initialization order a correctness dependency. Deferring the read to call time removes it.</div>
+</div>
+
+          <div class="quiz-actions">
+            <button type="button" id="gradeQuiz">Grade quiz</button>
+            <button type="button" class="secondary" id="resetQuiz">Reset</button>
+            <span id="quizResult" aria-live="polite"></span>
+          </div>
+        </form>
+      </section>
+
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
+          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
+          if (isCorrect) score += 1;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>

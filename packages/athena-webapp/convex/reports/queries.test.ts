@@ -236,8 +236,162 @@ describe("getOverview", () => {
     expect(result).toMatchObject({ updatedAt: 1000, currency: "GHS" });
     expect(result?.yesterday).toEqual(emptySnapshot());
     expect(result?.trailing3Months.netSalesMinor).toBe(900);
+    // The read-time backfill computes the six-month snapshots too — a legacy
+    // singleton predating them still serves real values, not empties.
+    expect(result?.trailing6Months.netSalesMinor).toBe(900);
+    expect(result?.priorTrailing6Months).toEqual(emptySnapshot());
     expect(result?.dailyTrend[0]?.unitsSold).toBe(10);
     expect(result).not.toHaveProperty("storeId");
+  });
+
+  it("computes six-month snapshots for a quiet store's stale singleton", async () => {
+    // The sweeper only rebuilds singletons for stores with dirty days, so a
+    // quiet store's document may NEVER be rewritten after this field ships.
+    // The read-time backfill is that store's only source of the new fields —
+    // it must compute them from reportDay history, not prefer empties.
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const snapshot = {
+      ...dayMetrics(),
+      dayCount: 1,
+      unsettledDayCount: 0,
+    };
+    await t.run((ctx) =>
+      ctx.db.insert("reportOverview", {
+        storeId,
+        updatedAt: 1000,
+        currency: "GHS",
+        today: snapshot,
+        yesterday: snapshot,
+        weekToDate: snapshot,
+        priorWeek: snapshot,
+        trailing30: snapshot,
+        priorTrailing30: snapshot,
+        trailing3Months: snapshot,
+        priorTrailing3Months: snapshot,
+        // trailing6Months / priorTrailing6Months intentionally absent: the
+        // singleton was last written before the six-month rollout.
+        comparisons: {
+          netSalesVsPriorWeekBp: 500,
+          unitsSoldVsPriorWeekBp: null,
+        },
+        dailyTrend: [
+          {
+            operatingDate: "2026-07-28",
+            netSalesMinor: 900,
+            status: "reconciled",
+            unitsSold: 10,
+          },
+        ],
+        trust: {
+          reconciledDays: 1,
+          provisionalDays: 0,
+          amendedDays: 0,
+        },
+      }),
+    );
+    // Anchor 2026-07-28: current six-month window 2026-02-01..2026-07-28,
+    // prior window 2025-08-01..2026-01-31.
+    const seedDay = (operatingDate: string, netSalesMinor: number) =>
+      t.run((ctx) =>
+        ctx.db.insert("reportDay", {
+          storeId,
+          operatingDate,
+          currency: "GHS",
+          status: "reconciled",
+          ...dayMetrics({ netSalesMinor }),
+          foldVersion: 1,
+          factCount: 3,
+          lastFactRecordedAt: 1000,
+          flags: dayFlags,
+        }),
+      );
+    await seedDay("2026-07-28", 900); // in the current window
+    await seedDay("2026-03-15", 70); // in the current window
+    await seedDay("2025-12-10", 40); // in the prior window
+    await seedDay("2025-07-15", 5); // before the prior window — excluded
+
+    const result = await t.run((ctx) =>
+      handlerOf(getOverview)(ctx, { storeId }),
+    );
+
+    expect(result?.trailing6Months.netSalesMinor).toBe(970);
+    expect(result?.trailing6Months.dayCount).toBe(2);
+    expect(result?.priorTrailing6Months.netSalesMinor).toBe(40);
+    expect(result?.priorTrailing6Months.dayCount).toBe(1);
+    // Stored snapshots pass through untouched — the backfill only fills gaps.
+    expect(result?.trailing3Months).toEqual(snapshot);
+    expect(result?.priorTrailing3Months).toEqual(snapshot);
+  });
+
+  it("serves partial six-month totals for a short-history store, like trailing3Months", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const snapshot = {
+      ...dayMetrics(),
+      dayCount: 1,
+      unsettledDayCount: 0,
+    };
+    await t.run((ctx) =>
+      ctx.db.insert("reportOverview", {
+        storeId,
+        updatedAt: 1000,
+        currency: "GHS",
+        today: snapshot,
+        weekToDate: snapshot,
+        priorWeek: snapshot,
+        trailing30: snapshot,
+        comparisons: {
+          netSalesVsPriorWeekBp: null,
+          unitsSoldVsPriorWeekBp: null,
+        },
+        dailyTrend: [
+          {
+            operatingDate: "2026-07-28",
+            netSalesMinor: 900,
+            status: "open",
+            unitsSold: 10,
+          },
+        ],
+        trust: {
+          reconciledDays: 0,
+          provisionalDays: 0,
+          amendedDays: 0,
+        },
+      }),
+    );
+    // Two days of history total — far fewer than the window. The snapshot
+    // sums what exists (the partial-totals convention every window shares).
+    for (const [operatingDate, netSalesMinor] of [
+      ["2026-07-27", 100],
+      ["2026-07-28", 900],
+    ] as const) {
+      await t.run((ctx) =>
+        ctx.db.insert("reportDay", {
+          storeId,
+          operatingDate,
+          currency: "GHS",
+          status: "open",
+          ...dayMetrics({ netSalesMinor }),
+          foldVersion: 1,
+          factCount: 3,
+          lastFactRecordedAt: 1000,
+          flags: dayFlags,
+        }),
+      );
+    }
+
+    const result = await t.run((ctx) =>
+      handlerOf(getOverview)(ctx, { storeId }),
+    );
+
+    expect(result?.trailing6Months.netSalesMinor).toBe(1000);
+    expect(result?.trailing6Months.dayCount).toBe(2);
+    expect(result?.trailing3Months.netSalesMinor).toBe(1000);
+    expect(result?.trailing3Months.dayCount).toBe(2);
+    // No history reaches the prior windows: both are empty, consistently.
+    expect(result?.priorTrailing6Months).toEqual(emptySnapshot());
+    expect(result?.priorTrailing3Months).toEqual(emptySnapshot());
   });
 
   it("propagates the access check's rejection", async () => {
@@ -310,7 +464,9 @@ describe("listDays", () => {
     ).rejects.toThrow();
   });
 
-  it("rejects a range spanning more than 92 days", async () => {
+  it("rejects a range spanning more than 184 days", async () => {
+    // U7 deliberately widened the days table from 92 to the shared 184-day
+    // drill-down ceiling; 185 stays rejected.
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
     await expect(
@@ -318,27 +474,72 @@ describe("listDays", () => {
         handlerOf(listDays)(ctx, {
           storeId,
           startDate: "2026-01-01",
-          endDate: "2026-05-01", // 121 days inclusive
+          endDate: "2026-07-04", // 185 days inclusive
         }),
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/184 days/);
   });
 
-  it("accepts an exactly-92-day span", async () => {
+  it("serves a fully seeded 184-day span completely", async () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
+    // 2026-01-01 .. 2026-07-03 inclusive is exactly 184 days. Seed every day
+    // so the read budget (.take) is exercised at the ceiling: a complete
+    // result proves the cap admits the whole window with no truncation.
+    const dates: string[] = [];
+    const cursor = new Date(Date.UTC(2026, 0, 1));
+    for (let day = 0; day < 184; day += 1) {
+      dates.push(cursor.toISOString().slice(0, 10));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    expect(dates[183]).toBe("2026-07-03");
+    await t.run(async (ctx) => {
+      for (const operatingDate of dates) {
+        await ctx.db.insert("reportDay", {
+          storeId,
+          operatingDate,
+          currency: "GHS",
+          status: "reconciled",
+          ...dayMetrics(),
+          foldVersion: 1,
+          factCount: 3,
+          lastFactRecordedAt: 1000,
+          flags: dayFlags,
+        });
+      }
+    });
+
     const rows = await t.run((ctx) =>
       handlerOf(listDays)(ctx, {
         storeId,
         startDate: "2026-01-01",
-        endDate: "2026-04-02", // 92 days inclusive
+        endDate: "2026-07-03",
       }),
     );
-    expect(rows).toEqual([]);
+    expect(rows).toHaveLength(184);
+    expect(rows.map((r: any) => r.operatingDate)).toEqual(dates);
   });
 });
 
 describe("listRangeSkuMix", () => {
+  it("still rejects a range spanning more than 92 days after the U7 drill-down raise", async () => {
+    // The synchronous mix reader keeps its 92-day server cap on purpose: the
+    // client routes only <=2-day spans here (U5); longer spans use the async
+    // snapshot. Widening this cap would let a direct caller exceed what the
+    // 5,000-row synchronous read can serve.
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    await expect(
+      t.run((ctx) =>
+        handlerOf(listRangeSkuMix)(ctx, {
+          storeId,
+          startDate: "2026-01-01",
+          endDate: "2026-04-03", // 93 days inclusive
+        }),
+      ),
+    ).rejects.toThrow(/92 days/);
+  });
+
   it("returns the five leading SKUs by units and groups the remainder", async () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
@@ -402,6 +603,22 @@ describe("listRangeSkuMix", () => {
 });
 
 describe("listRangeSkuMovement", () => {
+  it("still rejects a range spanning more than 92 days after the U7 drill-down raise", async () => {
+    // The legacy synchronous movement reader is rollout surface only (the
+    // Units moved sheet uses the async snapshot); it keeps the 92-day cap.
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    await expect(
+      t.run((ctx) =>
+        handlerOf(listRangeSkuMovement)(ctx, {
+          storeId,
+          startDate: "2026-01-01",
+          endDate: "2026-04-03", // 93 days inclusive
+        }),
+      ),
+    ).rejects.toThrow(/92 days/);
+  });
+
   it("returns every SKU separately with sold, returned, and net units", async () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
@@ -1071,7 +1288,9 @@ describe("getSkuDetail", () => {
     expect(result.totals.grossProfitMinor).toBeNull();
   });
 
-  it("rejects a range spanning more than 92 days", async () => {
+  it("rejects a range spanning more than 184 days", async () => {
+    // U7 deliberately widened SKU detail from 92 to the shared 184-day
+    // drill-down ceiling; 185 stays rejected.
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
     const productSkuId = await seedSku(t, storeId);
@@ -1081,10 +1300,72 @@ describe("getSkuDetail", () => {
           storeId,
           productSkuId,
           startDate: "2026-01-01",
-          endDate: "2026-05-01",
+          endDate: "2026-07-04", // 185 days inclusive
         }),
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/184 days/);
+  });
+
+  it("serves both the period and prior-comparison reads completely at the 184-day ceiling", async () => {
+    // getSkuDetail's budget doubled with the U7 raise: one 184-row read for
+    // the selected range plus one 184-row read for the immediately preceding
+    // equal-length range (2 x 184 = 368 reportSkuDay docs worst case). Seed
+    // every day of both windows and require complete, untruncated results
+    // from each read.
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const productSkuId = await seedSku(t, storeId);
+
+    // Period: 2026-01-01 .. 2026-07-03 (184 days).
+    // Prior: 2025-07-01 .. 2025-12-31 (the preceding 184 days).
+    const allDates: string[] = [];
+    const cursor = new Date(Date.UTC(2025, 6, 1));
+    for (let day = 0; day < 368; day += 1) {
+      allDates.push(cursor.toISOString().slice(0, 10));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    expect(allDates[183]).toBe("2025-12-31");
+    expect(allDates[184]).toBe("2026-01-01");
+    expect(allDates[367]).toBe("2026-07-03");
+    await t.run(async (ctx) => {
+      for (const operatingDate of allDates) {
+        await ctx.db.insert("reportSkuDay", {
+          storeId,
+          productSkuId,
+          operatingDate,
+          unitsSold: 1,
+          unitsReturned: 0,
+          grossSalesMinor: 100,
+          netSalesMinor: 100,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: 40,
+        });
+      }
+    });
+
+    const result = await t.run((ctx) =>
+      handlerOf(getSkuDetail)(ctx, {
+        storeId,
+        productSkuId,
+        startDate: "2026-01-01",
+        endDate: "2026-07-03",
+      }),
+    );
+
+    // Complete period read: all 184 days present, so totals reflect every day.
+    expect(result.days).toHaveLength(184);
+    expect(result.totals).toMatchObject({
+      unitsSold: 184,
+      netSalesMinor: 18_400,
+      grossProfitMinor: 7_360,
+    });
+    // Complete prior read: all 184 preceding days summed, none truncated.
+    expect(result.priorPeriodTotals).toMatchObject({
+      unitsSold: 184,
+      netSalesMinor: 18_400,
+      grossProfitMinor: 7_360,
+    });
   });
 });
 
@@ -2484,6 +2765,10 @@ describe("reports module public surface", () => {
       "queries.listRangeSkuMix",
       "queries.listRangeSkuMovement",
       "queries.listSkuDayTransactions",
+      "skuMixRange.ensureMixRange",
+      "skuMixRange.getMixRange",
+      "skuMixRange.getMixRangeVisible",
+      "skuMixRange.retryMixRange",
       "skuMovementRange.ensureMovementRange",
       "skuMovementRange.getMovementRange",
       "skuMovementRange.getMovementRangePage",
@@ -2496,6 +2781,9 @@ describe("reports module public surface", () => {
       "foldVersionRepair.countUncertifiedDays",
       "foldVersionRepair.markStaleFoldVersionDays",
       "reseed.reseedStoreReporting",
+      "skuMixRange.recordMixWorkerFailure",
+      "skuMixRange.runMixBatch",
+      "skuMixRange.runMixWorker",
       "skuMovementRange.recordMovementWorkerFailure",
       "skuMovementRange.runMovementBatch",
       "skuMovementRange.runMovementWorker",

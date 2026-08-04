@@ -113,8 +113,14 @@ vi.mock("recharts", () => ({
       data-testid="units-x-axis"
     />
   ),
-  YAxis: ({ tick }: { tick?: React.ReactElement }) => (
-    <svg data-testid="units-y-axis">
+  YAxis: ({
+    tick,
+    width,
+  }: {
+    tick?: React.ReactElement;
+    width?: number;
+  }) => (
+    <svg data-testid="units-y-axis" data-width={width}>
       {tick
         ? ["sku-1", "sku-2", "sku-3"].map((value) =>
             cloneElement(
@@ -660,6 +666,42 @@ describe("top movers", () => {
     expect(within(dialog).queryByText(/Page 1 of/)).not.toBeInTheDocument();
   });
 
+  it("gives long product names enough room without forcing them onto one line", async () => {
+    const productName = "Nab Lace Tint Mousse Dark Brown";
+    installCompleted([
+      movementRow(1, 12, {
+        identity: {
+          displayName: productName,
+          netPriceMinor: 4_500,
+          sku: "KK38-DGB-W6V",
+        },
+      }),
+    ]);
+
+    render(<ReportUnitsMovedChartSheet {...baseProps} isOpen />);
+
+    const dialog = expectShell();
+    await waitFor(() =>
+      expect(within(dialog).getByTestId("units-chart")).toBeInTheDocument(),
+    );
+
+    expect(dialog).toHaveClass(
+      "w-[min(100vw,42rem)]",
+      "sm:max-w-[42rem]",
+    );
+    expect(within(dialog).getByTestId("units-y-axis")).toHaveAttribute(
+      "data-width",
+      "184",
+    );
+
+    const chartLabel = dialog.querySelector(
+      '[data-chart-sku-link="sku-1"] > span',
+    );
+    expect(chartLabel).toHaveTextContent(productName);
+    expect(chartLabel).toHaveClass("line-clamp-2");
+    expect(chartLabel).not.toHaveClass("truncate");
+  });
+
   it("omits the subset disclosure when every mover fits on one page", async () => {
     const smallTotals = {
       unitsSold: 30,
@@ -944,7 +986,7 @@ describe("accessibility and layout", () => {
     render(<ReportUnitsMovedChartSheet {...baseProps} isOpen />);
 
     const dialog = expectShell();
-    expect(dialog.className).toContain("w-[min(100vw,36rem)]");
+    expect(dialog.className).toContain("w-[min(100vw,42rem)]");
     for (const tab of within(dialog).getAllByRole("tab")) {
       expect(tab.className).toContain("h-11");
     }

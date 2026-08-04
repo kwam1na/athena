@@ -190,6 +190,7 @@ import {
   reportWeekCurrentSchema,
   reportRangeResultSchema,
   reportRangeMovementSkuSchema,
+  reportRangeMixSkuSchema,
   reportMovementAdmissionSchema,
 } from "./schemas/reports";
 import {
@@ -1728,6 +1729,24 @@ const schema = defineSchema({
       "storeId",
       "rangeResultId",
       "rank",
+    ])
+    // Eligible-cleanup scan; children are deleted before their header.
+    .index("by_expiresAt", ["expiresAt"]),
+  reportRangeMixSku: defineTable(reportRangeMixSkuSchema)
+    // Store-bound uniqueness per (request, SKU); accumulation upserts here.
+    .index("by_storeId_rangeResultId_productSkuId", [
+      "storeId",
+      "rangeResultId",
+      "productSkuId",
+    ])
+    // Deterministic top-5 selection at read time: descending units sold
+    // (negated key, ascending index) with stable SKU identity as the
+    // tie-break. No rank index — mix has no ranking phase.
+    .index("by_storeId_rangeResultId_unitsSoldSortKey_productSkuId", [
+      "storeId",
+      "rangeResultId",
+      "unitsSoldSortKey",
+      "productSkuId",
     ])
     // Eligible-cleanup scan; children are deleted before their header.
     .index("by_expiresAt", ["expiresAt"]),

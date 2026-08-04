@@ -1,7 +1,7 @@
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowDown, RotateCcw } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Table,
   TableBody,
@@ -18,8 +18,14 @@ import { useStableReportQuery } from "./useStableReportQuery";
 import { useReportsSharedDemoMode } from "./useReportsSharedDemoMode";
 import {
   createSharedDemoReportDays,
+  createSharedDemoReportMixLifecycle,
   createSharedDemoReportSkuMix,
 } from "@/components/shared-demo/sharedDemoReportsFixture";
+import {
+  inclusiveOperatingDaySpan,
+  REPORT_SKU_MIX_SYNC_MAX_DAYS,
+  type ReportMixLifecycle,
+} from "~/shared/reportsContract";
 import { EmptyState } from "@/components/states/empty/empty-state";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
@@ -37,6 +43,12 @@ import {
 } from "./ReportUnitsMovedChartSheet";
 
 const REPORT_DAYS_PAGE_SIZE = 14;
+
+/** The latest mix ensure/retry outcome (see the sheet's EnsureOutcome). */
+type MixEnsureOutcome = {
+  requestKey: string | null;
+  lifecycle: ReportMixLifecycle;
+};
 
 function pageContainingDate(
   daysNewestFirst: Array<{ operatingDate: string }>,
@@ -149,34 +161,222 @@ export function ReportDaysPanel({
   );
   const skuMixStartDate = selectedDate ?? startDate;
   const skuMixEndDate = selectedDate ?? endDate;
+  /**
+   * Span routing (U5): selections of at most `REPORT_SKU_MIX_SYNC_MAX_DAYS`
+   * inclusive days — every day click, the dominant ambient interaction — stay
+   * on the synchronous `listRangeSkuMix` reader forever. Provably safe: the
+   * fold bounds `reportSkuDay` at 2,000 rows per operating day, so a 2-day
+   * span reads at most 4,000 rows, strictly under the reader's 5,000-row cap
+   * (see the constant's provability comment in shared/reportsContract.ts).
+   * Longer spans use the admitted snapshot lifecycle instead, whose 184-day
+   * ceiling the server enforces via `REPORT_RANGE_MAX_DAYS_BY_KIND.sku_mix`;
+   * ambient browsing therefore never consumes async admission budget.
+   */
+  const isSyncMixSpan =
+    inclusiveOperatingDaySpan(skuMixStartDate, skuMixEndDate) <=
+    REPORT_SKU_MIX_SYNC_MAX_DAYS;
+  const storeId = activeStore?._id;
   const liveSkuMix = useQuery(
     api.reports.queries.listRangeSkuMix,
-    activeStore?._id && useLiveQuery
+    storeId && useLiveQuery && isSyncMixSpan
       ? {
-          storeId: activeStore._id,
+          storeId,
           startDate: skuMixStartDate,
           endDate: skuMixEndDate,
         }
       : "skip",
   );
+
+  /**
+   * Multi-day poll-then-subscribe, mirroring ReportUnitsMovedChartSheet:
+   * idempotent ensure on range change; while the outcome is
+   * waiting/backpressure (no durable row) re-call ensure after the
+   * server-supplied interval on a single unmount-cancelled timer; once a
+   * requestKey lands, the `getMixRangeVisible` subscription owns the
+   * lifecycle. Demo mode never reaches here (client gate; the server denies
+   * demo generation independently).
+   */
+  const [mixAdmission, setMixAdmission] = useState<
+    MixEnsureOutcome | undefined
+  >(undefined);
+  const [mixEnsureFailed, setMixEnsureFailed] = useState(false);
+  const ensureMixRange = useMutation(api.reports.skuMixRange.ensureMixRange);
+  const retryMixRange = useMutation(api.reports.skuMixRange.retryMixRange);
+  const asyncMixEnabled = Boolean(!isSyncMixSpan && storeId && useLiveQuery);
+
+  useEffect(() => {
+    if (!asyncMixEnabled || !storeId) return;
+    let cancelled = false;
+    setMixAdmission(undefined);
+    setMixEnsureFailed(false);
+    ensureMixRange({
+      storeId,
+      startDate: skuMixStartDate,
+      endDate: skuMixEndDate,
+    }).then(
+      (result) => {
+        if (!cancelled) setMixAdmission(result);
+      },
+      () => {
+        if (!cancelled) setMixEnsureFailed(true);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    asyncMixEnabled,
+    ensureMixRange,
+    skuMixEndDate,
+    skuMixStartDate,
+    storeId,
+  ]);
+
+  const mixAdmissionLifecycle = mixAdmission?.lifecycle;
+  useEffect(() => {
+    if (!asyncMixEnabled || !storeId) return;
+    if (
+      mixAdmissionLifecycle?.state !== "waiting" &&
+      mixAdmissionLifecycle?.state !== "backpressure"
+    ) {
+      return;
+    }
+    let cancelled = false;
+    // The timer belongs to this effect instance — unmounting or changing the
+    // range clears it, and a StrictMode double effect cleans up its first
+    // timer before arming the second, so timers never stack.
+    const timer = window.setTimeout(() => {
+      ensureMixRange({
+        storeId,
+        startDate: skuMixStartDate,
+        endDate: skuMixEndDate,
+      }).then(
+        (result) => {
+          if (!cancelled) setMixAdmission(result);
+        },
+        () => {
+          if (!cancelled) setMixEnsureFailed(true);
+        },
+      );
+    }, mixAdmissionLifecycle.retryAfterMs);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    asyncMixEnabled,
+    ensureMixRange,
+    mixAdmissionLifecycle,
+    skuMixEndDate,
+    skuMixStartDate,
+    storeId,
+  ]);
+
+  const mixRequestKey = mixAdmission?.requestKey ?? null;
+  const liveMixVisible = useQuery(
+    api.reports.skuMixRange.getMixRangeVisible,
+    asyncMixEnabled && storeId && mixRequestKey
+      ? { storeId, requestKey: mixRequestKey }
+      : "skip",
+  );
+  const mixLifecycle: ReportMixLifecycle | undefined = asyncMixEnabled
+    ? (liveMixVisible?.lifecycle ?? mixAdmissionLifecycle)
+    : undefined;
+  /** Completed snapshots only — a lifecycle state is never settled data. */
+  const asyncMixData =
+    asyncMixEnabled &&
+    liveMixVisible?.lifecycle.state === "completed" &&
+    liveMixVisible.data
+      ? liveMixVisible.data
+      : undefined;
+
   const demoSkuMix = useMemo(
     () =>
       isSharedDemo
-        ? createSharedDemoReportSkuMix({
-            startDate: skuMixStartDate,
-            endDate: skuMixEndDate,
-          })
+        ? isSyncMixSpan
+          ? createSharedDemoReportSkuMix({
+              startDate: skuMixStartDate,
+              endDate: skuMixEndDate,
+            })
+          : // Demo multi-day mix (U6): an immediately-completed lifecycle
+            // wrapping the same fixture computation the sync path uses.
+            createSharedDemoReportMixLifecycle({
+              startDate: skuMixStartDate,
+              endDate: skuMixEndDate,
+            }).data
         : undefined,
-    [isSharedDemo, skuMixEndDate, skuMixStartDate],
+    [isSharedDemo, isSyncMixSpan, skuMixEndDate, skuMixStartDate],
   );
+  // Both paths feed the SAME settled seam, so the `{data, dataContext}` pair
+  // always describes the range the on-screen rows came from, whichever path
+  // served it — the Units moved sheet's range source depends on this.
   const {
     data: skuMix,
     dataContext: settledSkuMixContext,
     isRefreshing: isSkuMixRefreshing,
   } = useStableReportQuery(
-    isSharedDemo ? demoSkuMix : liveSkuMix,
+    isSharedDemo ? demoSkuMix : isSyncMixSpan ? liveSkuMix : asyncMixData,
     skuMixContext,
   );
+
+  const isMixTerminalError =
+    asyncMixEnabled &&
+    (mixEnsureFailed || mixLifecycle?.state === "terminal_error");
+  const mixErrorCorrelationId =
+    mixLifecycle?.state === "terminal_error"
+      ? mixLifecycle.correlationId
+      : undefined;
+  const isMixNotAvailable =
+    asyncMixEnabled &&
+    !mixEnsureFailed &&
+    mixLifecycle?.state === "not_available";
+  const isMixPending =
+    asyncMixEnabled &&
+    !isMixTerminalError &&
+    !isMixNotAvailable &&
+    (mixLifecycle === undefined ||
+      mixLifecycle.state === "waiting" ||
+      mixLifecycle.state === "backpressure" ||
+      mixLifecycle.state === "queued_pending");
+  const mixBuildState =
+    mixLifecycle?.state === "backpressure"
+      ? ("waiting_for_capacity" as const)
+      : mixLifecycle?.state === "waiting"
+        ? ("waiting_for_data" as const)
+        : mixLifecycle?.state === "queued_pending"
+          ? ("updating" as const)
+          : ("preparing" as const);
+  /**
+   * The async lifecycle, seen with settled rows already on screen. Preserve
+   * the prior chart while naming whether the next range is being prepared,
+   * waiting on report data, waiting to enter the queue, or actively folding.
+   * The sync path never sets this, so day clicks stay untouched.
+   */
+  const mixBuildingRange = useMemo(
+    () =>
+      isMixPending
+        ? {
+            endDate: skuMixEndDate,
+            startDate: skuMixStartDate,
+            state: mixBuildState,
+          }
+        : undefined,
+    [isMixPending, mixBuildState, skuMixEndDate, skuMixStartDate],
+  );
+
+  const handleMixRetry = async () => {
+    if (!storeId || !mixRequestKey) return;
+    try {
+      const result = await retryMixRange({
+        storeId,
+        requestKey: mixRequestKey,
+      });
+      setMixAdmission(result);
+      setMixEnsureFailed(false);
+    } catch {
+      setMixEnsureFailed(true);
+    }
+  };
   const settledUnitsStartDate =
     settledSkuMixContext?.selectedDate ??
     settledSkuMixContext?.startDate ??
@@ -187,8 +387,8 @@ export function ReportDaysPanel({
     skuMixEndDate;
   const daysNewestFirst = days
     ? [...days].sort((left, right) =>
-      right.operatingDate.localeCompare(left.operatingDate),
-    )
+        right.operatingDate.localeCompare(left.operatingDate),
+      )
     : days;
   const totalDays = daysNewestFirst?.length ?? 0;
   const pageCount = Math.max(1, Math.ceil(totalDays / REPORT_DAYS_PAGE_SIZE));
@@ -266,12 +466,12 @@ export function ReportDaysPanel({
           Refreshes keep the previous data on screen (see useStableReportQuery),
           so this branch is only ever the very first load. */}
       {isInitialLoad ||
-        daysNewestFirst === undefined ? null : daysNewestFirst.length === 0 ? (
-          <EmptyState
-            title="No days in range"
-            description="Choose a different date range."
-          />
-        ) : (
+      daysNewestFirst === undefined ? null : daysNewestFirst.length === 0 ? (
+        <EmptyState
+          title="No days in range"
+          description="Choose a different date range."
+        />
+      ) : (
         <div
           className="grid items-stretch gap-layout-3xl lg:grid-cols-2"
           data-testid="report-days-content-grid"
@@ -331,12 +531,8 @@ export function ReportDaysPanel({
                           isDeemphasized &&
                             "opacity-40 hover:opacity-70 focus-visible:opacity-100",
                         )}
-                        data-deemphasized={
-                          isDeemphasized ? "true" : undefined
-                        }
-                        data-highlighted={
-                          isHighlighted ? "true" : undefined
-                        }
+                        data-deemphasized={isDeemphasized ? "true" : undefined}
+                        data-highlighted={isHighlighted ? "true" : undefined}
                         data-status={day.status}
                         key={day.operatingDate}
                         onClick={(event) => {
@@ -384,10 +580,7 @@ export function ReportDaysPanel({
                           </Link>
                         </TableCell>
                         <TableCell className="text-right font-numeric tabular-nums">
-                          {formatReportMoney(
-                            day.netSalesMinor,
-                            day.currency,
-                          )}
+                          {formatReportMoney(day.netSalesMinor, day.currency)}
                         </TableCell>
                         <TableCell className="text-right font-numeric tabular-nums">
                           {formatUnits(day.unitsSold)}
@@ -457,6 +650,7 @@ export function ReportDaysPanel({
               />
             </div>
             <ReportSkuMixChart
+              building={mixBuildingRange}
               data={skuMix}
               detailLink={
                 orgUrlSlug && storeUrlSlug
@@ -478,7 +672,12 @@ export function ReportDaysPanel({
                     }
                   : undefined
               }
+              errorCorrelationId={mixErrorCorrelationId}
+              hasError={isMixTerminalError}
+              isNotAvailable={isMixNotAvailable}
+              isPending={isMixPending}
               isRefreshing={isSkuMixRefreshing}
+              onRetry={mixRequestKey ? handleMixRetry : undefined}
               selectedDate={settledSkuMixContext?.selectedDate}
             />
           </div>

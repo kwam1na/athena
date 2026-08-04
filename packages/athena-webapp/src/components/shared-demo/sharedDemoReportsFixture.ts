@@ -63,10 +63,12 @@ import {
   REPORT_MOVEMENT_PAGE_SIZE,
   REPORT_SKU_PAGE_SIZE,
   REPORTS_FOLD_VERSION,
+  trailingSixMonthsStart,
   trailingThreeMonthsStart,
   type ReportDayMetrics,
   type ReportDayRow,
   type ReportDayStatus,
+  type ReportMixLifecycle,
   type ReportMovementLifecycle,
   type ReportMovementTotals,
   type ReportOverviewData,
@@ -517,6 +519,8 @@ export function createSharedDemoReportsOverview(
   const priorTrailing30End = addDaysToDate(today, -30);
   const trailing3MonthsStart = trailingThreeMonthsStart(today);
   const priorTrailing3MonthsEnd = addDaysToDate(trailing3MonthsStart, -1);
+  const trailing6MonthsStart = trailingSixMonthsStart(today);
+  const priorTrailing6MonthsEnd = addDaysToDate(trailing6MonthsStart, -1);
 
   const weekToDate = snapshotForDays(daysInRange(model, weekStart, today));
   const priorWeek = snapshotForDays(
@@ -563,6 +567,18 @@ export function createSharedDemoReportsOverview(
         model,
         trailingThreeMonthsStart(priorTrailing3MonthsEnd),
         priorTrailing3MonthsEnd,
+      ),
+    ),
+    // The demo horizon is 21 days, so the six-month window renders from the
+    // same days its three-month window already does — partial by convention.
+    trailing6Months: snapshotForDays(
+      daysInRange(model, trailing6MonthsStart, today),
+    ),
+    priorTrailing6Months: snapshotForDays(
+      daysInRange(
+        model,
+        trailingSixMonthsStart(priorTrailing6MonthsEnd),
+        priorTrailing6MonthsEnd,
       ),
     ),
     comparisons: {
@@ -729,6 +745,41 @@ export function createSharedDemoReportSkuMix(args: {
   }
 
   return { rows, totalUnitsSold, skuCount: ranked.length };
+}
+
+// ---------------------------------------------------------------------------
+// SKU mix — async multi-day lifecycle (U6)
+//
+// U4's async `sku_mix` snapshot serves multi-day mix ranges; the demo has no
+// worker to run, so it returns an immediately-completed lifecycle wrapping
+// the exact same `createSharedDemoReportSkuMix` computation used by the
+// ≤2-day synchronous path — one derivation, two presentations, so the two
+// paths can never disagree. `completedAt` mirrors
+// `createSharedDemoReportMovementPage`'s convention of `model.updatedAt`.
+// ---------------------------------------------------------------------------
+
+export type SharedDemoReportMixLifecycle = {
+  lifecycle: Extract<ReportMixLifecycle, { state: "completed" }>;
+  data: ReportSkuMixData;
+};
+
+export function createSharedDemoReportMixLifecycle(args: {
+  startDate: string;
+  endDate: string;
+  today?: string;
+}): SharedDemoReportMixLifecycle {
+  const today = args.today ?? getLocalOperatingDate();
+  const model = getModel(today);
+  const data = createSharedDemoReportSkuMix(args);
+
+  return {
+    lifecycle: {
+      state: "completed",
+      totals: { totalUnitsSold: data.totalUnitsSold, skuCount: data.skuCount },
+      completedAt: model.updatedAt,
+    },
+    data,
+  };
 }
 
 export function createSharedDemoReportSkuMovement(args: {

@@ -33,7 +33,12 @@ import {
   REPORT_RANGE_MAX_DAYS_BY_KIND,
   REPORT_RANGE_SUMMARY_REQUEST_KEY_PREFIX,
   REPORT_RANGE_TTL_MS,
+  REPORT_DRILLDOWN_RANGE_MAX_DAYS,
+  REPORT_SKU_MIX_SYNC_MAX_DAYS,
+  REPORT_TRAILING_SIX_MONTHS_MAX_DAYS,
   REPORTS_FOLD_VERSION,
+  trailingSixMonthsStart,
+  trailingThreeMonthsStart,
   addWeekMetrics,
   admissibleMovementDayRevision,
   combineWeekCompleteness,
@@ -612,7 +617,7 @@ describe("U1 compatibility — legacy custom-summary rows keep their behavior", 
     );
   });
 
-  it("keeps the summary span limit at 366 while movement is capped at 92", () => {
+  it("keeps the summary span limit at 366 while movement serves the 184-day drill-down ceiling", () => {
     expect(REPORT_RANGE_MAX_DAYS_BY_KIND.custom_summary).toBe(
       REPORT_RANGE_MAX_DAYS,
     );
@@ -620,7 +625,12 @@ describe("U1 compatibility — legacy custom-summary rows keep their behavior", 
     expect(REPORT_RANGE_MAX_DAYS_BY_KIND.sku_movement).toBe(
       REPORT_MOVEMENT_RANGE_MAX_DAYS,
     );
-    expect(REPORT_RANGE_MAX_DAYS_BY_KIND.sku_movement).toBe(92);
+    // U7 deliberately widened movement from its 92-day rollout ceiling to the
+    // shared drill-down ceiling — the per-day resumable design serves the span.
+    expect(REPORT_RANGE_MAX_DAYS_BY_KIND.sku_movement).toBe(184);
+    expect(REPORT_MOVEMENT_RANGE_MAX_DAYS).toBe(
+      REPORT_DRILLDOWN_RANGE_MAX_DAYS,
+    );
     // Exactly 366 days remains valid for the legacy summary...
     expect(() =>
       validateReportRangeRequest("custom_summary", "2025-01-01", "2026-01-01"),
@@ -795,14 +805,15 @@ describe("U1 validation — movement uses the strict calendar check", () => {
     ).toThrow(/startDate must be on or before endDate/);
   });
 
-  it("accepts exactly 92 inclusive days and rejects 93", () => {
-    // 2026-04-01 .. 2026-07-01 inclusive is exactly 92 days.
+  it("accepts exactly 184 inclusive days and rejects 185", () => {
+    // U7 widened movement to the drill-down ceiling.
+    // 2026-01-01 .. 2026-07-03 inclusive is exactly 184 days.
     expect(() =>
-      validateReportRangeRequest("sku_movement", "2026-04-01", "2026-07-01"),
+      validateReportRangeRequest("sku_movement", "2026-01-01", "2026-07-03"),
     ).not.toThrow();
     expect(() =>
-      validateReportRangeRequest("sku_movement", "2026-04-01", "2026-07-02"),
-    ).toThrow(/maximum is 92 days/);
+      validateReportRangeRequest("sku_movement", "2026-01-01", "2026-07-04"),
+    ).toThrow(/maximum is 184 days/);
   });
 });
 
@@ -1016,7 +1027,7 @@ describe("U1 lifecycle — partial state can never read as completed", () => {
 describe("U1 cleanup — children are index-addressed and reseed-purged", () => {
   it("stores no child ids or unbounded arrays on the header", () => {
     const fields = fieldsOf(reportRangeResultSchema);
-    // The only array the header may carry is the bounded (≤92-entry)
+    // The only array the header may carry is the bounded (≤184-entry)
     // revision vector; per-SKU results live exclusively in the child table.
     const arrayFields = Object.entries(fields)
       .filter(([, validator]) => validator.kind === "array")
@@ -1078,5 +1089,104 @@ describe("U1 cleanup — children are index-addressed and reseed-purged", () => 
     );
     expect(eligible).toHaveLength(1);
     expect(eligible[0].rangeResultId).toBe(headerId);
+  });
+});
+
+/**
+ * U1 (trailing six months) — period vocabulary and named ceilings.
+ *
+ * These constants are DECLARED in U1 and applied by later units; the tests
+ * pin the calendar math and the 184-day arithmetic so no later unit can
+ * "simplify" the ceiling to 183 or drift a surface's future limit.
+ */
+describe("U1 six-month vocabulary and named ceilings", () => {
+  function inclusiveDays(startDate: string, endDate: string): number {
+    return (
+      Math.floor(
+        (Date.parse(`${endDate}T00:00:00.000Z`) -
+          Date.parse(`${startDate}T00:00:00.000Z`)) /
+          86_400_000,
+      ) + 1
+    );
+  }
+
+  it("returns the first of the month five months back, mirroring the three-month helper's alignment", () => {
+    // Same-year anchor.
+    expect(trailingSixMonthsStart("2026-08-15")).toBe("2026-03-01");
+    // Anchor on the first of a month still spans six calendar months.
+    expect(trailingSixMonthsStart("2026-08-01")).toBe("2026-03-01");
+    // Year boundary.
+    expect(trailingSixMonthsStart("2026-01-31")).toBe("2025-08-01");
+    expect(trailingSixMonthsStart("2026-02-28")).toBe("2025-09-01");
+    // Leap-day anchor.
+    expect(trailingSixMonthsStart("2024-02-29")).toBe("2023-09-01");
+    // Window containing a leap February.
+    expect(trailingSixMonthsStart("2024-07-31")).toBe("2024-02-01");
+    // Alignment parity: both helpers agree on the month-start convention —
+    // the three-month start is always inside the six-month window and both
+    // land on the first of a month.
+    for (const anchor of ["2026-08-15", "2026-01-31", "2024-02-29"]) {
+      expect(trailingSixMonthsStart(anchor) <= trailingThreeMonthsStart(anchor)).toBe(true);
+      expect(trailingSixMonthsStart(anchor).endsWith("-01")).toBe(true);
+      expect(trailingThreeMonthsStart(anchor).endsWith("-01")).toBe(true);
+    }
+  });
+
+  it("caps the calendar-aligned window at exactly 184 inclusive days — never 183, never 185", () => {
+    // The four longest six-calendar-month runs (documented at the constant).
+    const longestWindowEnds = [
+      "2026-08-31", // Mar–Aug
+      "2026-10-31", // May–Oct
+      "2026-12-31", // Jul–Dec
+      "2027-01-31", // Aug–Jan
+    ];
+    for (const endDate of longestWindowEnds) {
+      const span = inclusiveDays(trailingSixMonthsStart(endDate), endDate);
+      expect(span).toBe(184);
+      expect(span).toBe(REPORT_TRAILING_SIX_MONTHS_MAX_DAYS);
+    }
+
+    // Exhaustive: no anchor in a leap-year-spanning sweep produces a window
+    // wider than the named maximum, and 184 is actually attained (so a 183
+    // "simplification" would reject real windows).
+    let widest = 0;
+    for (
+      let t = Date.parse("2023-01-01T00:00:00.000Z");
+      t <= Date.parse("2027-12-31T00:00:00.000Z");
+      t += 86_400_000
+    ) {
+      const anchor = new Date(t).toISOString().slice(0, 10);
+      const span = inclusiveDays(trailingSixMonthsStart(anchor), anchor);
+      expect(span).toBeLessThanOrEqual(REPORT_TRAILING_SIX_MONTHS_MAX_DAYS);
+      widest = Math.max(widest, span);
+    }
+    expect(widest).toBe(184);
+
+    // A 185-day span exceeds the named maximum.
+    expect(inclusiveDays("2026-03-01", "2026-09-01")).toBe(185);
+    expect(185 > REPORT_TRAILING_SIX_MONTHS_MAX_DAYS).toBe(true);
+  });
+
+  it("applies the per-surface ceilings at their shipped U7 values", () => {
+    // The general drill-down ceiling is the six-month maximum itself.
+    expect(REPORT_DRILLDOWN_RANGE_MAX_DAYS).toBe(184);
+    expect(REPORT_DRILLDOWN_RANGE_MAX_DAYS).toBe(
+      REPORT_TRAILING_SIX_MONTHS_MAX_DAYS,
+    );
+
+    // Mix sync-path threshold: 2 days x 2,000 fold-capped reportSkuDay rows
+    // per day = 4,000 rows, strictly under the 5,000-row synchronous cap.
+    expect(REPORT_SKU_MIX_SYNC_MAX_DAYS).toBe(2);
+    expect(REPORT_SKU_MIX_SYNC_MAX_DAYS * 2_000).toBeLessThan(5_000);
+
+    // The kinded ceiling record declares exactly the shipped kinds at their
+    // shipped values — U4 added sku_mix at the full six-month ceiling, and
+    // U7 deliberately raised sku_movement from its 92-day rollout ceiling to
+    // the same 184-day drill-down ceiling (the preset's final surface).
+    expect(REPORT_RANGE_MAX_DAYS_BY_KIND).toEqual({
+      custom_summary: 366,
+      sku_movement: 184,
+      sku_mix: 184,
+    });
   });
 });
