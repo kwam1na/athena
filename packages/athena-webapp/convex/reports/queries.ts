@@ -11,9 +11,13 @@ import {
   dayPeriodKey,
   isReportingTodayInProgress,
   monthPeriodKey,
+  trailingSixMonthsStart,
   trailingThreeMonthsStart,
 } from "../../shared/reportsContract";
-import { REPORT_SKU_PAGE_SIZE } from "../../shared/reportsContract";
+import {
+  REPORT_DRILLDOWN_RANGE_MAX_DAYS,
+  REPORT_SKU_PAGE_SIZE,
+} from "../../shared/reportsContract";
 import type {
   ReportDayRow,
   ReportOverviewData,
@@ -41,7 +45,11 @@ import type {
   ReportWeekPriorPeriod,
   ReportWeekVariancePosture,
 } from "../../shared/reportsContract";
-import { emptySnapshot, snapshotForDays } from "./overview";
+import {
+  emptySnapshot,
+  OVERVIEW_DAY_SCAN_LIMIT,
+  snapshotForDays,
+} from "./overview";
 import { UNAVAILABLE_WEEKLY_INVENTORY_ATTENTION } from "./weeklyInventory";
 import { addDaysToDate, periodDateRange } from "./rollups";
 import { transactionCountFromCloseSummary } from "./transactionCounts";
@@ -54,7 +62,16 @@ import { transactionCountFromCloseSummary } from "./transactionCounts";
  * carries a comment stating its worst-case document reads.
  */
 
-const RANGE_MAX_SPAN_DAYS = 92;
+/**
+ * Span ceiling for the SYNCHRONOUS range readers only (`listRangeSkuMix`,
+ * `listRangeSkuMovement`). Deliberately narrower than
+ * `REPORT_DRILLDOWN_RANGE_MAX_DAYS` (184): both readers serve a single
+ * bounded 5,000-row read, and U5's span routing sends anything longer than
+ * two days to the async range-snapshot lifecycle instead. The drill-down
+ * surfaces (`listDays`, `getSkuDetail`) validate against the shared 184-day
+ * constant directly.
+ */
+const RANGE_SYNC_READER_MAX_SPAN_DAYS = 92;
 const RANGE_SKU_MIX_ROW_LIMIT = 5_000;
 const RANGE_SKU_MIX_VISIBLE_LIMIT = 5;
 const RANGE_SKU_MOVEMENT_LIMIT = 100;
@@ -401,13 +418,21 @@ function inclusiveDaySpan(startDate: string, endDate: string): number {
   return Math.round((end - start) / 86_400_000) + 1;
 }
 
-function requireValidDateRange(startDate: string, endDate: string): void {
+/**
+ * Per-caller span validation: each range query names its own ceiling so the
+ * U7 drill-down raise cannot silently widen the synchronous readers.
+ */
+function requireValidDateRange(
+  startDate: string,
+  endDate: string,
+  maxSpanDays: number,
+): void {
   if (startDate > endDate) {
     throw new Error("startDate must not be after endDate.");
   }
   const span = inclusiveDaySpan(startDate, endDate);
-  if (!Number.isFinite(span) || span > RANGE_MAX_SPAN_DAYS) {
-    throw new Error(`Date range must not exceed ${RANGE_MAX_SPAN_DAYS} days.`);
+  if (!Number.isFinite(span) || span > maxSpanDays) {
+    throw new Error(`Date range must not exceed ${maxSpanDays} days.`);
   }
 }
 
@@ -458,8 +483,12 @@ export const getOverview = query({
 
     // Steady-state read budget: 1 doc — the reportOverview singleton via
     // by_storeId. During overview-document rollouts, legacy documents are
-    // enriched from at most 184 reportDay rows until the next sweep refreshes
-    // the singleton with both current and prior rolling snapshots.
+    // enriched from at most OVERVIEW_DAY_SCAN_LIMIT reportDay rows until the
+    // next sweep refreshes the singleton with both current and prior rolling
+    // snapshots. NOTE: only stores with dirty days are ever swept, so a quiet
+    // store's singleton may never be rewritten — for those stores this
+    // backfill is the ONLY source of newer snapshot fields and must compute
+    // them rather than default to empties.
     const doc = await ctx.db
       .query("reportOverview")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
@@ -470,6 +499,8 @@ export const getOverview = query({
     let trailing3Months = doc.trailing3Months;
     let priorTrailing30 = doc.priorTrailing30;
     let priorTrailing3Months = doc.priorTrailing3Months;
+    let trailing6Months = doc.trailing6Months;
+    let priorTrailing6Months = doc.priorTrailing6Months;
     const needsTrendUnits = dailyTrend.some(
       (point) => point.unitsSold === undefined,
     );
@@ -479,17 +510,26 @@ export const getOverview = query({
       (needsTrendUnits ||
         !trailing3Months ||
         !priorTrailing30 ||
-        !priorTrailing3Months) &&
+        !priorTrailing3Months ||
+        !trailing6Months ||
+        !priorTrailing6Months) &&
       anchorDate
     ) {
       const trailing3MonthsStart = trailingThreeMonthsStart(anchorDate);
       const priorTrailing3MonthsEnd = addDaysToDate(trailing3MonthsStart, -1);
+      const trailing6MonthsStart = trailingSixMonthsStart(anchorDate);
+      const priorTrailing6MonthsEnd = addDaysToDate(trailing6MonthsStart, -1);
+      // Deepest missing field wins: the prior six-month window reaches
+      // furthest back, then the prior three-month window, and so on. Every
+      // shallower gap is filled from the same read.
       const startDate =
-        !priorTrailing30 || !priorTrailing3Months
-          ? trailingThreeMonthsStart(priorTrailing3MonthsEnd)
-          : !trailing3Months
-            ? trailing3MonthsStart
-            : dailyTrend.at(0)?.operatingDate;
+        !trailing6Months || !priorTrailing6Months
+          ? trailingSixMonthsStart(priorTrailing6MonthsEnd)
+          : !priorTrailing30 || !priorTrailing3Months
+            ? trailingThreeMonthsStart(priorTrailing3MonthsEnd)
+            : !trailing3Months
+              ? trailing3MonthsStart
+              : dailyTrend.at(0)?.operatingDate;
 
       if (startDate) {
         const days = await ctx.db
@@ -500,7 +540,7 @@ export const getOverview = query({
               .gte("operatingDate", startDate)
               .lte("operatingDate", anchorDate),
           )
-          .take(184);
+          .take(OVERVIEW_DAY_SCAN_LIMIT);
         if (needsTrendUnits) {
           const unitsByDate = new Map(
             days.map((day) => [day.operatingDate, day.unitsSold]),
@@ -534,6 +574,21 @@ export const getOverview = query({
               day.operatingDate <= priorTrailing3MonthsEnd,
           ),
         );
+        trailing6Months ??= snapshotForDays(
+          days.filter(
+            (day) =>
+              day.operatingDate >= trailing6MonthsStart &&
+              day.operatingDate <= anchorDate,
+          ),
+        );
+        priorTrailing6Months ??= snapshotForDays(
+          days.filter(
+            (day) =>
+              day.operatingDate >=
+                trailingSixMonthsStart(priorTrailing6MonthsEnd) &&
+              day.operatingDate <= priorTrailing6MonthsEnd,
+          ),
+        );
       }
     }
 
@@ -548,6 +603,8 @@ export const getOverview = query({
       priorTrailing30: priorTrailing30 ?? emptySnapshot(),
       trailing3Months: trailing3Months ?? emptySnapshot(),
       priorTrailing3Months: priorTrailing3Months ?? emptySnapshot(),
+      trailing6Months: trailing6Months ?? emptySnapshot(),
+      priorTrailing6Months: priorTrailing6Months ?? emptySnapshot(),
       comparisons: doc.comparisons,
       dailyTrend,
       trust: doc.trust,
@@ -694,10 +751,15 @@ export const listDays = query({
   },
   handler: async (ctx, args): Promise<ReportDayRow[]> => {
     await requireReportsStoreAccess(ctx, args.storeId);
-    requireValidDateRange(args.startDate, args.endDate);
+    requireValidDateRange(
+      args.startDate,
+      args.endDate,
+      REPORT_DRILLDOWN_RANGE_MAX_DAYS,
+    );
 
-    // Read budget: up to RANGE_MAX_SPAN_DAYS (92) reportDay docs — a single
-    // range read on by_storeId_operatingDate, capped by .take().
+    // Read budget: up to REPORT_DRILLDOWN_RANGE_MAX_DAYS (184) reportDay
+    // docs — a single range read on by_storeId_operatingDate, capped by
+    // .take(). One row per operating day, so the cap equals the span ceiling.
     const rows = await ctx.db
       .query("reportDay")
       .withIndex("by_storeId_operatingDate", (q) =>
@@ -706,7 +768,7 @@ export const listDays = query({
           .gte("operatingDate", args.startDate)
           .lte("operatingDate", args.endDate),
       )
-      .take(RANGE_MAX_SPAN_DAYS);
+      .take(REPORT_DRILLDOWN_RANGE_MAX_DAYS);
 
     return rows.map(toReportDayRow);
   },
@@ -724,7 +786,13 @@ export const listRangeSkuMix = query({
   },
   handler: async (ctx, args): Promise<ReportSkuMixData> => {
     await requireReportsStoreAccess(ctx, args.storeId);
-    requireValidDateRange(args.startDate, args.endDate);
+    // Sync path only: spans over REPORT_SKU_MIX_SYNC_MAX_DAYS are routed to
+    // the async snapshot by the client; this server cap stays at 92 (U7).
+    requireValidDateRange(
+      args.startDate,
+      args.endDate,
+      RANGE_SYNC_READER_MAX_SPAN_DAYS,
+    );
 
     // SKU-day density depends on both range length and catalogue breadth.
     // Fail closed at a bounded read instead of presenting an understated mix.
@@ -815,7 +883,13 @@ export const listRangeSkuMovement = query({
   },
   handler: async (ctx, args): Promise<ReportSkuMovementData> => {
     await requireReportsStoreAccess(ctx, args.storeId);
-    requireValidDateRange(args.startDate, args.endDate);
+    // Legacy rollout reader (the Units moved sheet uses the async
+    // snapshot); it keeps the narrow synchronous cap (U7).
+    requireValidDateRange(
+      args.startDate,
+      args.endDate,
+      RANGE_SYNC_READER_MAX_SPAN_DAYS,
+    );
 
     const skuDays = await ctx.db
       .query("reportSkuDay")
@@ -1346,12 +1420,17 @@ export const getSkuDetail = query({
     identity?: ReportSkuIdentity;
   } | null> => {
     await requireReportsStoreAccess(ctx, args.storeId);
-    requireValidDateRange(args.startDate, args.endDate);
+    requireValidDateRange(
+      args.startDate,
+      args.endDate,
+      REPORT_DRILLDOWN_RANGE_MAX_DAYS,
+    );
     const priorRange = precedingEqualRange(args.startDate, args.endDate);
 
-    // Read budget: up to 2 * RANGE_MAX_SPAN_DAYS (184) reportSkuDay docs —
-    // one bounded indexed read for the selected range and one for the
-    // immediately preceding equal-length comparison range.
+    // Read budget: up to 2 * REPORT_DRILLDOWN_RANGE_MAX_DAYS (368)
+    // reportSkuDay docs — one bounded indexed read for the selected range
+    // and one for the immediately preceding equal-length comparison range.
+    // The budget doubled with the U7 raise (2 * 92 = 184 before it).
     const [rows, priorRows, identity] = await Promise.all([
       ctx.db
         .query("reportSkuDay")
@@ -1362,7 +1441,7 @@ export const getSkuDetail = query({
             .gte("operatingDate", args.startDate)
             .lte("operatingDate", args.endDate),
         )
-        .take(RANGE_MAX_SPAN_DAYS),
+        .take(REPORT_DRILLDOWN_RANGE_MAX_DAYS),
       ctx.db
         .query("reportSkuDay")
         .withIndex("by_storeId_productSkuId_operatingDate", (q) =>
@@ -1372,7 +1451,7 @@ export const getSkuDetail = query({
             .gte("operatingDate", priorRange.startDate)
             .lte("operatingDate", priorRange.endDate),
         )
-        .take(RANGE_MAX_SPAN_DAYS),
+        .take(REPORT_DRILLDOWN_RANGE_MAX_DAYS),
       resolveSkuIdentity(ctx, args.productSkuId),
     ]);
     const priorPeriodTotals = skuRangeTotals(

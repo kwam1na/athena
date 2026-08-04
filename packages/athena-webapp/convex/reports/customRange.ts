@@ -254,11 +254,12 @@ export async function computeRange(
   ctx: MutationCtx,
   request: Doc<"reportRangeResult">,
 ): Promise<void> {
-  // Defense in depth: movement snapshots share the header table but are
-  // computed exclusively by their fenced worker (reports/skuMovementRange.ts).
-  // The sweeper already skips them; a movement row reaching this function
-  // must be a no-op, never a summary overwrite of movement lifecycle state.
-  if (request.kind === "sku_movement") return;
+  // Defense in depth: kinded snapshots share the header table but are
+  // computed exclusively by their own fenced workers
+  // (reports/rangeSnapshotLifecycle.ts and its per-kind configs). The
+  // sweeper already skips them exhaustively; ANY kinded row reaching this
+  // function must be a no-op, never a summary overwrite of lifecycle state.
+  if (request.kind !== undefined) return;
   try {
     // Bounded by the validated span, so this cannot outgrow the range check.
     const days = await ctx.db

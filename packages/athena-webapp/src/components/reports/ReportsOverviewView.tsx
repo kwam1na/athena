@@ -41,31 +41,46 @@ function comparisonFor(
       priorWindowLabel: string;
     }
   | undefined {
-  if (window === "today") {
-    return {
-      snapshot: overview.yesterday,
-      priorWindowLabel: "yesterday",
-    };
+  switch (window) {
+    case "today":
+      return {
+        snapshot: overview.yesterday,
+        priorWindowLabel: "yesterday",
+      };
+    case "weekToDate":
+      return {
+        snapshot: overview.priorWeek,
+        priorWindowLabel: "prior week",
+      };
+    case "trailing30":
+      return {
+        snapshot: overview.priorTrailing30,
+        priorWindowLabel: "previous 30 days",
+      };
+    case "trailing3Months":
+      return {
+        snapshot: overview.priorTrailing3Months,
+        priorWindowLabel: "previous 3 months",
+      };
+    case "trailing6Months":
+      return {
+        snapshot: overview.priorTrailing6Months,
+        priorWindowLabel: "previous 6 months",
+      };
+    default: {
+      // Exhaustiveness guard: a window value with no explicit case above is a
+      // compile error here, and a runtime escape (e.g. a stale URL value that
+      // slipped past validation) must not silently compare against the wrong
+      // prior period. Fail loudly in dev; show "no comparison" in production.
+      const unhandled: never = window;
+      if (import.meta.env.DEV) {
+        throw new Error(
+          `comparisonFor: unhandled overview window "${String(unhandled)}"`,
+        );
+      }
+      return undefined;
+    }
   }
-
-  if (window === "weekToDate") {
-    return {
-      snapshot: overview.priorWeek,
-      priorWindowLabel: "prior week",
-    };
-  }
-
-  if (window === "trailing30") {
-    return {
-      snapshot: overview.priorTrailing30,
-      priorWindowLabel: "previous 30 days",
-    };
-  }
-
-  return {
-    snapshot: overview.priorTrailing3Months,
-    priorWindowLabel: "previous 3 months",
-  };
 }
 
 /**

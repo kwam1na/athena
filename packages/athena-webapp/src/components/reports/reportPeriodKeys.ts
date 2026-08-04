@@ -1,6 +1,8 @@
 import {
   dayPeriodKey,
   monthPeriodKey,
+  REPORT_DRILLDOWN_RANGE_MAX_DAYS,
+  trailingSixMonthsStart,
   trailingThreeMonthsStart,
   weekPeriodKey,
   type ReportPeriodKey,
@@ -14,9 +16,28 @@ export const REPORT_OVERVIEW_WINDOWS = [
   "weekToDate",
   "trailing30",
   "trailing3Months",
+  "trailing6Months",
 ] as const;
 export type ReportOverviewWindow =
   (typeof REPORT_OVERVIEW_WINDOWS)[number];
+
+/**
+ * Range-picker preset windows — deliberately decoupled from
+ * `REPORT_OVERVIEW_WINDOWS`. The window enum drives the overview tabs, while
+ * this list drives `ReportDateRangeField` presets, so a new window can land on
+ * the tabs before every preset surface (days table, SKU detail, Units moved,
+ * SKU mix) can serve its span. Append a window here only when all of those
+ * surfaces admit it (R3). `trailing6Months` was appended in U7 as the
+ * delivery's final wire, once every one of those surfaces served the full
+ * 184-day span.
+ */
+export const REPORT_DATE_RANGE_PRESET_WINDOWS = [
+  "today",
+  "weekToDate",
+  "trailing30",
+  "trailing3Months",
+  "trailing6Months",
+] as const satisfies readonly ReportOverviewWindow[];
 
 export const REPORT_OVERVIEW_WINDOW_LABELS: Record<
   ReportOverviewWindow,
@@ -26,6 +47,7 @@ export const REPORT_OVERVIEW_WINDOW_LABELS: Record<
   weekToDate: "Week to date",
   trailing30: "Trailing 30 days",
   trailing3Months: "Trailing 3 months",
+  trailing6Months: "Trailing 6 months",
 };
 
 export const REPORT_PERIOD_TYPE_LABELS: Record<ReportPeriodType, string> = {
@@ -39,7 +61,7 @@ export type ReportDateRange = {
   endDate: string;
 };
 
-const REPORT_DAYS_MAX_SPAN = 92;
+const REPORT_DAYS_MAX_SPAN = REPORT_DRILLDOWN_RANGE_MAX_DAYS;
 
 function operatingDateToUtc(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
@@ -57,7 +79,8 @@ function addOperatingDays(value: string, days: number): string {
 
 /**
  * Keeps the rendered day scope stable while a new selection fits inside the
- * reporting query's 92-day read budget. A distant selection starts a fresh
+ * reporting query's 184-day drill-down read budget
+ * (`REPORT_DRILLDOWN_RANGE_MAX_DAYS`). A distant selection starts a fresh
  * scope instead of creating an invalid, ever-growing query range.
  */
 export function tableRangeIncludingSelection(
@@ -109,6 +132,11 @@ export function dateRangeForOverviewWindow(
     case "trailing3Months":
       return {
         startDate: trailingThreeMonthsStart(anchorDate),
+        endDate: anchorDate,
+      };
+    case "trailing6Months":
+      return {
+        startDate: trailingSixMonthsStart(anchorDate),
         endDate: anchorDate,
       };
   }

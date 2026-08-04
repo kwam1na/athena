@@ -724,6 +724,16 @@ export function trailingThreeMonthsStart(anchorDate: string): string {
     .slice(0, 10);
 }
 
+/** First operating date of the six-calendar-month window ending at anchor. */
+export function trailingSixMonthsStart(anchorDate: string): string {
+  const anchor = new Date(`${anchorDate}T00:00:00.000Z`);
+  return new Date(
+    Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth() - 5, 1),
+  )
+    .toISOString()
+    .slice(0, 10);
+}
+
 /**
  * ISO-8601 week key for an operating-date label. Operating dates are calendar
  * labels, so UTC math over the label is correct by construction — no store
@@ -807,6 +817,8 @@ export type ReportOverviewData = {
   priorTrailing30: ReportPeriodSnapshot;
   trailing3Months: ReportPeriodSnapshot;
   priorTrailing3Months: ReportPeriodSnapshot;
+  trailing6Months: ReportPeriodSnapshot;
+  priorTrailing6Months: ReportPeriodSnapshot;
   comparisons: {
     netSalesVsPriorWeekBp: number | null;
     unitsSoldVsPriorWeekBp: number | null;
@@ -921,22 +933,75 @@ export const REPORT_RANGE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const REPORT_SKU_PAGE_SIZE = 10 as const;
 export const REPORT_RANGE_TOP_SKU_LIMIT = 100 as const;
 
+/**
+ * Inclusive-day maximum of a calendar-aligned trailing six-month window.
+ *
+ * 184, not 183. The window is calendar-month aligned (`trailingSixMonthsStart`
+ * through the anchor), so its length is a sum of six real month lengths, not a
+ * fixed day count. The four longest six-month runs each contain 184 days:
+ *
+ *   Mar–Aug: 31 + 30 + 31 + 30 + 31 + 31 = 184
+ *   May–Oct: 31 + 30 + 31 + 31 + 30 + 31 = 184
+ *   Jul–Dec: 31 + 31 + 30 + 31 + 30 + 31 = 184
+ *   Aug–Jan: 31 + 30 + 31 + 30 + 31 + 31 = 184
+ *
+ * A 183-day ceiling would reject exactly those windows — an intermittent,
+ * date-dependent failure that looks random in production. Do not "simplify"
+ * this to 183.
+ */
+export const REPORT_TRAILING_SIX_MONTHS_MAX_DAYS = 184 as const;
+
+/**
+ * General drill-down span ceiling (days table, SKU detail, Units moved) now
+ * that the trailing six-month window is explorable. Declared in U1, applied
+ * in U5/U7: `listDays` and `getSkuDetail` validate and read against it, and
+ * `REPORT_MOVEMENT_RANGE_MAX_DAYS` below equals it. The synchronous SKU mix
+ * and legacy movement readers deliberately keep their narrower 92-day cap
+ * (`RANGE_SYNC_READER_MAX_SPAN_DAYS` in convex/reports/queries.ts).
+ */
+export const REPORT_DRILLDOWN_RANGE_MAX_DAYS =
+  REPORT_TRAILING_SIX_MONTHS_MAX_DAYS;
+
 // ---------------------------------------------------------------------------
-// Range request kinds — the shared range-result lifecycle now serves two
+// Range request kinds — the shared range-result lifecycle now serves three
 // consumers. A stored `reportRangeResult` row WITHOUT a `kind` field is a
 // legacy custom-summary request and keeps its exact original semantics
 // (including failed-row reuse until TTL and the 366-day span limit).
 // ---------------------------------------------------------------------------
 
-export const REPORT_RANGE_KINDS = ["custom_summary", "sku_movement"] as const;
+export const REPORT_RANGE_KINDS = [
+  "custom_summary",
+  "sku_movement",
+  "sku_mix",
+] as const;
 export type ReportRangeKind = (typeof REPORT_RANGE_KINDS)[number];
 
 /** Inclusive-day span ceilings, per request kind. */
-export const REPORT_MOVEMENT_RANGE_MAX_DAYS = 92 as const;
+/**
+ * Movement serves the full drill-down span since U7. Its per-day resumable
+ * design (one bounded source batch per included day) makes the wider window
+ * a matter of more batches, not bigger ones; the pre-admission
+ * revision-vector read is bounded by this same constant.
+ */
+export const REPORT_MOVEMENT_RANGE_MAX_DAYS = REPORT_DRILLDOWN_RANGE_MAX_DAYS;
+/** Mix serves the full trailing six-month window (its ambient consumer). */
+export const REPORT_MIX_RANGE_MAX_DAYS = REPORT_TRAILING_SIX_MONTHS_MAX_DAYS;
 export const REPORT_RANGE_MAX_DAYS_BY_KIND = {
   custom_summary: REPORT_RANGE_MAX_DAYS,
   sku_movement: REPORT_MOVEMENT_RANGE_MAX_DAYS,
+  sku_mix: REPORT_MIX_RANGE_MAX_DAYS,
 } as const satisfies Record<ReportRangeKind, number>;
+
+/**
+ * Span threshold (inclusive days) at or under which SKU mix stays on the
+ * synchronous reader permanently. Provably under the cap: the fold bounds
+ * `reportSkuDay` at 2,000 rows per operating day (`MAX_SKU_DAY_ROWS_PER_DAY`
+ * in convex/reports/sweeper.ts), so a 2-day span reads at most
+ * 2 × 2,000 = 4,000 rows — strictly below the 5,000-row synchronous cap
+ * (`RANGE_SKU_MIX_ROW_LIMIT` in convex/reports/queries.ts). DECLARED here
+ * (U1); U5's span routing applies it.
+ */
+export const REPORT_SKU_MIX_SYNC_MAX_DAYS = 2 as const;
 
 /** Rows per movement page — Top movers shows one page, Granular pages by it. */
 export const REPORT_MOVEMENT_PAGE_SIZE = 20 as const;
@@ -1036,6 +1101,7 @@ export function validateReportRangeRequest(
 /** Legacy custom-summary keys — shape is frozen; do not reuse for movement. */
 export const REPORT_RANGE_SUMMARY_REQUEST_KEY_PREFIX = "range:" as const;
 export const REPORT_MOVEMENT_REQUEST_KEY_PREFIX = "movement:" as const;
+export const REPORT_MIX_REQUEST_KEY_PREFIX = "mix:" as const;
 
 export type ReportMovementRequestIdentityArgs = {
   storeId: string;
@@ -1220,6 +1286,144 @@ export function deriveMovementRequestLifecycle(header: {
       totals: header.movementTotals,
       completedAt: header.computedAt,
       pageCount: movementPageCount(header.movementTotals.skuCount),
+    };
+  }
+  if (
+    header.movementPhase === "terminal_error" &&
+    header.movementErrorCode !== undefined &&
+    header.movementCorrelationId !== undefined
+  ) {
+    return {
+      state: "terminal_error",
+      errorCode: header.movementErrorCode,
+      correlationId: header.movementCorrelationId,
+    };
+  }
+  return { state: "queued_pending" };
+}
+
+// ---------------------------------------------------------------------------
+// SKU mix snapshot contract (U4). Mix rides the same kind-generic lifecycle
+// rail movement established — the `movement*` header columns are the generic
+// phase/fence/totals machinery for any kind (see reportRangeResultSchema) —
+// but has NO ranking phase: the surface only ever shows top 5 + Other, so
+// child rows carry a descending units-sold sort key and the reader selects
+// the top rows through that index at read time. No rank field exists.
+// ---------------------------------------------------------------------------
+
+/**
+ * Semantic version of the mix snapshot contract (aggregation and child-row
+ * meaning). Participates in the mix request key, so a contract change can
+ * never reuse a snapshot computed under the old meaning.
+ */
+export const REPORT_MIX_CONTRACT_VERSION = 1 as const;
+
+/**
+ * Visible mix rows before the Other bucket. Must stay equal to the sync
+ * reader's `RANGE_SKU_MIX_VISIBLE_LIMIT` (convex/reports/queries.ts) — the
+ * two paths present the same contract and U5 routes between them by span.
+ */
+export const REPORT_MIX_VISIBLE_ROW_LIMIT = 5 as const;
+
+export type ReportMixRequestIdentityArgs = {
+  storeId: string;
+  startDate: string;
+  endDate: string;
+  foldVersion: number;
+  contractVersion: number;
+  revisionVector: readonly ReportMovementDayRevision[];
+};
+
+/**
+ * Canonical (pre-hash) identity string. Fixed field order is part of the
+ * contract: changing it bumps REPORT_MIX_CONTRACT_VERSION. The "sku_mix"
+ * kind literal keeps a mix key from ever colliding with a movement key over
+ * the same store, dates, and revisions.
+ */
+export function mixRequestKeyIdentity(
+  args: ReportMixRequestIdentityArgs,
+): string {
+  return JSON.stringify([
+    "sku_mix",
+    args.storeId,
+    args.startDate,
+    args.endDate,
+    args.foldVersion,
+    args.contractVersion,
+    args.revisionVector.map((day) => [day.operatingDate, day.revision]),
+  ]);
+}
+
+/** Deterministic mix request key (hash injected as for movement keys). */
+export function computeMixRequestKey(
+  args: ReportMixRequestIdentityArgs,
+  hash: (input: string) => string,
+): string {
+  return `${REPORT_MIX_REQUEST_KEY_PREFIX}${hash(
+    mixRequestKeyIdentity(args),
+  )}`;
+}
+
+/**
+ * Negated unitsSold: ascending index order = descending units sold. `|| 0`
+ * normalizes -0 (from a zero input) to a canonical +0 key, mirroring
+ * `movementAbsNetUnitsSortKey` — though mix children are only ever written
+ * for accumulated unitsSold > 0.
+ */
+export function mixUnitsSoldSortKey(unitsSold: number): number {
+  return -unitsSold || 0;
+}
+
+/**
+ * Authoritative completed mix totals: total units sold across the range and
+ * the number of distinct SKUs with any units sold. Stored on the header's
+ * generic totals rail (`movementTotals`, with `unitsSold`/`netUnits` both
+ * carrying the sold total and `unitsReturned` structurally zero — mix counts
+ * sold units only), accumulated during aggregation because mix has no
+ * ranking pass to accumulate in.
+ */
+export type ReportMixTotals = {
+  totalUnitsSold: number;
+  skuCount: number;
+};
+
+export type ReportMixLifecycle =
+  | { state: "waiting"; retryAfterMs: number }
+  | { state: "backpressure"; retryAfterMs: number }
+  | { state: "not_available" }
+  | { state: "queued_pending" }
+  | { state: "completed"; totals: ReportMixTotals; completedAt: number }
+  | { state: "terminal_error"; errorCode: string; correlationId: string };
+
+/**
+ * Derives the public mix lifecycle from an admitted mix header. Same
+ * conservative shape as movement's: "completed" requires the completed phase
+ * AND finalized totals AND a completion time together; "terminal_error"
+ * requires both the sanitized code and the correlation id. Internal
+ * exception text, cursors, and fences never cross this boundary.
+ */
+export function deriveMixRequestLifecycle(header: {
+  movementPhase?: ReportMovementRequestPhase;
+  movementTotals?: ReportMovementTotals;
+  computedAt?: number;
+  movementErrorCode?: string;
+  movementCorrelationId?: string;
+}): Extract<
+  ReportMixLifecycle,
+  { state: "queued_pending" | "completed" | "terminal_error" }
+> {
+  if (
+    header.movementPhase === "completed" &&
+    header.movementTotals !== undefined &&
+    header.computedAt !== undefined
+  ) {
+    return {
+      state: "completed",
+      totals: {
+        totalUnitsSold: header.movementTotals.unitsSold,
+        skuCount: header.movementTotals.skuCount,
+      },
+      completedAt: header.computedAt,
     };
   }
   if (

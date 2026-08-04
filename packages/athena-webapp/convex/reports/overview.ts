@@ -2,7 +2,9 @@ import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import {
   weekPeriodKey,
+  trailingSixMonthsStart,
   trailingThreeMonthsStart,
+  REPORT_TRAILING_SIX_MONTHS_MAX_DAYS,
   type ReportDayMetrics,
   type ReportOverviewData,
   type ReportPeriodSnapshot,
@@ -26,10 +28,16 @@ import { transactionCountFromCloseSummary } from "./transactionCounts";
  */
 
 /**
- * Day docs read per rebuild. One doc per operating day; 184 covers the current
- * and immediately preceding three-calendar-month windows.
+ * Day docs read per rebuild. One doc per operating day.
+ *
+ * Derivation: 2 × 184 = 368. The current six-calendar-month window spans at
+ * most `REPORT_TRAILING_SIX_MONTHS_MAX_DAYS` (184) days, and its prior-period
+ * comparison window ("start minus one day, re-apply the helper") spans at most
+ * the same — so both windows together never need more than twice the maximum.
+ * `getOverview`'s read-time backfill shares this constant so the sweep scan
+ * and the backfill read cannot drift apart.
  */
-export const OVERVIEW_DAY_SCAN_LIMIT = 184;
+export const OVERVIEW_DAY_SCAN_LIMIT = 2 * REPORT_TRAILING_SIX_MONTHS_MAX_DAYS;
 
 export const OVERVIEW_TREND_DAYS = 30;
 
@@ -160,6 +168,8 @@ export function buildOverviewData(args: {
       priorTrailing30: emptySnapshot(),
       trailing3Months: emptySnapshot(),
       priorTrailing3Months: emptySnapshot(),
+      trailing6Months: emptySnapshot(),
+      priorTrailing6Months: emptySnapshot(),
       comparisons: { netSalesVsPriorWeekBp: null, unitsSoldVsPriorWeekBp: null },
       dailyTrend: [],
       trust: { reconciledDays: 0, provisionalDays: 0, amendedDays: 0 },
@@ -202,6 +212,21 @@ export function buildOverviewData(args: {
       day.operatingDate >= priorTrailing3MonthsStart &&
       day.operatingDate <= priorTrailing3MonthsEnd,
   );
+  const trailing6MonthsStart = trailingSixMonthsStart(anchor);
+  const priorTrailing6MonthsEnd = addDaysToDate(trailing6MonthsStart, -1);
+  const priorTrailing6MonthsStart = trailingSixMonthsStart(
+    priorTrailing6MonthsEnd,
+  );
+  const trailing6MonthsDays = days.filter(
+    (day) =>
+      day.operatingDate >= trailing6MonthsStart &&
+      day.operatingDate <= anchor,
+  );
+  const priorTrailing6MonthsDays = days.filter(
+    (day) =>
+      day.operatingDate >= priorTrailing6MonthsStart &&
+      day.operatingDate <= priorTrailing6MonthsEnd,
+  );
 
   const currentWeekKey = weekPeriodKey(anchor);
   const priorWeekKey = weekPeriodKey(addDaysToDate(anchor, -7));
@@ -239,6 +264,8 @@ export function buildOverviewData(args: {
     priorTrailing30: snapshotForDays(priorTrailing30Days),
     trailing3Months: snapshotForDays(trailing3MonthsDays),
     priorTrailing3Months: snapshotForDays(priorTrailing3MonthsDays),
+    trailing6Months: snapshotForDays(trailing6MonthsDays),
+    priorTrailing6Months: snapshotForDays(priorTrailing6MonthsDays),
     comparisons: {
       netSalesVsPriorWeekBp: comparisonBp(
         weekToDate.netSalesMinor,

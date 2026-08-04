@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trailing six-month period implementation plan</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --line: color-mix(in srgb, currentColor 16%, transparent);
+      --muted: color-mix(in srgb, currentColor 68%, transparent);
+      --panel: color-mix(in srgb, currentColor 4%, transparent);
+      --accent: #4b5bb4;
+    }
+    body { margin: 0 auto; max-width: 1060px; padding: 48px 28px 84px; line-height: 1.58; }
+    h1 { max-width: 800px; font-size: clamp(2rem, 5vw, 3.35rem); line-height: 1.06; letter-spacing: -.035em; }
+    h2 { margin-top: 2.5rem; border-bottom: 1px solid var(--line); padding-bottom: .45rem; }
+    h3 { margin: 0 0 .35rem; font-size: 1.05rem; }
+    p { max-width: 860px; }
+    code { background: color-mix(in srgb, currentColor 9%, transparent); border-radius: 4px; padding: .08rem .3rem; }
+    .meta, .note { color: var(--muted); }
+    .lede { font-size: 1.16rem; color: var(--muted); }
+    .promise { border-left: 4px solid var(--accent); padding: .8rem 1rem; background: var(--panel); }
+    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .unit { border: 1px solid var(--line); border-radius: 14px; padding: 1.1rem 1.2rem; background: var(--panel); }
+    .unit p { margin-bottom: 0; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid var(--line); padding: .68rem; text-align: left; vertical-align: top; }
+    th { background: var(--panel); }
+    .flow { display: flex; flex-wrap: wrap; gap: .55rem; align-items: center; margin: 1rem 0; }
+    .step { border: 1px solid var(--line); border-radius: 999px; padding: .42rem .72rem; }
+    .arrow { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <p class="meta">Athena · Reviewed implementation plan · 2026-08-04 (revised post-review)</p>
+  <h1>Adding a trailing six-month period to Reports</h1>
+  <p class="lede">Three parts ship together: a new Trailing 6 months window, drill-down reach raised to match it, and the SKU mix chart routed by span onto the bounded resumable snapshot lifecycle that Units moved uses, for the multi-day ranges that need it.</p>
+
+  <p class="promise"><strong>The span ceiling is 184 days, not 183.</strong> The window is calendar-month aligned, and the longest six calendar months (Mar–Aug, May–Oct, Jul–Dec, Aug–Jan) span 184 inclusive days. A 183-day ceiling would fail only on those windows — an intermittent, date-dependent bug that reads as a random production failure rather than an off-by-one.</p>
+
+  <p class="promise"><strong>Mix is span-routed — this is the headline design change.</strong> Mix is ambient: it fires on every workspace visit and every day click, so it cannot inherit movement's on-demand model. Selections of ≤2 days stay on the synchronous reader <em>forever</em>, provably under the 5,000-row cap because folds bound <code>reportSkuDay</code> at 2,000 rows per day (2 × 2,000 &lt; 5,000). Only multi-day ranges use the async snapshot lifecycle. This kills ambient request volume at the source instead of tuning budgets around it.</p>
+
+  <p class="note"><strong>Presets are decoupled from the window enum.</strong> <code>ReportDateRangeField</code> maps over an explicit preset list, not the raw enum, so a window can exist without a preset button appearing before every surface it reaches is ready. R3 holds at every unit boundary: presets decouple in U1, the enum/tab/snapshots land together in U2, and the six-month preset is appended last in U7.</p>
+
+  <h2>Problem frame</h2>
+  <table>
+    <tr><th>Blocker</th><th>Why it blocks a fifth window</th></tr>
+    <tr><td>Overview scan too small</td><td>Every snapshot is an in-memory filter over one descending read capped at <code>OVERVIEW_DAY_SCAN_LIMIT = 184</code> <code>reportDay</code> rows. A current six-month window alone can consume all 184; its prior-period comparison needs roughly 368.</td></tr>
+    <tr><td>The window list drives two UI surfaces at once</td><td><code>ReportDateRangeField</code> derives range-picker presets from the window list, and <code>ReportsOverviewView</code> derives the overview tabs from the same list. Adding the enum value before the surfaces are ready ships a preset that predictably errors and a tab with no snapshot behind it.</td></tr>
+    <tr><td>SKU mix throws past 5,000 rows</td><td><code>listRangeSkuMix</code> reads <code>reportSkuDay</code> with a 5,000-row cap and throws past it. Production moved 391 distinct SKUs in 30 days (~1,033 rows); a 92-day range is already near the wall and a six-month range exceeds it routinely.</td></tr>
+  </table>
+
+  <h2>Key technical decisions</h2>
+  <table>
+    <tr><th>Decision</th><th>Rationale</th></tr>
+    <tr><td>Ceiling is 184 days, not 183</td><td>Six calendar months span up to 184 inclusive days. A 183 ceiling fails only on those windows — a date-dependent bug that looks random in production. Documented at the constant with the arithmetic.</td></tr>
+    <tr><td>Route mix by span at the client</td><td>Spans of ≤2 days are provably under the 5,000-row cap (2,000 rows/day fold bound), so single-day selection — the dominant interaction — stays synchronous forever and never touches async admission. Multi-day ranges use the snapshot lifecycle.</td></tr>
+    <tr><td>Accept a calm pending state on multi-day first computation</td><td>After each day folds, the default range's revision vector changes and the first visit mints a new snapshot. Dedupe makes every subsequent visit instant; a warm-ahead scheme is deferred, not needed.</td></tr>
+    <tr><td>Mix has no ranking phase</td><td>Mix only ever shows top 5 + Other — no numbered pages, no ordinal addressing. Accumulate into child rows with a units-sold sort key, accumulate totals and SKU count on the header, and read top 5 via the sort-key index at read time. Phases: queued → aggregating → completed.</td></tr>
+    <tr><td>Per-surface ceilings during rollout</td><td>Raising one shared span constant would widen the synchronous mix reader past what it can serve. Ceilings are named per surface in U1 and applied per surface in U5/U7.</td></tr>
+    <tr><td>Decouple presets and tabs from the window enum's landing</td><td>The enum drives both presets and tabs. U1 introduces an explicit preset list (the current four); the enum, tab, and snapshots land together in U2; the six-month preset is appended only in U7, once every surface it reaches serves 184.</td></tr>
+    <tr><td>Generalize the lifecycle over kind before adding a third consumer</td><td>Copy-pasting the movement lifecycle would triple the fencing, admission, cleanup, and backstop logic and guarantee divergence. Extract the kind-generic seams first, then add mix as configuration.</td></tr>
+    <tr><td>Sibling child table, not a reused movement table</td><td>The movement child table's field names encode signed movement semantics. A sibling table reuses the index pattern with honest names.</td></tr>
+    <tr><td>Admission budget keyed by kind, sized for ambient use, no migration</td><td>A third consumer must not eat Units moved's budget. Buckets are 10-minute fixed windows, so old rows age out within one window of the key change — no migration machinery needed.</td></tr>
+    <tr><td>No fold-version bump</td><td>Certified provenance is already stamped at fold version 3 across production history. Verified as a U4 precondition, not assumed.</td></tr>
+    <tr><td>Mix totals are header state; Other is derived</td><td>The Other bucket has no natural durable row. Header totals let the reader derive Other as total minus visible.</td></tr>
+    <tr><td>The overview backfill computes; no empty-preference</td><td>Singletons refresh only for dirty-day stores, so a quiet store may never be rewritten. With the scan constant widened and the backfill routed through it, the read-time backfill can compute the six-month fields correctly — so it does. Short-history stores show partial totals, exactly as Trailing 30 and Trailing 3 months already do; no special understatement guard.</td></tr>
+    <tr><td><code>comparisonFor()</code> gains an explicit case and a defensive fallback</td><td>Today's fallback silently yields the three-month comparison for any unrecognized window — a wrong number, not a visible error.</td></tr>
+  </table>
+
+  <h2>Generalized range lifecycle</h2>
+  <div class="flow" aria-label="Request kinds over shared machinery">
+    <span class="step">custom_summary</span><span class="arrow">→</span>
+    <span class="step">sku_movement</span><span class="arrow">→</span>
+    <span class="step">sku_mix</span>
+  </div>
+  <p>Three request kinds now share one kind-generic machinery: admission (kind-keyed), fencing, scheduling, backstop, cleanup, and sanitized errors. Kind-specific behavior stays behind a small per-kind configuration — source projection, child row shape, totals struct, phase set (mix omits ranking entirely: <code>queued → aggregating → completed</code>, with top 5 read via the sort-key index), and constants.</p>
+
+  <h2>Implementation units</h2>
+  <div class="grid">
+    <section class="unit"><h3>U1 · Vocabulary, ceilings, preset decoupling</h3><p>Define the six-month calendar math and named per-surface ceilings, and decouple the range-picker presets from the window enum — without changing any surface's behavior yet.</p></section>
+    <section class="unit"><h3>U2 · Six-month overview window</h3><p>Land the window end to end on the overview: enum value, label, tab, snapshots, comparison, and a backfill that computes for quiet stores the sweeper never touches.</p></section>
+    <section class="unit"><h3>U3 · Generalize the range lifecycle over kind</h3><p>Extract the movement lifecycle's kind-generic seams so a third request kind can be added as configuration, with movement behavior provably unchanged.</p></section>
+    <section class="unit"><h3>U4 · Async SKU mix snapshot backend (no rank)</h3><p>Compute complete SKU mix for any admitted multi-day period as a bounded resumable snapshot with no ranking phase, opening by verifying the no-fold-bump premise.</p></section>
+    <section class="unit"><h3>U5 · Span-routed SKU mix surface</h3><p>Route mix by span — synchronous for ≤2-day selections, snapshot lifecycle for multi-day — preserving the settled context that also feeds the Units moved sheet.</p></section>
+    <section class="unit"><h3>U6 · Shared-demo parity</h3><p>Serve the new window and both mix paths in demo mode within the fixture's existing 21-day horizon, matching the established Trailing 3 months convention.</p></section>
+    <section class="unit"><h3>U7 · Drill-down reach and preset enablement</h3><p>Raise the days table, SKU detail, and Units moved to the 184-day ceiling, then append the six-month preset last, once every surface it reaches serves the span.</p></section>
+    <section class="unit"><h3>U8 · Focused validation, build, and Graphify refresh</h3><p>Run the focused suites named by U1–U7, require a clean production app build, and rebuild Graphify; the merge gate and PR are explicitly deferred.</p></section>
+  </div>
+
+  <h2>Where this could go quietly wrong</h2>
+  <ul>
+    <li><strong>Quiet-store overview backfill — solved by computing, not guarding.</strong> Singletons refresh only for dirty-day stores, so a quiet store's singleton may never be rewritten by the sweeper. The read-time backfill is that store's only source of the new fields; it now computes the six-month values via the widened shared scan constant rather than relying on an empty-preference or understatement guard, and short-history stores simply show partial totals, matching the existing convention.</li>
+    <li><strong>Ambient usage and the daily pending state.</strong> Mix is ambient rather than on-demand, so after each day folds, the default multi-day range's revision vector changes and the first visit that day mints a new snapshot before dedupe makes every later visit instant. This designed pending state must read as calm and intentional, not as breakage — it is bounded (a short aggregation, a handful of worker batches), and a warm-ahead scheme that would eliminate it entirely is deferred as a named follow-up rather than built now.</li>
+  </ul>
+  <p>The demo-horizon risk from the earlier draft is resolved: the fixture's 21-day horizon is retained as-is, and the six-month demo window renders from the same 21 days the three-month window already does — an established convention, not a gap.</p>
+
+  <h2>Risks</h2>
+  <table>
+    <tr><th>Risk</th><th>Mitigation</th></tr>
+    <tr><td>183-vs-184 off-by-one fails only on certain months</td><td>Ceiling is 184, documented with the calendar arithmetic, pinned by a test over the four longest windows.</td></tr>
+    <tr><td>Ambient mix usage exhausts admission or floods the worker</td><td>Span routing keeps day clicks and short ranges synchronous; dedupe makes revisits free; ambient-sized budgets are documented beside the constants.</td></tr>
+    <tr><td>Daily first-visit pending state reads as breakage</td><td>The pending state is designed and calm, bounded by a short aggregation; warm-ahead is a named follow-up if it ever matters.</td></tr>
+    <tr><td>Generalizing the lifecycle regresses shipped movement behavior</td><td>Characterization-first; the movement suite must pass unweakened.</td></tr>
+    <tr><td>A third kind consumes Units moved's admission budget</td><td>Kind-keyed buckets; old rows age out within one 10-minute window, no migration needed.</td></tr>
+    <tr><td>Quiet stores never materialize the new overview fields</td><td>The read-time backfill computes them via the widened shared constant, tested explicitly.</td></tr>
+    <tr><td>Preset or tab appears before its surfaces work</td><td>Presets decoupled in U1; enum+tab+snapshots land together in U2; preset enabled last in U7.</td></tr>
+    <tr><td>Mix settle-context change destabilizes the Units moved sheet</td><td>The settled contract is preserved across both mix paths and the coupling is tested.</td></tr>
+  </table>
+
+  <h2>Success metrics</h2>
+  <ul>
+    <li>Trailing 6 months appears alongside the existing periods with a correct prior-period comparison, for active, quiet, and short-history stores.</li>
+    <li>The longest six-calendar-month windows (184 days) validate and complete on the days table, SKU detail, Units moved, and multi-day SKU mix.</li>
+    <li>Day clicks and ≤2-day selections render mix instantly with zero async admission consumption.</li>
+    <li>A six-month SKU mix with production-like breadth (well over 5,000 SKU-day rows) completes with correct totals, visible rows, and Other bucket.</li>
+    <li>Movement behavior is unchanged after the lifecycle generalization, proven by the existing suite passing unweakened.</li>
+    <li>Admission budgets are isolated per kind.</li>
+    <li>Demo serves the window and both mix paths with no live read and no generation authority.</li>
+    <li>Focused suites pass and the app builds with zero errors; the merge gate and PR are deferred.</li>
+  </ul>
+
+  <p class="note">The paired Markdown plan contains requirement traceability, file-level scope, and focused test scenarios.</p>
+</body>
+</html>

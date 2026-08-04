@@ -14,30 +14,20 @@ import {
 } from "@/lib/operations/operatingDate";
 import { formatReportDateRange } from "./reportFormat";
 import { ReportCalendar } from "./ReportCalendar";
-import { dateRangeForOverviewWindow } from "./reportPeriodKeys";
+import {
+  dateRangeForOverviewWindow,
+  REPORT_DATE_RANGE_PRESET_WINDOWS,
+  REPORT_OVERVIEW_WINDOW_LABELS,
+} from "./reportPeriodKeys";
 
 type DateRangeValue = { startDate: string; endDate: string };
 
 function getDateRangePresets(today: Date) {
   const endDate = getLocalOperatingDate(today);
-  return [
-    {
-      label: "Today",
-      range: dateRangeForOverviewWindow("today", endDate),
-    },
-    {
-      label: "Week to date",
-      range: dateRangeForOverviewWindow("weekToDate", endDate),
-    },
-    {
-      label: "Trailing 30 days",
-      range: dateRangeForOverviewWindow("trailing30", endDate),
-    },
-    {
-      label: "Trailing 3 months",
-      range: dateRangeForOverviewWindow("trailing3Months", endDate),
-    },
-  ] satisfies Array<{ label: string; range: DateRangeValue }>;
+  return REPORT_DATE_RANGE_PRESET_WINDOWS.map((window) => ({
+    label: REPORT_OVERVIEW_WINDOW_LABELS[window],
+    range: dateRangeForOverviewWindow(window, endDate),
+  })) satisfies Array<{ label: string; range: DateRangeValue }>;
 }
 
 /** A compact, atomic date-range control shared by report views. */

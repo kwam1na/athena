@@ -422,6 +422,10 @@ export const reportOverviewSchema = v.object({
   trailing3Months: v.optional(periodSnapshot),
   // Optional while existing singleton documents are refreshed by the sweeper.
   priorTrailing3Months: v.optional(periodSnapshot),
+  // Optional while existing singleton documents are refreshed by the sweeper.
+  trailing6Months: v.optional(periodSnapshot),
+  // Optional while existing singleton documents are refreshed by the sweeper.
+  priorTrailing6Months: v.optional(periodSnapshot),
   comparisons: v.object({
     netSalesVsPriorWeekBp: v.union(v.number(), v.null()),
     unitsSoldVsPriorWeekBp: v.union(v.number(), v.null()),
@@ -484,14 +488,18 @@ export const reportDirtyDaySchema = v.object({
 /**
  * On-demand range results, computed by background work, TTL'd.
  *
- * Two request kinds share this header. A row WITHOUT `kind` is a legacy
- * custom-summary request and keeps its exact original lifecycle (pending →
- * completed/failed, failed rows reused until TTL, "range:" request keys).
- * `kind: "sku_movement"` rows are admitted movement snapshots: their
- * `movement*` fields drive the resumable worker (U3), their request key
- * ("movement:" prefix) folds in kind, contract/fold versions, and the
- * included-day revision vector, and their per-SKU results live in the
- * `reportRangeMovementSku` child table — never in arrays on this header.
+ * A row WITHOUT `kind` is a legacy custom-summary request and keeps its
+ * exact original lifecycle (pending → completed/failed, failed rows reused
+ * until TTL, "range:" request keys). Kinded rows are admitted range
+ * snapshots driven by the kind-generic lifecycle
+ * (convex/reports/rangeSnapshotLifecycle.ts): their `movement*` fields — the
+ * prefix is historical, from the movement lifecycle that introduced them —
+ * are the generic phase/fence/retry rail for ANY kind, their request keys
+ * are kind-prefixed and fold in contract/fold versions plus the
+ * included-day revision vector, and their per-SKU results live in per-kind
+ * child tables (movement's is `reportRangeMovementSku`) — never in arrays on
+ * this header. `kind: "sku_movement"` is the shipped movement snapshot; U4
+ * adds `sku_mix`.
  */
 export const reportRangeResultSchema = v.object({
   storeId: v.id("store"),
@@ -505,7 +513,11 @@ export const reportRangeResultSchema = v.object({
   ),
   /** Absent = legacy custom summary (exact current behavior). */
   kind: v.optional(
-    v.union(v.literal("custom_summary"), v.literal("sku_movement")),
+    v.union(
+      v.literal("custom_summary"),
+      v.literal("sku_movement"),
+      v.literal("sku_mix"),
+    ),
   ),
   // -- Movement lifecycle (kind === "sku_movement" only; all optional so
   // -- legacy rows validate untouched). Field meanings are contract-owned:
@@ -526,7 +538,7 @@ export const reportRangeResultSchema = v.object({
   /**
    * Lineage: certified revision per included operating day (or the explicit
    * empty-day sentinel), captured at admission and rechecked at publication.
-   * Bounded by REPORT_MOVEMENT_RANGE_MAX_DAYS (92) entries.
+   * Bounded by REPORT_MOVEMENT_RANGE_MAX_DAYS (184) entries.
    */
   movementRevisionVector: v.optional(
     v.array(
@@ -543,7 +555,11 @@ export const reportRangeResultSchema = v.object({
   movementFence: v.optional(v.number()),
   /** Next operating date to aggregate; unset once aggregation finishes. */
   movementSourceDayCursor: v.optional(v.string()),
-  /** Authoritative totals, written only at rank finalization. */
+  /** Authoritative kinded totals rail. Movement writes it only at rank
+   * finalization; mix (no ranking phase) accumulates it during aggregation
+   * with `unitsSold`/`netUnits` both carrying the sold total and
+   * `unitsReturned` structurally zero. The generic lifecycle erases it on
+   * retry resets and source-stale terminals for every kind. */
   movementTotals: v.optional(
     v.object({
       unitsSold: v.number(),
@@ -588,10 +604,16 @@ export const reportRangeResultSchema = v.object({
  * both tabs one deterministic ordering with `productSkuId` as the tie-break.
  */
 /**
- * Fixed-window admission counters for movement request generation, modeled on
- * the shared-demo admission bucket (sharedDemo/admission.ts) but movement's
- * own table: one row per (scope, key) window. `scope: "principal"` keys by
- * athenaUser id, `"store"` by store id, `"global"` by the literal "global".
+ * Fixed-window admission counters for kinded range-snapshot generation,
+ * modeled on the shared-demo admission bucket (sharedDemo/admission.ts) but
+ * this lifecycle's own table (the `Movement` name is historical): one row
+ * per (scope, key) window. Keys are kind-scoped so each kind's budgets are
+ * independent at every scope: movement (grandfathered — its production rows
+ * predate kind scoping) keys `scope: "principal"` by raw athenaUser id,
+ * `"store"` by raw store id, `"global"` by the literal "global"; every
+ * later kind prefixes each of those with `"<kind>:"`. No migration
+ * accompanies key-shape changes — buckets are fixed 10-minute windows, so
+ * rows under a superseded key age out within one window.
  * Rows are transient rate-limit state, not derived report data — they are
  * overwritten in place when a window rolls and are deliberately NOT part of
  * `RESEED_PURGE_TABLES` (a reseed must not reset abuse budgets).
@@ -620,6 +642,31 @@ export const reportRangeMovementSkuSchema = v.object({
   absNetUnitsSortKey: v.number(),
   /** Ordinal rank (1-based); absent until rank finalization completes. */
   rank: v.optional(v.number()),
+  /** Cleanup ownership: mirrors the header's expiresAt so expired children
+   * are found directly, without loading their header first. */
+  expiresAt: v.number(),
+});
+
+/**
+ * One row per (mix request, SKU) — the bounded child projection behind the
+ * top-5 SKU mix reader. A sibling of `reportRangeMovementSku`, deliberately
+ * NOT that table reused: movement's `netUnits`/`absNetUnitsSortKey` encode
+ * signed movement semantics mix does not have. Rows exist only for SKUs with
+ * accumulated `unitsSold > 0` (matching the sync reader's aggregate-level
+ * filter), and there is NO rank field: mix only ever shows top 5 + Other, so
+ * the reader takes the top rows through the sort-key index at read time
+ * instead of running a ranking pass. Request-owned and private until the
+ * header completes; addressable ONLY through indexes.
+ */
+export const reportRangeMixSkuSchema = v.object({
+  storeId: v.id("store"),
+  /** Owning request header; cleanup deletes children before the header. */
+  rangeResultId: v.id("reportRangeResult"),
+  productSkuId: v.id("productSku"),
+  /** Accumulated units sold across the range; always > 0 once written. */
+  unitsSold: v.number(),
+  /** -unitsSold: ascending index order = descending units sold. */
+  unitsSoldSortKey: v.number(),
   /** Cleanup ownership: mirrors the header's expiresAt so expired children
    * are found directly, without loading their header first. */
   expiresAt: v.number(),

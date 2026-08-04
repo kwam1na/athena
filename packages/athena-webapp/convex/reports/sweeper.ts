@@ -9,10 +9,13 @@ import {
 } from "../../shared/reportsContract";
 import { foldDay } from "./foldDay";
 import { computeRange } from "./customRange";
+import { MOVEMENT_RANGE_SNAPSHOT_KIND } from "./skuMovementRange";
+import { MIX_RANGE_SNAPSHOT_KIND } from "./skuMixRange";
 import {
-  cleanupExpiredMovement,
-  scheduleEligibleMovementWork,
-} from "./skuMovementRange";
+  cleanupExpiredRangeSnapshots,
+  scheduleEligibleRangeSnapshotWork,
+  type AnyRangeSnapshotKindConfig,
+} from "./rangeSnapshotLifecycle";
 import { rebuildStoreOverview } from "./overview";
 import { rebuildRollupsForDates } from "./rollups";
 import {
@@ -474,10 +477,13 @@ async function computePendingRanges(
   let computed = 0;
 
   for (const request of pending) {
-    // Movement rows share the header table and are ALSO "pending" while
-    // their worker runs; their lifecycle is owned entirely by
-    // reports/skuMovementRange.ts, never by the summary compute path.
-    if (request.kind === "sku_movement") continue;
+    // Kinded rows share the header table and are ALSO "pending" while their
+    // worker runs; every kinded lifecycle is owned by its own machinery
+    // (reports/rangeSnapshotLifecycle.ts and its per-kind configs), never by
+    // this legacy summary compute path. The skip is exhaustive over ANY
+    // kinded row — only legacy (kindless) custom-summary requests compute
+    // here, so a newly added kind can never leak into this lane.
+    if (request.kind !== undefined) continue;
     try {
       await computeRange(ctx, request);
       computed += 1;
@@ -507,9 +513,11 @@ async function expireRangeResults(
 
   let deleted = 0;
   for (const row of expired) {
-    // Movement headers own child rows and must drain child-first through
-    // cleanupExpiredMovement; deleting them here would skip that ordering.
-    if (row.kind === "sku_movement") continue;
+    // Kinded headers own child rows and must drain child-first through
+    // cleanupExpiredRangeSnapshots; deleting them here would skip that
+    // ordering. Exhaustive over ANY kinded row — legacy expiry owns only
+    // kindless custom-summary rows.
+    if (row.kind !== undefined) continue;
     await ctx.db.delete("reportRangeResult", row._id);
     deleted += 1;
   }
@@ -519,6 +527,16 @@ async function expireRangeResults(
 // ---------------------------------------------------------------------------
 // The sweep
 // ---------------------------------------------------------------------------
+
+/**
+ * Every kinded range-snapshot lifecycle the sweeper backs up and cleans.
+ * U4's `sku_mix` config joins this list. Deliberately a function, not a
+ * module-level const: this module and the kind modules import each other, so
+ * a top-level read of a kind config would race module initialization order.
+ */
+function rangeSnapshotKindConfigs(): readonly AnyRangeSnapshotKindConfig[] {
+  return [MOVEMENT_RANGE_SNAPSHOT_KIND, MIX_RANGE_SNAPSHOT_KIND];
+}
 
 export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
   const now = Date.now();
@@ -664,17 +682,21 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
   result.storesTouched = touchedStores.size;
   result.rangesExpired = await expireRangeResults(ctx, now);
 
-  // Movement lane — UNCONDITIONAL, never coupled to touchedStores: the
-  // backstop rescues dropped continuations for any store, and expired
-  // snapshots drain child-first. Scheduling and deletion only; movement
-  // aggregation always happens in its own fenced worker batches.
-  result.movementWorkersScheduled = await scheduleEligibleMovementWork(
+  // Kinded snapshot lane — UNCONDITIONAL, never coupled to touchedStores:
+  // the backstop rescues dropped continuations for any store and any
+  // registered kind, and expired snapshots drain child-first. Scheduling and
+  // deletion only; snapshot aggregation always happens in each kind's own
+  // fenced worker batches. (Result field names keep their historical
+  // `movement` prefix; they count all registered kinds.)
+  const kinds = rangeSnapshotKindConfigs();
+  result.movementWorkersScheduled = await scheduleEligibleRangeSnapshotWork(
     ctx,
     now,
+    kinds,
   );
-  const movementCleanup = await cleanupExpiredMovement(ctx, now);
-  result.movementChildrenExpired = movementCleanup.childrenDeleted;
-  result.movementHeadersExpired = movementCleanup.headersDeleted;
+  const snapshotCleanup = await cleanupExpiredRangeSnapshots(ctx, now, kinds);
+  result.movementChildrenExpired = snapshotCleanup.childrenDeleted;
+  result.movementHeadersExpired = snapshotCleanup.headersDeleted;
 
   return result;
 }

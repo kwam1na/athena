@@ -9,6 +9,7 @@ import {
   movementPageCount,
   REPORT_MOVEMENT_PAGE_SIZE,
   REPORT_SKU_PAGE_SIZE,
+  trailingSixMonthsStart,
 } from "~/shared/reportsContract";
 import { SHARED_DEMO_PRODUCTS } from "~/shared/sharedDemoStory";
 import {
@@ -20,6 +21,7 @@ import { createSharedDemoTransactionFixtures } from "./sharedDemoTransactionsFix
 import {
   createSharedDemoPeriodSkus,
   createSharedDemoReportDays,
+  createSharedDemoReportMixLifecycle,
   createSharedDemoReportMovementPage,
   createSharedDemoReportSkuMix,
   createSharedDemoReportSkuMovement,
@@ -661,6 +663,133 @@ describe("shared demo reports fixture", () => {
           today: TODAY,
         })[0]!.netSalesMinor,
       );
+    });
+
+    it("renders the trailing six-month window from the same 21 days trailing30 already does (U6 horizon convention)", () => {
+      const overview = createSharedDemoReportsOverview(TODAY);
+      const sixMonthsStart = trailingSixMonthsStart(TODAY);
+      const rows = createSharedDemoReportDays({
+        startDate: sixMonthsStart,
+        endDate: TODAY,
+        today: TODAY,
+      });
+
+      expect(overview.trailing6Months.netSalesMinor).toBe(
+        rows.reduce((total, row) => total + row.netSalesMinor, 0),
+      );
+      expect(overview.trailing6Months.unitsSold).toBe(
+        rows.reduce((total, row) => total + row.unitsSold, 0),
+      );
+      expect(overview.trailing6Months.dayCount).toBe(rows.length);
+      // The demo horizon (21 days + the open current day) is far shorter than
+      // any six-month window, so the six-month snapshot can only ever see
+      // every day the fixture holds — the same partial data trailing30
+      // already renders from, per the established demo convention.
+      expect(overview.trailing6Months.dayCount).toBe(
+        SHARED_DEMO_HISTORY_DAYS + 1,
+      );
+      expect(overview.trailing6Months).toEqual(overview.trailing30);
+      // The prior six-month window ends well before the fixture's history
+      // starts, so it is legitimately empty — not a truncation bug.
+      expect(overview.priorTrailing6Months.dayCount).toBe(0);
+    });
+  });
+
+  describe("SKU mix lifecycle (U6)", () => {
+    const dates = historyDates(TODAY);
+    const fullRangeStart = dates[0]!;
+    const fullRangeEnd = dates.at(-1)!;
+
+    it("is pure/local: no Convex imports, no network", () => {
+      const modulePath = join(
+        process.cwd(),
+        "src/components/shared-demo/sharedDemoReportsFixture.ts",
+      );
+      const source = readFileSync(modulePath, "utf8");
+      expect(source).not.toMatch(/from ["']convex\//);
+      expect(source).not.toMatch(/ConvexReactClient|useQuery|useMutation|fetch\(/);
+    });
+
+    it("parity: matches createSharedDemoReportSkuMix's rows, totals, and SKU count on the same range", () => {
+      const legacy = createSharedDemoReportSkuMix({
+        startDate: fullRangeStart,
+        endDate: fullRangeEnd,
+        today: TODAY,
+      });
+      const lifecycle = createSharedDemoReportMixLifecycle({
+        startDate: fullRangeStart,
+        endDate: fullRangeEnd,
+        today: TODAY,
+      });
+
+      expect(lifecycle.data).toEqual(legacy);
+      expect(lifecycle.lifecycle.state).toBe("completed");
+      expect(lifecycle.lifecycle.totals).toEqual({
+        totalUnitsSold: legacy.totalUnitsSold,
+        skuCount: legacy.skuCount,
+      });
+      expect(lifecycle.lifecycle.completedAt).toBeGreaterThan(0);
+    });
+
+    it("is immediately completed and deterministic across calls", () => {
+      const first = createSharedDemoReportMixLifecycle({
+        startDate: fullRangeStart,
+        endDate: fullRangeEnd,
+        today: TODAY,
+      });
+      const second = createSharedDemoReportMixLifecycle({
+        startDate: fullRangeStart,
+        endDate: fullRangeEnd,
+        today: TODAY,
+      });
+
+      expect(first).toEqual(second);
+      expect(first.lifecycle.state).toBe("completed");
+    });
+
+    it("Other bucket: absent when every SKU with activity fits in the top 5", () => {
+      // A single historical day sells at most a handful of the 8 demo SKUs,
+      // so this range is a plausible day where visible rows already cover
+      // every active SKU and the Other bucket is legitimately absent.
+      const singleDay = dates[0]!;
+      const lifecycle = createSharedDemoReportMixLifecycle({
+        startDate: singleDay,
+        endDate: singleDay,
+        today: TODAY,
+      });
+
+      if (lifecycle.data.skuCount <= 5) {
+        expect(lifecycle.data.rows.some((row) => row.key === "other")).toBe(
+          false,
+        );
+      }
+      expect(lifecycle.data.rows.length).toBeLessThanOrEqual(6);
+    });
+
+    it("Other bucket: present and dominant-shaped when the full catalogue is active over 21 days", () => {
+      const lifecycle = createSharedDemoReportMixLifecycle({
+        startDate: fullRangeStart,
+        endDate: fullRangeEnd,
+        today: TODAY,
+      });
+
+      // 8 demo SKUs over 21 days activate every SKU; the top 5 plus Other
+      // covers the full catalogue and Other's share is the complement of the
+      // visible rows' share.
+      expect(lifecycle.data.skuCount).toBe(SHARED_DEMO_PRODUCTS.length);
+      const other = lifecycle.data.rows.find((row) => row.key === "other");
+      expect(other).toBeDefined();
+      expect(other?.productSkuId).toBeUndefined();
+      expect(other?.identity).toBeUndefined();
+      const visibleShare = lifecycle.data.rows
+        .filter((row) => row.key !== "other")
+        .reduce((total, row) => total + row.shareBasisPoints, 0);
+      expect(visibleShare + (other?.shareBasisPoints ?? 0)).toBeLessThanOrEqual(
+        10_000,
+      );
+      expect(
+        lifecycle.data.rows.reduce((total, row) => total + row.unitsSold, 0),
+      ).toBe(lifecycle.data.totalUnitsSold);
     });
   });
 
