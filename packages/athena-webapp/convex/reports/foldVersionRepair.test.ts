@@ -15,6 +15,7 @@ type DayRow = {
   operatingDate: string;
   foldVersion: number;
   certifiedFoldRevision?: number;
+  skuDayRowCount?: number;
 };
 
 type DirtyRow = {
@@ -149,12 +150,20 @@ function day(
   };
 }
 
-/** A fully repaired row: current fold version AND a certified revision. */
+/**
+ * A fully repaired row: current fold version, a certified revision, AND the
+ * U8 `skuDayRowCount`. A row missing any of the three is still refold-bait,
+ * so this helper must carry all of them or every "leaves it alone" assertion
+ * silently stops testing what it claims to.
+ */
 function certifiedDay(
   operatingDate: string,
   storeId: string = String(STORE),
 ): DayRow {
-  return day(operatingDate, REPORTS_FOLD_VERSION, storeId, 1);
+  return {
+    ...day(operatingDate, REPORTS_FOLD_VERSION, storeId, 1),
+    skuDayRowCount: 12,
+  };
 }
 
 describe("fold version repair", () => {
@@ -263,6 +272,51 @@ describe("fold version repair", () => {
     expect(
       harness.dirtyRows.map((row) => [row.operatingDate, row.reason]),
     ).toEqual([["2026-07-01", "fold_version_bump"]]);
+  });
+
+  it("marks a certified day that predates the sku row count, and says why", async () => {
+    // The U8 backfill: fully trustworthy rows whose only gap is the mix
+    // probe's sizing hint. Counted separately from `missingRevisionCount` so
+    // the operator does not read a performance backfill as a trust failure.
+    const harness = createCtx([
+      { ...certifiedDay("2026-07-01"), skuDayRowCount: undefined },
+      certifiedDay("2026-07-02"),
+    ]);
+
+    const result = await markStaleFoldVersionDaysWithCtx(harness.ctx, {
+      storeId: STORE,
+    });
+
+    expect(result).toMatchObject({
+      isDone: true,
+      markedCount: 1,
+      staleCount: 1,
+      missingRevisionCount: 0,
+      missingSkuDayRowCountCount: 1,
+    });
+    expect(
+      harness.dirtyRows.map((row) => [row.operatingDate, row.reason]),
+    ).toEqual([["2026-07-01", "fold_version_bump"]]);
+  });
+
+  it("treats a zero sku row count as measured, not missing", async () => {
+    // A day that folded no SKU rows stores 0. Confusing that with "unknown"
+    // would put every quiet day into a permanent refold loop, and would make
+    // the mix probe unable to prove exactly the ranges that are cheapest.
+    const harness = createCtx([
+      { ...certifiedDay("2026-07-01"), skuDayRowCount: 0 },
+    ]);
+
+    const result = await markStaleFoldVersionDaysWithCtx(harness.ctx, {
+      storeId: STORE,
+    });
+
+    expect(result).toMatchObject({
+      markedCount: 0,
+      staleCount: 0,
+      missingSkuDayRowCountCount: 0,
+    });
+    expect(harness.dirtyRows).toEqual([]);
   });
 
   it("drives itself to completion when autoContinue is set", async () => {

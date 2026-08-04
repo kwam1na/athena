@@ -357,6 +357,11 @@ export async function foldAndReplaceDay(
     foldVersion: REPORTS_FOLD_VERSION,
     certifiedFoldRevision,
     factCount: result.day.factCount,
+    // The fold's SKU map IS the day's row set: every entry is patched or
+    // inserted below, and every existing row absent from it is deleted. So
+    // this size equals the post-fold `reportSkuDay` count exactly, written in
+    // the same mutation that writes those rows — it cannot disagree with them.
+    skuDayRowCount: result.skuDays.size,
     lastFactRecordedAt: result.day.lastFactRecordedAt,
     flags: result.day.flags,
     paymentPosture: result.day.paymentPosture,

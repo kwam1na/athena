@@ -24,6 +24,8 @@ import {
 import {
   inclusiveOperatingDaySpan,
   REPORT_SKU_MIX_SYNC_MAX_DAYS,
+  REPORT_SKU_MIX_SYNC_ROW_BUDGET,
+  skuMixSyncRowProbe,
   type ReportMixLifecycle,
 } from "~/shared/reportsContract";
 import { EmptyState } from "@/components/states/empty/empty-state";
@@ -162,19 +164,61 @@ export function ReportDaysPanel({
   const skuMixStartDate = selectedDate ?? startDate;
   const skuMixEndDate = selectedDate ?? endDate;
   /**
-   * Span routing (U5): selections of at most `REPORT_SKU_MIX_SYNC_MAX_DAYS`
-   * inclusive days — every day click, the dominant ambient interaction — stay
-   * on the synchronous `listRangeSkuMix` reader forever. Provably safe: the
-   * fold bounds `reportSkuDay` at 2,000 rows per operating day, so a 2-day
-   * span reads at most 4,000 rows, strictly under the reader's 5,000-row cap
-   * (see the constant's provability comment in shared/reportsContract.ts).
-   * Longer spans use the admitted snapshot lifecycle instead, whose 184-day
-   * ceiling the server enforces via `REPORT_RANGE_MAX_DAYS_BY_KIND.sku_mix`;
-   * ambient browsing therefore never consumes async admission budget.
+   * Mix routing, in two tiers.
+   *
+   * TIER 1 — span (U5), the floor that never depends on loaded data:
+   * selections of at most `REPORT_SKU_MIX_SYNC_MAX_DAYS` inclusive days stay
+   * synchronous unconditionally. Provably safe from the fold's 2,000-row
+   * per-day bound alone: a 2-day span reads at most 4,000 rows, under the
+   * reader's 5,000-row cap.
+   *
+   * TIER 2 — measured size (U8): that 2,000-row bound is a worst case real
+   * stores sit far below, so the span rule sent 3-day selections to the
+   * async snapshot to fold a few hundred rows. The days rail has already
+   * loaded one `reportDay` per day of this very window and each publishes its
+   * exact `skuDayRowCount`, so the read can be sized for free. When the sum
+   * clears `REPORT_SKU_MIX_SYNC_ROW_BUDGET`, the range is provably cheap and
+   * stays synchronous whatever its span.
+   *
+   * The probe sizes from `liveDays` — the RAW subscription result — never the
+   * stable seam's `days`, which holds the PREVIOUS range's rows while a new
+   * one loads. Stale rows against current coverage bounds would all fall
+   * outside the new range and sum to a confident 0: "provably cheap", proven
+   * on nothing. The raw result is `undefined` exactly while its args are in
+   * flight, so staleness is unrepresentable here.
+   *
+   * The probe returns `undefined` when it cannot prove the total — the days
+   * rail hasn't settled, its window is narrower than the selection, or a day
+   * predates the count. Ranges past the budget (or unprovable after the days
+   * rail settles) use the admitted snapshot lifecycle, whose 184-day ceiling
+   * the server enforces via `REPORT_RANGE_MAX_DAYS_BY_KIND.sku_mix`.
    */
+  const mixProbeRowCount =
+    liveDays === undefined
+      ? undefined
+      : skuMixSyncRowProbe({
+          coverageEndDate: tableEndDate,
+          coverageStartDate: tableStartDate,
+          endDate: skuMixEndDate,
+          rows: liveDays,
+          startDate: skuMixStartDate,
+        });
   const isSyncMixSpan =
     inclusiveOperatingDaySpan(skuMixStartDate, skuMixEndDate) <=
-    REPORT_SKU_MIX_SYNC_MAX_DAYS;
+      REPORT_SKU_MIX_SYNC_MAX_DAYS ||
+    (mixProbeRowCount !== undefined &&
+      mixProbeRowCount <= REPORT_SKU_MIX_SYNC_ROW_BUDGET);
+  /**
+   * Admission waits for the verdict. While the days read is in flight the
+   * probe is unresolved, and firing `ensureMixRange` on the span rule alone
+   * would consume admission budget for a range the probe may prove cheap a
+   * moment later — the exact spend this feature exists to prevent. The days
+   * read is already loading for the table itself, so the wait adds no new
+   * round-trip; a genuinely heavy range pays one table-load of latency before
+   * admission, which the held-snapshot UI absorbs. Demo mode never reaches
+   * here (`useLiveQuery` is false and the fixture answers synchronously).
+   */
+  const isMixRoutingSettled = isSyncMixSpan || liveDays !== undefined;
   const storeId = activeStore?._id;
   const liveSkuMix = useQuery(
     api.reports.queries.listRangeSkuMix,
@@ -202,7 +246,9 @@ export function ReportDaysPanel({
   const [mixEnsureFailed, setMixEnsureFailed] = useState(false);
   const ensureMixRange = useMutation(api.reports.skuMixRange.ensureMixRange);
   const retryMixRange = useMutation(api.reports.skuMixRange.retryMixRange);
-  const asyncMixEnabled = Boolean(!isSyncMixSpan && storeId && useLiveQuery);
+  const asyncMixEnabled = Boolean(
+    !isSyncMixSpan && isMixRoutingSettled && storeId && useLiveQuery,
+  );
 
   useEffect(() => {
     if (!asyncMixEnabled || !storeId) return;

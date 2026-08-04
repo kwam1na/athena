@@ -73,6 +73,26 @@ export function needsCertifiedRefold(day: {
   );
 }
 
+/**
+ * The U8 backfill predicate: a day folded before `skuDayRowCount` existed.
+ *
+ * Kept separate from `needsCertifiedRefold` because it is a different claim —
+ * certification is the movement lane's TRUST boundary, this is only the mix
+ * lane's SIZING hint. A day missing the count is fully trustworthy; the mix
+ * probe simply cannot size it and falls back to the span rule (see
+ * `skuMixSyncRowProbe`). Merging the two would make `countUncertifiedDays`
+ * report a movement-readiness failure for what is a performance shortfall.
+ *
+ * Deliberately no fold-version bump: the fold's OUTPUT is unchanged, so
+ * refolding is not a correctness repair and must not invalidate certified
+ * provenance for stores that are already movement-ready.
+ */
+export function skuDayRowCountBackfillNeeded(day: {
+  skuDayRowCount?: number | null;
+}): boolean {
+  return day.skuDayRowCount === undefined || day.skuDayRowCount === null;
+}
+
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
 
@@ -109,12 +129,22 @@ export async function markStaleFoldVersionDaysWithCtx(
 ) {
   const now = Date.now();
   const page = await dayPage(ctx, args);
-  const stale = page.page.filter(needsCertifiedRefold);
+  const stale = page.page.filter(
+    (day) => needsCertifiedRefold(day) || skuDayRowCountBackfillNeeded(day),
+  );
   // Current-version rows that were never revision-certified (an anomaly once
   // fold stamping is live, since a version bump ships with it) — reported
-  // separately so the operator can tell the two staleness causes apart.
+  // separately so the operator can tell the staleness causes apart. Tested
+  // directly rather than inferred from "stale AND current version", which
+  // since U8 also matches a certified day that only wants the row count.
   const missingRevisionCount = stale.filter(
-    (day) => day.foldVersion === REPORTS_FOLD_VERSION,
+    (day) =>
+      day.foldVersion === REPORTS_FOLD_VERSION &&
+      (day.certifiedFoldRevision === undefined ||
+        day.certifiedFoldRevision === null),
+  ).length;
+  const missingSkuDayRowCountCount = stale.filter(
+    skuDayRowCountBackfillNeeded,
   ).length;
 
   let markedCount = 0;
@@ -190,6 +220,7 @@ export async function markStaleFoldVersionDaysWithCtx(
     alreadyQueuedCount,
     staleCount: stale.length,
     missingRevisionCount,
+    missingSkuDayRowCountCount,
     // Cumulative across an `autoContinue` chain; equal to this batch when the
     // caller is driving the cursor itself.
     totals,
@@ -219,6 +250,12 @@ export async function countStaleFoldVersionDaysWithCtx(
     staleCount: page.page.filter(
       (day) => day.foldVersion !== REPORTS_FOLD_VERSION,
     ).length,
+    // U8 backfill drain gauge. Reported here rather than on
+    // `countUncertifiedDays` because a missing count is not an uncertified
+    // day: the mix probe degrades to the span rule, the movement lane is
+    // unaffected, and conflating them would gate a rollout on a hint.
+    missingSkuDayRowCountCount: page.page.filter(skuDayRowCountBackfillNeeded)
+      .length,
   };
 }
 

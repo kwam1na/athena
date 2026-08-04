@@ -35,6 +35,8 @@ import {
   REPORT_RANGE_TTL_MS,
   REPORT_DRILLDOWN_RANGE_MAX_DAYS,
   REPORT_SKU_MIX_SYNC_MAX_DAYS,
+  REPORT_SKU_MIX_SYNC_ROW_BUDGET,
+  skuMixSyncRowProbe,
   REPORT_TRAILING_SIX_MONTHS_MAX_DAYS,
   REPORTS_FOLD_VERSION,
   trailingSixMonthsStart,
@@ -1188,5 +1190,99 @@ describe("U1 six-month vocabulary and named ceilings", () => {
       sku_movement: 184,
       sku_mix: 184,
     });
+  });
+});
+
+describe("skuMixSyncRowProbe", () => {
+  const day = (operatingDate: string, skuDayRowCount?: number) => ({
+    operatingDate,
+    ...(skuDayRowCount === undefined ? {} : { skuDayRowCount }),
+  });
+  const probe = (
+    rows: { operatingDate: string; skuDayRowCount?: number }[],
+    range?: Partial<{
+      coverageEndDate: string;
+      coverageStartDate: string;
+      endDate: string;
+      startDate: string;
+    }>,
+  ) =>
+    skuMixSyncRowProbe({
+      coverageEndDate: "2026-07-05",
+      coverageStartDate: "2026-07-01",
+      endDate: "2026-07-05",
+      rows,
+      startDate: "2026-07-01",
+      ...range,
+    });
+
+  it("sums the folded row counts across the range", () => {
+    expect(
+      probe([day("2026-07-01", 30), day("2026-07-03", 12), day("2026-07-05", 8)]),
+    ).toBe(50);
+  });
+
+  it("keeps the budget strictly under the reader's fail-closed cap", () => {
+    // The gap is the whole point: the probe sizes rows folded a moment before
+    // the read, so it must leave room for a concurrent fold to add some.
+    expect(REPORT_SKU_MIX_SYNC_ROW_BUDGET).toBeLessThan(5_000);
+  });
+
+  it("counts an absent day as zero — reportDay is sparse", () => {
+    // No document means no activity means no reportSkuDay rows. Treating a
+    // gap as unknown would make quiet ranges — the cheapest ones — unprovable.
+    expect(probe([day("2026-07-02", 5)])).toBe(5);
+    expect(probe([])).toBe(0);
+  });
+
+  it("ignores rows outside the requested range", () => {
+    // The days rail loads a superset of the mix selection, so this is the
+    // normal case, not an edge one.
+    expect(
+      probe([day("2026-07-01", 100), day("2026-07-03", 7)], {
+        endDate: "2026-07-04",
+        startDate: "2026-07-02",
+      }),
+    ).toBe(7);
+  });
+
+  it("is indeterminate when a day in range predates the count", () => {
+    expect(probe([day("2026-07-01", 30), day("2026-07-03")])).toBeUndefined();
+  });
+
+  it("is determinate when the uncounted day falls outside the range", () => {
+    expect(
+      probe([day("2026-07-01"), day("2026-07-04", 9)], {
+        coverageStartDate: "2026-07-01",
+        endDate: "2026-07-05",
+        startDate: "2026-07-03",
+      }),
+    ).toBe(9);
+  });
+
+  it("is indeterminate when coverage is narrower than the range", () => {
+    // Row presence cannot prove the reader looked: a range extending past the
+    // loaded window would otherwise sum to a confident understatement.
+    expect(
+      probe([day("2026-07-01", 4)], {
+        coverageEndDate: "2026-07-03",
+        endDate: "2026-07-05",
+      }),
+    ).toBeUndefined();
+    expect(
+      probe([day("2026-07-05", 4)], {
+        coverageStartDate: "2026-07-03",
+        startDate: "2026-07-01",
+      }),
+    ).toBeUndefined();
+  });
+
+  it("accepts coverage wider than the range", () => {
+    expect(
+      probe([day("2026-07-03", 6)], {
+        coverageEndDate: "2026-08-01",
+        coverageStartDate: "2026-06-01",
+      }),
+    ).toBe(6);
   });
 });

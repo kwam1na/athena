@@ -522,11 +522,25 @@ describe("listDays", () => {
 });
 
 describe("listRangeSkuMix", () => {
-  it("still rejects a range spanning more than 92 days after the U7 drill-down raise", async () => {
-    // The synchronous mix reader keeps its 92-day server cap on purpose: the
-    // client routes only <=2-day spans here (U5); longer spans use the async
-    // snapshot. Widening this cap would let a direct caller exceed what the
-    // 5,000-row synchronous read can serve.
+  it("serves a range past the legacy 92-day cap now that the client sizes the read", async () => {
+    // U8 moved this reader from the 92-day proxy cap to the 184-day
+    // drill-down ceiling. The client no longer proves a range is cheap by
+    // being short — it sums folded `skuDayRowCount` totals — so a long, quiet
+    // range is a legitimate synchronous request and must not be refused on
+    // span alone. The row cap below is what actually bounds this read.
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const result = await t.run((ctx) =>
+      handlerOf(listRangeSkuMix)(ctx, {
+        storeId,
+        startDate: "2026-01-01",
+        endDate: "2026-04-03", // 93 days inclusive
+      }),
+    );
+    expect(result).toEqual({ rows: [], skuCount: 0, totalUnitsSold: 0 });
+  });
+
+  it("still rejects a range past the 184-day drill-down ceiling", async () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
     await expect(
@@ -534,10 +548,44 @@ describe("listRangeSkuMix", () => {
         handlerOf(listRangeSkuMix)(ctx, {
           storeId,
           startDate: "2026-01-01",
-          endDate: "2026-04-03", // 93 days inclusive
+          endDate: "2026-07-04", // 185 days inclusive
         }),
       ),
-    ).rejects.toThrow(/92 days/);
+    ).rejects.toThrow(/184 days/);
+  });
+
+  it("still fails closed past the row cap, whatever the span", async () => {
+    // The bound that replaced the span proxy. A probe-approved range that
+    // grew between the sizing and the read must hit this, not silently
+    // present an understated mix.
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const productSkuId = await seedSku(t, storeId);
+    await t.run(async (ctx) => {
+      for (let index = 0; index <= 5_000; index += 1) {
+        await ctx.db.insert("reportSkuDay", {
+          storeId,
+          productSkuId,
+          operatingDate: "2026-01-01",
+          unitsSold: 1,
+          unitsReturned: 0,
+          grossSalesMinor: 100,
+          netSalesMinor: 100,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: 100,
+        });
+      }
+    });
+    await expect(
+      t.run((ctx) =>
+        handlerOf(listRangeSkuMix)(ctx, {
+          storeId,
+          startDate: "2026-01-01",
+          endDate: "2026-01-01",
+        }),
+      ),
+    ).rejects.toThrow(/too much activity/);
   });
 
   it("returns the five leading SKUs by units and groups the remainder", async () => {
