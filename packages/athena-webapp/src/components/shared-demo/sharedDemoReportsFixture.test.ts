@@ -1,7 +1,15 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { getLocalOperatingDate } from "@/lib/operations/operatingDate";
-import { REPORT_SKU_PAGE_SIZE } from "~/shared/reportsContract";
+import {
+  movementAbsNetUnitsSortKey,
+  movementPageCount,
+  REPORT_MOVEMENT_PAGE_SIZE,
+  REPORT_SKU_PAGE_SIZE,
+} from "~/shared/reportsContract";
 import { SHARED_DEMO_PRODUCTS } from "~/shared/sharedDemoStory";
 import {
   getSharedDemoHistoricalDayFixture,
@@ -12,12 +20,15 @@ import { createSharedDemoTransactionFixtures } from "./sharedDemoTransactionsFix
 import {
   createSharedDemoPeriodSkus,
   createSharedDemoReportDays,
+  createSharedDemoReportMovementPage,
   createSharedDemoReportSkuMix,
+  createSharedDemoReportSkuMovement,
   createSharedDemoReportsOverview,
   createSharedDemoSkuDayTransactions,
   createSharedDemoSkuDetail,
   createSharedDemoWeeklyBriefing,
   isSharedDemoReportsSkuId,
+  rankSignedMovementRows,
   SHARED_DEMO_REPORTS_SKU_ID_PREFIX,
 } from "./sharedDemoReportsFixture";
 
@@ -91,6 +102,11 @@ describe("shared demo reports fixture", () => {
           endDate: today,
           today,
         });
+        const movement = createSharedDemoReportSkuMovement({
+          startDate: weekStart,
+          endDate: today,
+          today,
+        });
         const items = createSharedDemoPeriodSkus({
           periodKey: `d:${today}`,
           sortBy: "revenue",
@@ -114,6 +130,7 @@ describe("shared demo reports fixture", () => {
           ["overview", overview],
           ["days", days],
           ["mix", mix],
+          ["movement", movement],
           ["items", items],
           ["detail", detail],
           ["evidence", evidence],
@@ -216,6 +233,18 @@ describe("shared demo reports fixture", () => {
       expect(mix.totalUnitsSold).toBe(totalUnits);
       expect(mix.rows.reduce((total, row) => total + row.unitsSold, 0)).toBe(
         totalUnits,
+      );
+
+      const movement = createSharedDemoReportSkuMovement({
+        startDate,
+        endDate,
+        today: TODAY,
+      });
+      expect(movement.rows).toHaveLength(SHARED_DEMO_PRODUCTS.length);
+      expect(movement.rows.some((row) => row.key === "other")).toBe(false);
+      expect(movement.totalUnitsSold).toBe(totalUnits);
+      expect(movement.netUnits).toBe(
+        movement.totalUnitsSold - movement.totalUnitsReturned,
       );
 
       const detailNet = SHARED_DEMO_PRODUCTS.reduce((total, product) => {
@@ -631,6 +660,173 @@ describe("shared demo reports fixture", () => {
           endDate: addDaysToDate(TODAY, -1),
           today: TODAY,
         })[0]!.netSalesMinor,
+      );
+    });
+  });
+
+  describe("movement page (U4)", () => {
+    const dates = historyDates(TODAY);
+    const startDate = dates[0]!;
+    const endDate = dates.at(-1)!;
+
+    it("is pure/local: no Convex imports, no network", () => {
+      const modulePath = join(
+        process.cwd(),
+        "src/components/shared-demo/sharedDemoReportsFixture.ts",
+      );
+      const source = readFileSync(modulePath, "utf8");
+      expect(source).not.toMatch(/from ["']convex\//);
+      expect(source).not.toMatch(/ConvexReactClient|useQuery|useMutation|fetch\(/);
+    });
+
+    it("parity: page-1 ordering/count/totals match the legacy full movement data recomputed under absolute-net ordering", () => {
+      const legacy = createSharedDemoReportSkuMovement({
+        startDate,
+        endDate,
+        today: TODAY,
+      });
+      const page = createSharedDemoReportMovementPage({
+        startDate,
+        endDate,
+        page: 1,
+        today: TODAY,
+      });
+
+      const expectedOrder = [...legacy.rows].sort(
+        (left, right) =>
+          movementAbsNetUnitsSortKey(left.netUnits) -
+            movementAbsNetUnitsSortKey(right.netUnits) ||
+          left.productSkuId.localeCompare(right.productSkuId),
+      );
+
+      expect(page.lifecycle.state).toBe("completed");
+      expect(page.lifecycle.totals.skuCount).toBe(legacy.skuCount);
+      expect(page.lifecycle.totals.unitsSold).toBe(legacy.totalUnitsSold);
+      expect(page.lifecycle.totals.unitsReturned).toBe(
+        legacy.totalUnitsReturned,
+      );
+      expect(page.lifecycle.totals.netUnits).toBe(legacy.netUnits);
+      expect(page.lifecycle.pageCount).toBe(
+        movementPageCount(legacy.skuCount),
+      );
+      expect(page.page).toBe(1);
+      expect(page.rows.map((row) => row.productSkuId)).toEqual(
+        expectedOrder
+          .slice(0, REPORT_MOVEMENT_PAGE_SIZE)
+          .map((row) => row.productSkuId),
+      );
+    });
+
+    it("direction: net-return SKUs keep negative netUnits and rank by magnitude among positives (synthetic — the demo catalogue never returns a unit)", () => {
+      const ranked = rankSignedMovementRows([
+        { productSkuId: "sku-big-return", unitsSold: 2, unitsReturned: 26 },
+        { productSkuId: "sku-small-sale", unitsSold: 5, unitsReturned: 0 },
+        { productSkuId: "sku-big-sale", unitsSold: 18, unitsReturned: 0 },
+      ]);
+
+      expect(ranked.map((row) => row.productSkuId)).toEqual([
+        "sku-big-return",
+        "sku-big-sale",
+        "sku-small-sale",
+      ]);
+      expect(ranked[0]!.netUnits).toBe(-24);
+      expect(ranked[0]!.netUnits).toBeLessThan(0);
+      expect(ranked[1]!.netUnits).toBe(18);
+    });
+
+    it("zero-net: a SKU with equal sold and returned units stays in count and ordering (synthetic)", () => {
+      const ranked = rankSignedMovementRows([
+        { productSkuId: "sku-cancelled", unitsSold: 4, unitsReturned: 4 },
+        { productSkuId: "sku-active", unitsSold: 1, unitsReturned: 0 },
+        { productSkuId: "sku-untouched", unitsSold: 0, unitsReturned: 0 },
+      ]);
+
+      expect(ranked.map((row) => row.productSkuId)).toEqual([
+        "sku-active",
+        "sku-cancelled",
+      ]);
+      expect(ranked.find((row) => row.productSkuId === "sku-cancelled")!.netUnits).toBe(0);
+      expect(
+        ranked.some((row) => row.productSkuId === "sku-untouched"),
+      ).toBe(false);
+    });
+
+    it("pagination: deterministic, bounded to 20, and consistent with movementPageCount", () => {
+      const first = createSharedDemoReportMovementPage({
+        startDate,
+        endDate,
+        page: 1,
+        today: TODAY,
+      });
+      const again = createSharedDemoReportMovementPage({
+        startDate,
+        endDate,
+        page: 1,
+        today: TODAY,
+      });
+
+      expect(again).toEqual(first);
+      expect(first.rows.length).toBeLessThanOrEqual(REPORT_MOVEMENT_PAGE_SIZE);
+      expect(first.lifecycle.pageCount).toBe(
+        movementPageCount(first.lifecycle.totals.skuCount),
+      );
+      // The demo catalogue has 8 SKUs — under one page, so page 1 is also the
+      // (short) last page.
+      expect(first.lifecycle.pageCount).toBe(1);
+      expect(first.rows.length).toBe(first.lifecycle.totals.skuCount);
+    });
+
+    it("pagination: out-of-range pages canonicalize to the nearest valid page", () => {
+      const pageCount = createSharedDemoReportMovementPage({
+        startDate,
+        endDate,
+        today: TODAY,
+      }).lifecycle.pageCount;
+
+      for (const requested of [0, -1, -100, 0.5, NaN, Infinity, 9_999]) {
+        const page = createSharedDemoReportMovementPage({
+          startDate,
+          endDate,
+          page: requested,
+          today: TODAY,
+        });
+        expect(page.page).toBeGreaterThanOrEqual(1);
+        expect(page.page).toBeLessThanOrEqual(pageCount);
+      }
+
+      expect(
+        createSharedDemoReportMovementPage({
+          startDate,
+          endDate,
+          page: 9_999,
+          today: TODAY,
+        }).page,
+      ).toBe(pageCount);
+    });
+
+    it("top movers (page 1) rows are a prefix of the same absolute-net ordering", () => {
+      const topMovers = createSharedDemoReportMovementPage({
+        startDate,
+        endDate,
+        today: TODAY,
+      });
+      const fullyRanked = rankSignedMovementRows(
+        createSharedDemoReportSkuMovement({
+          startDate,
+          endDate,
+          today: TODAY,
+        }).rows.map((row) => ({
+          productSkuId: row.productSkuId,
+          unitsSold: row.unitsSold,
+          unitsReturned: row.unitsReturned,
+        })),
+      );
+
+      expect(topMovers.page).toBe(1);
+      expect(topMovers.rows.map((row) => row.productSkuId)).toEqual(
+        fullyRanked
+          .slice(0, REPORT_MOVEMENT_PAGE_SIZE)
+          .map((row) => row.productSkuId),
       );
     });
   });

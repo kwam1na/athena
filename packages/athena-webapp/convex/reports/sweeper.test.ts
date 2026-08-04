@@ -44,6 +44,10 @@ vi.mock("./weekly", async (importOriginal) => {
 });
 
 import {
+  countUncertifiedDaysWithCtx,
+  markStaleFoldVersionDaysWithCtx,
+} from "./foldVersionRepair";
+import {
   MAX_FACTS_PER_DAY,
   REPORTS_SWEEP_STORE_ALLOWLIST_ENV,
   WEEKLY_DIRTY_BATCH,
@@ -1137,6 +1141,175 @@ async function insertWeeklyCloseFixture(
   );
 }
 
+describe("certified fold revisions", () => {
+  it("stamps matching revisions on the day and all its SKU rows, and a refold advances them together", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId, productSkuId } = await seedStore(t, "sweep-revision");
+    allow(storeId);
+
+    // A second SKU so "all rows" means more than one.
+    const secondSkuId = await t.run(async (ctx) => {
+      const sku = await ctx.db.get("productSku", productSkuId);
+      return ctx.db.insert("productSku", {
+        images: [],
+        inventoryCount: 5,
+        price: 50,
+        productId: sku!.productId,
+        quantityAvailable: 5,
+        sku: "sweep-revision-SKU-2",
+        storeId,
+      });
+    });
+
+    await insertSaleFact(t, {
+      storeId,
+      productSkuId,
+      operatingDate: "2026-07-28",
+      sourceId: "txn-rev-1",
+      netAmountMinor: 1_000,
+      quantity: 2,
+    });
+    await insertSaleFact(t, {
+      storeId,
+      productSkuId: secondSkuId,
+      operatingDate: "2026-07-28",
+      sourceId: "txn-rev-2",
+      netAmountMinor: 500,
+      quantity: 1,
+    });
+
+    await mark(t, storeId, "2026-07-28");
+    await sweep(t);
+
+    const readDocs = () =>
+      t.run(async (ctx) => ({
+        day: await ctx.db.query("reportDay").unique(),
+        // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+        skuDays: await ctx.db.query("reportSkuDay").collect(),
+      }));
+
+    const first = await readDocs();
+    expect(first.day?.foldVersion).toBe(REPORTS_FOLD_VERSION);
+    expect(typeof first.day?.certifiedFoldRevision).toBe("number");
+    expect(first.skuDays).toHaveLength(2);
+    for (const row of first.skuDays) {
+      expect(row.certifiedFoldRevision).toBe(first.day?.certifiedFoldRevision);
+    }
+
+    // Refold the same day: the revision advances on the day AND every SKU row.
+    await mark(t, storeId, "2026-07-28", "late_fact", 2_000);
+    await sweep(t);
+
+    const second = await readDocs();
+    expect(second.day?._id).toBe(first.day?._id);
+    expect(second.day?.certifiedFoldRevision).toBe(
+      first.day!.certifiedFoldRevision! + 1,
+    );
+    for (const row of second.skuDays) {
+      expect(row.certifiedFoldRevision).toBe(second.day?.certifiedFoldRevision);
+    }
+  });
+
+  it("backfills a mixed-generation store through repair + sweep until coverage reports complete", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId, productSkuId } = await seedStore(t, "sweep-backfill");
+    allow(storeId);
+
+    // Two folded, certified days...
+    for (const [operatingDate, sourceId] of [
+      ["2026-07-27", "txn-bf-1"],
+      ["2026-07-28", "txn-bf-2"],
+    ] as const) {
+      await insertSaleFact(t, {
+        storeId,
+        productSkuId,
+        operatingDate,
+        sourceId,
+        netAmountMinor: 1_000,
+        quantity: 1,
+      });
+      await mark(t, storeId, operatingDate);
+    }
+    await sweep(t);
+
+    // ...then one is downgraded to the pre-certification generation, exactly
+    // what history looks like after the fold-version bump deploys.
+    await t.run(async (ctx) => {
+      const legacyDay = await ctx.db
+        .query("reportDay")
+        .withIndex("by_storeId_operatingDate", (q) =>
+          q.eq("storeId", storeId).eq("operatingDate", "2026-07-27"),
+        )
+        .unique();
+      await ctx.db.patch("reportDay", legacyDay!._id, {
+        foldVersion: REPORTS_FOLD_VERSION - 1,
+        certifiedFoldRevision: undefined,
+      });
+      const legacySku = await ctx.db
+        .query("reportSkuDay")
+        .withIndex("by_storeId_operatingDate_productSkuId", (q) =>
+          q.eq("storeId", storeId).eq("operatingDate", "2026-07-27"),
+        )
+        .unique();
+      await ctx.db.patch("reportSkuDay", legacySku!._id, {
+        certifiedFoldRevision: undefined,
+      });
+    });
+
+    // Mid-repair, coverage sees the store as not yet movement-ready.
+    const mixed = await t.run(async (ctx) =>
+      countUncertifiedDaysWithCtx(ctx, { storeId }),
+    );
+    expect(mixed).toMatchObject({
+      isDone: true,
+      processedCount: 2,
+      staleFoldVersionCount: 1,
+      missingRevisionCount: 0,
+      uncertifiedCount: 1,
+      certifiedCount: 1,
+    });
+
+    // The repair marks exactly the stale day dirty...
+    const repair = await t.run(async (ctx) =>
+      markStaleFoldVersionDaysWithCtx(ctx, { storeId }),
+    );
+    expect(repair).toMatchObject({ isDone: true, markedCount: 1 });
+    const marks = await marksOf(t);
+    expect(marks.map((m) => [m.operatingDate, m.reason])).toEqual([
+      ["2026-07-27", "fold_version_bump"],
+    ]);
+
+    // ...and draining it through the sweeper certifies day AND SKU rows.
+    await sweep(t);
+    expect(await marksOf(t)).toHaveLength(0);
+
+    const { days, skuDays } = await t.run(async (ctx) => ({
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      days: await ctx.db.query("reportDay").collect(),
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      skuDays: await ctx.db.query("reportSkuDay").collect(),
+    }));
+    for (const dayRow of days) {
+      expect(dayRow.foldVersion).toBe(REPORTS_FOLD_VERSION);
+      expect(typeof dayRow.certifiedFoldRevision).toBe("number");
+    }
+    for (const row of skuDays) {
+      const owner = days.find(
+        (dayRow) => dayRow.operatingDate === row.operatingDate,
+      );
+      expect(row.certifiedFoldRevision).toBe(owner?.certifiedFoldRevision);
+    }
+
+    await expect(
+      t.run(async (ctx) => countUncertifiedDaysWithCtx(ctx, { storeId })),
+    ).resolves.toMatchObject({
+      isDone: true,
+      uncertifiedCount: 0,
+      certifiedCount: 2,
+    });
+  });
+});
+
 describe("weekly lane", () => {
   it("contains a weekly failure without touching the completed close", async () => {
     vi.spyOn(Date, "now").mockReturnValue(WEEKLY_NOW);
@@ -1295,5 +1468,283 @@ describe("weekly lane", () => {
         included: baseline.included,
       });
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Movement lane — the unconditional backstop scan and child-first cleanup.
+// The lifecycle itself is covered by skuMovementRange.test.ts; these tests
+// prove the SWEEPER's contract: schedule-only recovery, per-tick budgets,
+// legacy-lane separation, and expiry ordering.
+// ---------------------------------------------------------------------------
+
+describe("movement lane", () => {
+  const movementConstants = () =>
+    import("./skuMovementRange");
+
+  async function insertMovementHeader(
+    t: Harness,
+    storeId: Id<"store">,
+    overrides: Partial<Doc<"reportRangeResult">> = {},
+  ) {
+    return t.run((ctx) =>
+      ctx.db.insert("reportRangeResult", {
+        storeId,
+        requestKey: `movement:${Math.random().toString(16).slice(2)}`,
+        startDate: "2026-07-01",
+        endDate: "2026-07-01",
+        status: "pending",
+        kind: "sku_movement",
+        movementPhase: "queued",
+        movementContractVersion: 1,
+        movementRevisionVector: [
+          { operatingDate: "2026-07-01", revision: "empty" as const },
+        ],
+        movementAttempt: 0,
+        movementEligibleAt: Date.now() - 1_000,
+        movementFence: 1,
+        movementSourceDayCursor: "2026-07-01",
+        requestedAt: Date.now(),
+        expiresAt: Date.now() + 60 * 60 * 1000,
+        foldVersion: REPORTS_FOLD_VERSION,
+        ...overrides,
+      }),
+    );
+  }
+
+  // The backstop schedules real internal actions; freeze setTimeout so the
+  // convex-test scheduler cannot race the assertions below.
+  const withFrozenScheduler = () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "setInterval"] });
+    return () => vi.useRealTimers();
+  };
+
+  it("recovers a dropped continuation with no allowlist and no dirty marks", async () => {
+    const restore = withFrozenScheduler();
+    try {
+      const t = convexTest(schema, modules);
+      const { storeId } = await seedStore(t, "movement-liveness");
+      // Deliberately NOT allowlisted: the movement backstop is unconditional.
+      const headerId = await insertMovementHeader(t, storeId);
+
+      const result = await sweep(t);
+      expect(result.movementWorkersScheduled).toBe(1);
+
+      const { MOVEMENT_STALL_RECOVERY_MS } = await movementConstants();
+      const header = await t.run((ctx) =>
+        ctx.db.get("reportRangeResult", headerId),
+      );
+      // Rescheduled and pushed one stall window out, not re-scanned per tick.
+      expect(header!.movementEligibleAt).toBeGreaterThan(Date.now());
+      expect(header!.movementEligibleAt).toBeLessThanOrEqual(
+        Date.now() + MOVEMENT_STALL_RECOVERY_MS,
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("budgets the backstop per tick and leaves backing-off rows alone", async () => {
+    const restore = withFrozenScheduler();
+    try {
+      const { MOVEMENT_BACKSTOP_SCHEDULES_PER_TICK } =
+        await movementConstants();
+      const t = convexTest(schema, modules);
+      const { storeId } = await seedStore(t, "movement-budget");
+
+      for (
+        let index = 0;
+        index < MOVEMENT_BACKSTOP_SCHEDULES_PER_TICK + 2;
+        index += 1
+      ) {
+        await insertMovementHeader(t, storeId);
+      }
+      // A poison request waiting out its capped backoff must not be touched.
+      const poisonId = await insertMovementHeader(t, storeId, {
+        movementPhase: "retry_wait",
+        movementAttempt: 3,
+        movementEligibleAt: Date.now() + 60 * 60 * 1000,
+      });
+
+      const first = await sweep(t);
+      expect(first.movementWorkersScheduled).toBe(
+        MOVEMENT_BACKSTOP_SCHEDULES_PER_TICK,
+      );
+      const second = await sweep(t);
+      expect(second.movementWorkersScheduled).toBe(2);
+
+      const poison = await t.run((ctx) =>
+        ctx.db.get("reportRangeResult", poisonId),
+      );
+      expect(poison!.movementEligibleAt).toBeGreaterThan(Date.now());
+      expect(poison!.movementPhase).toBe("retry_wait");
+    } finally {
+      restore();
+    }
+  });
+
+  it("clears a settled row out of the eligible index without scheduling it", async () => {
+    const restore = withFrozenScheduler();
+    try {
+      const t = convexTest(schema, modules);
+      const { storeId } = await seedStore(t, "movement-settled");
+      const headerId = await insertMovementHeader(t, storeId, {
+        status: "completed",
+        movementPhase: "completed",
+        movementTotals: {
+          unitsSold: 1,
+          unitsReturned: 0,
+          netUnits: 1,
+          skuCount: 1,
+        },
+        computedAt: Date.now(),
+      });
+
+      const result = await sweep(t);
+      expect(result.movementWorkersScheduled).toBe(0);
+      const header = await t.run((ctx) =>
+        ctx.db.get("reportRangeResult", headerId),
+      );
+      expect(header!.movementEligibleAt).toBeUndefined();
+      expect(header!.movementPhase).toBe("completed");
+    } finally {
+      restore();
+    }
+  });
+
+  it("computes pending legacy summaries but never a movement row", async () => {
+    const restore = withFrozenScheduler();
+    try {
+      const t = convexTest(schema, modules);
+      const { storeId } = await seedStore(t, "movement-legacy-split");
+      allow(storeId);
+
+      // Touch the store so computePendingRanges runs for it.
+      await insertSaleFact(t, {
+        storeId,
+        operatingDate: "2026-07-01",
+        sourceId: "tx-1",
+        netAmountMinor: 500,
+        quantity: 1,
+      });
+      await mark(t, storeId, "2026-07-01");
+
+      await t.run((ctx) =>
+        ctx.db.insert("reportRangeResult", {
+          storeId,
+          requestKey: "range:legacy-pending",
+          startDate: "2026-07-01",
+          endDate: "2026-07-01",
+          status: "pending",
+          requestedAt: Date.now(),
+          expiresAt: Date.now() + 60 * 60 * 1000,
+          foldVersion: REPORTS_FOLD_VERSION,
+        }),
+      );
+      const movementId = await insertMovementHeader(t, storeId, {
+        movementEligibleAt: Date.now() + 60 * 60 * 1000,
+      });
+
+      const result = await sweep(t);
+      expect(result.daysFolded).toBe(1);
+      expect(result.rangesComputed).toBe(1);
+
+      const legacy = await t.run((ctx) =>
+        ctx.db
+          .query("reportRangeResult")
+          .withIndex("by_storeId_requestKey", (q) =>
+            q.eq("storeId", storeId).eq("requestKey", "range:legacy-pending"),
+          )
+          .unique(),
+      );
+      expect(legacy!.status).toBe("completed");
+
+      // The movement row is untouched by the summary compute path.
+      const movement = await t.run((ctx) =>
+        ctx.db.get("reportRangeResult", movementId),
+      );
+      expect(movement!.status).toBe("pending");
+      expect(movement!.movementPhase).toBe("queued");
+      expect(movement!.totals).toBeUndefined();
+      expect(movement!.topSkus).toBeUndefined();
+    } finally {
+      restore();
+    }
+  });
+
+  it("expires movement snapshots child-first: cleaning phase, then children, then the header", async () => {
+    const restore = withFrozenScheduler();
+    try {
+      const t = convexTest(schema, modules);
+      const { storeId, productSkuId } = await seedStore(t, "movement-expiry");
+
+      const headerId = await insertMovementHeader(t, storeId, {
+        status: "completed",
+        movementPhase: "completed",
+        movementEligibleAt: undefined,
+        expiresAt: Date.now() - 1_000,
+      });
+      // Children still inside their own expiry window: the header must WAIT.
+      const childIds = await t.run(async (ctx) => {
+        const ids = [];
+        for (let index = 0; index < 3; index += 1) {
+          ids.push(
+            await ctx.db.insert("reportRangeMovementSku", {
+              storeId,
+              rangeResultId: headerId,
+              productSkuId,
+              unitsSold: 1,
+              unitsReturned: 0,
+              netUnits: 1,
+              absNetUnitsSortKey: -1,
+              rank: index + 1,
+              expiresAt: Date.now() + 60 * 60 * 1000,
+            }),
+          );
+        }
+        return ids;
+      });
+      // A legacy expired row keeps its existing one-shot deletion.
+      await t.run((ctx) =>
+        ctx.db.insert("reportRangeResult", {
+          storeId,
+          requestKey: "range:legacy-expired",
+          startDate: "2026-07-01",
+          endDate: "2026-07-01",
+          status: "completed",
+          requestedAt: Date.now() - 10_000,
+          expiresAt: Date.now() - 1_000,
+          foldVersion: REPORTS_FOLD_VERSION,
+        }),
+      );
+
+      const first = await sweep(t);
+      expect(first.rangesExpired).toBe(1); // the legacy row only
+      expect(first.movementHeadersExpired).toBe(0);
+      const cleaning = await t.run((ctx) =>
+        ctx.db.get("reportRangeResult", headerId),
+      );
+      expect(cleaning!.movementPhase).toBe("cleaning");
+
+      // Children reach their own expiry; the next ticks drain child-first.
+      await t.run(async (ctx) => {
+        for (const childId of childIds) {
+          await ctx.db.patch("reportRangeMovementSku", childId, {
+            expiresAt: Date.now() - 1_000,
+          });
+        }
+      });
+      const second = await sweep(t);
+      expect(second.movementChildrenExpired).toBe(3);
+      expect(second.movementHeadersExpired).toBe(1);
+      expect(
+        await t.run((ctx) => ctx.db.get("reportRangeResult", headerId)),
+      ).toBeNull();
+      expect(
+        await t.run((ctx) => ctx.db.get("reportRangeMovementSku", childIds[0]!)),
+      ).toBeNull();
+    } finally {
+      restore();
+    }
   });
 });

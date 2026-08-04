@@ -1,52 +1,50 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/states/empty/empty-state";
 import { FlipText } from "@/components/common/FlipNumber";
 import { ReportsWeeklyView } from "@/components/reports/ReportsWeeklyView";
 import { formatReportDateRange } from "@/components/reports/reportFormat";
-import { reportsWeeklySearchSchema } from "@/components/reports/reportRouteSearch";
+import { ReportLastUpdated } from "@/components/reports/ReportFreshness";
+import {
+  closedUnitsSheetSearch,
+  parseUnitsSheetFocusSearch,
+  reportsWeeklySearchSchema,
+  resetUnitsSheetContextSearch,
+  unitsSheetFocusSearchValue,
+} from "@/components/reports/reportRouteSearch";
+import { getOrigin } from "~/src/lib/navigationUtils";
 import { useReportsSharedDemoMode } from "@/components/reports/useReportsSharedDemoMode";
 import { useStableReportQuery } from "@/components/reports/useStableReportQuery";
 import { createSharedDemoWeeklyBriefing } from "@/components/shared-demo/sharedDemoReportsFixture";
-import { weeklyLifecycleLabel } from "@/components/reports/weeklyReportPresentation";
+import {
+  weeklyLifecycleLabel,
+  weeklyUpdatedAt,
+} from "@/components/reports/weeklyReportPresentation";
 import { Button } from "@/components/ui/button";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 
 export { reportsWeeklySearchSchema } from "@/components/reports/reportRouteSearch";
 
-function traceWeeklyHistoryMotion(
-  phase: "start" | "frame" | "complete",
-  latest?: Record<string, string | number>,
-) {
-  if (!import.meta.env.DEV) return;
-
-  const region = document.querySelector<HTMLElement>(
-    '[data-testid="weekly-history-motion-region"]',
-  );
-  const netSales = document.querySelector<HTMLElement>(
-    '[data-testid="weekly-net-sales-value"]',
-  );
-
-  console.debug("[Weekly history motion]", {
-    phase,
-    gridTemplateRows: latest?.gridTemplateRows,
-    opacity: latest?.opacity,
-    regionHeight: region?.getBoundingClientRect().height,
-    netSalesTop: netSales?.getBoundingClientRect().top,
-  });
-}
-
 function WeeklyStatusRow({
   action,
   status,
+  updatedAt,
 }: {
   action?: React.ReactNode;
   status: string;
+  updatedAt?: number | null;
 }) {
+  const prefersReducedMotion = useReducedMotion();
+  const [settledStatus, setSettledStatus] = useState<string | null>(null);
+  const handleStatusTransitionComplete = useCallback((value: string) => {
+    setSettledStatus(value);
+  }, []);
+  const showUpdatedAt = settledStatus === status;
+
   return (
     <div
       className="flex flex-wrap items-start justify-between gap-layout-sm"
@@ -55,10 +53,30 @@ function WeeklyStatusRow({
     >
       <p
         aria-live="polite"
-        className="text-sm text-muted-foreground"
+        className="flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground"
         data-testid="weekly-status"
       >
-        <FlipText delayMs={200} testId="weekly-status-value" value={status} />
+        <FlipText
+          delayMs={200}
+          onTransitionComplete={handleStatusTransitionComplete}
+          testId="weekly-status-value"
+          value={status}
+        />
+        {showUpdatedAt && updatedAt !== null && updatedAt !== undefined ? (
+          <motion.span
+            animate={{ opacity: 1 }}
+            className="inline-flex items-center gap-x-1.5"
+            data-testid="weekly-last-updated"
+            initial={{ opacity: 0.4 }}
+            transition={{
+              duration: prefersReducedMotion ? 0 : 0.3,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+          >
+            <span aria-hidden="true">·</span>
+            <ReportLastUpdated updatedAt={updatedAt} />
+          </motion.span>
+        ) : null}
       </p>
       {action}
     </div>
@@ -122,7 +140,9 @@ export const Route = createFileRoute(
 
 export function ReportsWeeklyRoute() {
   const search = Route.useSearch();
+  const unitsSheetFocus = parseUnitsSheetFocusSearch(search.unitsFocus);
   const navigate = Route.useNavigate();
+  const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
   const prefersReducedMotion = useReducedMotion();
   const { activeStore } = useGetActiveStore();
   const selectedReportId = search.reportId;
@@ -256,6 +276,7 @@ export function ReportsWeeklyRoute() {
           </Button>
         }
         status={weeklyStatus}
+        updatedAt={report ? weeklyUpdatedAt(report) : null}
       />
 
       <div>
@@ -279,9 +300,6 @@ export function ReportsWeeklyRoute() {
                   : { gridTemplateRows: "0fr", opacity: 0 }
               }
               key="weekly-report-history"
-              onAnimationComplete={() => traceWeeklyHistoryMotion("complete")}
-              onAnimationStart={() => traceWeeklyHistoryMotion("start")}
-              onUpdate={(latest) => traceWeeklyHistoryMotion("frame", latest)}
               transition={
                 prefersReducedMotion
                   ? { duration: 0.15, ease: "easeOut" }
@@ -323,6 +341,9 @@ export function ReportsWeeklyRoute() {
                               search: (current) => ({
                                 ...current,
                                 reportId: entry.reportId,
+                                // A different accepted week is a different
+                                // sheet period: continuity keys reset.
+                                ...resetUnitsSheetContextSearch,
                               }),
                             })
                           }
@@ -403,7 +424,93 @@ export function ReportsWeeklyRoute() {
         </AnimatePresence>
 
         {report ? (
-          <ReportsWeeklyView report={report} />
+          <ReportsWeeklyView
+            isUnitsSheetOpen={search.units === true}
+            onUnitsSheetOpenChange={(open) =>
+              void navigate({
+                replace: true,
+                search: (current) =>
+                  open
+                    ? { ...current, units: true }
+                    : { ...current, ...closedUnitsSheetSearch },
+              })
+            }
+            onUnitsSheetPageChange={(unitsPage) =>
+              void navigate({
+                replace: true,
+                search: (current) => ({
+                  ...current,
+                  unitsPage: unitsPage === 1 ? undefined : unitsPage,
+                }),
+              })
+            }
+            onUnitsSheetRestoreComplete={() =>
+              void navigate({
+                replace: true,
+                search: (current) => ({
+                  ...current,
+                  unitsFocus: undefined,
+                  unitsScroll: undefined,
+                }),
+              })
+            }
+            onUnitsSheetSkuLinkNavigate={({
+              endDate,
+              focusSurface,
+              productSkuId,
+              scrollOffset,
+              startDate,
+            }) => {
+              const unitsScroll =
+                scrollOffset !== undefined &&
+                Number.isFinite(scrollOffset) &&
+                scrollOffset > 0
+                  ? Math.round(scrollOffset)
+                  : undefined;
+              // Continuity keys are replaced into the reports URL first so
+              // both the detail origin (`o`) and the history entry browser
+              // Back lands on carry them; the drill-down stays a push entry.
+              return Promise.resolve(
+                navigate({
+                  replace: true,
+                  search: (current) => ({
+                    ...current,
+                    unitsFocus: unitsSheetFocusSearchValue(
+                      productSkuId,
+                      focusSurface,
+                    ),
+                    unitsScroll,
+                  }),
+                }),
+              ).then(() =>
+                navigate({
+                  params: {
+                    orgUrlSlug: orgUrlSlug!,
+                    productSkuId,
+                    storeUrlSlug: storeUrlSlug!,
+                  },
+                  search: { endDate, o: getOrigin(), startDate },
+                  to: "/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId",
+                }),
+              );
+            }}
+            onUnitsSheetTabChange={(tab) =>
+              void navigate({
+                replace: true,
+                search: (current) => ({
+                  ...current,
+                  unitsTab: tab === "granular" ? "granular" : undefined,
+                  unitsPage: undefined,
+                }),
+              })
+            }
+            report={report}
+            unitsSheetPage={search.unitsPage ?? 1}
+            unitsSheetRestoreFocusSkuId={unitsSheetFocus.productSkuId}
+            unitsSheetRestoreFocusSurface={unitsSheetFocus.surface}
+            unitsSheetRestoreScrollOffset={search.unitsScroll}
+            unitsSheetTab={search.unitsTab ?? "top"}
+          />
         ) : (
           <EmptyState
             description={

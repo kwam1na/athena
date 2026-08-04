@@ -9,6 +9,10 @@ import {
 } from "../../shared/reportsContract";
 import { foldDay } from "./foldDay";
 import { computeRange } from "./customRange";
+import {
+  cleanupExpiredMovement,
+  scheduleEligibleMovementWork,
+} from "./skuMovementRange";
 import { rebuildStoreOverview } from "./overview";
 import { rebuildRollupsForDates } from "./rollups";
 import {
@@ -21,14 +25,26 @@ import {
 /**
  * The sweeper — the ONE reporting cron (slice C).
  *
- * Liveness is declarative: work is a `reportDirtyDay` row, this is the only
- * consumer, and a crashed sweep leaves marks in place for the next tick. There
- * are no best-effort scheduling chains and no wedged states.
+ * Liveness comes in two deliberate flavors:
+ *
+ * FOLDS are declarative: work is a `reportDirtyDay` row, this is the only
+ * consumer, and a crashed sweep leaves marks in place for the next tick.
+ * There are no best-effort scheduling chains and no wedged states in the
+ * fold lane.
+ *
+ * The MOVEMENT lifecycle (reports/skuMovementRange.ts) owns its own queue:
+ * admitted requests progress through promptly scheduled internal-action
+ * continuations, and this cron is only their BACKSTOP — an unconditional,
+ * globally indexed `movementEligibleAt` scan that re-SCHEDULES dropped
+ * continuations (never aggregates inline, and never depends on a store
+ * having dirty-day marks). Movement snapshot cleanup (child rows first,
+ * then headers) rides the same unconditional section.
  *
  * At-least-once by construction: the mark is deleted BEFORE the fold. A crash
  * after the delete loses nothing (the fold is idempotent and the next fact
  * re-dirties the day); a crash before it simply re-runs the fold. Both are
- * safe; double-processing is not.
+ * safe; double-processing is not — movement batches carry phase/fence
+ * expectations for the same reason.
  *
  * Every read is bounded. Nothing here scans a table, and any work that does
  * not fit in a tick is left on the queue for the next one.
@@ -70,6 +86,12 @@ export type SweepResult = {
   storesTouched: number;
   rangesComputed: number;
   rangesExpired: number;
+  /** Backstop-scheduled movement workers (reports/skuMovementRange.ts). */
+  movementWorkersScheduled: number;
+  /** Expired movement child rows deleted (child-first cleanup). */
+  movementChildrenExpired: number;
+  /** Expired movement headers deleted after their children drained. */
+  movementHeadersExpired: number;
   weeksRebuilt: number;
   weekFailures: number;
   weeksAccepted: number;
@@ -294,6 +316,16 @@ export async function foldAndReplaceDay(
     )
     .unique();
 
+  // Certified fold revision: a per-day monotonic counter, advanced on EVERY
+  // fold of the day. Deliberately not the fold timestamp — a counter cannot
+  // collide across fast successive folds, and it is deterministic within this
+  // mutation. The same value is stamped on the day and on every SKU row
+  // written below, so `movementSourceRowMatchesRevision` can prove a SKU row
+  // belongs to exactly the day generation a movement snapshot admitted via
+  // `admissibleMovementDayRevision`. Rows written before certification existed
+  // carry no revision and are inadmissible until refolded.
+  const certifiedFoldRevision = (existingDay?.certifiedFoldRevision ?? 0) + 1;
+
   const dayDoc = {
     storeId,
     operatingDate,
@@ -320,6 +352,7 @@ export async function foldAndReplaceDay(
     postCloseNetSalesDeltaMinor: result.day.postCloseNetSalesDeltaMinor,
     foldedAt: now,
     foldVersion: REPORTS_FOLD_VERSION,
+    certifiedFoldRevision,
     factCount: result.day.factCount,
     lastFactRecordedAt: result.day.lastFactRecordedAt,
     flags: result.day.flags,
@@ -347,7 +380,11 @@ export async function foldAndReplaceDay(
     }
 
     seen.add(key);
-    await ctx.db.patch("reportSkuDay", row._id, { ...next, foldedAt: now });
+    await ctx.db.patch("reportSkuDay", row._id, {
+      ...next,
+      foldedAt: now,
+      certifiedFoldRevision,
+    });
   }
 
   for (const [skuId, metrics] of result.skuDays) {
@@ -358,6 +395,7 @@ export async function foldAndReplaceDay(
       operatingDate,
       ...metrics,
       foldedAt: now,
+      certifiedFoldRevision,
     });
   }
 
@@ -436,6 +474,10 @@ async function computePendingRanges(
   let computed = 0;
 
   for (const request of pending) {
+    // Movement rows share the header table and are ALSO "pending" while
+    // their worker runs; their lifecycle is owned entirely by
+    // reports/skuMovementRange.ts, never by the summary compute path.
+    if (request.kind === "sku_movement") continue;
     try {
       await computeRange(ctx, request);
       computed += 1;
@@ -463,8 +505,15 @@ async function expireRangeResults(
     .withIndex("by_expiresAt", (q) => q.lt("expiresAt", now))
     .take(RANGE_EXPIRY_BATCH);
 
-  for (const row of expired) await ctx.db.delete("reportRangeResult", row._id);
-  return expired.length;
+  let deleted = 0;
+  for (const row of expired) {
+    // Movement headers own child rows and must drain child-first through
+    // cleanupExpiredMovement; deleting them here would skip that ordering.
+    if (row.kind === "sku_movement") continue;
+    await ctx.db.delete("reportRangeResult", row._id);
+    deleted += 1;
+  }
+  return deleted;
 }
 
 // ---------------------------------------------------------------------------
@@ -490,6 +539,9 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
     storesTouched: 0,
     rangesComputed: 0,
     rangesExpired: 0,
+    movementWorkersScheduled: 0,
+    movementChildrenExpired: 0,
+    movementHeadersExpired: 0,
     weeksRebuilt: 0,
     weekFailures: 0,
     weeksAccepted: 0,
@@ -611,6 +663,18 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
 
   result.storesTouched = touchedStores.size;
   result.rangesExpired = await expireRangeResults(ctx, now);
+
+  // Movement lane — UNCONDITIONAL, never coupled to touchedStores: the
+  // backstop rescues dropped continuations for any store, and expired
+  // snapshots drain child-first. Scheduling and deletion only; movement
+  // aggregation always happens in its own fenced worker batches.
+  result.movementWorkersScheduled = await scheduleEligibleMovementWork(
+    ctx,
+    now,
+  );
+  const movementCleanup = await cleanupExpiredMovement(ctx, now);
+  result.movementChildrenExpired = movementCleanup.childrenDeleted;
+  result.movementHeadersExpired = movementCleanup.headersDeleted;
 
   return result;
 }

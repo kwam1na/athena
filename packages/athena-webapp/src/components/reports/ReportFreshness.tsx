@@ -7,6 +7,20 @@ const reportUpdatedAtFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
 });
 
+export function ReportLastUpdated({ updatedAt }: { updatedAt: number }) {
+  return (
+    <span>
+      Last updated{" "}
+      <time
+        className="tabular-nums"
+        dateTime={new Date(updatedAt).toISOString()}
+      >
+        {reportUpdatedAtFormatter.format(updatedAt)}
+      </time>
+    </span>
+  );
+}
+
 export function ReportFreshness({
   delayedDataLabel,
   updatedAt,
@@ -27,15 +41,7 @@ export function ReportFreshness({
       {updatedAt !== null && updatedAt !== undefined ? (
         <>
           <span aria-hidden="true">·</span>
-          <span>
-            Last updated{" "}
-            <time
-              className="tabular-nums"
-              dateTime={new Date(updatedAt).toISOString()}
-            >
-              {reportUpdatedAtFormatter.format(updatedAt)}
-            </time>
-          </span>
+          <ReportLastUpdated updatedAt={updatedAt} />
         </>
       ) : null}
     </p>

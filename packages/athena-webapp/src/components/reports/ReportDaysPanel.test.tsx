@@ -1,13 +1,26 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getFunctionName } from "convex/server";
 
 const useQuery = vi.fn();
+const ensureMovementRange = vi.fn();
 /** `null` = a real store; see `useReportsSharedDemoMode`. */
 let sharedDemoContext: { kind: string } | null | undefined = null;
 vi.mock("convex/react", () => ({
-  useQuery: (...args: unknown[]) => useQuery(...args),
+  useQuery: (...args: unknown[]) => {
+    const result = useQuery(...args);
+    // A skipped subscription can never produce data, whatever blanket
+    // mockReturnValue a test installed for the panel's own reads.
+    return args[1] === "skip" ? undefined : result;
+  },
+  useMutation: () => ensureMovementRange,
 }));
 vi.mock("@/hooks/useSharedDemoContext", () => ({
   useSharedDemoContext: () => sharedDemoContext,
@@ -69,6 +82,7 @@ const baseProps = {
 afterEach(() => {
   vi.unstubAllGlobals();
   sharedDemoContext = null;
+  ensureMovementRange.mockReset();
 });
 
 function isoDateOffset(from: string, days: number): string {
@@ -135,6 +149,118 @@ describe("ReportDaysPanel shared demo", () => {
 });
 
 describe("ReportDaysPanel", () => {
+  it("places the units chart action with Products sold and uses the same selected period", async () => {
+    const user = userEvent.setup();
+    const movementTotals = {
+      unitsSold: 7,
+      unitsReturned: 2,
+      netUnits: 5,
+      skuCount: 1,
+    };
+    const movementLifecycle = {
+      state: "completed" as const,
+      totals: movementTotals,
+      completedAt: 1_754_000_000_000,
+      pageCount: 1,
+    };
+    ensureMovementRange.mockResolvedValue({
+      requestKey: "movement:days-panel",
+      lifecycle: { state: "queued_pending" },
+    });
+    useQuery.mockImplementation((functionReference: unknown, args: unknown) => {
+      if (args === "skip") return undefined;
+      const functionName = getFunctionName(functionReference as never);
+      if (functionName === "reports/queries:listRangeSkuMix") {
+        return {
+          totalUnitsSold: 7,
+          skuCount: 1,
+          rows: [
+            {
+              key: "sku-1",
+              productSkuId: "sku-1",
+              label: "WIG-A",
+              unitsSold: 7,
+              shareBasisPoints: 10_000,
+              identity: { displayName: "Oshe", sku: "WIG-A" },
+            },
+          ],
+        };
+      }
+      if (functionName === "reports/skuMovementRange:getMovementRange") {
+        return {
+          requestKey: "movement:days-panel",
+          startDate: "2026-07-28",
+          endDate: "2026-07-28",
+          lifecycle: movementLifecycle,
+        };
+      }
+      if (functionName === "reports/skuMovementRange:getMovementRangePage") {
+        return {
+          requestKey: "movement:days-panel",
+          startDate: "2026-07-28",
+          endDate: "2026-07-28",
+          lifecycle: movementLifecycle,
+          page: 1,
+          pageCount: 1,
+          rows: [
+            {
+              key: "sku-1",
+              productSkuId: "sku-1",
+              label: "WIG-A",
+              netUnits: 5,
+              rank: 1,
+              unitsReturned: 2,
+              unitsSold: 7,
+              identity: {
+                displayName: "Oshe",
+                netPriceMinor: 4_500,
+                sku: "WIG-A",
+              },
+            },
+          ],
+        };
+      }
+      return [
+        {
+          operatingDate: "2026-07-28",
+          status: "provisional",
+          currency: "USD",
+          netSalesMinor: 1_200,
+          unitsSold: 7,
+        },
+      ];
+    });
+
+    render(
+      <ReportDaysPanel {...baseProps} selectedDate="2026-07-28" />,
+    );
+
+    const productsHeader = screen.getByTestId("report-products-sold-header");
+    expect(
+      within(productsHeader).getByRole("heading", { name: "Products sold" }),
+    ).toBeInTheDocument();
+    const trigger = within(productsHeader).getByRole("button", {
+      name: "View item movement",
+    });
+
+    await user.click(trigger);
+
+    const dialog = screen.getByRole("dialog", { name: "Item movement" });
+    // The sheet admits its movement request over the same selected period.
+    await waitFor(() =>
+      expect(ensureMovementRange).toHaveBeenCalledWith({
+        endDate: "2026-07-28",
+        startDate: "2026-07-28",
+        storeId: "store-1",
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        within(dialog).getAllByRole("link", { name: /Oshe/ }),
+      ).not.toHaveLength(0),
+    );
+  });
+
   it("paginates longer ranges in two-week slices with the shared controls", async () => {
     const user = userEvent.setup();
     const onPageChange = vi.fn();

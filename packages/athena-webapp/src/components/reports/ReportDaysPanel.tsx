@@ -30,6 +30,11 @@ import {
   formatUnits,
 } from "./reportFormat";
 import { ReportSkuMixChart } from "./ReportSkuMixChart";
+import {
+  ReportUnitsMovedChartSheet,
+  type ReportUnitsMovedTab,
+  type ReportUnitsMovedFocusSurface,
+} from "./ReportUnitsMovedChartSheet";
 
 const REPORT_DAYS_PAGE_SIZE = 14;
 
@@ -61,6 +66,17 @@ export function ReportDaysPanel({
   onRangeChange,
   onRangeReset,
   onSelectedDateChange,
+  isUnitsSheetOpen,
+  onUnitsSheetOpenChange,
+  onUnitsSheetPageChange,
+  onUnitsSheetRestoreComplete,
+  onUnitsSheetSkuLinkNavigate,
+  onUnitsSheetTabChange,
+  unitsSheetPage,
+  unitsSheetRestoreFocusSkuId,
+  unitsSheetRestoreFocusSurface,
+  unitsSheetRestoreScrollOffset,
+  unitsSheetTab,
   onPageChange,
   page,
   selectedDate,
@@ -76,6 +92,23 @@ export function ReportDaysPanel({
   ) => void;
   onRangeReset: () => void;
   onSelectedDateChange: (date: string | undefined) => void;
+  isUnitsSheetOpen?: boolean;
+  onUnitsSheetOpenChange?: (open: boolean) => void;
+  onUnitsSheetPageChange?: (page: number) => void;
+  onUnitsSheetRestoreComplete?: () => void;
+  onUnitsSheetSkuLinkNavigate?: (context: {
+    endDate: string;
+    focusSurface: ReportUnitsMovedFocusSurface;
+    productSkuId: string;
+    scrollOffset?: number;
+    startDate: string;
+  }) => void | Promise<void>;
+  onUnitsSheetTabChange?: (tab: ReportUnitsMovedTab) => void;
+  unitsSheetPage?: number;
+  unitsSheetRestoreFocusSkuId?: string;
+  unitsSheetRestoreFocusSurface?: ReportUnitsMovedFocusSurface;
+  unitsSheetRestoreScrollOffset?: number;
+  unitsSheetTab?: ReportUnitsMovedTab;
   onPageChange: (page: number) => void;
   page: number;
   selectedDate?: string;
@@ -144,6 +177,14 @@ export function ReportDaysPanel({
     isSharedDemo ? demoSkuMix : liveSkuMix,
     skuMixContext,
   );
+  const settledUnitsStartDate =
+    settledSkuMixContext?.selectedDate ??
+    settledSkuMixContext?.startDate ??
+    skuMixStartDate;
+  const settledUnitsEndDate =
+    settledSkuMixContext?.selectedDate ??
+    settledSkuMixContext?.endDate ??
+    skuMixEndDate;
   const daysNewestFirst = days
     ? [...days].sort((left, right) =>
       right.operatingDate.localeCompare(left.operatingDate),
@@ -378,18 +419,42 @@ export function ReportDaysPanel({
             </div>
           </div>
           <div className="flex min-w-0 flex-col gap-layout-sm">
-            <div>
-              <h3
-                className="text-base font-medium text-foreground"
-                id="report-sku-mix-heading"
-              >
-                Products sold
-              </h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {selectedDate
-                  ? `Share of units sold on ${formatOperatingDate(selectedDate)}`
-                  : "Share of units sold by product in this date range"}
-              </p>
+            <div
+              className="flex flex-wrap items-start justify-between gap-layout-sm"
+              data-testid="report-products-sold-header"
+            >
+              <div className="min-w-0 flex-1">
+                <h3
+                  className="text-base font-medium text-foreground"
+                  id="report-sku-mix-heading"
+                >
+                  Products sold
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {selectedDate
+                    ? `Share of units sold on ${formatOperatingDate(selectedDate)}`
+                    : "Share of units sold by product in this date range"}
+                </p>
+              </div>
+              <ReportUnitsMovedChartSheet
+                activeTab={unitsSheetTab}
+                currency={activeStore?.currency ?? "USD"}
+                granularPage={unitsSheetPage}
+                isOpen={isUnitsSheetOpen}
+                onActiveTabChange={onUnitsSheetTabChange}
+                onGranularPageChange={onUnitsSheetPageChange}
+                onOpenChange={onUnitsSheetOpenChange}
+                onRestoreComplete={onUnitsSheetRestoreComplete}
+                onSkuLinkNavigate={onUnitsSheetSkuLinkNavigate}
+                orgUrlSlug={orgUrlSlug!}
+                restoreFocusSkuId={unitsSheetRestoreFocusSkuId}
+                restoreFocusSurface={unitsSheetRestoreFocusSurface}
+                restoreScrollOffset={unitsSheetRestoreScrollOffset}
+                periodEndDate={settledUnitsEndDate}
+                periodStartDate={settledUnitsStartDate}
+                scrollContextKey={`overview:${orgUrlSlug}:${storeUrlSlug}:${settledUnitsStartDate}:${settledUnitsEndDate}`}
+                storeUrlSlug={storeUrlSlug!}
+              />
             </div>
             <ReportSkuMixChart
               data={skuMix}

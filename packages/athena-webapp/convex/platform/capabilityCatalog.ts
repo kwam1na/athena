@@ -268,6 +268,7 @@ const PUBLIC_WRITE_MODULE_CAPABILITIES = {
   "remoteAssist/public": "remote_assist.manage",
   "remoteAssist/transport": "remote_assist.manage",
   "reports/customRange": "reporting.generate",
+  "reports/skuMovementRange": "reporting.generate",
   "serviceOps/appointments": "appointments.manage",
   "serviceOps/catalog": "service.catalog.manage",
   "serviceOps/serviceCases": "service.cases.manage",

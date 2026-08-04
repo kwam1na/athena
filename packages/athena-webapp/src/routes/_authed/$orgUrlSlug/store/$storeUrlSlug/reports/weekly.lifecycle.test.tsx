@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -6,7 +6,13 @@ const state = vi.hoisted(() => ({
   activeResponse: undefined as unknown,
   /** `null` = a real store; see `useReportsSharedDemoMode`. */
   sharedDemoContext: null as { kind: string } | null | undefined,
-  navigationOptions: [] as Array<{ replace?: boolean }>,
+  /** Every push into another route's search (the SKU-detail drill-down). */
+  detailNavigations: [] as Array<Record<string, unknown>>,
+  /** The units-sheet ensure mutation; swapped per test, stable per render. */
+  ensureMutation: undefined as unknown,
+  /** Completed movement fixture; `null` keeps the sheet un-admitted. */
+  movement: null as null | { header: unknown; pages: Record<number, unknown> },
+  navigationOptions: [] as Array<{ replace?: boolean; to?: string }>,
   /** Simulates the first paint, before any Convex result has arrived. */
   pending: false,
   queryArgs: [] as unknown[],
@@ -15,30 +21,76 @@ const state = vi.hoisted(() => ({
 
 vi.mock("@tanstack/react-router", () => ({
   // The demo briefing carries `ownerRoutes`, so the view renders real links.
-  Link: ({ children }: { children?: React.ReactNode }) => <a>{children}</a>,
+  // The sheet's SKU links additionally carry their U6 seam props through.
+  Link: ({
+    children,
+    params,
+    search,
+    to,
+    ...props
+  }: {
+    children?: React.ReactNode;
+    params?: unknown;
+    search?: unknown;
+    to?: string;
+  }) => (
+    <a
+      data-params={params ? JSON.stringify(params) : undefined}
+      data-search={search ? JSON.stringify(search) : undefined}
+      href={typeof to === "string" ? to : undefined}
+      {...props}
+    >
+      {children}
+    </a>
+  ),
   createFileRoute: () => (options: Record<string, unknown>) => ({
     ...options,
     useNavigate:
       () =>
         ({
+          params,
           replace,
           search,
+          to,
         }: {
+          params?: unknown;
           replace?: boolean;
-          search: (current: Record<string, unknown>) => Record<string, unknown>;
+          search?:
+            | Record<string, unknown>
+            | ((current: Record<string, unknown>) => Record<string, unknown>);
+          to?: string;
         }) => {
-          state.navigationOptions.push({ replace });
-          state.search = search(state.search);
+          state.navigationOptions.push({ replace, to });
+          if (typeof search === "function") {
+            state.search = search(state.search);
+          } else if (search && typeof search === "object") {
+            state.detailNavigations.push({
+              params: params as Record<string, unknown>,
+              search,
+              to,
+            });
+          }
         },
     useSearch: () => state.search,
   }),
   useParams: () => ({ orgUrlSlug: "org", storeUrlSlug: "store" }),
 }));
 
+const stubEnsureMutation = async () => ({
+  requestKey: null,
+  lifecycle: { state: "not_available" },
+});
+
 vi.mock("convex/react", () => ({
   useQuery: (_reference: unknown, args: unknown) => {
     if (args !== "skip") state.queryArgs.push(args);
     if (args === "skip" || state.pending) return undefined;
+    if (typeof args === "object" && args !== null && "requestKey" in args) {
+      if (!state.movement) return undefined;
+      return "page" in args
+        ? state.movement.pages[(args as { page: number }).page]
+        : state.movement.header;
+    }
     if (typeof args === "object" && args !== null && "paginationOpts" in args) {
       return {
         page: [
@@ -57,6 +109,28 @@ vi.mock("convex/react", () => ({
     if (state.activeResponse !== undefined) return state.activeResponse;
     return { status: "available", current: report, acceptedBaseline: null };
   },
+  // The units sheet's ensure mutation. The returned function must be
+  // referentially stable, like the real hook's.
+  useMutation: () => state.ensureMutation as () => Promise<unknown>,
+}));
+
+vi.mock("recharts", () => ({
+  Bar: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="units-bar">{children}</div>
+  ),
+  BarChart: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="units-chart">{children}</div>
+  ),
+  CartesianGrid: () => null,
+  Cell: () => null,
+  Legend: () => null,
+  ReferenceLine: () => null,
+  ResponsiveContainer: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  Tooltip: () => null,
+  XAxis: () => null,
+  YAxis: () => null,
 }));
 
 vi.mock("@/hooks/useGetActiveStore", () => ({
@@ -73,6 +147,7 @@ const report = {
   cycleStartDate: "2026-07-06",
   cycleEndDate: "2026-07-12",
   currency: "USD",
+  materializedAt: Date.UTC(2026, 6, 12, 15, 30),
   included: {
     grossSalesMinor: 120_000,
     netSalesMinor: 100_000,
@@ -156,14 +231,336 @@ const report = {
   },
 };
 
+const MOVEMENT_REQUEST_KEY = "movement:weekly-route";
+
+function movementRow(rank: number, netUnits: number) {
+  const unitsSold = Math.max(netUnits, 0) + 2;
+  return {
+    key: `sku-${rank}`,
+    productSkuId: `sku-${rank}`,
+    label: `SKU-${rank}`,
+    unitsSold,
+    unitsReturned: unitsSold - netUnits,
+    netUnits,
+    rank,
+    identity: { displayName: `Product ${rank}`, sku: `SKU-${rank}` },
+  };
+}
+
+/** A completed 25-SKU movement snapshot: page 1 holds 20 rows, page 2 five. */
+function installCompletedMovement() {
+  const lifecycle = {
+    state: "completed" as const,
+    totals: { unitsSold: 400, unitsReturned: 120, netUnits: 280, skuCount: 25 },
+    completedAt: 1_754_000_000_000,
+    pageCount: 2,
+  };
+  const pageEnvelope = (page: number, rows: unknown[]) => ({
+    requestKey: MOVEMENT_REQUEST_KEY,
+    startDate: report.cycleStartDate,
+    endDate: report.cycleEndDate,
+    lifecycle,
+    page,
+    pageCount: 2,
+    rows,
+  });
+  state.movement = {
+    header: {
+      requestKey: MOVEMENT_REQUEST_KEY,
+      startDate: report.cycleStartDate,
+      endDate: report.cycleEndDate,
+      lifecycle,
+    },
+    pages: {
+      1: pageEnvelope(
+        1,
+        Array.from({ length: 20 }, (_, index) =>
+          movementRow(index + 1, 20 - index),
+        ),
+      ),
+      2: pageEnvelope(
+        2,
+        Array.from({ length: 5 }, (_, index) =>
+          movementRow(index + 21, -(5 - index)),
+        ),
+      ),
+    },
+  };
+  state.ensureMutation = async () => ({
+    requestKey: MOVEMENT_REQUEST_KEY,
+    lifecycle: { state: "queued_pending" },
+  });
+}
+
 describe("ReportsWeeklyRoute query lifecycle", () => {
   beforeEach(() => {
     state.activeResponse = undefined;
     state.sharedDemoContext = null;
+    state.detailNavigations = [];
+    state.ensureMutation = stubEnsureMutation;
+    state.movement = null;
     state.pending = false;
     state.navigationOptions = [];
     state.queryArgs = [];
     state.search = {};
+  });
+
+  it("keeps the units sheet open state in route search with replaced history entries", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<ReportsWeeklyRoute />);
+
+    await user.click(
+      screen.getByRole("button", { name: "View item movement" }),
+    );
+    expect(state.search.units).toBe(true);
+    // Open never adds a history entry (unified U6 convention).
+    expect(state.navigationOptions).toEqual([{ replace: true, to: undefined }]);
+
+    rerender(<ReportsWeeklyRoute />);
+    expect(
+      screen.getByRole("dialog", { name: "Item movement" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    // Close replaces too and clears every sheet-owned key.
+    expect(state.search.units).toBeUndefined();
+    expect(state.search.unitsTab).toBeUndefined();
+    expect(state.search.unitsPage).toBeUndefined();
+    expect(state.search.unitsFocus).toBeUndefined();
+    expect(state.search.unitsScroll).toBeUndefined();
+    expect(
+      state.navigationOptions.every(({ replace }) => replace === true),
+    ).toBe(true);
+  });
+
+  it("replaces history for tab and page changes and serializes only non-defaults", async () => {
+    const user = userEvent.setup();
+    installCompletedMovement();
+    state.search = { units: true };
+    const { rerender } = render(<ReportsWeeklyRoute />);
+
+    const dialog = await screen.findByRole("dialog", { name: "Item movement" });
+    await waitFor(() =>
+      expect(within(dialog).getByTestId("units-chart")).toBeInTheDocument(),
+    );
+
+    // Default state serializes nothing beyond the open flag.
+    expect(state.search).toEqual({ units: true });
+
+    await user.click(within(dialog).getByRole("tab", { name: "All items" }));
+    expect(state.search).toEqual({ units: true, unitsTab: "granular" });
+    rerender(<ReportsWeeklyRoute />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Go to next page" }),
+    );
+    expect(state.search).toEqual({
+      units: true,
+      unitsTab: "granular",
+      unitsPage: 2,
+    });
+    rerender(<ReportsWeeklyRoute />);
+    await waitFor(() =>
+      expect(screen.getByText("Page 2 of 2")).toBeInTheDocument(),
+    );
+
+    // Returning to page one drops the page key rather than writing 1.
+    await user.click(
+      screen.getByRole("button", { name: "Go to previous page" }),
+    );
+    expect(state.search).toEqual({ units: true, unitsTab: "granular" });
+    rerender(<ReportsWeeklyRoute />);
+
+    // Returning to Top movers clears the tab (and any page) keys.
+    await user.click(screen.getByRole("tab", { name: "Top movers" }));
+    expect(state.search).toEqual({ units: true });
+
+    // Every intra-sheet change replaced the current history entry.
+    expect(
+      state.navigationOptions.every(({ replace }) => replace === true),
+    ).toBe(true);
+  });
+
+  it("persists focus and scroll continuity when drilling into SKU detail, then pushes one real entry", async () => {
+    const user = userEvent.setup();
+    installCompletedMovement();
+    state.search = { units: true, unitsTab: "granular" };
+    render(<ReportsWeeklyRoute />);
+
+    const dialog = await screen.findByRole("dialog", { name: "Item movement" });
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole("link", { name: /Product 1 SKU-1\b/ }),
+      ).toBeInTheDocument(),
+    );
+    state.navigationOptions = [];
+
+    await user.click(
+      within(dialog).getByRole("link", { name: /Product 1 SKU-1\b/ }),
+    );
+
+    // The continuity write replaces the reports entry...
+    expect(state.search).toMatchObject({
+      units: true,
+      unitsTab: "granular",
+      unitsFocus: "sku-1",
+    });
+    // ...and the drill-down itself is the only push.
+    expect(state.navigationOptions).toEqual([
+      { replace: true, to: undefined },
+      {
+        replace: undefined,
+        to: "/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId",
+      },
+    ]);
+    expect(state.detailNavigations).toHaveLength(1);
+    const detail = state.detailNavigations[0] as {
+      params: Record<string, unknown>;
+      search: Record<string, unknown>;
+    };
+    expect(detail.params).toEqual({
+      orgUrlSlug: "org",
+      productSkuId: "sku-1",
+      storeUrlSlug: "store",
+    });
+    expect(detail.search.startDate).toBe("2026-07-06");
+    expect(detail.search.endDate).toBe("2026-07-12");
+    expect(typeof detail.search.o).toBe("string");
+  });
+
+  it("restores page, scroll, and the originating SKU link when returning from SKU detail", async () => {
+    installCompletedMovement();
+    state.search = {
+      units: true,
+      unitsTab: "granular",
+      unitsPage: 2,
+      unitsFocus: "sku-21",
+      unitsScroll: 640,
+    };
+    const scrollHeightSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollHeight", "get")
+      .mockImplementation(function (this: HTMLElement) {
+        return this.dataset.testid === "weekly-scroll-container" ? 2_000 : 0;
+      });
+    const clientHeightSpy = vi
+      .spyOn(HTMLElement.prototype, "clientHeight", "get")
+      .mockImplementation(function (this: HTMLElement) {
+        return this.dataset.testid === "weekly-scroll-container" ? 600 : 0;
+      });
+
+    try {
+      render(
+        <div
+          data-testid="weekly-scroll-container"
+          style={{ overflowY: "auto" }}
+        >
+          <ReportsWeeklyRoute />
+        </div>,
+      );
+
+      const dialog = await screen.findByRole("dialog", {
+        name: "Item movement",
+      });
+      await waitFor(() =>
+        expect(screen.getByText("Page 2 of 2")).toBeInTheDocument(),
+      );
+
+      // The captured report offset is reapplied under the sheet.
+      await waitFor(() =>
+        expect(
+          screen.getByTestId("weekly-scroll-container").scrollTop,
+        ).toBe(640),
+      );
+      // Keyboard context returns to the very link that was drilled through.
+      await waitFor(() =>
+        expect(document.activeElement).toBe(
+          within(dialog).getByRole("link", { name: /Product 21/ }),
+        ),
+      );
+      // The one-shot keys are cleared (replace) so refresh cannot re-restore.
+      await waitFor(() => {
+        expect(state.search.unitsFocus).toBeUndefined();
+        expect(state.search.unitsScroll).toBeUndefined();
+      });
+      expect(state.search).toMatchObject({
+        units: true,
+        unitsTab: "granular",
+        unitsPage: 2,
+      });
+      expect(
+        state.navigationOptions.every(({ replace }) => replace === true),
+      ).toBe(true);
+    } finally {
+      scrollHeightSpy.mockRestore();
+      clientHeightSpy.mockRestore();
+    }
+  });
+
+  it("falls back to the Granular heading with an announcement when the originating SKU is gone", async () => {
+    installCompletedMovement();
+    state.search = {
+      units: true,
+      unitsTab: "granular",
+      unitsPage: 2,
+      unitsFocus: "sku-999",
+    };
+    render(<ReportsWeeklyRoute />);
+
+    const dialog = await screen.findByRole("dialog", { name: "Item movement" });
+    await waitFor(() =>
+      expect(screen.getByText("Page 2 of 2")).toBeInTheDocument(),
+    );
+
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        within(dialog).getByRole("tab", { name: "All items" }),
+      ),
+    );
+    expect(
+      within(dialog).getByTestId("units-moved-restore-status"),
+    ).toHaveTextContent(
+      "Your previous item is no longer in this view. Showing page 2 of 2.",
+    );
+    await waitFor(() => expect(state.search.unitsFocus).toBeUndefined());
+  });
+
+  it("degrades a missing scroll container silently and still clears the keys", async () => {
+    installCompletedMovement();
+    state.search = { units: true, unitsScroll: 640 };
+    render(<ReportsWeeklyRoute />);
+
+    await screen.findByRole("dialog", { name: "Item movement" });
+    // jsdom's zero-height layout means no scrollable container ever appears;
+    // the bounded retry gives up quietly and releases the key.
+    await waitFor(
+      () => expect(state.search.unitsScroll).toBeUndefined(),
+      { timeout: 4_000 },
+    );
+    expect(state.search).toEqual({ units: true });
+  });
+
+  it("resets sheet continuity keys when a different accepted week is selected", async () => {
+    const user = userEvent.setup();
+    // A pasted or stale URL can carry continuity keys for a closed sheet;
+    // choosing a different accepted week names a different period, so they
+    // must not survive into it.
+    state.search = {
+      unitsTab: "granular",
+      unitsPage: 4,
+      unitsFocus: "sku-61",
+      unitsScroll: 640,
+    };
+    const { rerender } = render(<ReportsWeeklyRoute />);
+    await user.click(screen.getByRole("button", { name: "Weekly history" }));
+    rerender(<ReportsWeeklyRoute />);
+
+    await user.click(screen.getByRole("button", { name: "Jul 6–12, 2026" }));
+
+    expect(state.search).toMatchObject({ reportId: "week:2026-07-06" });
+    expect(state.search.unitsTab).toBeUndefined();
+    expect(state.search.unitsPage).toBeUndefined();
+    expect(state.search.unitsFocus).toBeUndefined();
+    expect(state.search.unitsScroll).toBeUndefined();
   });
 
   it("uses one active query, adds history only on demand, and replaces active with detail", async () => {
@@ -265,6 +662,11 @@ describe("ReportsWeeklyRoute query lifecycle", () => {
     expect(status).toHaveTextContent(
       "Reporting week Mon, Jul 6–Sun, Jul 12, 2026. Final Daily Close accepted.",
     );
+    expect(status).toHaveTextContent("Last updated");
+    expect(status.querySelector("time")).toHaveAttribute(
+      "datetime",
+      new Date(report.materializedAt).toISOString(),
+    );
     // The visible briefing already prints the plain range; the polite region
     // must not read the same string back.
     expect(status).not.toHaveTextContent("Jul 6–12, 2026.");
@@ -279,13 +681,15 @@ describe("ReportsWeeklyRoute query lifecycle", () => {
     expect(status).toHaveTextContent("Loading reporting week...");
   });
 
-  it("keeps one live region while the reporting summary flips", () => {
+  it("reveals freshness only after the reporting summary flip settles", async () => {
     state.pending = true;
     const { rerender } = render(<ReportsWeeklyRoute />);
     const status = screen.getByTestId("weekly-status");
 
     state.pending = false;
     rerender(<ReportsWeeklyRoute />);
+
+    expect(status).not.toHaveTextContent("Last updated");
 
     expect(screen.getByTestId("weekly-summary-entry")).toHaveAttribute(
       "data-motion",
@@ -300,6 +704,11 @@ describe("ReportsWeeklyRoute query lifecycle", () => {
       "200",
     );
     expect(screen.getByTestId("weekly-status")).toBe(status);
+    await waitFor(() => expect(status).toHaveTextContent("Last updated"));
+    expect(status).toHaveClass("flex", "gap-x-1.5");
+    expect(screen.getByTestId("weekly-last-updated")).toHaveClass(
+      "gap-x-1.5",
+    );
   });
 
   it("renders user-facing reporting dates through the shared formatter", async () => {

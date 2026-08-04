@@ -4,7 +4,9 @@ import type { Id } from "../_generated/dataModel";
 import { REPORTS_FOLD_VERSION } from "../../shared/reportsContract";
 import {
   countStaleFoldVersionDaysWithCtx,
+  countUncertifiedDaysWithCtx,
   markStaleFoldVersionDaysWithCtx,
+  needsCertifiedRefold,
 } from "./foldVersionRepair";
 
 type DayRow = {
@@ -12,6 +14,7 @@ type DayRow = {
   storeId: string;
   operatingDate: string;
   foldVersion: number;
+  certifiedFoldRevision?: number;
 };
 
 type DirtyRow = {
@@ -135,20 +138,30 @@ function day(
   operatingDate: string,
   foldVersion: number,
   storeId: string = String(STORE),
+  certifiedFoldRevision?: number,
 ): DayRow {
   return {
     _id: `day-${storeId}-${operatingDate}`,
     storeId,
     operatingDate,
     foldVersion,
+    ...(certifiedFoldRevision !== undefined ? { certifiedFoldRevision } : {}),
   };
+}
+
+/** A fully repaired row: current fold version AND a certified revision. */
+function certifiedDay(
+  operatingDate: string,
+  storeId: string = String(STORE),
+): DayRow {
+  return day(operatingDate, REPORTS_FOLD_VERSION, storeId, 1);
 }
 
 describe("fold version repair", () => {
   it("marks only the rows folded under a superseded version", async () => {
     const harness = createCtx([
       day("2026-07-01", 1),
-      day("2026-07-02", REPORTS_FOLD_VERSION),
+      certifiedDay("2026-07-02"),
       day("2026-07-03", 1),
     ]);
 
@@ -162,6 +175,7 @@ describe("fold version repair", () => {
       processedCount: 3,
       alreadyQueuedCount: 0,
       staleCount: 2,
+      missingRevisionCount: 0,
     });
     // The current-version day must not enter the sweeper's queue at all.
     expect(
@@ -227,10 +241,34 @@ describe("fold version repair", () => {
     expect(harness.patch).not.toHaveBeenCalled();
   });
 
+  it("marks a current-version day that was never revision-certified", async () => {
+    // Cannot happen through the fold path (stamping ships with the bump), but
+    // an ingest-created open day is exactly this shape until its first sweep;
+    // the repair must be able to reach it rather than leaving it inadmissible.
+    const harness = createCtx([
+      day("2026-07-01", REPORTS_FOLD_VERSION),
+      certifiedDay("2026-07-02"),
+    ]);
+
+    const result = await markStaleFoldVersionDaysWithCtx(harness.ctx, {
+      storeId: STORE,
+    });
+
+    expect(result).toMatchObject({
+      isDone: true,
+      markedCount: 1,
+      staleCount: 1,
+      missingRevisionCount: 1,
+    });
+    expect(
+      harness.dirtyRows.map((row) => [row.operatingDate, row.reason]),
+    ).toEqual([["2026-07-01", "fold_version_bump"]]);
+  });
+
   it("drives itself to completion when autoContinue is set", async () => {
     const harness = createCtx([
       day("2026-07-01", 1),
-      day("2026-07-02", REPORTS_FOLD_VERSION),
+      certifiedDay("2026-07-02"),
       day("2026-07-03", 1),
     ]);
 
@@ -263,6 +301,7 @@ describe("fold version repair", () => {
       processedCount: 3,
       alreadyQueuedCount: 0,
       staleCount: 2,
+      missingRevisionCount: 0,
     });
     // A finished chain must not schedule another link.
     expect(harness.runAfter).toHaveBeenCalledTimes(1);
@@ -339,5 +378,79 @@ describe("fold version repair", () => {
     await expect(
       countStaleFoldVersionDaysWithCtx(harness.ctx, { storeId: STORE }),
     ).resolves.toMatchObject({ isDone: true, staleCount: 0 });
+  });
+
+  it("exposes the repair predicate: stale version OR missing revision", () => {
+    expect(needsCertifiedRefold(day("d", 1))).toBe(true);
+    expect(needsCertifiedRefold(day("d", REPORTS_FOLD_VERSION))).toBe(true);
+    expect(needsCertifiedRefold(certifiedDay("d"))).toBe(false);
+  });
+});
+
+describe("certified revision coverage", () => {
+  it("reports a mixed-generation store as not yet certified, without writing", async () => {
+    const harness = createCtx([
+      day("2026-07-01", 1), // legacy fold version
+      day("2026-07-02", REPORTS_FOLD_VERSION), // current version, no revision
+      certifiedDay("2026-07-03"),
+    ]);
+
+    const first = await countUncertifiedDaysWithCtx(harness.ctx, {
+      limit: 2,
+      storeId: STORE,
+    });
+    expect(first).toMatchObject({
+      isDone: false,
+      processedCount: 2,
+      staleFoldVersionCount: 1,
+      missingRevisionCount: 1,
+      uncertifiedCount: 2,
+      certifiedCount: 0,
+    });
+
+    const second = await countUncertifiedDaysWithCtx(harness.ctx, {
+      cursor: first.continueCursor,
+      limit: 2,
+      storeId: STORE,
+    });
+    expect(second).toMatchObject({
+      isDone: true,
+      processedCount: 1,
+      uncertifiedCount: 0,
+      certifiedCount: 1,
+    });
+
+    // Any non-zero page means the store is not movement-ready.
+    expect(first.uncertifiedCount + second.uncertifiedCount).toBeGreaterThan(0);
+    expect(harness.insert).not.toHaveBeenCalled();
+    expect(harness.patch).not.toHaveBeenCalled();
+    expect(harness.runAfter).not.toHaveBeenCalled();
+  });
+
+  it("reports complete coverage once every row is certified under the current version", async () => {
+    const harness = createCtx([
+      certifiedDay("2026-07-01"),
+      certifiedDay("2026-07-02"),
+    ]);
+
+    await expect(
+      countUncertifiedDaysWithCtx(harness.ctx, { storeId: STORE }),
+    ).resolves.toMatchObject({
+      isDone: true,
+      processedCount: 2,
+      uncertifiedCount: 0,
+      certifiedCount: 2,
+    });
+  });
+
+  it("scopes coverage to the requested store", async () => {
+    const harness = createCtx([
+      certifiedDay("2026-07-01"),
+      day("2026-07-01", 1, String(OTHER_STORE)),
+    ]);
+
+    await expect(
+      countUncertifiedDaysWithCtx(harness.ctx, { storeId: STORE }),
+    ).resolves.toMatchObject({ processedCount: 1, uncertifiedCount: 0 });
   });
 });

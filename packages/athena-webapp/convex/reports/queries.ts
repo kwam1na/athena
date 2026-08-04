@@ -21,6 +21,7 @@ import type {
   ReportRangeSummary,
   ReportSkuIdentity,
   ReportSkuMixData,
+  ReportSkuMovementData,
   ReportSkuPeriodRow,
   ReportSkuSortBy,
   ReportSkuTransactionEvidence,
@@ -56,6 +57,7 @@ import { transactionCountFromCloseSummary } from "./transactionCounts";
 const RANGE_MAX_SPAN_DAYS = 92;
 const RANGE_SKU_MIX_ROW_LIMIT = 5_000;
 const RANGE_SKU_MIX_VISIBLE_LIMIT = 5;
+const RANGE_SKU_MOVEMENT_LIMIT = 100;
 const SKU_DAY_EVIDENCE_FACT_LIMIT = 500;
 const ITEMS_PERIOD_MAX_DAYS = 31;
 const ITEMS_UNCLOSED_DAY_FACT_LIMIT = 2_000;
@@ -802,6 +804,107 @@ export const listRangeSkuMix = query({
 });
 
 // ---------------------------------------------------------------------------
+// listRangeSkuMovement
+// ---------------------------------------------------------------------------
+
+export const listRangeSkuMovement = query({
+  args: {
+    storeId: v.id("store"),
+    startDate: v.string(),
+    endDate: v.string(),
+  },
+  handler: async (ctx, args): Promise<ReportSkuMovementData> => {
+    await requireReportsStoreAccess(ctx, args.storeId);
+    requireValidDateRange(args.startDate, args.endDate);
+
+    const skuDays = await ctx.db
+      .query("reportSkuDay")
+      .withIndex("by_storeId_operatingDate_productSkuId", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .gte("operatingDate", args.startDate)
+          .lte("operatingDate", args.endDate),
+      )
+      .take(RANGE_SKU_MIX_ROW_LIMIT + 1);
+
+    if (skuDays.length > RANGE_SKU_MIX_ROW_LIMIT) {
+      throw new Error(
+        "SKU movement covers too much activity to display accurately. Choose a shorter range.",
+      );
+    }
+
+    const movementBySku = new Map<
+      Id<"productSku">,
+      { unitsSold: number; unitsReturned: number }
+    >();
+    for (const row of skuDays) {
+      const current = movementBySku.get(row.productSkuId) ?? {
+        unitsSold: 0,
+        unitsReturned: 0,
+      };
+      current.unitsSold += row.unitsSold;
+      current.unitsReturned += row.unitsReturned;
+      movementBySku.set(row.productSkuId, current);
+    }
+
+    const ranked = Array.from(
+      movementBySku,
+      ([productSkuId, movement]) => ({
+        productSkuId,
+        ...movement,
+        netUnits: movement.unitsSold - movement.unitsReturned,
+      }),
+    )
+      .filter((row) => row.unitsSold !== 0 || row.unitsReturned !== 0)
+      .sort(
+        (left, right) =>
+          right.unitsSold +
+            right.unitsReturned -
+            (left.unitsSold + left.unitsReturned) ||
+          String(left.productSkuId).localeCompare(String(right.productSkuId)),
+      );
+
+    if (ranked.length > RANGE_SKU_MOVEMENT_LIMIT) {
+      throw new Error(
+        `This range includes more than ${RANGE_SKU_MOVEMENT_LIMIT} individual SKUs. Choose a shorter range.`,
+      );
+    }
+
+    const rows: ReportSkuMovementData["rows"] = await Promise.all(
+      ranked.map(async (row) => {
+        const identity = await resolveSkuIdentity(ctx, row.productSkuId);
+        return {
+          key: String(row.productSkuId),
+          productSkuId: String(row.productSkuId),
+          label:
+            identity?.sku ?? identity?.displayName ?? String(row.productSkuId),
+          unitsSold: row.unitsSold,
+          unitsReturned: row.unitsReturned,
+          netUnits: row.netUnits,
+          ...(identity ? { identity } : {}),
+        };
+      }),
+    );
+    const totalUnitsSold = rows.reduce(
+      (total, row) => total + row.unitsSold,
+      0,
+    );
+    const totalUnitsReturned = rows.reduce(
+      (total, row) => total + row.unitsReturned,
+      0,
+    );
+
+    return {
+      rows,
+      totalUnitsSold,
+      totalUnitsReturned,
+      netUnits: totalUnitsSold - totalUnitsReturned,
+      skuCount: rows.length,
+    };
+  },
+});
+
+// ---------------------------------------------------------------------------
 // listPeriodSkus
 // ---------------------------------------------------------------------------
 
@@ -1142,8 +1245,10 @@ function cleanMetadataValue(value?: string | null): string | undefined {
   return next;
 }
 
-/** Identity for one SKU — at most two document reads. */
-async function resolveSkuIdentity(
+/** Identity for one SKU — at most two document reads. Exported for the
+ * movement page reader (reports/skuMovementRange.ts), which hydrates at most
+ * 20 identities after rank selection. */
+export async function resolveSkuIdentity(
   ctx: QueryCtx,
   productSkuId: Id<"productSku">,
 ): Promise<ReportSkuIdentity | undefined> {

@@ -1,5 +1,142 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getFunctionName } from "convex/server";
+
+const { ensureMovementRange, useQuery } = vi.hoisted(() => ({
+  ensureMovementRange: vi.fn(),
+  useQuery: vi.fn(),
+}));
+
+const MOVEMENT_REQUEST_KEY = "movement:weekly-test";
+
+const movementTotals = {
+  unitsSold: 20,
+  unitsReturned: 2,
+  netUnits: 18,
+  skuCount: 2,
+};
+
+const movementLifecycle = {
+  state: "completed" as const,
+  totals: movementTotals,
+  completedAt: 1_754_000_000_000,
+  pageCount: 1,
+};
+
+const movementRows = [
+  {
+    identity: {
+      displayName: "Lace Front Wig",
+      netPriceMinor: 4_500,
+      size: "18 in",
+      sku: "LFW-01",
+    },
+    key: "sku-lace-front",
+    label: "LFW-01",
+    productSkuId: "sku-lace-front",
+    netUnits: 10,
+    rank: 1,
+    unitsReturned: 2,
+    unitsSold: 12,
+  },
+  {
+    identity: {
+      displayName: "Body Wave Wig",
+      netPriceMinor: 6_000,
+      sku: "BWW-01",
+    },
+    key: "sku-body-wave",
+    label: "BWW-01",
+    productSkuId: "sku-body-wave",
+    netUnits: 8,
+    rank: 2,
+    unitsReturned: 0,
+    unitsSold: 8,
+  },
+];
+
+/** Wires the sheet's movement lifecycle reads to a completed snapshot. */
+function installMovementQueries() {
+  ensureMovementRange.mockResolvedValue({
+    requestKey: MOVEMENT_REQUEST_KEY,
+    lifecycle: { state: "queued_pending" },
+  });
+  useQuery.mockImplementation((reference: unknown, args: unknown) => {
+    if (args === "skip") return undefined;
+    const name = getFunctionName(reference as never);
+    if (name === "reports/skuMovementRange:getMovementRange") {
+      return {
+        requestKey: MOVEMENT_REQUEST_KEY,
+        startDate: "2026-07-06",
+        endDate: "2026-07-12",
+        lifecycle: movementLifecycle,
+      };
+    }
+    if (name === "reports/skuMovementRange:getMovementRangePage") {
+      return {
+        requestKey: MOVEMENT_REQUEST_KEY,
+        startDate: "2026-07-06",
+        endDate: "2026-07-12",
+        lifecycle: movementLifecycle,
+        page: 1,
+        pageCount: 1,
+        rows: movementRows,
+      };
+    }
+    return undefined;
+  });
+}
+
+vi.mock("convex/react", () => ({
+  useQuery,
+  useMutation: () => ensureMovementRange,
+}));
+vi.mock("@/hooks/useGetActiveStore", () => ({
+  default: () => ({ activeStore: { _id: "store-1" } }),
+}));
+vi.mock("./useReportsSharedDemoMode", () => ({
+  useReportsSharedDemoMode: () => ({
+    isSharedDemo: false,
+    useLiveQuery: true,
+  }),
+}));
+
+vi.mock("recharts", () => ({
+  Bar: ({
+    dataKey,
+    isAnimationActive,
+  }: {
+    dataKey: string;
+    isAnimationActive?: boolean;
+  }) => (
+    <div
+      data-animation-active={String(Boolean(isAnimationActive))}
+      data-testid={`weekly-units-bar-${dataKey}`}
+    />
+  ),
+  BarChart: ({
+    children,
+    data,
+  }: {
+    children?: React.ReactNode;
+    data: unknown;
+  }) => (
+    <div data-chart-data={JSON.stringify(data)} data-testid="weekly-units-chart">
+      {children}
+    </div>
+  ),
+  CartesianGrid: () => null,
+  Cell: () => null,
+  Legend: () => null,
+  ReferenceLine: () => null,
+  ResponsiveContainer: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  Tooltip: () => null,
+  XAxis: () => null,
+  YAxis: () => null,
+}));
 
 vi.mock("@/components/ui/tooltip", () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => children,
@@ -14,7 +151,7 @@ vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
     search,
-    params: _params,
+    params,
     to,
     ...props
   }: {
@@ -23,9 +160,9 @@ vi.mock("@tanstack/react-router", () => ({
     search?: unknown;
     to: string;
   }) => {
-    void _params;
     return (
       <a
+        data-params={params ? JSON.stringify(params) : undefined}
         data-search={search ? JSON.stringify(search) : undefined}
         href={to}
         {...props}
@@ -41,6 +178,7 @@ import {
   ReportsWeeklyView,
   type WeeklyReportProjection,
 } from "./ReportsWeeklyView";
+import { weeklyUpdatedAt } from "./weeklyReportPresentation";
 
 const summary = {
   grossSalesMinor: 120_000,
@@ -244,6 +382,193 @@ const report: WeeklyReportProjection = {
 };
 
 describe("ReportsWeeklyView", () => {
+  it("uses the newest projection, acceptance, close, or amendment timestamp", () => {
+    expect(weeklyUpdatedAt({ ...report, materializedAt: 100 })).toBe(100);
+    expect(
+      weeklyUpdatedAt({
+        ...report,
+        acceptedAt: 200,
+        closePosture: { ...report.closePosture!, changedAt: 300 },
+        amendment: { ...report.amendment!, changedAt: 400 },
+        materializedAt: undefined,
+      }),
+    ).toBe(400);
+  });
+
+  beforeEach(() => {
+    ensureMovementRange.mockReset();
+    useQuery.mockReset();
+  });
+
+  it("restores the report scroll position when an open sheet remounts", async () => {
+    installMovementQueries();
+    const user = userEvent.setup();
+    const scrollHeightSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollHeight", "get")
+      .mockImplementation(function (this: HTMLElement) {
+        return this.dataset.testid === "weekly-scroll-container" ? 2_000 : 0;
+      });
+    const clientHeightSpy = vi
+      .spyOn(HTMLElement.prototype, "clientHeight", "get")
+      .mockImplementation(function (this: HTMLElement) {
+        return this.dataset.testid === "weekly-scroll-container" ? 600 : 0;
+      });
+    let mounted: ReturnType<typeof render> | undefined;
+
+    try {
+      mounted = render(
+        <div
+          data-testid="weekly-scroll-container"
+          style={{ overflowY: "auto" }}
+        >
+          <ReportsWeeklyView report={report} />
+        </div>,
+      );
+      const firstScroller = screen.getByTestId("weekly-scroll-container");
+      firstScroller.scrollTop = 640;
+
+      await user.click(
+        screen.getByRole("button", { name: "View item movement" }),
+      );
+      mounted.unmount();
+
+      mounted = render(
+        <div
+          data-testid="weekly-scroll-container"
+          style={{ overflowY: "auto" }}
+        >
+          <ReportsWeeklyView isUnitsSheetOpen report={report} />
+        </div>,
+      );
+
+      expect(screen.getByTestId("weekly-scroll-container").scrollTop).toBe(
+        640,
+      );
+      await user.click(screen.getByRole("button", { name: "Close" }));
+    } finally {
+      mounted?.unmount();
+      scrollHeightSpy.mockRestore();
+      clientHeightSpy.mockRestore();
+    }
+  });
+
+  it("opens a tabbed units sheet fed by the movement lifecycle", async () => {
+    installMovementQueries();
+    const user = userEvent.setup();
+    render(<ReportsWeeklyView report={report} />);
+
+    const chartTrigger = screen.getByRole("button", {
+      name: "View item movement",
+    });
+    expect(
+      screen
+        .getByText("Prior net units")
+        .compareDocumentPosition(chartTrigger) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await user.click(chartTrigger);
+
+    expect(
+      screen.getByRole("dialog", { name: "Item movement" }),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(ensureMovementRange).toHaveBeenCalledWith({
+        storeId: "store-1",
+        startDate: "2026-07-06",
+        endDate: "2026-07-12",
+      }),
+    );
+    expect(screen.getByRole("tab", { name: "Top movers" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "All items" })).toBeInTheDocument();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("weekly-units-dot-grid")).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("weekly-units-dot-grid")).toHaveClass(
+      "text-border/[0.55]",
+    );
+    expect(screen.getByTestId("weekly-units-dot-grid")).toHaveStyle({
+      backgroundImage:
+        "radial-gradient(currentColor 1px, transparent 1.5px)",
+      backgroundSize: "16px 16px",
+      maskImage:
+        "radial-gradient(ellipse at center, black 50%, transparent 100%)",
+    });
+    const chartData = JSON.parse(
+      screen
+        .getByTestId("weekly-units-chart")
+        .getAttribute("data-chart-data")!,
+    );
+    expect(chartData).toEqual([
+      {
+        key: "sku-lace-front",
+        netPrice: "$45",
+        productSkuId: "sku-lace-front",
+        productName: "Lace Front Wig",
+        rank: 1,
+        size: "18 in",
+        sku: "LFW-01",
+        units: 10,
+        unitsReturned: 2,
+        unitsSold: 12,
+      },
+      {
+        key: "sku-body-wave",
+        netPrice: "$60",
+        productSkuId: "sku-body-wave",
+        productName: "Body Wave Wig",
+        rank: 2,
+        sku: "BWW-01",
+        units: 8,
+        unitsReturned: 0,
+        unitsSold: 8,
+      },
+    ]);
+    const unitsBar = screen.getByTestId("weekly-units-bar-units");
+    expect(unitsBar).toHaveAttribute("data-animation-active", "true");
+    expect(screen.getByRole("columnheader", { name: "Item" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "Net units" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Lace Front Wig")).toBeInTheDocument();
+    expect(screen.getByTestId("unit-metadata-sku-lace-front")).toHaveTextContent(
+      "LFW-01 · 18 in · $45",
+    );
+    expect(screen.getByText("Body Wave Wig")).toBeInTheDocument();
+    expect(screen.getByTestId("unit-metadata-sku-body-wave")).toHaveTextContent(
+      "BWW-01 · $60",
+    );
+    expect(screen.getByTestId("units-moved-count")).toHaveTextContent(
+      "2 SKUs moved · 20 sold · 2 returned · net 18 out",
+    );
+    expect(screen.queryByText(/SKU LFW-01/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Size 18 in/)).not.toBeInTheDocument();
+
+    const itemLink = screen.getByRole("link", { name: /Lace Front Wig/ });
+    expect(itemLink).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId",
+    );
+    expect(JSON.parse(itemLink.getAttribute("data-params") ?? "{}")).toEqual({
+      orgUrlSlug: "acme",
+      productSkuId: "sku-lace-front",
+      storeUrlSlug: "downtown",
+    });
+    expect(JSON.parse(itemLink.getAttribute("data-search") ?? "{}")).toEqual({
+      endDate: "2026-07-12",
+      o: "%2F",
+      startDate: "2026-07-06",
+    });
+
+    const focusSpy = vi.spyOn(HTMLElement.prototype, "focus");
+    try {
+      await user.click(screen.getByRole("button", { name: "Close" }));
+      expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    } finally {
+      focusSpy.mockRestore();
+    }
+  });
+
   it("keeps net sales singular and orders the supporting lanes underneath", () => {
     render(<ReportsWeeklyView report={report} />);
 
@@ -274,8 +599,8 @@ describe("ReportsWeeklyView", () => {
       screen.getAllByRole("heading").map((heading) => heading.textContent),
     ).toEqual([
       "Net sales",
-      "Financial performance",
-      "Units moved",
+      "Sales breakdown",
+      "Item movement",
       "Payments",
       "Variance",
       "Inventory attention",
@@ -639,8 +964,8 @@ describe("ReportsWeeklyView", () => {
         screen.getAllByRole("heading").map((heading) => heading.textContent),
       ).toEqual([
         "Net sales",
-        "Financial performance",
-        "Units moved",
+        "Sales breakdown",
+        "Item movement",
         "Payments",
         "Variance",
         "Inventory attention",
@@ -652,6 +977,9 @@ describe("ReportsWeeklyView", () => {
       expect(screen.getAllByText("Unavailable").length).toBeGreaterThanOrEqual(
         6,
       );
+      expect(
+        screen.queryByRole("button", { name: "View item movement" }),
+      ).not.toBeInTheDocument();
     },
   );
 
@@ -845,7 +1173,7 @@ describe("ReportsWeeklyView", () => {
     // section heading — never at the foot of the page.
     const headline = screen.getByTestId("weekly-net-sales-value");
     const financial = screen.getByRole("heading", {
-      name: "Financial performance",
+      name: "Sales breakdown",
     });
     const disclosures = screen.getByRole("heading", {
       name: "Reporting details",
@@ -1038,7 +1366,13 @@ describe("ReportsWeeklyView", () => {
       />,
     );
 
-    expect(screen.getByText("No item cost recorded")).toBeInTheDocument();
+    const merchandiseMargin = screen
+      .getByText("Merchandise margin")
+      .closest("div");
+    expect(merchandiseMargin).not.toBeNull();
+    expect(merchandiseMargin).toHaveTextContent(
+      "Merchandise margin—No item cost recorded",
+    );
     expect(
       screen.getByText("Payment allocation is incomplete."),
     ).toBeInTheDocument();

@@ -36,6 +36,11 @@ import {
   weeklyValueLabelPrefix,
 } from "./weeklyReportPresentation";
 import { FadeIn } from "../common/FadeIn";
+import {
+  ReportUnitsMovedChartSheet,
+  type ReportUnitsMovedFocusSurface,
+  type ReportUnitsMovedTab,
+} from "./ReportUnitsMovedChartSheet";
 
 /**
  * The server-owned weekly projection shown by both active and history reads.
@@ -44,6 +49,10 @@ import { FadeIn } from "../common/FadeIn";
  */
 export type WeeklyReportProjection = {
   reportId?: string;
+  /** Active-week projection time; absent on accepted historical reports. */
+  materializedAt?: number;
+  /** Acceptance time for a closed week; absent on the active projection. */
+  acceptedAt?: number;
   cycleStartDate: string;
   cycleEndDate: string;
   currency: string;
@@ -290,10 +299,12 @@ function OwnerRouteLink({
 }
 
 function Metric({
+  detail,
   hint,
   label,
   value,
 }: {
+  detail?: React.ReactNode;
   hint?: string;
   label: string;
   value: React.ReactNode;
@@ -321,8 +332,15 @@ function Metric({
           </TooltipProvider>
         ) : null}
       </dt>
-      <dd className="mt-1 font-numeric text-base font-medium text-foreground">
-        {value}
+      <dd className="mt-1">
+        <span className="block font-numeric text-base font-medium text-foreground">
+          {value}
+        </span>
+        {detail ? (
+          <span className="mt-1 block text-sm leading-5 text-muted-foreground">
+            {detail}
+          </span>
+        ) : null}
       </dd>
     </div>
   );
@@ -330,9 +348,37 @@ function Metric({
 
 /** A projection-only weekly briefing; arithmetic stays in Reports materializers. */
 export function ReportsWeeklyView({
+  isUnitsSheetOpen,
+  onUnitsSheetOpenChange,
+  onUnitsSheetPageChange,
+  onUnitsSheetRestoreComplete,
+  onUnitsSheetSkuLinkNavigate,
+  onUnitsSheetTabChange,
   report,
+  unitsSheetPage,
+  unitsSheetRestoreFocusSkuId,
+  unitsSheetRestoreFocusSurface,
+  unitsSheetRestoreScrollOffset,
+  unitsSheetTab,
 }: {
+  isUnitsSheetOpen?: boolean;
+  onUnitsSheetOpenChange?: (open: boolean) => void;
+  onUnitsSheetPageChange?: (page: number) => void;
+  onUnitsSheetRestoreComplete?: () => void;
+  onUnitsSheetSkuLinkNavigate?: (context: {
+    endDate: string;
+    focusSurface: ReportUnitsMovedFocusSurface;
+    productSkuId: string;
+    scrollOffset?: number;
+    startDate: string;
+  }) => void | Promise<void>;
+  onUnitsSheetTabChange?: (tab: ReportUnitsMovedTab) => void;
   report: WeeklyReportProjection;
+  unitsSheetPage?: number;
+  unitsSheetRestoreFocusSkuId?: string;
+  unitsSheetRestoreFocusSurface?: ReportUnitsMovedFocusSurface;
+  unitsSheetRestoreScrollOffset?: number;
+  unitsSheetTab?: ReportUnitsMovedTab;
 }) {
   const { currency } = report;
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
@@ -531,7 +577,7 @@ export function ReportsWeeklyView({
         ) : null}
       </div>
 
-      <Section title="Financial performance">
+      <Section title="Sales breakdown">
         <MetricList>
           <Metric
             label={hasCurrentAmendment ? "Accepted gross sales" : "Gross sales"}
@@ -542,16 +588,15 @@ export function ReportsWeeklyView({
             value={money(baseline.refundsMinor)}
           />
           <Metric
+            detail={
+              !totalsWithheld
+                ? reportProfitHelper(baseline.merchandiseMarginMinor)
+                : undefined
+            }
             label="Merchandise margin"
             value={profit(baseline.merchandiseMarginMinor)}
           />
         </MetricList>
-        {!totalsWithheld &&
-        reportProfitHelper(baseline.merchandiseMarginMinor) ? (
-          <p className="mt-layout-sm text-sm text-muted-foreground">
-            {reportProfitHelper(baseline.merchandiseMarginMinor)}
-          </p>
-        ) : null}
         {hasCurrentAmendment && !totalsWithheld ? (
           <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
             Current amendment:{" "}
@@ -620,7 +665,7 @@ export function ReportsWeeklyView({
         ) : null}
       </Section>
 
-      <Section title="Units moved">
+      <Section title="Item movement">
         <MetricList>
           <Metric
             label={`${valuePrefix} net units`}
@@ -643,6 +688,29 @@ export function ReportsWeeklyView({
             }
           />
         </MetricList>
+        {totalsWithheld ? null : (
+          <div className="mt-layout-md">
+            <ReportUnitsMovedChartSheet
+              activeTab={unitsSheetTab}
+              currency={report.currency}
+              granularPage={unitsSheetPage}
+              isOpen={isUnitsSheetOpen}
+              onActiveTabChange={onUnitsSheetTabChange}
+              onGranularPageChange={onUnitsSheetPageChange}
+              onOpenChange={onUnitsSheetOpenChange}
+              onRestoreComplete={onUnitsSheetRestoreComplete}
+              onSkuLinkNavigate={onUnitsSheetSkuLinkNavigate}
+              orgUrlSlug={orgUrlSlug!}
+              restoreFocusSkuId={unitsSheetRestoreFocusSkuId}
+              restoreFocusSurface={unitsSheetRestoreFocusSurface}
+              restoreScrollOffset={unitsSheetRestoreScrollOffset}
+              periodEndDate={report.cycleEndDate}
+              periodStartDate={report.cycleStartDate}
+              scrollContextKey={`${orgUrlSlug}:${storeUrlSlug}:${report.reportId ?? `${report.cycleStartDate}:${report.cycleEndDate}`}`}
+              storeUrlSlug={storeUrlSlug!}
+            />
+          </div>
+        )}
       </Section>
 
       <Section title="Payments">

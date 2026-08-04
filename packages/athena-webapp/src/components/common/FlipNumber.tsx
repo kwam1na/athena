@@ -49,6 +49,7 @@ export function FlipText({
   animateChanges = true,
   className,
   delayMs = 0,
+  onTransitionComplete,
   reduceMotion,
   testId,
   value,
@@ -58,6 +59,8 @@ export function FlipText({
   className?: string;
   /** Keeps the current string visible before the next transition begins. */
   delayMs?: number;
+  /** Fires when the current visible string has fully settled. */
+  onTransitionComplete?: (value: string) => void;
   reduceMotion?: boolean;
   testId?: string;
   value: string;
@@ -67,6 +70,8 @@ export function FlipText({
   const resolvedDelayMs = Math.max(0, delayMs);
   const valueRef = useRef<HTMLSpanElement | null>(null);
   const displayedValueRef = useRef(value);
+  const onTransitionCompleteRef = useRef(onTransitionComplete);
+  onTransitionCompleteRef.current = onTransitionComplete;
   const animationRef = useRef<ReturnType<typeof animate> | null>(null);
   const hasMeasuredInitialMountRef = useRef(false);
   const assignValueRef = useCallback((element: HTMLSpanElement | null) => {
@@ -117,6 +122,10 @@ export function FlipText({
     if (previousValue === value) {
       if (element.childElementCount === 0) renderFlipText(element, value);
 
+      const completionFrame = requestAnimationFrame(() => {
+        onTransitionCompleteRef.current?.(value);
+      });
+
       if (shouldTraceInitialMount) {
         traceInitialMount("layout-effect:after-content");
         const firstFrame = requestAnimationFrame(() => {
@@ -127,15 +136,21 @@ export function FlipText({
           });
         });
 
-        return () => cancelAnimationFrame(firstFrame);
+        return () => {
+          cancelAnimationFrame(completionFrame);
+          cancelAnimationFrame(firstFrame);
+        };
       }
-      return;
+      return () => cancelAnimationFrame(completionFrame);
     }
 
     if (!animateChanges) {
       displayedValueRef.current = value;
       renderFlipText(element, value);
-      return;
+      const completionFrame = requestAnimationFrame(() => {
+        onTransitionCompleteRef.current?.(value);
+      });
+      return () => cancelAnimationFrame(completionFrame);
     }
 
     if (shouldReduceMotion) {
@@ -150,6 +165,7 @@ export function FlipText({
         onComplete: () => {
           incoming.removeAttribute("style");
           animationRef.current = null;
+          onTransitionCompleteRef.current?.(value);
         },
       });
       return () => {
@@ -187,6 +203,7 @@ export function FlipText({
           onComplete: () => {
             incoming.removeAttribute("style");
             animationRef.current = null;
+            onTransitionCompleteRef.current?.(value);
           },
         });
       },
