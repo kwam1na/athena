@@ -68,6 +68,51 @@ import {
 import { getLocalOperatingDate } from "@/lib/operations/operatingDate";
 import { formatOperatingDate, formatReportDateRange } from "./reportFormat";
 
+/**
+ * Day rows spanning `[startDate, endDate]`, each publishing the exact number
+ * of `reportSkuDay` rows its fold wrote. `skuDayRowCount: undefined` models
+ * the pre-U8 generation, which the mix probe must treat as unknown.
+ */
+function daysWithSkuRowCounts(
+  startDate: string,
+  endDate: string,
+  skuDayRowCount: number | undefined,
+) {
+  const rows = [];
+  for (let date = startDate; date <= endDate; date = isoDateOffset(date, 1)) {
+    rows.push({
+      operatingDate: date,
+      status: "reconciled" as const,
+      currency: "USD",
+      flags: {},
+      factCount: skuDayRowCount ?? 0,
+      ...(skuDayRowCount === undefined ? {} : { skuDayRowCount }),
+      grossSalesMinor: 0,
+      netSalesMinor: 0,
+      refundsMinor: 0,
+      unitsSold: 0,
+      unitsReturned: 0,
+      uncostedRevenueMinor: 0,
+      grossProfitMinor: 0,
+      paymentsCollectedMinor: 0,
+      paymentsRefundedMinor: 0,
+      paymentAllocatedMinor: 0,
+    });
+  }
+  return rows;
+}
+
+/** Route every read but `listDays` to `undefined`, so only routing is under test. */
+function onlyDaysRead(days: unknown) {
+  return (functionReference: unknown, args: unknown) => {
+    if (args === "skip") return undefined;
+    return getFunctionName(functionReference as never) ===
+      "reports/queries:listDays"
+      ? days
+      : undefined;
+  };
+}
+
 const baseProps = {
   startDate: "2026-07-15",
   endDate: "2026-07-28",
@@ -143,12 +188,16 @@ describe("ReportDaysPanel shared demo", () => {
   });
 
   it("keeps the days read live and admits the multi-day mix for a real store", () => {
-    useQuery.mockReturnValue([]);
+    // 14 days at 400 folded SKU rows each = 5,600, past the sync budget, so
+    // this range genuinely needs the snapshot.
+    useQuery.mockImplementation(
+      onlyDaysRead(daysWithSkuRowCounts(startDate, endDate, 400)),
+    );
 
     render(<ReportDaysPanel {...demoProps} />);
 
-    // The 14-day mix span routes through admission, not the sync reader,
-    // so the only live subscription on mount is the days table.
+    // Mix routes through admission, not the sync reader, so the only live
+    // subscription on mount is the days table.
     expect(
       useQuery.mock.calls.map((call) => call[1]).filter((a) => a !== "skip"),
     ).toEqual([{ storeId: "store-1", startDate, endDate }]);
@@ -156,6 +205,107 @@ describe("ReportDaysPanel shared demo", () => {
       storeId: "store-1",
       startDate,
       endDate,
+    });
+  });
+
+  /**
+   * U8 routing. The span rule alone sent every range over two days to
+   * admission; the probe keeps the ones the reader can provably serve on the
+   * synchronous path, and falls back to the span rule whenever it cannot
+   * prove the size.
+   */
+  describe("sku mix row probe", () => {
+    const syncMixCalls = () =>
+      useQuery.mock.calls.filter(
+        ([reference, args]) =>
+          args !== "skip" &&
+          getFunctionName(reference as never) ===
+            "reports/queries:listRangeSkuMix",
+      );
+
+    it("keeps a multi-day range synchronous when the folded rows clear the budget", () => {
+      // 14 days at 30 rows each = 420 rows: what wigclub's median day folds,
+      // and two orders of magnitude inside the 5,000-row reader cap.
+      useQuery.mockImplementation(
+        onlyDaysRead(daysWithSkuRowCounts(startDate, endDate, 30)),
+      );
+
+      render(<ReportDaysPanel {...demoProps} />);
+
+      expect(syncMixCalls().map(([, args]) => args)).toEqual([
+        { storeId: "store-1", startDate, endDate },
+      ]);
+      // The whole point: no admission, no polling, no snapshot build.
+      expect(ensureMixRange).not.toHaveBeenCalled();
+    });
+
+    it("admits the snapshot when the folded rows exceed the budget", () => {
+      useQuery.mockImplementation(
+        onlyDaysRead(daysWithSkuRowCounts(startDate, endDate, 300)),
+      );
+
+      render(<ReportDaysPanel {...demoProps} />);
+
+      expect(syncMixCalls()).toHaveLength(0);
+      expect(ensureMixRange).toHaveBeenCalledWith({
+        storeId: "store-1",
+        startDate,
+        endDate,
+      });
+    });
+
+    it("falls back to the span rule when any day predates the row count", () => {
+      // One unmeasurable day makes the whole range unprovable — the total is
+      // unknown, not "the rest of the days", so this must not route sync.
+      const days = daysWithSkuRowCounts(startDate, endDate, 10);
+      delete (days[3] as { skuDayRowCount?: number }).skuDayRowCount;
+      useQuery.mockImplementation(onlyDaysRead(days));
+
+      render(<ReportDaysPanel {...demoProps} />);
+
+      expect(syncMixCalls()).toHaveLength(0);
+      expect(ensureMixRange).toHaveBeenCalled();
+    });
+
+    it("holds admission until the days read settles, then routes on the verdict", () => {
+      // Firing ensure on the span rule while the probe is unresolved would
+      // consume admission budget for a range the probe may prove cheap a
+      // moment later — the exact spend this feature exists to prevent.
+      useQuery.mockImplementation(onlyDaysRead(undefined));
+
+      const { rerender } = render(<ReportDaysPanel {...demoProps} />);
+
+      expect(syncMixCalls()).toHaveLength(0);
+      expect(ensureMixRange).not.toHaveBeenCalled();
+
+      // The days rail settles cheap: the range routes sync, and the deferral
+      // means no admission was ever spent on it.
+      useQuery.mockImplementation(
+        onlyDaysRead(daysWithSkuRowCounts(startDate, endDate, 30)),
+      );
+      rerender(<ReportDaysPanel {...demoProps} />);
+
+      expect(syncMixCalls().map(([, args]) => args)).toContainEqual({
+        storeId: "store-1",
+        startDate,
+        endDate,
+      });
+      expect(ensureMixRange).not.toHaveBeenCalled();
+    });
+
+    it("still routes a single day synchronously with no probe at all", () => {
+      // The span floor is independent of loaded data: a day click cannot
+      // regress just because the days rail has not answered yet.
+      useQuery.mockImplementation(onlyDaysRead(undefined));
+
+      render(
+        <ReportDaysPanel {...demoProps} selectedDate={endDate} />,
+      );
+
+      expect(syncMixCalls().map(([, args]) => args)).toEqual([
+        { storeId: "store-1", startDate: endDate, endDate },
+      ]);
+      expect(ensureMixRange).not.toHaveBeenCalled();
     });
   });
 

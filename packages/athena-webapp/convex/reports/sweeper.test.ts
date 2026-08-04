@@ -586,6 +586,53 @@ describe("dirty-mark lifecycle", () => {
       ctx.db.query("reportSkuDay").collect(),
     );
     expect(skuDays).toHaveLength(0);
+    // The published count follows the rows down to zero. A day that shed its
+    // last SKU row must not keep advertising the old size — the mix probe
+    // would then route a range it cannot actually size.
+    const day = await t.run(async (ctx) =>
+      ctx.db
+        .query("reportDay")
+        .withIndex("by_storeId_operatingDate", (q) =>
+          q.eq("storeId", storeId).eq("operatingDate", "2026-07-28"),
+        )
+        .unique(),
+    );
+    expect(day?.skuDayRowCount).toBe(0);
+  });
+
+  it("publishes a sku row count equal to the rows the same fold wrote", async () => {
+    // The probe's whole basis: this number and those rows come out of one
+    // mutation, so they cannot drift. Asserted against the actual row count
+    // rather than a literal, so a fold that writes a different number of rows
+    // fails here instead of silently mis-sizing every mix read.
+    const t = convexTest(schema, modules);
+    const { storeId, productSkuId } = await seedStore(t, "sweep-row-count");
+    allow(storeId);
+
+    await insertSaleFact(t, {
+      storeId,
+      productSkuId,
+      operatingDate: "2026-07-28",
+      sourceId: "row-count-1",
+      netAmountMinor: 2_500,
+      quantity: 2,
+    });
+    await mark(t, storeId, "2026-07-28");
+    await sweep(t);
+
+    const { day, skuDays } = await t.run(async (ctx) => ({
+      day: await ctx.db
+        .query("reportDay")
+        .withIndex("by_storeId_operatingDate", (q) =>
+          q.eq("storeId", storeId).eq("operatingDate", "2026-07-28"),
+        )
+        .unique(),
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      skuDays: await ctx.db.query("reportSkuDay").collect(),
+    }));
+
+    expect(skuDays.length).toBeGreaterThan(0);
+    expect(day?.skuDayRowCount).toBe(skuDays.length);
   });
 
   it("folds a day_open mark keeping the day open, and does not re-mark it", async () => {

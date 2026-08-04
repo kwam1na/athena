@@ -838,6 +838,14 @@ export type ReportDayRow = ReportDayMetrics & {
   currency: string;
   flags: ReportDayFlags;
   factCount: number;
+  /**
+   * Exact count of `reportSkuDay` rows the fold wrote for this day.
+   *
+   * Carried so the days rail can SIZE the SKU-mix read before it is issued
+   * (`skuMixSyncRowProbe`). Optional: days folded before U8 carry none, and a
+   * missing count means "unknown", never zero — see the probe.
+   */
+  skuDayRowCount?: number;
   closeVarianceMinor?: number;
   postCloseNetSalesDeltaMinor?: number;
 };
@@ -1002,6 +1010,68 @@ export const REPORT_RANGE_MAX_DAYS_BY_KIND = {
  * (U1); U5's span routing applies it.
  */
 export const REPORT_SKU_MIX_SYNC_MAX_DAYS = 2 as const;
+
+/**
+ * Row budget the SKU-mix probe must clear to route a span synchronously.
+ *
+ * Deliberately below `RANGE_SKU_MIX_ROW_LIMIT` (5,000). The probe reads day
+ * counts folded a moment ago; the mix read happens after. A concurrent fold
+ * can add rows in between, so the 1,000-row gap absorbs that drift rather
+ * than letting the reader's fail-closed throw reach the operator as "choose a
+ * shorter range". Sized against production: wigclub's busiest day folds 88
+ * SKU rows, so the gap covers eleven such days landing mid-flight.
+ */
+export const REPORT_SKU_MIX_SYNC_ROW_BUDGET = 4_000 as const;
+
+/**
+ * Size a SKU-mix range from the days rail before paying for it.
+ *
+ * The span rule this supplements (`REPORT_SKU_MIX_SYNC_MAX_DAYS`) is calibrated
+ * to the fold's 2,000-rows-per-day ceiling — a bound real stores sit far below
+ * (wigclub's median day: 30 rows), so a 3-day selection was buying an async
+ * snapshot to fold a few hundred rows. The days rail already loads one
+ * `reportDay` doc per day for the same window and each carries its exact
+ * `skuDayRowCount`, so the cost of the mix read is knowable for free.
+ *
+ * Returns the summed row count when EVERY day of `[startDate, endDate]` is
+ * accounted for, or `undefined` when it is not provable — the caller must then
+ * fall back to the span rule. Indeterminate cases, all of which must stay
+ * indeterminate rather than defaulting to zero:
+ *
+ *   - `rows` does not span the requested range (the days rail loaded a
+ *     narrower window than the mix selection covers), or
+ *   - a row inside the range predates the count and carries `undefined`.
+ *
+ * Absent rows are NOT indeterminate: `reportDay` is sparse, and a day with no
+ * document had no activity and therefore no `reportSkuDay` rows. That is why
+ * `coverageStartDate`/`coverageEndDate` are required — they prove the reader
+ * looked at the range, which row presence alone cannot.
+ */
+export function skuMixSyncRowProbe({
+  coverageEndDate,
+  coverageStartDate,
+  endDate,
+  rows,
+  startDate,
+}: {
+  coverageEndDate: string;
+  coverageStartDate: string;
+  endDate: string;
+  rows: readonly Pick<ReportDayRow, "operatingDate" | "skuDayRowCount">[];
+  startDate: string;
+}): number | undefined {
+  if (coverageStartDate > startDate || coverageEndDate < endDate) {
+    return undefined;
+  }
+
+  let total = 0;
+  for (const row of rows) {
+    if (row.operatingDate < startDate || row.operatingDate > endDate) continue;
+    if (row.skuDayRowCount === undefined) return undefined;
+    total += row.skuDayRowCount;
+  }
+  return total;
+}
 
 /** Rows per movement page — Top movers shows one page, Granular pages by it. */
 export const REPORT_MOVEMENT_PAGE_SIZE = 20 as const;

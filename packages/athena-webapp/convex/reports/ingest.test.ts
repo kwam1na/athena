@@ -705,6 +705,67 @@ describe("recordFacts — day routing", () => {
     });
   });
 
+  it("keeps skuDayRowCount exact across incremental sku-row inserts", async () => {
+    // The mix probe's between-folds guarantee (U8): the open day's published
+    // count tracks the rows ingest itself inserts. A new SKU's first fact
+    // grows it; more facts for a counted SKU do not.
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { skuId, otherSkuId, storeId } = await seed(ctx);
+
+      await recordFacts(ctx, storeId, [saleFact({ productSkuId: skuId })]);
+      expect(await readDay(ctx, storeId, TODAY)).toMatchObject({
+        skuDayRowCount: 1,
+      });
+
+      await recordFacts(ctx, storeId, [
+        saleFact({ productSkuId: skuId, sourceId: "txn_2" }),
+        saleFact({ productSkuId: otherSkuId, sourceId: "txn_3" }),
+      ]);
+      const day = await readDay(ctx, storeId, TODAY);
+      expect(day).toMatchObject({ factCount: 3, skuDayRowCount: 2 });
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      expect(await ctx.db.query("reportSkuDay").collect()).toHaveLength(2);
+    });
+  });
+
+  it("stores a zero skuDayRowCount for a day opened without SKU attribution", async () => {
+    // Zero is a measurement, not a gap: the probe must be able to prove this
+    // day cheap rather than falling back to the span rule on it.
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { storeId } = await seed(ctx);
+      await recordFacts(ctx, storeId, [saleFact()]);
+      expect(await readDay(ctx, storeId, TODAY)).toMatchObject({
+        skuDayRowCount: 0,
+      });
+    });
+  });
+
+  it("leaves skuDayRowCount absent on a pre-U8 day rather than guessing", async () => {
+    // The base is unknown, so base + inserts would be a guess presented as a
+    // measurement. The day stays unprovable until its backfill refold.
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { skuId, storeId } = await seed(ctx);
+      await recordFacts(ctx, storeId, [saleFact({ productSkuId: skuId })]);
+      const day = await readDay(ctx, storeId, TODAY);
+      await ctx.db.patch("reportDay", day!._id, {
+        skuDayRowCount: undefined,
+      });
+
+      await recordFacts(ctx, storeId, [
+        saleFact({ productSkuId: skuId, sourceId: "txn_2" }),
+      ]);
+      const patched = await readDay(ctx, storeId, TODAY);
+      expect(patched?.factCount).toBe(2);
+      expect(patched?.skuDayRowCount).toBeUndefined();
+    });
+  });
+
   it("does nothing at all for an empty fact list", async () => {
     vi.spyOn(Date, "now").mockReturnValue(NOW);
     const t = convexTest(schema, modules);

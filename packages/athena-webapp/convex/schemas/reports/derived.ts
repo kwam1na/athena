@@ -374,6 +374,16 @@ export const reportDaySchema = v.object({
   foldedAt: v.optional(v.number()),
   foldVersion: v.number(),
   factCount: v.number(),
+  /**
+   * Exact number of `reportSkuDay` rows this day's fold wrote — the size of
+   * the SKU-mix read for this day, published so the days rail can route the
+   * mix chart without issuing the read (`skuMixSyncRowProbe`).
+   *
+   * Optional: days folded before U8 carry none. Absent means UNKNOWN, not
+   * zero — a day with no SKU activity stores 0. `skuDayRowCountBackfillNeeded`
+   * marks the pre-U8 generation for refold.
+   */
+  skuDayRowCount: v.optional(v.number()),
   lastFactRecordedAt: v.number(),
   flags: dayFlags,
   // Optional while legacy projections refresh; every new fold writes it.

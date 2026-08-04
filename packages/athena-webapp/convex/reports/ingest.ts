@@ -448,48 +448,10 @@ async function applyToOpenDay(
         Math.abs(base.paymentsRefundedMinor)
       : 0);
 
-  const dayPatch = {
-    ...next,
-    currency: base.currency,
-    status: existing?.status ?? ("open" as const),
-    foldVersion: base.foldVersion,
-    factCount,
-    lastFactRecordedAt,
-    flags,
-    paymentPosture: derivePaymentPosture({
-      collectedMinor: next.paymentsCollectedMinor,
-      refundedMinor: next.paymentsRefundedMinor,
-      allocatedMinor: next.paymentAllocatedMinor,
-      allocationOmittedMinor:
-        priorAllocationOmittedMinor + batchAllocationOmittedMinor,
-    }),
-  };
-
-  if (existing) {
-    await ctx.db.patch("reportDay", existing._id, dayPatch);
-  } else {
-    await ctx.db.insert("reportDay", {
-      storeId,
-      operatingDate,
-      ...dayPatch,
-    });
-
-    // Rollover: opening a new day is the moment any *older* still-open day
-    // stops being current. Dirty it so the sweeper folds it to `provisional`
-    // (day_open folds preserve `open`; late_fact folds do not) — without this,
-    // a day that never gets a close would stay `open` forever.
-    const recentDays = await ctx.db
-      .query("reportDay")
-      .withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", storeId))
-      .order("desc")
-      .take(ROLLOVER_OPEN_DAY_SCAN);
-    for (const day of recentDays) {
-      if (day.operatingDate < operatingDate && day.status === "open") {
-        await markDirty(ctx, storeId, day.operatingDate, "late_fact");
-      }
-    }
-  }
-
+  // SKU rows are upserted BEFORE the day doc so the day's `skuDayRowCount`
+  // can include this batch's inserts in the same write — the count and the
+  // rows must come out of one mutation or the mix probe reads drift (U8).
+  let insertedSkuRowCount = 0;
   for (const [productSkuId, entry] of skuDeltas) {
     const skuId = productSkuId as Id<"productSku">;
     const existingSku = await ctx.db
@@ -528,6 +490,69 @@ async function applyToOpenDay(
         operatingDate,
         ...merged,
       });
+      insertedSkuRowCount += 1;
+    }
+  }
+
+  /**
+   * The day's published SKU-row size, kept exact between folds (U8):
+   *
+   *   - new day: this batch's inserts are its only rows, so the count is
+   *     exactly `insertedSkuRowCount`;
+   *   - existing day with a count: the base plus this batch's inserts —
+   *     patches touched existing rows and deletes never happen here (only the
+   *     fold removes rows);
+   *   - existing day without a count (pre-U8): stays absent. The base is
+   *     unknown, so any number written here would be a guess presented as a
+   *     measurement; `undefined` on patch erases nothing that exists, and the
+   *     backfill refold supplies the real value.
+   */
+  const skuDayRowCount = existing
+    ? existing.skuDayRowCount === undefined
+      ? undefined
+      : existing.skuDayRowCount + insertedSkuRowCount
+    : insertedSkuRowCount;
+
+  const dayPatch = {
+    ...next,
+    currency: base.currency,
+    status: existing?.status ?? ("open" as const),
+    foldVersion: base.foldVersion,
+    factCount,
+    skuDayRowCount,
+    lastFactRecordedAt,
+    flags,
+    paymentPosture: derivePaymentPosture({
+      collectedMinor: next.paymentsCollectedMinor,
+      refundedMinor: next.paymentsRefundedMinor,
+      allocatedMinor: next.paymentAllocatedMinor,
+      allocationOmittedMinor:
+        priorAllocationOmittedMinor + batchAllocationOmittedMinor,
+    }),
+  };
+
+  if (existing) {
+    await ctx.db.patch("reportDay", existing._id, dayPatch);
+  } else {
+    await ctx.db.insert("reportDay", {
+      storeId,
+      operatingDate,
+      ...dayPatch,
+    });
+
+    // Rollover: opening a new day is the moment any *older* still-open day
+    // stops being current. Dirty it so the sweeper folds it to `provisional`
+    // (day_open folds preserve `open`; late_fact folds do not) — without this,
+    // a day that never gets a close would stay `open` forever.
+    const recentDays = await ctx.db
+      .query("reportDay")
+      .withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", storeId))
+      .order("desc")
+      .take(ROLLOVER_OPEN_DAY_SCAN);
+    for (const day of recentDays) {
+      if (day.operatingDate < operatingDate && day.status === "open") {
+        await markDirty(ctx, storeId, day.operatingDate, "late_fact");
+      }
     }
   }
 }

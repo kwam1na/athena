@@ -63,13 +63,16 @@ import { transactionCountFromCloseSummary } from "./transactionCounts";
  */
 
 /**
- * Span ceiling for the SYNCHRONOUS range readers only (`listRangeSkuMix`,
- * `listRangeSkuMovement`). Deliberately narrower than
- * `REPORT_DRILLDOWN_RANGE_MAX_DAYS` (184): both readers serve a single
- * bounded 5,000-row read, and U5's span routing sends anything longer than
- * two days to the async range-snapshot lifecycle instead. The drill-down
- * surfaces (`listDays`, `getSkuDetail`) validate against the shared 184-day
- * constant directly.
+ * Span ceiling for the legacy synchronous movement reader
+ * (`listRangeSkuMovement`). Deliberately narrower than
+ * `REPORT_DRILLDOWN_RANGE_MAX_DAYS` (184): it serves a single bounded
+ * 5,000-row read with no way to size that read in advance, so a narrow span
+ * is the only available proxy for a bounded cost.
+ *
+ * `listRangeSkuMix` used this too until U8, when the days rail began
+ * publishing exact `skuDayRowCount` totals — it can now size the read
+ * directly and validates against the 184-day drill-down ceiling instead. The
+ * drill-down surfaces (`listDays`, `getSkuDetail`) always did.
  */
 const RANGE_SYNC_READER_MAX_SPAN_DAYS = 92;
 const RANGE_SKU_MIX_ROW_LIMIT = 5_000;
@@ -443,6 +446,8 @@ function toReportDayRow(doc: Doc<"reportDay">): ReportDayRow {
     currency: doc.currency,
     flags: doc.flags,
     factCount: doc.factCount,
+    // Undefined for the pre-U8 generation; the probe treats that as unknown.
+    skuDayRowCount: doc.skuDayRowCount,
     closeVarianceMinor: doc.closeVarianceMinor,
     postCloseNetSalesDeltaMinor: doc.postCloseNetSalesDeltaMinor,
     grossSalesMinor: doc.grossSalesMinor,
@@ -786,12 +791,25 @@ export const listRangeSkuMix = query({
   },
   handler: async (ctx, args): Promise<ReportSkuMixData> => {
     await requireReportsStoreAccess(ctx, args.storeId);
-    // Sync path only: spans over REPORT_SKU_MIX_SYNC_MAX_DAYS are routed to
-    // the async snapshot by the client; this server cap stays at 92 (U7).
+    /**
+     * Span ceiling widened to the drill-down maximum in U8. The span is no
+     * longer what bounds this read — `RANGE_SKU_MIX_ROW_LIMIT` is, and it
+     * always was. Until U8 the client could only prove a range was cheap by
+     * being short (<=2 days), so a narrow span cap was the proxy; now it
+     * proves it directly from folded `skuDayRowCount` totals
+     * (`skuMixSyncRowProbe`) and can legitimately ask for a 120-day range
+     * that reads 3,000 rows. Rejecting that on span alone would send a read
+     * this reader can serve to the async snapshot instead.
+     *
+     * The row cap below still fails closed, and it is the real bound: no span
+     * this validator now admits can exceed it without the `.take()` tripping.
+     * The legacy movement reader keeps `RANGE_SYNC_READER_MAX_SPAN_DAYS` —
+     * it has no probe, so span remains its only proxy.
+     */
     requireValidDateRange(
       args.startDate,
       args.endDate,
-      RANGE_SYNC_READER_MAX_SPAN_DAYS,
+      REPORT_DRILLDOWN_RANGE_MAX_DAYS,
     );
 
     // SKU-day density depends on both range length and catalogue breadth.
