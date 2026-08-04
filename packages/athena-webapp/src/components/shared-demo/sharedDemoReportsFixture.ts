@@ -58,17 +58,24 @@ import {
   addWeekMetrics,
   combineWeekCompleteness,
   isReportingTodayInProgress,
+  movementAbsNetUnitsSortKey,
+  movementPageCount,
+  REPORT_MOVEMENT_PAGE_SIZE,
   REPORT_SKU_PAGE_SIZE,
   REPORTS_FOLD_VERSION,
   trailingThreeMonthsStart,
   type ReportDayMetrics,
   type ReportDayRow,
   type ReportDayStatus,
+  type ReportMovementLifecycle,
+  type ReportMovementTotals,
   type ReportOverviewData,
   type ReportPeriodSnapshot,
   type ReportSkuDayMetrics,
   type ReportSkuIdentity,
   type ReportSkuMixData,
+  type ReportSkuMovementData,
+  type ReportSkuMovementRow,
   type ReportSkuPeriodRow,
   type ReportSkuSortBy,
   type ReportSkuTransactionEvidence,
@@ -722,6 +729,179 @@ export function createSharedDemoReportSkuMix(args: {
   }
 
   return { rows, totalUnitsSold, skuCount: ranked.length };
+}
+
+export function createSharedDemoReportSkuMovement(args: {
+  startDate: string;
+  endDate: string;
+  today?: string;
+}): ReportSkuMovementData {
+  const today = args.today ?? getLocalOperatingDate();
+  const model = getModel(today);
+  const totals = skuTotalsForRange(model, args.startDate, args.endDate);
+  const rows = Array.from(totals, ([productSkuId, metrics]) => ({
+    productSkuId,
+    metrics,
+  }))
+    .filter(
+      (row) =>
+        row.metrics.unitsSold !== 0 || row.metrics.unitsReturned !== 0,
+    )
+    .sort(
+      (left, right) =>
+        right.metrics.unitsSold +
+          right.metrics.unitsReturned -
+          (left.metrics.unitsSold + left.metrics.unitsReturned) ||
+        left.productSkuId.localeCompare(right.productSkuId),
+    )
+    .map(({ productSkuId, metrics }) => {
+      const identity = skuIdentity(model, productSkuId);
+      return {
+        key: productSkuId,
+        productSkuId,
+        label: identity?.sku ?? identity?.displayName ?? productSkuId,
+        unitsSold: metrics.unitsSold,
+        unitsReturned: metrics.unitsReturned,
+        netUnits: metrics.unitsSold - metrics.unitsReturned,
+        ...(identity ? { identity } : {}),
+      };
+    });
+  const totalUnitsSold = rows.reduce(
+    (total, row) => total + row.unitsSold,
+    0,
+  );
+  const totalUnitsReturned = rows.reduce(
+    (total, row) => total + row.unitsReturned,
+    0,
+  );
+
+  return {
+    rows,
+    totalUnitsSold,
+    totalUnitsReturned,
+    netUnits: totalUnitsSold - totalUnitsReturned,
+    skuCount: rows.length,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// SKU movement — paged, absolute-net-ranked lifecycle (U4)
+//
+// Mirrors U1's public `ReportMovementLifecycle` "completed" shape and paging
+// (`REPORT_MOVEMENT_PAGE_SIZE`, `movementPageCount`) so the shared sheet reads
+// live and demo movement pages identically. The demo has no async work, so it
+// always returns an immediately-completed lifecycle over its already-local,
+// finite transaction fixture — never a live subscription.
+//
+// `rankSignedMovementRows` is extracted as a pure function, independent of
+// the demo model, because the shared-demo catalogue never carries a returned
+// unit (`buildDay` never increments `unitsReturned`): the negative-net and
+// zero-net ordering rules can only be exercised with synthetic input.
+// ---------------------------------------------------------------------------
+
+export type SharedDemoSignedMovementEntry = {
+  productSkuId: string;
+  unitsSold: number;
+  unitsReturned: number;
+};
+
+export type SharedDemoRankedMovementEntry = SharedDemoSignedMovementEntry & {
+  netUnits: number;
+};
+
+/**
+ * Absolute-net descending, stable productSkuId tie-break — the exact ordering
+ * `movementAbsNetUnitsSortKey` defines. Excludes SKUs with zero of both sold
+ * and returned units; a SKU whose sold and returned cancel to net zero but
+ * has nonzero activity on either side is kept.
+ */
+export function rankSignedMovementRows(
+  entries: readonly SharedDemoSignedMovementEntry[],
+): SharedDemoRankedMovementEntry[] {
+  return entries
+    .filter((entry) => entry.unitsSold !== 0 || entry.unitsReturned !== 0)
+    .map((entry) => ({ ...entry, netUnits: entry.unitsSold - entry.unitsReturned }))
+    .sort(
+      (left, right) =>
+        movementAbsNetUnitsSortKey(left.netUnits) -
+          movementAbsNetUnitsSortKey(right.netUnits) ||
+        left.productSkuId.localeCompare(right.productSkuId),
+    );
+}
+
+/** Clamp a requested 1-based page into `[1, pageCount]`; non-finite → 1. */
+function canonicalizeMovementPage(
+  requestedPage: number | undefined,
+  pageCount: number,
+): number {
+  if (requestedPage === undefined || !Number.isFinite(requestedPage)) return 1;
+  return Math.min(Math.max(Math.floor(requestedPage), 1), pageCount);
+}
+
+/**
+ * A single 20-row movement page plus the immediately-completed public
+ * lifecycle it belongs to. Top movers is page 1 of this same ordering — call
+ * with no `page` (or `page: 1`).
+ */
+export type SharedDemoReportMovementPage = {
+  lifecycle: Extract<ReportMovementLifecycle, { state: "completed" }>;
+  page: number;
+  rows: ReportSkuMovementRow[];
+};
+
+export function createSharedDemoReportMovementPage(args: {
+  startDate: string;
+  endDate: string;
+  page?: number;
+  today?: string;
+}): SharedDemoReportMovementPage {
+  const today = args.today ?? getLocalOperatingDate();
+  const model = getModel(today);
+  const totals = skuTotalsForRange(model, args.startDate, args.endDate);
+
+  const ranked = rankSignedMovementRows(
+    Array.from(totals, ([productSkuId, metrics]) => ({
+      productSkuId,
+      unitsSold: metrics.unitsSold,
+      unitsReturned: metrics.unitsReturned,
+    })),
+  );
+
+  const rows: ReportSkuMovementRow[] = ranked.map((entry) => {
+    const identity = skuIdentity(model, entry.productSkuId);
+    return {
+      key: entry.productSkuId,
+      productSkuId: entry.productSkuId,
+      label: identity?.sku ?? identity?.displayName ?? entry.productSkuId,
+      unitsSold: entry.unitsSold,
+      unitsReturned: entry.unitsReturned,
+      netUnits: entry.netUnits,
+      ...(identity ? { identity } : {}),
+    };
+  });
+
+  const skuCount = rows.length;
+  const pageCount = movementPageCount(skuCount);
+  const canonicalPage = canonicalizeMovementPage(args.page, pageCount);
+  const offset = (canonicalPage - 1) * REPORT_MOVEMENT_PAGE_SIZE;
+
+  const totalsSummary: ReportMovementTotals = {
+    unitsSold: rows.reduce((total, row) => total + row.unitsSold, 0),
+    unitsReturned: rows.reduce((total, row) => total + row.unitsReturned, 0),
+    netUnits: rows.reduce((total, row) => total + row.netUnits, 0),
+    skuCount,
+  };
+
+  return {
+    lifecycle: {
+      state: "completed",
+      totals: totalsSummary,
+      completedAt: model.updatedAt,
+      pageCount,
+    },
+    page: canonicalPage,
+    rows: rows.slice(offset, offset + REPORT_MOVEMENT_PAGE_SIZE),
+  };
 }
 
 // ---------------------------------------------------------------------------

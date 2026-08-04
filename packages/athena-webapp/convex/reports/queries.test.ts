@@ -14,6 +14,7 @@ import type {
 import {
   getOverview,
   listDays,
+  listRangeSkuMovement,
   listRangeSkuMix,
   listPeriodSkus,
   getSkuDetail,
@@ -396,6 +397,137 @@ describe("listRangeSkuMix", () => {
       label: "Other SKUs",
       unitsSold: 3,
       shareBasisPoints: 1071,
+    });
+  });
+});
+
+describe("listRangeSkuMovement", () => {
+  it("returns every SKU separately with sold, returned, and net units", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const skuIds = await Promise.all(
+      Array.from({ length: 7 }, () => seedSku(t, storeId)),
+    );
+
+    await t.run(async (ctx) => {
+      await Promise.all(
+        skuIds.map((productSkuId, index) =>
+          ctx.db.insert("reportSkuDay", {
+            storeId,
+            productSkuId,
+            operatingDate: "2026-07-28",
+            unitsSold: 7 - index,
+            unitsReturned: index === 0 ? 2 : 0,
+            grossSalesMinor: (7 - index) * 100,
+            netSalesMinor: (7 - index) * 100,
+            refundsMinor: 0,
+            uncostedRevenueMinor: 0,
+            grossProfitMinor: (7 - index) * 50,
+          }),
+        ),
+      );
+    });
+
+    const result = await t.run((ctx) =>
+      handlerOf(listRangeSkuMovement)(ctx, {
+        storeId,
+        startDate: "2026-07-28",
+        endDate: "2026-07-28",
+      }),
+    );
+
+    expect(result.rows).toHaveLength(7);
+    expect(
+      result.rows.some((row: { key: string }) => row.key === "other"),
+    ).toBe(false);
+    expect(result.rows[0]).toMatchObject({
+      productSkuId: String(skuIds[0]),
+      unitsSold: 7,
+      unitsReturned: 2,
+      netUnits: 5,
+    });
+    expect(result.rows[0].identity).toMatchObject({ displayName: "Wig" });
+    expect(result).toMatchObject({
+      netUnits: 26,
+      skuCount: 7,
+      totalUnitsReturned: 2,
+      totalUnitsSold: 28,
+    });
+  });
+
+  it("keeps its original response while the additive movement lifecycle rows exist", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const skuId = await seedSku(t, storeId);
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("reportSkuDay", {
+        storeId,
+        productSkuId: skuId,
+        operatingDate: "2026-07-28",
+        unitsSold: 4,
+        unitsReturned: 1,
+        grossSalesMinor: 400,
+        netSalesMinor: 400,
+        refundsMinor: 0,
+        uncostedRevenueMinor: 0,
+        grossProfitMinor: 200,
+      });
+      // An admitted movement snapshot over the same dates, with a completed
+      // header and ranked children. The legacy reader must not see any of it.
+      const rangeResultId = await ctx.db.insert("reportRangeResult", {
+        storeId,
+        requestKey: "movement:abc123",
+        startDate: "2026-07-28",
+        endDate: "2026-07-28",
+        status: "completed",
+        kind: "sku_movement",
+        movementPhase: "completed",
+        movementContractVersion: 1,
+        movementTotals: {
+          unitsSold: 99,
+          unitsReturned: 99,
+          netUnits: 0,
+          skuCount: 1,
+        },
+        requestedAt: Date.now(),
+        computedAt: Date.now(),
+        expiresAt: Date.now() + 60_000,
+        foldVersion: 3,
+      });
+      await ctx.db.insert("reportRangeMovementSku", {
+        storeId,
+        rangeResultId,
+        productSkuId: skuId,
+        unitsSold: 99,
+        unitsReturned: 99,
+        netUnits: 0,
+        absNetUnitsSortKey: 0,
+        rank: 1,
+        expiresAt: Date.now() + 60_000,
+      });
+    });
+
+    const result = await t.run((ctx) =>
+      handlerOf(listRangeSkuMovement)(ctx, {
+        storeId,
+        startDate: "2026-07-28",
+        endDate: "2026-07-28",
+      }),
+    );
+    // Exactly the pre-rollout shape and values: reportSkuDay only.
+    expect(result).toMatchObject({
+      netUnits: 3,
+      skuCount: 1,
+      totalUnitsReturned: 1,
+      totalUnitsSold: 4,
+    });
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({
+      productSkuId: String(skuId),
+      unitsSold: 4,
+      unitsReturned: 1,
+      netUnits: 3,
     });
   });
 });
@@ -2350,13 +2482,23 @@ describe("reports module public surface", () => {
       "queries.listDays",
       "queries.listPeriodSkus",
       "queries.listRangeSkuMix",
+      "queries.listRangeSkuMovement",
       "queries.listSkuDayTransactions",
+      "skuMovementRange.ensureMovementRange",
+      "skuMovementRange.getMovementRange",
+      "skuMovementRange.getMovementRangePage",
+      "skuMovementRange.retryMovementRange",
     ]);
-    // Acceptance, sweeping, reseeding, verification, and repair stay internal.
+    // Acceptance, sweeping, reseeding, verification, repair, and the
+    // movement worker machinery stay internal.
     expect(internalNames.sort()).toEqual([
       "foldVersionRepair.countStaleFoldVersionDays",
+      "foldVersionRepair.countUncertifiedDays",
       "foldVersionRepair.markStaleFoldVersionDays",
       "reseed.reseedStoreReporting",
+      "skuMovementRange.recordMovementWorkerFailure",
+      "skuMovementRange.runMovementBatch",
+      "skuMovementRange.runMovementWorker",
       "sweeper.sweep",
       "verify.verifyCurrentWeekAgainstSources",
       "verify.verifyDayAgainstSources",

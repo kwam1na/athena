@@ -189,6 +189,8 @@ import {
   reportWeekAcceptedSchema,
   reportWeekCurrentSchema,
   reportRangeResultSchema,
+  reportRangeMovementSkuSchema,
+  reportMovementAdmissionSchema,
 } from "./schemas/reports";
 import {
   walkthroughBudgetCounterSchema,
@@ -1700,7 +1702,39 @@ const schema = defineSchema({
     .index("by_markedAt", ["markedAt"]),
   reportRangeResult: defineTable(reportRangeResultSchema)
     .index("by_storeId_requestKey", ["storeId", "requestKey"])
+    .index("by_expiresAt", ["expiresAt"])
+    // Global eligible-work queue for the movement lifecycle: rows whose
+    // `movementEligibleAt` has passed are (re)scheduled by the sweeper's
+    // unconditional backstop scan. Legacy/summary rows never set the field
+    // and are excluded by querying gte 1 (undefined sorts below all numbers).
+    .index("by_movementEligibleAt", ["movementEligibleAt"]),
+  reportRangeMovementSku: defineTable(reportRangeMovementSkuSchema)
+    // Store-bound uniqueness per (request, SKU); accumulation upserts here.
+    .index("by_storeId_rangeResultId_productSkuId", [
+      "storeId",
+      "rangeResultId",
+      "productSkuId",
+    ])
+    // Deterministic ranking traversal: descending |netUnits| (negated key,
+    // ascending index) with stable SKU identity as the tie-break.
+    .index("by_storeId_rangeResultId_absNetUnitsSortKey_productSkuId", [
+      "storeId",
+      "rangeResultId",
+      "absNetUnitsSortKey",
+      "productSkuId",
+    ])
+    // Direct 20-row page reads over a finalized ordinal-rank interval.
+    .index("by_storeId_rangeResultId_rank", [
+      "storeId",
+      "rangeResultId",
+      "rank",
+    ])
+    // Eligible-cleanup scan; children are deleted before their header.
     .index("by_expiresAt", ["expiresAt"]),
+  reportMovementAdmission: defineTable(reportMovementAdmissionSchema).index(
+    "by_scope_key",
+    ["scope", "key"],
+  ),
 });
 
 export default schema;

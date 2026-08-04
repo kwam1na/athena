@@ -1,5 +1,17 @@
 import type { WeeklyReportProjection } from "./ReportsWeeklyView";
 
+export function weeklyUpdatedAt(
+  report: WeeklyReportProjection,
+): number | null {
+  const candidates = [
+    report.materializedAt,
+    report.acceptedAt,
+    report.closePosture?.changedAt,
+    report.amendment?.changedAt,
+  ].filter((value): value is number => value !== undefined);
+  return candidates.length > 0 ? Math.max(...candidates) : null;
+}
+
 /** Plain-language lifecycle derived only from durable Weekly projection state. */
 export function weeklyLifecycleLabel(report: WeeklyReportProjection): string {
   const labels = {

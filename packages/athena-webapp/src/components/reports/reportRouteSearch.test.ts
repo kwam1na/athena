@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  closedUnitsSheetSearch,
   overviewSearchFromWeeklyReturn,
+  parseUnitsSheetFocusSearch,
   reportsOverviewSearchSchema,
   reportsWeeklySearchSchema,
+  resetUnitsSheetContextSearch,
+  unitsSheetFocusSearchValue,
   weeklyReturnSearchFromOverview,
 } from "./reportRouteSearch";
 
@@ -22,6 +26,9 @@ describe("report route search", () => {
     expect(reportsOverviewSearchSchema.parse(overviewSearch)).toEqual(
       overviewSearch,
     );
+    expect(
+      reportsOverviewSearchSchema.parse({ ...overviewSearch, units: true }),
+    ).toEqual({ ...overviewSearch, units: true });
   });
 
   it("maps every supported Overview value into namespaced Weekly return state", () => {
@@ -42,6 +49,7 @@ describe("report route search", () => {
       history: true,
       historyCursor: "cursor-2",
       historyCursorTrail: [null, "cursor-1"],
+      units: true,
       ...weeklyReturnSearchFromOverview(overviewSearch),
       ignored: "not part of the route contract",
     });
@@ -49,6 +57,97 @@ describe("report route search", () => {
     expect(overviewSearchFromWeeklyReturn(weeklySearch)).toEqual(
       overviewSearch,
     );
+  });
+
+  it("accepts the units sheet continuity keys identically on both routes", () => {
+    const sheetState = {
+      units: true,
+      unitsTab: "granular" as const,
+      unitsPage: 4,
+      unitsFocus: "sku-61",
+      unitsScroll: 640,
+    };
+    expect(reportsOverviewSearchSchema.parse(sheetState)).toEqual(sheetState);
+    expect(reportsWeeklySearchSchema.parse(sheetState)).toEqual(sheetState);
+    // The default state serializes nothing beyond the open flag itself.
+    expect(reportsOverviewSearchSchema.parse({ units: true })).toEqual({
+      units: true,
+    });
+    expect(reportsWeeklySearchSchema.parse({ units: true })).toEqual({
+      units: true,
+    });
+  });
+
+  it("encodes the focus surface inside the existing one-shot focus token", () => {
+    expect(unitsSheetFocusSearchValue("sku-61", "table")).toBe("sku-61");
+    expect(unitsSheetFocusSearchValue("sku-61", "chart")).toBe(
+      "chart:sku-61",
+    );
+    expect(parseUnitsSheetFocusSearch("sku-61")).toEqual({
+      productSkuId: "sku-61",
+      surface: "table",
+    });
+    expect(parseUnitsSheetFocusSearch("chart:sku-61")).toEqual({
+      productSkuId: "sku-61",
+      surface: "chart",
+    });
+    expect(parseUnitsSheetFocusSearch(undefined)).toEqual({
+      productSkuId: undefined,
+      surface: undefined,
+    });
+  });
+
+  it("rejects malformed units sheet continuity values on both routes", () => {
+    for (const schema of [
+      reportsOverviewSearchSchema,
+      reportsWeeklySearchSchema,
+    ]) {
+      // Top movers is the default tab and never serializes.
+      expect(() => schema.parse({ unitsTab: "top" })).toThrow();
+      expect(() => schema.parse({ unitsPage: 0 })).toThrow();
+      expect(() => schema.parse({ unitsPage: 1.5 })).toThrow();
+      expect(() => schema.parse({ unitsFocus: "" })).toThrow();
+      expect(() => schema.parse({ unitsFocus: "x".repeat(257) })).toThrow();
+      expect(() => schema.parse({ unitsScroll: -1 })).toThrow();
+      expect(() => schema.parse({ unitsScroll: 12.5 })).toThrow();
+    }
+  });
+
+  it("keeps period-scoped sheet state out of the weekly<->overview bridges, like `units` itself", () => {
+    const withSheetState = {
+      ...overviewSearch,
+      units: true,
+      unitsTab: "granular" as const,
+      unitsPage: 4,
+      unitsFocus: "sku-61",
+      unitsScroll: 640,
+    };
+    expect(weeklyReturnSearchFromOverview(withSheetState)).toEqual(
+      weeklyReturnSearchFromOverview(overviewSearch),
+    );
+    expect(
+      overviewSearchFromWeeklyReturn({
+        ...weeklyReturnSearchFromOverview(overviewSearch),
+        units: true,
+        unitsTab: "granular",
+        unitsPage: 4,
+        unitsFocus: "sku-61",
+        unitsScroll: 640,
+      }),
+    ).toEqual(overviewSearch);
+  });
+
+  it("spells out the sheet-owned cleanup sets used by both routes", () => {
+    expect(resetUnitsSheetContextSearch).toEqual({
+      unitsTab: undefined,
+      unitsPage: undefined,
+      unitsFocus: undefined,
+      unitsScroll: undefined,
+    });
+    expect(closedUnitsSheetSearch).toEqual({
+      units: undefined,
+      ...resetUnitsSheetContextSearch,
+    });
   });
 
   it("returns Overview defaults when no valid return context exists", () => {

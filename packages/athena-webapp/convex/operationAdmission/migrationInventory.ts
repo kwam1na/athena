@@ -410,7 +410,11 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     capability: "reporting.generate",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: ["reports/customRange:requestRange"],
+    functions: [
+      "reports/customRange:requestRange",
+      "reports/skuMovementRange:ensureMovementRange",
+      "reports/skuMovementRange:retryMovementRange",
+    ],
   },
   {
     wave: "reporting",

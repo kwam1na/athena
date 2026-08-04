@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Units moved tabs implementation plan</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --line: color-mix(in srgb, currentColor 16%, transparent);
+      --muted: color-mix(in srgb, currentColor 68%, transparent);
+      --panel: color-mix(in srgb, currentColor 4%, transparent);
+      --accent: #4b5bb4;
+    }
+    body { margin: 0 auto; max-width: 1060px; padding: 48px 28px 84px; line-height: 1.58; }
+    h1 { max-width: 800px; font-size: clamp(2rem, 5vw, 3.35rem); line-height: 1.06; letter-spacing: -.035em; }
+    h2 { margin-top: 2.5rem; border-bottom: 1px solid var(--line); padding-bottom: .45rem; }
+    h3 { margin: 0 0 .35rem; font-size: 1.05rem; }
+    p { max-width: 860px; }
+    code { background: color-mix(in srgb, currentColor 9%, transparent); border-radius: 4px; padding: .08rem .3rem; }
+    .meta, .note { color: var(--muted); }
+    .lede { font-size: 1.16rem; color: var(--muted); }
+    .promise { border-left: 4px solid var(--accent); padding: .8rem 1rem; background: var(--panel); }
+    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .unit { border: 1px solid var(--line); border-radius: 14px; padding: 1.1rem 1.2rem; background: var(--panel); }
+    .unit p { margin-bottom: 0; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid var(--line); padding: .68rem; text-align: left; vertical-align: top; }
+    th { background: var(--panel); }
+    .flow { display: flex; flex-wrap: wrap; gap: .55rem; align-items: center; margin: 1rem 0; }
+    .step { border: 1px solid var(--line); border-radius: 999px; padding: .42rem .72rem; }
+    .arrow { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <p class="meta">Athena · Reviewed implementation plan · 2026-08-03</p>
+  <h1>Scale Units moved into top-mover and granular tabs</h1>
+  <p class="lede">Extend Athena's existing asynchronous range lifecycle with resumable movement snapshots, then deliver one bounded 20-row view to the shared Weekly, Overview, and demo sheet.</p>
+
+  <p class="promise"><strong>Completion guarantee:</strong> once a valid Units moved range of up to 92 days is admitted, SKU count and backend batch size remain pending work—not a terminal unavailable result. Admission overload is retryable backpressure that performs no write or scheduling.</p>
+
+  <p class="note"><strong>Rollout prerequisite:</strong> snapshot trust depends on certified fold revisions that no existing row carries. The fold path stamps them going forward, and existing history acquires them through a fold-version bump plus the per-store <code>foldVersionRepair</code> run — a required one-time migration before the UI is enabled. Stores outside the reporting sweep allowlist receive an explicit "not available" state rather than an indefinite pending state.</p>
+
+  <h2>Operator experience</h2>
+  <table>
+    <tr><th>Mode</th><th>Purpose</th><th>Result size</th><th>Ordering</th></tr>
+    <tr><td>Top movers</td><td>See the most significant signed net movement quickly.</td><td>Top 20</td><td>Absolute net units, stable SKU tie-break</td></tr>
+    <tr><td>Granular</td><td>Inspect every SKU with sold or returned activity.</td><td>20 per numbered page</td><td>The same deterministic rank</td></tr>
+  </table>
+
+  <h2>Revised backend lifecycle</h2>
+  <div class="flow" aria-label="Range movement lifecycle">
+    <span class="step">Authorize and admit</span><span class="arrow">→</span>
+    <span class="step">Queue</span><span class="arrow">→</span>
+    <span class="step">Accumulate bounded days</span><span class="arrow">→</span>
+    <span class="step">Finalize ranks</span><span class="arrow">→</span>
+    <span class="step">Publish immutable snapshot</span>
+  </div>
+  <p>The plan now reuses <code>reportRangeResult</code> as its request header instead of introducing a parallel framework. Request kind, range, contract version, and the bounded included-day revision vector define snapshot identity. Request-owned child rows keep documents bounded, and known-dirty or uncertified days wait for their canonical fold instead of publishing stale data.</p>
+
+  <h2>Security and reliability boundaries</h2>
+  <ul>
+    <li>Only a full administrator with report-generation authority can create work; demo/read-only principals can only read permitted results.</li>
+    <li>Equivalent requests deduplicate. Saturated admission returns a generic retry interval with no durable write or scheduled continuation.</li>
+    <li>Phase/version fencing prevents duplicate workers from applying one source day or rank interval twice.</li>
+    <li>An atomic batch mutation lets defects escape and roll back; a private action records retry metadata afterward in a separate mutation.</li>
+    <li>Prompt continuations provide responsiveness and a globally indexed cron scan recovers lost work.</li>
+    <li>Every header, child, page lookup, and hydrated SKU is bound to the authorized store.</li>
+    <li>Public errors expose a generic code and correlation id, never raw worker exceptions or source lineage.</li>
+    <li>Expired children are removed in fair, resumable batches before their unreferenced header.</li>
+  </ul>
+
+  <h2>Sheet state contract</h2>
+  <table>
+    <tr><th>State</th><th>Visible behavior</th><th>Control behavior</th></tr>
+    <tr><td>Waiting or pending</td><td>Persistent title/date and tabs with a neutral preparing status; no partial data.</td><td>The sheet polls the ensure mutation on the server-supplied interval; admission or clean-source retry is calm and automatic.</td></tr>
+    <tr><td>Not available (store)</td><td>Calm "not available for this store" message for stores outside the sweep allowlist.</td><td>No retry loop; enablement is an operational rollout step.</td></tr>
+    <tr><td>Page transition</td><td>Settled page label, rows, and links remain one coherent context.</td><td>Paging is busy and overlapping actions are disabled.</td></tr>
+    <tr><td>Completed empty</td><td>Calm no-movement message in either tab.</td><td>No pagination.</td></tr>
+    <tr><td>Completed success</td><td>Count/subset disclosure plus chart or table.</td><td>Tabs, item links, and pagination are fully operable.</td></tr>
+    <tr><td>Retrying</td><td>Neutral retry status with no partial result.</td><td>Background work observes backoff.</td></tr>
+    <tr><td>Terminal defect</td><td>Generic explanation and opaque correlation id.</td><td>Explicit Retry creates a new fenced attempt.</td></tr>
+  </table>
+
+  <h2>Implementation units</h2>
+  <div class="grid">
+    <section class="unit"><h3>U1 · Shared range contract</h3><p>Extend the existing range header compatibly and add store-bound movement rows, per-kind span limits, lifecycle validation, indexes, and cleanup ownership.</p></section>
+    <section class="unit"><h3>U2 · Revision provenance and repair</h3><p>Stamp certified revisions in the fold path, bump the fold version, and migrate existing history through the per-store repair with a coverage check.</p></section>
+    <section class="unit"><h3>U3 · Secure resumable backend</h3><p>Implement enablement gating, generation admission, per-day accumulation, fencing, rank finalization, bounded page reads, retry, cleanup, and additive rollout APIs — the module's first durable worker machinery.</p></section>
+    <section class="unit"><h3>U4 · Shared-demo parity</h3><p>Derive the same signed ordering, count, totals, and page slices while proving demo mode cannot create live work.</p></section>
+    <section class="unit"><h3>U5 · Explicit sheet hierarchy</h3><p>Build accessible tabs, a diverging chart, granular paging, lifecycle states with waiting-state polling, responsive behavior, and settled-context rendering.</p></section>
+    <section class="unit"><h3>U6 · Context restoration</h3><p>Unify the route history convention, then persist tab, page, source focus, period, and a new cross-navigation scroll restore across Weekly, Overview, and SKU drill-down return.</p></section>
+    <section class="unit"><h3>U7 · Focused proof</h3><p>Run scale, provenance, lifecycle, security, demo, route, focus, scroll, and animation tests; skip the heavy gate and rebuild Graphify.</p></section>
+  </div>
+
+  <h2>Scale acceptance</h2>
+  <table>
+    <tr><th>Scenario</th><th>Expected proof</th></tr>
+    <tr><td>146 moving SKUs over 30 days</td><td>Correct top 20, complete count, and eight reachable pages.</td></tr>
+    <tr><td>More than 5,000 SKU-day rows</td><td>Multiple bounded backend batches finish without truncation or capacity failure.</td></tr>
+    <tr><td>−24 and +18 net units</td><td>−24 ranks first while both signed directions remain explicit.</td></tr>
+    <tr><td>Equal sold and returned units</td><td>The SKU remains included as movement even when net units equal zero.</td></tr>
+    <tr><td>Dropped or duplicate continuation</td><td>Cron recovery completes lost work; fencing prevents duplicate totals.</td></tr>
+    <tr><td>Dirty source day or mid-batch defect</td><td>Stale data does not publish; aggregate writes roll back before retry metadata is recorded.</td></tr>
+    <tr><td>Cross-store identifier substitution</td><td>The reader returns no foreign header, row, identity, or error detail.</td></tr>
+    <tr><td>Return from granular page 4</td><td>Period, sheet, tab, page, source focus, and underlying scroll context restore.</td></tr>
+  </table>
+
+  <h2>Review decisions</h2>
+  <ul>
+    <li>Kept exhaustive granular browsing and absolute-net ranking because both were explicitly confirmed.</li>
+    <li>Rejected the overview timestamp as a correctness watermark.</li>
+    <li>Treated revision certification as an explicit migration (fold-version bump plus per-store repair) after review showed clean historical days never refold on their own.</li>
+    <li>Gated generation on the sweep store allowlist so a store that can never certify reports a truthful "not available" instead of waiting forever.</li>
+    <li>Chose polling for waiting states (which deliberately write nothing) and subscription only after admission.</li>
+    <li>Scoped R11's scroll restoration as new cross-navigation machinery; the sheet's in-mount scroll map cannot survive the SKU drill-down unmount.</li>
+    <li>Keyed completed movement snapshots by request kind and bounded clean-day revisions so changed source data cannot reuse a stale result.</li>
+    <li>Reused the existing range lifecycle instead of adding a second request framework.</li>
+    <li>Removed stale-while-refresh generation complexity that no requirement demanded.</li>
+    <li>Kept the legacy movement query during additive rollout so old clients remain compatible.</li>
+    <li>Deferred bespoke monitoring dashboards and broader range-framework generalization.</li>
+  </ul>
+
+  <p class="note">The paired Markdown plan contains requirement traceability, file-level scope, lifecycle transitions, focused test scenarios, risks, and rollout notes.</p>
+</body>
+</html>

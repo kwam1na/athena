@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { useMemo } from "react";
 
@@ -10,7 +10,14 @@ import { api } from "~/convex/_generated/api";
 
 import { ReportDaysPanel } from "@/components/reports/ReportDaysPanel";
 import { ReportsOverviewView } from "@/components/reports/ReportsOverviewView";
-import { reportsOverviewSearchSchema } from "@/components/reports/reportRouteSearch";
+import {
+  closedUnitsSheetSearch,
+  parseUnitsSheetFocusSearch,
+  reportsOverviewSearchSchema,
+  resetUnitsSheetContextSearch,
+  unitsSheetFocusSearchValue,
+} from "@/components/reports/reportRouteSearch";
+import { getOrigin } from "~/src/lib/navigationUtils";
 import {
   tableRangeIncludingSelection,
   type ReportOverviewWindow,
@@ -33,7 +40,9 @@ export const Route = createFileRoute(
 
 function ReportsOverviewRoute() {
   const search = Route.useSearch();
+  const unitsSheetFocus = parseUnitsSheetFocusSearch(search.unitsFocus);
   const navigate = Route.useNavigate();
+  const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
   const { activeStore } = useGetActiveStore();
 
   const { isSharedDemo, useLiveQuery } = useReportsSharedDemoMode();
@@ -87,6 +96,7 @@ function ReportsOverviewRoute() {
       <ReportDaysPanel
         canResetRange={canResetDaysRange}
         endDate={daysEnd}
+        isUnitsSheetOpen={search.units}
         onPageChange={(daysPage) =>
           void navigate({
             replace: true,
@@ -111,6 +121,7 @@ function ReportsOverviewRoute() {
               daysTableEnd: nextTableRange.endDate,
               daysPage: targetPage === 1 ? undefined : targetPage,
               selectedDay: undefined,
+              ...resetUnitsSheetContextSearch,
             }),
           });
         }}
@@ -123,6 +134,7 @@ function ReportsOverviewRoute() {
               daysEnd: undefined,
               daysPage: undefined,
               selectedDay: undefined,
+              ...resetUnitsSheetContextSearch,
             }),
           })
         }
@@ -132,11 +144,96 @@ function ReportsOverviewRoute() {
             search: (current) => ({
               ...current,
               selectedDay,
+              ...resetUnitsSheetContextSearch,
+            }),
+          })
+        }
+        onUnitsSheetOpenChange={(units) =>
+          void navigate({
+            replace: true,
+            search: (current) =>
+              units
+                ? { ...current, units: true }
+                : { ...current, ...closedUnitsSheetSearch },
+          })
+        }
+        onUnitsSheetPageChange={(unitsPage) =>
+          void navigate({
+            replace: true,
+            search: (current) => ({
+              ...current,
+              unitsPage: unitsPage === 1 ? undefined : unitsPage,
+            }),
+          })
+        }
+        onUnitsSheetRestoreComplete={() =>
+          void navigate({
+            replace: true,
+            search: (current) => ({
+              ...current,
+              unitsFocus: undefined,
+              unitsScroll: undefined,
+            }),
+          })
+        }
+        onUnitsSheetSkuLinkNavigate={({
+          endDate,
+          focusSurface,
+          productSkuId,
+          scrollOffset,
+          startDate,
+        }) => {
+          const unitsScroll =
+            scrollOffset !== undefined &&
+            Number.isFinite(scrollOffset) &&
+            scrollOffset > 0
+              ? Math.round(scrollOffset)
+              : undefined;
+          // Continuity keys are replaced into the reports URL first so both
+          // the detail origin (`o`) and the history entry browser Back lands
+          // on carry them; the drill-down itself stays a real push entry.
+          return Promise.resolve(
+            navigate({
+              replace: true,
+              search: (current) => ({
+                ...current,
+                unitsFocus: unitsSheetFocusSearchValue(
+                  productSkuId,
+                  focusSurface,
+                ),
+                unitsScroll,
+              }),
+            }),
+          ).then(() => {
+            const detailNavigation = navigate({
+              params: {
+                orgUrlSlug: orgUrlSlug!,
+                productSkuId,
+                storeUrlSlug: storeUrlSlug!,
+              },
+              search: { endDate, o: getOrigin(), startDate },
+              to: "/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId",
+            });
+            return detailNavigation;
+          });
+        }}
+        onUnitsSheetTabChange={(tab) =>
+          void navigate({
+            replace: true,
+            search: (current) => ({
+              ...current,
+              unitsTab: tab === "granular" ? "granular" : undefined,
+              unitsPage: undefined,
             }),
           })
         }
         page={search.daysPage ?? 1}
         selectedDate={search.selectedDay}
+        unitsSheetPage={search.unitsPage ?? 1}
+        unitsSheetRestoreFocusSkuId={unitsSheetFocus.productSkuId}
+        unitsSheetRestoreFocusSurface={unitsSheetFocus.surface}
+        unitsSheetRestoreScrollOffset={search.unitsScroll}
+        unitsSheetTab={search.unitsTab ?? "top"}
         startDate={daysStart}
         tableEndDate={daysTableEnd}
         tableStartDate={daysTableStart}

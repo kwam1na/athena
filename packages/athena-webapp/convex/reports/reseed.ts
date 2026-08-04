@@ -64,6 +64,9 @@ export const RESEED_PURGE_TABLES = [
   "reportDay",
   "reportPeriodSkuRollup",
   "reportOverview",
+  // Children before their header table, mirroring live cleanup's child-first
+  // deletion order (purge wipes both, so this is convention, not correctness).
+  "reportRangeMovementSku",
   "reportRangeResult",
   // Last: the walk immediately starts re-marking days, and marks written by an
   // earlier phase of THIS reseed must not be wiped by a later purge batch.
@@ -194,6 +197,13 @@ async function purgeBatch(
         return ctx.db
           .query("reportOverview")
           .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+          .take(RESEED_PURGE_BATCH);
+      case "reportRangeMovementSku":
+        return ctx.db
+          .query("reportRangeMovementSku")
+          .withIndex("by_storeId_rangeResultId_productSkuId", (q) =>
+            q.eq("storeId", storeId),
+          )
           .take(RESEED_PURGE_BATCH);
       case "reportRangeResult":
         return ctx.db

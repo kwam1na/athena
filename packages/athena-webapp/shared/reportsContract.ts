@@ -27,8 +27,15 @@
  * stale rows `fold_version_bump` dirty and the sweeper — the single fold
  * authority — refolds them. `countStaleFoldVersionDays` reports whether a
  * store still needs the repair.
+ *
+ * Version 3 certifies fold provenance: every fold stamps the same
+ * `certifiedFoldRevision` on the written `reportDay` AND every `reportSkuDay`
+ * row it replaces (see `foldAndReplaceDay` in convex/reports/sweeper.ts). The
+ * bump exists so the per-store repair sees every pre-revision day as stale —
+ * clean days never refold on their own, so without it existing history would
+ * stay uncertified forever.
  */
-export const REPORTS_FOLD_VERSION = 2 as const;
+export const REPORTS_FOLD_VERSION = 3 as const;
 /**
  * Version 2 adds the source-derived allocation dimensions carried by payment
  * facts. Replays hash with the version already stored on a fact.
@@ -877,6 +884,24 @@ export type ReportSkuMixData = {
   skuCount: number;
 };
 
+export type ReportSkuMovementRow = {
+  key: string;
+  productSkuId: string;
+  label: string;
+  unitsSold: number;
+  unitsReturned: number;
+  netUnits: number;
+  identity?: ReportSkuIdentity;
+};
+
+export type ReportSkuMovementData = {
+  rows: ReportSkuMovementRow[];
+  totalUnitsSold: number;
+  totalUnitsReturned: number;
+  netUnits: number;
+  skuCount: number;
+};
+
 export type ReportRangeStatus = "pending" | "completed" | "failed";
 
 export type ReportRangeSummary = {
@@ -895,3 +920,318 @@ export const REPORT_RANGE_MAX_DAYS = 366 as const;
 export const REPORT_RANGE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const REPORT_SKU_PAGE_SIZE = 10 as const;
 export const REPORT_RANGE_TOP_SKU_LIMIT = 100 as const;
+
+// ---------------------------------------------------------------------------
+// Range request kinds — the shared range-result lifecycle now serves two
+// consumers. A stored `reportRangeResult` row WITHOUT a `kind` field is a
+// legacy custom-summary request and keeps its exact original semantics
+// (including failed-row reuse until TTL and the 366-day span limit).
+// ---------------------------------------------------------------------------
+
+export const REPORT_RANGE_KINDS = ["custom_summary", "sku_movement"] as const;
+export type ReportRangeKind = (typeof REPORT_RANGE_KINDS)[number];
+
+/** Inclusive-day span ceilings, per request kind. */
+export const REPORT_MOVEMENT_RANGE_MAX_DAYS = 92 as const;
+export const REPORT_RANGE_MAX_DAYS_BY_KIND = {
+  custom_summary: REPORT_RANGE_MAX_DAYS,
+  sku_movement: REPORT_MOVEMENT_RANGE_MAX_DAYS,
+} as const satisfies Record<ReportRangeKind, number>;
+
+/** Rows per movement page — Top movers shows one page, Granular pages by it. */
+export const REPORT_MOVEMENT_PAGE_SIZE = 20 as const;
+
+/**
+ * Semantic version of the movement snapshot contract (aggregation, ranking,
+ * and child-row meaning). Participates in the movement request key, so a
+ * contract change can never reuse a snapshot computed under the old meaning.
+ */
+export const REPORT_MOVEMENT_CONTRACT_VERSION = 1 as const;
+
+/**
+ * Explicit sentinel for an included operating day with no `reportDay` row.
+ * An absent day is part of the request's identity — "this day had no fold" —
+ * not an omission from the revision vector.
+ */
+export const REPORT_MOVEMENT_EMPTY_DAY_REVISION = "empty" as const;
+
+/**
+ * One entry per included operating day. `revision` is the day's certified
+ * fold revision (`reportDay.certifiedFoldRevision`) or the empty-day
+ * sentinel. Bounded by REPORT_MOVEMENT_RANGE_MAX_DAYS entries.
+ */
+export type ReportMovementDayRevision = {
+  operatingDate: string;
+  revision: number | typeof REPORT_MOVEMENT_EMPTY_DAY_REVISION;
+};
+
+// ---------------------------------------------------------------------------
+// Strict operating-date validation. `queries.ts`'s loose span-only check is
+// deliberately NOT reused for movement: malformed labels must fail before
+// they participate in a durable request identity.
+// ---------------------------------------------------------------------------
+
+const OPERATING_DATE_LABEL_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Strict "YYYY-MM-DD" shape AND calendar validity (no 2026-02-30). */
+export function isValidOperatingDateLabel(value: string): boolean {
+  if (!OPERATING_DATE_LABEL_PATTERN.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const asDate = new Date(Date.UTC(year, month - 1, day));
+  return (
+    asDate.getUTCFullYear() === year &&
+    asDate.getUTCMonth() === month - 1 &&
+    asDate.getUTCDate() === day
+  );
+}
+
+/** Inclusive day count between two well-formed "YYYY-MM-DD" labels. */
+export function inclusiveOperatingDaySpan(
+  startDate: string,
+  endDate: string,
+): number {
+  const toUtc = (label: string) => {
+    const [year, month, day] = label.split("-").map(Number);
+    return Date.UTC(year, month - 1, day);
+  };
+  return Math.round((toUtc(endDate) - toUtc(startDate)) / 86_400_000) + 1;
+}
+
+/**
+ * Shared per-kind range validation: strict date labels, ordering, and the
+ * kind's own span ceiling. Throws on the first violation.
+ */
+export function validateReportRangeRequest(
+  kind: ReportRangeKind,
+  startDate: string,
+  endDate: string,
+): void {
+  if (!isValidOperatingDateLabel(startDate)) {
+    throw new Error(`Invalid startDate: "${startDate}".`);
+  }
+  if (!isValidOperatingDateLabel(endDate)) {
+    throw new Error(`Invalid endDate: "${endDate}".`);
+  }
+  if (startDate > endDate) {
+    throw new Error("startDate must be on or before endDate.");
+  }
+  const maxDays = REPORT_RANGE_MAX_DAYS_BY_KIND[kind];
+  const span = inclusiveOperatingDaySpan(startDate, endDate);
+  if (span > maxDays) {
+    throw new Error(
+      `Range spans ${span} days; the maximum is ${maxDays} days.`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Movement request identity. Legacy custom-summary keys keep their exact
+// original "range:" shape (computed in convex/reports/customRange.ts and
+// never including a kind). Movement keys use a distinct prefix AND fold the
+// kind, contract/fold versions, and the included-day revision vector into the
+// hashed identity, so a summary and a movement request over identical dates
+// cannot collide, and a revision change yields a successor request.
+// ---------------------------------------------------------------------------
+
+/** Legacy custom-summary keys — shape is frozen; do not reuse for movement. */
+export const REPORT_RANGE_SUMMARY_REQUEST_KEY_PREFIX = "range:" as const;
+export const REPORT_MOVEMENT_REQUEST_KEY_PREFIX = "movement:" as const;
+
+export type ReportMovementRequestIdentityArgs = {
+  storeId: string;
+  startDate: string;
+  endDate: string;
+  foldVersion: number;
+  contractVersion: number;
+  revisionVector: readonly ReportMovementDayRevision[];
+};
+
+/**
+ * Canonical (pre-hash) identity string. Fixed field order is part of the
+ * contract: changing it bumps REPORT_MOVEMENT_CONTRACT_VERSION.
+ */
+export function movementRequestKeyIdentity(
+  args: ReportMovementRequestIdentityArgs,
+): string {
+  return JSON.stringify([
+    "sku_movement",
+    args.storeId,
+    args.startDate,
+    args.endDate,
+    args.foldVersion,
+    args.contractVersion,
+    args.revisionVector.map((day) => [day.operatingDate, day.revision]),
+  ]);
+}
+
+/**
+ * Deterministic movement request key. The hash function is injected (Convex
+ * passes `stableStringHash` from reports/fingerprint.ts) so this shared
+ * module stays free of backend imports while the identity ordering — the part
+ * that must not drift — lives in one place.
+ */
+export function computeMovementRequestKey(
+  args: ReportMovementRequestIdentityArgs,
+  hash: (input: string) => string,
+): string {
+  return `${REPORT_MOVEMENT_REQUEST_KEY_PREFIX}${hash(
+    movementRequestKeyIdentity(args),
+  )}`;
+}
+
+// ---------------------------------------------------------------------------
+// Certified fold revisions — the movement trust boundary. A day (and its SKU
+// rows) is admissible movement evidence only when it carries a certified
+// revision written by the current fold version. Stamping and history repair
+// are U2's job; these helpers define what "admissible" means.
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps a `reportDay` row (or its absence) to an admissible revision-vector
+ * entry, or null when the day cannot be admitted yet:
+ * - no row → the explicit empty-day sentinel (admissible: no activity);
+ * - a row missing `certifiedFoldRevision` → null (uncertified, repair pending);
+ * - a row folded under a stale fold version → null (stale, repair pending).
+ */
+export function admissibleMovementDayRevision(
+  operatingDate: string,
+  day: { foldVersion: number; certifiedFoldRevision?: number | null } | null,
+): ReportMovementDayRevision | null {
+  if (day === null) {
+    return { operatingDate, revision: REPORT_MOVEMENT_EMPTY_DAY_REVISION };
+  }
+  if (
+    day.certifiedFoldRevision === undefined ||
+    day.certifiedFoldRevision === null
+  ) {
+    return null;
+  }
+  if (day.foldVersion !== REPORTS_FOLD_VERSION) return null;
+  return { operatingDate, revision: day.certifiedFoldRevision };
+}
+
+/**
+ * Whether a `reportSkuDay` source row matches its day's expected revision.
+ * An empty-sentinel day has no admissible rows; a row missing its own
+ * certified revision never matches.
+ */
+export function movementSourceRowMatchesRevision(
+  expected: ReportMovementDayRevision["revision"],
+  row: { certifiedFoldRevision?: number | null },
+): boolean {
+  if (expected === REPORT_MOVEMENT_EMPTY_DAY_REVISION) return false;
+  if (
+    row.certifiedFoldRevision === undefined ||
+    row.certifiedFoldRevision === null
+  ) {
+    return false;
+  }
+  return row.certifiedFoldRevision === expected;
+}
+
+// ---------------------------------------------------------------------------
+// Movement ordering. Convex indexes are ascending-only, so the sort key is
+// the NEGATED absolute net movement (matching the reportPeriodSkuRollup
+// sort-key convention); the index tie-break is stable SKU identity.
+// ---------------------------------------------------------------------------
+
+/** Negated |netUnits|: ascending index order = descending absolute movement. */
+export function movementAbsNetUnitsSortKey(netUnits: number): number {
+  // `|| 0` normalizes -0 (from -Math.abs(0)) to +0 so a fully-cancelled SKU
+  // stores a canonical zero key rather than a sign-of-zero oddity.
+  return -Math.abs(netUnits) || 0;
+}
+
+// ---------------------------------------------------------------------------
+// Movement lifecycle.
+//
+// Durable phases live on the admitted request header. The PUBLIC lifecycle is
+// a separate discriminated union: waiting/backpressure/not-available carry no
+// durable row at all (the ensure mutation returns them without writing), and
+// no public state ever exposes exception text, cursors, fences, or source
+// details.
+// ---------------------------------------------------------------------------
+
+export const REPORT_MOVEMENT_REQUEST_PHASES = [
+  "queued",
+  "aggregating",
+  "ranking",
+  "retry_wait",
+  "completed",
+  "terminal_error",
+  "cleaning",
+] as const;
+export type ReportMovementRequestPhase =
+  (typeof REPORT_MOVEMENT_REQUEST_PHASES)[number];
+
+/** Authoritative completed totals; written only at rank finalization. */
+export type ReportMovementTotals = {
+  unitsSold: number;
+  unitsReturned: number;
+  netUnits: number;
+  skuCount: number;
+};
+
+export type ReportMovementLifecycle =
+  | { state: "waiting"; retryAfterMs: number }
+  | { state: "backpressure"; retryAfterMs: number }
+  | { state: "not_available" }
+  | { state: "queued_pending" }
+  | {
+      state: "completed";
+      totals: ReportMovementTotals;
+      completedAt: number;
+      pageCount: number;
+    }
+  | { state: "terminal_error"; errorCode: string; correlationId: string };
+
+/** Number of granular pages a completed snapshot exposes. */
+export function movementPageCount(skuCount: number): number {
+  return Math.max(1, Math.ceil(skuCount / REPORT_MOVEMENT_PAGE_SIZE));
+}
+
+/**
+ * Derives the public lifecycle from an admitted movement header.
+ *
+ * Deliberately conservative: "completed" requires the completed phase AND
+ * finalized totals AND a completion time together — a header with partial
+ * aggregation/ranking state (or a completed phase missing its totals) can
+ * only ever surface as queued/pending. "terminal_error" requires both the
+ * sanitized code and the correlation id; internal exception text, cursors,
+ * and fences never cross this boundary.
+ */
+export function deriveMovementRequestLifecycle(header: {
+  movementPhase?: ReportMovementRequestPhase;
+  movementTotals?: ReportMovementTotals;
+  computedAt?: number;
+  movementErrorCode?: string;
+  movementCorrelationId?: string;
+}): Extract<
+  ReportMovementLifecycle,
+  { state: "queued_pending" | "completed" | "terminal_error" }
+> {
+  if (
+    header.movementPhase === "completed" &&
+    header.movementTotals !== undefined &&
+    header.computedAt !== undefined
+  ) {
+    return {
+      state: "completed",
+      totals: header.movementTotals,
+      completedAt: header.computedAt,
+      pageCount: movementPageCount(header.movementTotals.skuCount),
+    };
+  }
+  if (
+    header.movementPhase === "terminal_error" &&
+    header.movementErrorCode !== undefined &&
+    header.movementCorrelationId !== undefined
+  ) {
+    return {
+      state: "terminal_error",
+      errorCode: header.movementErrorCode,
+      correlationId: header.movementCorrelationId,
+    };
+  }
+  return { state: "queued_pending" };
+}

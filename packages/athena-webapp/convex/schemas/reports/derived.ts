@@ -378,6 +378,14 @@ export const reportDaySchema = v.object({
   flags: dayFlags,
   // Optional while legacy projections refresh; every new fold writes it.
   paymentPosture: v.optional(paymentPosture),
+  /**
+   * Certified fold revision — the movement trust boundary. Stamped by the
+   * fold (U2) on the day and every SKU row it replaces, together. Optional
+   * because rows folded before stamping landed carry none; they acquire one
+   * only through the fold-version bump + foldVersionRepair rewrite. A missing
+   * revision means "not admissible movement evidence", never "revision 0".
+   */
+  certifiedFoldRevision: v.optional(v.number()),
 });
 
 /** Sparse: rows exist only for (sku, day) pairs with activity. */
@@ -387,6 +395,8 @@ export const reportSkuDaySchema = v.object({
   operatingDate: v.string(),
   ...skuDayMetrics,
   foldedAt: v.optional(v.number()),
+  /** Matches the owning reportDay's certifiedFoldRevision; see reportDay. */
+  certifiedFoldRevision: v.optional(v.number()),
 });
 
 const periodSnapshot = v.object({
@@ -471,7 +481,18 @@ export const reportDirtyDaySchema = v.object({
   markedAt: v.number(),
 });
 
-/** On-demand custom range results, computed by the sweeper, TTL'd. */
+/**
+ * On-demand range results, computed by background work, TTL'd.
+ *
+ * Two request kinds share this header. A row WITHOUT `kind` is a legacy
+ * custom-summary request and keeps its exact original lifecycle (pending →
+ * completed/failed, failed rows reused until TTL, "range:" request keys).
+ * `kind: "sku_movement"` rows are admitted movement snapshots: their
+ * `movement*` fields drive the resumable worker (U3), their request key
+ * ("movement:" prefix) folds in kind, contract/fold versions, and the
+ * included-day revision vector, and their per-SKU results live in the
+ * `reportRangeMovementSku` child table — never in arrays on this header.
+ */
 export const reportRangeResultSchema = v.object({
   storeId: v.id("store"),
   requestKey: v.string(),
@@ -482,6 +503,58 @@ export const reportRangeResultSchema = v.object({
     v.literal("completed"),
     v.literal("failed"),
   ),
+  /** Absent = legacy custom summary (exact current behavior). */
+  kind: v.optional(
+    v.union(v.literal("custom_summary"), v.literal("sku_movement")),
+  ),
+  // -- Movement lifecycle (kind === "sku_movement" only; all optional so
+  // -- legacy rows validate untouched). Field meanings are contract-owned:
+  // -- shared/reportsContract.ts ReportMovementRequestPhase et al.
+  movementPhase: v.optional(
+    v.union(
+      v.literal("queued"),
+      v.literal("aggregating"),
+      v.literal("ranking"),
+      v.literal("retry_wait"),
+      v.literal("completed"),
+      v.literal("terminal_error"),
+      v.literal("cleaning"),
+    ),
+  ),
+  /** REPORT_MOVEMENT_CONTRACT_VERSION the snapshot was admitted under. */
+  movementContractVersion: v.optional(v.number()),
+  /**
+   * Lineage: certified revision per included operating day (or the explicit
+   * empty-day sentinel), captured at admission and rechecked at publication.
+   * Bounded by REPORT_MOVEMENT_RANGE_MAX_DAYS (92) entries.
+   */
+  movementRevisionVector: v.optional(
+    v.array(
+      v.object({
+        operatingDate: v.string(),
+        revision: v.union(v.number(), v.literal("empty")),
+      }),
+    ),
+  ),
+  /** Retry metadata: attempts so far and when the next attempt is eligible. */
+  movementAttempt: v.optional(v.number()),
+  movementEligibleAt: v.optional(v.number()),
+  /** Phase/version fence — a stale worker's writes must not apply. */
+  movementFence: v.optional(v.number()),
+  /** Next operating date to aggregate; unset once aggregation finishes. */
+  movementSourceDayCursor: v.optional(v.string()),
+  /** Authoritative totals, written only at rank finalization. */
+  movementTotals: v.optional(
+    v.object({
+      unitsSold: v.number(),
+      unitsReturned: v.number(),
+      netUnits: v.number(),
+      skuCount: v.number(),
+    }),
+  ),
+  /** Sanitized terminal metadata — never raw exception text. */
+  movementErrorCode: v.optional(v.string()),
+  movementCorrelationId: v.optional(v.string()),
   totals: v.optional(
     v.object({
       ...dayMetrics,
@@ -503,4 +576,51 @@ export const reportRangeResultSchema = v.object({
   computedAt: v.optional(v.number()),
   expiresAt: v.number(),
   foldVersion: v.number(),
+});
+
+/**
+ * One row per (movement request, SKU) — the bounded child projection behind
+ * ranked movement pages. Request-owned and private until the header
+ * completes; addressable ONLY through indexes (the header stores no child
+ * ids). Signed semantics: `netUnits` keeps its sign so outbound movement and
+ * net returns stay distinguishable, while `absNetUnitsSortKey` (negated
+ * |netUnits|, ascending-index convention as in reportPeriodSkuRollup) gives
+ * both tabs one deterministic ordering with `productSkuId` as the tie-break.
+ */
+/**
+ * Fixed-window admission counters for movement request generation, modeled on
+ * the shared-demo admission bucket (sharedDemo/admission.ts) but movement's
+ * own table: one row per (scope, key) window. `scope: "principal"` keys by
+ * athenaUser id, `"store"` by store id, `"global"` by the literal "global".
+ * Rows are transient rate-limit state, not derived report data — they are
+ * overwritten in place when a window rolls and are deliberately NOT part of
+ * `RESEED_PURGE_TABLES` (a reseed must not reset abuse budgets).
+ */
+export const reportMovementAdmissionSchema = v.object({
+  scope: v.union(
+    v.literal("principal"),
+    v.literal("store"),
+    v.literal("global"),
+  ),
+  key: v.string(),
+  windowStartedAt: v.number(),
+  count: v.number(),
+});
+
+export const reportRangeMovementSkuSchema = v.object({
+  storeId: v.id("store"),
+  /** Owning request header; cleanup deletes children before the header. */
+  rangeResultId: v.id("reportRangeResult"),
+  productSkuId: v.id("productSku"),
+  unitsSold: v.number(),
+  unitsReturned: v.number(),
+  /** Signed: sold minus returned; may be negative or zero with activity. */
+  netUnits: v.number(),
+  /** -|netUnits|: ascending index order = descending absolute movement. */
+  absNetUnitsSortKey: v.number(),
+  /** Ordinal rank (1-based); absent until rank finalization completes. */
+  rank: v.optional(v.number()),
+  /** Cleanup ownership: mirrors the header's expiresAt so expired children
+   * are found directly, without loading their header first. */
+  expiresAt: v.number(),
 });
