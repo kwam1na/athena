@@ -12,6 +12,7 @@ import {
   trailingSixMonthsStart,
 } from "~/shared/reportsContract";
 import { SHARED_DEMO_PRODUCTS } from "~/shared/sharedDemoStory";
+import type { SharedDemoLiveReportsDay } from "./sharedDemoLiveReportsDay";
 import {
   getSharedDemoHistoricalDayFixture,
   getSharedDemoHistoryStartOperatingDate,
@@ -477,6 +478,71 @@ describe("shared demo reports fixture", () => {
             today: TODAY,
           }),
         ).toEqual({ transactions: [], truncated: false });
+      }
+    });
+
+    it("reports stock from the live rows, never the story constant", () => {
+      // The demo's real `productSku` rows are decremented by a visitor's sale
+      // like any other store's, so a fixed catalogue number would contradict
+      // the stock the same visitor just moved.
+      const skuId = skuIdFor("demo-shea-butter");
+      const detail = createSharedDemoSkuDetail({
+        productSkuId: skuId,
+        startDate: addDaysToDate(TODAY, -6),
+        endDate: TODAY,
+        liveStock: new Map([[skuId, 4]]),
+        today: TODAY,
+      })!;
+
+      expect(detail.identity?.quantityAvailable).toBe(4);
+    });
+
+    it("keeps a sold-out zero rather than falling back", () => {
+      const skuId = skuIdFor("demo-shea-butter");
+      const detail = createSharedDemoSkuDetail({
+        productSkuId: skuId,
+        startDate: addDaysToDate(TODAY, -6),
+        endDate: TODAY,
+        liveStock: new Map([[skuId, 0]]),
+        today: TODAY,
+      })!;
+
+      expect(detail.identity?.quantityAvailable).toBe(0);
+    });
+
+    it("omits stock entirely until the live read settles", () => {
+      // Absent, not a story constant: an unknown figure must not render as a
+      // confident one that the next tick contradicts.
+      const detail = createSharedDemoSkuDetail({
+        productSkuId: skuIdFor("demo-shea-butter"),
+        startDate: addDaysToDate(TODAY, -6),
+        endDate: TODAY,
+        today: TODAY,
+      })!;
+
+      expect(detail.identity).toBeDefined();
+      expect(detail.identity?.quantityAvailable).toBeUndefined();
+    });
+
+    it("identifies the owning product the way the product route resolves it", () => {
+      // `identity.productId` exists to link out to the product detail page,
+      // and that route resolves its param by id OR slug against the store's
+      // real rows (`inventory/products:getByIdOrSlug`). The demo's provisioned
+      // product carries the story slug, so the slug is what resolves — a
+      // fixture-invented id matches nothing and renders "This product has
+      // been deleted".
+      for (const product of SHARED_DEMO_PRODUCTS) {
+        const detail = createSharedDemoSkuDetail({
+          productSkuId: skuIdFor(product.slug),
+          startDate: addDaysToDate(TODAY, -6),
+          endDate: TODAY,
+          today: TODAY,
+        })!;
+
+        expect(detail.identity?.productId, product.slug).toBe(product.slug);
+        expect(detail.identity?.productId, product.slug).not.toMatch(
+          /^shared-demo-product-/,
+        );
       }
     });
 
@@ -959,4 +1025,189 @@ describe("shared demo reports fixture", () => {
       );
     });
   });
+
+describe("live current day", () => {
+  const LIVE_SKU_ID = skuIdFor(SHARED_DEMO_PRODUCTS[0]!.slug);
+
+  function liveDay(
+    overrides: Partial<SharedDemoLiveReportsDay> = {},
+  ): SharedDemoLiveReportsDay {
+    return {
+      factCount: 5,
+      metrics: {
+        grossSalesMinor: 48_000,
+        netSalesMinor: 48_000,
+        refundsMinor: 0,
+        unitsSold: 12,
+        unitsReturned: 0,
+        uncostedRevenueMinor: 0,
+        grossProfitMinor: 16_000,
+        paymentsCollectedMinor: 48_000,
+        paymentsRefundedMinor: 0,
+        paymentAllocatedMinor: 48_000,
+      },
+      operatingDate: TODAY,
+      querySkuIdByFixtureSkuId: new Map(),
+      skus: [
+        [
+          LIVE_SKU_ID,
+          {
+            unitsSold: 12,
+            unitsReturned: 0,
+            grossSalesMinor: 48_000,
+            netSalesMinor: 48_000,
+            refundsMinor: 0,
+            uncostedRevenueMinor: 0,
+            grossProfitMinor: 16_000,
+          },
+        ],
+      ],
+      status: "open",
+      transactionCount: 0,
+      updatedAt: 1_780_000_000_000,
+      ...overrides,
+    };
+  }
+
+  it("moves today's snapshot off zero without touching the history", () => {
+    const withLive = createSharedDemoReportsOverview(TODAY, liveDay());
+    const withoutLive = createSharedDemoReportsOverview(TODAY);
+
+    expect(withLive.today.netSalesMinor).toBe(48_000);
+    expect(withLive.today.unitsSold).toBe(12);
+    expect(withLive.today.dayCount).toBe(1);
+    expect(withLive.today.unsettledDayCount).toBe(1);
+    expect(withLive.yesterday).toEqual(withoutLive.yesterday);
+    expect(withLive.priorWeek).toEqual(withoutLive.priorWeek);
+  });
+
+  it("keeps the current day open and unsettled", () => {
+    const overview = createSharedDemoReportsOverview(TODAY, liveDay());
+    const anchor = overview.dailyTrend.at(-1);
+
+    expect(anchor?.operatingDate).toBe(TODAY);
+    expect(anchor?.status).toBe("open");
+    expect(anchor?.netSalesMinor).toBe(48_000);
+    expect(anchor?.unitsSold).toBe(12);
+    // An open day still has no settled transaction count to report.
+    expect(anchor).not.toHaveProperty("transactionCount");
+  });
+
+  it("carries the live day into every window that contains it", () => {
+    const withLive = createSharedDemoReportsOverview(TODAY, liveDay());
+    const withoutLive = createSharedDemoReportsOverview(TODAY);
+
+    for (const window of ["weekToDate", "trailing30", "trailing3Months"] as const) {
+      expect(withLive[window].netSalesMinor).toBe(
+        withoutLive[window].netSalesMinor + 48_000,
+      );
+      expect(withLive[window].unitsSold).toBe(
+        withoutLive[window].unitsSold + 12,
+      );
+    }
+  });
+
+  it("shows the live numbers on the days rail", () => {
+    const rows = createSharedDemoReportDays({
+      startDate: addDaysToDate(TODAY, -2),
+      endDate: TODAY,
+      liveDay: liveDay(),
+      today: TODAY,
+    });
+    const todayRow = rows.at(-1);
+
+    expect(todayRow?.operatingDate).toBe(TODAY);
+    expect(todayRow?.status).toBe("open");
+    expect(todayRow?.netSalesMinor).toBe(48_000);
+    expect(todayRow?.factCount).toBe(5);
+    expect(todayRow).not.toHaveProperty("closeVarianceMinor");
+  });
+
+  it("attributes the live day's units in the sku mix", () => {
+    const range = { endDate: TODAY, startDate: TODAY };
+    const withLive = createSharedDemoReportSkuMix({
+      ...range,
+      liveDay: liveDay(),
+      today: TODAY,
+    });
+    const withoutLive = createSharedDemoReportSkuMix({
+      ...range,
+      today: TODAY,
+    });
+
+    expect(withoutLive.rows).toHaveLength(0);
+    expect(withLive.rows.map((row) => row.productSkuId)).toEqual([LIVE_SKU_ID]);
+    expect(withLive.rows[0]!.unitsSold).toBe(12);
+  });
+
+  it("ranks the live day's sku inside the items period", () => {
+    const result = createSharedDemoPeriodSkus({
+      periodKey: `d:${TODAY}`,
+      liveDay: liveDay(),
+      sortBy: "revenue",
+      today: TODAY,
+    });
+
+    expect(result.totalNetSalesMinor).toBe(48_000);
+    expect(result.totalUnitsSold).toBe(12);
+    expect(result.isTodayInProgress).toBe(true);
+    expect(result.rows[0]!.productSkuId).toBe(LIVE_SKU_ID);
+    expect(result.rows[0]!.identity?.sku).toBe(SHARED_DEMO_PRODUCTS[0]!.sku);
+  });
+
+  it("reports the live day as the freshest thing reporting has seen", () => {
+    // `updatedAt` is a high-water mark, so a live sale advances it and a
+    // stale live payload can never drag it back behind the history.
+    const historyUpdatedAt = createSharedDemoReportsOverview(TODAY).updatedAt;
+    const newer = historyUpdatedAt + 60_000;
+
+    expect(
+      createSharedDemoReportsOverview(TODAY, liveDay({ updatedAt: newer }))
+        .updatedAt,
+    ).toBe(newer);
+    expect(
+      createSharedDemoReportsOverview(TODAY, liveDay({ updatedAt: 0 }))
+        .updatedAt,
+    ).toBe(historyUpdatedAt);
+  });
+
+  it("ignores a live payload aimed at a day outside the rail", () => {
+    const stray = liveDay({ operatingDate: "2020-01-01" });
+
+    expect(createSharedDemoReportsOverview(TODAY, stray)).toEqual(
+      createSharedDemoReportsOverview(TODAY),
+    );
+  });
+
+  it("never lets a live merge leak into a later fixture-only read", () => {
+    // The history model is cached per `today`; the live day is folded on top
+    // per call. A merge that mutated the cache would poison every later read.
+    createSharedDemoReportsOverview(TODAY, liveDay());
+
+    expect(createSharedDemoReportsOverview(TODAY).today.netSalesMinor).toBe(0);
+    expect(
+      createSharedDemoReportDays({
+        startDate: TODAY,
+        endDate: TODAY,
+        today: TODAY,
+      })[0]!.netSalesMinor,
+    ).toBe(0);
+  });
+
+  it("keeps the weekly briefing's current cycle whole", () => {
+    const withLive = createSharedDemoWeeklyBriefing(TODAY, liveDay());
+    const withoutLive = createSharedDemoWeeklyBriefing(TODAY);
+    if (withLive.status !== "available" || withoutLive.status !== "available") {
+      throw new Error("unreachable");
+    }
+
+    expect(withLive.current.total.netSalesMinor).toBe(
+      withoutLive.current.total.netSalesMinor + 48_000,
+    );
+    expect(withLive.current.scheduleLineage).toHaveLength(7);
+    expect(withLive.current.cycleStartDate).toBe(
+      withoutLive.current.cycleStartDate,
+    );
+  });
+});
 });

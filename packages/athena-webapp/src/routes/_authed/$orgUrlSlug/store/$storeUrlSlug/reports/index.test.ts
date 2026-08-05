@@ -8,7 +8,7 @@ const routerState = vi.hoisted(() => ({
   queryReferences: [] as unknown[],
   overviewResult: undefined as unknown,
   /** `null` = a real store; see `useReportsSharedDemoMode`. */
-  sharedDemoContext: null as { kind: string } | null | undefined,
+  sharedDemoContext: null as { kind: string; storeId?: string } | null | undefined,
   /** Every push into another route's search (the SKU-detail drill-down). */
   detailNavigations: [] as Array<Record<string, unknown>>,
   navigationOptions: [] as Array<{ replace?: boolean; to?: string }>,
@@ -231,7 +231,7 @@ describe("reports overview route query lifecycle (AE19)", () => {
   });
 
   it("skips every Reports read in the shared demo and still starts no weekly query", () => {
-    routerState.sharedDemoContext = { kind: "shared_demo" };
+    routerState.sharedDemoContext = { kind: "shared_demo", storeId: "store-1" };
     render(
       createElement(
         (Route as unknown as { component: () => JSX.Element }).component,
@@ -241,7 +241,17 @@ describe("reports overview route query lifecycle (AE19)", () => {
     // The day panel painted from the fixture, so this really is the mounted
     // subtree and not an unrendered route shell.
     expect(screen.getByTestId("report-days-panel")).toBeInTheDocument();
-    expect(routerState.queryReferences).toEqual([]);
+    // Every Reports read the fixture can answer stays skipped. The one live
+    // subscription is the current operating day, which the fixture cannot
+    // know: it holds the visitor's own sales.
+    const mounted = routerState.queryReferences.map((reference) =>
+      getFunctionName(reference as never),
+    );
+    expect(mounted.length).toBeGreaterThan(0);
+    expect([...new Set(mounted)].sort()).toEqual([
+      "reports/liveDay:getLiveOperatingDay",
+      "reports/liveDay:listLiveSkuStock",
+    ]);
   });
 
   it("opens no Reports read while the shared demo context is loading", () => {
@@ -276,7 +286,7 @@ describe("reports overview units sheet continuity (U6)", () => {
   beforeEach(() => {
     routerState.queryReferences = [];
     routerState.overviewResult = { dailyTrend: [] };
-    routerState.sharedDemoContext = { kind: "shared_demo" };
+    routerState.sharedDemoContext = { kind: "shared_demo", storeId: "store-1" };
     routerState.detailNavigations = [];
     routerState.navigationOptions = [];
     routerState.search = {};

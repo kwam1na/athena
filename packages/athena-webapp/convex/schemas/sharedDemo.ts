@@ -126,5 +126,19 @@ export const sharedDemoBaselineDocumentSchema = v.object({
     v.literal("staffProfile"),
     v.literal("staffCredential"),
     v.literal("staffMessage"),
+    // Derived reporting state written by the demo's own sales. These are
+    // restore-registry members so an hourly restore purges them alongside the
+    // transactions that produced them, but they are never CAPTURED into a
+    // baseline (see `isDerivedRestoreTable`) — the literals exist so a legacy
+    // deployment that captured one before that rule landed still validates.
+    v.literal("reportFact"),
+    v.literal("reportDay"),
+    v.literal("reportSkuDay"),
+    v.literal("reportOverview"),
+    v.literal("reportPeriodSkuRollup"),
+    v.literal("reportDirtyDay"),
+    v.literal("reportWeekCurrent"),
+    v.literal("reportWeekAccepted"),
+    v.literal("reportDirtyWeek"),
   ),
 });

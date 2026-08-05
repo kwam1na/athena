@@ -1242,6 +1242,10 @@ describe("getSkuDetail", () => {
     );
     expect(result?.identity?.netPriceMinor).toBe(12_500);
     expect(result?.identity?.unitCostMinor).toBe(7_250);
+    // Stock on hand rides along for free: `quantityAvailable` is required on
+    // the `productSku` document this resolver already reads, so publishing it
+    // costs no extra read and keeps the field from being demo-only.
+    expect(result?.identity?.quantityAvailable).toBe(10);
   });
 
   it("sums metrics across days, with operatingDate per row", async () => {
@@ -1631,6 +1635,66 @@ async function seedAcceptedWeek(
 }
 
 describe("weekly projection reads", () => {
+  it("replaces stale active-week inventory attention with live resolved work", async () => {
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t);
+
+    await t.run(async (ctx) => {
+      const scheduleVersionId = await ctx.db.insert("storeSchedule", {
+        organizationId,
+        storeId,
+        status: "active",
+        effectiveFrom: 0,
+        timezone: "UTC",
+        weeklyWindows: [],
+        weeklyClosedDays: [0],
+        dateExceptions: [],
+        reportingCycleStartsOn: 1,
+        source: "admin",
+        createdAt: 0,
+        updatedAt: 0,
+      });
+
+      await ctx.db.insert("reportWeekCurrent", {
+        storeId,
+        cycleStartDate: "2026-07-27",
+        cycleEndDate: "2026-08-02",
+        currency: "GHS",
+        metricVersion: 1,
+        materializedAt: 1_100,
+        included: weeklyMetrics,
+        outsideSchedule: weeklyMetrics,
+        scheduleLineage: [{ ...weeklyLineage[0]!, scheduleVersionId }],
+        completeness: weeklyCompleteness,
+        lifecyclePosture: "live",
+        amendmentPosture: "none",
+        inventoryAttention: {
+          newCount: 2,
+          carriedForwardCount: 1,
+          completeness: "complete",
+          groups: [],
+          observedCount: 3,
+          overflow: false,
+        },
+      });
+    });
+
+    const result = await t.run((ctx) =>
+      handlerOf(getActiveWeeklyBriefing)(ctx, { storeId }),
+    );
+
+    expect(result).toMatchObject({
+      status: "available",
+      current: {
+        inventoryAttention: {
+          newCount: 0,
+          carriedForwardCount: 0,
+          completeness: "complete",
+        },
+      },
+    });
+  });
+
   it("fails closed after authorization when the store is outside the rollout", async () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
@@ -2802,6 +2866,12 @@ describe("reports module public surface", () => {
 
     expect(publicNames.sort()).toEqual([
       "customRange.requestRange",
+      // The shared demo's live current-day read: reportDay/reportSkuDay for
+      // one date, behind the same requireReportsStoreAccess gate as the rest.
+      "liveDay.getLiveOperatingDay",
+      // Current sellable stock, keyed by business code. Not day-scoped, so it
+      // is its own read rather than a lane on the operating day.
+      "liveDay.listLiveSkuStock",
       "queries.getAcceptedWeeklyDetail",
       "queries.getActiveWeeklyBriefing",
       "queries.getOverview",

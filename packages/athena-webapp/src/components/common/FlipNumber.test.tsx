@@ -1,7 +1,20 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("animejs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("animejs")>();
+  return { ...actual, animate: vi.fn(actual.animate) };
+});
+import { animate } from "animejs";
 
 import { FlipNumber, FlipText } from "./FlipNumber";
+
+/** Properties animated across every `animate` call since the last reset. */
+function animatedProperties() {
+  return vi
+    .mocked(animate)
+    .mock.calls.flatMap(([, options]) => Object.keys(options ?? {}));
+}
 
 describe("FlipNumber", () => {
   it("exposes an accessible formatted value while its glyphs animate", () => {
@@ -22,6 +35,31 @@ describe("FlipNumber", () => {
     expect(
       screen.getByText("711", { selector: ".sr-only" }),
     ).toBeInTheDocument();
+  });
+
+  it("settles the first value in from a placeholder zero without flipping", () => {
+    // Almost every metric mounts before its data arrives, so it mounts at a
+    // placeholder 0 and the real figure is its FIRST change. Flipping there
+    // animates the arrival of data as though the number had moved, which is
+    // what makes a freshly loaded page churn.
+    vi.mocked(animate).mockClear();
+    const { rerender } = render(
+      <FlipNumber testId="default-zero-number" value={0} />,
+    );
+    rerender(<FlipNumber testId="default-zero-number" value={24} />);
+
+    expect(animatedProperties()).not.toContain("rotateX");
+  });
+
+  it("still flips a change between two real values", () => {
+    // The flip earns its place when a number genuinely moves.
+    vi.mocked(animate).mockClear();
+    const { rerender } = render(
+      <FlipNumber testId="real-change-number" value={18} />,
+    );
+    rerender(<FlipNumber testId="real-change-number" value={24} />);
+
+    expect(animatedProperties()).toContain("rotateX");
   });
 
   it("can leave accessibility copy to a labelled parent", () => {

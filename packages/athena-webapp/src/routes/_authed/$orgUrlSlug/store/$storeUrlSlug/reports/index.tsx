@@ -3,7 +3,10 @@ import { useQuery } from "convex/react";
 import { useMemo } from "react";
 
 import useGetActiveStore from "@/hooks/useGetActiveStore";
-import { useReportsSharedDemoMode } from "@/components/reports/useReportsSharedDemoMode";
+import {
+  useReportsSharedDemoMode,
+  useSharedDemoLiveReportsDay,
+} from "@/components/reports/useReportsSharedDemoMode";
 import { useStableReportQuery } from "@/components/reports/useStableReportQuery";
 import { createSharedDemoReportsOverview } from "@/components/shared-demo/sharedDemoReportsFixture";
 import { api } from "~/convex/_generated/api";
@@ -46,6 +49,7 @@ function ReportsOverviewRoute() {
   const { activeStore } = useGetActiveStore();
 
   const { isSharedDemo, useLiveQuery } = useReportsSharedDemoMode();
+  const { liveDay, today } = useSharedDemoLiveReportsDay();
 
   /**
    * Gating the page on the overview query — the same document the header
@@ -61,12 +65,17 @@ function ReportsOverviewRoute() {
     activeStore?._id && useLiveQuery ? { storeId: activeStore._id } : "skip",
   );
   const demoOverview = useMemo(
-    () => (isSharedDemo ? createSharedDemoReportsOverview() : undefined),
-    [isSharedDemo],
+    () =>
+      isSharedDemo
+        ? createSharedDemoReportsOverview(today, liveDay)
+        : undefined,
+    [isSharedDemo, liveDay, today],
   );
-  const { isInitialLoad } = useStableReportQuery(
-    isSharedDemo ? demoOverview : liveOverview,
-  );
+  const {
+    data: overview,
+    isInitialLoad,
+    isRefreshing,
+  } = useStableReportQuery(isSharedDemo ? demoOverview : liveOverview);
 
   const defaultDaysEnd = isoDateOffset(0);
   const defaultDaysStart = isoDateOffset(-13);
@@ -77,11 +86,18 @@ function ReportsOverviewRoute() {
   const canResetDaysRange =
     daysStart !== defaultDaysStart || daysEnd !== defaultDaysEnd;
   const selectedWindow = search.window ?? "today";
-  if (activeStore === null || isInitialLoad) return null;
+  // The single gate for the whole page: children receive settled data as
+  // props and never re-derive it, so they cannot settle on different commits
+  // and paint each other's positions (see ReportsOverviewView's doc comment).
+  if (activeStore === null || isInitialLoad || overview === undefined) {
+    return null;
+  }
 
   return (
     <div className="space-y-layout-xl md:space-y-layout-2xl">
       <ReportsOverviewView
+        isRefreshing={isRefreshing}
+        overview={overview}
         onSelectedWindowChange={(window: ReportOverviewWindow) =>
           void navigate({
             replace: true,

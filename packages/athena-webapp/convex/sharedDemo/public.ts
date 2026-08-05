@@ -14,6 +14,7 @@ import {
   resetBrowserExperienceOperationDefinition,
 } from "../operationAdmission/definitions";
 import { admitPublicMutation } from "../operationAdmission/publicMutation";
+import { resolveStoreTimezone } from "../reports/operatingDay";
 import { createSharedDemoOperationAdapter } from "./operationAdapter";
 import { requireSharedDemoActorWithCtx } from "./actor";
 import {
@@ -81,6 +82,14 @@ const contextResult = v.union(
       ),
     }),
     storeId: v.id("store"),
+    /**
+     * The store's own timezone, so every demo surface resolves "today" the way
+     * the server does (`convex/reports/operatingDay.ts`) instead of from the
+     * visitor's browser clock. Deliberately the ZONE and not a resolved date
+     * label: a query does not re-run with the passage of time, so a label
+     * published here would go stale at the store's midnight.
+     */
+    timezone: v.string(),
   }),
 );
 
@@ -123,6 +132,7 @@ export const getContext = query({
       .unique();
     if (!state) return null;
     const hour = 3_600_000;
+    const timezone = await resolveStoreTimezone(ctx, actor.storeId, Date.now());
     return {
       baselineVersion: state.baselineVersion,
       kind: "shared_demo" as const,
@@ -135,6 +145,7 @@ export const getContext = query({
         status: state.status,
       },
       storeId: actor.storeId,
+      timezone,
     };
   },
 });

@@ -15,6 +15,7 @@ const stockAdjustmentSearchSchema = z.object({
   query: z.string().optional(),
   selectedSku: z.string().optional(),
   sku: z.string().optional(),
+  work: z.literal("synced_sale_inventory_review").optional(),
 });
 
 export const Route = createFileRoute(
@@ -44,6 +45,7 @@ function StockAdjustmentsRoute() {
           "query",
           "selectedSku",
           "sku",
+          "work",
         ] as const) {
           if (next[key] === undefined || next[key] === "") {
             delete next[key];

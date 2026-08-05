@@ -62,6 +62,26 @@ describe("shared demo public contract", () => {
     });
   });
 
+  it("publishes the store timezone so every surface can resolve the demo's own day", () => {
+    // One demo store is served to visitors in every zone while its server
+    // resolves operating dates in STORE time. Without this field the client
+    // derives "today" from the browser and names a different day than the
+    // rows it is about to read.
+    const context = {
+      baselineVersion: 1,
+      kind: "shared_demo",
+      nextHourlyRestoreAt: 1,
+      restore: { epoch: 2, status: "ready" },
+      storeId: "store-1",
+      timezone: "Africa/Accra",
+    };
+    assertConformsToExportedReturns(getContext, context);
+    expect(() => {
+      const { timezone: _omitted, ...withoutTimezone } = context;
+      assertConformsToExportedReturns(getContext, withoutTimezone);
+    }).toThrow();
+  });
+
   it("exposes the frontend context and manual restore contract without a store argument", () => {
     const source = readFileSync("convex/sharedDemo/public.ts", "utf8");
     expect(source).toContain("export const getContext = query");

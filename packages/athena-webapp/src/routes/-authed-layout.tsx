@@ -70,6 +70,7 @@ import {
 } from "@/lib/theme";
 import { SharedDemoRuntime } from "@/components/shared-demo/SharedDemoRuntime";
 import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
+import { useSharedDemoOperatingClock } from "@/hooks/useStoreOperatingClock";
 import {
   SharedDemoRestrictedSurface,
 } from "@/components/shared-demo/SharedDemoRestrictedSurface";
@@ -632,6 +633,13 @@ function MobileSidebarRouteDismiss({ routeKey }: { routeKey: string }) {
 }
 
 export default function Layout() {
+  // The shared demo's single store is served to visitors in every timezone
+  // while its server resolves operating dates in store time. Installing the
+  // store's zone HERE — the one component above both the POS and admin shells
+  // that always renders — makes every `getLocalOperatingDate` call site agree
+  // with the server, and keeps ownership single so no shell's unmount (a
+  // fullscreen toggle, say) can release a zone another shell still needs.
+  useSharedDemoOperatingClock(useSharedDemoContext()?.timezone);
   const [fullscreenOverride, setFullscreenOverride] = useState<boolean | null>(
     null,
   );

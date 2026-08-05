@@ -220,6 +220,12 @@ export const SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY = [
     capability: "reports.read",
   },
   {
+    // The demo's primary Reports read: the live current operating day the
+    // fixture folds onto its history. Same requireReportsStoreAccess gate.
+    functionName: "reports/liveDay:getLiveOperatingDay",
+    capability: "reports.read",
+  },
+  {
     functionName: "operations/staffCredentials:createStaffCredential",
     capability: "identity.manage",
   },

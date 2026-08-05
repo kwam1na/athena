@@ -73,7 +73,6 @@ export function FlipText({
   const onTransitionCompleteRef = useRef(onTransitionComplete);
   onTransitionCompleteRef.current = onTransitionComplete;
   const animationRef = useRef<ReturnType<typeof animate> | null>(null);
-  const hasMeasuredInitialMountRef = useRef(false);
   const assignValueRef = useCallback((element: HTMLSpanElement | null) => {
     valueRef.current = element;
     if (element && element.childElementCount === 0) {
@@ -85,36 +84,6 @@ export function FlipText({
     const element = valueRef.current;
     if (!element) return;
 
-    const shouldTraceInitialMount =
-      import.meta.env.DEV &&
-      !navigator.userAgent.includes("jsdom") &&
-      testId === "weekly-status-value" &&
-      !hasMeasuredInitialMountRef.current;
-    const traceInitialMount = (phase: string) => {
-      if (!shouldTraceInitialMount) return;
-
-      const wrapper = element.parentElement;
-      const wrapperRect = wrapper?.getBoundingClientRect();
-      const valueRect = element.getBoundingClientRect();
-      console.debug(
-        "[Weekly status mount]",
-        JSON.stringify({
-          phase,
-          value,
-          visualText: element.textContent,
-          visualChildCount: element.childElementCount,
-          valueHeight: valueRect.height,
-          valueTop: valueRect.top,
-          valueWidth: valueRect.width,
-          wrapperHeight: wrapperRect?.height ?? 0,
-          wrapperTop: wrapperRect?.top ?? 0,
-          wrapperWidth: wrapperRect?.width ?? 0,
-        }),
-      );
-    };
-
-    traceInitialMount("layout-effect:before-content");
-
     const previousValue = displayedValueRef.current;
     animationRef.current?.revert();
     animationRef.current = null;
@@ -125,22 +94,6 @@ export function FlipText({
       const completionFrame = requestAnimationFrame(() => {
         onTransitionCompleteRef.current?.(value);
       });
-
-      if (shouldTraceInitialMount) {
-        traceInitialMount("layout-effect:after-content");
-        const firstFrame = requestAnimationFrame(() => {
-          traceInitialMount("animation-frame:1");
-          requestAnimationFrame(() => {
-            traceInitialMount("animation-frame:2");
-            hasMeasuredInitialMountRef.current = true;
-          });
-        });
-
-        return () => {
-          cancelAnimationFrame(completionFrame);
-          cancelAnimationFrame(firstFrame);
-        };
-      }
       return () => cancelAnimationFrame(completionFrame);
     }
 
@@ -271,8 +224,21 @@ export function FlipNumber({
   const prefersReducedMotion = useReducedMotion();
   const shouldReduceMotion = reduceMotion ?? Boolean(prefersReducedMotion);
   const formattedValue = formatValue(value);
+  /**
+   * `fade`, not `flip`, is the default.
+   *
+   * Almost every consumer mounts before its data arrives — `value={total ?? 0}`
+   * is the house pattern — so the metric mounts at a placeholder zero and the
+   * real figure is its FIRST change. Flipping there animates the *arrival of
+   * data* as though the number had moved, which is why a freshly loaded page
+   * churns through every metric at once. A change between two real values
+   * still flips; only the settle out of zero is calmed.
+   *
+   * Pass `transitionFromZero="flip"` explicitly where a zero is a genuine
+   * reading the user watched, rather than "not loaded yet".
+   */
   const resolvedZeroTransition =
-    transitionFromZero ?? (skipAnimationFromZero ? "instant" : "flip");
+    transitionFromZero ?? (skipAnimationFromZero ? "instant" : "fade");
   const valueRef = useRef<HTMLSpanElement | null>(null);
   const displayedValueRef = useRef(formattedValue);
   const displayedNumberRef = useRef(value);

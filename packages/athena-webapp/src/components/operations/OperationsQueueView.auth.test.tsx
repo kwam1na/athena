@@ -187,7 +187,9 @@ describe("OperationsQueueView auth readiness", () => {
     render(<OperationsQueueView activeWorkflow="stock" />);
 
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
-      { storeId: "store-1" },
+      // The stock route reads open work only for the reviews it hydrates SKUs
+      // for, rather than pulling the whole queue it does not render.
+      { storeId: "store-1", workType: "synced_sale_inventory_review" },
       "skip",
       "skip",
       { storeId: "store-1" },

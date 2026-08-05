@@ -44,7 +44,10 @@ import {
 } from "@/lib/operations/operatingDate";
 import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { cn } from "@/lib/utils";
-import { createSharedDemoDailyOperationsFixture } from "@/components/shared-demo/sharedDemoOperationsFixture";
+import {
+  createSharedDemoDailyOperationsFixture,
+  toSharedDemoLivePulseDay,
+} from "@/components/shared-demo/sharedDemoOperationsFixture";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { currencyFormatter } from "~/shared/currencyFormatter";
@@ -4691,9 +4694,21 @@ function SharedDemoHistoricalDailyOperationsView({
     setOperatingDate(routeOperatingDate);
   }, [routeOperatingDate]);
 
+  // The week rail spans today even while a fixture day is selected, so the
+  // live current day is read here too — the fixture history stops at yesterday
+  // and would otherwise render today as a day that sold nothing.
+  const liveTodaySummary = useQuery(api.inventory.pos.getTodaySummary, {
+    pulseWindow: "today",
+    storeId,
+  });
+  const liveCurrentDay = useMemo(
+    () => toSharedDemoLivePulseDay(liveTodaySummary),
+    [liveTodaySummary],
+  );
   const fixture = useMemo(
     () =>
       createSharedDemoDailyOperationsFixture({
+        liveCurrentDay,
         operatingDate,
         orgUrlSlug: params?.orgUrlSlug ?? "",
         storeId,
@@ -4701,6 +4716,7 @@ function SharedDemoHistoricalDailyOperationsView({
         weekEndOperatingDate,
       }),
     [
+      liveCurrentDay,
       operatingDate,
       params?.orgUrlSlug,
       params?.storeUrlSlug,

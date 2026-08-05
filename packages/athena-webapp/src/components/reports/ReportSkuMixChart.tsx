@@ -332,7 +332,14 @@ export function ReportSkuMixChart({
     <section
       aria-busy={isRefreshing || isBuilding}
       aria-labelledby="report-sku-mix-heading"
-      className="flex h-full flex-1 flex-col rounded-lg p-layout-md"
+      /*
+       * `min-h` reserves the panel's settled height across its own state
+       * machine (content / pending / empty / error). Without it the content
+       * branch unmounting collapses this section to nothing, which drags the
+       * days rail below it — a measured 0.21 layout shift on entering the
+       * Overview tab. Matches the reservation the legend list already makes.
+       */
+      className="flex h-full min-h-[26rem] flex-1 flex-col rounded-lg p-layout-md"
       data-animation-active={String(isAnimationActive)}
       data-building={String(isBuilding)}
       data-exiting={String(isExiting)}
@@ -571,7 +578,7 @@ export function ReportSkuMixChart({
                       </p>
                       {row.identity?.sku &&
                       row.identity.sku !== row.identity.displayName ? (
-                        <p className="truncate font-mono text-xs text-muted-foreground">
+                        <p className="truncate text-xs text-muted-foreground">
                           {row.identity.sku}
                         </p>
                       ) : null}

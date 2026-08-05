@@ -16,7 +16,10 @@ import {
   unitsSheetFocusSearchValue,
 } from "@/components/reports/reportRouteSearch";
 import { getOrigin } from "~/src/lib/navigationUtils";
-import { useReportsSharedDemoMode } from "@/components/reports/useReportsSharedDemoMode";
+import {
+  useReportsSharedDemoMode,
+  useSharedDemoLiveReportsDay,
+} from "@/components/reports/useReportsSharedDemoMode";
 import { useStableReportQuery } from "@/components/reports/useStableReportQuery";
 import { createSharedDemoWeeklyBriefing } from "@/components/shared-demo/sharedDemoReportsFixture";
 import {
@@ -151,6 +154,7 @@ export function ReportsWeeklyRoute() {
   // History starts only when the operator opens the selector, keeping Weekly
   // at a maximum of two compact Reports subscriptions.
   const { isSharedDemo, useLiveQuery } = useReportsSharedDemoMode();
+  const { liveDay, today } = useSharedDemoLiveReportsDay();
   const liveActive = useQuery(
     api.reports.queries.getActiveWeeklyBriefing,
     activeStore?._id && !selectedReportId && useLiveQuery
@@ -160,9 +164,9 @@ export function ReportsWeeklyRoute() {
   const demoActive = useMemo(
     () =>
       isSharedDemo && !selectedReportId
-        ? createSharedDemoWeeklyBriefing()
+        ? createSharedDemoWeeklyBriefing(today, liveDay)
         : undefined,
-    [isSharedDemo, selectedReportId],
+    [isSharedDemo, liveDay, selectedReportId, today],
   );
   const active = isSharedDemo ? demoActive : liveActive;
   const liveSelectedDetail = useQuery(

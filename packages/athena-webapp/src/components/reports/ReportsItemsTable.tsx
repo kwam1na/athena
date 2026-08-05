@@ -85,7 +85,7 @@ export function ReportsItemsTable({
                     {formatSkuDisplayName(row.identity, row.productSkuId)}
                   </span>
                   <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-xs leading-5 text-muted-foreground">
-                    <span className="min-w-0 truncate font-mono">
+                    <span className="min-w-0 truncate">
                       {formatSkuSubtitle(row.identity, row.productSkuId)}
                     </span>
                     <span aria-hidden="true" className="text-muted-foreground/60">

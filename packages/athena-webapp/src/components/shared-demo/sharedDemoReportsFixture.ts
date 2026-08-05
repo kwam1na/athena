@@ -16,6 +16,17 @@
  * Operations could disagree for the same date, the demo would contradict
  * itself in front of a prospect.
  *
+ * ## The live current day
+ *
+ * The fixture owns every date BEFORE today; today itself is live. A visitor's
+ * own POS sales write real `reportDay`/`reportSkuDay` rows, and every creator
+ * here accepts an optional `liveDay` (`sharedDemoLiveReportsDay` normalises
+ * the `reports/liveDay` payload) that `getModel` folds onto the cached history
+ * per call — copied, never written into the cache. Same continuity rule as
+ * above, extended across the seam: Operations, Transactions, and Reports all
+ * source today from the store's live rows, so no surface can contradict
+ * another about the day in progress.
+ *
  * Cost basis comes from `unitCost` on `SHARED_DEMO_PRODUCTS` (minor units,
  * pesewas — like every other amount in this file). Nothing else in the demo
  * consumes `unitCost`; merchandise margin is exactly what it exists for.
@@ -106,11 +117,18 @@ import {
   createSharedDemoTransactionFixtures,
   type SharedDemoTransactionFixture,
 } from "./sharedDemoTransactionsFixture";
+import {
+  SHARED_DEMO_REPORTS_SKU_ID_PREFIX as FIXTURE_SKU_ID_PREFIX,
+  type SharedDemoLiveReportsDay,
+} from "./sharedDemoLiveReportsDay";
 
-/** Demo SKU ids are `shared-demo-sku-${slug}` — see the transactions fixture. */
-export const SHARED_DEMO_REPORTS_SKU_ID_PREFIX = "shared-demo-sku-";
+/**
+ * Demo SKU ids are `shared-demo-sku-${slug}` — see the transactions fixture.
+ * Defined by the live-day bridge, which is where real catalogue codes are
+ * rewritten into this space, and re-exported here for existing consumers.
+ */
+export { SHARED_DEMO_REPORTS_SKU_ID_PREFIX } from "./sharedDemoLiveReportsDay";
 
-const SHARED_DEMO_PRODUCT_ID_PREFIX = "shared-demo-product-";
 const SHARED_DEMO_SCHEDULE_VERSION_ID = "shared-demo-schedule-v1";
 const SHARED_DEMO_CURRENCY = SHARED_DEMO_STORE_IDENTITY.currency;
 
@@ -235,7 +253,7 @@ function periodDateRange(
  */
 export function isSharedDemoReportsSkuId(id: string): boolean {
   return (
-    typeof id === "string" && id.startsWith(SHARED_DEMO_REPORTS_SKU_ID_PREFIX)
+    typeof id === "string" && id.startsWith(FIXTURE_SKU_ID_PREFIX)
   );
 }
 
@@ -243,7 +261,7 @@ function demoProductForSkuId(
   productSkuId: string,
 ): SharedDemoProductStory | undefined {
   if (!isSharedDemoReportsSkuId(productSkuId)) return undefined;
-  const slug = productSkuId.slice(SHARED_DEMO_REPORTS_SKU_ID_PREFIX.length);
+  const slug = productSkuId.slice(FIXTURE_SKU_ID_PREFIX.length);
   return SHARED_DEMO_PRODUCTS.find((product) => product.slug === slug);
 }
 
@@ -310,6 +328,12 @@ type SharedDemoReportsDay = {
 
 type SharedDemoReportsModel = {
   today: string;
+  /**
+   * Current stock per fixture sku id, from the live rows. Absent until the
+   * read settles — identity then omits the figure rather than stating the
+   * catalogue's story constant, which never moves.
+   */
+  liveStock?: Map<string, number> | null;
   updatedAt: number;
   /** History start through today inclusive, ascending. */
   orderedDates: string[];
@@ -451,12 +475,54 @@ function buildModel(today: string): SharedDemoReportsModel {
   };
 }
 
-function getModel(today: string): SharedDemoReportsModel {
-  const cached = reportsFixtureCache.get(today);
-  if (cached) return cached;
-  const model = buildModel(today);
-  reportsFixtureCache.set(today, model);
-  return model;
+/**
+ * Fold the live current day onto the cached history.
+ *
+ * The 21-day history is genuinely static and expensive, so it stays cached on
+ * `today` alone; the live day is one day and folds on top per call. This
+ * COPIES rather than mutates — a merge that wrote into the cached model would
+ * poison every later fixture-only read of the same day.
+ *
+ * A payload for a date the rail does not cover is ignored outright. The
+ * fixture owns every date before today, and no live row may shadow it.
+ */
+function composeLiveDay(
+  base: SharedDemoReportsModel,
+  liveDay: SharedDemoLiveReportsDay,
+): SharedDemoReportsModel {
+  const existing = base.days.get(liveDay.operatingDate);
+  if (!existing) return base;
+
+  const days = new Map(base.days);
+  days.set(liveDay.operatingDate, {
+    ...existing,
+    factCount: liveDay.factCount,
+    metrics: liveDay.metrics,
+    skus: new Map(liveDay.skus),
+    status: liveDay.status,
+    transactionCount: liveDay.transactionCount,
+  });
+
+  return {
+    ...base,
+    days,
+    updatedAt: Math.max(base.updatedAt, liveDay.updatedAt),
+  };
+}
+
+function getModel(
+  today: string,
+  liveDay?: SharedDemoLiveReportsDay | null,
+  liveStock?: Map<string, number> | null,
+): SharedDemoReportsModel {
+  let model = reportsFixtureCache.get(today);
+  if (!model) {
+    model = buildModel(today);
+    reportsFixtureCache.set(today, model);
+  }
+  const withLiveDay = liveDay ? composeLiveDay(model, liveDay) : model;
+  // Copied, like the day: the cache holds fixture history only.
+  return liveStock ? { ...withLiveDay, liveStock } : withLiveDay;
 }
 
 /** Days on record inside an inclusive range, ascending. Never throws. */
@@ -511,8 +577,9 @@ function snapshotForDays(days: SharedDemoReportsDay[]): ReportPeriodSnapshot {
 
 export function createSharedDemoReportsOverview(
   today = getLocalOperatingDate(),
+  liveDay?: SharedDemoLiveReportsDay | null,
 ): ReportOverviewData {
-  const model = getModel(today);
+  const model = getModel(today, liveDay);
   const weekStart = isoWeekStart(today);
   const priorWeekStart = addDaysToDate(weekStart, -7);
   const trailing30Start = addDaysToDate(today, -29);
@@ -629,10 +696,12 @@ function toReportDayRow(day: SharedDemoReportsDay): ReportDayRow {
 export function createSharedDemoReportDays(args: {
   startDate: string;
   endDate: string;
+  liveDay?: SharedDemoLiveReportsDay | null;
+  liveStock?: Map<string, number> | null;
   today?: string;
 }): ReportDayRow[] {
   const today = args.today ?? getLocalOperatingDate();
-  const model = getModel(today);
+  const model = getModel(today, args.liveDay, args.liveStock);
   return daysInRange(model, args.startDate, args.endDate).map(toReportDayRow);
 }
 
@@ -647,6 +716,7 @@ function skuIdentity(
   const product = demoProductForSkuId(productSkuId);
   if (!product) return undefined;
   const imageUrl = model.imageBySkuId.get(productSkuId);
+  const liveQuantityAvailable = model.liveStock?.get(productSkuId);
 
   return {
     displayName: product.name,
@@ -654,8 +724,18 @@ function skuIdentity(
     netPriceMinor: product.price,
     unitCostMinor: product.unitCost,
     ...(imageUrl ? { imageUrl } : {}),
-    productId: `${SHARED_DEMO_PRODUCT_ID_PREFIX}${product.slug}`,
-    quantityAvailable: product.inventoryCount,
+    // The story slug, NOT a fixture-invented id: this value is handed to the
+    // product detail route, which resolves it by id-or-slug against the
+    // store's real rows (`inventory/products:getByIdOrSlug`). The demo's
+    // provisioned product carries this slug, so it resolves; a synthetic id
+    // matches nothing and the page renders "This product has been deleted".
+    productId: product.slug,
+    // Stock comes from the live rows or not at all. The catalogue's
+    // `inventoryCount` is a story constant that a visitor's sale never moves,
+    // so stating it would contradict the stock they just changed.
+    ...(liveQuantityAvailable !== undefined
+      ? { quantityAvailable: liveQuantityAvailable }
+      : {}),
   };
 }
 
@@ -702,10 +782,12 @@ function skuTotalsForRange(
 export function createSharedDemoReportSkuMix(args: {
   startDate: string;
   endDate: string;
+  liveDay?: SharedDemoLiveReportsDay | null;
+  liveStock?: Map<string, number> | null;
   today?: string;
 }): ReportSkuMixData {
   const today = args.today ?? getLocalOperatingDate();
-  const model = getModel(today);
+  const model = getModel(today, args.liveDay, args.liveStock);
   const totals = skuTotalsForRange(model, args.startDate, args.endDate);
   const ranked = Array.from(totals, ([productSkuId, metrics]) => ({
     productSkuId,
@@ -766,10 +848,12 @@ export type SharedDemoReportMixLifecycle = {
 export function createSharedDemoReportMixLifecycle(args: {
   startDate: string;
   endDate: string;
+  liveDay?: SharedDemoLiveReportsDay | null;
+  liveStock?: Map<string, number> | null;
   today?: string;
 }): SharedDemoReportMixLifecycle {
   const today = args.today ?? getLocalOperatingDate();
-  const model = getModel(today);
+  const model = getModel(today, args.liveDay, args.liveStock);
   const data = createSharedDemoReportSkuMix(args);
 
   return {
@@ -785,10 +869,12 @@ export function createSharedDemoReportMixLifecycle(args: {
 export function createSharedDemoReportSkuMovement(args: {
   startDate: string;
   endDate: string;
+  liveDay?: SharedDemoLiveReportsDay | null;
+  liveStock?: Map<string, number> | null;
   today?: string;
 }): ReportSkuMovementData {
   const today = args.today ?? getLocalOperatingDate();
-  const model = getModel(today);
+  const model = getModel(today, args.liveDay, args.liveStock);
   const totals = skuTotalsForRange(model, args.startDate, args.endDate);
   const rows = Array.from(totals, ([productSkuId, metrics]) => ({
     productSkuId,
@@ -904,10 +990,12 @@ export function createSharedDemoReportMovementPage(args: {
   startDate: string;
   endDate: string;
   page?: number;
+  liveDay?: SharedDemoLiveReportsDay | null;
+  liveStock?: Map<string, number> | null;
   today?: string;
 }): SharedDemoReportMovementPage {
   const today = args.today ?? getLocalOperatingDate();
-  const model = getModel(today);
+  const model = getModel(today, args.liveDay, args.liveStock);
   const totals = skuTotalsForRange(model, args.startDate, args.endDate);
 
   const ranked = rankSignedMovementRows(
@@ -1030,10 +1118,12 @@ export function createSharedDemoPeriodSkus(args: {
   periodKey: string;
   sortBy: ReportSkuSortBy;
   cursor?: string | null;
+  liveDay?: SharedDemoLiveReportsDay | null;
+  liveStock?: Map<string, number> | null;
   today?: string;
 }): SharedDemoPeriodSkusResult {
   const today = args.today ?? getLocalOperatingDate();
-  const model = getModel(today);
+  const model = getModel(today, args.liveDay, args.liveStock);
   const range = periodDateRange(args.periodKey);
   const prior = priorPeriodRange(args.periodKey, range);
   const totals = range
@@ -1169,6 +1259,8 @@ export function createSharedDemoSkuDetail(args: {
   productSkuId: string;
   startDate: string;
   endDate: string;
+  liveDay?: SharedDemoLiveReportsDay | null;
+  liveStock?: Map<string, number> | null;
   today?: string;
 }): SharedDemoSkuDetailResult | null {
   const today = args.today ?? getLocalOperatingDate();
@@ -1176,7 +1268,7 @@ export function createSharedDemoSkuDetail(args: {
   // route param and the story lookups throw on a miss.
   if (!demoProductForSkuId(args.productSkuId)) return null;
 
-  const model = getModel(today);
+  const model = getModel(today, args.liveDay, args.liveStock);
   const identity = skuIdentity(model, args.productSkuId);
   if (args.startDate > args.endDate) {
     return { days: [], totals: null, priorPeriodTotals: null, identity };
@@ -1223,6 +1315,8 @@ export function createSharedDemoSkuDetail(args: {
 export function createSharedDemoSkuDayTransactions(args: {
   productSkuId: string;
   operatingDate: string;
+  liveDay?: SharedDemoLiveReportsDay | null;
+  liveStock?: Map<string, number> | null;
   today?: string;
 }): { transactions: ReportSkuTransactionEvidence[]; truncated: boolean } {
   const today = args.today ?? getLocalOperatingDate();
@@ -1230,7 +1324,7 @@ export function createSharedDemoSkuDayTransactions(args: {
     return { transactions: [], truncated: false };
   }
 
-  const model = getModel(today);
+  const model = getModel(today, args.liveDay, args.liveStock);
   const dayTransactions =
     model.transactionsByDate.get(args.operatingDate) ?? [];
   const matching = dayTransactions.filter((transaction) =>
@@ -1493,8 +1587,9 @@ function priorPeriod(
 
 export function createSharedDemoWeeklyBriefing(
   today = getLocalOperatingDate(),
+  liveDay?: SharedDemoLiveReportsDay | null,
 ): ReportWeekBriefing {
-  const model = getModel(today);
+  const model = getModel(today, liveDay);
   const frameDates = weekFrameDates(today);
   const cycleStartDate = frameDates[0]!;
   const cycleEndDate = frameDates.at(-1)!;

@@ -384,7 +384,10 @@ describe("PointOfSaleView", () => {
     }
   });
 
-  it("uses shared-demo fixture history for POS non-today windows", async () => {
+  it("keeps reading the live day for shared-demo non-today windows", async () => {
+    // The fixture owns the history behind today, but a window that CONTAINS
+    // today has to fold the live day in. Skipping this read is what left the
+    // week and month trends ending at zero while Today showed real sales.
     const user = userEvent.setup();
     useSharedDemoContextMock.mockReturnValue({
       kind: "shared_demo",
@@ -396,7 +399,12 @@ describe("PointOfSaleView", () => {
 
     await user.click(screen.getByRole("tab", { name: "This week" }));
 
-    expect(useQueryMock).toHaveBeenCalledWith("getTodaySummary", "skip");
+    // Always TODAY, whatever window is on screen: the demo's live rows only
+    // ever cover today, so a wider live window would read the same day twice.
+    expect(useQueryMock).toHaveBeenCalledWith("getTodaySummary", {
+      pulseWindow: "today",
+      storeId: "store-1",
+    });
     expect(screen.queryAllByText("No sales yesterday")).toHaveLength(0);
     expect(screen.getAllByText(/last week/).length).toBeGreaterThan(0);
     expect(screen.getByText("Raw Shea Butter 250g")).toBeInTheDocument();

@@ -33,6 +33,11 @@ import { formatRegisterSessionCode } from "~/src/lib/pos/presentation/registerSe
 import { RelativeTimestamp } from "../../ui/relative-timestamp";
 import type { Id } from "~/convex/_generated/dataModel";
 import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
+import { useStoreOperatingDate } from "@/hooks/useStoreOperatingClock";
+import {
+  getLocalOperatingDateRange,
+  getLocalOperatingDateRangeFromSearch,
+} from "@/lib/operations/operatingDate";
 import { createSharedDemoTransactionFixtures } from "@/components/shared-demo/sharedDemoTransactionsFixture";
 
 function formatPaymentMethod(method: string | null) {
@@ -102,8 +107,10 @@ function getStartOfOperatingDate(operatingDate?: string) {
 
   if (!match) return null;
 
-  const [, year, month, day] = match;
-  return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
+  // Resolved through the shared helper so a store zone, when one is in force,
+  // decides where the day starts — the same boundary the server stamped onto
+  // the rows this bound is about to filter.
+  return getLocalOperatingDateRangeFromSearch(operatingDate).startAt;
 }
 
 function formatOperatingDateFilterLabel(operatingDate: string) {
@@ -375,6 +382,7 @@ export function TransactionsView() {
   const { activeStore } = useGetActiveStore();
   const sharedDemoContext = useSharedDemoContext();
   const isSharedDemo = Boolean(sharedDemoContext);
+  const storeOperatingDate = useStoreOperatingDate();
   const navigate = useNavigate();
   const {
     operatingDate,
@@ -426,14 +434,15 @@ export function TransactionsView() {
       : "all";
   const isOperatingDateFilterActive =
     filter === "fromDate" && operatingDateStartAt !== null;
-  const todayStartAt = useMemo(() => {
-    const today = new Date();
-    return new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate(),
-    ).getTime();
-  }, []);
+  // The store's own midnight, not the browser's. This is an epoch bound rather
+  // than a day label, so it is the one call site the operating-date override
+  // cannot correct implicitly — a demo visitor west of the store would
+  // otherwise clamp the feed to a window the store already closed.
+  const todayStartAt = useMemo(
+    () => getLocalOperatingDateRange().startAt,
+    // Recomputed when the store's own day rolls over, not the browser's.
+    [storeOperatingDate],
+  );
   const completedFrom =
     isSharedDemo
       ? todayStartAt

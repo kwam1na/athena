@@ -832,6 +832,31 @@ export type ReportOverviewData = {
 // Read-query result shapes (slice D implements; slice E consumes)
 // ---------------------------------------------------------------------------
 
+/**
+ * `reports/liveDay:getLiveOperatingDay` — the single open operating day, read
+ * straight from the rows a sale writes (`reportDay` / `reportSkuDay`), not
+ * from the sweeper-written overview. Declared here rather than beside the
+ * query because its consumer is client code (the shared demo folds it onto
+ * its fixture history), and client source may not import a Convex server
+ * module — the browser-boundary test enforces it.
+ */
+export type ReportLiveOperatingDay = {
+  operatingDate: string;
+  day: {
+    currency: string;
+    factCount: number;
+    lastFactRecordedAt: number;
+    metrics: ReportDayMetrics;
+    status: ReportDayStatus;
+  } | null;
+  skus: Array<{
+    metrics: ReportSkuDayMetrics;
+    productSkuId: string;
+    /** Business code, or `null` when the catalogue document is gone. */
+    sku: string | null;
+  }>;
+};
+
 export type ReportDayRow = ReportDayMetrics & {
   operatingDate: string;
   status: ReportDayStatus;

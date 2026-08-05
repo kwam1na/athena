@@ -6,7 +6,7 @@ const useQuery = vi.fn();
 const navigateBackMock = vi.fn();
 const search = { current: {} as Record<string, unknown> };
 /** `null` = a real store; see `useReportsSharedDemoMode`. */
-let sharedDemoContext: { kind: string } | null | undefined = null;
+let sharedDemoContext: { kind: string; storeId?: string } | null | undefined = null;
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQuery(...args),
 }));
@@ -86,7 +86,7 @@ describe("ReportsSkuDetailView shared demo", () => {
   });
 
   it("renders demo SKU detail and day evidence with no live reads", () => {
-    sharedDemoContext = { kind: "shared_demo" };
+    sharedDemoContext = { kind: "shared_demo", storeId: "store-1" };
     useQuery.mockReturnValue(undefined);
 
     const detail = createSharedDemoSkuDetail({
@@ -111,7 +111,23 @@ describe("ReportsSkuDetailView shared demo", () => {
       />,
     );
 
-    expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
+    // Demo mode opens no read the fixture answers. The only live reads are
+    // for the current operating day — more than one view may ask, and Convex
+    // dedupes identical subscriptions into one.
+    const liveReads = useQuery.mock.calls.filter((call) => call[1] !== "skip");
+    expect(liveReads.length).toBeGreaterThan(0);
+    for (const [, args] of liveReads) {
+      // Two reads the fixture cannot answer: the current operating day, and
+      // current stock. Everything else is answered locally.
+      expect(args).toEqual(
+        expect.objectContaining({ storeId: "store-1" }),
+      );
+      expect(Object.keys(args as object).sort()).toEqual(
+        (args as { operatingDate?: string }).operatingDate
+          ? ["operatingDate", "storeId"]
+          : ["storeId"],
+      );
+    }
     expect(screen.getByTestId("reports-sku-detail-name")).toHaveTextContent(
       SHARED_DEMO_PRODUCTS[0]!.name,
     );
@@ -134,7 +150,7 @@ describe("ReportsSkuDetailView shared demo", () => {
   });
 
   it("renders the empty state for a non-demo SKU id without throwing", () => {
-    sharedDemoContext = { kind: "shared_demo" };
+    sharedDemoContext = { kind: "shared_demo", storeId: "store-1" };
     useQuery.mockReturnValue(undefined);
 
     expect(() =>
@@ -143,8 +159,69 @@ describe("ReportsSkuDetailView shared demo", () => {
       ),
     ).not.toThrow();
 
-    expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
+    // An unresolvable SKU still opens no fixture-superseded read; only the
+    // shared current-day subscription is live.
+    for (const [, args] of useQuery.mock.calls.filter((c) => c[1] !== "skip")) {
+      // The operating day and current stock — the two reads the fixture
+      // cannot answer.
+      expect(args).toEqual(expect.objectContaining({ storeId: "store-1" }));
+      expect(Object.keys(args as object).sort()).toEqual(
+        (args as { operatingDate?: string }).operatingDate
+          ? ["operatingDate", "storeId"]
+          : ["storeId"],
+      );
+    }
     expect(screen.getByText("No activity")).toBeInTheDocument();
+  });
+
+  it("reads today's evidence from the server, not the fixture history", () => {
+    // The demo's transaction fixtures stop at yesterday, so today's evidence
+    // has to come from the same `reportFact` rows the visitor's own sales
+    // wrote. The sheet is addressed by a fixture sku id, so the live day's
+    // lookup is what makes that read addressable at all.
+    sharedDemoContext = { kind: "shared_demo", storeId: "store-1" };
+    const realSkuId = "kg2realconvexid";
+    useQuery.mockImplementation((_fn: unknown, args: unknown) => {
+      if (args === "skip") return undefined;
+      const call = args as Record<string, unknown>;
+      if (call.operatingDate && !call.productSkuId) {
+        return {
+          day: null,
+          operatingDate: endDate,
+          skus: [
+            {
+              metrics: {
+                unitsSold: 2,
+                unitsReturned: 0,
+                grossSalesMinor: 9_000,
+                netSalesMinor: 9_000,
+                refundsMinor: 0,
+                uncostedRevenueMinor: 0,
+                grossProfitMinor: 3_000,
+              },
+              productSkuId: realSkuId,
+              sku: SHARED_DEMO_PRODUCTS[0]!.sku,
+            },
+          ],
+        };
+      }
+      return undefined;
+    });
+
+    render(
+      <ReportsSkuDetailView
+        {...demoProps}
+        productSkuId={demoSkuId}
+        transactionDate={endDate}
+      />,
+    );
+
+    expect(useQuery.mock.calls.map((call) => call[1])).toContainEqual({
+      storeId: "store-1",
+      productSkuId: realSkuId,
+      operatingDate: endDate,
+    });
+    useQuery.mockReset();
   });
 
   it("keeps the live detail read for a real store", () => {
@@ -152,7 +229,7 @@ describe("ReportsSkuDetailView shared demo", () => {
 
     render(<ReportsSkuDetailView {...demoProps} />);
 
-    expect(useQuery.mock.calls[0]?.[1]).toEqual({
+    expect(useQuery.mock.calls.map((call) => call[1])).toContainEqual({
       storeId: "store-1",
       productSkuId: "sku-1",
       startDate,
@@ -171,6 +248,33 @@ describe("ReportsSkuDetailView shared demo", () => {
 });
 
 describe("ReportsSkuDetailView", () => {
+  it("states stock on hand beside the SKU's other standing attributes", () => {
+    // Deliberately NOT one of the period metric cards: those all answer "in
+    // this range" and compare against the prior period, while stock is a
+    // right-now fact the reporting-period control cannot change.
+    useQuery.mockReturnValue({
+      days: [],
+      totals: null,
+      identity: {
+        displayName: "oshe",
+        sku: "6N2Y-JY3-5G6",
+        netPriceMinor: 12_500,
+        unitCostMinor: 7_250,
+        productId: "product-9",
+        quantityAvailable: 12,
+      },
+    });
+    render(<ReportsSkuDetailView {...baseProps} />);
+
+    const pricing = screen.getByRole("group", { name: "Pricing and stock" });
+    expect(within(pricing).getByText("Available")).toBeInTheDocument();
+    expect(within(pricing).getByText("12")).toBeInTheDocument();
+
+    // It sits above the reporting period, with the SKU's own attributes.
+    const summary = screen.getByTestId("reports-sku-summary");
+    expect(within(summary).queryByText("Available")).not.toBeInTheDocument();
+  });
+
   it("lets the product identity stand on its own", () => {
     useQuery.mockReturnValue({
       days: [],
@@ -225,14 +329,16 @@ describe("ReportsSkuDetailView", () => {
     expect(within(details).getByText("6N2Y-JY3-5G6")).toBeInTheDocument();
     expect(details).toHaveClass("space-y-layout-xs");
 
-    const pricing = screen.getByRole("group", { name: "Pricing" });
+    const pricing = screen.getByRole("group", { name: "Pricing and stock" });
     expect(within(pricing).getByText("Net price")).toBeInTheDocument();
     expect(within(pricing).getByText("Unit cost")).toBeInTheDocument();
     expect(within(pricing).getByText("Unit margin")).toBeInTheDocument();
     expect(within(pricing).queryByText("SKU")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("heading", { name: "Pricing" }),
+      screen.queryByRole("heading", { name: "Pricing and stock" }),
     ).not.toBeInTheDocument();
+    // Absent identity field, absent row — never a fabricated zero.
+    expect(within(pricing).queryByText("Available")).not.toBeInTheDocument();
     expect(pricing.querySelector("dl")).toHaveClass("flex");
     expect(pricing.querySelector("dl")).not.toHaveClass("grid");
     expect(pricing.querySelector(".border-l")).not.toBeInTheDocument();

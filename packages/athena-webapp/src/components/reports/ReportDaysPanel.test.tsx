@@ -9,7 +9,7 @@ const ensureMovementRange = vi.fn();
 const ensureMixRange = vi.fn();
 const retryMixRange = vi.fn();
 /** `null` = a real store; see `useReportsSharedDemoMode`. */
-let sharedDemoContext: { kind: string } | null | undefined = null;
+let sharedDemoContext: { kind: string; storeId?: string } | null | undefined = null;
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => {
     const result = useQuery(...args);
@@ -161,12 +161,28 @@ describe("ReportDaysPanel shared demo", () => {
   };
 
   it("renders demo days and product mix without either live read", () => {
-    sharedDemoContext = { kind: "shared_demo" };
+    sharedDemoContext = { kind: "shared_demo", storeId: "store-1" };
     useQuery.mockReturnValue(undefined);
 
     render(<ReportDaysPanel {...demoProps} />);
 
-    expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
+    // Demo mode opens no read the fixture answers. The only live reads are
+    // for the current operating day — more than one view may ask, and Convex
+    // dedupes identical subscriptions into one.
+    const liveReads = useQuery.mock.calls.filter((call) => call[1] !== "skip");
+    expect(liveReads.length).toBeGreaterThan(0);
+    for (const [, args] of liveReads) {
+      // Two reads the fixture cannot answer: the current operating day, and
+      // current stock. Everything else is answered locally.
+      expect(args).toEqual(
+        expect.objectContaining({ storeId: "store-1" }),
+      );
+      expect(Object.keys(args as object).sort()).toEqual(
+        (args as { operatingDate?: string }).operatingDate
+          ? ["operatingDate", "storeId"]
+          : ["storeId"],
+      );
+    }
     // Demo mode never consumes async admission: the multi-day demo mix is
     // answered synchronously by the fixture, not by the ensure mutation
     // (which the server independently denies for shared-demo actors).

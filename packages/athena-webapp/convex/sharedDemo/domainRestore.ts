@@ -57,10 +57,63 @@ export const SHARED_DEMO_MUTABLE_TABLES = [
   { domain: "staff", tableName: "staffProfile" },
   { domain: "staff", tableName: "staffCredential" },
   { domain: "staff", tableName: "staffMessage" },
+  // Derived reporting state. A demo sale runs `recordFacts` like any other
+  // store's, so these fill up during a session and MUST be purged with the
+  // transactions that produced them — `reportFact` above all, because
+  // `foldDay` rebuilds a day from surviving facts and would otherwise
+  // resurrect revenue whose POS rows the restore already deleted.
+  { derived: true, domain: "reports", tableName: "reportFact" },
+  { derived: true, domain: "reports", tableName: "reportDay" },
+  { derived: true, domain: "reports", tableName: "reportSkuDay" },
+  { derived: true, domain: "reports", tableName: "reportOverview" },
+  { derived: true, domain: "reports", tableName: "reportPeriodSkuRollup" },
+  { derived: true, domain: "reports", tableName: "reportDirtyDay" },
+  { derived: true, domain: "reports", tableName: "reportWeekCurrent" },
+  { derived: true, domain: "reports", tableName: "reportWeekAccepted" },
+  { derived: true, domain: "reports", tableName: "reportDirtyWeek" },
 ] as const;
 const RESTORE_BATCH_LIMIT = 500;
-export function requireBoundedBatch<T>(rows: T[], tableName: string) {
-  if (rows.length > RESTORE_BATCH_LIMIT) throw new Error(`Demo restore batch required for ${tableName}.`);
+
+/**
+ * Ceiling for tables whose rows are a MULTIPLE of the domain rows beside them.
+ * Every completed sale emits one payment fact plus one sale fact per line, so
+ * `reportFact` crosses the shared 500 ceiling several times sooner than the
+ * `posTransaction` rows it derives from — and an over-budget throw fails the
+ * entire restore, which is far worse for the demo than a large read.
+ */
+const DERIVED_REPORT_BATCH_LIMIT = 2_000;
+
+const RESTORE_BATCH_LIMIT_OVERRIDES: Record<string, number> = {
+  reportFact: DERIVED_REPORT_BATCH_LIMIT,
+  reportSkuDay: DERIVED_REPORT_BATCH_LIMIT,
+};
+
+/** Per-table row ceiling for one restore pass. */
+export function restoreBatchLimitFor(tableName: string) {
+  return RESTORE_BATCH_LIMIT_OVERRIDES[tableName] ?? RESTORE_BATCH_LIMIT;
+}
+
+/**
+ * Derived tables are restored (purged) but never captured into a baseline.
+ *
+ * Capturing them would freeze whatever reporting rows happened to exist at
+ * capture time into permanent baseline state — phantom revenue that every
+ * later restore would faithfully reinstate. Nothing seeds them at provision,
+ * so their baseline is empty by construction and restore is pure deletion.
+ */
+export function isDerivedRestoreTable(tableName: string) {
+  return SHARED_DEMO_MUTABLE_TABLES.some(
+    (entry) =>
+      entry.tableName === tableName && "derived" in entry && entry.derived,
+  );
+}
+
+export function requireBoundedBatch<T>(
+  rows: T[],
+  tableName: string,
+  limit = RESTORE_BATCH_LIMIT,
+) {
+  if (rows.length > limit) throw new Error(`Demo restore batch required for ${tableName}.`);
   return rows;
 }
 
@@ -219,7 +272,26 @@ async function listStoreRows(ctx: any, tableName: string, storeId: Id<"store">) 
   if (tableName === "staffMessage") {
     return requireBoundedBatch(await ctx.db.query("staffMessage").withIndex("by_storeId_createdAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
   }
+  const batchLimit = restoreBatchLimitFor(tableName);
   const query = ctx.db.query(tableName);
+  // Derived reporting tables. Each declares the store-prefixed index the
+  // reports schema actually ships; none of them carries a bare `by_storeId`.
+  if (
+    tableName === "reportFact" ||
+    tableName === "reportDay" ||
+    tableName === "reportDirtyDay"
+  ) {
+    return requireBoundedBatch(await query.withIndex("by_storeId_operatingDate", (q: any) => q.eq("storeId", storeId)).take(batchLimit + 1), tableName, batchLimit);
+  }
+  if (tableName === "reportSkuDay") {
+    return requireBoundedBatch(await query.withIndex("by_storeId_operatingDate_productSkuId", (q: any) => q.eq("storeId", storeId)).take(batchLimit + 1), tableName, batchLimit);
+  }
+  if (tableName === "reportPeriodSkuRollup") {
+    return requireBoundedBatch(await query.withIndex("by_storeId_periodKey_revenueSortKey", (q: any) => q.eq("storeId", storeId)).take(batchLimit + 1), tableName, batchLimit);
+  }
+  if (tableName === "reportWeekAccepted") {
+    return requireBoundedBatch(await query.withIndex("by_storeId_cycleStartDate", (q: any) => q.eq("storeId", storeId)).take(batchLimit + 1), tableName, batchLimit);
+  }
   if (tableName === "posRegisterSessionActivity") {
     return requireBoundedBatch(await query.withIndex("by_store_registerSession_sequence", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
   }
@@ -293,6 +365,8 @@ export async function captureBaselineDocumentsWithCtx(
     for (const row of prior) await ctx.db.delete("sharedDemoBaselineDocument", row._id);
     let captured = 0;
     for (const entry of SHARED_DEMO_MUTABLE_TABLES) {
+      // Derived rows are purged by restore, never frozen into the baseline.
+      if (isDerivedRestoreTable(entry.tableName)) continue;
       const rows = await listStoreRows(ctx, entry.tableName, args.storeId);
       for (const row of rows) {
         await ctx.db.insert("sharedDemoBaselineDocument", {
