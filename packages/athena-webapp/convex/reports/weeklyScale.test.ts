@@ -6,7 +6,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import schema from "../schema";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { WEEKLY_INVENTORY_OPEN_WORK_ITEM_LIMIT } from "../operations/operationalWorkItems";
+import {
+  WEEKLY_INVENTORY_OPEN_WORK_ITEM_LIMIT,
+  WEEKLY_INVENTORY_OPEN_WORK_REPAIR_LIMIT,
+} from "../operations/operationalWorkItems";
 import {
   MAX_WEEKLY_FACTS,
   availableWeekCurrent,
@@ -787,10 +790,25 @@ describe("weekly accepted scale proof", () => {
       ],
     });
     expect(detail.result).toMatchObject({ cycleStartDate: "2026-06-29" });
+    // The active briefing projects inventory attention LIVE rather than from
+    // the materialized document, so it now also resolves the frame's schedule
+    // and reads the open synced-sale review lanes. Expressed through the
+    // representative constant, not a literal: this is a budget, and the lane
+    // is capped at WEEKLY_INVENTORY_OPEN_WORK_ITEM_LIMIT rather than growing
+    // with the store's queue (asserted above and bounded below).
     expect(active.reads).toEqual({
+      operationalWorkItem: REPRESENTATIVE_OPEN_WORK_MEMBERS,
+      oversizedOperationalWorkRepair: 0,
       reportWeekAccepted: 1,
       reportWeekCurrent: 1,
+      storeSchedule: 1,
     });
+    expect(active.reads.operationalWorkItem).toBeLessThanOrEqual(
+      WEEKLY_INVENTORY_OPEN_WORK_ITEM_LIMIT + 1,
+    );
+    expect(active.reads.oversizedOperationalWorkRepair).toBeLessThanOrEqual(
+      WEEKLY_INVENTORY_OPEN_WORK_REPAIR_LIMIT + 1,
+    );
     expect(history.reads).toEqual({
       reportWeekAccepted: HISTORY_PAGE_SIZE + 1,
     });

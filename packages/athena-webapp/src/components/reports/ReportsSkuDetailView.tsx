@@ -12,7 +12,10 @@ import { ListPagination } from "@/components/common/ListPagination";
 import { ReportDateRangeField } from "./ReportDateRangeField";
 import { ReportMetricComparisonCrossfade } from "./ReportMetricComparisonCrossfade";
 import { useStableReportQuery } from "./useStableReportQuery";
-import { useReportsSharedDemoMode } from "./useReportsSharedDemoMode";
+import {
+  useReportsSharedDemoMode,
+  useSharedDemoLiveReportsDay,
+} from "./useReportsSharedDemoMode";
 import {
   createSharedDemoSkuDayTransactions,
   createSharedDemoSkuDetail,
@@ -76,6 +79,7 @@ export function ReportsSkuDetailView({
   const rangeKey = `${startDate}:${endDate}`;
 
   const { isSharedDemo, useLiveQuery } = useReportsSharedDemoMode();
+  const { liveDay, liveStock, today } = useSharedDemoLiveReportsDay();
   // The SKU id is a route param, so it can be anything at all. Only a
   // shared-demo id reaches the fixture; everything else resolves to `null`,
   // which is the same "no activity" state the live query produces.
@@ -95,10 +99,26 @@ export function ReportsSkuDetailView({
     () =>
       isSharedDemo
         ? isDemoSku
-          ? createSharedDemoSkuDetail({ productSkuId, startDate, endDate })
+          ? createSharedDemoSkuDetail({
+              productSkuId,
+              startDate,
+              endDate,
+              liveDay,
+              liveStock,
+              today,
+            })
           : null
         : undefined,
-    [endDate, isDemoSku, isSharedDemo, productSkuId, startDate],
+    [
+      endDate,
+      isDemoSku,
+      isSharedDemo,
+      liveDay,
+      liveStock,
+      productSkuId,
+      startDate,
+      today,
+    ],
   );
   const {
     data: detail,
@@ -155,12 +175,24 @@ export function ReportsSkuDetailView({
     (currentPage - 1) * REPORT_SKU_DETAIL_PAGE_SIZE,
     currentPage * REPORT_SKU_DETAIL_PAGE_SIZE,
   );
+  /**
+   * The demo's history has no transactions for today — the fixture stops at
+   * yesterday — so today's evidence is read from the server like any other
+   * store's. `reportFact` rows for the visitor's own sales are already there.
+   * The lookup is what makes the read possible: the sheet is addressed by a
+   * fixture sku id, and only the live day knows the real row behind it.
+   */
+  const demoLiveEvidenceSkuId =
+    isSharedDemo && transactionDate === today
+      ? liveDay?.querySkuIdByFixtureSkuId.get(productSkuId)
+      : undefined;
   const liveTransactionEvidence = useQuery(
     api.reports.queries.listSkuDayTransactions,
-    activeStore?._id && transactionDate && useLiveQuery
+    activeStore?._id && transactionDate && (useLiveQuery || demoLiveEvidenceSkuId)
       ? {
         storeId: activeStore._id,
-        productSkuId: productSkuId as Id<"productSku">,
+        productSkuId: (demoLiveEvidenceSkuId ??
+          productSkuId) as Id<"productSku">,
         operatingDate: transactionDate,
       }
       : "skip",
@@ -172,14 +204,18 @@ export function ReportsSkuDetailView({
           ? createSharedDemoSkuDayTransactions({
               productSkuId,
               operatingDate: transactionDate,
+              liveDay,
+              today,
             })
           : { transactions: [], truncated: false }
         : undefined,
-    [isDemoSku, isSharedDemo, productSkuId, transactionDate],
+    [isDemoSku, isSharedDemo, liveDay, productSkuId, today, transactionDate],
   );
-  const transactionEvidenceResult = isSharedDemo
-    ? demoTransactionEvidence
-    : liveTransactionEvidence;
+  const transactionEvidenceResult = demoLiveEvidenceSkuId
+    ? liveTransactionEvidence
+    : isSharedDemo
+      ? demoTransactionEvidence
+      : liveTransactionEvidence;
   const transactionEvidence = transactionDate
     ? transactionEvidenceResult
     : undefined;
@@ -290,12 +326,32 @@ export function ReportsSkuDetailView({
                     <span className="font-medium uppercase tracking-wide">
                       SKU
                     </span>
-                    <span className="truncate font-mono text-foreground">
+                    <span className="truncate text-foreground">
                       {formatSkuSubtitle(detail.identity, productSkuId)}
                     </span>
                   </p>
-                  <div aria-label="Pricing" role="group">
+                  <div aria-label="Pricing and stock" role="group">
                     <dl className="flex min-w-0 flex-wrap items-baseline gap-x-layout-lg gap-y-layout-xs">
+                      {/*
+                        Stock on hand sits with the SKU's own attributes, ABOVE
+                        the reporting-period control — not among the period
+                        metrics below it. Those cards all answer "in this
+                        range", and every one of their helper lines compares
+                        against the prior period. Available is a right-now
+                        fact the date picker cannot change, so placing it there
+                        would make that control look like it governs a number
+                        it does not.
+                      */}
+                      {detail.identity?.quantityAvailable !== undefined ? (
+                        <div className="flex min-w-0 items-baseline gap-1.5">
+                          <dt className="text-xs text-muted-foreground">
+                            Available
+                          </dt>
+                          <dd className="font-numeric text-sm tabular-nums text-foreground">
+                            {formatUnits(detail.identity.quantityAvailable)}
+                          </dd>
+                        </div>
+                      ) : null}
                       <div className="flex min-w-0 items-baseline gap-1.5">
                         <dt className="text-xs text-muted-foreground">
                           Net price

@@ -35,6 +35,7 @@ import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import {
   createSharedDemoPointOfSaleStorePulseSummary,
   overlaySharedDemoPointOfSaleTodayWithFixtureYesterday,
+  toSharedDemoLivePulseDay,
 } from "@/components/shared-demo/sharedDemoOperationsFixture";
 import {
   POSStorePulseSection,
@@ -352,20 +353,27 @@ function PointOfSaleViewLive() {
   const visibleStorePulseWindow = hasFullAdminAccess
     ? storePulseWindow
     : "today";
-  const shouldUseSharedDemoStorePulseFixture =
-    sharedDemoContext?.kind === "shared_demo" &&
-    visibleStorePulseWindow !== "today";
+  const isSharedDemoPulse = sharedDemoContext?.kind === "shared_demo";
+  // The demo's own rows only ever cover TODAY — the fixture owns every earlier
+  // date, and the hourly restore wipes the rest — so the live read is always
+  // for today, whatever window is on screen. Every window that contains today
+  // then folds that one live day onto the fixture history.
+  const livePulseWindow = isSharedDemoPulse ? "today" : visibleStorePulseWindow;
   const liveTodaySummary = useQuery(
     api.inventory.pos.getTodaySummary,
-    snapshotStoreId && !shouldUseSharedDemoStorePulseFixture
-      ? { pulseWindow: visibleStorePulseWindow, storeId: snapshotStoreId }
+    snapshotStoreId
+      ? { pulseWindow: livePulseWindow, storeId: snapshotStoreId }
       : "skip",
   );
-  const todaySummary = shouldUseSharedDemoStorePulseFixture
-    ? createSharedDemoPointOfSaleStorePulseSummary(visibleStorePulseWindow)
-    : sharedDemoContext?.kind === "shared_demo"
+  const todaySummary = !isSharedDemoPulse
+    ? liveTodaySummary
+    : visibleStorePulseWindow === "today"
       ? overlaySharedDemoPointOfSaleTodayWithFixtureYesterday(liveTodaySummary)
-      : liveTodaySummary;
+      : createSharedDemoPointOfSaleStorePulseSummary(
+          visibleStorePulseWindow,
+          undefined,
+          toSharedDemoLivePulseDay(liveTodaySummary),
+        );
   const storeScheduleSummary = useQuery(
     api.inventory.storeSchedule.getStoreScheduleSummary,
     snapshotStoreId ? { storeId: snapshotStoreId } : "skip",

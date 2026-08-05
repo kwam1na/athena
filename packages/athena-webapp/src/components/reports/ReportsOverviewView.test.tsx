@@ -8,7 +8,7 @@ import type { ReportOverviewData } from "~/shared/reportsContract";
 const useQuery = vi.fn();
 const navigate = vi.fn();
 /** `null` = a real store; see `useReportsSharedDemoMode`. */
-let sharedDemoContext: { kind: string } | null | undefined = null;
+let sharedDemoContext: { kind: string; storeId?: string } | null | undefined = null;
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQuery(...args),
 }));
@@ -157,12 +157,17 @@ const fixture: ReportOverviewData = {
   },
 };
 
-function renderOverview(initialWindow: ReportOverviewWindow = "today") {
+function renderOverview(
+  initialWindow: ReportOverviewWindow = "today",
+  overview: ReportOverviewData | null = fixture,
+) {
   function Harness() {
     const [selectedWindow, setSelectedWindow] =
       useState<ReportOverviewWindow>(initialWindow);
     return (
       <ReportsOverviewView
+        isRefreshing={false}
+        overview={overview}
         onSelectedWindowChange={setSelectedWindow}
         selectedWindow={selectedWindow}
       />
@@ -179,35 +184,20 @@ describe("ReportsOverviewView", () => {
     sharedDemoContext = null;
   });
 
-  it("keeps the live overview subscription for a real store", () => {
-    useQuery.mockReturnValue(fixture);
+  it("holds no query of its own — the route supplies the settled document", () => {
+    // Sourcing lives in the route shell (see reports/index.test.ts): when this
+    // view re-derived the overview through its own hook instances, they could
+    // settle a commit after the route's, painting the sibling panels at the
+    // top of the page before this section pushed them down.
     renderOverview();
 
-    expect(useQuery.mock.calls.at(-1)?.[1]).toEqual({ storeId: "store-1" });
-  });
-
-  it("paints the shared demo from the fixture without a live overview read", () => {
-    sharedDemoContext = { kind: "shared_demo" };
-    useQuery.mockReturnValue(undefined);
-    renderOverview();
-
-    expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
+    expect(useQuery).not.toHaveBeenCalled();
     expect(screen.getByTestId("reports-overview")).toBeInTheDocument();
     expect(screen.getByTestId("report-freshness")).toBeInTheDocument();
   });
 
-  it("holds the live overview read while the shared demo context loads", () => {
-    sharedDemoContext = undefined;
-    useQuery.mockReturnValue(undefined);
-    renderOverview();
-
-    expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
-    expect(screen.queryByTestId("reports-overview")).not.toBeInTheDocument();
-  });
-
   it("opens a selected chart day in the item sales workspace", async () => {
     const user = userEvent.setup();
-    useQuery.mockReturnValue(fixture);
     renderOverview();
 
     await user.click(
@@ -231,7 +221,6 @@ describe("ReportsOverviewView", () => {
   });
 
   it("discloses the overview processing delay and snapshot time", () => {
-    useQuery.mockReturnValue(fixture);
     renderOverview();
 
     const freshness = screen.getByTestId("report-freshness");
@@ -250,7 +239,6 @@ describe("ReportsOverviewView", () => {
 
   it("shows the selected window's KPIs and a compact reporting summary", async () => {
     const user = userEvent.setup();
-    useQuery.mockReturnValue(fixture);
     renderOverview();
 
     // Today is the default window: one set of metrics, not all three at once.
@@ -303,7 +291,6 @@ describe("ReportsOverviewView", () => {
 
   it("compares the six-month window against its own prior six months", async () => {
     const user = userEvent.setup();
-    useQuery.mockReturnValue(fixture);
     renderOverview();
 
     await user.click(screen.getByRole("tab", { name: "Trailing 6 months" }));
@@ -320,7 +307,6 @@ describe("ReportsOverviewView", () => {
   });
 
   it("fails visibly in dev for an unrecognized window instead of comparing silently", () => {
-    useQuery.mockReturnValue(fixture);
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
@@ -328,6 +314,8 @@ describe("ReportsOverviewView", () => {
       expect(() =>
         render(
           <ReportsOverviewView
+            isRefreshing={false}
+            overview={fixture}
             onSelectedWindowChange={() => undefined}
             selectedWindow={"trailing12Months" as ReportOverviewWindow}
           />,
@@ -339,7 +327,7 @@ describe("ReportsOverviewView", () => {
   });
 
   it("describes the current open day as in progress", () => {
-    useQuery.mockReturnValue({
+    const overview: ReportOverviewData = {
       ...fixture,
       trailing30: snapshot({ dayCount: 28 }),
       dailyTrend: [
@@ -352,8 +340,8 @@ describe("ReportsOverviewView", () => {
         amendedDays: 0,
         oldestUnreconciledDate: "2026-07-29",
       },
-    });
-    renderOverview();
+    };
+    renderOverview("today", overview);
 
     expect(screen.getByTestId("report-trust-summary")).toHaveTextContent(
       "30-day trend · 27 of 28 reported days reconciled · Today in progress",
@@ -383,7 +371,6 @@ describe("ReportsOverviewView", () => {
 
   it("states the prior-week comparison in words rather than a bare percentage", async () => {
     const user = userEvent.setup();
-    useQuery.mockReturnValue(fixture);
     renderOverview();
 
     await user.click(screen.getByRole("tab", { name: "Week to date" }));
@@ -395,15 +382,15 @@ describe("ReportsOverviewView", () => {
 
   it("animates every metric value and comparison across every overview period", async () => {
     const user = userEvent.setup();
-    useQuery.mockReturnValue({
+    const overview: ReportOverviewData = {
       ...fixture,
       trailing30: snapshot({
         dayCount: 30,
         netSalesMinor: 2500_00,
         grossProfitMinor: 900_00,
       }),
-    });
-    renderOverview();
+    };
+    renderOverview("today", overview);
 
     const metricLabels = ["Net sales", "Units sold", "Gross profit", "Refunds"];
     const expectAnimatedMetrics = (comparisonLabel: string) => {
@@ -439,12 +426,12 @@ describe("ReportsOverviewView", () => {
 
   it("presents unsettled reporting state once at the period level", async () => {
     const user = userEvent.setup();
-    useQuery.mockReturnValue({
+    const overview: ReportOverviewData = {
       ...fixture,
       today: snapshot({ unsettledDayCount: 1 }),
       weekToDate: snapshot({ dayCount: 5, unsettledDayCount: 1 }),
-    });
-    renderOverview();
+    };
+    renderOverview("today", overview);
 
     expect(screen.getByTestId("report-period-status")).toHaveTextContent(
       "In progress",
@@ -464,7 +451,7 @@ describe("ReportsOverviewView", () => {
 
   it("links a closed current operating day to its EOD Review", async () => {
     const user = userEvent.setup();
-    useQuery.mockReturnValue({
+    const overview: ReportOverviewData = {
       ...fixture,
       dailyTrend: [
         ...fixture.dailyTrend,
@@ -474,8 +461,8 @@ describe("ReportsOverviewView", () => {
           status: "reconciled",
         },
       ],
-    });
-    renderOverview();
+    };
+    renderOverview("today", overview);
 
     expect(screen.getByTestId("report-period-status")).toHaveTextContent(
       "Closed",
@@ -527,7 +514,7 @@ describe("ReportsOverviewView", () => {
 
   it("links each overview window to transactions from that period's start date", async () => {
     const user = userEvent.setup();
-    useQuery.mockReturnValue({
+    const overview: ReportOverviewData = {
       ...fixture,
       dailyTrend: [
         ...fixture.dailyTrend,
@@ -537,8 +524,8 @@ describe("ReportsOverviewView", () => {
           status: "open",
         },
       ],
-    });
-    renderOverview();
+    };
+    renderOverview("today", overview);
 
     const linkedRange = () => {
       const link = screen.getByRole("link", { name: "Open transactions" });
@@ -591,12 +578,12 @@ describe("ReportsOverviewView", () => {
 
   it("names an empty prior window instead of rendering -100%", async () => {
     const user = userEvent.setup();
-    useQuery.mockReturnValue({
+    const overview: ReportOverviewData = {
       ...fixture,
       weekToDate: snapshot({ dayCount: 1, netSalesMinor: 0, unitsSold: 0 }),
       priorWeek: snapshot({ dayCount: 7, netSalesMinor: 0, unitsSold: 0 }),
-    });
-    renderOverview();
+    };
+    renderOverview("today", overview);
 
     await user.click(screen.getByRole("tab", { name: "Week to date" }));
 
@@ -608,7 +595,6 @@ describe("ReportsOverviewView", () => {
 
   it("explains a null gross profit in a helper line rather than the value", async () => {
     const user = userEvent.setup();
-    useQuery.mockReturnValue(fixture);
     renderOverview();
 
     // trailing30 is the snapshot with a null gross profit.
@@ -617,15 +603,8 @@ describe("ReportsOverviewView", () => {
     expect(screen.getByText("No item cost recorded")).toBeInTheDocument();
   });
 
-  it("renders nothing until the first result settles", () => {
-    useQuery.mockReturnValue(undefined);
-    renderOverview();
-    expect(screen.queryByTestId("reports-overview")).not.toBeInTheDocument();
-  });
-
   it("shows an empty state when there is no overview document yet", () => {
-    useQuery.mockReturnValue(null);
-    renderOverview();
+    renderOverview("today", null);
     expect(screen.getByText("No report data yet")).toBeInTheDocument();
   });
 });

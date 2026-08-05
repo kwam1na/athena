@@ -487,11 +487,108 @@ function buildStorePulseSummary(
   };
 }
 
+/**
+ * The live current day, in the shape the fixture history speaks.
+ *
+ * Only the fields a window projection actually folds; everything else on a
+ * historical metric describes a CLOSED day, which the current day is not.
+ */
+export type SharedDemoLivePulseDay = {
+  currentDayCashTotal?: number;
+  currentDayCashTransactionCount?: number;
+  paymentTotals?: SharedDemoHistoricalMetric["paymentTotals"];
+  salesTotal: number;
+  /** Live top sellers, merged into the window's own list by SKU. */
+  topItems?: SharedDemoStorePulseOperatorSnapshot["topItems"];
+  totalItemsSold: number;
+  transactionCount: number;
+};
+
+/**
+ * Read the live current day out of a `getTodaySummary` result.
+ *
+ * Returns `null` while the query is still settling, so a window renders its
+ * fixture history rather than briefly claiming the day sold nothing.
+ */
+export function toSharedDemoLivePulseDay(
+  liveTodaySummary: StorePulseSummary | undefined,
+): SharedDemoLivePulseDay | null {
+  if (!liveTodaySummary) return null;
+
+  const snapshot = liveTodaySummary.operatorSnapshot;
+  const cash = snapshot?.paymentMix.find((entry) => entry.method === "cash");
+
+  return {
+    currentDayCashTotal: cash?.total ?? 0,
+    currentDayCashTransactionCount: cash?.count ?? 0,
+    paymentTotals:
+      snapshot?.paymentMix
+        .filter((entry) => entry.total > 0)
+        .map((entry) => ({
+          amount: entry.total,
+          method: entry.method,
+          transactionCount: entry.count,
+        })) ?? [],
+    salesTotal: liveTodaySummary.totalSales ?? 0,
+    ...(snapshot?.topItems ? { topItems: snapshot.topItems } : {}),
+    totalItemsSold: liveTodaySummary.totalItemsSold ?? 0,
+    transactionCount: liveTodaySummary.totalTransactions ?? 0,
+  };
+}
+
+/**
+ * Fold the live day's sellers into the window's list.
+ *
+ * `buildStorePulseSummary` states its top items rather than deriving them from
+ * the history, so unlike every other lane they cannot inherit the injection.
+ * Without this, a visitor's own sale would raise "items sold" while the product
+ * they just rang stayed absent from "highest-volume items".
+ */
+function mergeLiveTopItems(
+  fixtureItems: SharedDemoStorePulseOperatorSnapshot["topItems"],
+  liveItems: SharedDemoStorePulseOperatorSnapshot["topItems"],
+): SharedDemoStorePulseOperatorSnapshot["topItems"] {
+  if (liveItems.length === 0) return fixtureItems;
+
+  const merged = new Map(
+    fixtureItems.map((item) => [item.productSku ?? item.name, item]),
+  );
+  for (const item of liveItems) {
+    const key = item.productSku ?? item.name;
+    const existing = merged.get(key);
+    merged.set(
+      key,
+      existing
+        ? {
+            ...existing,
+            quantity: existing.quantity + item.quantity,
+            totalSales: existing.totalSales + item.totalSales,
+          }
+        : item,
+    );
+  }
+
+  return [...merged.values()].sort((left, right) => right.quantity - left.quantity);
+}
+
 export function createSharedDemoPointOfSaleStorePulseSummary(
   pulseWindow: "today" | "this_week" | "this_month" | "all_time" = "today",
   today = getLocalOperatingDate(),
+  liveCurrentDay?: SharedDemoLivePulseDay | null,
 ): StorePulseSummary {
-  const currentDay = createEmptyMetric(today);
+  // The fixture history stops at yesterday, so the current day is whatever the
+  // store's live rows say. Injected HERE, into the history, rather than patched
+  // onto the finished summary: the trend, the window totals, the payment mix
+  // and the comparison all fold the same array, so one injection keeps them
+  // consistent with each other. Left empty, the comparison's own "current" day
+  // is the zeroed one — which is what made every wider window read -100%.
+  const currentDay = liveCurrentDay
+    ? {
+        ...createEmptyMetric(today),
+        ...liveCurrentDay,
+        paymentTotals: liveCurrentDay.paymentTotals ?? [],
+      }
+    : createEmptyMetric(today);
   const yesterday = buildFixtureHistoricalMetric(
     shiftOperatingDate(today, -1),
     today,
@@ -507,7 +604,20 @@ export function createSharedDemoPointOfSaleStorePulseSummary(
     today,
     yesterday,
   });
-  const summary = buildStorePulseSummary(windowHistory);
+  const baseSummary = buildStorePulseSummary(windowHistory);
+  const summary =
+    liveCurrentDay?.topItems && baseSummary.operatorSnapshot
+      ? {
+          ...baseSummary,
+          operatorSnapshot: {
+            ...baseSummary.operatorSnapshot,
+            topItems: mergeLiveTopItems(
+              baseSummary.operatorSnapshot.topItems,
+              liveCurrentDay.topItems,
+            ),
+          },
+        }
+      : baseSummary;
 
   if (pulseWindow !== "today") return summary;
   const operatorSnapshot = summary.operatorSnapshot;
@@ -789,12 +899,22 @@ function buildHistoricalTimeline({
 }
 
 export function createSharedDemoDailyOperationsFixture({
+  liveCurrentDay,
   operatingDate = getLocalOperatingDate(),
   orgUrlSlug,
   storeId,
   storeUrlSlug,
   weekEndOperatingDate,
 }: {
+  /**
+   * The live current day, for the week rail's `today` cell.
+   *
+   * The rail spans today even while a FIXTURE day is selected, and the fixture
+   * history stops at yesterday — so without this, a day with real sales reads
+   * GH0 beside days that genuinely had none, and "Week sales" (which reduces
+   * the same array) understates by exactly that amount.
+   */
+  liveCurrentDay?: SharedDemoLivePulseDay | null;
   operatingDate?: string;
   orgUrlSlug: string;
   storeId: Id<"store">;
@@ -811,7 +931,17 @@ export function createSharedDemoDailyOperationsFixture({
   );
   const weekMetrics = Array.from({ length: 7 }, (_, index) => {
     const date = shiftOperatingDate(weekEnd, index - 6);
-    const metric = buildFixtureHistoricalMetric(date, today);
+    const fixtureMetric = buildFixtureHistoricalMetric(date, today);
+    // Today is the one cell the fixture cannot know: its history ends
+    // yesterday, so it renders an empty day. The store's live rows own it.
+    const metric =
+      liveCurrentDay && date === today
+        ? {
+            ...fixtureMetric,
+            ...liveCurrentDay,
+            paymentTotals: liveCurrentDay.paymentTotals ?? [],
+          }
+        : fixtureMetric;
     return {
       ...metric,
       isSelected: metric.operatingDate === selectedMetric.operatingDate,

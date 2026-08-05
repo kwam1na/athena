@@ -1,5 +1,5 @@
 import { Link, useParams } from "@tanstack/react-router";
-import { ArrowUpRight, Info } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Info } from "lucide-react";
 import { FlipNumber } from "@/components/common/FlipNumber";
 import { Button } from "@/components/ui/button";
 import {
@@ -413,6 +413,10 @@ export function ReportsWeeklyView({
     scheduled.unitsReturned !== 0 ||
     scheduled.paymentsCollectedMinor !== 0;
   const priorNetSalesChange = report.priorPeriod?.netSalesChange ?? null;
+  const inventoryAttentionResolved =
+    report.inventoryAttention?.completeness === "complete" &&
+    report.inventoryAttention.newCount === 0 &&
+    report.inventoryAttention.carriedForwardCount === 0;
   /**
    * Mixed currency and a breached fact cap both tell the operator that totals
    * are withheld. Sections keep their shape so the report stays navigable,
@@ -840,32 +844,65 @@ export function ReportsWeeklyView({
       <Section title="Inventory attention">
         {report.inventoryAttention &&
         report.inventoryAttention.completeness !== "unavailable" ? (
-          <>
-            <MetricList>
-              <Metric
-                label="New this week"
-                value={`${report.inventoryAttention.newCount.toLocaleString()} new review ${report.inventoryAttention.newCount === 1 ? "group" : "groups"}`}
+          inventoryAttentionResolved ? (
+            <div
+              aria-live="polite"
+              className="mt-layout-sm flex items-start gap-layout-sm"
+              role="status"
+            >
+              <CheckCircle2
+                aria-hidden="true"
+                className="mt-0.5 h-4 w-4 shrink-0 text-success"
               />
-              <Metric
-                label="Carried forward"
-                value={`${report.inventoryAttention.carriedForwardCount.toLocaleString()} carried-forward review ${report.inventoryAttention.carriedForwardCount === 1 ? "group" : "groups"}`}
-              />
-            </MetricList>
-            {report.ownerRoutes ? (
-              <div className="mt-layout-md">
-                <OwnerRouteLink
-                  params={{
-                    orgUrlSlug: orgUrlSlug!,
-                    storeUrlSlug: storeUrlSlug!,
-                  }}
-                  search={report.ownerRoutes.openWork.search}
-                  to={report.ownerRoutes.openWork.to}
-                >
-                  Open inventory review
-                </OwnerRouteLink>
+              <div>
+                <p className="text-sm font-medium text-foreground">Resolved</p>
+                <p className="mt-0.5 text-sm leading-6 text-muted-foreground">
+                  All synced sale inventory reviews for this reporting week are
+                  closed.
+                </p>
               </div>
-            ) : null}
-          </>
+            </div>
+          ) : (
+            <>
+              <MetricList>
+                <Metric
+                  label="New this week"
+                  value={`${report.inventoryAttention.newCount.toLocaleString()} new review ${report.inventoryAttention.newCount === 1 ? "group" : "groups"}`}
+                />
+                <Metric
+                  label="Carried forward"
+                  value={`${report.inventoryAttention.carriedForwardCount.toLocaleString()} carried-forward review ${report.inventoryAttention.carriedForwardCount === 1 ? "group" : "groups"}`}
+                />
+              </MetricList>
+              {report.ownerRoutes ? (
+                <div className="mt-layout-md flex flex-wrap gap-x-layout-md gap-y-layout-xs">
+                  <OwnerRouteLink
+                    params={{
+                      orgUrlSlug: orgUrlSlug!,
+                      storeUrlSlug: storeUrlSlug!,
+                    }}
+                    search={report.ownerRoutes.openWork.search}
+                    to={report.ownerRoutes.openWork.to}
+                  >
+                    Open inventory review
+                  </OwnerRouteLink>
+                  <OwnerRouteLink
+                    params={{
+                      orgUrlSlug: orgUrlSlug!,
+                      storeUrlSlug: storeUrlSlug!,
+                    }}
+                    search={{
+                      mode: "cycle_count",
+                      work: "synced_sale_inventory_review",
+                    }}
+                    to="/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments"
+                  >
+                    Review stock adjustments
+                  </OwnerRouteLink>
+                </div>
+              ) : null}
+            </>
+          )
         ) : (
           <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
             Inventory review is unavailable for this reporting record.

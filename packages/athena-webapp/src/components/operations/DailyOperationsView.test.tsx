@@ -186,6 +186,11 @@ vi.mock("@/components/ui/chart", () => ({
 
 vi.mock("~/convex/_generated/api", () => ({
   api: {
+    inventory: {
+      // The shared demo's historical view still reads the live current day
+      // for the week rail's `today` cell.
+      pos: { getTodaySummary: "getTodaySummary" },
+    },
     operations: {
       dailyOperations: mockedApi,
     },
@@ -4437,7 +4442,12 @@ describe("DailyOperationsView", () => {
 
     render(<DailyOperationsView />);
 
-    expect(mockedHooks.useQuery).not.toHaveBeenCalled();
+    // No daily-operations snapshot query: the fixture answers the selected
+    // historical day. The one live read is the current day, which the week
+    // rail spans and the fixture history cannot know.
+    expect(
+      mockedHooks.useQuery.mock.calls.map(([reference]) => reference),
+    ).toEqual(["getTodaySummary"]);
     expect(
       screen.getByRole("heading", { name: "Top items" }),
     ).toBeInTheDocument();

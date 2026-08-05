@@ -155,9 +155,16 @@ export type StockAdjustmentSearchState = {
   query?: string;
   selectedSku?: string;
   sku?: string;
+  work?: "synced_sale_inventory_review";
 };
 
 export type StockAdjustmentSearchPatch = Partial<StockAdjustmentSearchState>;
+
+export type OpenSyncedSaleInventoryReviewSummary = {
+  completeness: "complete" | "incomplete";
+  skuIds: Id<"productSku">[];
+  workItemCount: number;
+};
 
 export type CycleCountDraftLine = {
   productSkuId: Id<"productSku">;
@@ -215,6 +222,7 @@ type StockAdjustmentWorkspaceContentProps = {
     productSkuId: Id<"productSku">;
   }) => Promise<NormalizedCommandResult<unknown>>;
   onLoadMoreInventoryItems?: () => void;
+  openSyncedSaleInventoryReview?: OpenSyncedSaleInventoryReviewSummary | null;
   onSubmitBatch: (
     args: SubmitStockAdjustmentArgs,
   ) => Promise<NormalizedCommandResult<unknown>>;
@@ -240,6 +248,7 @@ type StockAdjustmentFilterState = {
   availability: StockAdjustmentAvailabilityFilter;
   category: string;
   query: string;
+  work?: "synced_sale_inventory_review";
 };
 
 type StockAdjustmentCategoryFilterOption = {
@@ -512,6 +521,17 @@ function rowMatchesAvailabilityFilter(
   const isAllAvailable = item.inventoryCount === item.quantityAvailable;
 
   return availability === "all_available" ? isAllAvailable : !isAllAvailable;
+}
+
+function rowMatchesWorkFilter(
+  row: StockAdjustmentRow,
+  work: StockAdjustmentFilterState["work"],
+  openSyncedSaleInventoryReviewSkuIds: Set<Id<"productSku">>,
+) {
+  return (
+    work !== "synced_sale_inventory_review" ||
+    openSyncedSaleInventoryReviewSkuIds.has(row.inventoryItem._id)
+  );
 }
 
 export function SkuDetailPanel({
@@ -1748,6 +1768,7 @@ export function StockAdjustmentWorkspaceContent({
   onDiscardCycleCountDraft,
   onRefreshCycleCountDraftLineBaseline,
   onLoadMoreInventoryItems,
+  openSyncedSaleInventoryReview,
   onSearchStateChange,
   onSaveCycleCountDraftLine,
   onSubmitBatch,
@@ -1787,6 +1808,7 @@ export function StockAdjustmentWorkspaceContent({
     availability: searchState?.availability ?? "all",
     category: searchState?.category?.trim() || ALL_CATEGORY_FILTER_KEY,
     query: searchState?.query ?? "",
+    work: searchState?.work,
   });
   const [cycleCountSubmissionOutcome, setCycleCountSubmissionOutcome] =
     useState<CycleCountSubmissionOutcome>(null);
@@ -1823,8 +1845,14 @@ export function StockAdjustmentWorkspaceContent({
           : searchState.category.trim() || ALL_CATEGORY_FILTER_KEY,
       query:
         searchState?.query === undefined ? current.query : searchState.query,
+      work: searchState?.work,
     }));
-  }, [searchState?.availability, searchState?.category, searchState?.query]);
+  }, [
+    searchState?.availability,
+    searchState?.category,
+    searchState?.query,
+    searchState?.work,
+  ]);
 
   const handleSelectInventoryItem = useCallback(
     (itemId: Id<"productSku"> | null) => {
@@ -2021,6 +2049,10 @@ export function StockAdjustmentWorkspaceContent({
   );
 
   const changedRows = rows.filter((row) => row.submittedLineItem);
+  const openSyncedSaleInventoryReviewSkuIds = useMemo(
+    () => new Set(openSyncedSaleInventoryReview?.skuIds ?? []),
+    [openSyncedSaleInventoryReview?.skuIds],
+  );
   const categoryFilterOptions: StockAdjustmentCategoryFilterOption[] =
     useMemo(() => {
       const categories = new Map<string, StockAdjustmentCategoryFilterOption>();
@@ -2100,7 +2132,13 @@ export function StockAdjustmentWorkspaceContent({
       }))
       .filter(
         ({ row, score }) =>
-          score > 0 && rowMatchesAvailabilityFilter(row, filters.availability),
+          score > 0 &&
+          rowMatchesAvailabilityFilter(row, filters.availability) &&
+          rowMatchesWorkFilter(
+            row,
+            filters.work,
+            openSyncedSaleInventoryReviewSkuIds,
+          ),
       );
 
     if (!normalizedFilterQuery) {
@@ -2113,7 +2151,14 @@ export function StockAdjustmentWorkspaceContent({
         return left.position - right.position;
       })
       .map(({ row }) => row);
-  }, [filters.availability, normalizedFilterQuery, routeSkuFilterQuery, rows]);
+  }, [
+    filters.availability,
+    filters.work,
+    normalizedFilterQuery,
+    openSyncedSaleInventoryReviewSkuIds,
+    routeSkuFilterQuery,
+    rows,
+  ]);
   const filteredRows = useMemo(
     () =>
       queryAvailabilityFilteredRows.filter((row) =>
@@ -2725,6 +2770,15 @@ export function StockAdjustmentWorkspaceContent({
     if (!rowMatchesCategoryFilter(activeRow, nextFilters.category)) {
       return null;
     }
+    if (
+      !rowMatchesWorkFilter(
+        activeRow,
+        nextFilters.work,
+        openSyncedSaleInventoryReviewSkuIds,
+      )
+    ) {
+      return null;
+    }
 
     return activeRow.inventoryItem;
   };
@@ -2792,6 +2846,7 @@ export function StockAdjustmentWorkspaceContent({
       query: trimOptional(nextFilters.query),
       ...getSelectedSkuPatch(nextSelectedInventoryItemId),
       sku: nextRouteFilteredInventoryItemId,
+      work: nextFilters.work,
     });
   };
 
@@ -2800,6 +2855,7 @@ export function StockAdjustmentWorkspaceContent({
       availability: "all",
       category: ALL_CATEGORY_FILTER_KEY,
       query: "",
+      work: undefined,
     });
     setActiveInventoryItemId(null);
     onSearchStateChange?.({
@@ -2809,6 +2865,7 @@ export function StockAdjustmentWorkspaceContent({
       query: undefined,
       selectedSku: undefined,
       sku: undefined,
+      work: undefined,
     });
   };
 
@@ -3195,7 +3252,8 @@ export function StockAdjustmentWorkspaceContent({
                   filters.query ||
                   routeSkuFilterQuery ||
                   filters.availability !== "all" ||
-                  filters.category !== ALL_CATEGORY_FILTER_KEY,
+                  filters.category !== ALL_CATEGORY_FILTER_KEY ||
+                  filters.work,
                 )}
                 onClearFilters={handleClearFilters}
                 onFilterChange={(availability) =>
@@ -3219,56 +3277,108 @@ export function StockAdjustmentWorkspaceContent({
                 searchLabel="Search products, SKUs, or barcodes"
                 searchPlaceholder="Search product, SKU, or barcode"
                 secondaryFilters={
-                  <div
-                    aria-label="Filter by category"
-                    className="flex flex-col gap-2 sm:flex-row sm:items-center"
-                    role="group"
-                  >
-                    <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                      Categories
-                    </span>
-                    <div className="flex min-w-0 flex-wrap gap-1.5">
-                      {[
-                        {
-                          itemCount: rows.length,
-                          key: ALL_CATEGORY_FILTER_KEY,
-                          label: "All categories",
-                        },
-                        ...categoryFilterOptions,
-                      ].map((category) => {
-                        const isSelected = filters.category === category.key;
+                  <div className="space-y-layout-sm">
+                    <div
+                      aria-label="Filter by work"
+                      className="flex flex-col gap-2 sm:flex-row sm:items-center"
+                      role="group"
+                    >
+                      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                        Work
+                      </span>
+                      <button
+                        aria-label={`Open sale reviews, ${formatInventoryNumber(openSyncedSaleInventoryReview?.skuIds.length ?? 0)}${openSyncedSaleInventoryReview?.completeness === "incomplete" ? "+" : ""} ${openSyncedSaleInventoryReview?.completeness === "incomplete" ? "SKUs" : pluralize(openSyncedSaleInventoryReview?.skuIds.length ?? 0, "SKU")}`}
+                        aria-pressed={
+                          filters.work === "synced_sale_inventory_review"
+                        }
+                        className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors active:scale-[0.98] ${
+                          filters.work === "synced_sale_inventory_review"
+                            ? "border-primary-border bg-primary-soft text-foreground"
+                            : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                        }`}
+                        onClick={() =>
+                          handleFilterChange({
+                            work:
+                              filters.work === "synced_sale_inventory_review"
+                                ? undefined
+                                : "synced_sale_inventory_review",
+                          })
+                        }
+                        type="button"
+                      >
+                        Open sale reviews
+                        <span className="ml-1 tabular-nums">
+                          {formatInventoryNumber(
+                            openSyncedSaleInventoryReview?.skuIds.length ?? 0,
+                          )}
+                          {openSyncedSaleInventoryReview?.completeness ===
+                          "incomplete"
+                            ? "+"
+                            : ""}
+                        </span>
+                      </button>
+                    </div>
+                    <div
+                      aria-label="Filter by category"
+                      className="flex flex-col gap-2 sm:flex-row sm:items-center"
+                      role="group"
+                    >
+                      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                        Categories
+                      </span>
+                      <div className="flex min-w-0 flex-wrap gap-1.5">
+                        {[
+                          {
+                            itemCount: rows.length,
+                            key: ALL_CATEGORY_FILTER_KEY,
+                            label: "All categories",
+                          },
+                          ...categoryFilterOptions,
+                        ].map((category) => {
+                          const isSelected = filters.category === category.key;
 
-                        return (
-                          <button
-                            aria-label={`${category.label}, ${category.itemCount} ${pluralize(
-                              category.itemCount,
-                              "SKU",
-                            )}`}
-                            aria-pressed={isSelected}
-                            className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
-                              isSelected
-                                ? "border-primary-border bg-primary-soft text-foreground"
-                                : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
-                            }`}
-                            key={category.key}
-                            onClick={() =>
-                              handleFilterChange({
-                                category: isSelected
-                                  ? ALL_CATEGORY_FILTER_KEY
-                                  : category.key,
-                              })
-                            }
-                            type="button"
-                          >
-                            {category.label}
-                          </button>
-                        );
-                      })}
+                          return (
+                            <button
+                              aria-label={`${category.label}, ${category.itemCount} ${pluralize(
+                                category.itemCount,
+                                "SKU",
+                              )}`}
+                              aria-pressed={isSelected}
+                              className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+                                isSelected
+                                  ? "border-primary-border bg-primary-soft text-foreground"
+                                  : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                              }`}
+                              key={category.key}
+                              onClick={() =>
+                                handleFilterChange({
+                                  category: isSelected
+                                    ? ALL_CATEGORY_FILTER_KEY
+                                    : category.key,
+                                })
+                              }
+                              type="button"
+                            >
+                              {category.label}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 }
                 summary={
-                  stockAdjustmentAutoLoadStatus ? (
+                  filters.work === "synced_sale_inventory_review" ? (
+                    openSyncedSaleInventoryReview?.completeness ===
+                    "incomplete" ? (
+                      "More open sale review SKUs exist outside this view. Finish the listed SKUs, then return for the rest."
+                    ) : (openSyncedSaleInventoryReview?.workItemCount ?? 0) ===
+                      0 ? (
+                      "All synced sale inventory review work items are resolved. No stock counts are needed."
+                    ) : (
+                      `Enter reviewed counts for each SKU. Submitted stock updates close ${formatInventoryNumber(openSyncedSaleInventoryReview?.workItemCount ?? 0)} open sale inventory ${pluralize(openSyncedSaleInventoryReview?.workItemCount ?? 0, "work item")}.`
+                    )
+                  ) : stockAdjustmentAutoLoadStatus ? (
                     <span
                       aria-live="polite"
                       className="inline-flex min-h-5 items-center gap-2"

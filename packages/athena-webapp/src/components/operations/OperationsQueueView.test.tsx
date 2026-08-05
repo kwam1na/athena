@@ -2872,6 +2872,92 @@ describe("OperationsQueueViewContent", () => {
     });
   });
 
+  it("hydrates SKUs with open synced sale inventory work for stock adjustments", () => {
+    mockedHooks.useMutation.mockReset();
+    mockedHooks.useQuery.mockReset();
+    mockedHooks.useMutation.mockReturnValue(vi.fn());
+    mockedHooks.useQuery
+      .mockReturnValueOnce({
+        approvalRequests: [],
+        workItemSummary: {
+          byType: [
+            {
+              completeness: "complete",
+              count: 1,
+              overflow: false,
+              type: "synced_sale_inventory_review",
+            },
+          ],
+          completeness: "complete",
+          count: 1,
+        },
+        workItems: [
+          {
+            _id: "work-1" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: Date.now(),
+            details: {
+              primaryProductSkuId: "sku-review" as Id<"productSku">,
+            },
+            logicalGroup: {
+              completeness: "complete",
+              key: "synced_sale_inventory_review:store-1:sku-review",
+              memberIds: [
+                "work-1" as Id<"operationalWorkItem">,
+                "work-2" as Id<"operationalWorkItem">,
+              ],
+              members: [],
+              resolutionAvailability: "available",
+            },
+            priority: "high",
+            status: "open",
+            title: "Review inventory for review product",
+            type: "synced_sale_inventory_review",
+          },
+        ],
+      })
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce([
+        {
+          ...baseProps.inventoryItems[0],
+          _id: "sku-review" as Id<"productSku">,
+          productName: "review product",
+          sku: "REVIEW-1",
+        },
+      ])
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce(null);
+    mockedHooks.usePaginatedQuery.mockReturnValue({
+      isLoading: false,
+      loadMore: vi.fn(),
+      results: baseProps.inventoryItems,
+      status: "Exhausted",
+    });
+
+    render(
+      <OperationsQueueView
+        activeWorkflow="stock"
+        stockAdjustmentSearch={{
+          mode: "manual",
+          work: "synced_sale_inventory_review",
+        }}
+      />,
+    );
+
+    expect(mockedHooks.useQuery.mock.calls[2]?.[1]).toEqual({
+      productSkuIds: ["sku-review"],
+      storeId: "store-1",
+    });
+    expect(mockedHooks.useQuery.mock.calls[0]?.[1]).toEqual({
+      storeId: "store-1",
+      workType: "synced_sale_inventory_review",
+    });
+    expect(
+      screen.getByRole("button", { name: /open sale reviews, 1 sku/i }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText(/review product/i)).toBeInTheDocument();
+  });
+
   it("collapses unexpected approval failures to the shared fallback toast", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();

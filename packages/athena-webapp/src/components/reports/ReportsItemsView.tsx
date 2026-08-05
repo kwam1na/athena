@@ -18,7 +18,10 @@ import {
   periodKeyForSelection,
   type ReportPeriodType,
 } from "./reportPeriodKeys";
-import { useReportsSharedDemoMode } from "./useReportsSharedDemoMode";
+import {
+  useReportsSharedDemoMode,
+  useSharedDemoLiveReportsDay,
+} from "./useReportsSharedDemoMode";
 import { createSharedDemoPeriodSkus } from "@/components/shared-demo/sharedDemoReportsFixture";
 import { useStableReportQuery } from "./useStableReportQuery";
 
@@ -50,6 +53,7 @@ export function ReportsItemsView({
   const periodKey = periodKeyForSelection(periodType, periodDate);
   const currentPage = cursor ? cursorTrail.length + 2 : 1;
   const { isSharedDemo, useLiveQuery } = useReportsSharedDemoMode();
+  const { liveDay, liveStock, today } = useSharedDemoLiveReportsDay();
   const liveResult = useQuery(
     api.reports.queries.listPeriodSkus,
     activeStore?._id && useLiveQuery
@@ -61,9 +65,16 @@ export function ReportsItemsView({
   const demoResult = useMemo(
     () =>
       isSharedDemo
-        ? createSharedDemoPeriodSkus({ periodKey, sortBy, cursor })
+        ? createSharedDemoPeriodSkus({
+            periodKey,
+            sortBy,
+            cursor,
+            liveDay,
+            liveStock,
+            today,
+          })
         : undefined,
-    [cursor, isSharedDemo, periodKey, sortBy],
+    [cursor, isSharedDemo, liveDay, liveStock, periodKey, sortBy, today],
   );
   const {
     data: result,

@@ -1,14 +1,10 @@
-import { useQuery } from "convex/react";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { useMemo } from "react";
 
 import { EmptyState } from "@/components/states/empty/empty-state";
 import { FadeIn } from "@/components/common/FadeIn";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { cn } from "@/lib/utils";
 import { getOrigin } from "@/lib/navigationUtils";
-import { api } from "~/convex/_generated/api";
 import {
   isReportingTodayInProgress,
   type ReportOverviewData,
@@ -17,9 +13,6 @@ import { ReportPeriodMetrics } from "./ReportPeriodMetrics";
 import { ReportFreshness } from "./ReportFreshness";
 import { ReportTrendChart } from "./ReportTrendChart";
 import { ReportTrustStrip } from "./ReportTrustStrip";
-import { useReportsSharedDemoMode } from "./useReportsSharedDemoMode";
-import { createSharedDemoReportsOverview } from "@/components/shared-demo/sharedDemoReportsFixture";
-import { useStableReportQuery } from "./useStableReportQuery";
 import {
   dateRangeForOverviewWindow,
   REPORT_OVERVIEW_WINDOWS,
@@ -84,43 +77,33 @@ function comparisonFor(
 }
 
 /**
- * Overview tab. Subscribes to `reports.queries.getOverview` ONLY — one
- * query, one document — per the contract's read budget.
+ * Overview tab.
+ *
+ * The overview document arrives as a PROP from the route shell, which already
+ * sources it to gate the whole page — this view holds no query of its own.
+ * Deliberate, and load-bearing for layout stability: when this view re-derived
+ * the same document through its own hook instances, those instances settled
+ * one commit after the route's on a fresh mount. For that commit the view
+ * returned null while its sibling panels (which render their reserved shells
+ * dataless) painted at the top of the page, then everything shifted down —
+ * a measured 0.21 layout shift on every entry to this tab in the shared demo.
+ * One source, one settle: siblings can no longer disagree about whether the
+ * page has data.
  */
 export function ReportsOverviewView({
+  isRefreshing,
+  overview,
   selectedWindow,
   onSelectedWindowChange,
 }: {
+  isRefreshing: boolean;
+  /** Settled by the route; `null` means no reporting data materialized yet. */
+  overview: ReportOverviewData | null;
   selectedWindow: ReportOverviewWindow;
   onSelectedWindowChange: (window: ReportOverviewWindow) => void;
 }) {
-  const { activeStore } = useGetActiveStore();
   const navigate = useNavigate();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
-  const { isSharedDemo, useLiveQuery } = useReportsSharedDemoMode();
-  const liveOverview = useQuery(
-    api.reports.queries.getOverview,
-    activeStore?._id && useLiveQuery ? { storeId: activeStore._id } : "skip",
-  );
-  // Same fixture call the route shell makes; it is cached per operating date,
-  // so both resolve to one projection exactly as Convex dedup does live.
-  const demoOverview = useMemo(
-    () => (isSharedDemo ? createSharedDemoReportsOverview() : undefined),
-    [isSharedDemo],
-  );
-  const {
-    data: overview,
-    isInitialLoad,
-    isRefreshing,
-  } = useStableReportQuery(isSharedDemo ? demoOverview : liveOverview);
-
-  // Nothing until the first result settles: these queries resolve fast
-  // enough that a skeleton appears and vanishes as a flash of its own.
-  // Refreshes keep the previous data on screen (see useStableReportQuery),
-  // so this branch is only ever the very first load.
-  if (activeStore === null || isInitialLoad || overview === undefined) {
-    return null;
-  }
 
   if (overview === null) {
     return (

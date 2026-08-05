@@ -56,7 +56,10 @@ import {
   formatReportMoney,
   formatUnits,
 } from "./reportFormat";
-import { useReportsSharedDemoMode } from "./useReportsSharedDemoMode";
+import {
+  useReportsSharedDemoMode,
+  useSharedDemoLiveReportsDay,
+} from "./useReportsSharedDemoMode";
 import { useStableReportQuery } from "./useStableReportQuery";
 
 const unitsChartConfig = {
@@ -361,6 +364,7 @@ export function ReportUnitsMovedChartSheet({
 
   const { activeStore } = useGetActiveStore();
   const { isSharedDemo, useLiveQuery } = useReportsSharedDemoMode();
+  const { liveDay, liveStock, today } = useSharedDemoLiveReportsDay();
   const storeId = activeStore?._id;
   const liveEnabled = Boolean(isOpen && storeId && useLiveQuery);
 
@@ -478,6 +482,9 @@ export function ReportUnitsMovedChartSheet({
       startDate: periodStartDate,
       endDate: periodEndDate,
       page: requestedPage,
+      liveDay,
+      liveStock,
+      today,
     });
     return {
       lifecycle: demoPage.lifecycle,
@@ -486,7 +493,16 @@ export function ReportUnitsMovedChartSheet({
       requestKey: null,
       rows: demoPage.rows,
     };
-  }, [isOpen, isSharedDemo, periodEndDate, periodStartDate, requestedPage]);
+  }, [
+    isOpen,
+    isSharedDemo,
+    liveDay,
+    liveStock,
+    periodEndDate,
+    periodStartDate,
+    requestedPage,
+    today,
+  ]);
 
   const liveView = useMemo<MovementPageView | undefined>(() => {
     if (!livePageData || livePageData.lifecycle.state !== "completed") {

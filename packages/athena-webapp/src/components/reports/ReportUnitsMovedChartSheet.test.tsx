@@ -19,7 +19,7 @@ const state = vi.hoisted(() => ({
   useQuery: vi.fn(),
   reducedMotion: false,
   /** `null` = real store; `{kind:"shared_demo"}` = demo. */
-  sharedDemoContext: null as { kind: string } | null | undefined,
+  sharedDemoContext: null as { kind: string; storeId?: string } | null | undefined,
 }));
 
 vi.mock("convex/react", () => ({
@@ -881,7 +881,7 @@ describe("terminal error and manual retry", () => {
 describe("shared demo", () => {
   it("serves demo pages synchronously without live reads or generation calls", async () => {
     const user = userEvent.setup();
-    state.sharedDemoContext = { kind: "shared_demo" };
+    state.sharedDemoContext = { kind: "shared_demo", storeId: "store-1" };
     state.useQuery.mockReturnValue(undefined);
     const endDate = getLocalOperatingDate();
     const start = new Date(`${endDate}T00:00:00.000Z`);
@@ -899,9 +899,23 @@ describe("shared demo", () => {
 
     const dialog = expectShell();
     expect(state.ensure).not.toHaveBeenCalled();
-    expect(
-      state.useQuery.mock.calls.every((call) => call[1] === "skip"),
-    ).toBe(true);
+    // Demo mode opens no read the fixture answers. The only live reads are
+    // for the current operating day — more than one view may ask, and Convex
+    // dedupes identical subscriptions into one.
+    const liveReads = state.useQuery.mock.calls.filter((call) => call[1] !== "skip");
+    expect(liveReads.length).toBeGreaterThan(0);
+    for (const [, args] of liveReads) {
+      // Two reads the fixture cannot answer: the current operating day, and
+      // current stock. Everything else is answered locally.
+      expect(args).toEqual(
+        expect.objectContaining({ storeId: "store-1" }),
+      );
+      expect(Object.keys(args as object).sort()).toEqual(
+        (args as { operatingDate?: string }).operatingDate
+          ? ["operatingDate", "storeId"]
+          : ["storeId"],
+      );
+    }
 
     const demo = createSharedDemoReportMovementPage({
       startDate,
@@ -913,14 +927,24 @@ describe("shared demo", () => {
       `${demo.lifecycle.totals.skuCount} SKU`,
     );
 
-    // The granular tab pages the same fixture, still with no live reads.
+    // The granular tab pages the same fixture: still no movement read, and
+    // no read beyond the shared current-day subscription.
     await user.click(within(dialog).getByRole("tab", { name: "All items" }));
     expect(
       within(within(dialog).getByRole("tabpanel")).getByRole("table"),
     ).toBeInTheDocument();
-    expect(
-      state.useQuery.mock.calls.every((call) => call[1] === "skip"),
-    ).toBe(true);
+    for (const [, args] of state.useQuery.mock.calls.filter(
+      (call) => call[1] !== "skip",
+    )) {
+      // The operating day and current stock — the two reads the fixture
+      // cannot answer.
+      expect(args).toEqual(expect.objectContaining({ storeId: "store-1" }));
+      expect(Object.keys(args as object).sort()).toEqual(
+        (args as { operatingDate?: string }).operatingDate
+          ? ["operatingDate", "storeId"]
+          : ["storeId"],
+      );
+    }
     expect(state.ensure).not.toHaveBeenCalled();
   });
 });

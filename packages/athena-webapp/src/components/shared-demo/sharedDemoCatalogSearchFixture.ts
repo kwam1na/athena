@@ -14,8 +14,9 @@ import type { ProductSkuSearchResultLike } from "@/lib/skuSearch/productSkuSearc
 
 /**
  * Must stay in sync with `SHARED_DEMO_REPORTS_SKU_ID_PREFIX` in
- * `sharedDemoReportsFixture.ts`: a search hit navigates to the reports SKU
- * detail route, which resolves its fixture row by this id.
+ * `sharedDemoLiveReportsDay.ts` (re-exported by `sharedDemoReportsFixture.ts`):
+ * a search hit navigates to the reports SKU detail route, which resolves its
+ * fixture row by this id.
  */
 const SHARED_DEMO_SKU_ID_PREFIX = "shared-demo-sku-";
 const SHARED_DEMO_PRODUCT_ID_PREFIX = "shared-demo-product-";

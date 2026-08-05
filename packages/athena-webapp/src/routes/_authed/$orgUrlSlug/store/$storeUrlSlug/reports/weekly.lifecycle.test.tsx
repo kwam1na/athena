@@ -1,11 +1,12 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getFunctionName } from "convex/server";
 
 const state = vi.hoisted(() => ({
   activeResponse: undefined as unknown,
   /** `null` = a real store; see `useReportsSharedDemoMode`. */
-  sharedDemoContext: null as { kind: string } | null | undefined,
+  sharedDemoContext: null as { kind: string; storeId?: string } | null | undefined,
   /** Every push into another route's search (the SKU-detail drill-down). */
   detailNavigations: [] as Array<Record<string, unknown>>,
   /** The units-sheet ensure mutation; swapped per test, stable per render. */
@@ -15,6 +16,7 @@ const state = vi.hoisted(() => ({
   navigationOptions: [] as Array<{ replace?: boolean; to?: string }>,
   /** Simulates the first paint, before any Convex result has arrived. */
   pending: false,
+  liveDayQueryArgs: [] as unknown[],
   queryArgs: [] as unknown[],
   search: {} as Record<string, unknown>,
 }));
@@ -81,9 +83,39 @@ const stubEnsureMutation = async () => ({
   lifecycle: { state: "not_available" },
 });
 
+/**
+ * The shared demo's live current-day read is a standing subscription on every
+ * Reports surface, not part of the weekly lifecycle these assertions measure.
+ * It is recorded separately so "no weekly subscription" keeps meaning exactly
+ * that; `liveDayQueryArgs` is asserted on its own below.
+ */
+const SHARED_DEMO_STANDING_READS = new Set([
+  "reports/liveDay:getLiveOperatingDay",
+  "reports/liveDay:listLiveSkuStock",
+]);
+
+/**
+ * Discriminated by FUNCTION, not by argument shape: the stock read takes
+ * `{storeId}`, which is also the weekly briefing's shape, so a shape test
+ * would silently reclassify the very subscription these assertions measure.
+ */
+function isSharedDemoStandingRead(reference: unknown) {
+  try {
+    return SHARED_DEMO_STANDING_READS.has(getFunctionName(reference as never));
+  } catch {
+    return false;
+  }
+}
+
 vi.mock("convex/react", () => ({
   useQuery: (_reference: unknown, args: unknown) => {
-    if (args !== "skip") state.queryArgs.push(args);
+    if (args !== "skip") {
+      if (isSharedDemoStandingRead(_reference)) {
+        state.liveDayQueryArgs.push(args);
+      } else {
+        state.queryArgs.push(args);
+      }
+    }
     if (args === "skip" || state.pending) return undefined;
     if (typeof args === "object" && args !== null && "requestKey" in args) {
       if (!state.movement) return undefined;
@@ -302,6 +334,7 @@ describe("ReportsWeeklyRoute query lifecycle", () => {
     state.pending = false;
     state.navigationOptions = [];
     state.queryArgs = [];
+    state.liveDayQueryArgs = [];
     state.search = {};
   });
 
@@ -842,11 +875,22 @@ describe("ReportsWeeklyRoute query lifecycle", () => {
 
   it("answers the shared demo from the fixture with no weekly subscription", async () => {
     const user = userEvent.setup();
-    state.sharedDemoContext = { kind: "shared_demo" };
+    state.sharedDemoContext = { kind: "shared_demo", storeId: "store-1" };
     const { rerender } = render(<ReportsWeeklyRoute />);
 
     // Fewer subscriptions than the live path, which opens one immediately.
+    // The weekly briefing itself is answered by the fixture; the only read is
+    // the current operating day folded onto that fixture history.
     expect(state.queryArgs).toEqual([]);
+    expect(state.liveDayQueryArgs.length).toBeGreaterThan(0);
+    for (const args of state.liveDayQueryArgs) {
+      expect(args).toEqual(expect.objectContaining({ storeId: "store-1" }));
+      expect(Object.keys(args as object).sort()).toEqual(
+        (args as { operatingDate?: string }).operatingDate
+          ? ["operatingDate", "storeId"]
+          : ["storeId"],
+      );
+    }
     expect(screen.getByTestId("weekly-status")).toHaveTextContent(
       /^Reporting week /,
     );
@@ -867,7 +911,7 @@ describe("ReportsWeeklyRoute query lifecycle", () => {
   });
 
   it("settles a pasted accepted week as unavailable in the shared demo", () => {
-    state.sharedDemoContext = { kind: "shared_demo" };
+    state.sharedDemoContext = { kind: "shared_demo", storeId: "store-1" };
     state.search = { reportId: "week:2026-07-06" };
     render(<ReportsWeeklyRoute />);
 

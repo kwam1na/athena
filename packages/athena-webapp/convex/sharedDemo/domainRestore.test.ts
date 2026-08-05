@@ -3,13 +3,27 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  isDerivedRestoreTable,
   planBaselineDocumentPromotion,
   planDomainRestore,
   remapDocumentIds,
   requireBoundedBatch,
   requireCurrentBaselineDocuments,
+  restoreBatchLimitFor,
   SHARED_DEMO_MUTABLE_TABLES,
 } from "./domainRestore";
+
+const DERIVED_REPORT_TABLES = [
+  "reportFact",
+  "reportDay",
+  "reportSkuDay",
+  "reportOverview",
+  "reportPeriodSkuRollup",
+  "reportDirtyDay",
+  "reportWeekCurrent",
+  "reportWeekAccepted",
+  "reportDirtyWeek",
+] as const;
 
 const RETIRED_REPORTING_TABLES = [
   "reportingIngress",
@@ -97,7 +111,7 @@ describe("shared demo domain restore registry", () => {
 
   it("covers mutable tables and descendants for every approved demo domain", () => {
     expect([...new Set(SHARED_DEMO_MUTABLE_TABLES.map((entry) => entry.domain))]).toEqual([
-      "pos", "inventory", "cash", "orders", "operations", "staff",
+      "pos", "inventory", "cash", "orders", "operations", "staff", "reports",
     ]);
     expect(SHARED_DEMO_MUTABLE_TABLES.map((entry) => entry.tableName)).toEqual(
       expect.arrayContaining([
@@ -306,6 +320,74 @@ describe("shared demo domain restore registry", () => {
     expect(source).toContain('tableName === "reportingInventoryDeficitLot"');
     expect(source).toContain('"by_positionId"');
     expect(source).toContain("withIndex(indexName");
+  });
+
+  it("registers every reporting table the demo's own sales write", () => {
+    const tableNames = SHARED_DEMO_MUTABLE_TABLES.map(
+      (entry) => entry.tableName,
+    );
+    for (const tableName of DERIVED_REPORT_TABLES) {
+      expect(tableNames).toContain(tableName);
+      expect(
+        SHARED_DEMO_MUTABLE_TABLES.find(
+          (entry) => entry.tableName === tableName,
+        )?.domain,
+      ).toBe("reports");
+    }
+  });
+
+  it("keeps derived reporting rows out of the captured baseline", () => {
+    for (const tableName of DERIVED_REPORT_TABLES) {
+      expect(isDerivedRestoreTable(tableName)).toBe(true);
+    }
+    for (const tableName of ["posTransaction", "onlineOrder", "dailyOpening"]) {
+      expect(isDerivedRestoreTable(tableName)).toBe(false);
+    }
+  });
+
+  it("purges every derived reporting row when the baseline holds none", () => {
+    // A derived table is never captured, so its baseline is always empty and
+    // restore is pure deletion. Facts especially: `foldDay` rebuilds a day from
+    // surviving `reportFact` rows, so a fact that outlives the restore would
+    // resurrect revenue whose transactions were already wiped.
+    const plan = planDomainRestore({
+      baseline: [],
+      current: [
+        { _id: "fact-1", storeId: "demo" },
+        { _id: "fact-2", storeId: "demo" },
+        { _id: "fact-other-tenant", storeId: "real" },
+      ],
+      storeId: "demo",
+    });
+    expect(plan.remove).toEqual(["fact-1", "fact-2"]);
+    expect(plan.replace).toEqual([]);
+    expect(plan.missing).toEqual([]);
+    expect(plan.untouched).toEqual([
+      { _id: "fact-other-tenant", storeId: "real" },
+    ]);
+  });
+
+  it("gives fact rows a ceiling above the per-sale row multiple", () => {
+    // One payment fact plus one sale fact per line means `reportFact` crosses
+    // the shared 500-row ceiling several times sooner than the transactions
+    // that produced it, and an over-budget throw fails the whole restore.
+    expect(restoreBatchLimitFor("reportFact")).toBeGreaterThan(
+      restoreBatchLimitFor("posTransaction"),
+    );
+    expect(() =>
+      requireBoundedBatch(
+        Array.from({ length: 501 }),
+        "reportFact",
+        restoreBatchLimitFor("reportFact"),
+      ),
+    ).not.toThrow();
+    expect(() =>
+      requireBoundedBatch(
+        Array.from({ length: restoreBatchLimitFor("reportFact") + 1 }),
+        "reportFact",
+        restoreBatchLimitFor("reportFact"),
+      ),
+    ).toThrow("restore batch required");
   });
 
   it("routes register-session restore through authority writers", () => {

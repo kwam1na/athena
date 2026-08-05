@@ -100,6 +100,10 @@ vi.mock("./useReportsSharedDemoMode", () => ({
     isSharedDemo: false,
     useLiveQuery: true,
   }),
+  useSharedDemoLiveReportsDay: () => ({
+    liveDay: null,
+    today: "2026-08-06",
+  }),
 }));
 
 vi.mock("recharts", () => ({
@@ -648,6 +652,20 @@ describe("ReportsWeeklyView", () => {
     expect(
       screen.getByRole("link", { name: "Open inventory review" }),
     ).toBeInTheDocument();
+    const stockAdjustmentLink = screen.getByRole("link", {
+      name: "Review stock adjustments",
+    });
+    expect(stockAdjustmentLink).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments",
+    );
+    expect(
+      JSON.parse(stockAdjustmentLink.getAttribute("data-search") ?? "{}"),
+    ).toEqual({
+      mode: "cycle_count",
+      o: "%2F",
+      work: "synced_sale_inventory_review",
+    });
     expect(
       screen.getByRole("list", { name: "Scheduled days" }).firstElementChild,
     ).toHaveClass(
@@ -1047,6 +1065,35 @@ describe("ReportsWeeklyView", () => {
     expect(screen.queryByText("0 new review groups")).not.toBeInTheDocument();
   });
 
+  it("communicates when all live inventory review work is resolved", () => {
+    render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          inventoryAttention: {
+            newCount: 0,
+            carriedForwardCount: 0,
+            completeness: "complete",
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Resolved")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "All synced sale inventory reviews for this reporting week are closed.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open inventory review" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Review stock adjustments" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("0 new review groups")).not.toBeInTheDocument();
+  });
+
   it("labels a live week's values as week to date rather than accepted", () => {
     render(
       <ReportsWeeklyView
@@ -1273,7 +1320,7 @@ describe("ReportsWeeklyView", () => {
     render(<ReportsWeeklyView report={report} />);
 
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(4);
+    expect(links).toHaveLength(5);
     for (const link of links) {
       const search = JSON.parse(link.getAttribute("data-search")!);
       // The app's standard return convention: the owning surface reads `o`

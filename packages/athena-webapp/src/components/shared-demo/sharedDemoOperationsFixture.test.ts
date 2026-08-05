@@ -327,6 +327,154 @@ describe("createSharedDemoDailyOperationsFixture", () => {
     vi.useRealTimers();
   });
 
+  it("carries live shared-demo POS sales into every wider pulse window", () => {
+    // The demo's fixture history stops at yesterday and today is live, so a
+    // window that CONTAINS today must fold the live day in. Leaving it as the
+    // fixture's empty current day zeroed the trend's last point and made every
+    // comparison read -100%, because the comparison's "current" IS that day.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 23, 12));
+
+    const liveToday = {
+      currentDayCashTotal: 19_600,
+      currentDayCashTransactionCount: 1,
+      paymentTotals: [
+        { amount: 19_600, method: "cash", transactionCount: 1 },
+      ],
+      salesTotal: 19_600,
+      totalItemsSold: 110,
+      transactionCount: 1,
+    };
+
+    for (const pulseWindow of ["this_week", "this_month", "all_time"] as const) {
+      const withLive = createSharedDemoPointOfSaleStorePulseSummary(
+        pulseWindow,
+        undefined,
+        liveToday,
+      );
+      const withoutLive =
+        createSharedDemoPointOfSaleStorePulseSummary(pulseWindow);
+      const trend = withLive.operatorSnapshot!.trend;
+      const currentPoint = trend.at(-1)!;
+
+      expect(currentPoint.date, pulseWindow).toBe("2026-07-23");
+      expect(currentPoint.totalSales, pulseWindow).toBe(19_600);
+      expect(currentPoint.transactionCount, pulseWindow).toBe(1);
+      expect(currentPoint.totalItemsSold, pulseWindow).toBe(110);
+
+      // Window totals include the live day.
+      expect(withLive.totalSales, pulseWindow).toBe(
+        (withoutLive.totalSales ?? 0) + 19_600,
+      );
+      expect(withLive.totalItemsSold, pulseWindow).toBe(
+        (withoutLive.totalItemsSold ?? 0) + 110,
+      );
+      expect(withLive.totalTransactions, pulseWindow).toBe(
+        (withoutLive.totalTransactions ?? 0) + 1,
+      );
+
+      // The comparison's "current" is the live day, not an empty one, so a
+      // window with real sales can no longer report a -100% collapse.
+      const comparison = withLive.operatorSnapshot!.comparison;
+      expect(comparison.currentSales, pulseWindow).toBe(19_600);
+      expect(comparison.salesDeltaPercent, pulseWindow).not.toBe(-100);
+
+      // Payment mix sums the same history, so the live day's cash lands too.
+      const cash = withLive.operatorSnapshot!.paymentMix.find(
+        (entry) => entry.method === "cash",
+      )!;
+      const cashWithoutLive = withoutLive.operatorSnapshot!.paymentMix.find(
+        (entry) => entry.method === "cash",
+      )!;
+      expect(cash.total, pulseWindow).toBe(cashWithoutLive.total + 19_600);
+    }
+
+    vi.useRealTimers();
+  });
+
+  it("leaves the history untouched when no live day is supplied", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 23, 12));
+
+    const summary = createSharedDemoPointOfSaleStorePulseSummary("this_week");
+    expect(summary.operatorSnapshot!.trend.at(-1)!.totalSales).toBe(0);
+
+    vi.useRealTimers();
+  });
+
+  it("shows the live current day in the week rail of a historical day", () => {
+    // Selecting a fixture day must not blank today: the week rail spans it,
+    // and "Week sales" reduces the same array. Left empty, a day with real
+    // sales read GH0 beside days that had none.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 23, 12));
+
+    const liveToday = {
+      salesTotal: 30_360,
+      totalItemsSold: 110,
+      transactionCount: 2,
+    };
+    const args = {
+      operatingDate: "2026-07-21",
+      orgUrlSlug: "acme",
+      storeId: "store-1" as never,
+      storeUrlSlug: "downtown",
+    };
+
+    const withLive = createSharedDemoDailyOperationsFixture({
+      ...args,
+      liveCurrentDay: liveToday,
+    });
+    const withoutLive = createSharedDemoDailyOperationsFixture(args);
+
+    const todayCell = withLive.cachedWeekMetrics!.find(
+      (metric) => metric.operatingDate === "2026-07-23",
+    )!;
+    expect(todayCell.salesTotal).toBe(30_360);
+    expect(todayCell.transactionCount).toBe(2);
+
+    // The selected historical day is untouched by the live injection.
+    const selectedWith = withLive.cachedWeekMetrics!.find(
+      (metric) => metric.operatingDate === "2026-07-21",
+    )!;
+    const selectedWithout = withoutLive.cachedWeekMetrics!.find(
+      (metric) => metric.operatingDate === "2026-07-21",
+    )!;
+    expect(selectedWith).toEqual(selectedWithout);
+
+    // Week sales reduces this array, so the total moves with it.
+    const total = (metrics: typeof withLive.cachedWeekMetrics) =>
+      (metrics ?? []).reduce((sum, metric) => sum + metric.salesTotal, 0);
+    expect(total(withLive.cachedWeekMetrics)).toBe(
+      total(withoutLive.cachedWeekMetrics) + 30_360,
+    );
+
+    // The snapshot's own copy feeds the same rail and must not diverge.
+    expect(withLive.snapshot!.weekMetrics).toEqual(withLive.cachedWeekMetrics);
+
+    vi.useRealTimers();
+  });
+
+  it("leaves the week rail's current day empty when nothing is live yet", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 23, 12));
+
+    const fixture = createSharedDemoDailyOperationsFixture({
+      operatingDate: "2026-07-21",
+      orgUrlSlug: "acme",
+      storeId: "store-1" as never,
+      storeUrlSlug: "downtown",
+    });
+    const todayCell = fixture.cachedWeekMetrics!.find(
+      (metric) => metric.operatingDate === "2026-07-23",
+    )!;
+
+    expect(todayCell.salesTotal).toBe(0);
+    expect(todayCell.transactionCount).toBe(0);
+
+    vi.useRealTimers();
+  });
+
   it("overlays fixture yesterday onto live shared-demo POS today", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 6, 23, 12));

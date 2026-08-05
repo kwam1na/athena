@@ -15,7 +15,10 @@ import { cn } from "@/lib/utils";
 import { getOrigin } from "@/lib/navigationUtils";
 import { ListPagination } from "@/components/common/ListPagination";
 import { useStableReportQuery } from "./useStableReportQuery";
-import { useReportsSharedDemoMode } from "./useReportsSharedDemoMode";
+import {
+  useReportsSharedDemoMode,
+  useSharedDemoLiveReportsDay,
+} from "./useReportsSharedDemoMode";
 import {
   createSharedDemoReportDays,
   createSharedDemoReportMixLifecycle,
@@ -131,6 +134,8 @@ export function ReportDaysPanel({
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
   const pendingRangeStart = useRef<string | null>(null);
   const { isSharedDemo, useLiveQuery } = useReportsSharedDemoMode();
+
+  const { liveDay, liveStock, today } = useSharedDemoLiveReportsDay();
   const liveDays = useQuery(
     api.reports.queries.listDays,
     activeStore?._id && useLiveQuery
@@ -147,9 +152,11 @@ export function ReportDaysPanel({
         ? createSharedDemoReportDays({
             startDate: tableStartDate,
             endDate: tableEndDate,
+            liveDay,
+            today,
           })
         : undefined,
-    [isSharedDemo, tableEndDate, tableStartDate],
+    [isSharedDemo, liveDay, tableEndDate, tableStartDate, today],
   );
   const {
     data: days,
@@ -343,15 +350,29 @@ export function ReportDaysPanel({
           ? createSharedDemoReportSkuMix({
               startDate: skuMixStartDate,
               endDate: skuMixEndDate,
+              liveDay,
+              liveStock,
+              today,
             })
           : // Demo multi-day mix (U6): an immediately-completed lifecycle
             // wrapping the same fixture computation the sync path uses.
             createSharedDemoReportMixLifecycle({
               startDate: skuMixStartDate,
               endDate: skuMixEndDate,
+              liveDay,
+              liveStock,
+              today,
             }).data
         : undefined,
-    [isSharedDemo, isSyncMixSpan, skuMixEndDate, skuMixStartDate],
+    [
+      isSharedDemo,
+      isSyncMixSpan,
+      liveDay,
+      liveStock,
+      skuMixEndDate,
+      skuMixStartDate,
+      today,
+    ],
   );
   // Both paths feed the SAME settled seam, so the `{data, dataContext}` pair
   // always describes the range the on-screen rows came from, whichever path

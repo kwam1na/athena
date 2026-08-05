@@ -474,6 +474,118 @@ describe("StockAdjustmentWorkspaceContent", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("filters to SKUs with open synced sale inventory work", async () => {
+    const user = userEvent.setup();
+    const onSearchStateChange = vi.fn();
+
+    renderStockAdjustmentWorkspace({
+      onSearchStateChange,
+      openSyncedSaleInventoryReview: {
+        completeness: "complete",
+        skuIds: ["sku-2" as Id<"productSku">],
+        workItemCount: 3,
+      },
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: /open sale reviews, 1 sku/i }),
+    );
+
+    expect(screen.getByText(/body wave bundle/i)).toBeInTheDocument();
+    expect(screen.queryByText(/closure wig/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Enter reviewed counts for each SKU. Submitted stock updates close 3 open sale inventory work items.",
+      ),
+    ).toBeInTheDocument();
+    expect(onSearchStateChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        page: 1,
+        sku: undefined,
+        work: "synced_sale_inventory_review",
+      }),
+    );
+  });
+
+  it("restores the open synced sale inventory filter from route state", () => {
+    renderStockAdjustmentWorkspace({
+      openSyncedSaleInventoryReview: {
+        completeness: "complete",
+        skuIds: ["sku-1" as Id<"productSku">],
+        workItemCount: 1,
+      },
+      searchState: { work: "synced_sale_inventory_review" },
+    });
+
+    expect(
+      screen.getByRole("button", { name: /open sale reviews, 1 sku/i }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText(/closure wig/i)).toBeInTheDocument();
+    expect(screen.queryByText(/body wave bundle/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps the complete open-work SKU count when one SKU is not rendered", () => {
+    renderStockAdjustmentWorkspace({
+      openSyncedSaleInventoryReview: {
+        completeness: "complete",
+        skuIds: [
+          "sku-1" as Id<"productSku">,
+          "sku-not-rendered" as Id<"productSku">,
+        ],
+        workItemCount: 2,
+      },
+      searchState: { work: "synced_sale_inventory_review" },
+    });
+
+    expect(
+      screen.getByRole("button", { name: /open sale reviews, 2 skus/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /open sale reviews, 2\+ skus/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/closure wig/i)).toBeInTheDocument();
+  });
+
+  it("labels an incomplete open sale review SKU set as a lower bound", () => {
+    renderStockAdjustmentWorkspace({
+      openSyncedSaleInventoryReview: {
+        completeness: "incomplete",
+        skuIds: ["sku-1" as Id<"productSku">],
+        workItemCount: 2,
+      },
+      searchState: { work: "synced_sale_inventory_review" },
+    });
+
+    expect(
+      screen.getByRole("button", { name: /open sale reviews, 1\+ skus/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "More open sale review SKUs exist outside this view. Finish the listed SKUs, then return for the rest.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("communicates when the selected sale inventory work is resolved", () => {
+    renderStockAdjustmentWorkspace({
+      openSyncedSaleInventoryReview: {
+        completeness: "complete",
+        skuIds: [],
+        workItemCount: 0,
+      },
+      searchState: { work: "synced_sale_inventory_review" },
+    });
+
+    expect(
+      screen.getByText(
+        "All synced sale inventory review work items are resolved. No stock counts are needed.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/enter reviewed counts/i),
+    ).not.toBeInTheDocument();
+  });
+
   it("attaches a searched barcode to an existing SKU from stock quick add", async () => {
     const user = userEvent.setup();
     const onSearchStateChange = vi.fn();

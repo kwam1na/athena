@@ -4,6 +4,8 @@ import { query } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { isWeeklyReportingEnabledForStoreDoc } from "../platform/capabilityCatalog";
+import { localDateStartAt } from "../lib/storeScheduleTime";
+import { listOpenSyncedSaleInventoryReviewGroupsWithCompleteness } from "../operations/operationalWorkItems";
 import { requireReportsStoreAccess } from "./access";
 import {
   addWeekMetrics,
@@ -50,7 +52,10 @@ import {
   OVERVIEW_DAY_SCAN_LIMIT,
   snapshotForDays,
 } from "./overview";
-import { UNAVAILABLE_WEEKLY_INVENTORY_ATTENTION } from "./weeklyInventory";
+import {
+  projectLiveWeeklyInventoryAttention,
+  UNAVAILABLE_WEEKLY_INVENTORY_ATTENTION,
+} from "./weeklyInventory";
 import { addDaysToDate, periodDateRange } from "./rollups";
 import { transactionCountFromCloseSummary } from "./transactionCounts";
 
@@ -351,6 +356,39 @@ function toWeeklyCurrentProjection(
       scheduleLineage: doc.scheduleLineage,
     }),
   };
+}
+
+async function liveWeeklyInventoryAttention(
+  ctx: QueryCtx,
+  doc: MaterializedWeekCurrent,
+): Promise<ReportWeekInventoryAttention> {
+  const scheduleVersionId = doc.scheduleLineage.find(
+    (day) => day.scheduleVersionId !== null,
+  )?.scheduleVersionId;
+  if (!scheduleVersionId) {
+    return inventoryAttentionProjection(doc.inventoryAttention);
+  }
+
+  const schedule = await ctx.db.get(
+    "storeSchedule",
+    scheduleVersionId as Id<"storeSchedule">,
+  );
+  if (!schedule?.timezone) {
+    return inventoryAttentionProjection(doc.inventoryAttention);
+  }
+
+  const frameStartAt = localDateStartAt(doc.cycleStartDate, schedule.timezone);
+  if (frameStartAt === null) {
+    return inventoryAttentionProjection(doc.inventoryAttention);
+  }
+
+  return projectLiveWeeklyInventoryAttention({
+    frameStartAt,
+    logicalWork: await listOpenSyncedSaleInventoryReviewGroupsWithCompleteness(
+      ctx,
+      doc.storeId,
+    ),
+  });
 }
 
 function toAcceptedWeeklyProjection(
@@ -675,9 +713,15 @@ export const getActiveWeeklyBriefing = query({
           .unique()
       : null;
 
+    const currentProjection = toWeeklyCurrentProjection(current);
+    currentProjection.inventoryAttention = await liveWeeklyInventoryAttention(
+      ctx,
+      current,
+    );
+
     return {
       status: "available" as const,
-      current: toWeeklyCurrentProjection(current),
+      current: currentProjection,
       acceptedBaseline: baseline ? toAcceptedWeeklyProjection(baseline) : null,
     };
   },
@@ -1365,6 +1409,9 @@ export async function resolveSkuIdentity(
       String(productSkuId),
     ...(sku.netPrice !== undefined ? { netPriceMinor: sku.netPrice } : {}),
     ...(unitCostMinor !== undefined ? { unitCostMinor } : {}),
+    // Stock on hand. Required on the `productSku` document already read
+    // above, so it is free — no extra read, no widened budget.
+    quantityAvailable: sku.quantityAvailable,
     ...(code ? { sku: code } : {}),
     ...(size ? { size } : {}),
     ...(imageUrl ? { imageUrl } : {}),
