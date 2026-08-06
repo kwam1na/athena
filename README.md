@@ -41,6 +41,100 @@ Not there yet:
   wired. Accounting, banking, payroll, supplier, and broader CRM integrations
   are outside the core loop.
 
+## System Overview
+
+Athena is four layers that share one backend. The Convex deployment in
+`packages/athena-webapp/convex` is the only backend; both frontends and every
+webhook land there.
+
+```mermaid
+flowchart TB
+    subgraph Surfaces
+        OP["Operator app<br/>(POS register, operations, reports)"]
+        SF["Storefront<br/>(browse, bag, checkout, orders)"]
+        WH["Webhooks<br/>(Paystack, MTN MoMo, WhatsApp)"]
+    end
+    subgraph Backend["Convex backend"]
+        DOM["Domain commands<br/>pos · storeFront · serviceOps · stockOps · cashControls · operations"]
+        LEDGER["inventoryLedger<br/>(single stock + valuation write path)"]
+        FACTS["reports fact ledger → foldDay → reportDay"]
+        EVID["Evidence rails<br/>operationalEvent · workflowTraces · approvalProofs"]
+    end
+    OP --> DOM
+    SF --> DOM
+    WH --> DOM
+    DOM --> LEDGER
+    DOM --> FACTS
+    DOM --> EVID
+```
+
+### The transactional spine
+
+The load-bearing design decision is that a business action commits everything
+about itself in **one Convex transaction**. Completing a POS sale
+(`convex/pos/application/commands/completeTransaction.ts`) writes, atomically:
+the transaction rows, the inventory-ledger outbound effect (which returns the
+cost basis), the payment allocations, the register-session cash delta, the
+report facts, the operational event, and the workflow-trace event. Cross-domain
+calls are direct `*WithCtx` helper imports inside the caller's transaction, not
+scheduled jobs — so there is no window where a sale exists without its stock
+movement or its evidence.
+
+Two deliberate exceptions to strict coupling:
+
+- **Reporting can never roll back a sale.** Fact ingestion is contained; a
+  failure degrades to a dirty-day mark instead of failing the command.
+- **Traces are best-effort.** A trace write failure never fails the workflow
+  it observes.
+
+### The systems and how they connect
+
+- **Inventory ledger** (`convex/inventoryLedger`) is the single write path for
+  every stock movement and its weighted-average valuation. POS sales, online
+  orders, receiving, adjustments, and service parts usage all flow through it;
+  nothing else mutates quantity-on-hand. Uncosted stock is reported as an
+  honest unknown, never zero.
+- **Selling** happens on two channels against the same catalog and ledger. The
+  POS register is genuinely local-first (IndexedDB event log, hexagonal
+  `domain/application/infrastructure` split under `src/lib/pos`, background
+  sync drain with server-side projection policies), so a terminal keeps selling
+  offline. The storefront reserves stock through checkout holds, collects
+  payment via Paystack/MTN MoMo webhooks, and converts holds to real depletion
+  when the order is created. Both channels emit facts into the same reporting
+  ledger, so reports are a unified channel view — but only in-store sales touch
+  register cash.
+- **Accountability** wraps selling in three rails. `operationalEvent` is the
+  append-only audit log; `workflowTraces` gives each long-running workflow
+  (register session, order, PO, service case, return) a privacy-minimized
+  timeline; and manager approvals mint short-lived single-use **approval
+  proofs** that the privileged command must consume in-transaction — a
+  client-supplied staff id is never authorization.
+- **The day is the unit of trust.** `storeTime` is the authority for what
+  operating day it is in the store's timezone. Daily Opening starts the day;
+  cash controls close out each register (blocked while a terminal has unsynced
+  events); Daily Close composes transactions, closeouts, allocations, and open
+  work into a readiness verdict, and unresolved items carry forward to
+  tomorrow rather than blocking.
+- **Reporting** is a fact ledger, not live queries. Domain commands append
+  structurally-identified `reportFact` rows; a pure, order-independent
+  `foldDay` is the correctness authority; a 5-minute sweeper cron folds dirty
+  days and rebuilds SKU-day, weekly, and overview rollups. The open day is a
+  preview; replay mismatches quarantine rather than overwrite.
+- **Automation and intelligence** sit strictly downstream and read-then-command.
+  Automation (per-store policy: disabled / dry-run / enabled, with an
+  idempotent run ledger) invokes the same domain commands an operator would —
+  today chiefly unattended Daily Close. Intelligence runs provider-backed
+  insights over redacted context bundles tagged with freshness, and persists
+  artifacts for the operator to act on; neither layer writes domain state
+  directly.
+- **Notifications** are emitted as intents from domain mutations through a
+  code-owned registry and delivered by a sweeper with retry leases — the
+  approvals email, daily manager report, variance and terminal-health alerts,
+  receipts, and order updates all ride this rail.
+- **The docs workspace** serves `docs/solutions/` and landed-change reports
+  inside the app itself, so the reasoning behind the system ships with the
+  system.
+
 ## Getting Started
 
 A Bun workspace with three packages:
