@@ -173,6 +173,53 @@ describe("shared demo context event definitions", () => {
     ).toEqual({ ok: true });
   });
 
+  it("keeps the client-reportable surface key on the sensitivity scan", () => {
+    // surfaceKey is an allowed payload key on the events a browser may report,
+    // so it must not get the closed-identifier bypass that operationId and
+    // capability get. Those two are server-generated and never client-supplied.
+    expect(
+      validateRegisteredContextEventPayload(
+        findSharedDemoEvent("shared_demo.action_denied")!,
+        { reason: "demo_policy", surfaceKey: "visitor.token.ab12cd" },
+      ),
+    ).toEqual({ ok: false, message: "Invalid payload value: surfaceKey" });
+
+    expect(
+      validateRegisteredContextEventPayload(
+        findSharedDemoEvent("shared_demo.surface_viewed")!,
+        {
+          surfaceKey: "pos.checkout",
+          routeTemplate: "/:orgUrlSlug/store/:storeUrlSlug/pos",
+        },
+      ),
+    ).toEqual({ ok: true });
+  });
+
+  it("accepts every real view-surface key under the sensitivity scan", () => {
+    // Guards the fix above from over-correcting: no key in the shipped surface
+    // catalog may be rejected by the scan it now passes through.
+    for (const surfaceKey of [
+      "pos.checkout",
+      "pos.sales_history",
+      "pos.terminal_health",
+      "cash.register_control",
+      "storefront.checkout_sessions",
+      "orders.fulfillment",
+      "administration.app_settings",
+      "observability.workflow_trace",
+      "services.catalog_management",
+      "demo.owner_orientation",
+    ]) {
+      expect(
+        validateRegisteredContextEventPayload(
+          findSharedDemoEvent("shared_demo.action_denied")!,
+          { reason: "demo_policy", surfaceKey },
+        ),
+        surfaceKey,
+      ).toEqual({ ok: true });
+    }
+  });
+
   it("rejects free-form text smuggled into a closed identifier", () => {
     expect(
       validateRegisteredContextEventPayload(

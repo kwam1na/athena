@@ -12,7 +12,7 @@ applies_when:
   - Capturing what a shared-demo visitor did, tried, or was refused
   - "Recording anything about a caller whose write was denied inside a Convex mutation"
 tags: [shared-demo, context-events, telemetry, operation-admission, convex-transactions]
-delivery_diff_fingerprint: 8d1f4e3668e4894eb7df1c37e26d9bb37d135baf2cdd50b686345a471179357e
+delivery_diff_fingerprint: d6284b30fe44a594bacd6fb1be35c03cdf222395119819e77420499dc107adbe
 ---
 
 # Shared-demo visitor activity rides the context event rail, with denials observed from the browser
@@ -65,15 +65,24 @@ resolved server-side, so a browser cannot claim to be another visitor.
 
 Two smaller rules that fall out of the rail's own validation:
 
-- Payload values are scanned for sensitive free text, which rejects legitimate
-  catalog identifiers such as `payments.refund`. `operationId`, `capability`,
-  and `surfaceKey` are validated as *closed identifiers* — a strict shape, no
-  text scan — because they come from a compile-time catalog rather than a
-  visitor.
+- Payload values are scanned for sensitive free text. `operationId` and
+  `capability` skip that scan and validate against a strict identifier shape,
+  because they are generated server-side from a compile-time catalog and never
+  travel through a browser — and the scan, tuned for visitor text, would trip
+  on a future catalog id like `payment.collect`.
+
+  **The line is who supplies the value, not how it looks.** A first draft also
+  gave `surfaceKey` the bypass, which was wrong: `surfaceKey` is an allowed key
+  on the client-reportable events, so a crafted browser could have skipped the
+  scan with anything identifier-shaped. Before extending a validation bypass to
+  a key, check every event that key is allowed on and ask whether a browser can
+  reach any of them.
 - Navigation records the catalog's **route template**, never the visited
   pathname, so no org slug, store slug, product slug, or record id is captured.
   `resolveAthenaViewRoute` in the surface catalog returns the matched template
-  alongside the surface for exactly this.
+  alongside the surface for exactly this. Note this guarantee lives in the
+  client builder: the server's `SAFE_ROUTE_PATTERN` rejects unsafe characters
+  but cannot distinguish a template from a slug-bearing pathname.
 
 **Actions reach the rail through a mutation.** `admitPublicMutation` needs a
 `MutationCtx`, and a Convex action has no `db`, so an action cannot be admitted
