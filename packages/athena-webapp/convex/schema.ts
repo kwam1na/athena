@@ -463,6 +463,12 @@ const schema = defineSchema({
     "normalizedEmail",
   ]),
   contextEvent: defineTable(contextEventSchema)
+    .index("by_surface_eventId_status_occurredAt", [
+      "surface",
+      "eventId",
+      "status",
+      "occurredAt",
+    ])
     .index("by_storeId_surface_idempotencyKey", [
       "storeId",
       "surface",

@@ -9,134 +9,113 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as WalkthroughRouteImport } from './routes/walkthrough'
-import { Route as RegisterInterestRouteImport } from './routes/register-interest'
-import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as LandingRouteImport } from './routes/landing'
-import { Route as DocsRouteImport } from './routes/docs'
-import { Route as DemoRouteImport } from './routes/demo'
-import { Route as AppRouteImport } from './routes/app'
-import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as JoinTeamIndexRouteImport } from './routes/join-team.index'
+import { Route as AuthedRouteImport } from './routes/_authed'
+import { Route as AppRouteImport } from './routes/app'
+import { Route as DemoRouteImport } from './routes/demo'
+import { Route as DocsRouteImport } from './routes/docs'
+import { Route as LandingRouteImport } from './routes/landing'
+import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as RegisterInterestRouteImport } from './routes/register-interest'
+import { Route as WalkthroughRouteImport } from './routes/walkthrough'
 import { Route as DocsIndexRouteImport } from './routes/docs.index'
+import { Route as JoinTeamIndexRouteImport } from './routes/join-team.index'
 import { Route as LoginLayoutRouteImport } from './routes/login/_layout'
-import { Route as LoginLayoutIndexRouteImport } from './routes/login/_layout.index'
-import { Route as DocsSolutionsIndexRouteImport } from './routes/docs.solutions.index'
-import { Route as DocsReportsIndexRouteImport } from './routes/docs.reports.index'
 import { Route as AuthedOrgUrlSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/index'
+import { Route as DocsReportsIndexRouteImport } from './routes/docs.reports.index'
 import { Route as DocsReportsSlugRouteImport } from './routes/docs.reports.$slug'
-import { Route as AuthedOrgUrlSlugStoreIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/index'
+import { Route as DocsSolutionsIndexRouteImport } from './routes/docs.solutions.index'
+import { Route as LoginLayoutIndexRouteImport } from './routes/login/_layout.index'
 import { Route as AuthedOrgUrlSlugSettingsIndexRouteImport } from './routes/_authed/$orgUrlSlug/settings/index'
+import { Route as AuthedOrgUrlSlugStoreIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/index'
 import { Route as DocsSolutionsCategorySlugRouteImport } from './routes/docs.solutions.$category.$slug'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/index'
 import { Route as AuthedOrgUrlSlugSettingsOrganizationIndexRouteImport } from './routes/_authed/$orgUrlSlug/settings/organization/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reports'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugHomeRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings'
 import { Route as AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRouteImport } from './routes/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugServicesIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReportsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/members.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/logs.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugHomeRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reports'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/assets.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/users.$userId'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugTracesTraceIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReportsWeeklyRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/weekly'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsArchivedRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/archived'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsSkuActivityRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpeningRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/logs.$logId'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.$bagId'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/intake.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/appointments.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/active-cases.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/sessions.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/logs.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/logs.$logId'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/members.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpeningRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsSkuActivityRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsArchivedRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/archived'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReportsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReportsWeeklyRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/weekly'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugServicesIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugTracesTraceIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/users.$userId'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsProductSkuIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/sessions.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsProductSkuIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/active-cases.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/appointments.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/intake.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdActivityRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers.$sessionId.activity'
 
-const WalkthroughRoute = WalkthroughRouteImport.update({
-  id: '/walkthrough',
-  path: '/walkthrough',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RegisterInterestRoute = RegisterInterestRouteImport.update({
-  id: '/register-interest',
-  path: '/register-interest',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrivacyRoute = PrivacyRouteImport.update({
-  id: '/privacy',
-  path: '/privacy',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LandingRoute = LandingRouteImport.update({
-  id: '/landing',
-  path: '/landing',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DocsRoute = DocsRouteImport.update({
-  id: '/docs',
-  path: '/docs',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DemoRoute = DemoRouteImport.update({
-  id: '/demo',
-  path: '/demo',
+const AuthedRoute = AuthedRouteImport.update({
+  id: '/_authed',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -144,18 +123,34 @@ const AppRoute = AppRouteImport.update({
   path: '/app',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthedRoute = AuthedRouteImport.update({
-  id: '/_authed',
+const DemoRoute = DemoRouteImport.update({
+  id: '/demo',
+  path: '/demo',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const DocsRoute = DocsRouteImport.update({
+  id: '/docs',
+  path: '/docs',
   getParentRoute: () => rootRouteImport,
 } as any)
-const JoinTeamIndexRoute = JoinTeamIndexRouteImport.update({
-  id: '/join-team/',
-  path: '/join-team/',
+const LandingRoute = LandingRouteImport.update({
+  id: '/landing',
+  path: '/landing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterInterestRoute = RegisterInterestRouteImport.update({
+  id: '/register-interest',
+  path: '/register-interest',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WalkthroughRoute = WalkthroughRouteImport.update({
+  id: '/walkthrough',
+  path: '/walkthrough',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DocsIndexRoute = DocsIndexRouteImport.update({
@@ -163,46 +158,51 @@ const DocsIndexRoute = DocsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DocsRoute,
 } as any)
+const JoinTeamIndexRoute = JoinTeamIndexRouteImport.update({
+  id: '/join-team/',
+  path: '/join-team/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginLayoutRoute = LoginLayoutRouteImport.update({
   id: '/login/_layout',
   path: '/login',
   getParentRoute: () => rootRouteImport,
-} as any)
-const LoginLayoutIndexRoute = LoginLayoutIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => LoginLayoutRoute,
-} as any)
-const DocsSolutionsIndexRoute = DocsSolutionsIndexRouteImport.update({
-  id: '/solutions/',
-  path: '/solutions/',
-  getParentRoute: () => DocsRoute,
-} as any)
-const DocsReportsIndexRoute = DocsReportsIndexRouteImport.update({
-  id: '/reports/',
-  path: '/reports/',
-  getParentRoute: () => DocsRoute,
 } as any)
 const AuthedOrgUrlSlugIndexRoute = AuthedOrgUrlSlugIndexRouteImport.update({
   id: '/$orgUrlSlug/',
   path: '/$orgUrlSlug/',
   getParentRoute: () => AuthedRoute,
 } as any)
+const DocsReportsIndexRoute = DocsReportsIndexRouteImport.update({
+  id: '/reports/',
+  path: '/reports/',
+  getParentRoute: () => DocsRoute,
+} as any)
 const DocsReportsSlugRoute = DocsReportsSlugRouteImport.update({
   id: '/reports/$slug',
   path: '/reports/$slug',
   getParentRoute: () => DocsRoute,
 } as any)
-const AuthedOrgUrlSlugStoreIndexRoute =
-  AuthedOrgUrlSlugStoreIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/',
-    path: '/$orgUrlSlug/store/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
+const DocsSolutionsIndexRoute = DocsSolutionsIndexRouteImport.update({
+  id: '/solutions/',
+  path: '/solutions/',
+  getParentRoute: () => DocsRoute,
+} as any)
+const LoginLayoutIndexRoute = LoginLayoutIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LoginLayoutRoute,
+} as any)
 const AuthedOrgUrlSlugSettingsIndexRoute =
   AuthedOrgUrlSlugSettingsIndexRouteImport.update({
     id: '/$orgUrlSlug/settings/',
     path: '/$orgUrlSlug/settings/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreIndexRoute =
+  AuthedOrgUrlSlugStoreIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/',
+    path: '/$orgUrlSlug/store/',
     getParentRoute: () => AuthedRoute,
   } as any)
 const DocsSolutionsCategorySlugRoute =
@@ -211,40 +211,10 @@ const DocsSolutionsCategorySlugRoute =
     path: '/solutions/$category/$slug',
     getParentRoute: () => DocsRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
 const AuthedOrgUrlSlugSettingsOrganizationIndexRoute =
   AuthedOrgUrlSlugSettingsOrganizationIndexRouteImport.update({
     id: '/$orgUrlSlug/settings/organization/',
     path: '/$orgUrlSlug/settings/organization/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/shared-demo',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/shared-demo',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/reports',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/reports',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugHomeRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/home',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/home',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/app-settings',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/app-settings',
     getParentRoute: () => AuthedRoute,
   } as any)
 const AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute =
@@ -253,106 +223,34 @@ const AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute =
     path: '/$orgUrlSlug/settings/stores/$storeUrlSlug',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugServicesIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugServicesIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/services/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/services/',
+const AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/reviews/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/',
+const AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/app-settings',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/app-settings',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugReportsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugReportsIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/',
+const AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugHomeRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/home',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/home',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/products/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/products/',
+const AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/reports',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/reports',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/procurement/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/procurement/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/operations/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/operations/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/members/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/members/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/logs/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/logs/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/dashboard/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/dashboard/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/configuration/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/configuration/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/bags/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/bags/',
+const AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/shared-demo',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/shared-demo',
     getParentRoute: () => AuthedRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute =
@@ -361,90 +259,82 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute =
     path: '/$orgUrlSlug/store/$storeUrlSlug/assets/',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/users/$userId',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/users/$userId',
+const AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/bags/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/bags/',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugTracesTraceIdRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugTracesTraceIdRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId',
+const AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugReportsWeeklyRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugReportsWeeklyRouteImport.update({
-    id: '/weekly',
-    path: '/weekly',
-    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRouteImport.update({
-    id: '/items',
-    path: '/items',
-    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new',
+const AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug',
+const AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved',
+const AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/products/new',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/products/new',
+const AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/configuration/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/configuration/',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugProductsArchivedRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugProductsArchivedRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/products/archived',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/products/archived',
+const AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/dashboard/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/dashboard/',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRouteImport.update(
-    {
-      id: '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments',
-      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments',
-      getParentRoute: () => AuthedRoute,
-    } as any,
-  )
-const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsSkuActivityRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsSkuActivityRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity',
+const AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/logs/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/logs/',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpeningRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpeningRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/operations/opening',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/operations/opening',
+const AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work',
+const AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/members/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/members/',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import',
+const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/operations/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/operations/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close',
     getParentRoute: () => AuthedRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRoute =
@@ -455,176 +345,138 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRoute =
       getParentRoute: () => AuthedRoute,
     } as any,
   )
-const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close',
+const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals',
+const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId',
+const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpeningRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpeningRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/operations/opening',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/operations/opening',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId',
+const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsSkuActivityRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsSkuActivityRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/services/intake/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/services/intake/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRouteImport.update(
+const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRouteImport.update(
     {
-      id: '/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/',
-      path: '/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/',
+      id: '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments',
+      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments',
       getParentRoute: () => AuthedRoute,
     } as any,
   )
-const AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/services/appointments/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/services/appointments/',
+const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/',
+const AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/reviews/published/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/published/',
+const AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/procurement/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/procurement/',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/reviews/new/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/new/',
+const AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/products/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/products/',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsIndexRouteImport.update({
+const AuthedOrgUrlSlugStoreStoreUrlSlugProductsArchivedRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugProductsArchivedRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/products/archived',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/products/archived',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/products/new',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/products/new',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugReportsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugReportsIndexRouteImport.update({
     id: '/',
     path: '/',
-    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRoute,
+    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRouteImport.update(
-    {
-      id: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/',
-      path: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/',
-      getParentRoute: () => AuthedRoute,
-    } as any,
-  )
-const AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/',
+const AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRouteImport.update({
+    id: '/items',
+    path: '/items',
+    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugReportsWeeklyRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugReportsWeeklyRouteImport.update({
+    id: '/weekly',
+    path: '/weekly',
+    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/reviews/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/',
+const AuthedOrgUrlSlugStoreStoreUrlSlugServicesIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugServicesIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/services/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/services/',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/',
+const AuthedOrgUrlSlugStoreStoreUrlSlugTracesTraceIdRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugTracesTraceIdRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId',
     getParentRoute: () => AuthedRoute,
   } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/sessions/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/sessions/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/register/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/register/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/ready/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/ready/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/open/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/open/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/completed/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/completed/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/all/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/all/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/',
+const AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/users/$userId',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/users/$userId',
     getParentRoute: () => AuthedRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRoute =
@@ -635,51 +487,12 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRoute =
       getParentRoute: () => AuthedRoute,
     } as any,
   )
-const AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsProductSkuIdRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsProductSkuIdRouteImport.update({
-    id: '/$productSkuId',
-    path: '/$productSkuId',
-    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRouteImport.update(
+const AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteImport.update(
     {
-      id: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId',
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId',
+      id: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId',
+      path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId',
       getParentRoute: () => AuthedRoute,
-    } as any,
-  )
-const AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRouteImport.update(
-    {
-      id: '/review',
-      path: '/review',
-      getParentRoute: () =>
-        AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRoute,
     } as any,
   )
 const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRoute =
@@ -691,14 +504,201 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRoute
         AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRoute,
     } as any,
   )
-const AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteImport.update(
+const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRouteImport.update(
     {
-      id: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId',
-      path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId',
+      id: '/review',
+      path: '/review',
+      getParentRoute: () =>
+        AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRoute,
+    } as any,
+  )
+const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/all/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/all/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/completed/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/completed/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/open/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/open/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/ready/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/ready/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/register/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/register/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/sessions/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/sessions/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRouteImport.update(
+    {
+      id: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId',
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId',
       getParentRoute: () => AuthedRoute,
     } as any,
   )
+const AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRouteImport.update(
+    {
+      id: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/',
+      path: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/',
+      getParentRoute: () => AuthedRoute,
+    } as any,
+  )
+const AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsProductSkuIdRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsProductSkuIdRouteImport.update({
+    id: '/$productSkuId',
+    path: '/$productSkuId',
+    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/reviews/new/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/new/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/reviews/published/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/published/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/services/appointments/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/services/appointments/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRouteImport.update(
+    {
+      id: '/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/',
+      path: '/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/',
+      getParentRoute: () => AuthedRoute,
+    } as any,
+  )
+const AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/services/intake/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/services/intake/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdActivityRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdActivityRouteImport.update(
     {
@@ -1323,53 +1323,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/walkthrough': {
-      id: '/walkthrough'
-      path: '/walkthrough'
-      fullPath: '/walkthrough'
-      preLoaderRoute: typeof WalkthroughRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/register-interest': {
-      id: '/register-interest'
-      path: '/register-interest'
-      fullPath: '/register-interest'
-      preLoaderRoute: typeof RegisterInterestRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/privacy': {
-      id: '/privacy'
-      path: '/privacy'
-      fullPath: '/privacy'
-      preLoaderRoute: typeof PrivacyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/landing': {
-      id: '/landing'
-      path: '/landing'
-      fullPath: '/landing'
-      preLoaderRoute: typeof LandingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/docs': {
-      id: '/docs'
-      path: '/docs'
-      fullPath: '/docs'
-      preLoaderRoute: typeof DocsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/demo': {
-      id: '/demo'
-      path: '/demo'
-      fullPath: '/demo'
-      preLoaderRoute: typeof DemoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/app': {
-      id: '/app'
-      path: '/app'
-      fullPath: '/app'
-      preLoaderRoute: typeof AppRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authed': {
@@ -1379,18 +1337,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/app': {
+      id: '/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/join-team/': {
-      id: '/join-team/'
-      path: '/join-team'
-      fullPath: '/join-team/'
-      preLoaderRoute: typeof JoinTeamIndexRouteImport
+    '/demo': {
+      id: '/demo'
+      path: '/demo'
+      fullPath: '/demo'
+      preLoaderRoute: typeof DemoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/docs': {
+      id: '/docs'
+      path: '/docs'
+      fullPath: '/docs'
+      preLoaderRoute: typeof DocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/landing': {
+      id: '/landing'
+      path: '/landing'
+      fullPath: '/landing'
+      preLoaderRoute: typeof LandingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register-interest': {
+      id: '/register-interest'
+      path: '/register-interest'
+      fullPath: '/register-interest'
+      preLoaderRoute: typeof RegisterInterestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/walkthrough': {
+      id: '/walkthrough'
+      path: '/walkthrough'
+      fullPath: '/walkthrough'
+      preLoaderRoute: typeof WalkthroughRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/docs/': {
@@ -1400,33 +1393,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsIndexRouteImport
       parentRoute: typeof DocsRoute
     }
+    '/join-team/': {
+      id: '/join-team/'
+      path: '/join-team'
+      fullPath: '/join-team/'
+      preLoaderRoute: typeof JoinTeamIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login/_layout': {
       id: '/login/_layout'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginLayoutRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/login/_layout/': {
-      id: '/login/_layout/'
-      path: '/'
-      fullPath: '/login/'
-      preLoaderRoute: typeof LoginLayoutIndexRouteImport
-      parentRoute: typeof LoginLayoutRoute
-    }
-    '/docs/solutions/': {
-      id: '/docs/solutions/'
-      path: '/solutions'
-      fullPath: '/docs/solutions/'
-      preLoaderRoute: typeof DocsSolutionsIndexRouteImport
-      parentRoute: typeof DocsRoute
-    }
-    '/docs/reports/': {
-      id: '/docs/reports/'
-      path: '/reports'
-      fullPath: '/docs/reports/'
-      preLoaderRoute: typeof DocsReportsIndexRouteImport
-      parentRoute: typeof DocsRoute
     }
     '/_authed/$orgUrlSlug/': {
       id: '/_authed/$orgUrlSlug/'
@@ -1435,6 +1414,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgUrlSlugIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/docs/reports/': {
+      id: '/docs/reports/'
+      path: '/reports'
+      fullPath: '/docs/reports/'
+      preLoaderRoute: typeof DocsReportsIndexRouteImport
+      parentRoute: typeof DocsRoute
+    }
     '/docs/reports/$slug': {
       id: '/docs/reports/$slug'
       path: '/reports/$slug'
@@ -1442,18 +1428,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsReportsSlugRouteImport
       parentRoute: typeof DocsRoute
     }
-    '/_authed/$orgUrlSlug/store/': {
-      id: '/_authed/$orgUrlSlug/store/'
-      path: '/$orgUrlSlug/store'
-      fullPath: '/$orgUrlSlug/store/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreIndexRouteImport
-      parentRoute: typeof AuthedRoute
+    '/docs/solutions/': {
+      id: '/docs/solutions/'
+      path: '/solutions'
+      fullPath: '/docs/solutions/'
+      preLoaderRoute: typeof DocsSolutionsIndexRouteImport
+      parentRoute: typeof DocsRoute
+    }
+    '/login/_layout/': {
+      id: '/login/_layout/'
+      path: '/'
+      fullPath: '/login/'
+      preLoaderRoute: typeof LoginLayoutIndexRouteImport
+      parentRoute: typeof LoginLayoutRoute
     }
     '/_authed/$orgUrlSlug/settings/': {
       id: '/_authed/$orgUrlSlug/settings/'
       path: '/$orgUrlSlug/settings'
       fullPath: '/$orgUrlSlug/settings/'
       preLoaderRoute: typeof AuthedOrgUrlSlugSettingsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/': {
+      id: '/_authed/$orgUrlSlug/store/'
+      path: '/$orgUrlSlug/store'
+      fullPath: '/$orgUrlSlug/store/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/docs/solutions/$category/$slug': {
@@ -1463,46 +1463,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsSolutionsCategorySlugRouteImport
       parentRoute: typeof DocsRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
     '/_authed/$orgUrlSlug/settings/organization/': {
       id: '/_authed/$orgUrlSlug/settings/organization/'
       path: '/$orgUrlSlug/settings/organization'
       fullPath: '/$orgUrlSlug/settings/organization/'
       preLoaderRoute: typeof AuthedOrgUrlSlugSettingsOrganizationIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/reports'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reports'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/home': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/home'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/home'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/app-settings'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/app-settings'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug': {
@@ -1512,123 +1477,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/services'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/services/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesIndexRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/reviews'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reviews/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/app-settings'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/app-settings'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/'
-      path: '/'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reports/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsIndexRouteImport
-      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/home': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/home'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/home'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/products'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/reports'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reports'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/procurement'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/procurement/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/operations'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/members/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/members/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/members'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/members/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/logs'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/logs/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/dashboard'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/dashboard/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/configuration'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/configuration/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/bags'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/bags/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/': {
@@ -1638,130 +1519,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/users/$userId': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugTracesTraceIdRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/weekly': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/weekly'
-      path: '/weekly'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reports/weekly'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsWeeklyRouteImport
-      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items'
-      path: '/items'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reports/items'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRouteImport
-      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/products/new'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/new'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/archived': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/archived'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/products/archived'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/archived'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsArchivedRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsSkuActivityRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/opening'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/opening'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpeningRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/open-work': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/approvals': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/bags'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/bags/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': {
@@ -1771,172 +1533,242 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/intake/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/intake/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/services/intake'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/services/intake/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/appointments/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/appointments/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/services/appointments'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/services/appointments/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/services/active-cases'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/configuration'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/configuration/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/published'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reviews/published/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/dashboard'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/dashboard/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/new'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reviews/new/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/logs'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/logs/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items/'
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/members/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/members/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/members'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/members/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/operations'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/approvals': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/open-work': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/opening'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/opening'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpeningRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsSkuActivityRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/procurement'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/procurement/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/products'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/archived': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/archived'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/products/archived'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/archived'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsArchivedRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/products/new'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/new'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/'
       path: '/'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reports/items/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsIndexRouteImport
-      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRoute
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reports/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsIndexRouteImport
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items'
+      path: '/items'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reports/items'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRouteImport
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/weekly': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/weekly'
+      path: '/weekly'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reports/weekly'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsWeeklyRouteImport
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/reviews'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reviews/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/services'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/services/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugTracesTraceIdRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/sessions/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/sessions/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/sessions'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/sessions/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/register'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/register/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/ready'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/ready/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/open'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/open/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/completed'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/completed/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/all'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/all/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/users/$userId': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/': {
@@ -1946,39 +1778,88 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId'
-      path: '/$productSkuId'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsProductSkuIdRouteImport
-      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRoute
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay'
+      path: '/cost-overlay'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRouteImport
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review'
+      path: '/review'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRouteImport
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/all'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/all/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/completed'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/completed/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/open'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/open/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/ready'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/ready/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId': {
@@ -1988,25 +1869,144 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review'
-      path: '/review'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportReviewRouteImport
-      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRoute
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay'
-      path: '/cost-overlay'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/cost-overlay'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportCostOverlayRouteImport
-      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRoute
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/register'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/register/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/sessions/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/sessions/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/sessions'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/sessions/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items/'
+      path: '/'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reports/items/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsIndexRouteImport
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId'
+      path: '/$productSkuId'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsProductSkuIdRouteImport
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/new'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reviews/new/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/published'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reviews/published/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/services/active-cases'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/appointments/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/appointments/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/services/appointments'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/services/appointments/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/intake/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/intake/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/services/intake'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/services/intake/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId/activity': {

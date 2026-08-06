@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import type { Validator } from "convex/values";
+
+import {
+  sharedDemoRestoreAuditSchema,
+  sharedDemoRestoreStateSchema,
+} from "../schemas/sharedDemo";
 
 import {
   applyRestoreLeaseWithCtx,
@@ -16,6 +22,25 @@ import {
 } from "./restore";
 
 describe("shared demo restore", () => {
+  it("keeps legacy daily restore sources readable", () => {
+    type AnyValidator = Validator<any, any, any> & {
+      fields?: Record<string, AnyValidator>;
+      members?: AnyValidator[];
+      value?: unknown;
+    };
+    for (const [schema, field] of [
+      [sharedDemoRestoreAuditSchema, "source"],
+      [sharedDemoRestoreStateSchema, "restoreSource"],
+    ] as const) {
+      const validator = (schema as AnyValidator).fields![field]!;
+      const union = validator.members ?? validator;
+      const members = Array.isArray(union)
+        ? union
+        : (union as AnyValidator).members!;
+      expect(members.map((member) => member.value)).toContain("daily");
+    }
+  });
+
   it("starts an idempotent restore lease and serializes overlap", () => {
     const initial = { baselineVersion: 1, epoch: 4, status: "ready" as const };
     const first = beginRestore(initial, { idempotencyKey: "hour-1", now: 100 });

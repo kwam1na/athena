@@ -1,7 +1,9 @@
 import { v } from "convex/values";
 
+import type { MutationCtx } from "../_generated/server";
 import { internalMutation } from "../_generated/server";
 import {
+  type ContextEventAppendArgs,
   contextEventAppendArgsValidator,
   contextEventStatusValidator,
 } from "../schemas/contextTracking";
@@ -57,132 +59,153 @@ export const appendContextEvent = internalMutation({
     status: v.optional(contextEventStatusValidator),
     message: v.optional(v.string()),
   }),
-  handler: async (ctx, args) => {
-    const registration = findRegisteredContextEvent(args);
-    if (!registration) {
-      return { kind: "rejected" as const, message: "Unknown context event." };
-    }
+  handler: appendContextEventWithCtx,
+});
 
-    const validation = validateRegisteredContextEventPayload(
-      registration,
-      args.payload,
-    );
-    if (!validation.ok) {
-      return { kind: "rejected" as const, message: validation.message };
-    }
+export async function appendContextEventWithCtx(
+  ctx: Pick<MutationCtx, "db">,
+  args: ContextEventAppendArgs,
+) {
+  if (!args.storeId && !isAllowedGlobalContextEvent(args)) {
+    return {
+      kind: "rejected" as const,
+      message: "Context event requires store scope.",
+    };
+  }
 
-    const payloadHash = buildSnapshotHash(args.payload);
-    const envelopeHash = buildContextEventSemanticEnvelopeHash(args);
+  const registration = findRegisteredContextEvent(args);
+  if (!registration) {
+    return { kind: "rejected" as const, message: "Unknown context event." };
+  }
 
-    const existing = await ctx.db
-      .query("contextEvent")
-      .withIndex("by_storeId_surface_idempotencyKey", (q) =>
-        q
-          .eq("storeId", args.storeId)
-          .eq("surface", args.surface)
-          .eq("idempotencyKey", args.idempotencyKey),
-      )
-      .first();
+  const validation = validateRegisteredContextEventPayload(
+    registration,
+    args.payload,
+  );
+  if (!validation.ok) {
+    return { kind: "rejected" as const, message: validation.message };
+  }
 
-    if (existing) {
-      if (
-        existing.payloadHash === payloadHash &&
-        existing.envelopeHash === envelopeHash
-      ) {
-        return {
-          kind: "duplicate" as const,
-          contextEventId: existing._id,
-          status: existing.status,
-        };
-      }
+  const payloadHash = buildSnapshotHash(args.payload);
+  const envelopeHash = buildContextEventSemanticEnvelopeHash(args);
 
+  const existing = await ctx.db
+    .query("contextEvent")
+    .withIndex("by_storeId_surface_idempotencyKey", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("surface", args.surface)
+        .eq("idempotencyKey", args.idempotencyKey),
+    )
+    .first();
+
+  if (existing) {
+    if (
+      existing.payloadHash === payloadHash &&
+      existing.envelopeHash === envelopeHash
+    ) {
       return {
-        kind: "idempotency_conflict" as const,
+        kind: "duplicate" as const,
         contextEventId: existing._id,
         status: existing.status,
-        message:
-          "Context event idempotency key already exists with different content.",
       };
     }
 
-    if (args.abusePartitionKey) {
-      const recentEvents = await ctx.db
-        .query("contextEvent")
-        .withIndex(
-          "by_storeId_surface_status_abusePartitionKey_receivedAt",
-          (q) =>
-            q
-              .eq("storeId", args.storeId)
-              .eq("surface", args.surface)
-              .eq("status", "recorded")
-              .eq("abusePartitionKey", args.abusePartitionKey)
-              .gte("receivedAt", Date.now() - ABUSE_WINDOW_MS),
-        )
-        .take(MAX_EVENTS_PER_ABUSE_WINDOW + 1);
-
-      if (
-        selectContextEventAppendQuotaDecision({
-          abusePartitionKey: args.abusePartitionKey,
-          recentEventCount: recentEvents.length,
-        }) === "reject_quota_exceeded"
-      ) {
-        return {
-          kind: "rejected" as const,
-          message: "Context event write quota exceeded.",
-        };
-      }
-    }
-
-    const now = Date.now();
-    const contextEventId = await ctx.db.insert("contextEvent", {
-      storeId: args.storeId,
-      organizationId: args.organizationId,
-      surface: args.surface,
-      eventId: args.eventId,
-      schemaVersion: args.schemaVersion,
-      idempotencyKey: args.idempotencyKey,
-      envelopeHash,
-      payloadHash,
-      occurredAt: args.occurredAt,
-      receivedAt: now,
-      origin: args.origin,
-      status: "recorded",
-      nonCompilable: args.nonCompilable ?? false,
-      payload: args.payload,
-      actorRef: args.actorRef,
-      actorRefKind: args.actorRef?.kind,
-      actorRefId: args.actorRef?.id,
-      sessionRefKind: args.sessionRef?.kind,
-      sessionRefId: args.sessionRef?.id,
-      primarySubjectType: args.primarySubject?.type,
-      primarySubjectId: args.primarySubject?.id,
-      subjectRefs: args.subjectRefs ?? [],
-      sourceRefs:
-        args.sourceRefs?.map((sourceRef) => ({
-          ...sourceRef,
-          surface: sourceRef.surface ?? args.surface,
-          eventId: sourceRef.eventId ?? args.eventId,
-          schemaVersion: sourceRef.schemaVersion ?? args.schemaVersion,
-        })) ?? [],
-      visibilityMode: registration.visibilityMode,
-      retentionClass: registration.retentionClass,
-      environment: args.environment,
-      synthetic: args.synthetic,
-      abusePartitionKey: args.abusePartitionKey,
-      historicalImportRunId: args.historicalImportRunId,
-      historicalImportBatchId: args.historicalImportBatchId,
-      historicalImportStatus: args.historicalImportStatus,
-      importedAt: args.historicalImportRunId ? now : undefined,
-      expiresAt:
-        registration.retentionClass === "short_lived"
-          ? now + 1000 * 60 * 60 * 24 * 30
-          : undefined,
-    });
-
     return {
-      kind: "recorded" as const,
-      contextEventId,
-      status: "recorded" as const,
+      kind: "idempotency_conflict" as const,
+      contextEventId: existing._id,
+      status: existing.status,
+      message:
+        "Context event idempotency key already exists with different content.",
     };
-  },
-});
+  }
+
+  if (args.abusePartitionKey) {
+    const recentEvents = await ctx.db
+      .query("contextEvent")
+      .withIndex(
+        "by_storeId_surface_status_abusePartitionKey_receivedAt",
+        (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("surface", args.surface)
+            .eq("status", "recorded")
+            .eq("abusePartitionKey", args.abusePartitionKey)
+            .gte("receivedAt", Date.now() - ABUSE_WINDOW_MS),
+      )
+      .take(MAX_EVENTS_PER_ABUSE_WINDOW + 1);
+
+    if (
+      selectContextEventAppendQuotaDecision({
+        abusePartitionKey: args.abusePartitionKey,
+        recentEventCount: recentEvents.length,
+      }) === "reject_quota_exceeded"
+    ) {
+      return {
+        kind: "rejected" as const,
+        message: "Context event write quota exceeded.",
+      };
+    }
+  }
+
+  const now = Date.now();
+  const contextEventId = await ctx.db.insert("contextEvent", {
+    storeId: args.storeId,
+    organizationId: args.organizationId,
+    surface: args.surface,
+    eventId: args.eventId,
+    schemaVersion: args.schemaVersion,
+    idempotencyKey: args.idempotencyKey,
+    envelopeHash,
+    payloadHash,
+    occurredAt: args.occurredAt,
+    receivedAt: now,
+    origin: args.origin,
+    status: "recorded",
+    nonCompilable: args.nonCompilable ?? false,
+    payload: args.payload,
+    actorRef: args.actorRef,
+    actorRefKind: args.actorRef?.kind,
+    actorRefId: args.actorRef?.id,
+    sessionRefKind: args.sessionRef?.kind,
+    sessionRefId: args.sessionRef?.id,
+    primarySubjectType: args.primarySubject?.type,
+    primarySubjectId: args.primarySubject?.id,
+    subjectRefs: args.subjectRefs ?? [],
+    sourceRefs:
+      args.sourceRefs?.map((sourceRef) => ({
+        ...sourceRef,
+        surface: sourceRef.surface ?? args.surface,
+        eventId: sourceRef.eventId ?? args.eventId,
+        schemaVersion: sourceRef.schemaVersion ?? args.schemaVersion,
+      })) ?? [],
+    visibilityMode: registration.visibilityMode,
+    retentionClass: registration.retentionClass,
+    environment: args.environment,
+    synthetic: args.synthetic,
+    abusePartitionKey: args.abusePartitionKey,
+    historicalImportRunId: args.historicalImportRunId,
+    historicalImportBatchId: args.historicalImportBatchId,
+    historicalImportStatus: args.historicalImportStatus,
+    importedAt: args.historicalImportRunId ? now : undefined,
+    expiresAt:
+      registration.retentionClass === "short_lived"
+        ? now + 1000 * 60 * 60 * 24 * 30
+        : undefined,
+  });
+
+  return {
+    kind: "recorded" as const,
+    contextEventId,
+    status: "recorded" as const,
+  };
+}
+
+function isAllowedGlobalContextEvent(args: ContextEventAppendArgs) {
+  return (
+    args.surface === "athena_webapp" &&
+    args.eventId === "athena_webapp.workspace_viewed" &&
+    args.payload.route === "/docs" &&
+    args.payload.workspace === "docs"
+  );
+}

@@ -108,6 +108,40 @@ describe("context event append safeguards", () => {
     expect(quotaCtx.db.insert).not.toHaveBeenCalled();
   });
 
+  it("allows only the registered docs visit to omit store scope", async () => {
+    const append = getHandler(appendContextEvent);
+    const ctx = buildContextEventCtx([], []);
+
+    await expect(
+      append(ctx, {
+        eventId: "storefront.route_viewed",
+        idempotencyKey: "route:session:/shop",
+        occurredAt: 999_500,
+        payload: { route: "/shop" },
+        schemaVersion: 1,
+        surface: "storefront",
+        visibilityMode: "store_admin",
+        retentionClass: "standard",
+      }),
+    ).resolves.toMatchObject({
+      kind: "rejected",
+      message: "Context event requires store scope.",
+    });
+
+    await expect(
+      append(ctx, {
+        eventId: "athena_webapp.workspace_viewed",
+        idempotencyKey: "docs-workspace:session-1",
+        occurredAt: 999_500,
+        payload: { route: "/docs", workspace: "docs" },
+        schemaVersion: 1,
+        surface: "athena_webapp",
+        visibilityMode: "store_admin",
+        retentionClass: "standard",
+      }),
+    ).resolves.toMatchObject({ kind: "recorded" });
+  });
+
   it("uses a targeted abuse-partition quota index instead of filtering recorded events", () => {
     const root = process.cwd();
     const schemaSource = readFileSync(

@@ -96,7 +96,17 @@ function redactTextNode(node) {
   if (shouldSkip(node)) return;
   const source = originals.get(node) ?? node.nodeValue;
   if (!source || !/\d/.test(source)) return;
-  const masked = redactString(source);
+  const flipRoot = node.parentElement?.closest(
+    "[data-motion='flip'][data-value]"
+  );
+  const flipValue = flipRoot?.getAttribute("data-value") ?? "";
+  // FlipNumber renders one text node per glyph, so no visible node contains
+  // both the currency marker and its digits. Classify the complete value on
+  // the stable root, then preserve the glyph DOM by masking each digit node.
+  const masked =
+    flipValue && redactString(flipValue) !== flipValue
+      ? maskDigits(source)
+      : redactString(source);
   if (masked === source) return;
   if (!originals.has(node)) originals.set(node, source);
   if (node.nodeValue !== masked) node.nodeValue = masked;

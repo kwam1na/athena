@@ -1,9 +1,15 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  canAccessSolutionCategory,
+  filterAccessibleSolutionDocs,
+} from "@/lib/docs/access";
 import { listSolutionCategories, listSolutionDocs } from "@/lib/docs/content";
 import { optionalSearchString } from "@/lib/docs/navigation";
+import { LOGIN_PATH } from "@/lib/navigation/appEntryRoutes";
 import { cn } from "@/lib/utils";
 import { formatCategoryLabel, SolutionDocCard } from "./-docs-shared";
 
@@ -18,8 +24,25 @@ function SolutionsList() {
   const { category, q } = Route.useSearch();
   const query = q ?? "";
   const navigate = useNavigate({ from: Route.fullPath });
-  const docs = listSolutionDocs();
-  const categories = listSolutionCategories();
+  const { isLoading, user } = useAuth();
+  const isAuthenticated = Boolean(user);
+  const docs = filterAccessibleSolutionDocs(
+    listSolutionDocs(),
+    isAuthenticated,
+  );
+  const categories = listSolutionCategories().filter(({ category }) =>
+    canAccessSolutionCategory(category, isAuthenticated),
+  );
+
+  useEffect(() => {
+    if (
+      !isLoading &&
+      category &&
+      !canAccessSolutionCategory(category, isAuthenticated)
+    ) {
+      navigate({ to: LOGIN_PATH });
+    }
+  }, [category, isAuthenticated, isLoading, navigate]);
 
   const visibleDocs = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -38,7 +61,10 @@ function SolutionsList() {
   // press leaves the list rather than rewinding keystrokes.
   const setQuery = (next: string) => {
     navigate({
-      search: (previous) => ({ ...previous, q: next.length > 0 ? next : undefined }),
+      search: (previous) => ({
+        ...previous,
+        q: next.length > 0 ? next : undefined,
+      }),
       replace: true,
     });
   };
@@ -57,7 +83,7 @@ function SolutionsList() {
           Solution docs
         </h1>
         <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground">
-          Reusable implementation learnings captured after each investigation.
+          Reusable implementation learnings captured after each delivery.
         </p>
       </header>
 

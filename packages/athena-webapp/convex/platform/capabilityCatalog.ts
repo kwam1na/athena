@@ -53,6 +53,7 @@ export const ATHENA_CAPABILITY_CATALOG = [
   { id: "storefront.analytics.write", label: "Storefront analytics" },
   { id: "storefront.content.manage", label: "Storefront merchandising" },
   { id: "storefront.session.manage", label: "Storefront sessions" },
+  { id: "workspace.telemetry.write", label: "Workspace telemetry" },
 ] as const;
 
 export type AthenaCapability = (typeof ATHENA_CAPABILITY_CATALOG)[number]["id"];
@@ -213,6 +214,7 @@ const PUBLIC_WRITE_MODULE_CAPABILITIES = {
   "cashControls/closeouts": "cash.control.write",
   "cashControls/deposits": "cash.control.write",
   "cloudflare/stream": "integrations.manage",
+  "contextTracking/athenaWebappEvents": "workspace.telemetry.write",
   "customerMessaging/public": "customer.messaging.send",
   devPatchBadTransaction: "administration.maintenance",
   "intelligence/capabilities/actions": "intelligence.generate",

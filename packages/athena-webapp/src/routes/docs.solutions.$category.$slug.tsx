@@ -1,28 +1,87 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 
 import DocsMarkdown from "@/components/docs/DocsMarkdown";
+import Spinner from "@/components/ui/spinner";
+import { useAuth } from "@/hooks/useAuth";
 import { DocsBackLink } from "./-docs-back-link";
 import {
-  findSolutionDoc,
   loadSolutionDocBody,
-  stripFrontmatter,
   type SolutionDocMeta,
 } from "@/lib/docs/content";
+import {
+  loadSolutionDocPageData,
+  stripSolutionDocHeading,
+} from "@/lib/docs/solutionPage";
+import { LOGIN_PATH } from "@/lib/navigation/appEntryRoutes";
 import {
   formatCategoryLabel,
   formatDocDate,
   SeverityIndicator,
 } from "./-docs-shared";
 
-type SolutionDocLoaderData = {
-  doc: SolutionDocMeta | null;
-  body: string | null;
-};
-
 function SolutionDocPage() {
-  const { doc, body } = Route.useLoaderData();
+  const { doc, body, requiresAuthentication } = Route.useLoaderData();
 
+  if (doc && requiresAuthentication) {
+    return <AuthenticatedSolutionDocPage doc={doc} />;
+  }
+
+  return <SolutionDocContent body={body} doc={doc} />;
+}
+
+function AuthenticatedSolutionDocPage({ doc }: { doc: SolutionDocMeta }) {
+  const { isLoading, user } = useAuth();
+  const navigate = useNavigate();
+  const [body, setBody] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
+
+  useEffect(() => {
+    if (!isLoading && user === null) {
+      navigate({ to: LOGIN_PATH });
+    }
+  }, [isLoading, navigate, user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let isCurrent = true;
+    void loadSolutionDocBody(doc)
+      .then((raw) => {
+        if (isCurrent) {
+          setBody(stripSolutionDocHeading(raw));
+        }
+      })
+      .catch((error: unknown) => {
+        if (isCurrent) setLoadError(error);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [doc, user]);
+
+  if (loadError) throw loadError;
+
+  if (isLoading || !user || body === null) {
+    return (
+      <div className="flex min-h-64 items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
+
+  return <SolutionDocContent body={body} doc={doc} />;
+}
+
+function SolutionDocContent({
+  body,
+  doc,
+}: {
+  body: string | null;
+  doc: SolutionDocMeta | null;
+}) {
   if (!doc || body === null) {
     return (
       <div className="space-y-4">
@@ -85,13 +144,5 @@ function SolutionDocPage() {
 
 export const Route = createFileRoute("/docs/solutions/$category/$slug")({
   component: SolutionDocPage,
-  loader: async ({ params }): Promise<SolutionDocLoaderData> => {
-    const doc = findSolutionDoc(params.category, params.slug);
-    if (!doc) return { doc: null, body: null };
-    const raw = await loadSolutionDocBody(doc);
-    // The page header already shows the title, so drop a leading H1 that
-    // repeats it.
-    const body = stripFrontmatter(raw).replace(/^\s*#\s[^\n]+\n+/, "");
-    return { doc, body };
-  },
+  loader: ({ params }) => loadSolutionDocPageData(params),
 });
