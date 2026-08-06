@@ -190,6 +190,14 @@ describe("ReportsSkuDetailView shared demo", () => {
           operatingDate: endDate,
           skus: [
             {
+              identity: {
+                displayName: SHARED_DEMO_PRODUCTS[0]!.name,
+                netPriceMinor: SHARED_DEMO_PRODUCTS[0]!.price,
+                productId: "jd7realproductid",
+                quantityAvailable: 5,
+                sku: SHARED_DEMO_PRODUCTS[0]!.sku,
+                unitCostMinor: SHARED_DEMO_PRODUCTS[0]!.unitCost,
+              },
               metrics: {
                 unitsSold: 2,
                 unitsReturned: 0,
@@ -527,7 +535,6 @@ describe("ReportsSkuDetailView", () => {
       ["Net sales", "+50% vs prior period"],
       ["Units sold", "+100% vs prior period"],
       ["Gross profit", "+50% vs prior period"],
-      ["Refunds", "-50% vs prior period"],
     ] as const;
 
     for (const [label, comparison] of expectations) {

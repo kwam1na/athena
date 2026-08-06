@@ -332,10 +332,28 @@ describe("ReportsCatalogLookup", () => {
     expect(screen.getByText("No matching products")).toBeInTheDocument();
   });
 
-  it("answers the shared demo from the local fixture without a live search", async () => {
+  it("searches the shared demo's real catalogue, re-keyed to its story ids", async () => {
+    // The demo searches live rows like any other store, so its provisioned
+    // products are found by the server — but a hit navigates to the reports
+    // detail route, which is addressed in fixture id space.
     const user = userEvent.setup();
     sharedDemoContext = { kind: "shared_demo", storeId: "store-1" };
-    useQuery.mockReturnValue(undefined);
+    const kente = SHARED_DEMO_PRODUCTS.find(
+      (product) => product.slug === "demo-kente-scarf",
+    )!;
+    useQuery.mockReturnValue({
+      candidateOverflow: false,
+      limit: 25,
+      truncated: false,
+      results: [
+        result({
+          productName: kente.name,
+          productSkuId: "kg2realconvexid" as Id<"productSku">,
+          productSlug: kente.slug,
+          sku: kente.sku,
+        }),
+      ],
+    });
 
     render(
       <ReportsCatalogLookup endDate="2026-07-29" startDate="2026-07-29" />,
@@ -345,15 +363,10 @@ describe("ReportsCatalogLookup", () => {
       "kente",
     );
 
-    expect(useQuery.mock.calls.at(-1)?.[1]).toBe("skip");
-    expect(useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(true);
-    expect(
-      screen.getByRole("heading", { name: "Kente Scarf" }),
-    ).toBeInTheDocument();
-
-    const kente = SHARED_DEMO_PRODUCTS.find(
-      (product) => product.slug === "demo-kente-scarf",
-    )!;
+    expect(useQuery.mock.calls.at(-1)?.[1]).toMatchObject({
+      query: "kente",
+      storeId: "store-1",
+    });
     await user.click(
       screen.getByRole("button", { name: new RegExp(kente.sku) }),
     );
@@ -362,6 +375,48 @@ describe("ReportsCatalogLookup", () => {
       expect.objectContaining({
         params: expect.objectContaining({
           productSkuId: "shared-demo-sku-demo-kente-scarf",
+        }),
+      }),
+    );
+  });
+
+  it("finds a sku created at the register and routes to its live id", async () => {
+    // The gap this closes: a quick-added SKU exists only in the store's real
+    // rows, so a local story fixture could never return it at all.
+    const user = userEvent.setup();
+    sharedDemoContext = { kind: "shared_demo", storeId: "store-1" };
+    useQuery.mockReturnValue({
+      candidateOverflow: false,
+      limit: 25,
+      truncated: false,
+      results: [
+        result({
+          productName: "bottled water",
+          productSkuId: "kg2quickadd" as Id<"productSku">,
+          sku: "FM5W-QCK-ADD",
+        }),
+      ],
+    });
+
+    render(
+      <ReportsCatalogLookup endDate="2026-07-29" startDate="2026-07-29" />,
+    );
+    await user.type(
+      screen.getByRole("searchbox", { name: "Search products" }),
+      "water",
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Bottled Water" }),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /FM5W-QCK-ADD/ }),
+    );
+
+    expect(navigate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          productSkuId: "shared-demo-live-sku-kg2quickadd",
         }),
       }),
     );

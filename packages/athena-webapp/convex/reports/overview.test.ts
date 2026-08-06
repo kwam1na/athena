@@ -5,7 +5,10 @@ import { describe, expect, it } from "vitest";
 
 import schema from "../schema";
 import type { Doc, Id } from "../_generated/dataModel";
-import { REPORT_TRAILING_SIX_MONTHS_MAX_DAYS } from "../../shared/reportsContract";
+import {
+  REPORT_TRAILING_SIX_MONTHS_MAX_DAYS,
+  unitsPerTransaction,
+} from "../../shared/reportsContract";
 import {
   anchorDate,
   buildOverviewData,
@@ -558,5 +561,55 @@ describe("rebuildStoreOverview", () => {
       trend.find((point) => point.operatingDate === "2026-07-28")
         ?.transactionCount,
     ).toBeUndefined();
+  });
+});
+
+describe("overview snapshots — settled transaction coverage", () => {
+  it("sums only days that carry a count, and records how many those were", () => {
+    // The pair is the point: a bare sum would look like a whole-period total
+    // while silently omitting the open day beside it.
+    const snapshot = snapshotForDays([
+      day("2026-08-03", { transactionCount: 9, unitsSold: 20 }),
+      day("2026-08-04", { transactionCount: 6, unitsSold: 15 }),
+      day("2026-08-05", { status: "open", unitsSold: 25 }),
+    ]);
+
+    expect(snapshot.transactionCount).toBe(15);
+    expect(snapshot.transactionCoveredDayCount).toBe(2);
+    expect(snapshot.dayCount).toBe(3);
+    // Units still span every day — which is exactly why the basket is withheld.
+    expect(snapshot.unitsSold).toBe(60);
+    expect(unitsPerTransaction(snapshot)).toBeNull();
+  });
+
+  it("states the basket once every day in the window is closed", () => {
+    const snapshot = snapshotForDays([
+      day("2026-08-03", { transactionCount: 9, unitsSold: 20 }),
+      day("2026-08-04", { transactionCount: 6, unitsSold: 25 }),
+    ]);
+
+    expect(snapshot.transactionCoveredDayCount).toBe(snapshot.dayCount);
+    expect(unitsPerTransaction(snapshot)).toBe(3);
+  });
+
+  it("keeps a closed day that sold nothing in the coverage count", () => {
+    // Zero is a settled fact. Dropping it would make the window look fully
+    // covered by fewer days than it has, and state a basket off a short sum.
+    const snapshot = snapshotForDays([
+      day("2026-08-03", { transactionCount: 0, unitsSold: 0 }),
+      day("2026-08-04", { transactionCount: 4, unitsSold: 12 }),
+    ]);
+
+    expect(snapshot.transactionCount).toBe(4);
+    expect(snapshot.transactionCoveredDayCount).toBe(2);
+    expect(unitsPerTransaction(snapshot)).toBe(3);
+  });
+
+  it("reports an empty window as covered by nothing", () => {
+    const snapshot = snapshotForDays([]);
+
+    expect(snapshot.transactionCount).toBe(0);
+    expect(snapshot.transactionCoveredDayCount).toBe(0);
+    expect(unitsPerTransaction(snapshot)).toBeNull();
   });
 });

@@ -69,7 +69,7 @@ const contextResult = v.union(
   v.object({
     baselineVersion: v.number(),
     kind: v.literal("shared_demo"),
-    nextHourlyRestoreAt: v.number(),
+    nextRestoreAt: v.number(),
     restore: v.object({
       completedAt: v.optional(v.number()),
       epoch: v.number(),
@@ -131,12 +131,16 @@ export const getContext = query({
       .withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId))
       .unique();
     if (!state) return null;
-    const hour = 3_600_000;
+    // Derived from the CRON's schedule, not from the store's timezone: this
+    // value must name the moment the reset actually happens, and the cron
+    // fires at midnight UTC (`crons.ts`). The two coincide today because the
+    // demo store runs `Africa/Accra`, but the schedule is what is promised.
+    const day = 86_400_000;
     const timezone = await resolveStoreTimezone(ctx, actor.storeId, Date.now());
     return {
       baselineVersion: state.baselineVersion,
       kind: "shared_demo" as const,
-      nextHourlyRestoreAt: (Math.floor(Date.now() / hour) + 1) * hour,
+      nextRestoreAt: (Math.floor(Date.now() / day) + 1) * day,
       restore: {
         completedAt: state.completedAt,
         epoch: state.epoch,

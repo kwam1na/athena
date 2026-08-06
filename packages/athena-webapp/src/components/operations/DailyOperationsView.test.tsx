@@ -1,4 +1,12 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import React, { type AnchorHTMLAttributes, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -1048,6 +1056,97 @@ function renderContent(
   );
 }
 
+describe("DailyOperationsViewContent — sheet return", () => {
+  beforeEach(() => {
+    mockedHooks.useSearch.mockReturnValue({});
+  });
+
+  // The shared `sheetReturn` convention proven on the activity timeline: a
+  // link inside the sheet hands the route a token before navigating, and the
+  // return journey puts focus back on that same link.
+  const timelineSnapshot = {
+    operatingDate: quickAddTimelineSnapshot.operatingDate,
+    timeline: quickAddTimelineSnapshot.timeline,
+    timelineHasMore: false,
+  };
+
+  it("hands the route a return token instead of navigating straight out", async () => {
+    const user = userEvent.setup();
+    const onTimelineLinkNavigate = vi.fn();
+    renderContent(quickAddTimelineSnapshot, {
+      isTimelineSheetOpen: true,
+      onTimelineLinkNavigate,
+      timelineSnapshot,
+    });
+
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("link", {
+        name: /Vitamilk/,
+      }),
+    );
+
+    expect(onTimelineLinkNavigate).toHaveBeenCalledTimes(1);
+    // The event id is the focus key: stable across a refetch, unlike an index.
+    expect(onTimelineLinkNavigate.mock.calls[0]![0]).toEqual(
+      expect.objectContaining({
+        focusKey: "event-quick-add",
+        to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+      }),
+    );
+  });
+
+  it("returns focus to the link that was followed", async () => {
+    const onSheetReturnComplete = vi.fn();
+    renderContent(quickAddTimelineSnapshot, {
+      isTimelineSheetOpen: true,
+      onSheetReturnComplete,
+      sheetReturn: { focusKey: "event-quick-add" },
+      timelineSnapshot,
+    });
+
+    const link = within(screen.getByRole("dialog")).getByRole("link", {
+      name: /Vitamilk/,
+    });
+    // The same event id is also rendered by the preview panel on the page
+    // behind the sheet, so this only passes if the lookup is sheet-scoped.
+    expect(document.querySelectorAll("[data-sheet-return-key]").length).toBe(2);
+    await waitFor(() => expect(link).toHaveFocus());
+    // The token is only given back once every leg is done, so the route can
+    // clear it without cancelling a restore still in flight.
+    expect(onSheetReturnComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("lands on the list when the event is no longer in the window", async () => {
+    // Changed data removed the event. Focus must not fall to the document
+    // body, and must never land on a different event.
+    const onSheetReturnComplete = vi.fn();
+    renderContent(quickAddTimelineSnapshot, {
+      isTimelineSheetOpen: true,
+      onSheetReturnComplete,
+      sheetReturn: { focusKey: "event-that-is-gone" },
+      timelineSnapshot,
+    });
+
+    await waitFor(() => expect(onSheetReturnComplete).toHaveBeenCalledTimes(1));
+    expect(document.body).not.toHaveFocus();
+    expect(
+      within(screen.getByRole("dialog")).getByRole("link", { name: /Vitamilk/ }),
+    ).not.toHaveFocus();
+  });
+
+  it("restores nothing when the page carries no token", async () => {
+    const onSheetReturnComplete = vi.fn();
+    renderContent(quickAddTimelineSnapshot, {
+      isTimelineSheetOpen: true,
+      onSheetReturnComplete,
+      timelineSnapshot,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(onSheetReturnComplete).not.toHaveBeenCalled();
+  });
+});
+
 describe("DailyOperationsViewContent", () => {
   let scrollIntoViewMock: ReturnType<typeof vi.fn>;
 
@@ -1406,7 +1505,11 @@ describe("DailyOperationsViewContent", () => {
     const automationPanel = automationHeading.closest("section");
     const netSalesMetric = screen.getByText(/^(Today's net sales|Net sales)$/);
 
-    expect(automationPanel).toHaveClass("px-layout-md", "py-layout-sm");
+    expect(automationPanel).toHaveClass(
+      "h-full",
+      "px-layout-md",
+      "py-layout-md",
+    );
     expect(automationPanel).not.toHaveClass(
       "rounded-md",
       "border",
@@ -1418,11 +1521,20 @@ describe("DailyOperationsViewContent", () => {
       "font-medium",
       "text-foreground",
     );
-    expect(automationHeading.parentElement).toHaveClass("gap-layout-md");
-    expect(automationHeading.parentElement?.lastElementChild).toHaveClass(
-      "divide-y",
-      "divide-border/70",
+    expect(automationHeading.parentElement).toHaveClass("flex", "items-center");
+    expect(
+      automationHeading.parentElement?.parentElement?.lastElementChild,
+    ).toHaveClass("divide-y", "divide-border/70");
+    const storeDayStatus = screen
+      .getByRole("heading", { name: "Store day status" })
+      .closest("section");
+    expect(storeDayStatus).toHaveClass(
+      "overflow-hidden",
+      "rounded-lg",
+      "border",
+      "bg-surface",
     );
+    expect(storeDayStatus).toContainElement(automationPanel);
     const automationTime = within(automationPanel!).getByText(/[48]:30 AM/);
 
     expect(automationTime).toHaveClass("tabular-nums");
@@ -1571,7 +1683,7 @@ describe("DailyOperationsViewContent", () => {
       .getByText("Athena completed EOD Review under store policy.")
       .closest("section");
     expect(attributionBand).not.toBeNull();
-    expect(attributionBand).toHaveClass("px-layout-md", "py-layout-sm");
+    expect(attributionBand).toHaveClass("px-layout-md", "py-layout-md");
     expect(attributionBand).not.toHaveClass(
       "rounded-lg",
       "border",
@@ -1605,6 +1717,15 @@ describe("DailyOperationsViewContent", () => {
       ),
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/manager approved/i)).not.toBeInTheDocument();
+    const historicalStoreDayStatus = screen
+      .getByRole("heading", { name: "Store day status" })
+      .closest("section");
+    expect(historicalStoreDayStatus).toContainElement(attributionBand);
+    expect(
+      screen.getByText(
+        "Close status and automation activity recorded for this operating date.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("omits generic historical view copy when Athena completion attribution is present", () => {
@@ -1632,7 +1753,7 @@ describe("DailyOperationsViewContent", () => {
       ),
     ).not.toBeInTheDocument();
     expect(attributionBand).not.toBeNull();
-    expect(attributionBand).toHaveClass("px-layout-md", "py-layout-sm");
+    expect(attributionBand).toHaveClass("px-layout-md", "py-layout-md");
     expect(
       attributionBand!.compareDocumentPosition(screen.getByText("Net sales")) &
         Node.DOCUMENT_POSITION_FOLLOWING,
@@ -2461,6 +2582,24 @@ describe("DailyOperationsViewContent", () => {
         "Review EOD before treating this date as a closed store-day record.",
       ),
     ).toBeInTheDocument();
+    const incompleteCloseBand = screen
+      .getByRole("heading", { name: "Incomplete store-day close" })
+      .closest("section");
+    const historicalStoreDayStatus = screen
+      .getByRole("heading", { name: "Store day status" })
+      .closest("section");
+    expect(historicalStoreDayStatus).toContainElement(incompleteCloseBand);
+    expect(historicalStoreDayStatus).toHaveClass(
+      "overflow-hidden",
+      "rounded-lg",
+      "border",
+      "bg-surface",
+    );
+    expect(
+      screen.getByText(
+        "Close status and automation activity recorded for this operating date.",
+      ),
+    ).toBeInTheDocument();
     view.unmount();
 
     view = renderContent(blockedSnapshot);
@@ -2637,10 +2776,11 @@ describe("DailyOperationsViewContent", () => {
       "text-muted-foreground",
     );
     expect(registerSessionsPanel).toHaveClass(
-      "border-t",
-      "pt-layout-md",
+      "h-full",
       "px-layout-md",
+      "py-layout-md",
     );
+    expect(registerSessionsPanel).not.toHaveClass("border-t");
     expect(registerSessionsPanel).not.toHaveClass(
       "xl:border-l",
       "xl:border-t-0",
@@ -2650,23 +2790,21 @@ describe("DailyOperationsViewContent", () => {
       "rounded-lg",
       "bg-background/60",
     );
-    expect(registerSessionLink).not.toHaveClass("border", "bg-background");
     expect(registerSessionLink).toHaveClass(
       "inline-flex",
       "items-center",
-      "font-medium",
-      "text-sm",
-      "text-foreground",
-      "underline-offset-4",
-      "hover:underline",
+      "h-7",
+      "text-xs",
     );
-    expect(registerSessionLink).not.toHaveClass("hover:text-primary");
-    expect(registerSessionLink.closest("article")?.parentElement).toHaveClass(
-      "w-full",
-      "max-w-md",
+    expect(registerSessionLink.closest("article")).toHaveClass(
+      "items-center",
+      "justify-between",
     );
     const automationBand = screen
       .getByRole("heading", { name: "Athena automation" })
+      .closest("section");
+    const storeDayStatus = screen
+      .getByRole("heading", { name: "Store day status" })
       .closest("section");
     const timeline = screen.getByRole("region", {
       name: "Recent activity",
@@ -2694,6 +2832,12 @@ describe("DailyOperationsViewContent", () => {
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
     expect(automationBand).not.toContainElement(registerSessionsPanel);
+    expect(storeDayStatus).toContainElement(automationBand);
+    expect(storeDayStatus).toContainElement(registerSessionsPanel);
+    expect(storeDayStatus?.lastElementChild).toHaveClass(
+      "lg:grid-cols-2",
+      "lg:divide-x",
+    );
     expect(
       screen.queryByRole("link", {
         name: "Open register session Codex / Register 2",
@@ -2722,6 +2866,14 @@ describe("DailyOperationsViewContent", () => {
     expect(registerSessionsPanel).not.toBeNull();
     expect(registerSessionsPanel).not.toHaveClass("border-t");
     expect(registerSessionsPanel).not.toHaveClass("pt-layout-md");
+    const storeDayStatus = screen
+      .getByRole("heading", { name: "Store day status" })
+      .closest("section");
+    expect(storeDayStatus).toContainElement(registerSessionsPanel);
+    expect(storeDayStatus?.lastElementChild).not.toHaveClass(
+      "lg:grid-cols-2",
+      "lg:divide-x",
+    );
     expect(
       registerSessionsPanel!.compareDocumentPosition(
         screen.getByText("Today's net sales"),
@@ -2786,6 +2938,9 @@ describe("DailyOperationsViewContent", () => {
       screen.queryByRole("button", {
         name: "Open EOD Review unavailable for May 8, 2026",
       }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Store day status" }),
     ).not.toBeInTheDocument();
   });
 
@@ -3293,6 +3448,100 @@ describe("DailyOperationsView", () => {
     mockedHooks.useSharedDemoContext.mockReturnValue(null);
     mockedHooks.navigate.mockReset();
     mockedHooks.useSearch.mockReturnValue({});
+  });
+
+  it("persists the return token as a search-only update, then pushes", async () => {
+    // The seam the component tests mock out, and where this actually broke:
+    // a relative `to: "."` does not resolve on a search-only update, so the
+    // token never landed and the return journey had nothing to read.
+    const user = userEvent.setup();
+    mockedHooks.useSearch.mockReturnValue({ timeline: "open" });
+    mockedHooks.useQuery.mockImplementation((_query: unknown, args: unknown) =>
+      args === "skip" ? undefined : quickAddTimelineSnapshot,
+    );
+
+    render(<DailyOperationsView />);
+
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("link", {
+        name: /Vitamilk/,
+      }),
+    );
+
+    const [persist, push] = mockedHooks.navigate.mock.calls.slice(-2);
+    expect(persist![0]).toEqual(
+      expect.objectContaining({ replace: true, search: expect.any(Function) }),
+    );
+    // No `to` on the persist call — that is the whole bug.
+    expect(persist![0]).not.toHaveProperty("to");
+    // And it has to carry the token while preserving the open sheet, or the
+    // return lands on a page with nothing to restore into.
+    expect(persist![0].search({ timeline: "open" })).toEqual({
+      sheetReturn: expect.stringContaining("event-quick-add"),
+      timeline: "open",
+    });
+    // The destination is pushed AFTER, so the token sits on this entry.
+    expect(push![0]).toEqual(
+      expect.objectContaining({
+        to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+      }),
+    );
+  });
+
+  it("sends a back-origin that already carries the token", async () => {
+    // `o` is how the destination returns here (`useNavigateBack` navigates to
+    // decodeURIComponent(o)), and `getOrigin()` snapshots the URL at the
+    // moment it runs. Captured before the persist step it predates the token,
+    // so the return lands on a URL that never carried one — the token gets
+    // written correctly and then discarded on the way back.
+    const user = userEvent.setup();
+    mockedHooks.useSearch.mockReturnValue({ timeline: "open" });
+    mockedHooks.useQuery.mockImplementation((_query: unknown, args: unknown) =>
+      args === "skip" ? undefined : quickAddTimelineSnapshot,
+    );
+    window.history.replaceState(
+      {},
+      "",
+      "/wigclub/store/osu/operations?timeline=open",
+    );
+    // The real router rewrites the URL on a replace. Without that, `getOrigin`
+    // reads the same string before and after the persist step and the test
+    // cannot tell the two orderings apart.
+    mockedHooks.navigate.mockImplementation((options: never) => {
+      const { replace, search } = options as {
+        replace?: boolean;
+        search?: unknown;
+      };
+      if (replace && typeof search === "function") {
+        const current = Object.fromEntries(
+          new URLSearchParams(window.location.search),
+        );
+        const next = (search as (previous: unknown) => Record<string, unknown>)(
+          current,
+        );
+        const params = new URLSearchParams();
+        for (const [key, value] of Object.entries(next)) {
+          if (value !== undefined) params.set(key, String(value));
+        }
+        window.history.replaceState(
+          {},
+          "",
+          `${window.location.pathname}?${params}`,
+        );
+      }
+      return Promise.resolve();
+    });
+
+    render(<DailyOperationsView />);
+
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("link", {
+        name: /Vitamilk/,
+      }),
+    );
+
+    const push = mockedHooks.navigate.mock.calls.at(-1)![0];
+    expect(decodeURIComponent(push.search.o)).toContain("sheetReturn=");
   });
 
   it("queries the daily operations snapshot for the active store", () => {

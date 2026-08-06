@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => ({
   sharedDemo: null as null | {
     baselineVersion: number;
     kind: "shared_demo";
-    nextHourlyRestoreAt: number;
+    nextRestoreAt: number;
     restore: { epoch: number; status: "ready" };
     storeId: string;
   },
@@ -74,7 +74,7 @@ describe("OnlineOrderProvider", () => {
     mocks.sharedDemo = {
       baselineVersion: 19,
       kind: "shared_demo",
-      nextHourlyRestoreAt: Date.now() + 3_600_000,
+      nextRestoreAt: Date.now() + 86_400_000,
       restore: { epoch: 7, status: "ready" },
       storeId: "store-1",
     };

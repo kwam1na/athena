@@ -118,16 +118,23 @@ import {
   type SharedDemoTransactionFixture,
 } from "./sharedDemoTransactionsFixture";
 import {
+  SHARED_DEMO_REPORTS_LIVE_SKU_ID_PREFIX as FIXTURE_LIVE_SKU_ID_PREFIX,
   SHARED_DEMO_REPORTS_SKU_ID_PREFIX as FIXTURE_SKU_ID_PREFIX,
   type SharedDemoLiveReportsDay,
+  type SharedDemoLiveSkuEntry,
 } from "./sharedDemoLiveReportsDay";
 
 /**
- * Demo SKU ids are `shared-demo-sku-${slug}` — see the transactions fixture.
- * Defined by the live-day bridge, which is where real catalogue codes are
- * rewritten into this space, and re-exported here for existing consumers.
+ * Demo SKU ids are `shared-demo-sku-${slug}` — see the transactions fixture —
+ * or `shared-demo-live-sku-${realSkuId}` for a SKU the story does not contain,
+ * such as one created at the register by POS quick add. Both are defined by the
+ * live-day bridge, which is where real rows are rewritten into this space, and
+ * re-exported here for existing consumers.
  */
-export { SHARED_DEMO_REPORTS_SKU_ID_PREFIX } from "./sharedDemoLiveReportsDay";
+export {
+  SHARED_DEMO_REPORTS_LIVE_SKU_ID_PREFIX,
+  SHARED_DEMO_REPORTS_SKU_ID_PREFIX,
+} from "./sharedDemoLiveReportsDay";
 
 const SHARED_DEMO_SCHEDULE_VERSION_ID = "shared-demo-schedule-v1";
 const SHARED_DEMO_CURRENCY = SHARED_DEMO_STORE_IDENTITY.currency;
@@ -250,17 +257,23 @@ function periodDateRange(
  * `sharedDemoProductBySku`/`BySlug` THROW on a miss — so no arbitrary URL value
  * is ever handed to them. This prefix test is the gate, and
  * `demoProductForSkuId` is the non-throwing resolver behind it.
+ *
+ * Both spaces pass: the story space, and the live space that names a SKU the
+ * story does not contain. Neither reaches a throwing resolver — a live id is
+ * answered from the identity the live reads carry, never from the story.
  */
 export function isSharedDemoReportsSkuId(id: string): boolean {
   return (
-    typeof id === "string" && id.startsWith(FIXTURE_SKU_ID_PREFIX)
+    typeof id === "string" &&
+    (id.startsWith(FIXTURE_SKU_ID_PREFIX) ||
+      id.startsWith(FIXTURE_LIVE_SKU_ID_PREFIX))
   );
 }
 
 function demoProductForSkuId(
   productSkuId: string,
 ): SharedDemoProductStory | undefined {
-  if (!isSharedDemoReportsSkuId(productSkuId)) return undefined;
+  if (!productSkuId.startsWith(FIXTURE_SKU_ID_PREFIX)) return undefined;
   const slug = productSkuId.slice(FIXTURE_SKU_ID_PREFIX.length);
   return SHARED_DEMO_PRODUCTS.find((product) => product.slug === slug);
 }
@@ -329,11 +342,15 @@ type SharedDemoReportsDay = {
 type SharedDemoReportsModel = {
   today: string;
   /**
-   * Current stock per fixture sku id, from the live rows. Absent until the
+   * Stock and identity per fixture sku id, from the live rows. Absent until the
    * read settles — identity then omits the figure rather than stating the
    * catalogue's story constant, which never moves.
+   *
+   * `getModel` overlays the live DAY's identities onto this before it reaches
+   * `skuIdentity`, so a SKU quick-added and sold moments ago is nameable from
+   * the day alone, without waiting on the stock subscription to settle.
    */
-  liveStock?: Map<string, number> | null;
+  liveStock?: Map<string, SharedDemoLiveSkuEntry> | null;
   updatedAt: number;
   /** History start through today inclusive, ascending. */
   orderedDates: string[];
@@ -510,10 +527,41 @@ function composeLiveDay(
   };
 }
 
+/**
+ * Stock keyed by fixture sku id, with the live day's identities folded in.
+ *
+ * The two live reads settle independently and neither is complete on its own:
+ * the stock lane knows every SKU but no movement, the day lane knows only what
+ * sold. A SKU quick-added and sold seconds ago is in the day before it is in
+ * stock, so identity is taken from whichever lane has it — and the day wins,
+ * being the fresher of the two.
+ */
+function composeLiveSkuEntries(
+  liveDay?: SharedDemoLiveReportsDay | null,
+  liveStock?: Map<string, SharedDemoLiveSkuEntry> | null,
+): Map<string, SharedDemoLiveSkuEntry> | null {
+  if (!liveDay?.liveSkuIdentityById.size) return liveStock ?? null;
+
+  const entries = new Map(liveStock ?? []);
+  for (const [fixtureSkuId, identity] of liveDay.liveSkuIdentityById) {
+    // A story SKU is named by the story, here as in the stock lane: Reports
+    // must not be the one surface quoting a different name or price for it.
+    if (!fixtureSkuId.startsWith(FIXTURE_LIVE_SKU_ID_PREFIX)) continue;
+    const existing = entries.get(fixtureSkuId);
+    entries.set(fixtureSkuId, {
+      identity,
+      quantityAvailable:
+        existing?.quantityAvailable ?? identity.quantityAvailable,
+    });
+  }
+
+  return entries;
+}
+
 function getModel(
   today: string,
   liveDay?: SharedDemoLiveReportsDay | null,
-  liveStock?: Map<string, number> | null,
+  liveStock?: Map<string, SharedDemoLiveSkuEntry> | null,
 ): SharedDemoReportsModel {
   let model = reportsFixtureCache.get(today);
   if (!model) {
@@ -521,8 +569,9 @@ function getModel(
     reportsFixtureCache.set(today, model);
   }
   const withLiveDay = liveDay ? composeLiveDay(model, liveDay) : model;
+  const entries = composeLiveSkuEntries(liveDay, liveStock);
   // Copied, like the day: the cache holds fixture history only.
-  return liveStock ? { ...withLiveDay, liveStock } : withLiveDay;
+  return entries ? { ...withLiveDay, liveStock: entries } : withLiveDay;
 }
 
 /** Days on record inside an inclusive range, ascending. Never throws. */
@@ -547,6 +596,8 @@ function snapshotForDays(days: SharedDemoReportsDay[]): ReportPeriodSnapshot {
     ...zeroDayMetrics(),
     dayCount: 0,
     unsettledDayCount: 0,
+    transactionCount: 0,
+    transactionCoveredDayCount: 0,
   };
   let grossProfitMinor: number | null = 0;
 
@@ -569,6 +620,14 @@ function snapshotForDays(days: SharedDemoReportsDay[]): ReportPeriodSnapshot {
     if (day.status === "open" || day.status === "provisional") {
       snapshot.unsettledDayCount += 1;
     }
+    // Every day counts, today included: the live day carries its own running
+    // count (`reports/ingest.ts` maintains it per sale), so the demo's basket
+    // size moves during the trading day exactly as a real store's does. The
+    // fixture's historical days each carry a count too, so coverage is whole.
+    snapshot.transactionCount =
+      (snapshot.transactionCount ?? 0) + day.transactionCount;
+    snapshot.transactionCoveredDayCount =
+      (snapshot.transactionCoveredDayCount ?? 0) + 1;
   }
 
   snapshot.grossProfitMinor = grossProfitMinor;
@@ -697,7 +756,7 @@ export function createSharedDemoReportDays(args: {
   startDate: string;
   endDate: string;
   liveDay?: SharedDemoLiveReportsDay | null;
-  liveStock?: Map<string, number> | null;
+  liveStock?: Map<string, SharedDemoLiveSkuEntry> | null;
   today?: string;
 }): ReportDayRow[] {
   const today = args.today ?? getLocalOperatingDate();
@@ -714,9 +773,26 @@ function skuIdentity(
   productSkuId: string,
 ): ReportSkuIdentity | undefined {
   const product = demoProductForSkuId(productSkuId);
-  if (!product) return undefined;
+  const entry = model.liveStock?.get(productSkuId);
+  if (!product) {
+    // No story, so the live rows are the only thing that can name it — a SKU
+    // created at the register by POS quick add. It ships no image and, having
+    // been priced but never costed, no unit cost: the day's margin discloses
+    // that as uncosted revenue rather than pretending to a full one.
+    if (!entry?.identity) return undefined;
+    return {
+      displayName: entry.identity.displayName,
+      netPriceMinor: entry.identity.netPriceMinor,
+      productId: entry.identity.productId,
+      quantityAvailable: entry.quantityAvailable,
+      ...(entry.identity.sku ? { sku: entry.identity.sku } : {}),
+      ...(entry.identity.unitCostMinor !== null
+        ? { unitCostMinor: entry.identity.unitCostMinor }
+        : {}),
+    };
+  }
   const imageUrl = model.imageBySkuId.get(productSkuId);
-  const liveQuantityAvailable = model.liveStock?.get(productSkuId);
+  const liveQuantityAvailable = entry?.quantityAvailable;
 
   return {
     displayName: product.name,
@@ -783,7 +859,7 @@ export function createSharedDemoReportSkuMix(args: {
   startDate: string;
   endDate: string;
   liveDay?: SharedDemoLiveReportsDay | null;
-  liveStock?: Map<string, number> | null;
+  liveStock?: Map<string, SharedDemoLiveSkuEntry> | null;
   today?: string;
 }): ReportSkuMixData {
   const today = args.today ?? getLocalOperatingDate();
@@ -849,7 +925,7 @@ export function createSharedDemoReportMixLifecycle(args: {
   startDate: string;
   endDate: string;
   liveDay?: SharedDemoLiveReportsDay | null;
-  liveStock?: Map<string, number> | null;
+  liveStock?: Map<string, SharedDemoLiveSkuEntry> | null;
   today?: string;
 }): SharedDemoReportMixLifecycle {
   const today = args.today ?? getLocalOperatingDate();
@@ -870,7 +946,7 @@ export function createSharedDemoReportSkuMovement(args: {
   startDate: string;
   endDate: string;
   liveDay?: SharedDemoLiveReportsDay | null;
-  liveStock?: Map<string, number> | null;
+  liveStock?: Map<string, SharedDemoLiveSkuEntry> | null;
   today?: string;
 }): ReportSkuMovementData {
   const today = args.today ?? getLocalOperatingDate();
@@ -991,7 +1067,7 @@ export function createSharedDemoReportMovementPage(args: {
   endDate: string;
   page?: number;
   liveDay?: SharedDemoLiveReportsDay | null;
-  liveStock?: Map<string, number> | null;
+  liveStock?: Map<string, SharedDemoLiveSkuEntry> | null;
   today?: string;
 }): SharedDemoReportMovementPage {
   const today = args.today ?? getLocalOperatingDate();
@@ -1119,7 +1195,7 @@ export function createSharedDemoPeriodSkus(args: {
   sortBy: ReportSkuSortBy;
   cursor?: string | null;
   liveDay?: SharedDemoLiveReportsDay | null;
-  liveStock?: Map<string, number> | null;
+  liveStock?: Map<string, SharedDemoLiveSkuEntry> | null;
   today?: string;
 }): SharedDemoPeriodSkusResult {
   const today = args.today ?? getLocalOperatingDate();
@@ -1260,16 +1336,17 @@ export function createSharedDemoSkuDetail(args: {
   startDate: string;
   endDate: string;
   liveDay?: SharedDemoLiveReportsDay | null;
-  liveStock?: Map<string, number> | null;
+  liveStock?: Map<string, SharedDemoLiveSkuEntry> | null;
   today?: string;
 }): SharedDemoSkuDetailResult | null {
   const today = args.today ?? getLocalOperatingDate();
-  // An unknown id is a `null` detail, never a throw: this value arrives from a
-  // route param and the story lookups throw on a miss.
-  if (!demoProductForSkuId(args.productSkuId)) return null;
-
   const model = getModel(today, args.liveDay, args.liveStock);
+  // An unknown id is a `null` detail, never a throw: this value arrives from a
+  // route param and the story lookups throw on a miss. Resolving IDENTITY is
+  // the test rather than resolving a story, so a SKU that exists only in the
+  // store's live rows — a quick add — gets its page instead of an empty one.
   const identity = skuIdentity(model, args.productSkuId);
+  if (!identity) return null;
   if (args.startDate > args.endDate) {
     return { days: [], totals: null, priorPeriodTotals: null, identity };
   }
@@ -1316,11 +1393,14 @@ export function createSharedDemoSkuDayTransactions(args: {
   productSkuId: string;
   operatingDate: string;
   liveDay?: SharedDemoLiveReportsDay | null;
-  liveStock?: Map<string, number> | null;
+  liveStock?: Map<string, SharedDemoLiveSkuEntry> | null;
   today?: string;
 }): { transactions: ReportSkuTransactionEvidence[]; truncated: boolean } {
   const today = args.today ?? getLocalOperatingDate();
-  if (!demoProductForSkuId(args.productSkuId)) {
+  // The fixture history contains story SKUs only, so a live-only id can never
+  // match one of its transactions. Today's evidence for such a SKU is read
+  // from the server instead — see `demoLiveEvidenceSkuId` in the detail view.
+  if (!isSharedDemoReportsSkuId(args.productSkuId)) {
     return { transactions: [], truncated: false };
   }
 
@@ -1446,6 +1526,9 @@ function scheduleLineage(
       scheduleVersionId: SHARED_DEMO_SCHEDULE_VERSION_ID,
       dayStatus: day?.status ?? null,
       dayAvailable: Boolean(day),
+      // The demo closes every store day it has finished, so leaving `open` and
+      // being closed coincide here — the same test `variancePosture` uses.
+      dayClosed: day ? day.status !== "open" : false,
       activityPosture: !day
         ? ("unavailable" as const)
         : day.metrics.netSalesMinor !== 0 || day.metrics.unitsSold !== 0
@@ -1504,7 +1587,7 @@ function variancePosture(
 function ownerRoutes(args: {
   cycleStartDate: string;
   cycleEndDate: string;
-  finalScheduledDate: string | null;
+  lastClosedScheduledDate: string | null;
 }): ReportWeekOwnerRoutes {
   return {
     transactions: {
@@ -1516,11 +1599,13 @@ function ownerRoutes(args: {
       },
     },
     // A live week routes to the working Daily Close for the most recent
-    // scheduled date that has actually happened — never a future frame date.
-    dailyClose: args.finalScheduledDate
+    // scheduled date whose EOD review EXISTS — never a future frame date, and
+    // never the week's last scheduled day when nobody has closed it yet. The
+    // link says "View EOD Review", so it has to name a review that happened.
+    dailyClose: args.lastClosedScheduledDate
       ? {
           to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
-          search: { operatingDate: args.finalScheduledDate },
+          search: { operatingDate: args.lastClosedScheduledDate },
         }
       : null,
     cashControls: { to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls" },
@@ -1621,8 +1706,12 @@ export function createSharedDemoWeeklyBriefing(
     reason: missingIncludedFold ? "missing_day_fold" : "complete",
     outsideSchedule: { complete: true, reason: "complete" },
   };
-  const finalScheduledDate =
-    includedDays.at(-1)?.operatingDate ?? null;
+  // The last scheduled day that has actually been closed, not simply the last
+  // one on record: today is live and unclosed, and routing an owner to its EOD
+  // review would land them on one that does not exist yet.
+  const lastClosedScheduledDate =
+    includedDays.filter((day) => day.status !== "open").at(-1)?.operatingDate ??
+    null;
 
   return {
     status: "available",
@@ -1648,7 +1737,7 @@ export function createSharedDemoWeeklyBriefing(
       ownerRoutes: ownerRoutes({
         cycleStartDate,
         cycleEndDate,
-        finalScheduledDate,
+        lastClosedScheduledDate,
       }),
     },
     // Deliberately null. An accepted baseline is earned from a register close

@@ -10,6 +10,7 @@ import {
 } from "./DailyCloseView";
 import type { Id } from "~/convex/_generated/dataModel";
 import { ok, userError } from "~/shared/commandResult";
+import { encodeSheetReturn } from "@/lib/sheetReturn";
 
 const mockedHooks = vi.hoisted(() => ({
   sharedDemoContext: undefined as
@@ -327,6 +328,108 @@ const blockedSnapshot: DailyCloseSnapshot = {
   readyItems: [],
   status: "blocked",
 };
+
+describe("DailyCloseViewContent — transactions report sheet return", () => {
+  // The shared `sheetReturn` convention on the EOD review's report sheet.
+  // Both failure modes this pattern has hit before are asserted here: the
+  // persist must be a search-only update (a relative `to` does not resolve),
+  // and `o` must be re-captured after the token lands or the destination's
+  // back control returns to a URL that never carried it.
+  beforeEach(() => {
+    mockedRouter.search = { report: "transactions" };
+    mockedRouter.navigate.mockReset();
+  });
+
+  it("persists the token as a search-only update, then pushes", async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(
+      {},
+      "",
+      "/wigclub/store/wigclub/operations/daily-close?report=transactions",
+    );
+    mockedRouter.navigate.mockImplementation((options: never) => {
+      const { replace, search } = options as {
+        replace?: boolean;
+        search?: unknown;
+      };
+      // The real router rewrites the URL on a replace. Without that the test
+      // cannot tell the two orderings of `getOrigin()` apart.
+      if (replace && typeof search === "function") {
+        const current = Object.fromEntries(
+          new URLSearchParams(window.location.search),
+        );
+        const next = (search as (previous: unknown) => Record<string, unknown>)(
+          current,
+        );
+        const params = new URLSearchParams();
+        for (const [key, value] of Object.entries(next)) {
+          if (value !== undefined) params.set(key, String(value));
+        }
+        window.history.replaceState(
+          {},
+          "",
+          `${window.location.pathname}?${params}`,
+        );
+      }
+      return Promise.resolve();
+    });
+
+    renderContent(readySnapshot);
+    const report = await screen.findByRole("dialog");
+
+    await user.click(within(report).getByRole("link", { name: /TXN-1/ }));
+
+    const [persist, push] = mockedRouter.navigate.mock.calls.slice(-2);
+    expect(persist![0]).not.toHaveProperty("to");
+    expect(persist![0].search({ report: "transactions" })).toEqual({
+      report: "transactions",
+      sheetReturn: expect.stringContaining("~"),
+    });
+    // The back-origin already carries the token, so returning restores it.
+    expect(decodeURIComponent(push![0].search.o)).toContain("sheetReturn=");
+  });
+
+  it("returns focus to the row that was followed", async () => {
+    mockedRouter.search = {
+      report: "transactions",
+      // `getItemId` — the row's own id, not the "#TXN-1" label it displays.
+      // Stable across a refetch, which a display string is not.
+      sheetReturn: encodeSheetReturn({ focusKey: "ready-2" }),
+    };
+
+    renderContent(readySnapshot);
+    const report = await screen.findByRole("dialog");
+    const link = within(report).getByRole("link", { name: /TXN-1/ });
+
+    await waitFor(() => expect(link).toHaveFocus());
+    // Cleared only once every leg finished.
+    await waitFor(() =>
+      expect(
+        mockedRouter.navigate.mock.calls.some(
+          ([options]) =>
+            typeof options?.search === "function" &&
+            options.search({ sheetReturn: "x" }).sheetReturn === undefined,
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it("lands on the report body when the row is no longer in the day", async () => {
+    mockedRouter.search = {
+      report: "transactions",
+      sheetReturn: encodeSheetReturn({ focusKey: "TXN-that-is-gone" }),
+    };
+
+    renderContent(readySnapshot);
+    const report = await screen.findByRole("dialog");
+
+    await waitFor(() =>
+      expect(
+        within(report).getByTestId("transaction-report-body"),
+      ).toHaveFocus(),
+    );
+  });
+});
 
 function renderContent(
   snapshot: DailyCloseSnapshot | undefined,

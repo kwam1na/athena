@@ -355,7 +355,7 @@ function PointOfSaleViewLive() {
     : "today";
   const isSharedDemoPulse = sharedDemoContext?.kind === "shared_demo";
   // The demo's own rows only ever cover TODAY — the fixture owns every earlier
-  // date, and the hourly restore wipes the rest — so the live read is always
+  // date, and the nightly restore wipes the rest — so the live read is always
   // for today, whatever window is on screen. Every window that contains today
   // then folds that one live day onto the fixture history.
   const livePulseWindow = isSharedDemoPulse ? "today" : visibleStorePulseWindow;

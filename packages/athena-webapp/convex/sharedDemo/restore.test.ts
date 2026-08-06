@@ -265,7 +265,7 @@ describe("shared demo restore", () => {
       failRestoreLeaseWithCtx(ctx as never, {
         epoch: 5,
         idempotencyKey: "older-restore",
-        source: "hourly",
+        source: "daily",
         storeId: "store" as never,
       }),
     ).resolves.toEqual({ kind: "stale" });

@@ -103,5 +103,9 @@ export function getAthenaDocumentTitle(pathname: string) {
     return "Athena | Demo";
   }
 
+  if (pathname.includes("/docs")) {
+    return "Athena | Docs";
+  }
+
   return "Athena";
 }

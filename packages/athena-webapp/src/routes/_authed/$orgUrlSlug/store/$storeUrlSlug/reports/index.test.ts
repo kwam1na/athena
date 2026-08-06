@@ -145,8 +145,7 @@ describe("reports overview search schema", () => {
       units: true,
       unitsTab: "granular" as const,
       unitsPage: 4,
-      unitsFocus: "sku-61",
-      unitsScroll: 640,
+      sheetReturn: "sku-61~640",
     };
     expect(reportsOverviewSearchSchema.parse(value)).toEqual(value);
   });
@@ -163,7 +162,7 @@ describe("reports overview search schema", () => {
       reportsOverviewSearchSchema.parse({ unitsPage: 0 }),
     ).toThrow();
     expect(() =>
-      reportsOverviewSearchSchema.parse({ unitsScroll: -1 }),
+      reportsOverviewSearchSchema.parse({ sheetReturn: "" }),
     ).toThrow();
   });
 
@@ -316,8 +315,7 @@ describe("reports overview units sheet continuity (U6)", () => {
       units: undefined,
       unitsTab: undefined,
       unitsPage: undefined,
-      unitsFocus: undefined,
-      unitsScroll: undefined,
+      sheetReturn: undefined,
     });
     // Same convention as Weekly: no sheet interaction adds a history entry.
     expect(
@@ -337,7 +335,7 @@ describe("reports overview units sheet continuity (U6)", () => {
     const dialog = screen.getByRole("dialog", { name: "Item movement" });
     const link = await waitFor(() => {
       const found = dialog.ownerDocument.querySelector<HTMLElement>(
-        `[data-sku-link="${firstSkuId}"]`,
+        `[data-sheet-return-key="${firstSkuId}"]`,
       );
       expect(found).not.toBeNull();
       return found!;
@@ -348,7 +346,7 @@ describe("reports overview units sheet continuity (U6)", () => {
 
     expect(routerState.search).toMatchObject({
       units: true,
-      unitsFocus: firstSkuId,
+      sheetReturn: `${firstSkuId}~`,
     });
     expect(routerState.navigationOptions).toEqual([
       { replace: true, to: undefined },
@@ -380,7 +378,7 @@ describe("reports overview units sheet continuity (U6)", () => {
 
     const chartLink = await waitFor(() => {
       const found = document.querySelector<HTMLElement>(
-        `[data-chart-sku-link="${firstSkuId}"]`,
+        `[data-sheet-return-key="chart:${firstSkuId}"]`,
       );
       expect(found).not.toBeNull();
       return found!;
@@ -389,7 +387,7 @@ describe("reports overview units sheet continuity (U6)", () => {
 
     expect(routerState.search).toMatchObject({
       units: true,
-      unitsFocus: `chart:${firstSkuId}`,
+      sheetReturn: `chart%3A${firstSkuId}~`,
     });
   });
 
@@ -398,8 +396,7 @@ describe("reports overview units sheet continuity (U6)", () => {
     const firstSkuId = demoPage.rows[0].productSkuId;
     routerState.search = {
       units: true,
-      unitsFocus: firstSkuId,
-      unitsScroll: 640,
+      sheetReturn: `${firstSkuId}~640`,
     };
     const scrollHeightSpy = vi
       .spyOn(HTMLElement.prototype, "scrollHeight", "get")
@@ -432,12 +429,11 @@ describe("reports overview units sheet continuity (U6)", () => {
       );
       await waitFor(() =>
         expect(document.activeElement).toBe(
-          document.querySelector(`[data-sku-link="${firstSkuId}"]`),
+          document.querySelector(`[data-sheet-return-key="${firstSkuId}"]`),
         ),
       );
       await waitFor(() => {
-        expect(routerState.search.unitsFocus).toBeUndefined();
-        expect(routerState.search.unitsScroll).toBeUndefined();
+        expect(routerState.search.sheetReturn).toBeUndefined();
       });
       expect(
         routerState.navigationOptions.every(
@@ -454,7 +450,7 @@ describe("reports overview units sheet continuity (U6)", () => {
     routerState.search = {
       units: true,
       unitsTab: "granular",
-      unitsFocus: "sku-that-no-longer-exists",
+      sheetReturn: "sku-that-no-longer-exists~",
     };
     render(createElement(RouteComponent));
 
@@ -464,11 +460,17 @@ describe("reports overview units sheet continuity (U6)", () => {
         within(dialog).getByRole("tab", { name: "All items" }),
       ),
     );
-    expect(
-      within(dialog).getByTestId("units-moved-restore-status"),
-    ).toHaveTextContent(/Your previous item is no longer in this view\./);
+    // Awaited, not synchronous: the announcement is a state update made from
+    // the hook's async missing-target path, so it can flush a render AFTER
+    // focus has already fallen back to the tab above. Asserting it
+    // synchronously passes locally and races under CI load.
     await waitFor(() =>
-      expect(routerState.search.unitsFocus).toBeUndefined(),
+      expect(
+        within(dialog).getByTestId("units-moved-restore-status"),
+      ).toHaveTextContent(/Your previous item is no longer in this view\./),
+    );
+    await waitFor(() =>
+      expect(routerState.search.sheetReturn).toBeUndefined(),
     );
   });
 
@@ -479,8 +481,7 @@ describe("reports overview units sheet continuity (U6)", () => {
     routerState.search = {
       unitsTab: "granular",
       unitsPage: 4,
-      unitsFocus: "sku-61",
-      unitsScroll: 640,
+      sheetReturn: "sku-61~640",
     };
     render(createElement(RouteComponent));
 
@@ -492,7 +493,6 @@ describe("reports overview units sheet continuity (U6)", () => {
     expect(routerState.search.selectedDay).toBeDefined();
     expect(routerState.search.unitsTab).toBeUndefined();
     expect(routerState.search.unitsPage).toBeUndefined();
-    expect(routerState.search.unitsFocus).toBeUndefined();
-    expect(routerState.search.unitsScroll).toBeUndefined();
+    expect(routerState.search.sheetReturn).toBeUndefined();
   });
 });

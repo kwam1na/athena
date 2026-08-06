@@ -5,6 +5,8 @@ import type { Doc } from "../_generated/dataModel";
 import type {
   ReportDayMetrics,
   ReportLiveOperatingDay,
+  ReportLiveSkuIdentity,
+  ReportLiveSkuStockRow,
   ReportSkuDayMetrics,
 } from "../../shared/reportsContract";
 import { requireReportsStoreAccess } from "./access";
@@ -70,7 +72,40 @@ const skuMetricsValidator = v.object({
 
 // The result shape lives in `shared/reportsContract.ts` (ReportLiveOperatingDay):
 // its consumer is client code, which may not import this server module.
-export type { ReportLiveOperatingDay } from "../../shared/reportsContract";
+export type {
+  ReportLiveOperatingDay,
+  ReportLiveSkuStockRow,
+} from "../../shared/reportsContract";
+
+const skuIdentityValidator = v.object({
+  displayName: v.string(),
+  netPriceMinor: v.number(),
+  productId: v.string(),
+  quantityAvailable: v.number(),
+  sku: v.union(v.string(), v.null()),
+  unitCostMinor: v.union(v.number(), v.null()),
+});
+
+/**
+ * Catalogue identity from the SKU document both lanes already load.
+ *
+ * `productName` is denormalised onto `productSku`, so a name costs no product
+ * read. `netPrice` falls back to `price`: the two agree except where a SKU
+ * carries a distinct net, and the register's quick add writes both.
+ */
+function toSkuIdentity(sku: Doc<"productSku">): ReportLiveSkuIdentity {
+  const code = sku.sku?.trim() || null;
+  return {
+    displayName: sku.productName?.trim() || code || "",
+    netPriceMinor: sku.netPrice ?? sku.price,
+    productId: String(sku.productId),
+    quantityAvailable: sku.quantityAvailable,
+    sku: code,
+    // Absent, never zero: a SKU with no cost basis is uncosted revenue, and
+    // reporting a zero cost would state a full margin the store never earned.
+    unitCostMinor: sku.unitCost ?? null,
+  };
+}
 
 function toDayMetrics(row: Doc<"reportDay">): ReportDayMetrics {
   return {
@@ -115,11 +150,13 @@ export const getLiveOperatingDay = query({
           v.literal("reconciled"),
           v.literal("amended"),
         ),
+        transactionCount: v.optional(v.number()),
       }),
     ),
     operatingDate: v.string(),
     skus: v.array(
       v.object({
+        identity: v.union(v.null(), skuIdentityValidator),
         metrics: skuMetricsValidator,
         productSkuId: v.string(),
         sku: v.union(v.string(), v.null()),
@@ -153,10 +190,15 @@ export const getLiveOperatingDay = query({
         // A reporting row outlives its subject; a missing catalogue document
         // is reported as an unresolvable code, never as a dropped row.
         const sku = await ctx.db.get("productSku", row.productSkuId);
+        const resolved = sku?.storeId === args.storeId ? sku : null;
         return {
+          // Carried inline because the row is the only place a client can
+          // learn the name of a SKU that exists nowhere but this store's own
+          // catalogue — the register's quick add being exactly that case.
+          identity: resolved ? toSkuIdentity(resolved) : null,
           metrics: toSkuMetrics(row),
           productSkuId: String(row.productSkuId),
-          sku: sku?.storeId === args.storeId ? (sku.sku ?? null) : null,
+          sku: resolved?.sku ?? null,
         };
       }),
     );
@@ -169,6 +211,12 @@ export const getLiveOperatingDay = query({
             lastFactRecordedAt: day.lastFactRecordedAt,
             metrics: toDayMetrics(day),
             status: day.status,
+            // Carried even while the day is OPEN: ingest maintains it per
+            // sale, so a caller that reads the day live can state a basket
+            // size without waiting for the close.
+            ...(day.transactionCount === undefined
+              ? {}
+              : { transactionCount: day.transactionCount }),
           }
         : null,
       operatingDate: args.operatingDate,
@@ -185,24 +233,27 @@ export const getLiveOperatingDay = query({
  * screen. It exists as its own read for the shared demo: that workspace
  * resolves SKU identity from a client fixture, whose stock figure is a story
  * constant that never moves, while the demo's REAL rows are decremented by a
- * visitor's sale like any other store's. Keyed by code rather than id because
- * the fixture speaks catalogue codes and never handles a Convex id.
+ * visitor's sale like any other store's.
+ *
+ * It carries identity as well as stock, and is keyed by id as well as code,
+ * because the story fixture cannot name every SKU the store has: one created
+ * at the register by POS quick add exists only here. The code is still
+ * reported — that is what matches a row to its story — but it is no longer the
+ * key, so a SKU that has none is disclosed rather than dropped.
  *
  * Read budget: up to `LIVE_STOCK_SKU_LIMIT` `productSku` documents, one
- * indexed range scan, no joins.
+ * indexed range scan, no joins — identity is denormalised onto the SKU.
  */
 export const listLiveSkuStock = query({
   args: { storeId: v.id("store") },
   returns: v.array(
     v.object({
-      quantityAvailable: v.number(),
-      sku: v.string(),
+      identity: skuIdentityValidator,
+      productSkuId: v.string(),
+      sku: v.union(v.string(), v.null()),
     }),
   ),
-  handler: async (
-    ctx,
-    args,
-  ): Promise<Array<{ quantityAvailable: number; sku: string }>> => {
+  handler: async (ctx, args): Promise<ReportLiveSkuStockRow[]> => {
     await requireReportsStoreAccess(ctx, args.storeId);
 
     const skus = await ctx.db
@@ -210,13 +261,10 @@ export const listLiveSkuStock = query({
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .take(LIVE_STOCK_SKU_LIMIT);
 
-    return skus.flatMap((sku) => {
-      // A SKU with no business code cannot be matched to a catalogue story,
-      // and the code is the only key this result has.
-      const code = sku.sku?.trim();
-      return code
-        ? [{ quantityAvailable: sku.quantityAvailable, sku: code }]
-        : [];
-    });
+    return skus.map((sku) => ({
+      identity: toSkuIdentity(sku),
+      productSkuId: String(sku._id),
+      sku: sku.sku?.trim() || null,
+    }));
   },
 });

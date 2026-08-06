@@ -132,6 +132,8 @@ export const foldDay: FoldDayFn = (
     quarantinedFactCount: 0,
   };
   const skuAccumulators = new Map<string, SkuAccumulator>();
+  const saleTransactionIds = new Set<string>();
+  const voidedTransactionIds = new Set<string>();
 
   let lastFactRecordedAt = 0;
   let postCloseNetSalesDeltaMinor = 0;
@@ -155,6 +157,18 @@ export const foldDay: FoldDayFn = (
     // (no FX rate lives in the fold; converting here would invent numbers).
     if (fact.quarantined) continue;
     if (factCurrency !== storeCurrency) continue;
+
+    // Distinct POS transactions, counted from the facts already being walked.
+    // `sourceId` IS the transaction id on a pos-domain fact, so this is exact
+    // and costs no read. Payment facts cannot be used for this: they are one
+    // per ALLOCATION (`sourceDomain: "payments"`), so split tender would
+    // count a single sale twice.
+    if (fact.sourceDomain === "pos") {
+      if (fact.factKind === "sale") saleTransactionIds.add(fact.sourceId);
+      // A voided sale still emits its original sale facts — the void negates
+      // them. The close counts COMPLETED transactions, so this must too.
+      if (fact.factKind === "void") voidedTransactionIds.add(fact.sourceId);
+    }
 
     const sku =
       fact.productSkuId !== undefined && REVENUE_KINDS.has(fact.factKind)
@@ -300,6 +314,11 @@ export const foldDay: FoldDayFn = (
     ...day,
     grossProfitMinor: flags.hasUncostedRevenue ? null : day.grossProfitMinor,
   };
+  // Completed transactions: those that sold and were not voided.
+  let foldedTransactionCount = 0;
+  for (const transactionId of saleTransactionIds) {
+    if (!voidedTransactionIds.has(transactionId)) foldedTransactionCount += 1;
+  }
   const paymentPosture = derivePaymentPosture({
     collectedMinor: metrics.paymentsCollectedMinor,
     refundedMinor: metrics.paymentsRefundedMinor,
@@ -315,6 +334,9 @@ export const foldDay: FoldDayFn = (
         flags,
         factCount: facts.length,
         lastFactRecordedAt,
+        // Provisional, like every other number on an unclosed day: derived
+        // from facts now, replaced by the close's settled figure later.
+        transactionCount: foldedTransactionCount,
         paymentPosture,
       },
       skuDays,
@@ -330,6 +352,14 @@ export const foldDay: FoldDayFn = (
       factCount: facts.length,
       lastFactRecordedAt,
       closeVarianceMinor,
+      // The close settled this, and settled beats derived. The fallback is
+      // for a close whose summary carries no count at all: that reads as 0,
+      // and 0 completed transactions is impossible on a day whose own facts
+      // show sales — so the facts answer rather than withholding the metric.
+      transactionCount:
+        close.transactionCount > 0
+          ? close.transactionCount
+          : foldedTransactionCount,
       ...(sawPostCloseFact ? { postCloseNetSalesDeltaMinor } : {}),
       paymentPosture,
     },

@@ -15,6 +15,14 @@ const dailyCloseSearchSchema = z.object({
   page: z.coerce.number().int().positive().optional(),
   readyPanels: z.string().optional(),
   report: z.enum(["transactions"]).optional(),
+  /**
+   * Where to put the visitor back after the transactions report sends them to
+   * a transaction. Same name on every route that hosts a sheet, so one codec
+   * (`lib/sheetReturn`) parses all of them. Untyped beyond `string`: the codec
+   * treats anything unparseable as no token, so a malformed URL degrades to
+   * "no restore" rather than failing route validation and blanking the page.
+   */
+  sheetReturn: z.string().optional(),
   tab: z.enum(["blocked", "carry-forward", "ready", "review"]).optional(),
 });
 

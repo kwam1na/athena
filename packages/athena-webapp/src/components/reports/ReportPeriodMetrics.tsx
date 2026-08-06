@@ -5,9 +5,14 @@ import { ArrowUpRight } from "lucide-react";
 import { AnimatedHeight } from "@/components/common/AnimatedHeight";
 import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
 import { formatOperationsMetricComparison } from "@/components/operations/operationsMetricFormatting";
-import type { ReportPeriodSnapshot } from "~/shared/reportsContract";
+import {
+  settledTransactionCount,
+  unitsPerTransaction,
+  type ReportPeriodSnapshot,
+} from "~/shared/reportsContract";
 import { ReportMetricComparisonCrossfade } from "./ReportMetricComparisonCrossfade";
 import {
+  formatBasketSize,
   formatReportMoney,
   formatReportProfit,
   formatUnits,
@@ -99,6 +104,48 @@ export function ReportPeriodMetrics({
       })}
     </ReportMetricComparisonCrossfade>
   );
+  /**
+   * Transactions and the basket size derived from them.
+   *
+   * Both read through the SAME coverage rule (`settledTransactionCount`), so
+   * they can never disagree about whether the evidence is whole — a stated
+   * count beside a withheld ratio derived from it would read as a bug.
+   *
+   * Coverage is the seam: units are folded from facts the instant a sale
+   * lands, while a day's transaction count is only complete once that day is
+   * closed. Neither number is approximated across it; the shared helper below
+   * says which days are missing rather than leaving a bare dash.
+   */
+  const settledTransactions = settledTransactionCount(snapshot);
+  const basketSize = unitsPerTransaction(snapshot);
+  const coveredDayCount = snapshot.transactionCoveredDayCount;
+  const hasFullCoverage =
+    coveredDayCount !== undefined && coveredDayCount === snapshot.dayCount;
+  const coverageHelper =
+    hasFullCoverage || snapshot.dayCount === 0 ? undefined : (
+      <ReportMetricComparisonCrossfade comparisonKey={comparisonKey}>
+        {coveredDayCount === undefined
+          ? "Awaiting close"
+          : snapshot.dayCount === 1
+            ? "Available after close"
+            : `${coveredDayCount.toLocaleString()} of ${snapshot.dayCount.toLocaleString()} days closed`}
+      </ReportMetricComparisonCrossfade>
+    );
+  const transactionsHelper =
+    settledTransactions === null
+      ? coverageHelper
+      : comparison
+        ? comparisonHelper(
+            settledTransactions,
+            settledTransactionCount(comparison),
+          )
+        : undefined;
+  const basketSizeHelper =
+    basketSize === null
+      ? coverageHelper
+      : comparison
+        ? comparisonHelper(basketSize, unitsPerTransaction(comparison))
+        : undefined;
   const grossProfitHelper =
     snapshot.grossProfitMinor === null
       ? (
@@ -179,15 +226,6 @@ export function ReportPeriodMetrics({
               : undefined
           }
           label="Net sales"
-          link={
-            transactionsLink
-              ? {
-                  ariaLabel: "Open transactions",
-                  ...transactionsLink,
-                  to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
-                }
-              : undefined
-          }
           value={snapshot.netSalesMinor}
           valueTestId="overview-net-sales-number"
           valueTransitionFromZero="fade"
@@ -205,6 +243,40 @@ export function ReportPeriodMetrics({
           valueTestId="overview-units-sold-number"
           valueTransitionFromZero="fade"
         />
+        {/*
+          Sits between its two related figures on purpose: units sold ÷
+          transactions = units per sale reads left to right, so the ratio is a
+          number you can check rather than one you take on faith. It also owns
+          the transactions link now — the control belongs beside what it
+          describes, not on Net sales two tiles away.
+        */}
+        <OperationsSummaryMetric
+          className="h-full"
+          formatValue={formatUnits}
+          helper={transactionsHelper}
+          label="Transactions"
+          link={
+            transactionsLink
+              ? {
+                  ariaLabel: "Open transactions",
+                  ...transactionsLink,
+                  to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+                }
+              : undefined
+          }
+          value={settledTransactions ?? formatUnits(null)}
+          valueTestId="overview-transactions-number"
+          valueTransitionFromZero="fade"
+        />
+        <OperationsSummaryMetric
+          className="h-full"
+          formatValue={formatBasketSize}
+          helper={basketSizeHelper}
+          label="Units per sale"
+          value={basketSize ?? formatBasketSize(null)}
+          valueTestId="overview-units-per-sale-number"
+          valueTransitionFromZero="fade"
+        />
         <OperationsSummaryMetric
           className="h-full"
           formatValue={(value) => formatReportProfit(value, currency)}
@@ -212,22 +284,6 @@ export function ReportPeriodMetrics({
           label="Gross profit"
           value={snapshot.grossProfitMinor ?? formatReportProfit(null, currency)}
           valueTestId="overview-gross-profit-number"
-          valueTransitionFromZero="fade"
-        />
-        <OperationsSummaryMetric
-          className="h-full"
-          formatValue={(value) => formatReportMoney(value, currency)}
-          helper={
-            comparison
-              ? comparisonHelper(
-                  snapshot.refundsMinor,
-                  comparison.refundsMinor,
-                )
-              : undefined
-          }
-          label="Refunds"
-          value={snapshot.refundsMinor}
-          valueTestId="overview-refunds-number"
           valueTransitionFromZero="fade"
         />
       </div>

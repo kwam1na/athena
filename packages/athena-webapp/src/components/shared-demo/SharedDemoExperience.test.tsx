@@ -104,7 +104,7 @@ describe("SharedDemoStatusBar", () => {
       screen.queryByRole("button", { name: "Restore demo" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText("Demo resets at the start of every hour"),
+      screen.queryByText("Demo resets daily at midnight GMT"),
     ).not.toBeInTheDocument();
   });
 
@@ -117,7 +117,7 @@ describe("SharedDemoStatusBar", () => {
     );
 
     expect(
-      screen.getByText("Demo resets at the start of every hour"),
+      screen.getByText("Demo resets daily at midnight GMT"),
     ).toBeInTheDocument();
   });
 });

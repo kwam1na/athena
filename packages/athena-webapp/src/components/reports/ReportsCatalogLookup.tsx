@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
-import { createSharedDemoCatalogSearchResults } from "@/components/shared-demo/sharedDemoCatalogSearchFixture";
+import { sharedDemoFixtureSkuId } from "@/components/shared-demo/sharedDemoLiveReportsDay";
 import { getOrigin } from "@/lib/navigationUtils";
 import { cn } from "@/lib/utils";
 import {
@@ -66,18 +66,18 @@ export function ReportsCatalogLookup({
   const trimmedQuery = query.trim();
   const trimmedDebouncedQuery = debouncedQuery.trim();
 
-  // The shared demo catalog is eight fixed products, so its lookup is answered
-  // locally. `undefined` means the context read has not settled yet: hold the
-  // live subscription until it does rather than opening one we would discard.
+  // The demo searches the store's REAL catalogue, like every other store. Its
+  // eight provisioned products are there, and so is anything a visitor created
+  // at the register with POS quick add — which a local fixture of the story
+  // could never know about. `undefined` means the context read has not settled
+  // yet: hold the subscription until it does rather than opening one whose
+  // results we would have to re-key.
   const isSharedDemo = sharedDemoContext?.kind === "shared_demo";
   const isSharedDemoContextPending = sharedDemoContext === undefined;
 
   const liveSearchResult = useQuery(
     api.inventory.skuSearch.searchProductSkus,
-    activeStore?._id &&
-      trimmedDebouncedQuery &&
-      !isSharedDemo &&
-      !isSharedDemoContextPending
+    activeStore?._id && trimmedDebouncedQuery && !isSharedDemoContextPending
       ? {
           limit: SEARCH_LIMIT,
           query: trimmedDebouncedQuery,
@@ -86,20 +86,26 @@ export function ReportsCatalogLookup({
       : "skip",
   ) as ProductSkuSearchResponse | undefined;
 
-  const sharedDemoStoreId = activeStore?._id;
-  const sharedDemoSearchResult = useMemo(
-    () =>
-      isSharedDemo && sharedDemoStoreId && trimmedDebouncedQuery
-        ? createSharedDemoCatalogSearchResults({
-            limit: SEARCH_LIMIT,
-            query: trimmedDebouncedQuery,
-            storeId: sharedDemoStoreId,
-          })
-        : undefined,
-    [isSharedDemo, sharedDemoStoreId, trimmedDebouncedQuery],
-  );
-
-  const searchResult = isSharedDemo ? sharedDemoSearchResult : liveSearchResult;
+  /**
+   * In the demo, a hit navigates to the reports SKU detail route, which is
+   * addressed in fixture id space — so a real `productSku` id is rewritten
+   * here, exactly as the live day rewrites its own rows. A provisioned story
+   * SKU lands on its story id and its 21-day history; a quick-added one lands
+   * on a live id and the day it actually sold in.
+   */
+  const searchResult = useMemo(() => {
+    if (!isSharedDemo || !liveSearchResult) return liveSearchResult;
+    return {
+      ...liveSearchResult,
+      results: liveSearchResult.results.map((result) => ({
+        ...result,
+        productSkuId: sharedDemoFixtureSkuId({
+          productSkuId: String(result.productSkuId),
+          sku: result.sku ?? null,
+        }) as typeof result.productSkuId,
+      })),
+    };
+  }, [isSharedDemo, liveSearchResult]);
 
   const groups = useMemo(
     () =>

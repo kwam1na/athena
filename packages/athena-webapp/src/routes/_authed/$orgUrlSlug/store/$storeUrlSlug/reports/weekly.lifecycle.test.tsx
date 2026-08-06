@@ -359,8 +359,7 @@ describe("ReportsWeeklyRoute query lifecycle", () => {
     expect(state.search.units).toBeUndefined();
     expect(state.search.unitsTab).toBeUndefined();
     expect(state.search.unitsPage).toBeUndefined();
-    expect(state.search.unitsFocus).toBeUndefined();
-    expect(state.search.unitsScroll).toBeUndefined();
+    expect(state.search.sheetReturn).toBeUndefined();
     expect(
       state.navigationOptions.every(({ replace }) => replace === true),
     ).toBe(true);
@@ -436,7 +435,7 @@ describe("ReportsWeeklyRoute query lifecycle", () => {
     expect(state.search).toMatchObject({
       units: true,
       unitsTab: "granular",
-      unitsFocus: "sku-1",
+      sheetReturn: "sku-1~",
     });
     // ...and the drill-down itself is the only push.
     expect(state.navigationOptions).toEqual([
@@ -467,8 +466,7 @@ describe("ReportsWeeklyRoute query lifecycle", () => {
       units: true,
       unitsTab: "granular",
       unitsPage: 2,
-      unitsFocus: "sku-21",
-      unitsScroll: 640,
+      sheetReturn: "sku-21~640",
     };
     const scrollHeightSpy = vi
       .spyOn(HTMLElement.prototype, "scrollHeight", "get")
@@ -512,8 +510,7 @@ describe("ReportsWeeklyRoute query lifecycle", () => {
       );
       // The one-shot keys are cleared (replace) so refresh cannot re-restore.
       await waitFor(() => {
-        expect(state.search.unitsFocus).toBeUndefined();
-        expect(state.search.unitsScroll).toBeUndefined();
+        expect(state.search.sheetReturn).toBeUndefined();
       });
       expect(state.search).toMatchObject({
         units: true,
@@ -535,7 +532,7 @@ describe("ReportsWeeklyRoute query lifecycle", () => {
       units: true,
       unitsTab: "granular",
       unitsPage: 2,
-      unitsFocus: "sku-999",
+      sheetReturn: "sku-999~",
     };
     render(<ReportsWeeklyRoute />);
 
@@ -554,19 +551,19 @@ describe("ReportsWeeklyRoute query lifecycle", () => {
     ).toHaveTextContent(
       "Your previous item is no longer in this view. Showing page 2 of 2.",
     );
-    await waitFor(() => expect(state.search.unitsFocus).toBeUndefined());
+    await waitFor(() => expect(state.search.sheetReturn).toBeUndefined());
   });
 
   it("degrades a missing scroll container silently and still clears the keys", async () => {
     installCompletedMovement();
-    state.search = { units: true, unitsScroll: 640 };
+    state.search = { units: true, sheetReturn: "~640" };
     render(<ReportsWeeklyRoute />);
 
     await screen.findByRole("dialog", { name: "Item movement" });
     // jsdom's zero-height layout means no scrollable container ever appears;
     // the bounded retry gives up quietly and releases the key.
     await waitFor(
-      () => expect(state.search.unitsScroll).toBeUndefined(),
+      () => expect(state.search.sheetReturn).toBeUndefined(),
       { timeout: 4_000 },
     );
     expect(state.search).toEqual({ units: true });
@@ -580,8 +577,7 @@ describe("ReportsWeeklyRoute query lifecycle", () => {
     state.search = {
       unitsTab: "granular",
       unitsPage: 4,
-      unitsFocus: "sku-61",
-      unitsScroll: 640,
+      sheetReturn: "sku-61~640",
     };
     const { rerender } = render(<ReportsWeeklyRoute />);
     await user.click(screen.getByRole("button", { name: "Weekly history" }));
@@ -592,8 +588,7 @@ describe("ReportsWeeklyRoute query lifecycle", () => {
     expect(state.search).toMatchObject({ reportId: "week:2026-07-06" });
     expect(state.search.unitsTab).toBeUndefined();
     expect(state.search.unitsPage).toBeUndefined();
-    expect(state.search.unitsFocus).toBeUndefined();
-    expect(state.search.unitsScroll).toBeUndefined();
+    expect(state.search.sheetReturn).toBeUndefined();
   });
 
   it("uses one active query, adds history only on demand, and replaces active with detail", async () => {

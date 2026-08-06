@@ -695,7 +695,7 @@ describe("top movers", () => {
     );
 
     const chartLabel = dialog.querySelector(
-      '[data-chart-sku-link="sku-1"] > span',
+      '[data-sheet-return-key="chart:sku-1"] > span',
     );
     expect(chartLabel).toHaveTextContent(productName);
     expect(chartLabel).toHaveClass("line-clamp-2");

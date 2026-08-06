@@ -68,6 +68,22 @@ export function formatUnits(units: number | null | undefined): string {
 }
 
 /**
+ * Average units per sale, to one decimal.
+ *
+ * One decimal because the interesting movement is small: 1.8 to 2.1 is a real
+ * merchandising change that rounding to whole units would erase entirely.
+ */
+export function formatBasketSize(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return "—";
+  }
+  return value.toLocaleString(undefined, {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 1,
+  });
+}
+
+/**
  * Compact money for chart axis ticks (e.g. "$12k", "$1.2m") — wraps the
  * repo's own currency formatter, same as `formatReportMoney`, just with a
  * k/m suffix instead of full precision.

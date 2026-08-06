@@ -24,8 +24,7 @@ describe("reports weekly route search", () => {
       units: true,
       unitsTab: "granular" as const,
       unitsPage: 4,
-      unitsFocus: "sku-61",
-      unitsScroll: 640,
+      sheetReturn: "sku-61~640",
     };
     expect(reportsWeeklySearchSchema.parse(sheetState)).toEqual(sheetState);
     expect(reportsWeeklySearchSchema.parse({ units: true })).toEqual({
@@ -36,7 +35,7 @@ describe("reports weekly route search", () => {
     ).toThrow();
     expect(() => reportsWeeklySearchSchema.parse({ unitsPage: 0 })).toThrow();
     expect(() =>
-      reportsWeeklySearchSchema.parse({ unitsScroll: -10 }),
+      reportsWeeklySearchSchema.parse({ sheetReturn: "" }),
     ).toThrow();
   });
 });

@@ -1,4 +1,10 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Link,
   useNavigate,
@@ -24,6 +30,15 @@ import {
 } from "lucide-react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import { useSheetReturnPosition } from "@/hooks/useSheetReturnPosition";
+import { findScrollableAncestor } from "@/hooks/useSheetScrollPreservation";
+import {
+  decodeSheetReturn,
+  encodeSheetReturn,
+  sheetReturnFocusSelector,
+  sheetReturnTargetProps,
+  type SheetReturn,
+} from "@/lib/sheetReturn";
 import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import { createSharedDemoDailyCloseFixture } from "@/components/shared-demo/sharedDemoDailyCloseFixture";
 import { formatReviewReason } from "@/components/cash-controls/formatReviewReason";
@@ -2298,12 +2313,27 @@ function getTransactionReportLink(
   return null;
 }
 
+/**
+ * Persist the return token, THEN navigate. The route owns the ordering — the
+ * token has to land on this page's history entry before the destination is
+ * pushed, or coming back reads an entry that never carried it.
+ */
+type TransactionReportLinkNavigate = (args: {
+  focusKey: string;
+  params: Record<string, unknown>;
+  scrollOffset?: number;
+  search: Record<string, unknown>;
+  to: string;
+}) => void | Promise<unknown>;
+
 function TransactionReportIdentifierLink({
   item,
+  onLinkNavigate,
   orgUrlSlug,
   storeUrlSlug,
 }: {
   item: DailyCloseItem;
+  onLinkNavigate?: TransactionReportLinkNavigate;
   orgUrlSlug: string;
   storeUrlSlug: string;
 }) {
@@ -2353,6 +2383,30 @@ function TransactionReportIdentifierLink({
     <span className="inline-flex items-baseline gap-2">
       <Link
         className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+        onClick={(event: React.MouseEvent<HTMLAnchorElement>) => {
+          if (!onLinkNavigate || event.defaultPrevented || !link.to) return;
+          // Modified clicks open a new tab, which is not a return journey.
+          if (
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return;
+          }
+          event.preventDefault();
+          void onLinkNavigate({
+            focusKey: getItemId(item),
+            params: {
+              orgUrlSlug,
+              storeUrlSlug,
+              ...(link.params ?? {}),
+            },
+            search: { o: getOrigin(), ...(link.search ?? {}) },
+            to: link.to,
+          });
+        }}
         params={
           {
             orgUrlSlug,
@@ -2367,6 +2421,7 @@ function TransactionReportIdentifierLink({
           } as never
         }
         to={link.to as never}
+        {...sheetReturnTargetProps(getItemId(item))}
       >
         {label}
         <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
@@ -3097,20 +3152,62 @@ function TransactionReportAction({
   canViewFinancialDetails,
   currency,
   isOpen,
+  onItemLinkNavigate,
   onOpenChange,
+  onSheetReturnComplete,
   orgUrlSlug,
+  sheetReturn,
   snapshot,
   storeUrlSlug,
 }: {
   canViewFinancialDetails: boolean;
   currency: string;
   isOpen: boolean;
+  onItemLinkNavigate?: TransactionReportLinkNavigate;
   onOpenChange: (isOpen: boolean) => void;
+  onSheetReturnComplete?: () => void;
   orgUrlSlug: string;
+  /** Decoded from the shared `sheetReturn` param — see `lib/sheetReturn`. */
+  sheetReturn?: SheetReturn;
   snapshot: DailyCloseSnapshot;
   storeUrlSlug: string;
 }) {
   const items = getTransactionReportItems(snapshot);
+  /**
+   * Anchor for the return scroll: the report's own scrolling body, not the
+   * workspace behind it. A visitor coming back from a transaction wants this
+   * table where they left it, and a long close report is exactly where losing
+   * the position costs the most.
+   */
+  const reportBodyRef = useRef<HTMLDivElement>(null);
+  useSheetReturnPosition({
+    anchorRef: reportBodyRef,
+    focus:
+      sheetReturn?.focusKey === undefined
+        ? undefined
+        : {
+            selector: sheetReturnFocusSelector(sheetReturn.focusKey),
+            isExpected: items.some(
+              (item) => getItemId(item) === sheetReturn.focusKey,
+            ),
+            // The report renders straight from the snapshot, so once that
+            // exists the row either is on screen or is genuinely gone.
+            isReady: true,
+            onMissing: () => {
+              // The row dropped out of the day. Land on the report body
+              // rather than leaving focus on the document.
+              reportBodyRef.current?.focus();
+            },
+          },
+    isOpen,
+    onComplete: onSheetReturnComplete,
+    scrollOffset: sheetReturn?.scrollOffset,
+  });
+
+  const handleItemLinkNavigate: TransactionReportLinkNavigate = (args) => {
+    const scroller = findScrollableAncestor(reportBodyRef.current);
+    return onItemLinkNavigate?.({ ...args, scrollOffset: scroller?.scrollTop });
+  };
   const reportSummary = [
     formatPosSaleCount(
       getSummaryCount(snapshot.summary, "transactionCount", "transactionCount"),
@@ -3150,6 +3247,10 @@ function TransactionReportAction({
           <div
             className="min-h-0 flex-1 overflow-y-auto bg-surface-raised p-layout-lg md:p-layout-xl"
             data-testid="transaction-report-body"
+            // `tabIndex={-1}` so the fallback can land focus here when the
+            // row a visitor followed is no longer in the day.
+            ref={reportBodyRef}
+            tabIndex={-1}
           >
             <div
               className="overflow-hidden rounded-lg border border-border bg-background/60 shadow-surface"
@@ -3191,6 +3292,7 @@ function TransactionReportAction({
                         >
                           <TransactionReportIdentifierLink
                             item={item}
+                            onLinkNavigate={handleItemLinkNavigate}
                             orgUrlSlug={orgUrlSlug}
                             storeUrlSlug={storeUrlSlug}
                           />
@@ -3922,8 +4024,15 @@ export function DailyCloseViewContent({
     page?: unknown;
     readyPanels?: unknown;
     report?: unknown;
+    sheetReturn?: unknown;
     tab?: unknown;
   };
+  // Shared across every sheet in the app (`lib/sheetReturn`); decoded here so
+  // the sheet never parses a URL.
+  const transactionReportReturn = useMemo(
+    () => decodeSheetReturn(search.sheetReturn),
+    [search.sheetReturn],
+  );
   const carryForwardSelectionIds = useMemo(
     () =>
       (snapshot?.carryForwardItems ?? [])
@@ -4262,7 +4371,42 @@ export function DailyCloseViewContent({
               canViewFinancialDetails={hasFinancialDetailsAccess}
               currency={currency}
               isOpen={isTransactionReportOpen}
+              onItemLinkNavigate={async ({
+                focusKey,
+                params,
+                scrollOffset,
+                search: destinationSearch,
+                to,
+              }) => {
+                // Search-only update on the CURRENT route — no `to`, which
+                // would make it a relative navigation that does not resolve.
+                await navigate({
+                  replace: true,
+                  search: ((current: Record<string, unknown>) => ({
+                    ...current,
+                    sheetReturn: encodeSheetReturn({ focusKey, scrollOffset }),
+                  })) as never,
+                });
+                // Re-captured AFTER the token lands: `o` is how the
+                // destination returns here, and a copy taken earlier predates
+                // the token — the return would drop it.
+                await navigate({
+                  params,
+                  search: { ...destinationSearch, o: getOrigin() },
+                  to,
+                } as never);
+              }}
               onOpenChange={handleTransactionReportOpenChange}
+              onSheetReturnComplete={() =>
+                void navigate({
+                  replace: true,
+                  search: ((current: Record<string, unknown>) => ({
+                    ...current,
+                    sheetReturn: undefined,
+                  })) as never,
+                })
+              }
+              sheetReturn={transactionReportReturn}
               orgUrlSlug={orgUrlSlug}
               snapshot={displaySnapshot}
               storeUrlSlug={storeUrlSlug}

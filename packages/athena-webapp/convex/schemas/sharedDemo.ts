@@ -9,7 +9,7 @@ export const sharedDemoRestoreStateSchema = v.object({
   failureCode: v.optional(v.string()),
   idempotencyKey: v.optional(v.string()),
   phase: v.optional(v.union(v.literal("leased"), v.literal("applied"))),
-  restoreSource: v.optional(v.union(v.literal("hourly"), v.literal("manual"))),
+  restoreSource: v.optional(v.union(v.literal("daily"), v.literal("hourly"), v.literal("manual"))),
   restoredDocuments: v.optional(v.number()),
   startedAt: v.optional(v.number()),
   status: v.union(v.literal("ready"), v.literal("restoring"), v.literal("failed")),
@@ -28,7 +28,16 @@ export const sharedDemoRestoreAuditSchema = v.object({
   epoch: v.number(),
   occurredAt: v.number(),
   outcome: v.union(v.literal("ready"), v.literal("failed")),
-  source: v.union(v.literal("hourly"), v.literal("manual")),
+  /**
+   * What triggered the restore. `hourly` is RETAINED for the audit rows the
+   * scheduler wrote before the cadence moved to a midnight reset — dropping it
+   * would fail validation on every historical row. Nothing writes it now.
+   */
+  source: v.union(
+    v.literal("daily"),
+    v.literal("hourly"),
+    v.literal("manual"),
+  ),
   storeId: v.id("store"),
 });
 
@@ -127,7 +136,7 @@ export const sharedDemoBaselineDocumentSchema = v.object({
     v.literal("staffCredential"),
     v.literal("staffMessage"),
     // Derived reporting state written by the demo's own sales. These are
-    // restore-registry members so an hourly restore purges them alongside the
+    // restore-registry members so a scheduled restore purges them alongside the
     // transactions that produced them, but they are never CAPTURED into a
     // baseline (see `isDerivedRestoreTable`) — the literals exist so a legacy
     // deployment that captured one before that rule landed still validates.

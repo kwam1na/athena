@@ -129,8 +129,31 @@ secrets are not loaded.
 allowed demo mutation must read it in the same Convex transaction as the
 business write through `requireReadySharedDemoWriteWithCtx`. Restore replaces
 the versioned baseline rows, verifies expected domain counts, then publishes
-`ready`. Hourly and manual callers use the same internal `restoreBaseline`
+`ready`. The nightly and manual callers use the same internal `restoreBaseline`
 mutation and idempotency contract.
+
+The scheduled restore runs **once a day at midnight**, registered in
+`convex/crons.ts` as `shared-demo-daily-restore` on `0 0 * * *`. Midnight UTC is
+also the demo store's own midnight, because the store runs `Africa/Accra`
+(UTC+0, no daylight saving), so the reset lands on the same boundary the
+operating day rolls over on rather than partway through a trading day someone is
+reading. A demo store in another zone would need that cron hour moved to match.
+
+The idempotency key is `daily:<UTC day number>` — deliberately exactly one reset
+cycle wide. A narrower bucket would let a retried firing restore the baseline a
+second time mid-day; a wider one would swallow the next day's genuine reset.
+Audit rows written before this change carry `source: "hourly"`, which the schema
+retains as a legacy literal so historical rows still validate; nothing writes it
+now.
+
+A second cron, `shared-demo-hourly-provision-heal` on `0 * * * *`, runs
+provisioning **only** — it begins no restore lease and replaces no visitor rows.
+Admission rejects every visitor while the persisted `baselineVersion` trails
+`SHARED_DEMO_BASELINE_VERSION`, and `scripts/deploy-vps.sh` migrates that row
+right after `convex deploy`; this job is what bounds the damage if that step
+fails, repairing the lockout within the hour. Keeping the two jobs separate is
+the point: provisioning is idempotent and non-destructive and so is safe hourly,
+while restoring wipes visitor activity and belongs only at the daily boundary.
 
 Every store-scoped demo read or write also compares its target store to the
 server-owned principal before ordinary organization authorization runs. A
@@ -153,7 +176,7 @@ slugs and returns the Athena user, organization, and store IDs required by the
 runtime configuration. It creates the synthetic owner and cashier, catalog and
 stock, terminal/register and cash posture, completed sale and line item,
 inventory movement, pickup order and line item, a started store day with its
-Opening Handoff completed, and operational narrative. Hourly and manual restore
-roll that opening state to the current store operating date. Baseline documents
+Opening Handoff completed, and operational narrative. The nightly and manual
+restores roll that opening state to the current store operating date. Baseline documents
 are captured transactionally before the mutation reports `created`; a partial
 pre-existing foundation fails closed.

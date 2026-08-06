@@ -64,8 +64,7 @@ describe("report route search", () => {
       units: true,
       unitsTab: "granular" as const,
       unitsPage: 4,
-      unitsFocus: "sku-61",
-      unitsScroll: 640,
+      sheetReturn: "chart:sku-61~640",
     };
     expect(reportsOverviewSearchSchema.parse(sheetState)).toEqual(sheetState);
     expect(reportsWeeklySearchSchema.parse(sheetState)).toEqual(sheetState);
@@ -106,10 +105,8 @@ describe("report route search", () => {
       expect(() => schema.parse({ unitsTab: "top" })).toThrow();
       expect(() => schema.parse({ unitsPage: 0 })).toThrow();
       expect(() => schema.parse({ unitsPage: 1.5 })).toThrow();
-      expect(() => schema.parse({ unitsFocus: "" })).toThrow();
-      expect(() => schema.parse({ unitsFocus: "x".repeat(257) })).toThrow();
-      expect(() => schema.parse({ unitsScroll: -1 })).toThrow();
-      expect(() => schema.parse({ unitsScroll: 12.5 })).toThrow();
+      expect(() => schema.parse({ sheetReturn: "" })).toThrow();
+      expect(() => schema.parse({ sheetReturn: "x".repeat(513) })).toThrow();
     }
   });
 
@@ -119,8 +116,7 @@ describe("report route search", () => {
       units: true,
       unitsTab: "granular" as const,
       unitsPage: 4,
-      unitsFocus: "sku-61",
-      unitsScroll: 640,
+      sheetReturn: "chart:sku-61~640",
     };
     expect(weeklyReturnSearchFromOverview(withSheetState)).toEqual(
       weeklyReturnSearchFromOverview(overviewSearch),
@@ -131,23 +127,26 @@ describe("report route search", () => {
         units: true,
         unitsTab: "granular",
         unitsPage: 4,
-        unitsFocus: "sku-61",
-        unitsScroll: 640,
+        sheetReturn: "chart:sku-61~640",
       }),
     ).toEqual(overviewSearch);
   });
 
   it("spells out the sheet-owned cleanup sets used by both routes", () => {
-    expect(resetUnitsSheetContextSearch).toEqual({
-      unitsTab: undefined,
-      unitsPage: undefined,
-      unitsFocus: undefined,
-      unitsScroll: undefined,
-    });
-    expect(closedUnitsSheetSearch).toEqual({
-      units: undefined,
-      ...resetUnitsSheetContextSearch,
-    });
+    // Asserted as a KEY SET: every value here is `undefined`, and `toEqual`
+    // ignores undefined properties — so an object literal would keep passing
+    // after a key was renamed out from under it.
+    expect(Object.keys(resetUnitsSheetContextSearch).sort()).toEqual([
+      "sheetReturn",
+      "unitsPage",
+      "unitsTab",
+    ]);
+    expect(Object.keys(closedUnitsSheetSearch).sort()).toEqual([
+      "sheetReturn",
+      "units",
+      "unitsPage",
+      "unitsTab",
+    ]);
   });
 
   it("inherits the five-window vocabulary on both routes via z.enum(REPORT_OVERVIEW_WINDOWS)", () => {

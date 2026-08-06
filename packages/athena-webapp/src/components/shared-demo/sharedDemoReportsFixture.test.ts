@@ -10,6 +10,7 @@ import {
   REPORT_MOVEMENT_PAGE_SIZE,
   REPORT_SKU_PAGE_SIZE,
   trailingSixMonthsStart,
+  unitsPerTransaction,
 } from "~/shared/reportsContract";
 import { SHARED_DEMO_PRODUCTS } from "~/shared/sharedDemoStory";
 import type { SharedDemoLiveReportsDay } from "./sharedDemoLiveReportsDay";
@@ -32,6 +33,7 @@ import {
   createSharedDemoWeeklyBriefing,
   isSharedDemoReportsSkuId,
   rankSignedMovementRows,
+  SHARED_DEMO_REPORTS_LIVE_SKU_ID_PREFIX,
   SHARED_DEMO_REPORTS_SKU_ID_PREFIX,
 } from "./sharedDemoReportsFixture";
 
@@ -490,7 +492,7 @@ describe("shared demo reports fixture", () => {
         productSkuId: skuId,
         startDate: addDaysToDate(TODAY, -6),
         endDate: TODAY,
-        liveStock: new Map([[skuId, 4]]),
+        liveStock: new Map([[skuId, { identity: null, quantityAvailable: 4 }]]),
         today: TODAY,
       })!;
 
@@ -503,7 +505,7 @@ describe("shared demo reports fixture", () => {
         productSkuId: skuId,
         startDate: addDaysToDate(TODAY, -6),
         endDate: TODAY,
-        liveStock: new Map([[skuId, 0]]),
+        liveStock: new Map([[skuId, { identity: null, quantityAvailable: 0 }]]),
         today: TODAY,
       })!;
 
@@ -661,6 +663,45 @@ describe("shared demo reports fixture", () => {
         to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
         search: { operatingDate: "2026-08-08" },
       });
+    });
+
+    it("routes the EOD review to the last CLOSED day, not the last scheduled one", () => {
+      // Mid-week, the final scheduled date has not happened yet and today is
+      // still open. Routing to either would land an owner on a review that
+      // does not exist — the link says "View EOD Review".
+      const thursday = "2026-08-06";
+      const briefing = createSharedDemoWeeklyBriefing(thursday);
+      if (briefing.status !== "available") throw new Error("unreachable");
+      const lineage = briefing.current.scheduleLineage;
+
+      // The week still SCHEDULES through Saturday, and today is open.
+      expect(lineage.filter((entry) => entry.included).at(-1)?.localDate).toBe(
+        "2026-08-08",
+      );
+      expect(
+        lineage.find((entry) => entry.localDate === thursday)?.dayStatus,
+      ).toBe("open");
+      expect(
+        lineage.find((entry) => entry.localDate === thursday)?.dayClosed,
+      ).toBe(false);
+
+      expect(briefing.current.ownerRoutes.dailyClose).toEqual({
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+        search: { operatingDate: "2026-08-05" },
+      });
+    });
+
+    it("omits the EOD review link when no day in the week is closed", () => {
+      // Monday: the only scheduled day on record is today, and it is open.
+      // The weekly view renders no link rather than a dead one.
+      const monday = "2026-08-03";
+      const briefing = createSharedDemoWeeklyBriefing(monday);
+      if (briefing.status !== "available") throw new Error("unreachable");
+
+      expect(
+        briefing.current.scheduleLineage.every((entry) => !entry.dayClosed),
+      ).toBe(true);
+      expect(briefing.current.ownerRoutes.dailyClose).toBeNull();
     });
 
     it("totals the week from the same day rows Reports lists", () => {
@@ -1048,6 +1089,7 @@ describe("live current day", () => {
       },
       operatingDate: TODAY,
       querySkuIdByFixtureSkuId: new Map(),
+      liveSkuIdentityById: new Map(),
       skus: [
         [
           LIVE_SKU_ID,
@@ -1068,6 +1110,156 @@ describe("live current day", () => {
       ...overrides,
     };
   }
+
+  describe("a sku created at the register", () => {
+    // POS quick add mints a real `productSku` that no story describes. It is a
+    // genuine part of the visitor's day, so Reports names it from the identity
+    // the live reads carry rather than declining to show it at all.
+    const QUICK_ADD_SKU_ID = `${SHARED_DEMO_REPORTS_LIVE_SKU_ID_PREFIX}kg2quickadd`;
+    const QUICK_ADD_METRICS = {
+      unitsSold: 4,
+      unitsReturned: 0,
+      grossSalesMinor: 2_000,
+      netSalesMinor: 2_000,
+      refundsMinor: 0,
+      uncostedRevenueMinor: 2_000,
+      grossProfitMinor: null,
+    };
+    const QUICK_ADD_IDENTITY = {
+      displayName: "Bottled Water",
+      netPriceMinor: 500,
+      productId: "jd7quickaddproduct",
+      quantityAvailable: 11,
+      sku: "QUICK-ADD-1",
+      // Priced at the register, never costed.
+      unitCostMinor: null,
+    };
+
+    function quickAddDay() {
+      return liveDay({
+        querySkuIdByFixtureSkuId: new Map([[QUICK_ADD_SKU_ID, "kg2quickadd"]]),
+        liveSkuIdentityById: new Map([[QUICK_ADD_SKU_ID, QUICK_ADD_IDENTITY]]),
+        skus: [[QUICK_ADD_SKU_ID, QUICK_ADD_METRICS]],
+      });
+    }
+
+    it("names it in the day's sku mix", () => {
+      const mix = createSharedDemoReportSkuMix({
+        startDate: TODAY,
+        endDate: TODAY,
+        liveDay: quickAddDay(),
+        today: TODAY,
+      });
+      const row = mix.rows.find((entry) => entry.productSkuId === QUICK_ADD_SKU_ID);
+
+      expect(row).toBeDefined();
+      expect(row?.identity?.displayName).toBe("Bottled Water");
+      expect(row?.unitsSold).toBe(4);
+    });
+
+    it("makes the mix sum to the day it belongs to", () => {
+      // The gap this closes: its money was always in the day's totals, so a
+      // breakdown that omitted it could never sum to the number beside it.
+      const mix = createSharedDemoReportSkuMix({
+        startDate: TODAY,
+        endDate: TODAY,
+        liveDay: quickAddDay(),
+        today: TODAY,
+      });
+
+      expect(mix.totalUnitsSold).toBe(4);
+      expect(
+        mix.rows.reduce((total, row) => total + row.unitsSold, 0),
+      ).toBe(4);
+    });
+
+    it("gives it a detail page rather than an empty one", () => {
+      const detail = createSharedDemoSkuDetail({
+        productSkuId: QUICK_ADD_SKU_ID,
+        startDate: addDaysToDate(TODAY, -6),
+        endDate: TODAY,
+        liveDay: quickAddDay(),
+        today: TODAY,
+      });
+
+      expect(detail).not.toBeNull();
+      expect(detail?.identity?.displayName).toBe("Bottled Water");
+      expect(detail?.identity?.netPriceMinor).toBe(500);
+      expect(detail?.identity?.quantityAvailable).toBe(11);
+      // No cost basis, so no invented margin: the revenue is disclosed as
+      // uncosted instead.
+      expect(detail?.identity?.unitCostMinor).toBeUndefined();
+      expect(detail?.totals?.grossProfitMinor).toBeNull();
+      expect(detail?.totals?.uncostedRevenueMinor).toBe(2_000);
+      // It exists only from today: the fixture history never contained it.
+      expect(detail?.days.map((day) => day.operatingDate)).toEqual([TODAY]);
+    });
+
+    it("is a shared-demo sku id, so no route param reaches a story lookup", () => {
+      expect(isSharedDemoReportsSkuId(QUICK_ADD_SKU_ID)).toBe(true);
+      expect(isSharedDemoReportsSkuId("kg2rawconvexid")).toBe(false);
+    });
+
+    it("has no fixture evidence, deferring to the live read for today", () => {
+      // The 21-day history contains story SKUs only, so the detail view reads
+      // today's evidence from the server via `querySkuIdByFixtureSkuId`.
+      expect(
+        createSharedDemoSkuDayTransactions({
+          productSkuId: QUICK_ADD_SKU_ID,
+          operatingDate: TODAY,
+          liveDay: quickAddDay(),
+          today: TODAY,
+        }),
+      ).toEqual({ transactions: [], truncated: false });
+      expect(
+        quickAddDay().querySkuIdByFixtureSkuId.get(QUICK_ADD_SKU_ID),
+      ).toBe("kg2quickadd");
+    });
+
+    it("still refuses an id in neither space", () => {
+      expect(
+        createSharedDemoSkuDetail({
+          productSkuId: "kg2rawconvexid",
+          startDate: addDaysToDate(TODAY, -6),
+          endDate: TODAY,
+          liveDay: quickAddDay(),
+          today: TODAY,
+        }),
+      ).toBeNull();
+    });
+  });
+
+  it("counts today's live transactions toward the basket size", () => {
+    // Parity with a real store: the live day carries its own running count,
+    // so the demo's units-per-sale moves during the trading day instead of
+    // waiting on a close that a demo visitor never performs.
+    const overview = createSharedDemoReportsOverview(
+      TODAY,
+      liveDay({ transactionCount: 3 }),
+    );
+
+    expect(overview.today.transactionCount).toBe(3);
+    expect(overview.today.transactionCoveredDayCount).toBe(
+      overview.today.dayCount,
+    );
+    expect(unitsPerTransaction(overview.today)).toBeCloseTo(12 / 3, 5);
+  });
+
+  it("reports an untouched live day as a real zero, not as unknown", () => {
+    // Zero transactions on a day that exists is a measurement. Coverage stays
+    // whole, and the basket is withheld for want of a denominator — not for
+    // want of evidence.
+    const overview = createSharedDemoReportsOverview(
+      TODAY,
+      liveDay({ transactionCount: 0 }),
+    );
+
+    expect(overview.today.transactionCount).toBe(0);
+    expect(overview.today.transactionCoveredDayCount).toBe(
+      overview.today.dayCount,
+    );
+    expect(unitsPerTransaction(overview.today)).toBeNull();
+  });
 
   it("moves today's snapshot off zero without touching the history", () => {
     const withLive = createSharedDemoReportsOverview(TODAY, liveDay());

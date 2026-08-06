@@ -494,6 +494,7 @@ describe("foldDay — status, close variance and amendment", () => {
     closeId: "close-1",
     acceptedAt: CLOSE_AT,
     closeNetSalesMinor: 900,
+    transactionCount: 12,
   };
 
   it("is provisional with no close and carries no variance fields", () => {
@@ -501,6 +502,51 @@ describe("foldDay — status, close variance and amendment", () => {
     expect(day.status).toBe("provisional");
     expect(day.closeVarianceMinor).toBeUndefined();
     expect(day.postCloseNetSalesDeltaMinor).toBeUndefined();
+    // The count is NOT close-gated: it is derived from the facts already being
+    // folded, so an unclosed day still reports a basket. Provisional like
+    // every other number here — the close's settled figure replaces it.
+    expect(day.transactionCount).toBe(1);
+  });
+
+  it("counts distinct transactions, not lines or payments", () => {
+    // Three sale facts across two transactions. Counting facts would say 3;
+    // counting payment facts would double a split-tender sale.
+    const { day } = foldDay("GHS", [
+      sale({ factId: "f1", lineId: "l1", sourceId: "t1" }),
+      sale({ factId: "f2", lineId: "l2", sourceId: "t1" }),
+      sale({ factId: "f3", lineId: "l1", sourceId: "t2" }),
+    ]);
+    expect(day.transactionCount).toBe(2);
+  });
+
+  it("excludes a voided transaction, which still carries its sale facts", () => {
+    const { day } = foldDay("GHS", [
+      sale({ factId: "f1", lineId: "l1", sourceId: "t1" }),
+      sale({ factId: "f2", lineId: "l1", sourceId: "t2" }),
+      { ...sale({ factId: "f3", lineId: "l1", sourceId: "t2" }), factKind: "void" },
+    ]);
+    expect(day.transactionCount).toBe(1);
+  });
+
+  it("records the close's settled transaction count on the day", () => {
+    // Kept on the day so a period read can sum basket-size evidence without
+    // reopening every close.
+    const { day } = foldDay(
+      "GHS",
+      [sale({ factId: "f1", recordedAt: CLOSE_AT })],
+      close,
+    );
+    expect(day.transactionCount).toBe(12);
+  });
+
+  it("keeps the settled count when post-close activity amends the day", () => {
+    const { day } = foldDay(
+      "GHS",
+      [sale({ factId: "f1", recordedAt: CLOSE_AT + 1_000 })],
+      close,
+    );
+    expect(day.status).toBe("amended");
+    expect(day.transactionCount).toBe(12);
   });
 
   it("is reconciled when every fact predates the close acceptance", () => {
@@ -576,6 +622,9 @@ describe("foldDay — status, close variance and amendment", () => {
       },
       factCount: 0,
       lastFactRecordedAt: 0,
+      // A day with no facts sold nothing. Zero here is a measurement, not a
+      // placeholder — the fold saw every fact there was.
+      transactionCount: 0,
     });
   });
 
@@ -602,6 +651,7 @@ describe("foldDay — determinism", () => {
     closeId: "close-1",
     acceptedAt: CLOSE_AT,
     closeNetSalesMinor: 1_234,
+    transactionCount: 7,
   };
 
   const corpus: FoldFact[] = [

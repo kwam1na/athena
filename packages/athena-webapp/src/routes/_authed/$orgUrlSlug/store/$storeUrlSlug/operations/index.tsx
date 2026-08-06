@@ -8,10 +8,21 @@ export const dailyOperationsSearchSchema = z.object({
   // Development-only screenshot fixtures; inert in production builds.
   fixture: z.string().optional(),
   o: z.string().optional(),
+  /**
+   * Where to put the visitor back after a sheet on this page sends them
+   * somewhere else — see `lib/sheetReturn`. Deliberately the same name on
+   * every route that hosts a sheet, so one codec parses all of them.
+   *
+   * Untyped beyond `string` on purpose: the value is opaque here and the codec
+   * treats anything unparseable as no token, so a malformed URL degrades to
+   * "no restore" rather than failing route validation and blanking the page.
+   */
+  sheetReturn: z.string().optional(),
   operatingDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
+  timeline: z.literal("open").optional(),
   weekEndOperatingDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)

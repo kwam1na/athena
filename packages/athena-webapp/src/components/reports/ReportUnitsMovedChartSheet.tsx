@@ -2,13 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useReducedMotion } from "framer-motion";
 import { ArrowUpRight, ChartNoAxesColumn, LoaderCircle } from "lucide-react";
-import {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -43,6 +37,16 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
+import {
+  findScrollableAncestor,
+  useSheetScrollPreservation,
+} from "@/hooks/useSheetScrollPreservation";
+import { useSheetReturnPosition } from "@/hooks/useSheetReturnPosition";
+import {
+  sheetReturnFocusSelector,
+  sheetReturnTargetProps,
+} from "@/lib/sheetReturn";
+import { unitsSheetFocusSearchValue } from "./reportRouteSearch";
 import { capitalizeWords } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
 import { getOrigin } from "~/src/lib/navigationUtils";
@@ -71,28 +75,6 @@ const unitsChartConfig = {
 
 export type ReportUnitsMovedTab = "top" | "granular";
 export type ReportUnitsMovedFocusSurface = "chart" | "table";
-
-/**
- * In-mount preservation of the underlying report's scroll position while the
- * sheet opens/closes over it. Cross-navigation restore is the routes' job.
- */
-const reportUnitsScrollPositions = new Map<string, number>();
-
-function findReportScrollContainer(
-  trigger: HTMLElement | null | undefined,
-): HTMLElement | null {
-  let candidate = trigger?.parentElement ?? null;
-  while (
-    candidate &&
-    !(
-      candidate.scrollHeight > candidate.clientHeight &&
-      ["auto", "scroll"].includes(getComputedStyle(candidate).overflowY)
-    )
-  ) {
-    candidate = candidate.parentElement;
-  }
-  return candidate;
-}
 
 /**
  * Direction-word rendering of a net unit movement. In retail copy a "+" reads
@@ -193,7 +175,9 @@ function UnitMovementAxisTick({
           <Link
             aria-label={`View ${row.productName} SKU details from chart`}
             className="group flex max-w-full flex-col items-end rounded-sm px-1 py-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            data-chart-sku-link={row.productSkuId}
+            {...sheetReturnTargetProps(
+              unitsSheetFocusSearchValue(row.productSkuId, "chart"),
+            )}
             onClick={(event: React.MouseEvent<HTMLAnchorElement>) =>
               onLinkClick(row.productSkuId, event)
             }
@@ -310,16 +294,6 @@ export function ReportUnitsMovedChartSheet({
   const errorHeadingRef = useRef<HTMLHeadingElement>(null);
   const granularTabRef = useRef<HTMLButtonElement>(null);
   const skuNavigationPendingRef = useRef(false);
-  /**
-   * One-shot bookkeeping for the cross-navigation restoration (U6). Each leg
-   * runs at most once per open; `completed` fires `onRestoreComplete` exactly
-   * once so the route can clear the focus/scroll keys.
-   */
-  const restoreRef = useRef({
-    completed: false,
-    focusDone: false,
-    scrollDone: false,
-  });
   const [restoreAnnouncement, setRestoreAnnouncement] = useState<
     string | null
   >(null);
@@ -329,20 +303,27 @@ export function ReportUnitsMovedChartSheet({
   const activeTab = controlledActiveTab ?? localActiveTab;
   const granularPage = controlledGranularPage ?? localGranularPage;
 
+  /**
+   * Keeps the report underneath pinned where the visitor left it while this
+   * sheet is open. Only the IN-MOUNT half of continuity — restoring across a
+   * navigation to SKU detail is `restoreScrollOffset` below, which the route
+   * supplies from its own search params.
+   */
+  const reportScroll = useSheetScrollPreservation({
+    anchorRef: triggerRef,
+    contextKey: scrollContextKey,
+    isOpen,
+  });
+
   const setIsOpen = (open: boolean) => {
     if (!open) {
       skuNavigationPendingRef.current = false;
       setIsSkuNavigationPending(false);
-      reportUnitsScrollPositions.delete(scrollContextKey);
+      reportScroll.clear();
       setAdmission(undefined);
       setEnsureFailed(false);
       setLocalActiveTab("top");
       setLocalGranularPage(1);
-      restoreRef.current = {
-        completed: false,
-        focusDone: false,
-        scrollDone: false,
-      };
       setRestoreAnnouncement(null);
     }
     setLocalIsOpen(open);
@@ -356,11 +337,7 @@ export function ReportUnitsMovedChartSheet({
     setLocalGranularPage(page);
     onGranularPageChange?.(page);
   };
-  const captureScrollPosition = () => {
-    const scrollContainer = findReportScrollContainer(triggerRef.current);
-    if (!scrollContainer) return;
-    reportUnitsScrollPositions.set(scrollContextKey, scrollContainer.scrollTop);
-  };
+  const captureScrollPosition = () => reportScroll.capture();
 
   const { activeStore } = useGetActiveStore();
   const { isSharedDemo, useLiveQuery } = useReportsSharedDemoMode();
@@ -532,14 +509,6 @@ export function ReportUnitsMovedChartSheet({
   const isPageTransition =
     lifecycle?.state === "completed" && settled.isRefreshing;
 
-  useLayoutEffect(() => {
-    if (!isOpen) return;
-    const savedScrollTop = reportUnitsScrollPositions.get(scrollContextKey);
-    const scrollContainer = findReportScrollContainer(triggerRef.current);
-    if (savedScrollTop === undefined || !scrollContainer) return;
-    scrollContainer.scrollTop = savedScrollTop;
-  }, [isOpen, scrollContextKey]);
-
   /**
    * Canonicalize an out-of-range Granular page only once a completed request
    * supplies the authoritative count: the page payload reports the canonical
@@ -556,67 +525,7 @@ export function ReportUnitsMovedChartSheet({
     // route callback, and the guard above makes re-runs idempotent.
   }, [activeTab, granularPage, isOpen, onGranularPageChange, servedView]);
 
-  const completeRestoreIfReady = () => {
-    const restore = restoreRef.current;
-    if (restore.completed) return;
-    if (restoreScrollOffset !== undefined && !restore.scrollDone) return;
-    if (restoreFocusSkuId !== undefined && !restore.focusDone) return;
-    if (restoreScrollOffset === undefined && restoreFocusSkuId === undefined) {
-      return;
-    }
-    restore.completed = true;
-    onRestoreComplete?.();
-  };
 
-  /**
-   * Cross-navigation scroll restore (R11): the captured offset is applied
-   * once the underlying report content has laid out. jsdom-free of repo
-   * precedent — the container may not exist or be tall enough on the first
-   * frame after a route mount, so retry on animation frames, bounded, and
-   * degrade silently to top when the offset never becomes applicable.
-   */
-  useEffect(() => {
-    if (!isOpen || restoreScrollOffset === undefined) return;
-    if (isSkuNavigationPending) return;
-    const restore = restoreRef.current;
-    if (restore.scrollDone || restore.completed) return;
-    if (!Number.isFinite(restoreScrollOffset) || restoreScrollOffset <= 0) {
-      restore.scrollDone = true;
-      completeRestoreIfReady();
-      return;
-    }
-    let cancelled = false;
-    let attempts = 0;
-    const attemptRestore = () => {
-      if (cancelled) return;
-      const scrollContainer = findReportScrollContainer(triggerRef.current);
-      if (
-        scrollContainer &&
-        scrollContainer.scrollHeight > scrollContainer.clientHeight
-      ) {
-        scrollContainer.scrollTop = restoreScrollOffset;
-        // Keep the in-mount map coherent so closing the sheet afterwards
-        // does not jump the report back to the top.
-        reportUnitsScrollPositions.set(scrollContextKey, restoreScrollOffset);
-        restore.scrollDone = true;
-        completeRestoreIfReady();
-        return;
-      }
-      attempts += 1;
-      if (attempts >= 30) {
-        restore.scrollDone = true;
-        completeRestoreIfReady();
-        return;
-      }
-      requestAnimationFrame(attemptRestore);
-    };
-    attemptRestore();
-    return () => {
-      cancelled = true;
-    };
-    // completeRestoreIfReady closes over the same props this effect lists.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, isSkuNavigationPending, restoreScrollOffset, scrollContextKey]);
 
   const handleRetry = async () => {
     if (!storeId || !requestKey) return;
@@ -685,84 +594,6 @@ export function ReportUnitsMovedChartSheet({
   const terminalCorrelationId =
     lifecycle?.state === "terminal_error" ? lifecycle.correlationId : undefined;
 
-  /**
-   * Originating-focus restore (R10/AE4): once the returned page settles, move
-   * focus back to the SKU link the operator drilled through. If changed data
-   * removed the SKU (or its page canonicalized away), focus the Granular tab
-   * heading instead and announce the settled result via the status region —
-   * never a different item.
-   */
-  const isRestoreSettled =
-    lifecycle?.state === "completed" && settledView !== undefined
-      ? !settled.isRefreshing
-      : false;
-  useEffect(() => {
-    if (!isOpen || restoreFocusSkuId === undefined) return;
-    if (isSkuNavigationPending) return;
-    const restore = restoreRef.current;
-    if (restore.focusDone || restore.completed) return;
-    if (isTerminalError || isNotAvailable) {
-      // No rows will ever settle; give the keys back without moving focus.
-      restore.focusDone = true;
-      completeRestoreIfReady();
-      return;
-    }
-    if (!isRestoreSettled || !settledView) return;
-    const focusSurface = restoreFocusSurface ?? "table";
-    const focusAttribute =
-      focusSurface === "chart" ? "data-chart-sku-link" : "data-sku-link";
-    const selector = `[${focusAttribute}="${CSS.escape(restoreFocusSkuId)}"]`;
-    const skuStillExists = settledView.rows.some(
-      (row) => row.productSkuId === restoreFocusSkuId,
-    );
-    const attemptFocus = (): boolean => {
-      if (restore.focusDone || restore.completed) return true;
-      const link = document.querySelector<HTMLElement>(selector);
-      if (!link && skuStillExists) return false;
-      restore.focusDone = true;
-      if (link) {
-        link.focus();
-      } else {
-        granularTabRef.current?.focus();
-        setRestoreAnnouncement(
-          `Your previous item is no longer in this view. Showing page ${settledView.page} of ${settledView.pageCount}.`,
-        );
-      }
-      completeRestoreIfReady();
-      return true;
-    };
-
-    let observer: MutationObserver | undefined;
-    const frame = requestAnimationFrame(() => {
-      if (attemptFocus()) return;
-      // Recharts mounts SVG ticks asynchronously. The settled row proves this
-      // SKU still belongs in the surface, so observe for the actual axis link
-      // instead of treating an elapsed frame budget as item removal.
-      observer = new MutationObserver(() => {
-        if (attemptFocus()) observer?.disconnect();
-      });
-      const sheet = document.querySelector("[role='dialog']");
-      observer.observe(sheet ?? document.body, {
-        childList: true,
-        subtree: true,
-      });
-    });
-    return () => {
-      cancelAnimationFrame(frame);
-      observer?.disconnect();
-    };
-    // completeRestoreIfReady closes over the same props this effect lists.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    isNotAvailable,
-    isOpen,
-    isRestoreSettled,
-    isTerminalError,
-    isSkuNavigationPending,
-    restoreFocusSkuId,
-    restoreFocusSurface,
-    settledView,
-  ]);
 
   const handleSkuLinkClick = (
     productSkuId: string,
@@ -790,16 +621,20 @@ export function ReportUnitsMovedChartSheet({
     // browser return and consume/focus the token on the page being left.
     skuNavigationPendingRef.current = true;
     setIsSkuNavigationPending(true);
-    const scrollContainer = findReportScrollContainer(triggerRef.current);
+    const scrollContainer = findScrollableAncestor(triggerRef.current);
     const navigation = onSkuLinkNavigate({
       endDate: periodEndDate,
-      focusSurface: event.currentTarget.dataset.chartSkuLink
+      // Read back off the element rather than recomputed: the key the link
+      // carries IS what the restore will look for, so the two cannot drift.
+      focusSurface: event.currentTarget.dataset.sheetReturnKey?.startsWith(
+        "chart:",
+      )
         ? "chart"
         : "table",
       productSkuId,
       scrollOffset:
         scrollContainer?.scrollTop ??
-        reportUnitsScrollPositions.get(scrollContextKey),
+        reportScroll.peek(),
       startDate: periodStartDate,
     });
     if (navigation && typeof navigation.then === "function") {
@@ -809,6 +644,55 @@ export function ReportUnitsMovedChartSheet({
       });
     }
   };
+
+  /**
+   * Cross-navigation return (U6/R10/R11). The machinery — one-shot legs, the
+   * frame-bounded scroll retry, the observer for late-mounting content — lives
+   * in the hook. What stays here is the part only this sheet can answer: which
+   * link identifies the SKU, whether that SKU is still in the settled page, and
+   * what to do when changed data removed it.
+   */
+  const isRestoreSettled =
+    lifecycle?.state === "completed" && settledView !== undefined
+      ? !settled.isRefreshing
+      : false;
+  useSheetReturnPosition({
+    anchorRef: triggerRef,
+    focus:
+      restoreFocusSkuId === undefined
+        ? undefined
+        : {
+            // The chart and the table render the same SKU under different
+            // attributes, so the surface the operator left from decides which
+            // link to return to — never a different one showing the same item.
+            selector: sheetReturnFocusSelector(
+              unitsSheetFocusSearchValue(
+                restoreFocusSkuId,
+                restoreFocusSurface ?? "table",
+              ),
+            ),
+            isExpected: Boolean(
+              settledView?.rows.some(
+                (row) => row.productSkuId === restoreFocusSkuId,
+              ),
+            ),
+            isReady: isRestoreSettled && settledView !== undefined,
+            isUnavailable: isTerminalError || isNotAvailable,
+            onMissing: () => {
+              granularTabRef.current?.focus();
+              setRestoreAnnouncement(
+                settledView
+                  ? `Your previous item is no longer in this view. Showing page ${settledView.page} of ${settledView.pageCount}.`
+                  : "Your previous item is no longer in this view.",
+              );
+            },
+          },
+    isNavigationPending: isSkuNavigationPending,
+    isOpen,
+    onComplete: onRestoreComplete,
+    preservation: reportScroll,
+    scrollOffset: restoreScrollOffset,
+  });
 
   const itemRowsTable = (
     <table className="w-full border-collapse border-t border-border text-sm">
@@ -829,7 +713,9 @@ export function ReportUnitsMovedChartSheet({
             <td className="min-w-0 py-layout-sm pr-layout-md align-top">
               <Link
                 className="group block min-h-11 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                data-sku-link={item.productSkuId}
+                {...sheetReturnTargetProps(
+                  unitsSheetFocusSearchValue(item.productSkuId, "table"),
+                )}
                 onClick={(event: React.MouseEvent<HTMLAnchorElement>) =>
                   handleSkuLinkClick(item.productSkuId, event)
                 }

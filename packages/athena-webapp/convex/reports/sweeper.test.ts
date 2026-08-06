@@ -1067,6 +1067,84 @@ describe("fold integration", () => {
     expect(days[0].closeId).toBeDefined();
   });
 
+  it("persists the settled transaction count onto the day document", async () => {
+    // `foldAndReplaceDay` builds an EXPLICIT day document rather than
+    // spreading the fold result, so a field the fold returns can be silently
+    // dropped on write. Asserting the fold's return value alone would not
+    // catch that — this reads the stored row back.
+    const t = convexTest(schema, modules);
+    const { organizationId, productSkuId, storeId } = await seedStore(
+      t,
+      "fold-transaction-count",
+    );
+    allow(storeId);
+
+    await insertSaleFact(t, {
+      storeId,
+      productSkuId,
+      operatingDate: "2026-07-28",
+      sourceId: "txn-1",
+      netAmountMinor: 1_000,
+      quantity: 2,
+      recordedAt: 1_000,
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("dailyClose", {
+        storeId,
+        organizationId,
+        operatingDate: "2026-07-28",
+        status: "completed",
+        isCurrent: true,
+        readiness: {
+          status: "ready",
+          blockerCount: 0,
+          reviewCount: 0,
+          carryForwardCount: 0,
+          readyCount: 0,
+        },
+        summary: { salesTotal: 1_000, transactionCount: 3 },
+        sourceSubjects: [],
+        carryForwardWorkItemIds: [],
+        createdAt: 1,
+        updatedAt: 2_000,
+        completedAt: 2_000,
+      });
+    });
+
+    await mark(t, storeId, "2026-07-28", "close_accepted");
+    await sweep(t);
+
+    const days = await t.run(async (ctx) => ctx.db.query("reportDay").take(2));
+    // The close settled 3; the facts show 1. Settled beats derived.
+    expect(days[0].transactionCount).toBe(3);
+  });
+
+  it("persists a fact-derived count on a day that was never closed", async () => {
+    const t = convexTest(schema, modules);
+    const { productSkuId, storeId } = await seedStore(t, "fold-count-open");
+    allow(storeId);
+
+    for (const sourceId of ["txn-1", "txn-2"]) {
+      await insertSaleFact(t, {
+        storeId,
+        productSkuId,
+        operatingDate: "2026-07-28",
+        sourceId,
+        netAmountMinor: 1_000,
+        quantity: 2,
+        recordedAt: 1_000,
+      });
+    }
+
+    await mark(t, storeId, "2026-07-28", "late_fact");
+    await sweep(t);
+
+    const days = await t.run(async (ctx) => ctx.db.query("reportDay").take(2));
+    expect(days[0].status).toBe("provisional");
+    expect(days[0].transactionCount).toBe(2);
+  });
+
   it("marks a day amended when a fact lands after the close was accepted", async () => {
     const t = convexTest(schema, modules);
     const { organizationId, productSkuId, storeId } = await seedStore(

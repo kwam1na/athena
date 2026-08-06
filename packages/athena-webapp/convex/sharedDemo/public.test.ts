@@ -70,7 +70,7 @@ describe("shared demo public contract", () => {
     const context = {
       baselineVersion: 1,
       kind: "shared_demo",
-      nextHourlyRestoreAt: 1,
+      nextRestoreAt: 1,
       restore: { epoch: 2, status: "ready" },
       storeId: "store-1",
       timezone: "Africa/Accra",

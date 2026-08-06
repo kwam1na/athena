@@ -34,8 +34,21 @@
  * bump exists so the per-store repair sees every pre-revision day as stale —
  * clean days never refold on their own, so without it existing history would
  * stay uncertified forever.
+ *
+ * Version 4 recorded a day's completed `transactionCount`, so a period snapshot
+ * can sum basket-size evidence without re-reading every close. Same reasoning
+ * as version 3: already-reconciled days would otherwise keep an absent count
+ * forever, and the metric would only ever cover days closed after the deploy.
+ *
+ * Version 5 is that same field, actually persisted. The fold returned it under
+ * version 4, but `foldAndReplaceDay` builds an EXPLICIT day document rather
+ * than spreading the fold result, so the value was dropped on write and
+ * 4-stamped days carry no count. A day is only re-marked when its version
+ * differs, so correcting the write is not enough on its own — those days need
+ * a version they have not seen. Any new field on `DayFoldResult` has to be
+ * added to that document too; the omission is silent.
  */
-export const REPORTS_FOLD_VERSION = 3 as const;
+export const REPORTS_FOLD_VERSION = 5 as const;
 /**
  * Version 2 adds the source-derived allocation dimensions carried by payment
  * facts. Replays hash with the version already stored on a fact.
@@ -333,6 +346,15 @@ export type ReportWeekLineage = {
   scheduleVersionId: string | null;
   dayStatus: ReportDayStatus | null;
   dayAvailable: boolean;
+  /**
+   * Whether this date has an EOD close on record. Absent on rows folded before
+   * the field existed, where it means "unknown" rather than "not closed".
+   *
+   * Not the same question as `dayStatus !== "open"`: the sweeper folds a day to
+   * `provisional` on its own, so a day can leave `open` having never been
+   * closed.
+   */
+  dayClosed?: boolean;
   activityPosture: "recorded" | "zero_activity" | "unavailable";
 };
 
@@ -627,6 +649,12 @@ export type CloseRef = {
   closeId: string;
   acceptedAt: number;
   closeNetSalesMinor: number;
+  /**
+   * Completed POS transactions the close settled. Carried on the ref because
+   * the fold already holds the close summary this comes from, so recording it
+   * on the day costs no read that was not already being paid for.
+   */
+  transactionCount: number;
 };
 
 export type SkuDayFoldResult = ReportSkuDayMetrics;
@@ -639,6 +667,8 @@ export type DayFoldResult = {
     lastFactRecordedAt: number;
     closeVarianceMinor?: number;
     postCloseNetSalesDeltaMinor?: number;
+    /** Completed POS transactions, from the close. Absent when there is none. */
+    transactionCount?: number;
     paymentPosture: ReportPaymentPosture;
   };
   /** Keyed by productSkuId. Only SKUs with activity appear. */
@@ -782,7 +812,64 @@ export type ReportPeriodSnapshot = ReportDayMetrics & {
   dayCount: number;
   /** Days in the period still open/provisional (numbers may move). */
   unsettledDayCount: number;
+  /**
+   * Completed POS transactions across the period's CLOSED days only.
+   *
+   * Deliberately paired with `transactionCoveredDayCount`: a transaction count
+   * is settled evidence from a register close, while every other metric here
+   * is folded from facts and moves during an open day. Reading this total
+   * without its coverage would state a whole-period figure that silently omits
+   * today — see `unitsPerTransaction` in `reportsContract`, which refuses to
+   * divide when coverage is partial.
+   *
+   * Optional while existing overview singletons are refreshed by the sweeper;
+   * absent means UNKNOWN, never zero.
+   */
+  transactionCount?: number;
+  /** Days contributing to `transactionCount` — those with a close on record. */
+  transactionCoveredDayCount?: number;
 };
+
+/**
+ * Average basket size for a period, or `null` when it cannot be stated.
+ *
+ * Null whenever the transaction count does not cover every day the units came
+ * from. Units are folded from facts the moment a sale lands; transactions are
+ * settled only at close. Dividing across that seam would divide a whole-period
+ * numerator by a closed-days-only denominator and overstate the basket — on a
+ * day still trading, sometimes wildly. A withheld number is recoverable; a
+ * confidently wrong one is not.
+ */
+export function unitsPerTransaction(
+  snapshot: Pick<
+    ReportPeriodSnapshot,
+    "dayCount" | "transactionCoveredDayCount" | "transactionCount" | "unitsSold"
+  >,
+): number | null {
+  const transactionCount = settledTransactionCount(snapshot);
+  if (transactionCount === null || transactionCount <= 0) return null;
+  return snapshot.unitsSold / transactionCount;
+}
+
+/**
+ * The period's transaction count, or `null` when it does not cover the period.
+ *
+ * The single coverage rule both the count and the basket size are read
+ * through, so the two can never disagree about whether the evidence is whole —
+ * a stated count beside a withheld ratio derived from it would read as a bug.
+ */
+export function settledTransactionCount(
+  snapshot: Pick<
+    ReportPeriodSnapshot,
+    "dayCount" | "transactionCoveredDayCount" | "transactionCount"
+  >,
+): number | null {
+  const { transactionCoveredDayCount, transactionCount } = snapshot;
+  if (transactionCount === undefined) return null;
+  if (transactionCoveredDayCount === undefined) return null;
+  if (transactionCoveredDayCount !== snapshot.dayCount) return null;
+  return transactionCount;
+}
 
 export type ReportTrendPoint = {
   operatingDate: string;
@@ -848,13 +935,54 @@ export type ReportLiveOperatingDay = {
     lastFactRecordedAt: number;
     metrics: ReportDayMetrics;
     status: ReportDayStatus;
+    /**
+     * Completed POS transactions so far. Maintained on an OPEN day by the
+     * incremental ingest path, so this moves with the trading day rather than
+     * waiting on a close. Absent on a day written before the field existed.
+     */
+    transactionCount?: number;
   } | null;
   skus: Array<{
+    /** Catalogue identity, or `null` when the SKU document is gone. */
+    identity: ReportLiveSkuIdentity | null;
     metrics: ReportSkuDayMetrics;
     productSkuId: string;
     /** Business code, or `null` when the catalogue document is gone. */
     sku: string | null;
   }>;
+};
+
+/**
+ * Catalogue identity carried alongside a live row, for a client that has no
+ * second read to resolve it with.
+ *
+ * Every field here already sits on the `productSku` document the live queries
+ * load for the business code, so carrying them costs no extra read. The shared
+ * demo is the caller that needs them: it names most SKUs from a client story
+ * fixture, but a SKU created at the register — POS quick add — exists only in
+ * the store's real rows, and this is the only place its name can come from.
+ *
+ * `unitCostMinor` is null when the SKU carries no cost basis, which is exactly
+ * the quick-add case: the register captures a price, never a cost. Reports
+ * already model that as uncosted revenue rather than as zero margin.
+ */
+export type ReportLiveSkuIdentity = {
+  displayName: string;
+  netPriceMinor: number;
+  /** Owning product, for linking out to the product detail page. */
+  productId: string;
+  quantityAvailable: number;
+  /** Business code, or `null` when the SKU carries none. */
+  sku: string | null;
+  unitCostMinor: number | null;
+};
+
+/** One row of `reports/liveDay:listLiveSkuStock`. */
+export type ReportLiveSkuStockRow = {
+  identity: ReportLiveSkuIdentity;
+  productSkuId: string;
+  /** Business code, or `null` when the SKU carries none. */
+  sku: string | null;
 };
 
 export type ReportDayRow = ReportDayMetrics & {

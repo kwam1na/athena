@@ -83,6 +83,18 @@ const weeklyLineage = v.object({
   scheduleVersionId: v.union(v.id("storeSchedule"), v.null()),
   dayStatus: v.union(dayStatus, v.null()),
   dayAvailable: v.boolean(),
+  /**
+   * Whether this date has an EOD close on record — `closeVarianceMinor` being
+   * present on the day, the same evidence `computeWeeklyVariancePosture`
+   * counts. Deliberately NOT derived from `dayStatus`: the sweeper folds a day
+   * to `provisional` on its own, so a non-`open` day may still have no close.
+   *
+   * Optional because rows folded before this field existed carry none, and a
+   * missing value means "unknown", never "not closed" — see
+   * `lastClosedScheduledDate` in `reports/queries.ts`, which falls back to the
+   * old behaviour rather than mistaking a legacy row for an unclosed week.
+   */
+  dayClosed: v.optional(v.boolean()),
   activityPosture: v.union(
     v.literal("recorded"),
     v.literal("zero_activity"),
@@ -369,6 +381,18 @@ export const reportDaySchema = v.object({
   closeAcceptedAt: v.optional(v.number()),
   closeVarianceMinor: v.optional(v.number()),
   postCloseNetSalesDeltaMinor: v.optional(v.number()),
+  /**
+   * Completed POS transactions the close settled, recorded by the fold so a
+   * period read can sum basket-size evidence without reopening every close.
+   *
+   * Optional: absent on an unclosed day, and on any day folded before version
+   * 5. Absent means UNKNOWN, never zero — a closed day with no sales stores 0.
+   * `REPORTS_FOLD_VERSION` 5 + `foldVersionRepair` is what backfills history.
+   * Not 4: that version stamped days without persisting this field, because
+   * `foldAndReplaceDay` writes an explicit document rather than spreading the
+   * fold result. See the version history in `shared/reportsContract.ts`.
+   */
+  transactionCount: v.optional(v.number()),
 
   /** Unset while the day is open (incrementally maintained, provisional). */
   foldedAt: v.optional(v.number()),
@@ -413,6 +437,11 @@ const periodSnapshot = v.object({
   ...dayMetrics,
   dayCount: v.number(),
   unsettledDayCount: v.number(),
+  // Settled transaction evidence and the days it actually covers. Both
+  // optional while existing singletons are refreshed by the sweeper; the pair
+  // is meaningless apart, so reads treat either being absent as unknown.
+  transactionCount: v.optional(v.number()),
+  transactionCoveredDayCount: v.optional(v.number()),
 });
 
 /** Singleton per store. The dashboard subscribes to THIS DOC ONLY. */

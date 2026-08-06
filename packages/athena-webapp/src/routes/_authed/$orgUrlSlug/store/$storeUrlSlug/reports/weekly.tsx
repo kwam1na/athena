@@ -15,6 +15,10 @@ import {
   resetUnitsSheetContextSearch,
   unitsSheetFocusSearchValue,
 } from "@/components/reports/reportRouteSearch";
+import {
+  decodeSheetReturn,
+  encodeSheetReturn,
+} from "@/lib/sheetReturn";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import {
   useReportsSharedDemoMode,
@@ -143,7 +147,12 @@ export const Route = createFileRoute(
 
 export function ReportsWeeklyRoute() {
   const search = Route.useSearch();
-  const unitsSheetFocus = parseUnitsSheetFocusSearch(search.unitsFocus);
+  // One shared param for the whole app (`lib/sheetReturn`); the focus key
+  // inside it is this sheet's own vocabulary.
+  const unitsSheetReturn = decodeSheetReturn(search.sheetReturn);
+  const unitsSheetFocus = parseUnitsSheetFocusSearch(
+    unitsSheetReturn?.focusKey,
+  );
   const navigate = Route.useNavigate();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
   const prefersReducedMotion = useReducedMotion();
@@ -451,11 +460,7 @@ export function ReportsWeeklyRoute() {
             onUnitsSheetRestoreComplete={() =>
               void navigate({
                 replace: true,
-                search: (current) => ({
-                  ...current,
-                  unitsFocus: undefined,
-                  unitsScroll: undefined,
-                }),
+                search: (current) => ({ ...current, sheetReturn: undefined }),
               })
             }
             onUnitsSheetSkuLinkNavigate={({
@@ -479,11 +484,13 @@ export function ReportsWeeklyRoute() {
                   replace: true,
                   search: (current) => ({
                     ...current,
-                    unitsFocus: unitsSheetFocusSearchValue(
-                      productSkuId,
-                      focusSurface,
-                    ),
-                    unitsScroll,
+                    sheetReturn: encodeSheetReturn({
+                      focusKey: unitsSheetFocusSearchValue(
+                        productSkuId,
+                        focusSurface,
+                      ),
+                      scrollOffset: unitsScroll,
+                    }),
                   }),
                 }),
               ).then(() =>
@@ -512,7 +519,7 @@ export function ReportsWeeklyRoute() {
             unitsSheetPage={search.unitsPage ?? 1}
             unitsSheetRestoreFocusSkuId={unitsSheetFocus.productSkuId}
             unitsSheetRestoreFocusSurface={unitsSheetFocus.surface}
-            unitsSheetRestoreScrollOffset={search.unitsScroll}
+            unitsSheetRestoreScrollOffset={unitsSheetReturn?.scrollOffset}
             unitsSheetTab={search.unitsTab ?? "top"}
           />
         ) : (

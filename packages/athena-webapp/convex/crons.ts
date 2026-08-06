@@ -3,10 +3,40 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
-crons.hourly(
-  "shared-demo-hourly-restore",
-  { minuteUTC: 0 },
-  (internal as any).sharedDemo.scheduledRestore.runHourlyRestore,
+/**
+ * The shared demo returns to its baseline once a day, at midnight.
+ *
+ * Midnight UTC IS the demo store's midnight: it runs `Africa/Accra`
+ * (`DEFAULT_STORE_TIMEZONE` in `reports/operatingDay.ts`), which is UTC+0 all
+ * year with no daylight saving. That alignment is the point rather than a
+ * coincidence — the reset now lands on the same boundary the operating day
+ * rolls over on, so a visitor never sees the baseline restored partway through
+ * a trading day they were reading. A demo store in another zone would need
+ * this hour moved to match its own midnight.
+ */
+crons.cron(
+  "shared-demo-daily-restore",
+  "0 0 * * *",
+  (internal as any).sharedDemo.scheduledRestore.runDailyRestore,
+  {},
+);
+
+/**
+ * The lockout self-heal, kept on the OLD hourly rhythm on purpose.
+ *
+ * Admission rejects every visitor while the persisted `baselineVersion` trails
+ * the constant in code. `scripts/deploy-vps.sh` migrates it right after
+ * `convex deploy`, but if that step fails the demo stays locked until a
+ * scheduled run repairs it — and waiting for midnight could mean a full day.
+ *
+ * This job only PROVISIONS: idempotent, non-destructive, and it begins no
+ * restore lease, so it never wipes a visitor's activity. That separation is
+ * what lets the reset move to midnight without lengthening the recovery time.
+ */
+crons.cron(
+  "shared-demo-hourly-provision-heal",
+  "0 * * * *",
+  (internal as any).sharedDemo.scheduledRestore.runHourlyProvisionHeal,
   {},
 );
 

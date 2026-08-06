@@ -86,8 +86,8 @@ export function SharedDemoOwnerHome({ routes }: { routes: SharedDemoRoutes }) {
           </h2>
           <p className="mt-layout-xs max-w-xl text-sm leading-6 text-muted-foreground">
             This is a shared demo. Everyone explores the same store at once, so
-            activity you didn&apos;t create may appear, and changes reset at the
-            top of each hour.
+            activity you didn&apos;t create may appear, and changes reset daily
+            at midnight GMT.
           </p>
         </div>
         <ul className="flex flex-wrap gap-x-layout-lg gap-y-layout-sm md:justify-end">
