@@ -28,7 +28,7 @@ export function SharedDemoStatusBar({
       <AnimatePresence>
         {!isOwnerHome ? (
           <motion.span
-            key="shared-demo-hourly-reset-guidance"
+            key="shared-demo-reset-guidance"
             animate={{ opacity: 1, y: 0 }}
             className="hidden items-center gap-layout-xs whitespace-nowrap text-xs font-medium text-muted-foreground xl:inline-flex"
             exit={{ opacity: 0, y: shouldReduceMotion ? 0 : 4 }}
@@ -38,7 +38,13 @@ export function SharedDemoStatusBar({
               ease: [0.23, 1, 0.32, 1],
             }}
           >
-            Demo resets at the start of every hour
+            {/*
+              The zone is named because visitors read this from everywhere,
+              and "midnight" alone would mean a different moment to each of
+              them. GMT is the demo store's own zone (Africa/Accra), which is
+              the midnight the reset actually lands on.
+            */}
+            Demo resets daily at midnight GMT
           </motion.span>
         ) : null}
       </AnimatePresence>

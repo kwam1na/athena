@@ -31,7 +31,7 @@ export type RestoreState = {
   idempotencyKey?: string;
   phase?: "leased" | "applied";
   restoredDocuments?: number;
-  restoreSource?: "hourly" | "manual";
+  restoreSource?: "daily" | "hourly" | "manual";
   startedAt?: number;
   status: "ready" | "restoring" | "failed";
 };
@@ -41,7 +41,7 @@ export const SHARED_DEMO_RESTORE_FAILURE_CODE = "baseline_restore_failed";
 type RestoreLeaseArgs = {
   epoch: number;
   idempotencyKey: string;
-  source: "hourly" | "manual";
+  source: "daily" | "hourly" | "manual";
   storeId: Id<"store">;
 };
 
@@ -118,7 +118,7 @@ export function completeRestore(
   };
 }
 
-const restoreSource = v.union(v.literal("hourly"), v.literal("manual"));
+const restoreSource = v.union(v.literal("daily"), v.literal("hourly"), v.literal("manual"));
 
 async function applyBaselineDocumentsWithCtx(
   ctx: MutationCtx,
@@ -215,7 +215,7 @@ export async function beginRestoreLeaseWithCtx(
     cleanupTerminalId?: Id<"posTerminal">;
     idempotencyKey: string;
     now?: number;
-    source: "hourly" | "manual";
+    source: "daily" | "hourly" | "manual";
     storeId: Id<"store">;
   },
 ) {

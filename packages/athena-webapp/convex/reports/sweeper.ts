@@ -8,6 +8,7 @@ import {
   normalizeCurrencyCode,
 } from "../../shared/reportsContract";
 import { foldDay } from "./foldDay";
+import { transactionCountFromCloseSummary } from "./transactionCounts";
 import { computeRange } from "./customRange";
 import { MOVEMENT_RANGE_SNAPSHOT_KIND } from "./skuMovementRange";
 import { MIX_RANGE_SNAPSHOT_KIND } from "./skuMixRange";
@@ -234,6 +235,8 @@ export function toCloseRef(close: Doc<"dailyClose">): CloseRef {
     closeId: String(close._id),
     acceptedAt: close.completedAt ?? close.updatedAt,
     closeNetSalesMinor,
+    // Free: the summary is already in hand for the net-sales figure above.
+    transactionCount: transactionCountFromCloseSummary(summary),
   };
 }
 
@@ -416,6 +419,7 @@ export async function foldAndReplaceDay(
     closeAcceptedAt: closeRef?.acceptedAt,
     closeVarianceMinor: result.day.closeVarianceMinor,
     postCloseNetSalesDeltaMinor: result.day.postCloseNetSalesDeltaMinor,
+    transactionCount: result.day.transactionCount,
     foldedAt: now,
     foldVersion: REPORTS_FOLD_VERSION,
     certifiedFoldRevision,

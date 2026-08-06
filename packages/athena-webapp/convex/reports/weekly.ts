@@ -218,6 +218,10 @@ export function foldWeekFromDays(args: {
         scheduleVersionId: date.scheduleVersionId,
         dayStatus: day?.status ?? null,
         dayAvailable: day !== undefined,
+        // The same close evidence `computeWeeklyVariancePosture` counts. A
+        // date with no day row has no close, which is a known false rather
+        // than an unknown.
+        dayClosed: day?.closeVarianceMinor !== undefined,
         activityPosture:
           day === undefined || day.factCount === 0
             ? "zero_activity"

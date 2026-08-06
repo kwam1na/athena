@@ -888,6 +888,91 @@ describe("listPeriodSkus", () => {
     expect(result.isTodayInProgress).toBe(false);
   });
 
+  it("prefers the count stored on the day over re-reading its close", async () => {
+    // The fold already resolved close-vs-derived and wrote the answer onto the
+    // day, so a period read costs no close read and no fact scan. The close
+    // summary here deliberately DISAGREES: if it won, the total would be 3.
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t);
+    await t.run(async (ctx) => {
+      const closeId = await ctx.db.insert("dailyClose", {
+        storeId,
+        organizationId,
+        operatingDate: "2026-07-28",
+        status: "completed",
+        isCurrent: true,
+        readiness: {
+          status: "ready",
+          blockerCount: 0,
+          reviewCount: 0,
+          carryForwardCount: 0,
+          readyCount: 0,
+        },
+        summary: { transactionCount: 3 },
+        sourceSubjects: [],
+        carryForwardWorkItemIds: [],
+        createdAt: 1,
+        updatedAt: 1,
+        completedAt: 1,
+      });
+      await ctx.db.insert("reportDay", {
+        storeId,
+        operatingDate: "2026-07-28",
+        currency: "GHS",
+        status: "reconciled",
+        ...dayMetrics({ unitsSold: 10 }),
+        closeId,
+        foldVersion: 1,
+        factCount: 10,
+        lastFactRecordedAt: 1000,
+        flags: dayFlags,
+        transactionCount: 9,
+      });
+    });
+
+    const result = await t.run((ctx) =>
+      handlerOf(listPeriodSkus)(ctx, {
+        storeId,
+        periodKey: "d:2026-07-28",
+        sortBy: "revenue",
+      }),
+    );
+
+    expect(result.totalTransactions).toBe(9);
+  });
+
+  it("counts an unclosed day from its stored count, without scanning facts", async () => {
+    // An open day has no close at all. Ingest maintains the count per sale, so
+    // the read is answered from the day row rather than by walking its facts.
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("reportDay", {
+        storeId,
+        operatingDate: "2026-07-28",
+        currency: "GHS",
+        status: "open",
+        ...dayMetrics({ unitsSold: 10 }),
+        foldVersion: 1,
+        factCount: 0,
+        lastFactRecordedAt: 1000,
+        flags: dayFlags,
+        transactionCount: 4,
+      });
+    });
+
+    const result = await t.run((ctx) =>
+      handlerOf(listPeriodSkus)(ctx, {
+        storeId,
+        periodKey: "d:2026-07-28",
+        sortBy: "revenue",
+      }),
+    );
+
+    // Four, not zero: no facts exist for this day, so a fact scan would say 0.
+    expect(result.totalTransactions).toBe(4);
+  });
+
   it("returns prior day, week, and month totals for metric comparisons", async () => {
     const t = convexTest(schema, modules);
     const { organizationId, storeId } = await seedStore(t);
@@ -1919,6 +2004,171 @@ describe("weekly projection reads", () => {
         to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
         search: { workType: "synced_sale_inventory_review" },
       },
+    });
+  });
+
+  describe("weekly EOD review route", () => {
+    // The link is labelled "View EOD Review", so it must name a date whose
+    // review exists. The final SCHEDULED date routinely does not: mid-week it
+    // is a day that has not happened, and the latest day on record is today,
+    // still open.
+    const closedDay = (localDate: string) => ({
+      localDate,
+      included: true,
+      scheduleVersionId: null,
+      dayStatus: "reconciled" as const,
+      dayAvailable: true,
+      dayClosed: true,
+      activityPosture: "recorded" as const,
+    });
+    const unclosedDay = (
+      localDate: string,
+      dayStatus: "open" | "provisional" | null = "open",
+    ) => ({
+      localDate,
+      included: true,
+      scheduleVersionId: null,
+      dayStatus,
+      dayAvailable: dayStatus !== null,
+      dayClosed: false,
+      activityPosture: "recorded" as const,
+    });
+
+    async function ownerRoutesFor(
+      scheduleLineage: Array<Record<string, unknown>>,
+    ) {
+      const t = convexTest(schema, modules);
+      const { storeId } = await seedStore(t);
+      await t.run((ctx) =>
+        ctx.db.insert("reportWeekCurrent", {
+          storeId,
+          cycleStartDate: "2026-07-27",
+          cycleEndDate: "2026-08-02",
+          currency: "GHS",
+          metricVersion: 1,
+          materializedAt: 1_100,
+          included: weeklyMetrics,
+          outsideSchedule: weeklyMetrics,
+          scheduleLineage: scheduleLineage as never,
+          completeness: weeklyCompleteness,
+          lifecyclePosture: "live",
+          amendmentPosture: "none",
+        }),
+      );
+      const result = await t.run((ctx) =>
+        handlerOf(getActiveWeeklyBriefing)(ctx, { storeId }),
+      );
+      if (result.status !== "available") throw new Error("Expected a week.");
+      return result.current.ownerRoutes;
+    }
+
+    it("names the last closed day, not the last scheduled one", async () => {
+      const routes = await ownerRoutesFor([
+        closedDay("2026-07-27"),
+        closedDay("2026-07-28"),
+        unclosedDay("2026-07-29"),
+        unclosedDay("2026-07-30", null),
+      ]);
+
+      expect(routes.dailyClose).toEqual({
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+        search: { operatingDate: "2026-07-28" },
+      });
+    });
+
+    it("does not treat a day that merely left `open` as closed", async () => {
+      // The sweeper folds a day to `provisional` on its own, with no close
+      // performed — which is exactly why this reads `dayClosed` rather than
+      // testing `dayStatus !== "open"`.
+      const routes = await ownerRoutesFor([
+        closedDay("2026-07-27"),
+        unclosedDay("2026-07-28", "provisional"),
+      ]);
+
+      expect(routes.dailyClose).toEqual({
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+        search: { operatingDate: "2026-07-27" },
+      });
+    });
+
+    it("omits the route when the week has no closed day", async () => {
+      const routes = await ownerRoutesFor([
+        unclosedDay("2026-07-27"),
+        unclosedDay("2026-07-28"),
+      ]);
+
+      expect(routes.dailyClose).toBeNull();
+      // The rest of the owner routes are unaffected.
+      expect(routes.cashControls).toEqual({
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls",
+      });
+    });
+
+    it("skips a closed date that is not on the schedule", async () => {
+      const routes = await ownerRoutesFor([
+        closedDay("2026-07-27"),
+        { ...closedDay("2026-08-02"), included: false },
+      ]);
+
+      expect(routes.dailyClose).toEqual({
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+        search: { operatingDate: "2026-07-27" },
+      });
+    });
+
+    describe("a lineage folded before `dayClosed` existed", () => {
+      // These are the majority until every week is rebuilt: a week only
+      // refolds when marked dirty, and an accepted one never does. So the
+      // fallback approximates closure from `dayStatus` rather than reverting
+      // to the final scheduled date, which is routinely a day that has not
+      // happened at all.
+      const legacy = (
+        localDate: string,
+        dayStatus: "open" | "reconciled" | null = "reconciled",
+      ) => {
+        const { dayClosed: _dayClosed, ...rest } = closedDay(localDate);
+        return { ...rest, dayStatus, dayAvailable: dayStatus !== null };
+      };
+
+      it("approximates the last closed day from `dayStatus`", async () => {
+        // The shape this bug was reported on: two reconciled days, today
+        // open, and three scheduled days that have not happened.
+        const routes = await ownerRoutesFor([
+          legacy("2026-07-27"),
+          legacy("2026-07-28"),
+          legacy("2026-07-29", "open"),
+          legacy("2026-07-30", null),
+          legacy("2026-07-31", null),
+        ]);
+
+        expect(routes.dailyClose).toEqual({
+          to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+          search: { operatingDate: "2026-07-28" },
+        });
+      });
+
+      it("omits the route when no scheduled day has left `open`", async () => {
+        const routes = await ownerRoutesFor([
+          legacy("2026-07-27", "open"),
+          legacy("2026-07-28", null),
+        ]);
+
+        expect(routes.dailyClose).toBeNull();
+      });
+
+      it("prefers the exact field the moment any entry carries it", async () => {
+        // A refolded row must not be read through the approximation: here
+        // `dayStatus` would say 07-28, but the recorded truth is 07-27.
+        const routes = await ownerRoutesFor([
+          closedDay("2026-07-27"),
+          { ...legacy("2026-07-28"), dayClosed: false },
+        ]);
+
+        expect(routes.dailyClose).toEqual({
+          to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+          search: { operatingDate: "2026-07-27" },
+        });
+      });
     });
   });
 

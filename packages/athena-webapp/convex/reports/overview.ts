@@ -55,7 +55,13 @@ const ZERO_METRICS: ReportDayMetrics = {
 };
 
 export function emptySnapshot(): ReportPeriodSnapshot {
-  return { ...ZERO_METRICS, dayCount: 0, unsettledDayCount: 0 };
+  return {
+    ...ZERO_METRICS,
+    dayCount: 0,
+    unsettledDayCount: 0,
+    transactionCount: 0,
+    transactionCoveredDayCount: 0,
+  };
 }
 
 /** A day whose numbers can still move: mid-flight or not yet reconciled. */
@@ -68,6 +74,12 @@ function isUnsettled(status: Doc<"reportDay">["status"]): boolean {
  *
  * `grossProfitMinor` is null when ANY contributing day lacks a cost basis —
  * a partial sum would read as a real margin.
+ *
+ * `transactionCount` sums only days that carry one, and
+ * `transactionCoveredDayCount` records how many those were. The pair is what
+ * lets a reader tell a real whole-period total from one missing today: the
+ * count is settled at close, while every other metric here moves with the
+ * facts. Summing it alone would quietly under-report.
  */
 export function snapshotForDays(
   days: readonly Doc<"reportDay">[],
@@ -91,6 +103,12 @@ export function snapshotForDays(
         : grossProfit + day.grossProfitMinor;
     snapshot.dayCount += 1;
     if (isUnsettled(day.status)) snapshot.unsettledDayCount += 1;
+    if (day.transactionCount !== undefined) {
+      snapshot.transactionCount = (snapshot.transactionCount ?? 0) +
+        day.transactionCount;
+      snapshot.transactionCoveredDayCount =
+        (snapshot.transactionCoveredDayCount ?? 0) + 1;
+    }
   }
 
   snapshot.grossProfitMinor = grossProfit;

@@ -85,7 +85,7 @@ import { ReportsOverviewView } from "./ReportsOverviewView";
 import type { ReportOverviewWindow } from "./reportPeriodKeys";
 
 function snapshot(overrides: Partial<ReportOverviewData["today"]> = {}) {
-  return {
+  const merged = {
     grossSalesMinor: 100_00,
     netSalesMinor: 90_00,
     refundsMinor: 10_00,
@@ -98,7 +98,16 @@ function snapshot(overrides: Partial<ReportOverviewData["today"]> = {}) {
     paymentAllocatedMinor: 90_00,
     dayCount: 1,
     unsettledDayCount: 0,
+    transactionCount: 5,
     ...overrides,
+  };
+  return {
+    ...merged,
+    // Default to a fully covered window, which is what a store with closed
+    // days actually looks like. `??` so an explicit 0 survives — the partial
+    // and unknown cases are set deliberately by the tests that need them.
+    transactionCoveredDayCount:
+      overrides.transactionCoveredDayCount ?? merged.dayCount,
   };
 }
 
@@ -272,8 +281,11 @@ describe("ReportsOverviewView", () => {
       screen.queryByText("Net sales — last 30 days"),
     ).not.toBeInTheDocument();
     expect(screen.getByText("+13%")).toBeInTheDocument();
-    expect(screen.getByText("+50%")).toBeInTheDocument();
-    expect(screen.getAllByText("vs yesterday")).toHaveLength(4);
+    // Twice: units sold and units per sale. Transaction count is flat between
+    // the two days, so the basket moves exactly with units — the arithmetic
+    // the Transactions tile now makes visible instead of leaving to inference.
+    expect(screen.getAllByText("+50%")).toHaveLength(2);
+    expect(screen.getAllByText("vs yesterday")).toHaveLength(5);
 
     await user.click(screen.getByRole("tab", { name: "Week to date" }));
     expect(screen.getByText("$400")).toBeInTheDocument();
@@ -392,7 +404,13 @@ describe("ReportsOverviewView", () => {
     };
     renderOverview("today", overview);
 
-    const metricLabels = ["Net sales", "Units sold", "Gross profit", "Refunds"];
+    const metricLabels = [
+      "Net sales",
+      "Units sold",
+      "Transactions",
+      "Units per sale",
+      "Gross profit",
+    ];
     const expectAnimatedMetrics = (comparisonLabel: string) => {
       for (const label of metricLabels) {
         const metricLabel = screen
@@ -406,7 +424,7 @@ describe("ReportsOverviewView", () => {
       }
       expect(
         screen.getAllByText(new RegExp(comparisonLabel, "i")),
-      ).toHaveLength(4);
+      ).toHaveLength(5);
     };
 
     expectAnimatedMetrics("yesterday");
@@ -607,4 +625,128 @@ describe("ReportsOverviewView", () => {
     renderOverview("today", null);
     expect(screen.getByText("No report data yet")).toBeInTheDocument();
   });
+
+  describe("units per sale", () => {
+    // The tile spans a seam: units come from facts as they land, the
+    // transaction count only from a register close. It states a basket only
+    // when the count covers every day the units came from.
+    it("shows the count beside the ratio it divides by", () => {
+      // The point of the tile: units sold and units per sale are both on
+      // screen, so the denominator between them is readable rather than
+      // something the owner has to infer by dividing backwards.
+      renderOverview("today", {
+        ...fixture,
+        today: snapshot({ dayCount: 1, transactionCount: 4, unitsSold: 12 }),
+      });
+
+      expect(
+        screen.getByTestId("overview-transactions-number"),
+      ).toHaveAttribute("data-value", "4");
+      expect(
+        screen.getByTestId("overview-units-sold-number"),
+      ).toHaveAttribute("data-value", "12");
+      expect(
+        screen.getByTestId("overview-units-per-sale-number"),
+      ).toHaveAttribute("data-value", "3.0");
+    });
+
+    it("withholds the count and the ratio together on partial coverage", () => {
+      // Never one without the other: a confident count beside a withheld
+      // ratio derived from it would read as a bug rather than as a rule.
+      renderOverview("weekToDate", {
+        ...fixture,
+        weekToDate: snapshot({
+          dayCount: 5,
+          transactionCount: 40,
+          transactionCoveredDayCount: 4,
+          unitsSold: 120,
+        }),
+      });
+
+      expect(
+        screen.queryByTestId("overview-transactions-number"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("overview-units-per-sale-number"),
+      ).not.toBeInTheDocument();
+      expect(screen.getAllByText("4 of 5 days closed")).toHaveLength(2);
+    });
+
+    it("keeps the transactions link on the tile it describes", () => {
+      renderOverview();
+
+      const link = screen.getByRole("link", { name: "Open transactions" });
+      const card = link.closest("div.rounded-lg");
+      expect(card?.textContent).toContain("Transactions");
+      expect(card?.textContent).not.toContain("Net sales");
+    });
+
+    it("states the basket when every day in the window is closed", () => {
+      renderOverview("today", {
+        ...fixture,
+        today: snapshot({
+          dayCount: 1,
+          transactionCount: 5,
+          transactionCoveredDayCount: 1,
+          unitsSold: 12,
+        }),
+      });
+
+      expect(
+        screen.getByTestId("overview-units-per-sale-number"),
+      ).toHaveAttribute("data-value", "2.4");
+    });
+
+    it("withholds the basket on an open day and says why", () => {
+      // The default view. A number here would divide today's units by a count
+      // the close has not settled yet.
+      renderOverview("today", {
+        ...fixture,
+        today: snapshot({
+          dayCount: 1,
+          transactionCount: 0,
+          transactionCoveredDayCount: 0,
+          unitsSold: 25,
+        }),
+      });
+
+      expect(screen.getByText("Units per sale")).toBeInTheDocument();
+      // On BOTH tiles: the count and the ratio derived from it share one
+      // coverage rule, so they withhold together or not at all.
+      expect(screen.getAllByText("Available after close")).toHaveLength(2);
+      expect(
+        screen.queryByTestId("overview-units-per-sale-number"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("names how many days are still open across a multi-day window", () => {
+      renderOverview("weekToDate", {
+        ...fixture,
+        weekToDate: snapshot({
+          dayCount: 5,
+          transactionCount: 40,
+          transactionCoveredDayCount: 4,
+          unitsSold: 120,
+        }),
+      });
+
+      expect(screen.getAllByText("4 of 5 days closed")).toHaveLength(2);
+    });
+
+    it("withholds rather than guessing on a snapshot with no coverage fields", () => {
+      // A singleton written before the fields existed knows nothing about
+      // closes; it must not divide by an implied zero.
+      renderOverview("today", {
+        ...fixture,
+        today: {
+          ...snapshot({ dayCount: 1, unitsSold: 25 }),
+          transactionCount: undefined,
+          transactionCoveredDayCount: undefined,
+        },
+      });
+
+      expect(screen.getAllByText("Awaiting close")).toHaveLength(2);
+    });
+  });
+
 });

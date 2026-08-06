@@ -8,6 +8,7 @@ import {
   toSharedDemoLiveReportsDay,
   toSharedDemoLiveSkuStock,
   type SharedDemoLiveReportsDay,
+  type SharedDemoLiveSkuEntry,
 } from "@/components/shared-demo/sharedDemoLiveReportsDay";
 
 /**
@@ -63,7 +64,7 @@ export function useReportsSharedDemoMode(): {
  */
 export function useSharedDemoLiveReportsDay(): {
   liveDay: SharedDemoLiveReportsDay | null;
-  liveStock: Map<string, number> | null;
+  liveStock: Map<string, SharedDemoLiveSkuEntry> | null;
   today: string;
 } {
   const sharedDemoContext = useSharedDemoContext();

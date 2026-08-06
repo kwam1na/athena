@@ -859,7 +859,7 @@ async function migrateSharedDemoStoryWithCtx(
 // outside SHARED_DEMO_MUTABLE_TABLES on purpose, so a store that loses it never
 // gets it back. The seeded register session keeps a terminalId that resolves to
 // nothing, its name disappears from every register-identity surface, and the
-// hourly restore re-asserts the dead id from the frozen baseline document. Both
+// scheduled restore re-asserts the dead id from the frozen baseline document. Both
 // halves have to be repaired: the live row and the captured document.
 export async function ensureSharedDemoSeededTerminalWithCtx(
   ctx: MutationCtx,
@@ -975,7 +975,7 @@ export async function repairSharedDemoSeededTerminalBindingWithCtx(
 
 /**
  * Runs on every provisioning pass, not only on migration, so a store that lost
- * its terminal heals on the next hourly cron instead of needing a version bump.
+ * its terminal heals on the next provisioning pass instead of needing a version bump.
  */
 export async function ensureSharedDemoRegisterFoundationWithCtx(
   ctx: MutationCtx,

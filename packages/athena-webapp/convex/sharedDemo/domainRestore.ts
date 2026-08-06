@@ -11,7 +11,7 @@ import { SHARED_DEMO_BASELINE_VERSION } from "./config";
 
 export const SHARED_DEMO_MUTABLE_TABLES = [
   // Device registration is durable POS foundation, not resettable store data.
-  // Keeping it outside this registry prevents an hourly restore from
+  // Keeping it outside this registry prevents a scheduled restore from
   // invalidating a mounted local-first register.
   { domain: "pos", tableName: "posLocalSyncConflict" },
   { domain: "pos", tableName: "posLocalSyncCursor" },

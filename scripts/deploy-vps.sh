@@ -652,10 +652,14 @@ MESSAGE
 
 # SHARED_DEMO_BASELINE_VERSION lives in code, but admission compares it against
 # the baselineVersion persisted in sharedDemoRestoreState. Only provisioning
-# writes that row, and its only scheduled caller is the top-of-the-hour
-# shared-demo-hourly-restore cron -- so a deploy that bumps the constant locks
-# every visitor out of the demo until the next hour. Run the cron's own
+# writes that row, and its only scheduled caller is the midnight
+# shared-demo-daily-restore cron -- so a deploy that bumps the constant locks
+# every visitor out of the demo until that cron next fires. Run the cron's own
 # implementation here to migrate the row as soon as the new code is live.
+#
+# If this step fails, the shared-demo-hourly-provision-heal cron repairs the row
+# within the hour. That job is provision-only and begins no restore lease, so
+# the recovery stayed hourly when the destructive reset moved to midnight.
 provision_shared_demo_prod() {
   local deployment="$1"
   local node_bin="$2"
@@ -665,7 +669,7 @@ provision_shared_demo_prod() {
   if (
     cd packages/athena-webapp
     PATH="$(dirname "$node_bin"):$PATH" CONVEX_DEPLOYMENT="$deployment" \
-      npx convex run sharedDemo/scheduledRestore:verifyHourlyRestoreNow '{}'
+      npx convex run sharedDemo/scheduledRestore:verifyDailyRestoreNow '{}'
   ); then
     return 0
   fi
@@ -674,10 +678,11 @@ provision_shared_demo_prod() {
 
 WARNING: the Convex deploy succeeded, but shared demo provisioning failed.
 If this deploy changed SHARED_DEMO_BASELINE_VERSION, the demo will reject
-visitors until the baseline row catches up. The shared-demo-hourly-restore cron
-retries at the top of each hour; to retry now:
+visitors until the baseline row catches up. The
+shared-demo-hourly-provision-heal cron repairs this within the hour; to fix it
+now:
 
-  cd packages/athena-webapp && CONVEX_DEPLOYMENT=$deployment npx convex run sharedDemo/scheduledRestore:verifyHourlyRestoreNow '{}'
+  cd packages/athena-webapp && CONVEX_DEPLOYMENT=$deployment npx convex run sharedDemo/scheduledRestore:verifyDailyRestoreNow '{}'
 
 MESSAGE
 }

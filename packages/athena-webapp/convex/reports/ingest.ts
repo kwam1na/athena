@@ -281,6 +281,86 @@ async function findExistingFact(
     .unique();
 }
 
+/**
+ * POS transactions in this batch that ALREADY had facts on record.
+ *
+ * Counting transactions incrementally needs this: a later batch touching a
+ * transaction already counted must not count it twice, and a void must only
+ * decrement a transaction that was counted in the first place. Queried BEFORE
+ * any insert, so the answer describes the day as it was.
+ *
+ * One indexed lookup per distinct transaction — normally exactly one, since a
+ * batch is one completed sale.
+ */
+async function findRecordedPosTransactions(
+  ctx: MutationCtx,
+  storeId: Id<"store">,
+  facts: readonly NewReportFact[],
+): Promise<Set<string>> {
+  const sourceIds = new Set(
+    facts
+      .filter((fact) => fact.sourceDomain === "pos")
+      .map((fact) => fact.sourceId),
+  );
+  const recorded = new Set<string>();
+  for (const sourceId of sourceIds) {
+    const existing = await ctx.db
+      .query("reportFact")
+      .withIndex("by_identity", (q) =>
+        q
+          .eq("storeId", storeId)
+          .eq("sourceDomain", "pos")
+          .eq("sourceId", sourceId),
+      )
+      .first();
+    if (existing) recorded.add(sourceId);
+  }
+  return recorded;
+}
+
+/**
+ * How many completed POS transactions this batch adds to the open day.
+ *
+ * Distinct transactions cannot be summed the way money is — the same
+ * transaction emits facts more than once over its life — so the delta is
+ * computed against what was already on record:
+ *
+ *   - a transaction selling for the first time, not voided in the same batch,
+ *     adds one;
+ *   - a void for a transaction counted earlier removes one;
+ *   - a sale and its void in one batch nets zero, never counted at all;
+ *   - further facts on a transaction already counted change nothing.
+ *
+ * `sourceId` IS the transaction id on a pos-domain fact. Payment facts are
+ * unusable here: one per ALLOCATION, so split tender would double count.
+ */
+function batchTransactionDelta(
+  applied: readonly { fact: NewReportFact }[],
+  alreadyRecorded: ReadonlySet<string>,
+  storeCurrency: string,
+): number {
+  const sold = new Set<string>();
+  const voided = new Set<string>();
+  for (const { fact } of applied) {
+    if (fact.sourceDomain !== "pos") continue;
+    // Foreign-currency facts are excluded from every other metric on this day
+    // and from the fold's own count. Counting them here would make the live
+    // number jump the moment the fold replaced it.
+    if (normalizeCurrencyCode(fact.currency) !== storeCurrency) continue;
+    if (fact.factKind === "sale") sold.add(fact.sourceId);
+    if (fact.factKind === "void") voided.add(fact.sourceId);
+  }
+
+  let delta = 0;
+  for (const sourceId of sold) {
+    if (!alreadyRecorded.has(sourceId) && !voided.has(sourceId)) delta += 1;
+  }
+  for (const sourceId of voided) {
+    if (alreadyRecorded.has(sourceId)) delta -= 1;
+  }
+  return delta;
+}
+
 /** Upsert the (store, day) dirty mark. One row per day; last reason wins. */
 async function markDirty(
   ctx: MutationCtx,
@@ -320,8 +400,15 @@ async function applyToOpenDay(
   operatingDate: string,
   storeCurrency: string,
   applied: { fact: NewReportFact; recordedAt: number }[],
+  alreadyRecordedTransactions: ReadonlySet<string>,
 ): Promise<void> {
   if (applied.length === 0) return;
+
+  const transactionDelta = batchTransactionDelta(
+    applied,
+    alreadyRecordedTransactions,
+    storeCurrency,
+  );
 
   const existing = await ctx.db
     .query("reportDay")
@@ -513,6 +600,20 @@ async function applyToOpenDay(
       : existing.skuDayRowCount + insertedSkuRowCount
     : insertedSkuRowCount;
 
+  /**
+   * Completed transactions on the open day, kept exact between folds.
+   *
+   * Same rule `skuDayRowCount` states above: an existing day that carries no
+   * count stays absent, because the base is unknown and any number written
+   * here would be a guess presented as a measurement. A day opened after this
+   * field landed starts from zero and accumulates honestly.
+   */
+  const transactionCount = existing
+    ? existing.transactionCount === undefined
+      ? undefined
+      : Math.max(0, existing.transactionCount + transactionDelta)
+    : Math.max(0, transactionDelta);
+
   const dayPatch = {
     ...next,
     currency: base.currency,
@@ -520,6 +621,7 @@ async function applyToOpenDay(
     foldVersion: base.foldVersion,
     factCount,
     skuDayRowCount,
+    transactionCount,
     lastFactRecordedAt,
     flags,
     paymentPosture: derivePaymentPosture({
@@ -582,6 +684,13 @@ export async function recordFacts(
     const appliedToCurrentDay: { fact: NewReportFact; recordedAt: number }[] =
       [];
     const lateDates = new Set<string>();
+    // Before any insert: afterwards this batch's own rows would look like
+    // history and every new transaction would read as already counted.
+    const alreadyRecordedTransactions = await findRecordedPosTransactions(
+      ctx,
+      storeId,
+      facts,
+    );
 
     for (const incoming of facts) {
       // Currency is normalised ONCE, here, so the stored code, the fingerprint
@@ -638,6 +747,7 @@ export async function recordFacts(
       currentOperatingDate,
       normalizeCurrencyCode(store.currency),
       appliedToCurrentDay,
+      alreadyRecordedTransactions,
     );
 
     for (const date of lateDates) {

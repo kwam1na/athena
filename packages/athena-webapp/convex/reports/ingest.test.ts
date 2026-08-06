@@ -873,3 +873,148 @@ describe("recordFacts — containment", () => {
     });
   });
 });
+
+describe("recordFacts — open-day transaction count", () => {
+  // Money can be summed per batch; distinct transactions cannot, because the
+  // same transaction emits facts more than once over its life. These pin the
+  // dedupe that makes the live basket-size metric honest.
+  it("counts one transaction however many lines it sold", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { skuId, storeId } = await seed(ctx);
+      await recordFacts(ctx, storeId, [
+        saleFact({ lineId: "line_1", productSkuId: skuId }),
+        saleFact({ lineId: "line_2", productSkuId: skuId }),
+      ]);
+
+      const day = await readDay(ctx, storeId, TODAY);
+      expect(day?.transactionCount).toBe(1);
+    });
+  });
+
+  it("accumulates across separate sales", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { storeId } = await seed(ctx);
+      await recordFacts(ctx, storeId, [saleFact({ sourceId: "txn_1" })]);
+      await recordFacts(ctx, storeId, [saleFact({ sourceId: "txn_2" })]);
+      await recordFacts(ctx, storeId, [saleFact({ sourceId: "txn_3" })]);
+
+      const day = await readDay(ctx, storeId, TODAY);
+      expect(day?.transactionCount).toBe(3);
+    });
+  });
+
+  it("does not count a replayed sale twice", async () => {
+    // The emitter retries; the fact is deduped by identity. The count must be
+    // deduped with it, or a retry inflates the basket denominator.
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { storeId } = await seed(ctx);
+      const fact = saleFact({ sourceId: "txn_1" });
+      await recordFacts(ctx, storeId, [fact]);
+      await recordFacts(ctx, storeId, [fact]);
+
+      const day = await readDay(ctx, storeId, TODAY);
+      expect(day?.transactionCount).toBe(1);
+    });
+  });
+
+  it("does not count a transaction again when a later fact touches it", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { storeId } = await seed(ctx);
+      await recordFacts(ctx, storeId, [
+        saleFact({ lineId: "line_1", sourceId: "txn_1" }),
+      ]);
+      await recordFacts(ctx, storeId, [
+        {
+          ...saleFact({ lineId: "line_1", sourceId: "txn_1" }),
+          factKind: "payment",
+          netAmountMinor: 9_000,
+          quantity: 0,
+        },
+      ]);
+
+      const day = await readDay(ctx, storeId, TODAY);
+      expect(day?.transactionCount).toBe(1);
+    });
+  });
+
+  it("removes a transaction voided after it was counted", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { storeId } = await seed(ctx);
+      await recordFacts(ctx, storeId, [saleFact({ sourceId: "txn_1" })]);
+      await recordFacts(ctx, storeId, [saleFact({ sourceId: "txn_2" })]);
+      await recordFacts(ctx, storeId, [
+        {
+          ...saleFact({ lineId: "line_1", sourceId: "txn_2" }),
+          factKind: "void",
+        },
+      ]);
+
+      const day = await readDay(ctx, storeId, TODAY);
+      expect(day?.transactionCount).toBe(1);
+    });
+  });
+
+  it("never counts a sale voided in the same batch", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { storeId } = await seed(ctx);
+      await recordFacts(ctx, storeId, [
+        saleFact({ lineId: "line_1", sourceId: "txn_1" }),
+        {
+          ...saleFact({ lineId: "line_1", sourceId: "txn_1" }),
+          factKind: "void",
+        },
+      ]);
+
+      const day = await readDay(ctx, storeId, TODAY);
+      expect(day?.transactionCount).toBe(0);
+    });
+  });
+
+  it("excludes a foreign-currency sale, exactly as the fold does", async () => {
+    // Every other metric on the day skips foreign-currency facts, and so does
+    // the fold's own count. Counting one here would make the live number jump
+    // downward the moment the fold replaced it.
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { storeId } = await seed(ctx);
+      await recordFacts(ctx, storeId, [
+        saleFact({ sourceId: "txn_ghs" }),
+        saleFact({ currency: "USD", sourceId: "txn_usd" }),
+      ]);
+
+      const day = await readDay(ctx, storeId, TODAY);
+      expect(day?.transactionCount).toBe(1);
+      expect(day?.flags.mixedCurrency).toBe(true);
+    });
+  });
+
+  it("never goes negative on a void with no counted sale behind it", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { storeId } = await seed(ctx);
+      await recordFacts(ctx, storeId, [
+        {
+          ...saleFact({ lineId: "line_1", sourceId: "txn_orphan" }),
+          factKind: "void",
+        },
+      ]);
+
+      const day = await readDay(ctx, storeId, TODAY);
+      expect(day?.transactionCount).toBe(0);
+    });
+  });
+});

@@ -22,6 +22,7 @@ import {
 } from "../../shared/reportsContract";
 import type {
   ReportDayRow,
+  ReportDayStatus,
   ReportOverviewData,
   ReportPeriodKey,
   ReportRangeSummary,
@@ -249,14 +250,48 @@ function weeklyAmendmentProjection(
   };
 }
 
-function finalScheduledDate(
-  scheduleLineage: {
-    included: boolean;
-    localDate: string;
-  }[],
+type OwnerRouteLineage = {
+  dayClosed?: boolean;
+  dayStatus?: ReportDayStatus | null;
+  included: boolean;
+  localDate: string;
+};
+
+/**
+ * The most recent scheduled date whose EOD review actually exists.
+ *
+ * The link is labelled "View EOD Review", so it has to name a date that HAS
+ * one. The final scheduled date of the week frequently does not: on a live week
+ * it is often today, still open, or a scheduled day nobody closed — and sending
+ * an owner there lands them on a review that was never performed.
+ *
+ * Returns null when the week has no closed day at all; the weekly view already
+ * omits the link rather than rendering a dead one.
+ *
+ * A lineage with NO `dayClosed` anywhere is a row folded before that field
+ * existed, and those are the majority until every week is next rebuilt — a week
+ * only refolds when it is marked dirty, and an accepted one never does. So the
+ * fallback has to be good, not merely safe: it approximates closure with
+ * `dayStatus`, taking the last scheduled day that has left `open` and is on
+ * record.
+ *
+ * That approximation is why `dayClosed` exists — the sweeper folds a day to
+ * `provisional` on its own, so a non-`open` day may have no close — but it is
+ * strictly better than the final scheduled date it replaced, which is routinely
+ * a day that has not happened at all. Refolded rows get the exact answer.
+ */
+function lastClosedScheduledDate(
+  scheduleLineage: OwnerRouteLineage[],
 ): string | null {
+  const scheduled = scheduleLineage.filter((date) => date.included);
+  const knowsClosure = scheduled.some((date) => date.dayClosed !== undefined);
+  if (knowsClosure) {
+    return scheduled.filter((date) => date.dayClosed).at(-1)?.localDate ?? null;
+  }
   return (
-    scheduleLineage.filter((date) => date.included).at(-1)?.localDate ?? null
+    scheduled
+      .filter((date) => date.dayStatus != null && date.dayStatus !== "open")
+      .at(-1)?.localDate ?? null
   );
 }
 
@@ -264,9 +299,9 @@ function weeklyOwnerRoutes(args: {
   cycleEndDate: string;
   cycleStartDate: string;
   historical: boolean;
-  scheduleLineage: { included: boolean; localDate: string }[];
+  scheduleLineage: OwnerRouteLineage[];
 }): ReportWeekOwnerRoutes {
-  const finalDate = finalScheduledDate(args.scheduleLineage);
+  const closedDate = lastClosedScheduledDate(args.scheduleLineage);
   return {
     transactions: {
       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions" as const,
@@ -276,17 +311,18 @@ function weeklyOwnerRoutes(args: {
         order: "oldestFirst" as const,
       },
     },
-    // Daily Close owns the final included schedule date, never the calendar
-    // frame end (which can be a closed date).
-    dailyClose: finalDate
+    // Daily Close owns the most recent SCHEDULED date with a close on record —
+    // never the calendar frame end (which can be a closed date), and never a
+    // scheduled date whose review does not exist.
+    dailyClose: closedDate
       ? args.historical
         ? {
             to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history" as const,
-            search: { day: finalDate },
+            search: { day: closedDate },
           }
         : {
             to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close" as const,
-            search: { operatingDate: finalDate },
+            search: { operatingDate: closedDate },
           }
       : null,
     cashControls: {
@@ -1085,6 +1121,19 @@ function decodeCursor(cursor: string): ListPeriodSkusCursor {
  */
 const TIE_BREAK_OVERFETCH = 25;
 
+/**
+ * Distinct completed POS transactions for a day, derived by scanning its facts.
+ *
+ * LEGACY: only days folded before `REPORTS_FOLD_VERSION` 5 reach this, since
+ * every fold since writes the same count onto the day. Kept because a fact
+ * scan is the only way to answer for a day that carries none — and because it
+ * is expensive (up to `ITEMS_UNCLOSED_DAY_FACT_LIMIT` facts, and a throw past
+ * that), which is exactly why the stored count exists.
+ *
+ * The rule here is the authority the fold and the incremental ingest path both
+ * match: distinct `sourceId` over pos-domain sale facts, minus any transaction
+ * that was voided, excluding quarantined and foreign-currency facts.
+ */
 async function livePosTransactionCount(
   ctx: QueryCtx,
   day: Pick<Doc<"reportDay">, "currency" | "operatingDate" | "storeId">,
@@ -1145,21 +1194,31 @@ function priorPeriodDateRange(
   return null;
 }
 
+/**
+ * Completed POS transactions per day, from the day rows already in hand.
+ *
+ * `reportDay.transactionCount` has already resolved this: the fold writes the
+ * close's settled figure when the day has a close, and the fact-derived count
+ * when it does not, while `reports/ingest.ts` maintains it per sale on the
+ * open day. So the common path costs NO close read and NO fact scan — the
+ * days are read for their metrics regardless.
+ *
+ * The fallback below is for days folded before `REPORTS_FOLD_VERSION` 5, which
+ * carry no count. It is the original derivation, kept verbatim so those days
+ * answer exactly as they did until `foldVersionRepair` reaches them — at which
+ * point it becomes dead and can go.
+ */
 async function transactionCountsForDays(
   ctx: QueryCtx,
   days: Doc<"reportDay">[],
 ): Promise<number[]> {
-  const closes = await Promise.all(
-    days.map((day) =>
-      day.closeId
-        ? ctx.db.get("dailyClose", day.closeId)
-        : Promise.resolve(null),
-    ),
-  );
-
   return Promise.all(
-    days.map((day, index) => {
-      const close = closes[index];
+    days.map(async (day) => {
+      if (day.transactionCount !== undefined) return day.transactionCount;
+
+      const close = day.closeId
+        ? await ctx.db.get("dailyClose", day.closeId)
+        : null;
       return close
         ? transactionCountFromCloseSummary(close.summary)
         : livePosTransactionCount(ctx, day);

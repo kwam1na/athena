@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>A number you can check, and a reset that waits for midnight</title>
+</head>
+<body>
+<article
+  data-athena-landed-change-report="v2"
+  data-athena-report-diff-fingerprint="6dbde5fd5709d4b16daecc962e595a0ecf3b1972d904a8b84e62468f48c6a48f"
+  data-athena-report-base="origin/main"
+  data-athena-report-head="worktree-reports-basket-size-demo-cadence"
+>
+  <header data-report-section="header">
+    <h1>A number you can check, and a reset that waits for midnight</h1>
+    <p class="lede">Reports gains <strong>Transactions</strong> and <strong>Units per sale</strong> — a basket size that refuses to state itself until the evidence covers the whole period. Getting there required a fold-version bump to <strong>5</strong>, because version 4 stamped history without persisting the field it added. Alongside it, the shared demo stops wiping visitors every hour and resets once, at midnight.</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch worktree-reports-basket-size-demo-cadence</li>
+      <li>Base origin/main</li>
+      <li>72 files, +5,905 / −2,035</li>
+      <li>Merge gate: pr:athena</li>
+      <li>Schema: 3 optional fields</li>
+      <li>REPORTS_FOLD_VERSION 3 → 5</li>
+      <li>Rollout step required: foldVersionRepair</li>
+    </ul>
+  </header>
+
+  <section data-report-section="summary">
+    <h2>Executive Summary</h2>
+    <div class="panel">
+      <p>Three strands ship together because they share a seam: <em>what a reporting surface is allowed to claim when its evidence is incomplete.</em></p>
+      <ul>
+        <li><strong>Basket size.</strong> <code>reportDay</code> now records how many completed POS transactions a day settled. Periods sum it, and <code>unitsPerTransaction</code> divides units by transactions — but only when every day in the period contributes a count. Otherwise it returns <code>null</code> and the tile says <em>“3 of 7 days closed”</em> rather than a number.</li>
+        <li><strong>A version nobody had seen.</strong> The field first shipped as fold version 4 and was silently dropped on write. Because staleness is <code>foldVersion !== REPORTS_FOLD_VERSION</code>, correcting the write could not reach the days version 4 had already stamped. Version 5 is the same field, actually persisted.</li>
+        <li><strong>Demo reset cadence.</strong> The hourly restore became <code>shared-demo-daily-restore</code> at midnight. A separate <code>shared-demo-hourly-provision-heal</code> keeps the old rhythm for the one thing that genuinely needed it.</li>
+      </ul>
+      <p>A fourth strand is pure extraction: the scroll-and-focus restoration built for the units-moved sheet is now three shared modules, adopted by Daily Operations and Daily Close.</p>
+    </div>
+  </section>
+
+  <section data-report-section="problem">
+    <h2>Problem and Context</h2>
+    <p>Average basket size is a ratio, and a ratio is only as honest as the alignment of its two inputs. In Athena those inputs come from different places at different times:</p>
+    <table>
+      <thead><tr><th>Input</th><th>Source</th><th>When it becomes true</th></tr></thead>
+      <tbody>
+        <tr><td>Units sold</td><td>Folded from <code>reportFact</code> rows</td><td>The instant a sale lands</td></tr>
+        <tr><td>Transaction count</td><td>Settled by the register close</td><td>End of day, at close</td></tr>
+      </tbody>
+    </table>
+    <p>Divide a whole-period numerator by a closed-days-only denominator and the result is not slightly high — on a day still trading it is arbitrarily high, and it renders identically to a real measurement. That is the failure this change is built to make impossible.</p>
+    <p>The second problem was operational. The shared demo reset <strong>every hour, on the hour</strong>. A visitor mid-way through exploring could lose their work to a cron that fired while they were reading. But the hourly rhythm was load-bearing for something else: <code>SHARED_DEMO_BASELINE_VERSION</code> lives in code and is compared against a version persisted in <code>sharedDemoRestoreState</code>, and while the persisted value trails, admission rejects <em>every</em> visitor. The deploy script migrates it, but if that step fails, a scheduled run is the only recovery.</p>
+  </section>
+
+  <section data-report-section="mental-model">
+    <h2>Mental Model</h2>
+    <div class="panel">
+      <p><strong>Absent means unknown, never zero.</strong> Every new field here is <code>v.optional</code>, and every read treats absence as “I cannot answer” rather than “nothing happened”. A closed day with no sales stores <code>0</code>; a day that predates the field stores nothing. Those are different facts and the code never conflates them.</p>
+      <p><strong>Coverage travels with the number.</strong> <code>transactionCount</code> is meaningless without <code>transactionCoveredDayCount</code>, so the pair is written together and read together. Both the Transactions tile and the Units-per-sale tile go through the <em>same</em> helper, <code>settledTransactionCount</code> — because a stated count sitting beside a withheld ratio derived from it would read as a bug.</p>
+      <p><strong>Provisioning and restoring are different risks.</strong> Provisioning is idempotent and touches no visitor data. Restoring wipes it. Once you see them as two jobs rather than one, the cadence question answers itself: the safe half stays hourly, the destructive half moves to midnight.</p>
+    </div>
+  </section>
+
+  <section data-report-section="before-after">
+    <h2>Before and After</h2>
+    <h3>Counting transactions</h3>
+    <p>A transaction cannot be summed the way money is — the same transaction emits facts more than once over its life. Two paths compute it, and they must agree:</p>
+    <table>
+      <thead><tr><th>Path</th><th>Rule</th></tr></thead>
+      <tbody>
+        <tr><td><code>foldDay</code> (whole-day rebuild)</td><td>Walk the facts already in hand; distinct <code>pos</code> <code>sourceId</code>s that sold and were not voided. On a closed day the close’s settled figure wins, falling back to the derived count when the summary carries none.</td></tr>
+        <tr><td><code>ingest</code> (open day, incremental)</td><td>A delta against what was already on record: first sale <code>+1</code>, void of a counted transaction <code>−1</code>, sale-and-void in one batch nets zero, further facts on a counted transaction change nothing.</td></tr>
+      </tbody>
+    </table>
+    <p>Payment facts are unusable for this: they are one per <em>allocation</em>, so split tender would count a single sale twice. <code>sourceId</code> on a <code>pos</code>-domain fact <em>is</em> the transaction id, which makes the count exact and free.</p>
+    <h3>Demo cron topology</h3>
+    <table>
+      <thead><tr><th></th><th>Before</th><th>After</th></tr></thead>
+      <tbody>
+        <tr><td>Reset (destructive)</td><td><code>shared-demo-hourly-restore</code>, hourly</td><td><code>shared-demo-daily-restore</code>, <code>0 0 * * *</code></td></tr>
+        <tr><td>Baseline heal (safe)</td><td>same job, hourly</td><td><code>shared-demo-hourly-provision-heal</code>, hourly</td></tr>
+        <tr><td>Idempotency bucket</td><td><code>hourly:&lt;hour&gt;</code></td><td><code>daily:&lt;UTC day&gt;</code>, exactly one cycle wide</td></tr>
+        <tr><td>Deploy verification</td><td><code>verifyHourlyRestoreNow</code></td><td><code>verifyDailyRestoreNow</code></td></tr>
+      </tbody>
+    </table>
+    <p>Midnight UTC <em>is</em> the demo store’s midnight: it runs <code>Africa/Accra</code>, which is UTC+0 year-round with no daylight saving. The reset now lands on the same boundary the operating day rolls over on, so a visitor never sees the baseline restored partway through a trading day they were reading.</p>
+  </section>
+
+  <section data-report-section="key-files">
+    <h2>Key Files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>shared/reportsContract.ts</code></td><td><code>REPORTS_FOLD_VERSION</code> and its version history, plus <code>settledTransactionCount</code> / <code>unitsPerTransaction</code> — the single coverage rule every read goes through.</td></tr>
+        <tr><td><code>convex/reports/sweeper.ts</code></td><td><code>foldAndReplaceDay</code> builds an <strong>explicit</strong> day document. This is the line that dropped the field under version 4, and the reason any new <code>DayFoldResult</code> field is a two-file edit.</td></tr>
+        <tr><td><code>convex/reports/foldDay.ts</code></td><td>Derives the count from facts; settled-beats-derived on a closed day.</td></tr>
+        <tr><td><code>convex/reports/ingest.ts</code></td><td><code>findRecordedPosTransactions</code> runs <em>before</em> any insert — afterwards the batch’s own rows would look like history.</td></tr>
+        <tr><td><code>convex/reports/overview.ts</code></td><td><code>snapshotForDays</code> increments count and coverage together.</td></tr>
+        <tr><td><code>convex/reports/queries.ts</code></td><td>Reads the persisted count; retains the legacy close/fact-scan path for pre-v5 rows. Also <code>lastClosedScheduledDate</code>.</td></tr>
+        <tr><td><code>convex/crons.ts</code>, <code>convex/sharedDemo/scheduledRestore.ts</code></td><td>The two-job split and the one-cycle-wide idempotency bucket.</td></tr>
+        <tr><td><code>scripts/deploy-vps.sh</code></td><td>Calls <code>verifyDailyRestoreNow</code> after <code>convex deploy</code>; documents the hourly heal as the fallback.</td></tr>
+        <tr><td><code>src/lib/sheetReturn.ts</code>, <code>src/hooks/useSheetReturnPosition.ts</code>, <code>src/hooks/useSheetScrollPreservation.ts</code></td><td>New shared sheet-return mechanism, extracted from the units-moved sheet.</td></tr>
+        <tr><td><code>src/components/reports/ReportPeriodMetrics.tsx</code></td><td>The tile row: Net sales → Units sold → Transactions → Units per sale → Gross profit.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section data-report-section="changes">
+    <h2>What Changed, and What Did Not</h2>
+    <h3>Changed</h3>
+    <ul>
+      <li><strong>Schema:</strong> three optional fields — <code>reportDay.transactionCount</code>, and <code>transactionCount</code> / <code>transactionCoveredDayCount</code> on the period snapshot. Plus <code>dayClosed</code> on weekly lineage.</li>
+      <li><strong>Overview tiles:</strong> Refunds removed; Transactions and Units per sale added. The “Open transactions” link moved off Net sales onto Transactions, beside what it describes.</li>
+      <li><strong>Weekly “View EOD Review” link:</strong> <code>lastClosedScheduledDate</code> replaces <code>finalScheduledDate</code>. The old rule took the last <em>included</em> scheduled date — routinely today, open, never closed — producing a link into a review that never happened.</li>
+      <li><strong>Shared demo:</strong> live SKU identity is carried inline on <code>getLiveOperatingDay</code> and <code>listLiveSkuStock</code>, which is what lets a POS quick-add SKU be named at all. The client-side catalogue-search fixture is deleted; the demo now searches the store’s real catalogue and re-keys results into the story id space.</li>
+      <li><strong>Sheet return:</strong> one <code>sheetReturn</code> search param app-wide, replacing the sheet-specific <code>unitsFocus</code>/<code>unitsScroll</code> pair.</li>
+    </ul>
+    <h3>Deliberately unchanged</h3>
+    <ul>
+      <li><strong>Refunds data is untouched.</strong> <code>refundsMinor</code> remains in the contract, the fold and the snapshot. Only the two tiles were removed — refunds are no longer reachable from the overview and SKU-detail surfaces, which is a presentation decision, not a data one.</li>
+      <li><strong><code>"hourly"</code> is still a valid <code>restoreSource</code>.</strong> Nothing writes it any more; it is retained so historical audit rows continue to validate. A <code>grep hourly</code> will still hit.</li>
+      <li><strong><code>livePosTransactionCount</code> is not dead code.</strong> It remains reachable for day rows folded before version 5 and must not be deleted until the repair has completed everywhere.</li>
+    </ul>
+  </section>
+
+  <section data-report-section="validation">
+    <h2>Validation and Deployment Status</h2>
+    <ul>
+      <li>Full <code>athena-webapp</code> vitest suite on this branch: <strong>690 files, 8,027 tests, all passing</strong> in 166s. Notably this run was clean of the usual load-related <code>waitFor</code> flakes, so no failures needed discounting against the known baseline.</li>
+      <li>Merge gate <code>bun run pr:athena</code> — prepare → preflight → validate → record-proof → scorecard. This includes <code>tsc --noEmit</code>, the Convex audit and changed-file lints, the architecture boundary check, and full coverage.</li>
+      <li><strong>Deployment: pending.</strong> Production deploy is <code>scripts/deploy-vps.sh convex-athena-local</code>, to be run after merge.</li>
+      <li><strong>Root alignment: pending.</strong> The <code>foldVersionRepair</code> run described below is required for the new metric to cover history.</li>
+    </ul>
+    <div class="panel warn">
+      <p><strong>An inaccuracy caught during review and corrected.</strong> The <code>reportDay.transactionCount</code> schema comment credited <em>version 4</em> with backfilling history. Version 4 is precisely the version that did not — it stamped days and persisted nothing. The comment now names version 5 and records why 4 is not it.</p>
+    </div>
+  </section>
+
+  <section data-report-section="guidance">
+    <h2>Operational Guidance</h2>
+    <ul>
+      <li><strong>The repair is a required rollout step, not a cleanup.</strong> Clean days never refold on their own. Without it, the metric only ever covers days closed after the deploy, and every historical period shows partial coverage instead of a basket size.</li>
+      <li>Run <code>reports/foldVersionRepair:markStaleFoldVersionDays</code> per store, for the stores named by the sweep allowlist env var. Confirm with <code>countStaleFoldVersionDays</code> before considering the rollout complete.</li>
+      <li><strong>Adding any field to <code>DayFoldResult</code> is a two-file edit.</strong> The fold result type and the explicit day-document literal in <code>foldAndReplaceDay</code>. Assert on the persisted row, not the fold return value — a fold-level unit test passes happily while the write drops the field.</li>
+      <li><strong>If a version bump has already shipped with a broken write, the fix needs a higher number.</strong> Re-running the repair at the same version is a no-op by construction.</li>
+      <li>If the deploy’s shared-demo provisioning step fails, <code>shared-demo-hourly-provision-heal</code> repairs the baseline row within the hour; the manual command is <code>npx convex run sharedDemo/scheduledRestore:verifyDailyRestoreNow '{}'</code>.</li>
+      <li><strong>The midnight cron is coupled to the demo store’s timezone.</strong> <code>0 0 * * *</code> is correct only while that store is <code>Africa/Accra</code>. Nothing in code enforces this; moving the demo store means moving the cron hour.</li>
+    </ul>
+  </section>
+
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why did <code>REPORTS_FOLD_VERSION</code> go from 3 to 5 with no working version 4?</p>
+        <ol data-quiz-options>
+          <li>Version 4 was reserved for a concurrent branch.</li>
+          <li data-quiz-correct>Version 4 stamped days without persisting the new field, and since staleness is <code>foldVersion !== REPORTS_FOLD_VERSION</code>, those days could only be reclaimed by a version they had not yet seen.</li>
+          <li>Convex requires odd version numbers for schema migrations.</li>
+          <li>Version 4 was rolled back before reaching production.</li>
+        </ol>
+        <p data-quiz-explanation>Once history carries 4, it matches the constant and is invisible to the repair forever. Correcting the write is necessary but not sufficient — the number itself has to move.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What mechanism caused version 4 to drop the field silently?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct><code>foldAndReplaceDay</code> builds an explicit day document field by field rather than spreading the fold result, and the schema field is optional, so an omitted key produces no type error.</li>
+          <li>The Convex validator stripped unknown fields at write time.</li>
+          <li>The sweeper batched writes and lost the last one.</li>
+          <li>The field was declared after the document was constructed.</li>
+        </ol>
+        <p data-quiz-explanation>This is why a fold-level unit test passes while the write drops the field: the fold <em>returns</em> the count correctly. Only an assertion on the persisted row catches it.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does <code>unitsPerTransaction</code> return <code>null</code> instead of dividing when coverage is partial?</p>
+        <ol data-quiz-options>
+          <li>Division by zero risk.</li>
+          <li>Convex queries cannot return floats.</li>
+          <li data-quiz-correct>Units are folded from facts the instant a sale lands while transactions settle only at close, so a whole-period numerator over a closed-days-only denominator overstates the basket — arbitrarily so on a day still trading.</li>
+          <li>The UI has no format for fractional baskets.</li>
+        </ol>
+        <p data-quiz-explanation>A withheld number is recoverable; a confidently wrong one is not. The tile shows the coverage gap instead.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why do the Transactions tile and the Units-per-sale tile read through the same helper?</p>
+        <ol data-quiz-options>
+          <li>To share a memoization cache.</li>
+          <li data-quiz-correct>So they can never disagree about whether the evidence is whole — a stated count beside a withheld ratio derived from it would read as a bug.</li>
+          <li>Because the contract exports only one function.</li>
+          <li>To keep the tiles the same width.</li>
+        </ol>
+        <p data-quiz-explanation>Two independent coverage checks would eventually drift. One rule, two readers.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why can’t payment facts be used to count transactions?</p>
+        <ol data-quiz-options>
+          <li>They are written asynchronously after the sale.</li>
+          <li>They lack a <code>sourceId</code>.</li>
+          <li data-quiz-correct>They are emitted one per <em>allocation</em>, so a split-tender sale would be counted twice.</li>
+          <li>They are quarantined by default.</li>
+        </ol>
+        <p data-quiz-explanation><code>sourceId</code> on a <code>pos</code>-domain fact <em>is</em> the transaction id, which makes that lane exact and free.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>In the incremental ingest path, why is <code>findRecordedPosTransactions</code> queried before any insert?</p>
+        <ol data-quiz-options>
+          <li>To take a write lock on the day row.</li>
+          <li data-quiz-correct>Afterwards the batch’s own newly inserted rows would look like history, so every new transaction would read as already counted.</li>
+          <li>Because Convex forbids reads after writes in a mutation.</li>
+          <li>To warm the index cache.</li>
+        </ol>
+        <p data-quiz-explanation>The query has to describe the day as it was, not as the batch is leaving it.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>An open day already carries no <code>transactionCount</code>. A new batch arrives with one sale. What does ingest write?</p>
+        <ol data-quiz-options>
+          <li><code>1</code> — start counting from here.</li>
+          <li><code>0</code> — the day is not closed.</li>
+          <li data-quiz-correct>Nothing; the field stays absent, because the base is unknown and any number written would be a guess presented as a measurement.</li>
+          <li>It throws, forcing a full refold.</li>
+        </ol>
+        <p data-quiz-explanation>Same rule as <code>skuDayRowCount</code>. A day opened after the field landed starts from zero and accumulates honestly; a pre-existing day waits for the repair.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why did the destructive demo reset move to midnight while a separate job stayed hourly?</p>
+        <ol data-quiz-options>
+          <li>Convex rate-limits daily crons.</li>
+          <li>The restore lease cannot be held for an hour.</li>
+          <li data-quiz-correct>Provisioning is idempotent and begins no restore lease, so it can heal a stale baseline hourly without wiping visitor activity — which is exactly what the cadence change existed to stop.</li>
+          <li>Midnight is the only hour with spare capacity.</li>
+        </ol>
+        <p data-quiz-explanation>While the persisted baseline trails the constant in code, admission rejects every visitor. Splitting the jobs keeps recovery at an hour while the reset becomes daily.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is the idempotency bucket exactly one reset cycle wide?</p>
+        <ol data-quiz-options>
+          <li>To match the Convex scheduler’s retry window.</li>
+          <li data-quiz-correct>Narrower and a retried firing restores a second time; wider and a genuine next-day reset is swallowed as already-done.</li>
+          <li>So audit rows sort chronologically.</li>
+          <li>To keep the key under the index size limit.</li>
+        </ol>
+        <p data-quiz-explanation>Hence <code>daily:&lt;UTC day number&gt;</code> over an 86,400,000 ms cycle.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why was <code>dayClosed</code> added rather than deriving “closed” from <code>dayStatus !== "open"</code>?</p>
+        <ol data-quiz-options>
+          <li><code>dayStatus</code> is not indexed.</li>
+          <li data-quiz-correct>The sweeper folds a day to <code>provisional</code> on its own, so a day can leave <code>open</code> having never been closed — <code>dayClosed</code> tracks an actual EOD close on record.</li>
+          <li><code>dayStatus</code> is optional on legacy rows.</li>
+          <li>The weekly view does not load <code>dayStatus</code>.</li>
+        </ol>
+        <p data-quiz-explanation>It uses the same evidence <code>computeWeeklyVariancePosture</code> counts: the presence of <code>closeVarianceMinor</code>. Rows folded before the field carry none, and absent means unknown, so the fallback is the old approximation rather than a false “not closed”.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent Evidence</h2>
+    <div class="panel">
+      <p>One read-only <strong>delivered-diff subagent</strong> was dispatched against the staged index, scoped to the areas outside the author’s direct reading: the Daily Operations and Daily Close rewrites, the six new sheet-return modules, the deleted shared-demo catalogue fixture and its replacement, and the reports route/search surfaces. It returned the file-level map reflected in the Key Files and “Deliberately unchanged” sections above, and independently flagged three things carried into this report: that <code>livePosTransactionCount</code> is legacy-reachable rather than dead, that <code>"hourly"</code> survives in the restore-source union for historical audit rows, and that the <code>transactionCount</code> schema comment credited version 4 with a backfill it never performed — the last of which was a real defect in the change and was corrected before delivery.</p>
+      <p>No session-history subagent was dispatched: this delivery was authored in one session with the working tree in hand. The contract, fold, ingest, cron and deploy-script mechanics described here were read directly from the staged diff rather than summarized from an agent.</p>
+    </div>
+  </section>
+</article>
+</body>
+</html>

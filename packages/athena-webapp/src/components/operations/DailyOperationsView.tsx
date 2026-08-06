@@ -4,8 +4,20 @@ import {
   type ReactNode,
   useCallback,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import {
+  findScrollableAncestor,
+} from "@/hooks/useSheetScrollPreservation";
+import { useSheetReturnPosition } from "@/hooks/useSheetReturnPosition";
+import {
+  encodeSheetReturn,
+  sheetReturnFocusSelector,
+  sheetReturnTargetProps,
+  decodeSheetReturn,
+  type SheetReturn,
+} from "@/lib/sheetReturn";
 import {
   Link,
   useNavigate,
@@ -153,11 +165,11 @@ type DailyOperationsAutomationOutcome =
 
 type DailyOperationsAutomationStatus = {
   bucket?:
-  | "failed"
-  | "action_taken"
-  | "needs_review"
-  | "policy_skipped"
-  | "scheduled_later";
+    | "failed"
+    | "action_taken"
+    | "needs_review"
+    | "policy_skipped"
+    | "scheduled_later";
   id: string;
   lane: "opening" | "close";
   occurredAt?: number | null;
@@ -213,17 +225,17 @@ type DailyOperationsCompletedCloseAttribution = {
 
 type DailyOperationsAutomationUpdate =
   | {
-    id: string;
-    occurredAt?: number | null;
-    status: DailyOperationsAutomationStatus;
-    type: "status";
-  }
+      id: string;
+      occurredAt?: number | null;
+      status: DailyOperationsAutomationStatus;
+      type: "status";
+    }
   | {
-    completedClose: DailyOperationsCompletedCloseAttribution;
-    id: string;
-    occurredAt?: number | null;
-    type: "completion";
-  };
+      completedClose: DailyOperationsCompletedCloseAttribution;
+      id: string;
+      occurredAt?: number | null;
+      type: "completion";
+    };
 
 export type DailyOperationsSnapshot = {
   automationStatuses?: DailyOperationsAutomationStatus[];
@@ -360,7 +372,7 @@ export type DailyOperationsSnapshot = {
 
 export type DailyOperationsViewContentProps = {
   cachedPriorWeekBoundaryMetric?:
-  DailyOperationsSnapshot["weekMetrics"][number] | null;
+    DailyOperationsSnapshot["weekMetrics"][number] | null;
   cachedWeekAnalyticsFetchedAt?: number;
   cachedWeekMetrics?: DailyOperationsSnapshot["weekMetrics"];
   cachedWeekStorePulse?: StorePulseSummary | null;
@@ -383,6 +395,25 @@ export type DailyOperationsViewContentProps = {
   onRequestStorePulseSnapshot?: () => void;
   onRequestTimelineSnapshot?: () => void;
   onTimelineSheetOpenChange?: (open: boolean) => void;
+  /**
+   * Where to put the visitor back after a timeline link sent them away.
+   * Decoded from the shared `sheetReturn` param by the route.
+   */
+  sheetReturn?: SheetReturn;
+  /** Clears the token once every restore leg has finished. */
+  onSheetReturnComplete?: () => void;
+  /**
+   * Persist the return token, THEN navigate. Ordering matters: the token has
+   * to be on this page's history entry before the destination is pushed, or
+   * coming back lands on an entry that never carried it.
+   */
+  onTimelineLinkNavigate?: (args: {
+    focusKey: string;
+    params: Record<string, unknown>;
+    scrollOffset?: number;
+    search: Record<string, unknown>;
+    to: string;
+  }) => void | Promise<unknown>;
   onOperatingDateChange?: (date: Date) => void;
   openRegisterSessionsSnapshot?: DailyOperationsOpenRegisterSessionsSnapshot;
   orgUrlSlug: string;
@@ -415,7 +446,7 @@ type CachedWeekAnalytics = {
   fetchedAt: number;
   metrics: DailyOperationsSnapshot["weekMetrics"];
   priorWeekBoundaryMetric?:
-  DailyOperationsSnapshot["weekMetrics"][number] | null;
+    DailyOperationsSnapshot["weekMetrics"][number] | null;
   storePulse?: StorePulseSummary | null;
 };
 
@@ -447,7 +478,7 @@ type DailyOperationsTimelinePreviewSnapshot =
 type DailyOperationsWeekAnalyticsSnapshot = {
   operatingDate: string;
   priorWeekBoundaryMetric?:
-  DailyOperationsSnapshot["weekMetrics"][number] | null;
+    DailyOperationsSnapshot["weekMetrics"][number] | null;
   weekEndOperatingDate: string;
   weekMetrics: DailyOperationsSnapshot["weekMetrics"];
 };
@@ -863,9 +894,16 @@ function formatTimelineMessage(message: string) {
 
 function TimelineMessage({
   event,
+  onLinkNavigate,
   orgUrlSlug,
   storeUrlSlug,
 }: {
+  onLinkNavigate?: (args: {
+    focusKey: string;
+    params: Record<string, unknown>;
+    search: Record<string, unknown>;
+    to: string;
+  }) => void | Promise<unknown>;
   event: DailyOperationsSnapshot["timeline"][number];
   orgUrlSlug: string;
   storeUrlSlug: string;
@@ -893,6 +931,40 @@ function TimelineMessage({
     matchLabel,
   );
 
+  /**
+   * Persist the return token before the destination is pushed.
+   *
+   * The default navigation is prevented so the ordering is guaranteed: the
+   * token must land on THIS history entry, or coming back restores an entry
+   * that never carried it. Modified clicks are left alone — a new tab is not
+   * a return journey.
+   */
+  const handleLinkClick =
+    (link: { params?: unknown; search?: unknown; to?: string }) =>
+    (event_: React.MouseEvent<HTMLAnchorElement>) => {
+      if (!onLinkNavigate || event_.defaultPrevented || !link.to) return;
+      if (
+        event_.button !== 0 ||
+        event_.metaKey ||
+        event_.ctrlKey ||
+        event_.shiftKey ||
+        event_.altKey
+      ) {
+        return;
+      }
+      event_.preventDefault();
+      void onLinkNavigate({
+        focusKey: event.id,
+        params: {
+          ...(link.params as Record<string, unknown>),
+          orgUrlSlug,
+          storeUrlSlug,
+        },
+        search: { o: getOrigin(), ...((link.search as object) ?? {}) },
+        to: link.to,
+      });
+    };
+
   const renderApprovedProductLink = () => {
     if (
       !canRenderApprovedProductLink ||
@@ -914,8 +986,10 @@ function TimelineMessage({
             orgUrlSlug,
             storeUrlSlug,
           }}
+          onClick={handleLinkClick(approvedProductLink)}
           search={{ o: getOrigin(), ...(approvedProductLink.search ?? {}) }}
           to={approvedProductLink.to}
+          {...sheetReturnTargetProps(event.id)}
         >
           <span>{approvedProductLabel}</span>
           <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
@@ -952,8 +1026,10 @@ function TimelineMessage({
           orgUrlSlug,
           storeUrlSlug,
         }}
+        onClick={handleLinkClick(inlineLink)}
         search={{ o: getOrigin(), ...(inlineLink.search ?? {}) }}
         to={inlineLink.to}
+        {...sheetReturnTargetProps(event.id)}
       >
         <span>{linkLabel}</span>
         <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
@@ -1098,11 +1174,11 @@ function compareSummaryPaymentTotals(
 function getPaymentTotalAmount(
   summary:
     | {
-      paymentTotals?: Array<{
-        amount: number;
-        method: string;
-      }>;
-    }
+        paymentTotals?: Array<{
+          amount: number;
+          method: string;
+        }>;
+      }
     | undefined,
   method: string,
 ) {
@@ -1333,10 +1409,14 @@ function buildParams(
 
 function TimelineEventItem({
   event,
+  onLinkNavigate,
   orgUrlSlug,
   storeUrlSlug,
 }: {
   event: DailyOperationsSnapshot["timeline"][number];
+  onLinkNavigate?: React.ComponentProps<
+    typeof TimelineMessage
+  >["onLinkNavigate"];
   orgUrlSlug: string;
   storeUrlSlug: string;
 }) {
@@ -1348,6 +1428,7 @@ function TimelineEventItem({
       <p className="mt-1 text-sm text-foreground">
         <TimelineMessage
           event={event}
+          onLinkNavigate={onLinkNavigate}
           orgUrlSlug={orgUrlSlug}
           storeUrlSlug={storeUrlSlug}
         />
@@ -1419,29 +1500,15 @@ function OpenRegisterSessionsPanel({
   if (sessions.length === 0) return null;
 
   return (
-    <section
-      aria-labelledby="open-register-sessions-heading"
-      className={cn(
-        "px-layout-md",
-        showTopRule && "border-t border-border/70 pt-layout-md",
-      )}
+    <DailyOperationsTopBandShell
+      className={cn("py-layout-md", showTopRule && "border-t border-border/70")}
+      icon={
+        <Coins aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+      }
+      meta={`${sessions.length} open`}
+      title="Open register sessions"
     >
-      <div className="flex items-baseline gap-layout-sm">
-        <Coins
-          aria-hidden="true"
-          className="h-4 w-4 shrink-0 self-center text-muted-foreground"
-        />
-        <h2
-          className="text-sm font-medium text-foreground"
-          id="open-register-sessions-heading"
-        >
-          Open register sessions
-        </h2>
-        <p className="font-numeric text-xs tabular-nums text-muted-foreground">
-          {sessions.length} open
-        </p>
-      </div>
-      <div className="mt-layout-sm flex w-full max-w-md min-w-0 flex-col divide-y divide-border/70">
+      <div className="flex min-w-0 flex-col divide-y divide-border/70">
         {sessions.slice(0, 2).map((session) => {
           const sessionLabel =
             session.registerSession?.displayLabel ??
@@ -1450,41 +1517,60 @@ function OpenRegisterSessionsPanel({
 
           return (
             <article
-              className="py-layout-sm first:pt-0 last:pb-0"
+              className="flex min-w-0 items-center justify-between gap-layout-md py-layout-sm first:pt-0 last:pb-0"
               key={session.id}
             >
-              <Link
-                aria-label={`Open register session ${sessionLabel}`}
-                className="inline-flex min-w-0 items-center gap-layout-xs rounded-sm text-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                params={buildParams(orgUrlSlug, storeUrlSlug, session.params)}
-                search={
-                  {
-                    ...(session.search ?? {}),
-                    ...getWorkflowSearch(session.to ?? "", operatingDate),
-                  } as never
-                }
-                to={
-                  session.to ?? "/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
-                }
+              <p className="min-w-0 truncate text-sm font-medium text-foreground">
+                {sessionLabel}
+              </p>
+              <Button
+                asChild
+                className="h-7 shrink-0 px-2 text-xs"
+                size="sm"
+                variant="ghost"
               >
-                <span className="truncate">{sessionLabel}</span>
-                <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
-              </Link>
+                <Link
+                  aria-label={`Open register session ${sessionLabel}`}
+                  params={buildParams(orgUrlSlug, storeUrlSlug, session.params)}
+                  search={
+                    {
+                      ...(session.search ?? {}),
+                      ...getWorkflowSearch(session.to ?? "", operatingDate),
+                    } as never
+                  }
+                  to={
+                    session.to ??
+                    "/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
+                  }
+                >
+                  Open
+                  <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
             </article>
           );
         })}
-        {sessions.length > 2 && <div className="pt-2">
-          <Link to={'/$orgUrlSlug/store/$storeUrlSlug/cash-controls'}
-            params={buildParams(orgUrlSlug, storeUrlSlug)}
-            search={{ o: getOrigin() }}
-            className="inline-flex min-w-0 items-center gap-layout-xs rounded-sm text-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            <span className="truncate">View all</span>
-            <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
-          </Link>
-        </div>}
+        {sessions.length > 2 ? (
+          <div className="pt-layout-sm">
+            <Button
+              asChild
+              className="h-7 px-2 text-xs"
+              size="sm"
+              variant="ghost"
+            >
+              <Link
+                params={buildParams(orgUrlSlug, storeUrlSlug)}
+                search={{ o: getOrigin() }}
+                to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
+              >
+                View all
+                <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
+        ) : null}
       </div>
-    </section>
+    </DailyOperationsTopBandShell>
   );
 }
 
@@ -1726,20 +1812,68 @@ function getVisibleAutomationStatuses(snapshot: DailyOperationsSnapshot) {
 
 function DailyOperationsTopBandShell({
   children,
+  className,
   icon,
+  meta,
   title,
 }: {
   children: ReactNode;
+  className?: string;
   icon: ReactNode;
+  meta?: string;
   title: string;
 }) {
   return (
-    <section className="px-layout-md py-layout-sm">
-      <div className="flex flex-col gap-layout-md">
-        <h3 className="flex shrink-0 items-center gap-layout-xs text-sm font-medium text-foreground">
-          {icon}
-          {title}
-        </h3>
+    <section className={cn("h-full px-layout-md py-layout-sm", className)}>
+      <div className="flex flex-col gap-layout-sm">
+        <div className="flex min-w-0 items-center gap-layout-xs">
+          <h3 className="flex min-w-0 items-center gap-layout-xs text-sm font-medium text-foreground">
+            {icon}
+            <span className="truncate">{title}</span>
+          </h3>
+          {meta ? (
+            <p className="font-numeric text-xs tabular-nums text-muted-foreground">
+              {meta}
+            </p>
+          ) : null}
+        </div>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function StoreDayStatusWorkspace({
+  children,
+  description,
+  hasMultipleSections,
+}: {
+  children: ReactNode;
+  description: string;
+  hasMultipleSections: boolean;
+}) {
+  return (
+    <section
+      aria-labelledby="store-day-status-heading"
+      className="overflow-hidden rounded-lg border border-border/70 bg-surface"
+    >
+      <div className="border-b border-border/70 bg-background/50 px-layout-md py-layout-sm">
+        <h2
+          className="text-sm font-semibold text-foreground"
+          id="store-day-status-heading"
+        >
+          Store day status
+        </h2>
+        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+          {description}
+        </p>
+      </div>
+      <div
+        className={cn(
+          "grid divide-y divide-border/70",
+          hasMultipleSections && "lg:grid-cols-2 lg:divide-x lg:divide-y-0",
+        )}
+      >
         {children}
       </div>
     </section>
@@ -1792,9 +1926,11 @@ function AutomationStatusPanel({
   if (variant === "compact") {
     return (
       <DailyOperationsTopBandShell
+        className="py-layout-md"
         icon={
           <Bot aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
         }
+        meta={`${updates.length} ${updates.length === 1 ? "update" : "updates"}`}
         title="Athena automation"
       >
         <div className="flex min-w-0 flex-col divide-y divide-border/70">
@@ -1812,8 +1948,8 @@ function AutomationStatusPanel({
                     {getDailyOperationsCompletionAttributionDetail(
                       update.completedClose,
                       carryForwardCount ??
-                      update.completedClose.carryForwardCount ??
-                      0,
+                        update.completedClose.carryForwardCount ??
+                        0,
                     )}
                   </p>
                   {update.occurredAt ? (
@@ -1972,9 +2108,11 @@ function getDailyOperationsCompletionAttributionDetail(
 
 function DailyOperationsCompletionAttributionNotice({
   carryForwardCount,
+  contained = false,
   completedClose,
 }: {
   carryForwardCount?: number | null;
+  contained?: boolean;
   completedClose?: DailyOperationsCompletedCloseAttribution | null;
 }) {
   if (completedClose?.actorType !== "automation") {
@@ -1983,6 +2121,7 @@ function DailyOperationsCompletionAttributionNotice({
 
   return (
     <DailyOperationsTopBandShell
+      className={cn(contained && "py-layout-md")}
       icon={
         <Bot aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
       }
@@ -2024,8 +2163,9 @@ function getScheduledRunMessage(run: DailyOperationsScheduledRunSummary) {
   const label = formatScheduledRunLabel(run.cronFamily);
 
   if (run.outcome === "partial_failure") {
-    return `${label} partially ran. ${run.succeededCount} applied, ${run.failedCount} ${run.failedCount === 1 ? "needs" : "need"
-      } review.`;
+    return `${label} partially ran. ${run.succeededCount} applied, ${run.failedCount} ${
+      run.failedCount === 1 ? "needs" : "need"
+    } review.`;
   }
 
   if (run.outcome === "no_candidates") {
@@ -2193,6 +2333,7 @@ function HistoricalWorkflowPanel({
 
   return (
     <DailyOperationsTopBandShell
+      className="py-layout-md"
       icon={
         <Clock3 aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
       }
@@ -2420,17 +2561,17 @@ function buildCachedStorePulseForOperatingDate({
   const combinedSummary =
     weekOperatorSnapshot && selectedDayOperatorSnapshot
       ? {
-        ...baseSummary,
-        operatorSnapshot: {
-          ...selectedDayOperatorSnapshot,
-          historyDays: weekOperatorSnapshot.historyDays,
-          trend: mergeSelectedStorePulseTrend(
-            weekOperatorSnapshot.trend,
-            selectedDayOperatorSnapshot.trend,
-          ),
-          usableHistoryDays: weekOperatorSnapshot.usableHistoryDays,
-        },
-      }
+          ...baseSummary,
+          operatorSnapshot: {
+            ...selectedDayOperatorSnapshot,
+            historyDays: weekOperatorSnapshot.historyDays,
+            trend: mergeSelectedStorePulseTrend(
+              weekOperatorSnapshot.trend,
+              selectedDayOperatorSnapshot.trend,
+            ),
+            usableHistoryDays: weekOperatorSnapshot.usableHistoryDays,
+          },
+        }
       : baseSummary;
 
   return selectStorePulseTrendThroughOperatingDate(
@@ -2594,12 +2735,12 @@ function DailyOperationsWeekMetricsPreview({
     metrics.length > 0
       ? metrics
       : WEEKDAY_PREVIEW_LABELS.map((_, index) => ({
-        isClosed: index < 3,
-        isReopened: false,
-        isSelected: false,
-        operatingDate: shiftLocalOperatingDate(previewWeekStart, index),
-        transactionCount: 0,
-      }));
+          isClosed: index < 3,
+          isReopened: false,
+          isSelected: false,
+          operatingDate: shiftLocalOperatingDate(previewWeekStart, index),
+          transactionCount: 0,
+        }));
   const weekEndOperatingDate = metrics.at(-1)?.operatingDate;
 
   return (
@@ -3362,10 +3503,19 @@ export function DailyOperationsViewContent({
   storePulseSnapshot,
   storeRequestsSnapshot,
   todayRefreshedAt,
+  onSheetReturnComplete,
+  onTimelineLinkNavigate,
+  sheetReturn,
   timelinePreviewSnapshot,
   timelineSnapshot,
 }: DailyOperationsViewContentProps) {
   const [localTimelineSheetOpen, setLocalTimelineSheetOpen] = useState(false);
+  /**
+   * Anchor for the return scroll. Deliberately inside the SHEET's own list
+   * rather than the page underneath: a visitor returning from a transaction
+   * wants the timeline where they left it, and the page behind never moved.
+   */
+  const timelineReturnAnchorRef = useRef<HTMLDivElement>(null);
   const shouldShowAutomationStatuses =
     canViewAutomationStatuses ?? hasFullAdminAccess;
   const isMobile = useIsMobile();
@@ -3374,6 +3524,58 @@ export function DailyOperationsViewContent({
   const setTimelineSheetOpen = (open: boolean) => {
     setLocalTimelineSheetOpen(open);
     onTimelineSheetOpenChange?.(open);
+  };
+
+  /**
+   * Derived here rather than reusing the copy below, which lives after this
+   * component's early returns — a hook cannot run conditionally. Same date
+   * guard: a snapshot for another operating day must not answer for this one.
+   */
+  const returnTimelineEvents =
+    snapshot && timelineSnapshot?.operatingDate === snapshot.operatingDate
+      ? timelineSnapshot.timeline
+      : undefined;
+  /**
+   * Return the visitor to the timeline entry they followed. The event id is
+   * the focus key: it is stable across a refetch, unlike a list index, so a
+   * timeline that gained an event while they were away still returns them to
+   * the right row rather than the row that took its place.
+   */
+  useSheetReturnPosition({
+    anchorRef: timelineReturnAnchorRef,
+    focus:
+      sheetReturn?.focusKey === undefined
+        ? undefined
+        : {
+            selector: sheetReturnFocusSelector(sheetReturn.focusKey),
+            isExpected: Boolean(
+              returnTimelineEvents?.some(
+                (event) => event.id === sheetReturn.focusKey,
+              ),
+            ),
+            isReady: Boolean(returnTimelineEvents),
+            onMissing: () => {
+              // The event fell out of the window. Land on the list itself
+              // rather than silently leaving focus on the document body.
+              timelineReturnAnchorRef.current?.focus();
+            },
+          },
+    isOpen: isTimelineSheetOpen,
+    onComplete: onSheetReturnComplete,
+    scrollOffset: sheetReturn?.scrollOffset,
+  });
+
+  const handleTimelineLinkNavigate = (args: {
+    focusKey: string;
+    params: Record<string, unknown>;
+    search: Record<string, unknown>;
+    to: string;
+  }) => {
+    const scroller = findScrollableAncestor(timelineReturnAnchorRef.current);
+    return onTimelineLinkNavigate?.({
+      ...args,
+      scrollOffset: scroller?.scrollTop,
+    });
   };
 
   if (isLoadingAccess) {
@@ -3392,7 +3594,7 @@ export function DailyOperationsViewContent({
 
   const timelinePreview =
     snapshot &&
-      timelinePreviewSnapshot?.operatingDate === snapshot.operatingDate
+    timelinePreviewSnapshot?.operatingDate === snapshot.operatingDate
       ? timelinePreviewSnapshot
       : undefined;
   const previewTimeline = timelinePreview?.timeline;
@@ -3409,10 +3611,10 @@ export function DailyOperationsViewContent({
     : [];
   const priorComparisonMetric = snapshot
     ? getPriorComparisonMetric(
-      snapshot,
-      cachedWeekMetrics,
-      cachedPriorWeekBoundaryMetric,
-    )
+        snapshot,
+        cachedWeekMetrics,
+        cachedPriorWeekBoundaryMetric,
+      )
     : undefined;
   const priorWindowLabel = snapshot
     ? getPriorWindowLabel(snapshot.operatingDate)
@@ -3427,7 +3629,9 @@ export function DailyOperationsViewContent({
     ? isHistoricalOperatingDate(snapshot.operatingDate)
     : false;
   const shouldShowHistoricalWorkflowPanel =
-    isHistoricalDate && showHistoricalEodReviewAction;
+    isHistoricalDate &&
+    showHistoricalEodReviewAction &&
+    snapshot?.lifecycle.status !== "closed";
   const hasAutomationCompletion =
     snapshot?.completedClose?.actorType === "automation";
   const shouldShowCurrentAutomationBand = Boolean(
@@ -3442,9 +3646,9 @@ export function DailyOperationsViewContent({
   );
   const primaryActionEmphasisStatus = snapshot
     ? getPrimaryActionEmphasisStatus({
-      isHistoricalDate,
-      status: snapshot.lifecycle.status,
-    })
+        isHistoricalDate,
+        status: snapshot.lifecycle.status,
+      })
     : undefined;
   const primaryActionEmphasis = primaryActionEmphasisStatus
     ? getPrimaryActionEmphasis(primaryActionEmphasisStatus)
@@ -3462,33 +3666,35 @@ export function DailyOperationsViewContent({
   const pendingApprovalsLane = getPendingApprovalsLaneFromLanes(operationLanes);
   const snapshotOpenRegisterSessions = !isHistoricalDate
     ? (snapshot?.attentionItems.filter(
-      (item) =>
-        item.source.type === "register_session" &&
-        item.registerSession?.isOpenedForOperatingDate === true &&
-        item.params?.sessionId !== undefined &&
-        item.to !== undefined,
-    ) ?? [])
+        (item) =>
+          item.source.type === "register_session" &&
+          item.registerSession?.isOpenedForOperatingDate === true &&
+          item.params?.sessionId !== undefined &&
+          item.to !== undefined,
+      ) ?? [])
     : [];
   const openRegisterSessions =
     openRegisterSessionsSnapshot &&
-      snapshot &&
-      Array.isArray(openRegisterSessionsSnapshot.sessions) &&
-      openRegisterSessionsSnapshot.operatingDate === snapshot.operatingDate
+    snapshot &&
+    Array.isArray(openRegisterSessionsSnapshot.sessions) &&
+    openRegisterSessionsSnapshot.operatingDate === snapshot.operatingDate
       ? openRegisterSessionsSnapshot.sessions.map((session) => ({
-        id: session.id,
-        label: "Register session is still open",
-        message: "",
-        owner: "daily_close" as const,
-        params: { sessionId: session.id },
-        registerSession: {
-          displayLabel: session.displayLabel,
-          isOpenedForOperatingDate: true,
-        },
-        severity: "critical" as const,
-        source: { id: session.id, type: "register_session" },
-        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
-      }))
+          id: session.id,
+          label: "Register session is still open",
+          message: "",
+          owner: "daily_close" as const,
+          params: { sessionId: session.id },
+          registerSession: {
+            displayLabel: session.displayLabel,
+            isOpenedForOperatingDate: true,
+          },
+          severity: "critical" as const,
+          source: { id: session.id, type: "register_session" },
+          to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+        }))
       : snapshotOpenRegisterSessions;
+  const shouldShowCurrentStoreDayStatus =
+    shouldShowCurrentAutomationBand || openRegisterSessions.length > 0;
   const actionableLanes = operationLanes.filter(isActionableLane);
   const hasAutomationReviewEvidence = Boolean(
     snapshot?.automationStatuses?.some(
@@ -3515,9 +3721,9 @@ export function DailyOperationsViewContent({
   const storePulseDetailSnapshot =
     snapshot && loadedStorePulse !== undefined
       ? {
-        ...snapshot,
-        storePulse: loadedStorePulse,
-      }
+          ...snapshot,
+          storePulse: loadedStorePulse,
+        }
       : undefined;
   const requestStorePulseSnapshot =
     onRequestStorePulseSnapshot ?? onRequestDetailSnapshot;
@@ -3661,32 +3867,53 @@ export function DailyOperationsViewContent({
                   </div>
                 </div>
 
-                {shouldShowCurrentAutomationBand ? (
-                  <>
-                    <AutomationStatusPanel
-                      carryForwardCount={
-                        snapshot.completedClose?.carryForwardCount
-                      }
-                      completedClose={snapshot.completedClose}
-                      orgUrlSlug={orgUrlSlug}
-                      showStatuses={shouldShowAutomationStatuses}
-                      snapshot={snapshot}
-                      storeUrlSlug={storeUrlSlug}
-                      variant="compact"
-                    />
-                    {isMobile ? (
-                      <AutomationReviewEvidencePanel
+                {shouldShowCurrentStoreDayStatus ? (
+                  <StoreDayStatusWorkspace
+                    description="Automation activity and open registers for this operating date."
+                    hasMultipleSections={
+                      shouldShowCurrentAutomationBand &&
+                      openRegisterSessions.length > 0
+                    }
+                  >
+                    {shouldShowCurrentAutomationBand ? (
+                      <AutomationStatusPanel
+                        carryForwardCount={
+                          snapshot.completedClose?.carryForwardCount
+                        }
+                        completedClose={snapshot.completedClose}
                         orgUrlSlug={orgUrlSlug}
+                        showStatuses={shouldShowAutomationStatuses}
                         snapshot={snapshot}
                         storeUrlSlug={storeUrlSlug}
+                        variant="compact"
                       />
                     ) : null}
-                  </>
+                    <OpenRegisterSessionsPanel
+                      operatingDate={snapshot.operatingDate}
+                      orgUrlSlug={orgUrlSlug}
+                      sessions={openRegisterSessions}
+                      storeUrlSlug={storeUrlSlug}
+                    />
+                  </StoreDayStatusWorkspace>
+                ) : null}
+
+                {shouldShowCurrentAutomationBand && isMobile ? (
+                  <AutomationReviewEvidencePanel
+                    orgUrlSlug={orgUrlSlug}
+                    snapshot={snapshot}
+                    storeUrlSlug={storeUrlSlug}
+                  />
                 ) : null}
 
                 {shouldShowHistoricalWorkflowPanel ||
-                  shouldShowHistoricalAutomationCompletion ? (
-                  <section className="space-y-layout-md">
+                shouldShowHistoricalAutomationCompletion ? (
+                  <StoreDayStatusWorkspace
+                    description="Close status and automation activity recorded for this operating date."
+                    hasMultipleSections={
+                      shouldShowHistoricalWorkflowPanel &&
+                      shouldShowHistoricalAutomationCompletion
+                    }
+                  >
                     {shouldShowHistoricalWorkflowPanel ? (
                       <HistoricalWorkflowPanel snapshot={snapshot} />
                     ) : null}
@@ -3695,23 +3922,25 @@ export function DailyOperationsViewContent({
                         carryForwardCount={
                           snapshot.completedClose?.carryForwardCount
                         }
+                        contained
                         completedClose={snapshot.completedClose}
                       />
                     ) : null}
-                  </section>
+                  </StoreDayStatusWorkspace>
                 ) : null}
 
-                <OpenRegisterSessionsPanel
-                  operatingDate={snapshot.operatingDate}
-                  orgUrlSlug={orgUrlSlug}
-                  sessions={openRegisterSessions}
-                  showTopRule={
-                    shouldShowCurrentAutomationBand ||
-                    shouldShowHistoricalWorkflowPanel ||
-                    shouldShowHistoricalAutomationCompletion
-                  }
-                  storeUrlSlug={storeUrlSlug}
-                />
+                {!shouldShowCurrentStoreDayStatus ? (
+                  <OpenRegisterSessionsPanel
+                    operatingDate={snapshot.operatingDate}
+                    orgUrlSlug={orgUrlSlug}
+                    sessions={openRegisterSessions}
+                    showTopRule={
+                      shouldShowHistoricalWorkflowPanel ||
+                      shouldShowHistoricalAutomationCompletion
+                    }
+                    storeUrlSlug={storeUrlSlug}
+                  />
+                ) : null}
 
                 <div className="grid gap-layout-md [grid-template-columns:repeat(auto-fit,minmax(min(14rem,100%),1fr))] md:gap-layout-lg">
                   <OperationsSummaryMetric
@@ -4025,7 +4254,13 @@ export function DailyOperationsViewContent({
                       {formatOperatingDateWithWeekday(snapshot.operatingDate)}.
                     </SheetDescription>
                   </SheetHeader>
-                  <div className="min-h-0 flex-1 overflow-y-auto px-layout-lg py-layout-md">
+                  <div
+                    className="min-h-0 flex-1 overflow-y-auto px-layout-lg py-layout-md"
+                    // `tabIndex={-1}` so the fallback can land focus here when
+                    // the event a visitor followed is no longer in the window.
+                    ref={timelineReturnAnchorRef}
+                    tabIndex={-1}
+                  >
                     {isLoadingTimelineSnapshot ? (
                       <div className="space-y-layout-md">
                         {Array.from({ length: 5 }).map((_, index) => (
@@ -4042,6 +4277,7 @@ export function DailyOperationsViewContent({
                           <TimelineEventItem
                             event={event}
                             key={event.id}
+                            onLinkNavigate={handleTimelineLinkNavigate}
                             orgUrlSlug={orgUrlSlug}
                             storeUrlSlug={storeUrlSlug}
                           />
@@ -4123,17 +4359,26 @@ function DailyOperationsConnectedView({
   const canAccessSurface = canAccessProtectedSurface ?? hasFullAdminAccess;
   const params = useParams({ strict: false }) as
     | {
-      orgUrlSlug?: string;
-      storeUrlSlug?: string;
-    }
+        orgUrlSlug?: string;
+        storeUrlSlug?: string;
+      }
     | undefined;
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as {
     operatingDate?: unknown;
+    sheetReturn?: unknown;
     timeline?: unknown;
     weekEndOperatingDate?: unknown;
   };
   const isTimelineSearchOpen = search.timeline === "open";
+  /**
+   * Shared return token for sheets on this page (`lib/sheetReturn`). Decoded
+   * here rather than in the view so the view never parses a URL.
+   */
+  const sheetReturn = useMemo(
+    () => decodeSheetReturn(search.sheetReturn),
+    [search.sheetReturn],
+  );
   const operatingDateRange = useMemo(
     () => getLocalOperatingDateRangeFromSearch(search.operatingDate),
     [search.operatingDate],
@@ -4145,14 +4390,14 @@ function DailyOperationsConnectedView({
   const storePulseWindow: StorePulseWindow = "today";
   const snapshotArgs = canQueryProtectedData
     ? {
-      ...operatingDateRange,
-      operatingTimezoneOffsetMinutes: getOperatingTimezoneOffsetMinutes(
-        operatingDateRange.operatingDate,
-      ),
-      storeId: activeStore!._id,
-      storePulseWindow,
-      weekEndOperatingDate,
-    }
+        ...operatingDateRange,
+        operatingTimezoneOffsetMinutes: getOperatingTimezoneOffsetMinutes(
+          operatingDateRange.operatingDate,
+        ),
+        storeId: activeStore!._id,
+        storePulseWindow,
+        weekEndOperatingDate,
+      }
     : "skip";
   const snapshotRequestKey =
     snapshotArgs === "skip"
@@ -4233,12 +4478,12 @@ function DailyOperationsConnectedView({
     isTodayRefreshRequested;
   const todayRefreshArgs =
     shouldQueryTodayRefreshSnapshot &&
-      snapshotArgs !== "skip" &&
-      todayRefreshRequest
+    snapshotArgs !== "skip" &&
+    todayRefreshRequest
       ? {
-        ...snapshotArgs,
-        refreshRequestedAt: todayRefreshRequest.requestedAt,
-      }
+          ...snapshotArgs,
+          refreshRequestedAt: todayRefreshRequest.requestedAt,
+        }
       : "skip";
 
   const compactSnapshot = useExpectedDailyOperationsQuery(
@@ -4273,7 +4518,7 @@ function DailyOperationsConnectedView({
   ) as DailyOperationsAutomationSnapshot | undefined;
   const openRegisterSessionsSnapshot = useExpectedDailyOperationsQuery(
     getDailyOperationsOpenRegisterSessionsSnapshot ??
-    getDailyOperationsSnapshot,
+      getDailyOperationsSnapshot,
     getDailyOperationsOpenRegisterSessionsSnapshot && canQueryProtectedData
       ? snapshotArgs
       : "skip",
@@ -4302,10 +4547,10 @@ function DailyOperationsConnectedView({
   const normalizedDetailSnapshot =
     detailSnapshot && detailSnapshotMetric
       ? normalizeDailyOperationsSnapshotWithWeekMetric(
-        detailSnapshot,
-        detailSnapshotMetric,
-        detailSnapshot.weekMetrics,
-      )
+          detailSnapshot,
+          detailSnapshotMetric,
+          detailSnapshot.weekMetrics,
+        )
       : detailSnapshot;
   const baseSnapshot = compactSnapshot ?? cachedDaySnapshotEntry?.snapshot;
   const mergedSnapshot = baseSnapshot
@@ -4330,9 +4575,9 @@ function DailyOperationsConnectedView({
   const refreshedStorePulseSnapshot =
     snapshotArgs !== "skip" && cachedTodayRefreshSnapshot
       ? {
-        operatingDate: cachedTodayRefreshSnapshot.operatingDate,
-        storePulse: cachedTodayRefreshSnapshot.storePulse ?? null,
-      }
+          operatingDate: cachedTodayRefreshSnapshot.operatingDate,
+          storePulse: cachedTodayRefreshSnapshot.storePulse ?? null,
+        }
       : undefined;
   const storePulseSnapshot =
     refreshedStorePulseSnapshot ??
@@ -4341,45 +4586,45 @@ function DailyOperationsConnectedView({
   const rawCachedWeekMetrics =
     snapshotArgs !== "skip" && clientWeekAnalytics
       ? selectWeekMetricsForOperatingDate(
-        clientWeekAnalytics.metrics,
-        snapshotArgs.operatingDate,
-      )
-      : cachedWeekAnalytics && snapshotArgs !== "skip"
-        ? selectWeekMetricsForOperatingDate(
-          cachedWeekAnalytics.metrics,
+          clientWeekAnalytics.metrics,
           snapshotArgs.operatingDate,
         )
+      : cachedWeekAnalytics && snapshotArgs !== "skip"
+        ? selectWeekMetricsForOperatingDate(
+            cachedWeekAnalytics.metrics,
+            snapshotArgs.operatingDate,
+          )
         : undefined;
   const cachedWeekMetrics =
     snapshotArgs !== "skip"
       ? replaceWeekMetricForOperatingDate(
-        rawCachedWeekMetrics,
-        cachedTodayRefreshSnapshot?.weekMetric ??
-        snapshot?.weekMetrics.find(
-          (metric) => metric.operatingDate === snapshotArgs.operatingDate,
-        ),
-        snapshotArgs.operatingDate,
-      )
+          rawCachedWeekMetrics,
+          cachedTodayRefreshSnapshot?.weekMetric ??
+            snapshot?.weekMetrics.find(
+              (metric) => metric.operatingDate === snapshotArgs.operatingDate,
+            ),
+          snapshotArgs.operatingDate,
+        )
       : rawCachedWeekMetrics;
   const cachedWeekStorePulse =
     clientWeekAnalytics && snapshot && cachedWeekMetrics
       ? buildCachedWeekStorePulseSummary({
-        ...snapshot,
-        storePulse: clientWeekAnalytics.storePulse,
-        weekMetrics: cachedWeekMetrics,
-      })
+          ...snapshot,
+          storePulse: clientWeekAnalytics.storePulse,
+          weekMetrics: cachedWeekMetrics,
+        })
       : cachedTodayRefreshSnapshot?.storePulse && snapshot
         ? buildCachedWeekStorePulseSummary({
-          ...snapshot,
-          storePulse: cachedTodayRefreshSnapshot.storePulse,
-          weekMetrics: cachedWeekMetrics ?? snapshot.weekMetrics,
-        })
+            ...snapshot,
+            storePulse: cachedTodayRefreshSnapshot.storePulse,
+            weekMetrics: cachedWeekMetrics ?? snapshot.weekMetrics,
+          })
         : (cachedWeekAnalytics?.storePulse ??
           (snapshot && cachedWeekMetrics
             ? buildWeekMetricStorePulseSummary({
-              ...snapshot,
-              weekMetrics: cachedWeekMetrics,
-            })
+                ...snapshot,
+                weekMetrics: cachedWeekMetrics,
+              })
             : undefined));
 
   useEffect(() => {
@@ -4473,7 +4718,7 @@ function DailyOperationsConnectedView({
       !todayRefreshRequest ||
       todayRefreshRequest.snapshotRequestKey !== snapshotRequestKey ||
       queriedTodayRefreshSnapshot.refreshRequestedAt !==
-      todayRefreshRequest.requestedAt
+        todayRefreshRequest.requestedAt
     ) {
       return;
     }
@@ -4642,6 +4887,57 @@ function DailyOperationsConnectedView({
         isTimelineSnapshotRequested && timelineSnapshot === undefined
       }
       isTimelineSheetOpen={isTimelineSearchOpen}
+      sheetReturn={sheetReturn}
+      onSheetReturnComplete={() =>
+        // Drop the token once every leg has finished, so a later visit to this
+        // page does not silently re-restore a stale position.
+        void navigate({
+          replace: true,
+          // No `to`: this is a search-only update on the CURRENT route, the
+          // same shape `handleTimelineSheetOpenChange` uses. Passing `to: "."`
+          // makes it a relative navigation, which does not resolve here — the
+          // token silently never lands.
+          search: ((previous: Record<string, unknown>) => ({
+            ...previous,
+            sheetReturn: undefined,
+          })) as never,
+        })
+      }
+      onTimelineLinkNavigate={async ({
+        focusKey,
+        params,
+        scrollOffset,
+        search: destinationSearch,
+        to,
+      }) => {
+        // Write the token onto THIS entry first, then push. Reversing the two
+        // would leave the return position on the destination's entry, where
+        // going back never reads it.
+        const token = encodeSheetReturn({ focusKey, scrollOffset });
+        await navigate({
+          replace: true,
+          search: ((previous: Record<string, unknown>) => ({
+            ...previous,
+            sheetReturn: token,
+          })) as never,
+        });
+        /**
+         * Re-capture the origin AFTER the token lands.
+         *
+         * `o` is how the destination's back control returns here
+         * (`useNavigateBack` navigates to `decodeURIComponent(o)`), and
+         * `getOrigin()` snapshots `pathname + search` at the moment it runs.
+         * The copy built while rendering the link predates the token, so
+         * returning through it lands on a URL that never carried one — the
+         * token is written correctly and then thrown away on the way back.
+         */
+        const origin = getOrigin();
+        await navigate({
+          params,
+          search: { ...destinationSearch, o: origin },
+          to,
+        } as never);
+      }}
       isLoadingSnapshot={snapshot === undefined}
       isRefreshingToday={isTodayRefreshRequested}
       onRequestDetailSnapshot={() =>

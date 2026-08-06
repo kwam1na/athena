@@ -18,6 +18,7 @@ import {
 } from "../schemas/reports";
 import {
   REPORT_DAY_METRIC_KEYS,
+  unitsPerTransaction,
   REPORT_SKU_DAY_METRIC_KEYS,
   REPORT_DAY_STATUSES,
   REPORT_FACT_KINDS,
@@ -1284,5 +1285,66 @@ describe("skuMixSyncRowProbe", () => {
         coverageStartDate: "2026-06-01",
       }),
     ).toBe(6);
+  });
+});
+
+describe("unitsPerTransaction", () => {
+  // The metric spans a seam: units are folded from facts the instant a sale
+  // lands, while the transaction count is settled only by a register close.
+  // Dividing across that seam overstates the basket, so it is withheld.
+  const base = {
+    dayCount: 3,
+    transactionCoveredDayCount: 3,
+    transactionCount: 20,
+    unitsSold: 50,
+  };
+
+  it("divides when every day in the window is closed", () => {
+    expect(unitsPerTransaction(base)).toBe(2.5);
+  });
+
+  it("withholds when a day in the window has no close", () => {
+    // The shape that matters: a week in progress. Units include today; the
+    // transaction count cannot. 50/12 = 4.2 would be a fabricated basket.
+    expect(
+      unitsPerTransaction({ ...base, transactionCoveredDayCount: 2 }),
+    ).toBeNull();
+  });
+
+  it("withholds on an open single day rather than reporting today's units", () => {
+    expect(
+      unitsPerTransaction({
+        dayCount: 1,
+        transactionCoveredDayCount: 0,
+        transactionCount: 0,
+        unitsSold: 25,
+      }),
+    ).toBeNull();
+  });
+
+  it("withholds when the fields are absent, never treating unknown as zero", () => {
+    // A snapshot written before the fields existed knows nothing; it must not
+    // divide by an implied zero or report a confident basket of its own.
+    expect(
+      unitsPerTransaction({ dayCount: 3, unitsSold: 50 }),
+    ).toBeNull();
+    expect(
+      unitsPerTransaction({
+        dayCount: 3,
+        transactionCount: 20,
+        unitsSold: 50,
+      }),
+    ).toBeNull();
+  });
+
+  it("withholds rather than dividing by zero on a closed day with no sales", () => {
+    expect(
+      unitsPerTransaction({
+        dayCount: 1,
+        transactionCoveredDayCount: 1,
+        transactionCount: 0,
+        unitsSold: 0,
+      }),
+    ).toBeNull();
   });
 });

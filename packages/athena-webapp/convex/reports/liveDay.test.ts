@@ -127,11 +127,34 @@ async function seedSku(
       inventoryCount: 10,
       price: 100,
       productId,
+      productName: "Clay mug",
       quantityAvailable: 10,
       sku,
       storeId,
+      unitCost: 60,
     });
   });
+}
+
+function skuIdentity(
+  overrides: Partial<{
+    displayName: string;
+    netPriceMinor: number;
+    productId: string;
+    quantityAvailable: number;
+    sku: string | null;
+    unitCostMinor: number | null;
+  }> = {},
+) {
+  return {
+    displayName: "Clay mug",
+    netPriceMinor: 100,
+    productId: "jd7abcdef",
+    quantityAvailable: 10,
+    sku: "FM5W-9C3-2RD",
+    unitCostMinor: 60,
+    ...overrides,
+  };
 }
 
 describe("live day return contracts", () => {
@@ -149,6 +172,7 @@ describe("live day return contracts", () => {
       operatingDate: "2026-08-04",
       skus: [
         {
+          identity: skuIdentity(),
           metrics: skuMetrics(),
           productSkuId: "kg2abcdef",
           sku: "FM5W-9C3-2RD",
@@ -162,12 +186,29 @@ describe("live day return contracts", () => {
       day: null,
       operatingDate: "2026-08-04",
       skus: [
-        { metrics: skuMetrics(), productSkuId: "kg2abcdef", sku: null },
+        {
+          identity: null,
+          metrics: skuMetrics(),
+          productSkuId: "kg2abcdef",
+          sku: null,
+        },
       ],
     });
 
     assertConformsToExportedReturns(listLiveSkuStock, [
-      { quantityAvailable: 7, sku: "FM5W-9C3-2RD" },
+      {
+        identity: skuIdentity(),
+        productSkuId: "kg2abcdef",
+        sku: "FM5W-9C3-2RD",
+      },
+    ]);
+    // A SKU priced at the register carries no cost and may carry no code.
+    assertConformsToExportedReturns(listLiveSkuStock, [
+      {
+        identity: skuIdentity({ sku: null, unitCostMinor: null }),
+        productSkuId: "kg2abcdef",
+        sku: null,
+      },
     ]);
     assertConformsToExportedReturns(listLiveSkuStock, []);
   });
@@ -257,11 +298,119 @@ describe("getLiveOperatingDay", () => {
     });
     expect(result.skus).toEqual([
       {
+        identity: {
+          displayName: "Clay mug",
+          netPriceMinor: 100,
+          productId: expect.any(String),
+          quantityAvailable: 10,
+          sku: "FM5W-9C3-2RD",
+          unitCostMinor: 60,
+        },
         metrics: skuMetrics(),
         productSkuId: String(skuId),
         sku: "FM5W-9C3-2RD",
       },
     ]);
+  });
+
+  it("carries the open day's running transaction count", async () => {
+    // Not close-gated: ingest maintains it per sale, so a caller reading the
+    // day live can state a basket size while the store is still trading.
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("reportDay", {
+        storeId,
+        operatingDate: "2026-08-04",
+        currency: "GHS",
+        status: "open",
+        ...dayMetrics(),
+        foldVersion: 1,
+        factCount: 7,
+        lastFactRecordedAt: 1_733_000_000_000,
+        flags: dayFlags,
+        transactionCount: 6,
+      });
+    });
+
+    const result = await t.run((ctx) =>
+      handlerOf(getLiveOperatingDay)(ctx, {
+        operatingDate: "2026-08-04",
+        storeId,
+      }),
+    );
+
+    expect(result.day?.status).toBe("open");
+    expect(result.day?.transactionCount).toBe(6);
+  });
+
+  it("omits the count on a day written before it existed", async () => {
+    // Absent means unknown, never zero — the caller withholds rather than
+    // reporting a basket divided by a count that was never recorded.
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("reportDay", {
+        storeId,
+        operatingDate: "2026-08-04",
+        currency: "GHS",
+        status: "open",
+        ...dayMetrics(),
+        foldVersion: 1,
+        factCount: 7,
+        lastFactRecordedAt: 1_733_000_000_000,
+        flags: dayFlags,
+      });
+    });
+
+    const result = await t.run((ctx) =>
+      handlerOf(getLiveOperatingDay)(ctx, {
+        operatingDate: "2026-08-04",
+        storeId,
+      }),
+    );
+
+    expect(result.day).not.toHaveProperty("transactionCount");
+  });
+
+  it("names a sku the caller could not resolve on its own", async () => {
+    // A SKU created at the register by POS quick add exists in no client
+    // catalogue, so the row is the only place its name can come from. It is
+    // priced but never costed, and a null cost is what says so.
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const skuId = await seedSku(t, storeId, "FM5W-QCK-ADD");
+    await t.run((ctx) =>
+      ctx.db.patch("productSku", skuId, {
+        netPrice: 500,
+        price: 500,
+        productName: "Bottled water",
+        unitCost: undefined,
+      }),
+    );
+    await t.run(async (ctx) => {
+      await ctx.db.insert("reportSkuDay", {
+        storeId,
+        productSkuId: skuId,
+        operatingDate: "2026-08-04",
+        ...skuMetrics(),
+      });
+    });
+
+    const result = await t.run((ctx) =>
+      handlerOf(getLiveOperatingDay)(ctx, {
+        operatingDate: "2026-08-04",
+        storeId,
+      }),
+    );
+
+    expect(result.skus[0]!.identity).toMatchObject({
+      displayName: "Bottled water",
+      netPriceMinor: 500,
+      unitCostMinor: null,
+    });
   });
 
   it("carries the business sku code so a caller can resolve identity", async () => {
@@ -458,9 +607,9 @@ describe("listLiveSkuStock", () => {
     );
   });
 
-  it("reports current sellable stock keyed by business code", async () => {
-    // Keyed by CODE, not id: the caller holds catalogue codes, and this is
-    // the only join back to the real row.
+  it("reports current sellable stock with the identity to name it", async () => {
+    // Identity rides along because the caller cannot always resolve the row
+    // itself: a SKU created at the register exists in no client catalogue.
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
     const skuId = await seedSku(t, storeId, "FM5W-9C3-2RD");
@@ -472,7 +621,20 @@ describe("listLiveSkuStock", () => {
       handlerOf(listLiveSkuStock)(ctx, { storeId }),
     );
 
-    expect(result).toEqual([{ quantityAvailable: 7, sku: "FM5W-9C3-2RD" }]);
+    expect(result).toEqual([
+      {
+        identity: {
+          displayName: "Clay mug",
+          netPriceMinor: 100,
+          productId: expect.any(String),
+          quantityAvailable: 7,
+          sku: "FM5W-9C3-2RD",
+          unitCostMinor: 60,
+        },
+        productSkuId: String(skuId),
+        sku: "FM5W-9C3-2RD",
+      },
+    ]);
   });
 
   it("moves with the row rather than reporting a seeded constant", async () => {
@@ -495,11 +657,13 @@ describe("listLiveSkuStock", () => {
       handlerOf(listLiveSkuStock)(ctx, { storeId }),
     );
 
-    expect(before[0].quantityAvailable).toBe(20);
-    expect(after[0].quantityAvailable).toBe(12);
+    expect(before[0].identity.quantityAvailable).toBe(20);
+    expect(after[0].identity.quantityAvailable).toBe(12);
   });
 
-  it("omits a sku with no business code rather than keying on nothing", async () => {
+  it("keeps a sku with no business code, keyed by its id", async () => {
+    // The code is no longer the key, so a SKU that has none is disclosed
+    // rather than dropped — it is still a real row a visitor can sell.
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
     const skuId = await seedSku(t, storeId, "FM5W-0AA-0AA");
@@ -511,7 +675,12 @@ describe("listLiveSkuStock", () => {
       handlerOf(listLiveSkuStock)(ctx, { storeId }),
     );
 
-    expect(result).toEqual([]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      productSkuId: String(skuId),
+      sku: null,
+    });
+    expect(result[0]!.identity.sku).toBeNull();
   });
 
   it("never reads another store's stock", async () => {

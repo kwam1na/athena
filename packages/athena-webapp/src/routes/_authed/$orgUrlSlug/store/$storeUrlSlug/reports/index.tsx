@@ -20,6 +20,10 @@ import {
   resetUnitsSheetContextSearch,
   unitsSheetFocusSearchValue,
 } from "@/components/reports/reportRouteSearch";
+import {
+  decodeSheetReturn,
+  encodeSheetReturn,
+} from "@/lib/sheetReturn";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import {
   tableRangeIncludingSelection,
@@ -43,7 +47,12 @@ export const Route = createFileRoute(
 
 function ReportsOverviewRoute() {
   const search = Route.useSearch();
-  const unitsSheetFocus = parseUnitsSheetFocusSearch(search.unitsFocus);
+  // One shared param for the whole app (`lib/sheetReturn`); the focus key
+  // inside it is this sheet's own vocabulary.
+  const unitsSheetReturn = decodeSheetReturn(search.sheetReturn);
+  const unitsSheetFocus = parseUnitsSheetFocusSearch(
+    unitsSheetReturn?.focusKey,
+  );
   const navigate = Route.useNavigate();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
   const { activeStore } = useGetActiveStore();
@@ -187,8 +196,7 @@ function ReportsOverviewRoute() {
             replace: true,
             search: (current) => ({
               ...current,
-              unitsFocus: undefined,
-              unitsScroll: undefined,
+              sheetReturn: undefined,
             }),
           })
         }
@@ -213,11 +221,13 @@ function ReportsOverviewRoute() {
               replace: true,
               search: (current) => ({
                 ...current,
-                unitsFocus: unitsSheetFocusSearchValue(
-                  productSkuId,
-                  focusSurface,
-                ),
-                unitsScroll,
+                sheetReturn: encodeSheetReturn({
+                  focusKey: unitsSheetFocusSearchValue(
+                    productSkuId,
+                    focusSurface,
+                  ),
+                  scrollOffset: unitsScroll,
+                }),
               }),
             }),
           ).then(() => {
@@ -248,7 +258,7 @@ function ReportsOverviewRoute() {
         unitsSheetPage={search.unitsPage ?? 1}
         unitsSheetRestoreFocusSkuId={unitsSheetFocus.productSkuId}
         unitsSheetRestoreFocusSurface={unitsSheetFocus.surface}
-        unitsSheetRestoreScrollOffset={search.unitsScroll}
+        unitsSheetRestoreScrollOffset={unitsSheetReturn?.scrollOffset}
         unitsSheetTab={search.unitsTab ?? "top"}
         startDate={daysStart}
         tableEndDate={daysTableEnd}

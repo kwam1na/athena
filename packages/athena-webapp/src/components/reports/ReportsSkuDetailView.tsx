@@ -408,7 +408,7 @@ export function ReportsSkuDetailView({
             <div
               aria-busy={isRefreshing}
               className={cn(
-                "grid grid-cols-2 gap-layout-sm transition-opacity duration-150 motion-reduce:transition-none sm:grid-cols-4",
+                "grid grid-cols-2 gap-layout-sm transition-opacity duration-150 motion-reduce:transition-none sm:grid-cols-3",
                 isRefreshing && "opacity-60",
               )}
             >
@@ -449,22 +449,6 @@ export function ReportsSkuDetailView({
                 helper={grossProfitHelper()}
                 label="Gross profit"
                 value={detail.totals?.grossProfitMinor ?? "—"}
-                valueTransitionFromZero="fade"
-              />
-              <OperationsSummaryMetric
-                formatValue={(value) =>
-                  formatOptionalMoney(value, currency)
-                }
-                helper={
-                  detail.totals
-                    ? comparisonHelper(
-                      detail.totals.refundsMinor,
-                      detail.priorPeriodTotals?.refundsMinor,
-                    )
-                    : undefined
-                }
-                label="Refunds"
-                value={detail.totals?.refundsMinor ?? "—"}
                 valueTransitionFromZero="fade"
               />
             </div>

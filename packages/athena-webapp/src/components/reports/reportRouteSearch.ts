@@ -9,10 +9,9 @@ const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
  * omitted at its default so a plain `units=true` URL stays canonical:
  * - `unitsTab` serializes only the non-default Granular tab.
  * - `unitsPage` serializes only a Granular page greater than one.
- * - `unitsFocus` is the productSkuId of the drill-down link the operator
- *   activated; present only while a return restoration is pending.
- * - `unitsScroll` is the captured underlying-report scroll offset for the
- *   same pending restoration.
+ * Return continuity — which link was followed and the report scroll offset —
+ * rides on the shared `sheetReturn` param (`lib/sheetReturn`) rather than on
+ * keys of its own, so every sheet in the app spells it the same way.
  * The sheet state is period-scoped, so like `units` itself it never rides
  * through the weekly<->overview return-context bridges below.
  */
@@ -20,8 +19,11 @@ const unitsSheetSearchShape = {
   units: z.boolean().optional(),
   unitsTab: z.literal("granular").optional(),
   unitsPage: z.coerce.number().int().positive().optional(),
-  unitsFocus: z.string().min(1).max(256).optional(),
-  unitsScroll: z.coerce.number().int().min(0).optional(),
+  /**
+   * Opaque here: the codec carries it and the sheet interprets it. See
+   * `unitsSheetFocusSearchValue` for what this sheet packs into the key.
+   */
+  sheetReturn: z.string().min(1).max(512).optional(),
 };
 const weeklyHistoryCursorSchema = z.string().min(1).max(2_048);
 const weeklyHistoryCursorTrailSchema = z
@@ -54,13 +56,19 @@ type ReportsOverviewSearch = z.infer<typeof reportsOverviewSearchSchema>;
 export const resetUnitsSheetContextSearch = {
   unitsTab: undefined,
   unitsPage: undefined,
-  unitsFocus: undefined,
-  unitsScroll: undefined,
+  sheetReturn: undefined,
 } as const;
 
 const UNITS_CHART_FOCUS_PREFIX = "chart:";
 
-/** Keep the originating surface inside the existing one-shot focus token. */
+/**
+ * Pack the originating surface into the focus key.
+ *
+ * The chart and the table render the same SKU, so the key has to say which
+ * one the operator left from — returning to the other would look like focus
+ * jumping to an unrelated element. `lib/sheetReturn` never reads this; the
+ * key is this sheet's own vocabulary.
+ */
 export function unitsSheetFocusSearchValue(
   productSkuId: string,
   surface: "chart" | "table",
