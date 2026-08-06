@@ -1,15 +1,14 @@
-import { useEffect } from "react";
-import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, BookOpenText, FileChartColumn, Moon, ScrollText, Sun } from "lucide-react";
+import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { BookOpenText, FileChartColumn, Moon, ScrollText, Sun } from "lucide-react";
 
 import { DocsScrollToTop } from "@/components/docs/DocsScrollToTop";
 import { DocsTexture } from "@/components/docs/DocsTexture";
 import { FadeIn } from "@/components/common/FadeIn";
-import Spinner from "@/components/ui/spinner";
 import { DocsOriginProvider } from "./-docs-origin";
+import { useDocsWorkspaceTracking } from "@/contextTracking/useDocsWorkspaceTracking";
 import { useAuth } from "@/hooks/useAuth";
+import { filterAccessibleSolutionDocs } from "@/lib/docs/access";
 import { listDeliveryReports, listSolutionDocs } from "@/lib/docs/content";
-import { LOGIN_PATH } from "@/lib/navigation/appEntryRoutes";
 import { useAthenaTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -40,8 +39,11 @@ const NAV_LINK_ACTIVE = {
   className: cn(NAV_LINK_CLASS, "bg-primary-soft font-medium text-primary"),
 };
 
-function DocsNav() {
-  const solutionCount = listSolutionDocs().length;
+function DocsNav({ isAuthenticated }: { isAuthenticated: boolean }) {
+  const solutionCount = filterAccessibleSolutionDocs(
+    listSolutionDocs(),
+    isAuthenticated,
+  ).length;
   const reportCount = listDeliveryReports().length;
 
   return (
@@ -81,32 +83,13 @@ function DocsNav() {
   );
 }
 
-/**
- * The docs corpus includes security and infrastructure writeups, so the whole
- * section sits behind the same signed-in gate as the app shell.
- */
-function DocsAuthGate({ children }: { children: React.ReactNode }) {
-  const { isLoading, user } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!isLoading && user === null) {
-      navigate({ to: LOGIN_PATH });
-    }
-  }, [isLoading, user, navigate]);
-
-  if (isLoading || user === null) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Spinner />
-      </div>
-    );
-  }
-
-  return <>{children}</>;
-}
-
 export function DocsLayout() {
+  const { isLoading, user } = useAuth();
+  const isAuthenticated = Boolean(user);
+  useDocsWorkspaceTracking({
+    isAuthenticated,
+    isAuthLoading: isLoading,
+  });
   // Keying the fade on the pathname replays it on every page change. Search
   // params are excluded on purpose: filtering the solutions list should not
   // flash the results it is filtering.
@@ -115,19 +98,11 @@ export function DocsLayout() {
   });
 
   return (
-    <DocsAuthGate>
-      <DocsOriginProvider>
+    <DocsOriginProvider>
       <div className="relative min-h-screen bg-background text-foreground">
         <DocsTexture />
         <header className="sticky top-0 z-20 border-b border-border/70 bg-background/90 backdrop-blur">
           <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-3 px-4 sm:px-6">
-            <Link
-              to="/"
-              aria-label="Back to Athena"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
             <Link to="/docs" className="flex items-baseline gap-2">
               <span className="font-display text-base font-medium">Athena</span>
               <span className="text-sm text-muted-foreground">Docs</span>
@@ -141,12 +116,12 @@ export function DocsLayout() {
         <div className="relative z-10 mx-auto flex w-full max-w-7xl gap-10 px-4 py-10 sm:px-6 sm:py-14">
           <aside className="hidden w-56 shrink-0 md:block">
             <div className="sticky top-[6rem]">
-              <DocsNav />
+              <DocsNav isAuthenticated={isAuthenticated} />
             </div>
           </aside>
           <main className="min-w-0 flex-1">
             <div className="mb-8 border-b border-border/70 pb-6 md:hidden">
-              <DocsNav />
+              <DocsNav isAuthenticated={isAuthenticated} />
             </div>
             <FadeIn key={pathname}>
               <Outlet />
@@ -156,7 +131,6 @@ export function DocsLayout() {
 
         <DocsScrollToTop />
       </div>
-      </DocsOriginProvider>
-    </DocsAuthGate>
+    </DocsOriginProvider>
   );
 }

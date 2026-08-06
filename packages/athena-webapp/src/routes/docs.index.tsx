@@ -1,6 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 
+import { useAuth } from "@/hooks/useAuth";
+import {
+  canAccessSolutionCategory,
+  filterAccessibleSolutionDocs,
+} from "@/lib/docs/access";
 import {
   listDeliveryReports,
   listSolutionCategories,
@@ -13,9 +18,16 @@ import {
 } from "./-docs-shared";
 
 function DocsOverview() {
-  const solutions = listSolutionDocs();
+  const { user } = useAuth();
+  const isAuthenticated = Boolean(user);
+  const solutions = filterAccessibleSolutionDocs(
+    listSolutionDocs(),
+    isAuthenticated,
+  );
   const reports = listDeliveryReports();
-  const categories = listSolutionCategories();
+  const categories = listSolutionCategories().filter(({ category }) =>
+    canAccessSolutionCategory(category, isAuthenticated),
+  );
 
   return (
     <div className="space-y-16">
@@ -24,10 +36,9 @@ function DocsOverview() {
           Documentation
         </h1>
         <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-          Implementation learnings and delivery history for the Athena
-          workspace: {solutions.length} solution docs across{" "}
-          {categories.length} categories, and {reports.length} delivery
-          reports.
+          Implementation learnings and delivery history for Athena:{" "}
+          {solutions.length} solution docs across {categories.length} categories,
+          and {reports.length} delivery reports.
         </p>
       </header>
 

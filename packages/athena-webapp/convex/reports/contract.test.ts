@@ -75,6 +75,7 @@ import { RESEED_PURGE_TABLES } from "./reseed";
 type AnyValidator = Validator<any, any, any> & {
   kind: string;
   fields?: Record<string, AnyValidator>;
+  element?: AnyValidator;
   members?: AnyValidator[];
   value?: unknown;
   isOptional: "required" | "optional";
@@ -129,6 +130,8 @@ describe("reports contract ↔ schema parity", () => {
       "priorTrailing30",
       "trailing3Months",
       "priorTrailing3Months",
+      "trailing6Months",
+      "priorTrailing6Months",
     ] as const) {
       const snapshot = fieldsOf(fields[period]);
       for (const key of REPORT_DAY_METRIC_KEYS) {
@@ -137,6 +140,10 @@ describe("reports contract ↔ schema parity", () => {
       }
       expect(snapshot.dayCount).toBeDefined();
       expect(snapshot.unsettledDayCount).toBeDefined();
+      expect(snapshot.transactionCount).toBeDefined();
+      expect(snapshot.transactionCount.isOptional).toBe("optional");
+      expect(snapshot.transactionCoveredDayCount).toBeDefined();
+      expect(snapshot.transactionCoveredDayCount.isOptional).toBe("optional");
     }
   });
 
@@ -214,6 +221,21 @@ describe("reports contract ↔ schema parity", () => {
     expect(new Set(unionLiterals(completeness.reason))).toEqual(
       new Set(unionLiterals(fieldsOf(completeness.outsideSchedule).reason)),
     );
+  });
+
+  it("keeps legacy weekly day-closed lineage readable during projection refresh", () => {
+    for (const schema of [
+      reportWeekAcceptedSchema,
+      (reportWeekCurrentSchema as AnyValidator).members!.find(
+        (member) => member.fields?.included,
+      )!,
+    ]) {
+      const lineage = fieldsOf(schema).scheduleLineage;
+      expect(lineage.kind).toBe("array");
+      const row = fieldsOf(lineage.element);
+      expect(row.dayClosed).toBeDefined();
+      expect(row.dayClosed.isOptional).toBe("optional");
+    }
   });
 
   it("persists the prior period's outside-schedule lane, optional during rollout", () => {

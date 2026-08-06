@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { type Infer, v } from "convex/values";
 
 import {
   intelligenceSourceRefValidator,
@@ -105,7 +105,7 @@ export const contextEnvironmentValidator = v.object({
 });
 
 export const contextEventAppendArgsValidator = {
-  storeId: v.id("store"),
+  storeId: v.optional(v.id("store")),
   organizationId: v.optional(v.id("organization")),
   surface: contextTrackingSurfaceValidator,
   eventId: v.string(),
@@ -130,8 +130,15 @@ export const contextEventAppendArgsValidator = {
   nonCompilable: v.optional(v.boolean()),
 };
 
+const contextEventAppendArgsObjectValidator = v.object(
+  contextEventAppendArgsValidator,
+);
+export type ContextEventAppendArgs = Infer<
+  typeof contextEventAppendArgsObjectValidator
+>;
+
 export const contextEventSchema = v.object({
-  storeId: v.id("store"),
+  storeId: v.optional(v.id("store")),
   organizationId: v.optional(v.id("organization")),
   surface: contextTrackingSurfaceValidator,
   eventId: v.string(),

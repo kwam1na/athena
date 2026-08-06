@@ -34,6 +34,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/docs.index.tsx`](../../src/routes/docs.index.tsx)
 - [`src/routes/docs.reports.$slug.tsx`](../../src/routes/docs.reports.$slug.tsx)
 - [`src/routes/docs.reports.index.tsx`](../../src/routes/docs.reports.index.tsx)
+- [`src/routes/docs.solutions.$category.$slug.test.tsx`](../../src/routes/docs.solutions.$category.$slug.test.tsx)
 - [`src/routes/docs.solutions.$category.$slug.tsx`](../../src/routes/docs.solutions.$category.$slug.tsx)
 - [`src/routes/docs.solutions.index.tsx`](../../src/routes/docs.solutions.index.tsx)
 - [`src/routes/docs.tsx`](../../src/routes/docs.tsx)

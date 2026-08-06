@@ -77,8 +77,10 @@ export function ReportDateRangeField({
         </Button>
       </PopoverTrigger>
       <PopoverContent align={align} className="w-auto p-0">
-        <div>
+        <div className="w-full">
           <ReportCalendar
+            className="w-full"
+            classNames={{ root: "w-full" }}
             defaultMonth={selectedRange.from}
             mode="range"
             onSelect={(range) => {

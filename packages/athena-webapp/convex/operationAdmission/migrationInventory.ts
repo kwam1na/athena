@@ -239,6 +239,17 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     functions: ["intelligence/runs:dismissArtifact"],
   },
   {
+    wave: "intelligence",
+    capability: "workspace.telemetry.write",
+    owner: "V26-1094",
+    reason:
+      "Anonymous docs-workspace visit telemetry. It has no store scope and no " +
+      "authenticated actor, so it does not fit the current operation-admission " +
+      "actor model; admission stays inventoried here until a public-actor " +
+      "definition exists.",
+    functions: ["contextTracking/athenaWebappEvents:recordDocsWorkspaceVisit"],
+  },
+  {
     wave: "operations-support",
     capability: "appointments.manage",
     owner: "V26-1094",

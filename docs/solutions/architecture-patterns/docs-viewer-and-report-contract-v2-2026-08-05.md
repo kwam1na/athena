@@ -12,7 +12,7 @@ applies_when:
   - "Authoring or rendering a landed-change report via .agents/skills/ce-landed-change-report"
   - "Editing render_report.py, report-presentation-check.ts, or landed-change-report-check.ts"
 tags: [docs-viewer, landed-change-report, vite-virtual-module, report-contract, delivery-gate]
-delivery_diff_fingerprint: 998036a77377d8e8053b875ce035eb12678690bef8f55079d6cf6747fc16279f
+delivery_diff_fingerprint: 557f87faf1ff8fcd143f36cd8da9452adaf23a7fcfd8790b6b6497988f8154e3
 ---
 
 # In-app docs viewer and the landed-change report contract-v2 split
@@ -35,9 +35,25 @@ time into a virtual module (`virtual:athena-docs-index`) that carries
 metadata only — titles, dates, categories, slugs. Document bodies lazy-load
 per page via `import.meta.glob`, so the index stays cheap even as the corpus
 grows. New routes (`docs.tsx`, `docs.index.tsx`, `docs.solutions.*.tsx`,
-`docs.reports.*.tsx`) render that content behind the same `useAuth` sign-in
-gate as the rest of the app shell (`-docs-layout.tsx`'s `DocsAuthGate`) — any
-signed-in user can read it, there is no additional role check.
+`docs.reports.*.tsx`) render that content publicly. The `security-issues`
+solution category is the exception: public listings omit its metadata, direct
+category and document navigation redirects signed-out readers to login, and
+its document body does not lazy-load until `useAuth` resolves an Athena user.
+This is an application access boundary, not a place to store secrets: the docs
+corpus is still compiled into browser assets and needs a server-authorized
+content endpoint before it can provide confidentiality against direct asset
+discovery.
+
+The public docs shell emits one `athena_webapp.workspace_viewed` context event
+per browser-tab session and authentication state. The server derives an
+`athenaUser` actor for signed-in readers; signed-out readers use a random,
+tab-scoped guest id. The event records only the fixed `/docs` route, the
+`docs` workspace code, a coarse viewport bucket, and the session reference —
+never email, query parameters, referrer, document title, or document body.
+Because docs have no store context, this one registered event may omit
+`storeId`; the append boundary rejects every other unscoped context event and
+marks docs visits non-compilable so they cannot become store/customer
+intelligence evidence.
 
 **2. Report contract v2.** Landed-change reports move from freeform styled
 HTML (v1) to semantic content documents: a single

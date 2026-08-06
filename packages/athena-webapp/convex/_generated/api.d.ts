@@ -28,6 +28,7 @@ import type * as constants_countries from "../constants/countries.js";
 import type * as constants_email from "../constants/email.js";
 import type * as constants_ghana from "../constants/ghana.js";
 import type * as constants_payment from "../constants/payment.js";
+import type * as contextTracking_athenaWebappEvents from "../contextTracking/athenaWebappEvents.js";
 import type * as contextTracking_contextBundles from "../contextTracking/contextBundles.js";
 import type * as contextTracking_contextEvents from "../contextTracking/contextEvents.js";
 import type * as contextTracking_eventDefinitions from "../contextTracking/eventDefinitions.js";
@@ -622,6 +623,7 @@ declare const fullApi: ApiFromModules<{
   "constants/email": typeof constants_email;
   "constants/ghana": typeof constants_ghana;
   "constants/payment": typeof constants_payment;
+  "contextTracking/athenaWebappEvents": typeof contextTracking_athenaWebappEvents;
   "contextTracking/contextBundles": typeof contextTracking_contextBundles;
   "contextTracking/contextEvents": typeof contextTracking_contextEvents;
   "contextTracking/eventDefinitions": typeof contextTracking_eventDefinitions;

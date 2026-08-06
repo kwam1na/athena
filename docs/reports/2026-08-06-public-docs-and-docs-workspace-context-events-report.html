@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Public Docs Workspace with Gated Security Notes and Visit Tracking</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="557f87faf1ff8fcd143f36cd8da9452adaf23a7fcfd8790b6b6497988f8154e3">
+  <header data-report-section="header">
+    <h1>Public Docs Workspace with Gated Security Notes and Visit Tracking</h1>
+    <p>/docs opens to signed-out readers, security-issues stays behind login, and each docs tab-session records one unscoped context event</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch feat/public-docs-security-gating-and-docs-context-events</li>
+      <li>190 tests green across 17 affected suites</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>PR</dt><dd>Not yet opened</dd>
+      <dt>Status</dt><dd>Delivery candidate</dd>
+      <dt>Deploy</dt><dd>Pending</dd>
+      <dt>Root alignment</dt><dd>Pending</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive Summary</h2>
+      <p>The /docs section shipped behind a blanket sign-in gate, which meant solution notes and landed-change reports could not be linked to anyone outside the app. This branch removes the blanket gate and replaces it with a single per-category access policy: everything is public except the <code>security-issues</code> solution category, which is filtered out of public listings, redirects signed-out readers to login on direct navigation, and never has its document body read at loader time.</p>
+      <p>Opening the section to anonymous readers also made docs traffic invisible, so the branch adds one context event per browser-tab session and authentication state. Because docs have no store, this required the context-event append boundary to accept an unscoped write for the first time — and it does so through an exact allow-list rather than by relaxing the rule.</p>
+      <p>Two smaller fixes ride along: the screen-redact browser extension now masks per-glyph animated currency values, and the report date-range calendar stretches to the full width of its popover.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Problem</h2>
+      <p>The docs viewer landed with <code>DocsAuthGate</code> in <code>-docs-layout.tsx</code> wrapping the entire route tree, on the reasoning that the corpus contains security writeups. That is true of exactly one category. Applying its confidentiality requirement to the whole corpus made every architecture note and delivery report unreachable without an Athena account.</p>
+      <p>Making the section public then created a second problem. The existing context-event append path required a <code>storeId</code> on every write, and a docs reader has no store — signed-out readers have no identity at all. There was no registered writer for the <code>athena_webapp.workspace_viewed</code> event even though the event definition already existed.</p>
+      <p>Separately, the screen-redact extension silently failed on the numbers that most need redacting. <code>FlipNumber</code> renders one text node per glyph, so no single text node ever contains both a currency marker and its digits, and the extension's <code>SYMBOL_AMOUNT</code> regex never matched.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental Model</h2>
+      <p>Access is one predicate applied at four places, not four independent checks. <code>canAccessSolutionCategory(category, isAuthenticated)</code> in <code>src/lib/docs/access.ts</code> is the whole policy; the nav, the docs overview, the solutions list, and the document loader each call it or its list-shaped sibling <code>filterAccessibleSolutionDocs</code>.</p>
+      <p>The load-bearing call is the one in the route loader, and it passes <code>false</code> for <code>isAuthenticated</code> unconditionally. The loader never assumes a reader is signed in, so a restricted document's body is never read into the route payload. Authentication is resolved afterwards, client-side, and only then does the body load.</p>
+      <p>For tracking, think of the append boundary as a gate with one named exception rather than an optional field. <code>storeId</code> became optional in the validator, but the first check in <code>appendContextEventWithCtx</code> rejects any unscoped event that is not the exact <code>(surface, eventId, route, workspace)</code> tuple for a docs visit.</p>
+      <ul>
+        <li>Policy: one predicate, four call sites, hardcoded <code>false</code> at the loader</li>
+        <li>Boundary: unscoped writes are allow-listed by exact tuple, not by relaxed validation</li>
+        <li>Identity: the client supplies a session id; the server derives the actor</li>
+      </ul>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before vs After</h2>
+      <p>Before: <code>DocsAuthGate</code> read <code>useAuth()</code>, showed a spinner while loading, and redirected to <code>LOGIN_PATH</code> when <code>user === null</code> — for every docs route. All listing routes called <code>listSolutionDocs()</code> and <code>listSolutionCategories()</code> unfiltered, and the <code>$category/$slug</code> loader unconditionally resolved <code>findSolutionDoc</code>, <code>loadSolutionDocBody</code>, and the frontmatter strip.</p>
+      <p>After: the gate is deleted. <code>loadSolutionDocPageData</code> in the new <code>src/lib/docs/solutionPage.ts</code> returns <code>{ doc, body: null, requiresAuthentication: true }</code> for a restricted category without touching the body. <code>SolutionDocPage</code> dispatches to <code>AuthenticatedSolutionDocPage</code>, which resolves <code>useAuth</code>, redirects on <code>null</code>, and only then loads the body in an effect guarded by an <code>isCurrent</code> cancellation flag.</p>
+      <p>Before: <code>appendContextEvent</code> was an <code>internalMutation</code> whose logic lived entirely in its handler, and <code>storeId</code> was a required <code>v.id("store")</code> in both the append validator and the stored <code>contextEvent</code> row.</p>
+      <p>After: the handler body is extracted verbatim into an exported <code>appendContextEventWithCtx(ctx: Pick&lt;MutationCtx, "db"&gt;, args: ContextEventAppendArgs)</code>. That narrow ctx type is what lets the new public <code>recordDocsWorkspaceVisit</code> mutation reuse the boundary in-process instead of scheduling an internal mutation. Most of the 255 changed lines in <code>contextEvents.ts</code> are the resulting re-indent.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>What Changed</h2>
+      <p>Access gating: new <code>src/lib/docs/access.ts</code> and <code>src/lib/docs/solutionPage.ts</code>; <code>-docs-layout.tsx</code> loses <code>DocsAuthGate</code> and its "Back to Athena" header link, and <code>DocsNav</code> gains an <code>isAuthenticated</code> prop so its solution count matches what the reader can open. <code>docs.index.tsx</code> and <code>docs.solutions.index.tsx</code> filter both documents and categories; the latter also redirects to <code>LOGIN_PATH</code> via effect when an inaccessible <code>category</code> search param is present and auth has finished loading.</p>
+      <p>Tracking: three layers. <code>docsWorkspaceTracking.ts</code> holds pure helpers — a <code>sessionStorage</code>-backed visitor id under <code>athena-docs-visitor-session-v1</code>, viewport bucketing, and the visit builder that produces the idempotency key <code>docs-workspace:${sessionId}:${visitorKind}</code>. <code>useDocsWorkspaceTracking.ts</code> fires the mutation from <code>DocsLayout</code>, skipping while auth is loading and swallowing rejections. <code>athenaWebappEvents.ts</code> exposes a public <code>recordDocsWorkspaceVisit</code> mutation with literal-constrained args, validates the visit, resolves the actor server-side, and appends.</p>
+      <p>Append boundary: <code>storeId</code> becomes <code>v.optional(v.id("store"))</code> in both <code>contextEventAppendArgsValidator</code> and <code>contextEventSchema</code>; a new exported <code>ContextEventAppendArgs</code> type makes the extracted function callable with a plain object; and <code>isAllowedGlobalContextEvent</code> gates the unscoped case. A new <code>by_surface_eventId_status_occurredAt</code> index is added to <code>contextEvent</code> — nothing in this branch reads it; it is forward-provisioning for querying events that have no store-prefixed index to use.</p>
+      <p>Registration: adding a public mutation obliges two registries. <code>workspace.telemetry.write</code> joins <code>ATHENA_CAPABILITY_CATALOG</code> and <code>contextTracking/athenaWebappEvents</code> maps to it in <code>PUBLIC_WRITE_MODULE_CAPABILITIES</code>, which is what lets shared-demo coverage classify the mutation instead of defaulting it to denied. The mutation is then named in <code>OPERATION_ADMISSION_MIGRATION_INVENTORY</code>: it has no store scope and no authenticated actor, so it does not fit the current operation-admission actor model, and it stays inventoried rather than defined until a public-actor definition exists. The capability is deliberately not added to <code>SHARED_DEMO_ALLOWED_CAPABILITIES</code> — nothing enforces it on this path, and default-deny is the repo's stated posture.</p>
+      <p>Not changed: the event registry entry for <code>athena_webapp.workspace_viewed</code> already existed in <code>eventDefinitions.ts</code> with its payload keys, visibility mode, and retention class; this branch only added a writer for it. Dedupe, hashing, and quota logic are untouched — unscoped events simply occupy their own <code>undefined</code>-storeId partition of the existing indexes.</p>
+      <p>Riding along: <code>tools/screen-redact-extension/content.js</code> classifies flip-animated values on the stable <code>data-value</code> attribute of the flip root and applies <code>maskDigits</code> per glyph, and <code>ReportDateRangeField.tsx</code> adds <code>w-full</code> plus a <code>classNames={{ root: "w-full" }}</code> override so react-day-picker's own root stretches. Two backward-compatibility test guards were added, pinning that legacy <code>"daily"</code> shared-demo restore sources and legacy weekly <code>scheduleLineage[].dayClosed</code> stay readable through schema widening.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure Boundaries</h2>
+      <p>This is an application access boundary, not confidentiality. The docs corpus is still compiled into browser assets, so gating <code>security-issues</code> in the app does not protect it against direct asset discovery. Real confidentiality needs a server-authorized content endpoint, which this branch does not add. The loader also still returns a restricted document's metadata (title, date, category) — only the body is withheld.</p>
+      <p>Signed-out access to a restricted doc fails in three independent places: listings filter it out, a <code>?category=security-issues</code> deep link redirects after auth resolves, and a direct document URL returns <code>body: null</code> from the loader so the markdown never reaches the client payload at all. The third is the one that actually holds; the first two are consistency, not enforcement.</p>
+      <p>An invalid docs visit is rejected with the single opaque string "Invalid docs workspace visit." — no detail is leaked about which rule failed. The rules are a <code>sessionId</code> matching <code>/^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/</code>, an idempotency key that is exactly <code>docs-workspace:${sessionId}:anonymous</code> or <code>:authenticated</code>, and a symmetric ±5 minute clock-skew bound. Nothing throws; every outcome is a returned <code>kind</code>.</p>
+      <p>Repeat writes are absorbed by idempotency rather than rejected: a remount or re-render for the same tab-session and auth state yields <code>duplicate</code>, and signing in produces a distinct key ending <code>:authenticated</code> rather than an <code>idempotency_conflict</code>.</p>
+      <p>The abuse quota partitions on <code>docs-workspace:${sessionId}</code>, and the session id is client-chosen. A caller can rotate sessions to evade it, so treat that quota as noise control, not abuse control. The real protection against docs visits polluting intelligence is <code>nonCompilable: true</code>, which makes <code>compileContextEvent</code> return <code>null</code> so the event never enters a context bundle.</p>
+      <p>Tracking failure is invisible by design — <code>useDocsWorkspaceTracking</code> catches and discards, so a rejected or failed write never degrades the docs UI. A body-load failure on the authenticated path is not swallowed: it is stored and rethrown on the next render so the nearest error boundary handles it.</p>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation</h2>
+      <p>Targeted suites: 17 files, 190 tests, all passing — the docs access and loader tests, the client and server docs-visit tests, the amended <code>contextEvents.test.ts</code> store-scope case, the screen-redact extension test, and the reports/shared-demo contract guards.</p>
+      <p>Types: <code>tsc --noEmit</code> over <code>packages/athena-webapp/tsconfig.json</code> is clean.</p>
+      <p>Gate: the full <code>bun run pr:athena</code> merge gate (prepare, preflight, validate, record-proof, scorecard) was run on this branch, which includes the Convex audit, changed-file lint for both convex and frontend, the architecture boundary check, coverage, harness review, inferential review, harness audit, and the graphify check.</p>
+      <p>Not covered: <code>getDocsViewportBucket</code> boundary values, the <code>useDocsWorkspaceTracking</code> effect wiring (the auth-loading skip and the swallowed rejection), the <code>docs.solutions.index.tsx</code> redirect effect, the clock-skew rejection path specifically, and the new <code>by_surface_eventId_status_occurredAt</code> index, which has no reader yet.</p>
+      <p>Deploy status: pending at authoring time — this report is written as a delivery candidate before the PR is opened.</p>
+      <p>Root-alignment status: pending — local main is fast-forwarded after merge.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next-Time Guidance</h2>
+      <p>When a route's data depends on authentication, decide it in the loader with authentication assumed absent, not in the component. Passing a hardcoded <code>false</code> into the access predicate is what guarantees a restricted body never enters the route payload; a component-level check would have shipped the content and then hidden it.</p>
+      <p>When an append boundary needs to accept a new shape, allow-list the exact tuple rather than relaxing the validator. Making <code>storeId</code> optional without <code>isAllowedGlobalContextEvent</code> would have silently permitted every unscoped event on every surface.</p>
+      <p>Adding a public Convex mutation is never a one-file change. Two static sensors — the shared-demo coverage classifier and the operation-admission migration inventory — fail on any unregistered public mutation, and both key on a catalog capability. This branch's own gate run caught exactly that; budget for the capability entry, the module mapping, and the inventory entry as part of the change rather than as follow-up.</p>
+      <p>Do not describe an in-app category gate as confidentiality. Anything compiled into the client bundle is discoverable regardless of routing, and saying so in the solution note is what keeps the next reader from treating /docs as a place to store secrets.</p>
+      <p>When redacting DOM that an animation owns, classify on a stable attribute and transform the leaf nodes in place. Rewriting the flip root's text would have masked the value correctly and broken the animation; reading <code>data-value</code> to decide and then masking per glyph preserves both.</p>
+      <p>Extension tests can execute the real content script — <code>readFileSync</code> plus <code>new Function</code> with a stubbed <code>chrome.storage</code> — instead of reimplementing its logic in the test. That is what makes the post-mutation re-mask case meaningful, since it exercises the actual MutationObserver rather than a copy of it.</p>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/src/lib/docs/access.ts</code></td><td>The entire access policy: <code>SECURITY_SOLUTION_CATEGORY</code>, <code>canAccessSolutionCategory</code>, and <code>filterAccessibleSolutionDocs</code>.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/lib/docs/solutionPage.ts</code></td><td><code>loadSolutionDocPageData</code> — calls the predicate with <code>false</code> so a restricted body is never read at loader time.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/routes/docs.solutions.$category.$slug.tsx</code></td><td>Splits into public and authenticated page components; the authenticated one resolves auth, redirects on null, then loads the body.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/routes/-docs-layout.tsx</code></td><td>Blanket <code>DocsAuthGate</code> removed; hosts the visit-tracking hook and passes <code>isAuthenticated</code> to the nav.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/contextTracking/docsWorkspaceTracking.ts</code></td><td>Pure client helpers: tab-scoped visitor session, viewport bucket, and the visit/idempotency-key shape.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/contextTracking/useDocsWorkspaceTracking.ts</code></td><td>Fires the visit once auth resolves and swallows failures so tracking never degrades the page.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/contextTracking/athenaWebappEvents.ts</code></td><td>The public <code>recordDocsWorkspaceVisit</code> mutation: literal-constrained args, server-derived actor, <code>nonCompilable: true</code>.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/contextTracking/contextEvents.ts</code></td><td>Handler extracted to <code>appendContextEventWithCtx</code>; adds the store-scope check and its <code>isAllowedGlobalContextEvent</code> allow-list.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/schemas/contextTracking.ts</code></td><td>Makes <code>storeId</code> optional in both the append args and the stored row, and exports <code>ContextEventAppendArgs</code>.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/schema.ts</code></td><td>Adds <code>by_surface_eventId_status_occurredAt</code> so unscoped events are queryable without a store prefix.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/platform/capabilityCatalog.ts</code></td><td>Adds <code>workspace.telemetry.write</code> and maps the new module to it, so the shared-demo classifier declares the mutation instead of denying it as unclassified.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operationAdmission/migrationInventory.ts</code></td><td>Names the mutation so no public write is unaccounted for, with the reason it cannot yet carry an operation definition.</td></tr>
+        <tr><td><code>tools/screen-redact-extension/content.js</code></td><td>Classifies flip-animated values on the flip root's <code>data-value</code> and masks digits per glyph node.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/extensions/screenRedactExtension.test.ts</code></td><td>Executes the real content script against a stubbed <code>chrome.storage</code>, covering initial masking and the MutationObserver re-mask.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/reports/ReportDateRangeField.tsx</code></td><td>Full-width popover calendar via <code>w-full</code> plus the react-day-picker <code>classNames.root</code> override.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does <code>loadSolutionDocPageData</code> pass a hardcoded <code>false</code> for <code>isAuthenticated</code> instead of the reader's real auth state?</p>
+        <ol data-quiz-options>
+          <li>The loader runs before Convex is initialised, so auth state is always false there</li>
+          <li data-quiz-correct>So the loader never assumes authentication and a restricted document's body is never read into the route payload; auth is resolved afterwards, client-side, before the body loads</li>
+          <li>It is a placeholder that a follow-up branch will replace with the real value</li>
+          <li>TanStack Router loaders cannot receive props, so no other value is available</li>
+        </ol>
+        <p data-quiz-explanation>Deciding access in the loader with authentication assumed absent is what guarantees the content never ships to an unauthorized client. A component-level check would have delivered the body and then hidden it.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What protection does gating the <code>security-issues</code> category actually provide?</p>
+        <ol data-quiz-options>
+          <li>Full confidentiality — the documents are encrypted at rest and served only to authorized users</li>
+          <li data-quiz-correct>An application access boundary only; the docs corpus is still compiled into browser assets, so it is not protected against direct asset discovery</li>
+          <li>Nothing — the gate is cosmetic and the body is always sent to the client</li>
+          <li>Network-level protection, since the category is served from a separate origin</li>
+        </ol>
+        <p data-quiz-explanation>The loader does withhold the body from the route payload, but the corpus is still bundled. Real confidentiality would need a server-authorized content endpoint, which this branch deliberately does not add.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why was <code>storeId</code> made optional without simply letting any unscoped context event through?</p>
+        <ol data-quiz-options>
+          <li>Convex validators cannot express a conditionally required field</li>
+          <li>Unscoped events are rejected later by the event registry anyway, so the allow-list is redundant</li>
+          <li data-quiz-correct><code>isAllowedGlobalContextEvent</code> permits exactly one <code>(surface, eventId, route, workspace)</code> tuple; relaxing the validator alone would have silently allowed every unscoped event on every surface</li>
+          <li>The allow-list exists only to produce a clearer error message</li>
+        </ol>
+        <p data-quiz-explanation>The store-scope check is the first thing <code>appendContextEventWithCtx</code> does, before any database read. Optionality in the validator is the type-level enabler; the allow-list is the actual policy.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is the append handler extracted into <code>appendContextEventWithCtx</code> with a <code>Pick&lt;MutationCtx, "db"&gt;</code> parameter?</p>
+        <ol data-quiz-options>
+          <li>To let the function run inside a Convex query as well as a mutation</li>
+          <li data-quiz-correct>So the new public docs-visit mutation can reuse the same append boundary in-process rather than scheduling an internal mutation, while the narrow ctx type documents that the path only touches the database</li>
+          <li>Because <code>internalMutation</code> handlers cannot be exported from a Convex module</li>
+          <li>To avoid a circular import between the schema and the mutation</li>
+        </ol>
+        <p data-quiz-explanation>Most of the 255 changed lines in <code>contextEvents.ts</code> are the re-indent from that extraction. The narrow ctx type is a deliberate signal: no auth, no scheduler, just <code>db</code>.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A reader opens /docs signed out, reads for a while, then signs in without closing the tab. What happens to the context events?</p>
+        <ol data-quiz-options>
+          <li>The second write returns <code>idempotency_conflict</code> because the session id is unchanged</li>
+          <li>The second write returns <code>duplicate</code> and is discarded</li>
+          <li data-quiz-correct>Two events are recorded — the idempotency key ends in <code>:anonymous</code> then <code>:authenticated</code>, so the auth state is part of the key</li>
+          <li>The first event is retroactively updated to attach the signed-in actor</li>
+        </ol>
+        <p data-quiz-explanation>The key is <code>docs-workspace:${sessionId}:${visitorKind}</code>. Auth state is part of it precisely so a sign-in produces a distinct event rather than a conflict, while re-renders within one state collapse to <code>duplicate</code>.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Can the abuse quota on docs visits be relied on to stop a determined caller?</p>
+        <ol data-quiz-options>
+          <li>Yes — the partition key is derived server-side from the authenticated user</li>
+          <li data-quiz-correct>No — the partition key is <code>docs-workspace:${sessionId}</code> and the session id is client-chosen, so a caller can rotate sessions to evade it; it is noise control, not abuse control</li>
+          <li>Yes — the mutation is rate-limited by IP address before the handler runs</li>
+          <li>No, because the quota is disabled for unscoped events entirely</li>
+        </ol>
+        <p data-quiz-explanation>Worth naming honestly. The protection that does hold is <code>nonCompilable: true</code>, which keeps docs visits out of context bundles regardless of volume.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does <code>nonCompilable: true</code> do to a recorded context event?</p>
+        <ol data-quiz-options>
+          <li>It prevents the event from being written to the <code>contextEvent</code> table at all</li>
+          <li data-quiz-correct>It makes <code>compileContextEvent</code> return <code>null</code>, so the event is persisted but never enters an LLM context bundle</li>
+          <li>It marks the event for deletion at the end of its retention window</li>
+          <li>It skips payload validation against the event registry</li>
+        </ol>
+        <p data-quiz-explanation>The event is still a real, queryable row. The flag governs only whether it can become store or customer intelligence evidence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why did the screen-redact extension fail to mask currency values rendered by <code>FlipNumber</code>?</p>
+        <ol data-quiz-options>
+          <li>The extension skipped elements carrying a <code>data-motion</code> attribute</li>
+          <li data-quiz-correct><code>FlipNumber</code> renders one text node per glyph, so no single text node contains both the currency marker and its digits, and the <code>SYMBOL_AMOUNT</code> regex never matched</li>
+          <li>The MutationObserver was not attached to animated subtrees</li>
+          <li><code>chrome.storage.sync</code> returned <code>enabled: false</code> during animation</li>
+        </ol>
+        <p data-quiz-explanation>The fix classifies on the flip root's <code>data-value</code> attribute, which holds the complete value, and then applies <code>maskDigits</code> to each glyph node so the per-glyph DOM the animation depends on survives.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Does anything in this branch read the new <code>by_surface_eventId_status_occurredAt</code> index?</p>
+        <ol data-quiz-options>
+          <li>Yes — the docs-visit mutation uses it for its idempotency lookup</li>
+          <li>Yes — the abuse quota check reads it</li>
+          <li data-quiz-correct>No — it has no reader here; it is forward-provisioning for querying unscoped events, which have no store-prefixed index to use</li>
+          <li>No — it is dead and should be removed before merge</li>
+        </ol>
+        <p data-quiz-explanation>Dedupe and quota still traverse the existing storeId-prefixed indexes, where unscoped events simply occupy the <code>undefined</code> partition. The new index anticipates reporting that cannot start from a store.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the deploy and root-alignment status this report claims?</p>
+        <ol data-quiz-options>
+          <li>Both completed before the report was written</li>
+          <li data-quiz-correct>Both pending — the report is authored as a delivery candidate, before the PR is opened, merged, or deployed</li>
+          <li>Deployed to production but not yet root-aligned</li>
+          <li>Not applicable; this change has no deploy step</li>
+        </ol>
+        <p data-quiz-explanation>The header meta and the validation section both say pending. The report is written at delivery-candidate time and does not claim outcomes that had not happened yet.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>staged diff analyst (Explore)</dt><dd>Read the staged diff against origin/main together with the pre-change files via <code>git show origin/main:&lt;path&gt;</code>, and produced the changed-file map by concern, the before/after for the docs gate and the append boundary, the finding that most of the 255-line <code>contextEvents.ts</code> diff is a re-indent from the handler extraction, the failure-boundary inventory (opaque rejection message, symmetric ±5 minute skew, three independent gating layers, the client-chosen abuse partition key), the observation that the new index has no reader in this branch, the meaning of <code>nonCompilable</code> traced to <code>compileContextEvent</code>, and the test inventory including the named coverage gaps reproduced in the validation section.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>
