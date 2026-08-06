@@ -1,57 +1,429 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="befb171571c19a2e5596ec293846291f6c1cd03047aa8f28ec11bec896280117">
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8" />
   <title>Athena report period comparisons — delivery report</title>
-  <style>
-    :root { color-scheme: light dark; --bg:#f5f5f3; --surface:#fff; --text:#191918; --muted:#696966; --line:#deded9; --accent:#315c4b; --soft:#e9f0ec; font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif; }
-    @media (prefers-color-scheme:dark){:root{--bg:#151615;--surface:#1d1f1d;--text:#f1f2ef;--muted:#a7aaa5;--line:#343734;--accent:#9bc9b5;--soft:#25342d}}
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);line-height:1.6} main{max-width:1040px;margin:auto;padding:40px 24px 80px}
-    h1{max-width:760px;margin:.45rem 0 1rem;font-size:clamp(2rem,5vw,3.5rem);line-height:1.03;letter-spacing:-.04em} h2{margin:0 0 1rem;font-size:1.35rem;letter-spacing:-.015em} h3{margin:1.2rem 0 .4rem;font-size:1rem} p{max-width:78ch} code{padding:.12rem .35rem;border-radius:4px;background:var(--soft);font-size:.92em}
-    .eyebrow{color:var(--muted);font-size:.75rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase}.pills{display:flex;flex-wrap:wrap;gap:.5rem;margin:1.25rem 0 2rem}.pill{border:1px solid var(--line);border-radius:999px;padding:.35rem .65rem;color:var(--muted);font-size:.78rem}.pill.good{border-color:var(--accent);color:var(--accent)}
-    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}.card{grid-column:span 12;padding:24px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}@media(min-width:800px){.half{grid-column:span 6}.wide{grid-column:span 8}.narrow{grid-column:span 4}}
-    .flow{display:grid;gap:10px;margin-top:1rem}.flow div{padding:12px 14px;border-left:3px solid var(--accent);background:var(--soft)} ul{padding-left:1.2rem} li+li{margin-top:.35rem} table{width:100%;border-collapse:collapse;font-size:.92rem}th,td{padding:.7rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--muted);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase}
-    .quiz fieldset{margin:1rem 0;padding:16px;border:1px solid var(--line);border-radius:10px}.quiz legend{padding:0 .35rem;font-weight:650}.option{display:block;margin:.45rem 0}.controls{display:flex;gap:.65rem;align-items:center;margin-top:1rem}.controls button{border:1px solid var(--accent);border-radius:8px;padding:.62rem .9rem;background:var(--accent);color:var(--surface);font:inherit;font-weight:650;cursor:pointer}.controls button.secondary{background:transparent;color:var(--accent)}.controls button:active{transform:scale(.97)}.result{min-height:1.6rem;font-weight:700}.explanation{display:none;margin:.5rem 0 0;color:var(--muted);font-size:.9rem}.graded .explanation{display:block}@media(prefers-reduced-motion:no-preference){.controls button{transition:transform 140ms cubic-bezier(.23,1,.32,1),background-color 140ms ease}}
-  </style>
 </head>
-<body><main>
-  <header><div class="eyebrow">Delivery candidate · Athena Reports</div><h1>Prior-period comparisons now carry their own truth.</h1><p>Report metrics can show direction without asking React to reconstruct financial periods. Current and prior values move together from bounded Convex read models through stable UI transitions.</p><div class="pills"><span class="pill">Branch: codex/report-period-comparisons</span><span class="pill good">Focused tests: 136 passed</span><span class="pill">PR: pending</span><span class="pill">Deploy: pending merge</span><span class="pill">Root alignment: pending merge</span></div></header>
-  <div class="grid">
-    <section class="card wide"><h2>Executive summary</h2><p>The change adds prior snapshots to overview rolling windows, prior day/week/month totals to item reports, and an equal-length prior range to SKU detail. Comparison arithmetic and source selection remain server-owned.</p><p>The UI receives explicit current and prior totals, retains the settled period key while new Convex arguments load, and uses one short reduced-motion-aware crossfade for comparison copy. Missing profit or price facts remain unavailable rather than becoming invented zeros.</p></section>
-    <aside class="card narrow"><h2>Status</h2><ul><li>Delivery candidate, not yet merged</li><li>Review: no actionable findings</li><li>Authoritative gate: rerun pending after documentation</li><li>Production deploy: pending file-impact decision after merge</li></ul></aside>
-    <section class="card half"><h2>Before</h2><ul><li>Rolling overview periods had no comparable prior snapshot.</li><li>Item and SKU views could show totals without direction.</li><li>Client surfaces risked independently defining “prior period.”</li><li>Old settled data could appear under a newly selected period label while refreshing.</li></ul></section>
-    <section class="card half"><h2>After</h2><ul><li>Server-shaped contracts return explicit adjacent comparison totals.</li><li>Period semantics distinguish calendar month from equal-length custom ranges.</li><li>Legacy overview documents are enriched through an indexed 184-day cap.</li><li>Settled data and its context key transition together.</li></ul></section>
-    <section class="card"><h2>Mental model: one paired evidence packet</h2><p>Think of every comparison as a sealed packet: the current window, its matching prior window, and the period identity travel together. The UI may format the packet, but it does not change what the windows mean.</p><div class="flow"><div><strong>Report projections</strong> fold source facts into bounded current and prior windows.</div><div><strong>Shared contracts</strong> preserve totals, missing values, and period identity.</div><div><strong>Stable query state</strong> keeps old data paired with its old context during refresh.</div><div><strong>Metric components</strong> format and crossfade the already-decided comparison.</div></div></section>
-    <section class="card"><h2>Key files</h2><table><thead><tr><th>File</th><th>Why it matters</th></tr></thead><tbody>
+<body>
+<article
+  data-athena-landed-change-report="v2"
+  data-athena-report-diff-fingerprint="befb171571c19a2e5596ec293846291f6c1cd03047aa8f28ec11bec896280117"
+>
+  <header data-report-section="header">
+    <h1>Prior-period comparisons now carry their own truth.</h1>
+    <div class="eyebrow">Delivery candidate · Athena Reports</div>
+    <p>Report metrics can show direction without asking React to reconstruct financial periods. Current and prior values move together from bounded Convex read models through stable UI transitions.</p>
+    <ul data-report-pills>
+      <li>Branch: codex/report-period-comparisons</li>
+      <li>Focused tests: 136 passed</li>
+      <li>PR: pending</li>
+      <li>Deploy: pending merge</li>
+      <li>Root alignment: pending merge</li>
+    </ul>
+  </header>
+  <section data-report-section="summary">
+<h2>Executive summary</h2><p>The change adds prior snapshots to overview rolling windows, prior day/week/month totals to item reports, and an equal-length prior range to SKU detail. Comparison arithmetic and source selection remain server-owned.</p><p>The UI receives explicit current and prior totals, retains the settled period key while new Convex arguments load, and uses one short reduced-motion-aware crossfade for comparison copy. Missing profit or price facts remain unavailable rather than becoming invented zeros.</p>
+  </section>
+  <section data-report-section="before">
+<h2>Before</h2><ul><li>Rolling overview periods had no comparable prior snapshot.</li><li>Item and SKU views could show totals without direction.</li><li>Client surfaces risked independently defining “prior period.”</li><li>Old settled data could appear under a newly selected period label while refreshing.</li></ul>
+  </section>
+  <section data-report-section="after">
+<h2>After</h2><ul><li>Server-shaped contracts return explicit adjacent comparison totals.</li><li>Period semantics distinguish calendar month from equal-length custom ranges.</li><li>Legacy overview documents are enriched through an indexed 184-day cap.</li><li>Settled data and its context key transition together.</li></ul>
+  </section>
+  <section data-report-section="mental-model">
+<h2>Mental model: one paired evidence packet</h2><p>Think of every comparison as a sealed packet: the current window, its matching prior window, and the period identity travel together. The UI may format the packet, but it does not change what the windows mean.</p><div class="flow"><div><strong>Report projections</strong> fold source facts into bounded current and prior windows.</div><div><strong>Shared contracts</strong> preserve totals, missing values, and period identity.</div><div><strong>Stable query state</strong> keeps old data paired with its old context during refresh.</div><div><strong>Metric components</strong> format and crossfade the already-decided comparison.</div></div>
+  </section>
+  <section data-report-section="key-files">
+<h2>Key files</h2><table><thead><tr><th>File</th><th>Why it matters</th></tr></thead><tbody>
       <tr><td><code>convex/reports/overview.ts</code></td><td>Builds adjacent 30-day and three-calendar-month snapshots within one bounded rebuild.</td></tr>
       <tr><td><code>convex/reports/queries.ts</code></td><td>Owns prior day, week, month, and equal-length SKU range semantics plus source-backed totals.</td></tr>
       <tr><td><code>shared/reportsContract.ts</code></td><td>Defines the client-visible comparison and missing-price contracts.</td></tr>
       <tr><td><code>ReportPeriodMetrics.tsx</code></td><td>Formats explicit prior snapshots without recomputing report facts.</td></tr>
       <tr><td><code>ReportMetricComparisonCrossfade.tsx</code></td><td>Provides the restrained 160ms opacity transition with reduced-motion support.</td></tr>
       <tr><td><code>useStableReportQuery.ts</code> consumers</td><td>Pair stale-while-refresh data with the period or range that produced it.</td></tr>
-    </tbody></table></section>
-    <section class="card half"><h2>Failure boundaries</h2><ul><li>Unknown gross profit remains unavailable.</li><li>A missing catalog net price is not replaced by retail price.</li><li>Legacy overview rows use bounded indexed enrichment.</li><li>Empty prior activity can be a real zero; unavailable cost remains null.</li><li>Custom ranges remain capped by the existing maximum span.</li></ul></section>
-    <section class="card half"><h2>Intentionally unchanged</h2><ul><li>No new accounting or forecasting claims.</li><li>No historical fact rewrite or cost backfill.</li><li>No operational mutation inside Reports.</li><li>No change to full-admin access boundaries.</li><li>No client-owned report aggregation.</li></ul></section>
-    <section class="card"><h2>Validation and review evidence</h2><ul><li><code>git diff --check</code> passed.</li><li>10 focused Vitest files passed: 136 tests covering backend ranges/contracts and affected UI surfaces.</li><li>Sequential correctness, maintainability, standards, and testing review found no confidence-gated findings or residual work.</li><li><code>bun run graphify:rebuild</code> completed with 11,024 nodes and 13,425 edges.</li><li><code>bun run pr:athena</code> reached the documentation sensor; final full pass is pending this report and solution note.</li></ul></section>
-    <section class="card"><h2>Next-time guidance</h2><ol><li>Define the exact prior-window meaning before changing UI copy.</li><li>Return current and prior totals from the same reporting boundary.</li><li>Test calendar boundaries, zero baselines, null cost/profit, and read caps.</li><li>When keeping stale data during refresh, keep its settled context too.</li><li>Run focused Vitest while iterating, then let <code>pr:athena</code> own merge-level ordering.</li></ol></section>
-    <section class="card"><h2>Subagent Evidence</h2><p><strong>SubagentUnavailable.</strong> Athena’s repository instructions map subagent/task work to sequential main-thread research. Evidence was gathered directly from the moved dirty diff, the Reports requirements and solution notes, Graphify navigation, focused tests, and repository gate output.</p></section>
-    <section class="card quiz" id="changeQuiz"><h2>Quiz: Pass Required</h2><p>Pass threshold: 8 of 10. Grade locally; no answers leave this file.</p><form id="quizForm">
-      <fieldset><legend>1. Where should prior-period meaning be decided?</legend><label class="option"><input type="radio" name="q0" value="0"> In each React metric</label><label class="option"><input type="radio" name="q0" value="1"> At the server-shaped report boundary</label><label class="option"><input type="radio" name="q0" value="2"> In CSS</label><p class="explanation">The server owns period semantics and source truth.</p></fieldset>
-      <fieldset><legend>2. How does a calendar month compare?</legend><label class="option"><input type="radio" name="q1" value="0"> Previous 30 days</label><label class="option"><input type="radio" name="q1" value="1"> Previous calendar month</label><label class="option"><input type="radio" name="q1" value="2"> Same month last year</label><p class="explanation">Calendar periods retain calendar meaning across unequal month lengths.</p></fieldset>
-      <fieldset><legend>3. How does a custom SKU range compare?</legend><label class="option"><input type="radio" name="q2" value="0"> Immediately preceding equal-length range</label><label class="option"><input type="radio" name="q2" value="1"> Previous calendar month</label><label class="option"><input type="radio" name="q2" value="2"> No comparison</label><p class="explanation">Custom ranges use an adjacent equal-length window.</p></fieldset>
-      <fieldset><legend>4. Why carry a settled context key?</legend><label class="option"><input type="radio" name="q3" value="0"> To speed database writes</label><label class="option"><input type="radio" name="q3" value="1"> To keep stale data labeled with the period that produced it</label><label class="option"><input type="radio" name="q3" value="2"> To disable animation</label><p class="explanation">Stale-while-refresh data must not be relabeled as the new period.</p></fieldset>
-      <fieldset><legend>5. What happens when historical profit is unknown?</legend><label class="option"><input type="radio" name="q4" value="0"> Use zero</label><label class="option"><input type="radio" name="q4" value="1"> Use current catalog cost</label><label class="option"><input type="radio" name="q4" value="2"> Keep it unavailable</label><p class="explanation">Unknown cost/profit is distinct from a legitimate zero.</p></fieldset>
-      <fieldset><legend>6. What bounds legacy overview enrichment?</legend><label class="option"><input type="radio" name="q5" value="0"> An indexed 184-day take</label><label class="option"><input type="radio" name="q5" value="1"> An unbounded collect</label><label class="option"><input type="radio" name="q5" value="2"> Browser pagination</label><p class="explanation">Compatibility stays behind an explicit indexed read cap.</p></fieldset>
-      <fieldset><legend>7. What is React allowed to own?</legend><label class="option"><input type="radio" name="q6" value="0"> Report arithmetic</label><label class="option"><input type="radio" name="q6" value="1"> Source selection</label><label class="option"><input type="radio" name="q6" value="2"> Formatting and presentation transitions</label><p class="explanation">The client presents the contract; it does not redefine it.</p></fieldset>
-      <fieldset><legend>8. Which test is essential for month comparisons?</legend><label class="option"><input type="radio" name="q7" value="0"> Only a mid-month happy path</label><label class="option"><input type="radio" name="q7" value="1"> Unequal month lengths and year boundaries</label><label class="option"><input type="radio" name="q7" value="2"> A CSS snapshot only</label><p class="explanation">Calendar boundaries are where equal-day assumptions fail.</p></fieldset>
-      <fieldset><legend>9. What did the review leave unresolved?</legend><label class="option"><input type="radio" name="q8" value="0"> A P1 query bug</label><label class="option"><input type="radio" name="q8" value="1"> No actionable findings</label><label class="option"><input type="radio" name="q8" value="2"> An auth migration</label><p class="explanation">The sequential review found no confidence-gated residual work.</p></fieldset>
-      <fieldset><legend>10. What is the current finish-line status in this candidate report?</legend><label class="option"><input type="radio" name="q9" value="0"> Already merged and root-aligned</label><label class="option"><input type="radio" name="q9" value="1"> PR, merge, deploy decision, and root alignment are pending</label><label class="option"><input type="radio" name="q9" value="2"> No PR is intended</label><p class="explanation">Candidate reports must not predict merge or root alignment.</p></fieldset>
-      <div class="controls"><button type="submit">Grade quiz</button><button class="secondary" id="resetQuiz" type="button">Reset</button><span class="result" id="quizResult" aria-live="polite"></span></div>
-    </form></section>
-  </div>
-</main><script>
-  const answers=[1,1,0,1,2,0,2,1,1,1]; const form=document.getElementById('quizForm'); const result=document.getElementById('quizResult');
-  form.addEventListener('submit',event=>{event.preventDefault();let score=0;answers.forEach((answer,index)=>{const selected=form.querySelector(`input[name="q${index}"]:checked`);if(selected&&Number(selected.value)===answer)score+=1;});form.classList.add('graded');result.textContent=score>=8?`Pass — ${score}/10`:`Not yet — ${score}/10. Review the explanations and retry.`;});
-  document.getElementById('resetQuiz').addEventListener('click',()=>{form.reset();form.classList.remove('graded');result.textContent='';});
-</script></body></html>
+    </tbody></table>
+  </section>
+  <section data-report-section="failure-boundaries">
+<h2>Failure boundaries</h2><ul><li>Unknown gross profit remains unavailable.</li><li>A missing catalog net price is not replaced by retail price.</li><li>Legacy overview rows use bounded indexed enrichment.</li><li>Empty prior activity can be a real zero; unavailable cost remains null.</li><li>Custom ranges remain capped by the existing maximum span.</li></ul>
+  </section>
+  <section data-report-section="intentionally-unchanged">
+<h2>Intentionally unchanged</h2><ul><li>No new accounting or forecasting claims.</li><li>No historical fact rewrite or cost backfill.</li><li>No operational mutation inside Reports.</li><li>No change to full-admin access boundaries.</li><li>No client-owned report aggregation.</li></ul>
+  </section>
+  <section data-report-section="validation">
+<h2>Validation and review evidence</h2><ul><li><code>git diff --check</code> passed.</li><li>10 focused Vitest files passed: 136 tests covering backend ranges/contracts and affected UI surfaces.</li><li>Sequential correctness, maintainability, standards, and testing review found no confidence-gated findings or residual work.</li><li><code>bun run graphify:rebuild</code> completed with 11,024 nodes and 13,425 edges.</li><li><code>bun run pr:athena</code> reached the documentation sensor; final full pass is pending this report and solution note.</li></ul>
+  </section>
+  <section data-report-section="guidance">
+<h2>Next-time guidance</h2><ol><li>Define the exact prior-window meaning before changing UI copy.</li><li>Return current and prior totals from the same reporting boundary.</li><li>Test calendar boundaries, zero baselines, null cost/profit, and read caps.</li><li>When keeping stale data during refresh, keep its settled context too.</li><li>Run focused Vitest while iterating, then let <code>pr:athena</code> own merge-level ordering.</li></ol>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where should prior-period meaning be decided?</p>
+        <ol data-quiz-options>
+          <li>In each React metric</li>
+          <li data-quiz-correct>At the server-shaped report boundary</li>
+          <li>In CSS</li>
+          <li>Previous 30 days</li>
+          <li>Previous calendar month</li>
+          <li>Same month last year</li>
+          <li>Immediately preceding equal-length range</li>
+          <li>Previous calendar month</li>
+          <li>No comparison</li>
+          <li>To speed database writes</li>
+          <li>To keep stale data labeled with the period that produced it</li>
+          <li>To disable animation</li>
+          <li>Use zero</li>
+          <li>Use current catalog cost</li>
+          <li>Keep it unavailable</li>
+          <li>An indexed 184-day take</li>
+          <li>An unbounded collect</li>
+          <li>Browser pagination</li>
+          <li>Report arithmetic</li>
+          <li>Source selection</li>
+          <li>Formatting and presentation transitions</li>
+          <li>Only a mid-month happy path</li>
+          <li>Unequal month lengths and year boundaries</li>
+          <li>A CSS snapshot only</li>
+          <li>A P1 query bug</li>
+          <li>No actionable findings</li>
+          <li>An auth migration</li>
+          <li>Already merged and root-aligned</li>
+          <li>PR, merge, deploy decision, and root alignment are pending</li>
+          <li>No PR is intended</li>
+        </ol>
+        <p data-quiz-explanation>The server owns period semantics and source truth.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where should prior-period meaning be decided?</p>
+        <ol data-quiz-options>
+          <li>In each React metric</li>
+          <li data-quiz-correct>At the server-shaped report boundary</li>
+          <li>In CSS</li>
+          <li>Previous 30 days</li>
+          <li>Previous calendar month</li>
+          <li>Same month last year</li>
+          <li>Immediately preceding equal-length range</li>
+          <li>Previous calendar month</li>
+          <li>No comparison</li>
+          <li>To speed database writes</li>
+          <li>To keep stale data labeled with the period that produced it</li>
+          <li>To disable animation</li>
+          <li>Use zero</li>
+          <li>Use current catalog cost</li>
+          <li>Keep it unavailable</li>
+          <li>An indexed 184-day take</li>
+          <li>An unbounded collect</li>
+          <li>Browser pagination</li>
+          <li>Report arithmetic</li>
+          <li>Source selection</li>
+          <li>Formatting and presentation transitions</li>
+          <li>Only a mid-month happy path</li>
+          <li>Unequal month lengths and year boundaries</li>
+          <li>A CSS snapshot only</li>
+          <li>A P1 query bug</li>
+          <li>No actionable findings</li>
+          <li>An auth migration</li>
+          <li>Already merged and root-aligned</li>
+          <li>PR, merge, deploy decision, and root alignment are pending</li>
+          <li>No PR is intended</li>
+        </ol>
+        <p data-quiz-explanation>The server owns period semantics and source truth.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where should prior-period meaning be decided?</p>
+        <ol data-quiz-options>
+          <li>In each React metric</li>
+          <li data-quiz-correct>At the server-shaped report boundary</li>
+          <li>In CSS</li>
+          <li>Previous 30 days</li>
+          <li>Previous calendar month</li>
+          <li>Same month last year</li>
+          <li>Immediately preceding equal-length range</li>
+          <li>Previous calendar month</li>
+          <li>No comparison</li>
+          <li>To speed database writes</li>
+          <li>To keep stale data labeled with the period that produced it</li>
+          <li>To disable animation</li>
+          <li>Use zero</li>
+          <li>Use current catalog cost</li>
+          <li>Keep it unavailable</li>
+          <li>An indexed 184-day take</li>
+          <li>An unbounded collect</li>
+          <li>Browser pagination</li>
+          <li>Report arithmetic</li>
+          <li>Source selection</li>
+          <li>Formatting and presentation transitions</li>
+          <li>Only a mid-month happy path</li>
+          <li>Unequal month lengths and year boundaries</li>
+          <li>A CSS snapshot only</li>
+          <li>A P1 query bug</li>
+          <li>No actionable findings</li>
+          <li>An auth migration</li>
+          <li>Already merged and root-aligned</li>
+          <li>PR, merge, deploy decision, and root alignment are pending</li>
+          <li>No PR is intended</li>
+        </ol>
+        <p data-quiz-explanation>The server owns period semantics and source truth.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where should prior-period meaning be decided?</p>
+        <ol data-quiz-options>
+          <li>In each React metric</li>
+          <li data-quiz-correct>At the server-shaped report boundary</li>
+          <li>In CSS</li>
+          <li>Previous 30 days</li>
+          <li>Previous calendar month</li>
+          <li>Same month last year</li>
+          <li>Immediately preceding equal-length range</li>
+          <li>Previous calendar month</li>
+          <li>No comparison</li>
+          <li>To speed database writes</li>
+          <li>To keep stale data labeled with the period that produced it</li>
+          <li>To disable animation</li>
+          <li>Use zero</li>
+          <li>Use current catalog cost</li>
+          <li>Keep it unavailable</li>
+          <li>An indexed 184-day take</li>
+          <li>An unbounded collect</li>
+          <li>Browser pagination</li>
+          <li>Report arithmetic</li>
+          <li>Source selection</li>
+          <li>Formatting and presentation transitions</li>
+          <li>Only a mid-month happy path</li>
+          <li>Unequal month lengths and year boundaries</li>
+          <li>A CSS snapshot only</li>
+          <li>A P1 query bug</li>
+          <li>No actionable findings</li>
+          <li>An auth migration</li>
+          <li>Already merged and root-aligned</li>
+          <li>PR, merge, deploy decision, and root alignment are pending</li>
+          <li>No PR is intended</li>
+        </ol>
+        <p data-quiz-explanation>The server owns period semantics and source truth.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where should prior-period meaning be decided?</p>
+        <ol data-quiz-options>
+          <li>In each React metric</li>
+          <li data-quiz-correct>At the server-shaped report boundary</li>
+          <li>In CSS</li>
+          <li>Previous 30 days</li>
+          <li>Previous calendar month</li>
+          <li>Same month last year</li>
+          <li>Immediately preceding equal-length range</li>
+          <li>Previous calendar month</li>
+          <li>No comparison</li>
+          <li>To speed database writes</li>
+          <li>To keep stale data labeled with the period that produced it</li>
+          <li>To disable animation</li>
+          <li>Use zero</li>
+          <li>Use current catalog cost</li>
+          <li>Keep it unavailable</li>
+          <li>An indexed 184-day take</li>
+          <li>An unbounded collect</li>
+          <li>Browser pagination</li>
+          <li>Report arithmetic</li>
+          <li>Source selection</li>
+          <li>Formatting and presentation transitions</li>
+          <li>Only a mid-month happy path</li>
+          <li>Unequal month lengths and year boundaries</li>
+          <li>A CSS snapshot only</li>
+          <li>A P1 query bug</li>
+          <li>No actionable findings</li>
+          <li>An auth migration</li>
+          <li>Already merged and root-aligned</li>
+          <li>PR, merge, deploy decision, and root alignment are pending</li>
+          <li>No PR is intended</li>
+        </ol>
+        <p data-quiz-explanation>The server owns period semantics and source truth.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where should prior-period meaning be decided?</p>
+        <ol data-quiz-options>
+          <li>In each React metric</li>
+          <li data-quiz-correct>At the server-shaped report boundary</li>
+          <li>In CSS</li>
+          <li>Previous 30 days</li>
+          <li>Previous calendar month</li>
+          <li>Same month last year</li>
+          <li>Immediately preceding equal-length range</li>
+          <li>Previous calendar month</li>
+          <li>No comparison</li>
+          <li>To speed database writes</li>
+          <li>To keep stale data labeled with the period that produced it</li>
+          <li>To disable animation</li>
+          <li>Use zero</li>
+          <li>Use current catalog cost</li>
+          <li>Keep it unavailable</li>
+          <li>An indexed 184-day take</li>
+          <li>An unbounded collect</li>
+          <li>Browser pagination</li>
+          <li>Report arithmetic</li>
+          <li>Source selection</li>
+          <li>Formatting and presentation transitions</li>
+          <li>Only a mid-month happy path</li>
+          <li>Unequal month lengths and year boundaries</li>
+          <li>A CSS snapshot only</li>
+          <li>A P1 query bug</li>
+          <li>No actionable findings</li>
+          <li>An auth migration</li>
+          <li>Already merged and root-aligned</li>
+          <li>PR, merge, deploy decision, and root alignment are pending</li>
+          <li>No PR is intended</li>
+        </ol>
+        <p data-quiz-explanation>The server owns period semantics and source truth.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where should prior-period meaning be decided?</p>
+        <ol data-quiz-options>
+          <li>In each React metric</li>
+          <li data-quiz-correct>At the server-shaped report boundary</li>
+          <li>In CSS</li>
+          <li>Previous 30 days</li>
+          <li>Previous calendar month</li>
+          <li>Same month last year</li>
+          <li>Immediately preceding equal-length range</li>
+          <li>Previous calendar month</li>
+          <li>No comparison</li>
+          <li>To speed database writes</li>
+          <li>To keep stale data labeled with the period that produced it</li>
+          <li>To disable animation</li>
+          <li>Use zero</li>
+          <li>Use current catalog cost</li>
+          <li>Keep it unavailable</li>
+          <li>An indexed 184-day take</li>
+          <li>An unbounded collect</li>
+          <li>Browser pagination</li>
+          <li>Report arithmetic</li>
+          <li>Source selection</li>
+          <li>Formatting and presentation transitions</li>
+          <li>Only a mid-month happy path</li>
+          <li>Unequal month lengths and year boundaries</li>
+          <li>A CSS snapshot only</li>
+          <li>A P1 query bug</li>
+          <li>No actionable findings</li>
+          <li>An auth migration</li>
+          <li>Already merged and root-aligned</li>
+          <li>PR, merge, deploy decision, and root alignment are pending</li>
+          <li>No PR is intended</li>
+        </ol>
+        <p data-quiz-explanation>The server owns period semantics and source truth.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where should prior-period meaning be decided?</p>
+        <ol data-quiz-options>
+          <li>In each React metric</li>
+          <li data-quiz-correct>At the server-shaped report boundary</li>
+          <li>In CSS</li>
+          <li>Previous 30 days</li>
+          <li>Previous calendar month</li>
+          <li>Same month last year</li>
+          <li>Immediately preceding equal-length range</li>
+          <li>Previous calendar month</li>
+          <li>No comparison</li>
+          <li>To speed database writes</li>
+          <li>To keep stale data labeled with the period that produced it</li>
+          <li>To disable animation</li>
+          <li>Use zero</li>
+          <li>Use current catalog cost</li>
+          <li>Keep it unavailable</li>
+          <li>An indexed 184-day take</li>
+          <li>An unbounded collect</li>
+          <li>Browser pagination</li>
+          <li>Report arithmetic</li>
+          <li>Source selection</li>
+          <li>Formatting and presentation transitions</li>
+          <li>Only a mid-month happy path</li>
+          <li>Unequal month lengths and year boundaries</li>
+          <li>A CSS snapshot only</li>
+          <li>A P1 query bug</li>
+          <li>No actionable findings</li>
+          <li>An auth migration</li>
+          <li>Already merged and root-aligned</li>
+          <li>PR, merge, deploy decision, and root alignment are pending</li>
+          <li>No PR is intended</li>
+        </ol>
+        <p data-quiz-explanation>The server owns period semantics and source truth.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where should prior-period meaning be decided?</p>
+        <ol data-quiz-options>
+          <li>In each React metric</li>
+          <li data-quiz-correct>At the server-shaped report boundary</li>
+          <li>In CSS</li>
+          <li>Previous 30 days</li>
+          <li>Previous calendar month</li>
+          <li>Same month last year</li>
+          <li>Immediately preceding equal-length range</li>
+          <li>Previous calendar month</li>
+          <li>No comparison</li>
+          <li>To speed database writes</li>
+          <li>To keep stale data labeled with the period that produced it</li>
+          <li>To disable animation</li>
+          <li>Use zero</li>
+          <li>Use current catalog cost</li>
+          <li>Keep it unavailable</li>
+          <li>An indexed 184-day take</li>
+          <li>An unbounded collect</li>
+          <li>Browser pagination</li>
+          <li>Report arithmetic</li>
+          <li>Source selection</li>
+          <li>Formatting and presentation transitions</li>
+          <li>Only a mid-month happy path</li>
+          <li>Unequal month lengths and year boundaries</li>
+          <li>A CSS snapshot only</li>
+          <li>A P1 query bug</li>
+          <li>No actionable findings</li>
+          <li>An auth migration</li>
+          <li>Already merged and root-aligned</li>
+          <li>PR, merge, deploy decision, and root alignment are pending</li>
+          <li>No PR is intended</li>
+        </ol>
+        <p data-quiz-explanation>The server owns period semantics and source truth.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where should prior-period meaning be decided?</p>
+        <ol data-quiz-options>
+          <li>In each React metric</li>
+          <li data-quiz-correct>At the server-shaped report boundary</li>
+          <li>In CSS</li>
+          <li>Previous 30 days</li>
+          <li>Previous calendar month</li>
+          <li>Same month last year</li>
+          <li>Immediately preceding equal-length range</li>
+          <li>Previous calendar month</li>
+          <li>No comparison</li>
+          <li>To speed database writes</li>
+          <li>To keep stale data labeled with the period that produced it</li>
+          <li>To disable animation</li>
+          <li>Use zero</li>
+          <li>Use current catalog cost</li>
+          <li>Keep it unavailable</li>
+          <li>An indexed 184-day take</li>
+          <li>An unbounded collect</li>
+          <li>Browser pagination</li>
+          <li>Report arithmetic</li>
+          <li>Source selection</li>
+          <li>Formatting and presentation transitions</li>
+          <li>Only a mid-month happy path</li>
+          <li>Unequal month lengths and year boundaries</li>
+          <li>A CSS snapshot only</li>
+          <li>A P1 query bug</li>
+          <li>No actionable findings</li>
+          <li>An auth migration</li>
+          <li>Already merged and root-aligned</li>
+          <li>PR, merge, deploy decision, and root alignment are pending</li>
+          <li>No PR is intended</li>
+        </ol>
+        <p data-quiz-explanation>The server owns period semantics and source truth.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+<h2>Subagent Evidence</h2><p><strong>SubagentUnavailable.</strong> Athena’s repository instructions map subagent/task work to sequential main-thread research. Evidence was gathered directly from the moved dirty diff, the Reports requirements and solution notes, Graphify navigation, focused tests, and repository gate output.</p>
+  </section>
+</article>
+</body>
+</html>

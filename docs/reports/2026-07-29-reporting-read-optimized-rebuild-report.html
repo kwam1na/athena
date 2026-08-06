@@ -1,462 +1,25 @@
 <!doctype html>
-<html
-  lang="en"
-  data-athena-landed-change-report="v1"
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Reporting read-optimized rebuild — delivery candidate report</title>
+</head>
+<body>
+<article
+  data-athena-landed-change-report="v2"
   data-athena-report-diff-fingerprint="43eab2981ce42f502573861d89af13fa97c0b711fba6ca3bccdd1579a36c86fd"
 >
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Reporting read-optimized rebuild — delivery candidate report</title>
-    <style>
-      :root {
-        color-scheme: light;
-        --ink: #17211d;
-        --muted: #5f6d66;
-        --line: #d9e1dc;
-        --paper: #f8faf8;
-        --panel: #ffffff;
-        --accent: #176b4a;
-        --accent-soft: #e7f3ec;
-        --warn: #805d10;
-        --warn-soft: #fff7dd;
-        --danger: #9d342f;
-        --danger-soft: #fff0ee;
-        --code: #eff3f0;
-        --shadow: 0 18px 44px rgba(23, 33, 29, 0.08);
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      html {
-        scroll-behavior: smooth;
-      }
-
-      body {
-        margin: 0;
-        background: var(--paper);
-        color: var(--ink);
-        font:
-          15px/1.62 Inter,
-          ui-sans-serif,
-          system-ui,
-          -apple-system,
-          BlinkMacSystemFont,
-          "Segoe UI",
-          sans-serif;
-      }
-
-      a {
-        color: var(--accent);
-      }
-
-      .shell {
-        width: min(1120px, calc(100% - 32px));
-        margin: 0 auto;
-        padding: 34px 0 72px;
-      }
-
-      .hero,
-      .section {
-        border: 1px solid var(--line);
-        background: var(--panel);
-        box-shadow: var(--shadow);
-      }
-
-      .hero {
-        padding: clamp(26px, 5vw, 54px);
-        border-radius: 22px;
-      }
-
-      .eyebrow {
-        margin: 0 0 10px;
-        color: var(--accent);
-        font-size: 12px;
-        font-weight: 800;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }
-
-      h1,
-      h2,
-      h3 {
-        line-height: 1.18;
-        letter-spacing: -0.025em;
-      }
-
-      h1 {
-        max-width: 820px;
-        margin: 0;
-        font-size: clamp(34px, 6vw, 64px);
-      }
-
-      h2 {
-        margin: 0 0 18px;
-        font-size: clamp(23px, 3.2vw, 34px);
-      }
-
-      h3 {
-        margin: 0 0 8px;
-        font-size: 18px;
-      }
-
-      .lede {
-        max-width: 780px;
-        margin: 18px 0 0;
-        color: var(--muted);
-        font-size: 18px;
-      }
-
-      .pills {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 24px;
-      }
-
-      .pill {
-        display: inline-flex;
-        align-items: center;
-        min-height: 30px;
-        padding: 5px 11px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: #fbfcfb;
-        font-size: 12px;
-        font-weight: 750;
-      }
-
-      .pill.good {
-        border-color: #b8d8c7;
-        background: var(--accent-soft);
-        color: var(--accent);
-      }
-
-      .pill.pending {
-        border-color: #ead493;
-        background: var(--warn-soft);
-        color: var(--warn);
-      }
-
-      .meta {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
-        margin-top: 28px;
-      }
-
-      .meta div,
-      .metric,
-      .card {
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        background: #fbfcfb;
-      }
-
-      .meta div {
-        padding: 13px;
-      }
-
-      .meta dt {
-        color: var(--muted);
-        font-size: 11px;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      .meta dd {
-        margin: 4px 0 0;
-        font-weight: 720;
-        overflow-wrap: anywhere;
-      }
-
-      .toc {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px 16px;
-        margin: 22px 0 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .section {
-        margin-top: 20px;
-        padding: clamp(24px, 4vw, 42px);
-        border-radius: 18px;
-      }
-
-      .grid-2,
-      .grid-3,
-      .metrics {
-        display: grid;
-        gap: 14px;
-      }
-
-      .grid-2 {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .grid-3,
-      .metrics {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-
-      .card,
-      .metric {
-        padding: 18px;
-      }
-
-      .card p,
-      .metric p {
-        margin: 6px 0 0;
-        color: var(--muted);
-      }
-
-      .metric strong {
-        display: block;
-        color: var(--accent);
-        font-size: 28px;
-        line-height: 1.1;
-      }
-
-      .flow {
-        display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
-        gap: 8px;
-        margin: 18px 0;
-        padding: 0;
-        list-style: none;
-        counter-reset: flow;
-      }
-
-      .flow li {
-        min-height: 116px;
-        padding: 14px;
-        border: 1px solid var(--line);
-        border-radius: 13px;
-        background: #fbfcfb;
-        counter-increment: flow;
-      }
-
-      .flow li::before {
-        content: counter(flow);
-        display: grid;
-        width: 25px;
-        height: 25px;
-        margin-bottom: 10px;
-        place-items: center;
-        border-radius: 50%;
-        background: var(--accent);
-        color: white;
-        font-size: 12px;
-        font-weight: 800;
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-
-      th,
-      td {
-        padding: 12px 10px;
-        border-bottom: 1px solid var(--line);
-        text-align: left;
-        vertical-align: top;
-      }
-
-      th {
-        color: var(--muted);
-        font-size: 11px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      code {
-        padding: 2px 5px;
-        border-radius: 5px;
-        background: var(--code);
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 0.9em;
-      }
-
-      .callout {
-        margin: 18px 0;
-        padding: 16px 18px;
-        border-left: 4px solid var(--accent);
-        border-radius: 0 12px 12px 0;
-        background: var(--accent-soft);
-      }
-
-      .callout.warn {
-        border-color: var(--warn);
-        background: var(--warn-soft);
-      }
-
-      .callout.danger {
-        border-color: var(--danger);
-        background: var(--danger-soft);
-      }
-
-      .quiet {
-        color: var(--muted);
-      }
-
-      .quiz-question {
-        margin: 16px 0;
-        padding: 18px;
-        border: 1px solid var(--line);
-        border-radius: 14px;
-      }
-
-      .quiz-question legend {
-        padding: 0 6px;
-        font-weight: 800;
-      }
-
-      .option {
-        display: flex;
-        gap: 9px;
-        margin: 9px 0;
-        cursor: pointer;
-      }
-
-      .explanation {
-        display: none;
-        margin: 10px 0 0;
-        padding: 10px 12px;
-        border-radius: 10px;
-        background: var(--code);
-        color: var(--muted);
-      }
-
-      .quiz-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        align-items: center;
-        margin-top: 18px;
-      }
-
-      button {
-        min-height: 42px;
-        padding: 9px 16px;
-        border: 1px solid var(--accent);
-        border-radius: 10px;
-        background: var(--accent);
-        color: white;
-        font: inherit;
-        font-weight: 800;
-        cursor: pointer;
-        transition: transform 140ms ease-out;
-      }
-
-      button.secondary {
-        background: white;
-        color: var(--accent);
-      }
-
-      button:active {
-        transform: scale(0.97);
-      }
-
-      #quizResult {
-        min-height: 24px;
-        font-weight: 800;
-      }
-
-      footer {
-        padding: 26px 4px 0;
-        color: var(--muted);
-        font-size: 13px;
-      }
-
-      @media (max-width: 860px) {
-        .meta,
-        .grid-3,
-        .metrics {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        .flow {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
-      }
-
-      @media (max-width: 620px) {
-        .shell {
-          width: min(100% - 18px, 1120px);
-          padding-top: 10px;
-        }
-
-        .meta,
-        .grid-2,
-        .grid-3,
-        .metrics,
-        .flow {
-          grid-template-columns: 1fr;
-        }
-
-        .section,
-        .hero {
-          border-radius: 14px;
-        }
-
-        table,
-        thead,
-        tbody,
-        tr,
-        th,
-        td {
-          display: block;
-        }
-
-        th {
-          display: none;
-        }
-
-        td {
-          padding-left: 0;
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        html {
-          scroll-behavior: auto;
-        }
-
-        button {
-          transition: none;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <main class="shell">
-      <header class="hero">
-        <p class="eyebrow">Delivery candidate · Athena operations</p>
-        <h1>Reporting was rebuilt around a fact ledger and a day fold.</h1>
-        <p class="lede">
+  <header data-report-section="header">
+    <h1>Reporting was rebuilt around a fact ledger and a day fold.</h1>
+    <p class="eyebrow">Delivery candidate · Athena operations</p>
+    <p class="lede">
           The legacy reporting layer read too much per query and rewrote derived
           state on every applied fact. This delivery replaces it wholesale with
           an append-only fact ledger, a pure day-fold correctness authority, and
           metric-as-field, singleton-doc read surfaces — verified against
           independently recomputed domain totals on the wigclub dev store.
         </p>
-        <div class="pills">
-          <span class="pill good">Local validation: passed</span>
-          <span class="pill good">Dev deploy: complete</span>
-          <span class="pill good">Dev verification (wigclub): 67/67 days</span>
-          <span class="pill pending">PR: pending</span>
-          <span class="pill pending">Production deploy: pending</span>
-          <span class="pill pending"
-            >Week of read-metric measurement: pending</span
-          >
-        </div>
-        <dl class="meta">
+    <dl class="meta">
           <div>
             <dt>Store proven</dt>
             <dd>wigclub (dev)</dd>
@@ -474,7 +37,7 @@
             <dd>Deferred until merge</dd>
           </div>
         </dl>
-        <ul class="toc">
+    <ul class="toc">
           <li><a href="#summary">What changed</a></li>
           <li><a href="#architecture">Architecture</a></li>
           <li><a href="#deleted-extracted">Deleted vs extracted</a></li>
@@ -483,11 +46,18 @@
           <li><a href="#subagents">Subagent Evidence</a></li>
           <li><a href="#quiz">Quiz</a></li>
         </ul>
-      </header>
-
-      <section class="section" id="summary">
-        <p class="eyebrow">What changed, and why</p>
-        <h2>The driving constraint was database read cost.</h2>
+    <ul data-report-pills>
+      <li>Local validation: passed</li>
+      <li>Dev deploy: complete</li>
+      <li>Dev verification (wigclub): 67/67 days</li>
+      <li>PR: pending</li>
+      <li>Production deploy: pending</li>
+      <li>Week of read-metric measurement: pending</li>
+    </ul>
+  </header>
+  <section data-report-section="changes">
+<h2>The driving constraint was database read cost.</h2><p class="eyebrow">What changed, and why</p>
+        
         <p>
           On the wigclub dev deployment (<code>jovial-wildebeest-179</code>),
           1,284 canonical facts over 64 operating days had fanned out into
@@ -534,43 +104,40 @@
           by this layer. Reporting is fully derived; rollback is a redeploy of
           prior code.
         </div>
-      </section>
-
-      <section class="section" id="architecture">
-        <p class="eyebrow">Architecture</p>
-        <h2>
+  </section>
+  <section data-report-section="an-append-only-ledger-and-a-fold-over-incrementa">
+<h2>
           An append-only ledger and a fold-over-incremental correctness model.
-        </h2>
+        </h2><p class="eyebrow">Architecture</p>
+        
         <ol class="flow">
           <li>
-            <strong>Ingest</strong><br />Emitters write
+            <strong>Ingest</strong><br>Emitters write
             <code>reportFact</code> rows inside the same domain transaction that
             commits the sale, order, close, or stock move.
           </li>
           <li>
-            <strong>Patch open day</strong><br />An arriving fact for the
-            still-open day incrementally patches <code>reportDay</code>/<code
-              >reportSkuDay</code
-            >
+            <strong>Patch open day</strong><br>An arriving fact for the
+            still-open day incrementally patches <code>reportDay</code>/<code>reportSkuDay</code>
             — provisional, best-effort.
           </li>
           <li>
-            <strong>Dirty closed day</strong><br />A late fact against a closed
+            <strong>Dirty closed day</strong><br>A late fact against a closed
             day never patches it directly; it upserts a
             <code>reportDirtyDay</code> mark.
           </li>
           <li>
-            <strong>Fold</strong><br /><code>foldDay(facts, close?)</code> is
+            <strong>Fold</strong><br><code>foldDay(facts, close?)</code> is
             the one authority: sorts facts deterministically and derives day +
             sku-day results from scratch.
           </li>
           <li>
-            <strong>Sweep</strong><br />A single 5-minute cron drains dirty
+            <strong>Sweep</strong><br>A single 5-minute cron drains dirty
             marks, refolds, rebuilds the store's overview doc, and re-marks the
             still-open day.
           </li>
           <li>
-            <strong>Read</strong><br />UI surfaces read the overview singleton,
+            <strong>Read</strong><br>UI surfaces read the overview singleton,
             bounded day/sku-day index pages, and calendar rollups — never raw
             facts.
           </li>
@@ -605,14 +172,13 @@
           they occurred — still lands facts on the correct historical operating
           day instead of the day the reseed job happened to run.
         </p>
-      </section>
-
-      <section class="section" id="deleted-extracted">
-        <p class="eyebrow">What was deleted vs extracted</p>
-        <h2>
+  </section>
+  <section data-report-section="legacy-reporting-was-deleted-non-reporting-machi">
+<h2>
           Legacy reporting was deleted; non-reporting machinery living inside it
           was moved out.
-        </h2>
+        </h2><p class="eyebrow">What was deleted vs extracted</p>
+        
         <table>
           <thead>
             <tr>
@@ -639,7 +205,7 @@
             <tr>
               <td>Extracted</td>
               <td>
-                Inventory valuation/costing ledger &rarr;
+                Inventory valuation/costing ledger →
                 <code>convex/inventoryLedger/</code>
               </td>
               <td>
@@ -651,15 +217,13 @@
             <tr>
               <td>Extracted</td>
               <td>
-                Operating-day / timezone resolution authority &rarr;
+                Operating-day / timezone resolution authority →
                 <code>convex/storeTime/</code>
               </td>
               <td>
                 Store-local operating-day math is used well beyond reporting
                 (closes, POS, scheduling); it was ported and simplified out of
-                <code>operatingPeriods.ts</code>/<code
-                  >storeTimeAuthority.ts</code
-                >
+                <code>operatingPeriods.ts</code>/<code>storeTimeAuthority.ts</code>
                 rather than deleted or duplicated.
               </td>
             </tr>
@@ -670,14 +234,13 @@
           <code>convex/reports/access.ts</code> — it is a thin wrapper over
           existing store-membership checks, not reporting-specific logic.
         </p>
-      </section>
-
-      <section class="section" id="verification">
-        <p class="eyebrow">Verification evidence</p>
-        <h2>
+  </section>
+  <section data-report-section="independent-domain-recomputation-not-comparison">
+<h2>
           Independent domain recomputation, not comparison against the old
           (known-buggy) projections.
-        </h2>
+        </h2><p class="eyebrow">Verification evidence</p>
+        
         <div class="metrics">
           <article class="metric">
             <strong>67/67</strong>
@@ -732,11 +295,10 @@
             with zero merchandise units.
           </li>
         </ul>
-      </section>
-
-      <section class="section" id="read-cost">
-        <p class="eyebrow">Read-cost outcome</p>
-        <h2>Per the design doc's measured/derived table.</h2>
+  </section>
+  <section data-report-section="per-the-design-doc-s-measured-derived-table">
+<h2>Per the design doc's measured/derived table.</h2><p class="eyebrow">Read-cost outcome</p>
+        
         <table>
           <thead>
             <tr>
@@ -810,14 +372,13 @@
           validation, the dev deploy, and dev verification on wigclub (67/67
           days) are claimed by this report.
         </div>
-      </section>
-
-      <section class="section">
-        <p class="eyebrow">UI outcomes</p>
-        <h2>
+  </section>
+  <section data-report-section="rebuilt-against-a-shared-typed-contract-so-backe">
+<h2>
           Rebuilt against a shared typed contract so backend/frontend divergence
           is a compile error.
-        </h2>
+        </h2><p class="eyebrow">UI outcomes</p>
+        
         <div class="grid-2">
           <article class="card">
             <h3>One period at a time</h3>
@@ -852,11 +413,10 @@
             </p>
           </article>
         </div>
-      </section>
-
-      <section class="section">
-        <p class="eyebrow">Next-time guidance</p>
-        <h2>How to extend or debug this area</h2>
+  </section>
+  <section data-report-section="guidance">
+<h2>How to extend or debug this area</h2><p class="eyebrow">Next-time guidance</p>
+        
         <ol>
           <li>
             Never add a code path that writes day/sku-day metrics directly. All
@@ -895,12 +455,184 @@
             each other's internals.
           </li>
         </ol>
-      </section>
-
-
-      <section class="section" id="subagents">
-        <p class="eyebrow">Delivery provenance</p>
-        <h2>Subagent Evidence</h2>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the days table say "Under close" / "Matches close" /
+              "Not closed yet" instead of a "reconciled" badge?</p>
+        <ol data-quiz-options>
+          <li>Because reconciliation
+              is deprecated</li>
+          <li data-quiz-correct>Because "reconciled"
+              describes timing relative to the close, not whether the folded
+              numbers agree with it</li>
+          <li>Because the close doc
+              no longer stores a variance</li>
+        </ol>
+        <p data-quiz-explanation>Settlement state and numeric agreement are different facts;
+              collapsing them into one badge hid which one had actually failed.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is <code>foldDay</code> the sole correctness authority
+              instead of the incrementally patched open-day doc?</p>
+        <ol data-quiz-options>
+          <li>The incremental patch
+              is deleted after every sweep</li>
+          <li>The incremental patch
+              runs faster, so it wins ties</li>
+          <li data-quiz-correct>The incremental patch
+              is explicitly best-effort and can transiently double-count; only a
+              full fold over that day's facts is deterministic and
+              replayable</li>
+        </ol>
+        <p data-quiz-explanation>The open-day patch exists only to keep numbers roughly current
+              between sweeps. The fold always overwrites it — there is no
+              reconciliation step between the two because only one is ever
+              authoritative.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is fact identity structural fields
+              <code>(storeId, sourceDomain, sourceId, lineId, factKind)</code>
+              rather than a concatenated string key?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>A composite index on
+              real fields removes the string-escaping/forgery bug class instead
+              of merely mitigating it</li>
+          <li>Convex indexes cannot
+              be built on string fields</li>
+          <li>String keys are slower
+              to hash</li>
+        </ol>
+        <p data-quiz-explanation>A concatenated key can be crafted or mis-escaped to collide or
+              diverge; separate indexed fields have no such ambiguity.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What did the wigclub "ghs" vs "GHS" defect actually teach?</p>
+        <ol data-quiz-options>
+          <li>Currency codes should
+              be optional</li>
+          <li data-quiz-correct>Any value compared
+              across the ingest/fold/overview boundary must go through one
+              shared normalization helper, or a casing mismatch silently zeroes
+              everything</li>
+          <li>The fold should ignore
+              currency entirely</li>
+        </ol>
+        <p data-quiz-explanation>Because the raw store currency skipped normalization in one path,
+              every fact was excluded as "foreign," folding all 67 days to zero
+              — invisible until the independent verifier compared against domain
+              totals.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does reseed stamp facts with business time
+              (<code>occurredAt</code>) as the driver of operating date, rather
+              than the time the reseed job ran (<code>recordedAt</code>)?</p>
+        <ol data-quiz-options>
+          <li>Because reseed cannot
+              access historical timestamps</li>
+          <li>Because Convex
+              requires monotonic timestamps</li>
+          <li data-quiz-correct>Because reseed
+              re-derives historical facts long after they occurred; using
+              arrival time would collapse months of history onto the reseed
+              run's date</li>
+        </ol>
+        <p data-quiz-explanation>Business time is what makes reseed = backfill = disaster recovery
+              a single code path — the same emitter logic lands facts on the
+              correct historical day regardless of when it runs.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is the store overview a single denormalized document rather
+              than a query that aggregates day docs live?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>So a dashboard
+              subscription costs one document read, invalidated only by the
+              sweep, instead of scanning tens to hundreds of day/sku-day docs on
+              every execution</li>
+          <li>Because Convex cannot
+              aggregate across documents</li>
+          <li>Because the overview
+              only needs today's numbers</li>
+        </ol>
+        <p data-quiz-explanation>The sweeper computes the aggregation once per cadence and writes
+              the result; the dashboard's job becomes reading one doc, not
+              repeating the aggregation on every reactive re-run.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What did the till-billed service-line defect reveal about
+              capturing revenue from a new domain?</p>
+        <ol data-quiz-options>
+          <li>Service revenue should
+              never be reported</li>
+          <li data-quiz-correct>A source that bills at
+              the header level with no item rows needs an explicit revenue-only
+              fact — inferring facts purely from item rows silently drops that
+              revenue</li>
+          <li>Service lines must
+              always have a unit cost</li>
+        </ol>
+        <p data-quiz-explanation>posTransactionServiceLine carried header revenue with no items;
+              the emitters were only walking items, so three real days were
+              undercounted until a revenue-only, zero-unit fact was added per
+              service line.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why were the inventory valuation ledger and
+              operating-day/timezone authority moved to their own namespaces
+              instead of deleted with the rest of legacy reporting?</p>
+        <ol data-quiz-options>
+          <li>They were left in
+              place for backward compatibility</li>
+          <li>They failed their
+              tests, so deletion was deferred</li>
+          <li data-quiz-correct>They were never
+              reporting code — other non-reporting domains (six for the cost
+              ledger; closes/POS/scheduling for operating-day math) depend on
+              them</li>
+        </ol>
+        <p data-quiz-explanation>Deleting them with the rest of convex/reporting/ would have broken
+              unrelated domains; they were extracted to convex/inventoryLedger/
+              and convex/storeTime/ instead.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does the source-truth verifier deliberately avoid using as
+              its reference?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>The legacy reporting
+              projections, which had known double-count and truncation
+              bugs</li>
+          <li>The store's daily
+              close documents</li>
+          <li>The reportFact ledger
+              itself</li>
+        </ol>
+        <p data-quiz-explanation>verifyDayAgainstSources recomputes totals independently from
+              domain tables, deliberately not sharing code with the emitters,
+              and never compares against the known-buggy legacy projections.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the delivery status at report generation?</p>
+        <ol data-quiz-options>
+          <li>Merged and deployed
+              to production, one week of read metrics collected</li>
+          <li data-quiz-correct>Delivery candidate:
+              local validation and dev deploy complete, wigclub dev verification
+              at 67/67; PR, merge, production deploy, and the week of
+              read-metric measurement are pending</li>
+          <li>Abandoned after the
+              dev verification failures</li>
+        </ol>
+        <p data-quiz-explanation>The two defects the verifier found were fixed and are now at
+              67/67; nothing beyond dev has happened yet.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+<h2>Subagent Evidence</h2><p class="eyebrow">Delivery provenance</p>
+        
         <p class="quiet">
           The rebuild was fanned out across parallel subagents against a frozen
           contract (<code>shared/reportsContract.ts</code>) and typed stubs, so
@@ -925,325 +657,7 @@
           keep — the currency-normalization and till-billed-service defects
           were both caught by it on real data, not by unit tests.
         </div>
-      </section>
-
-      <section class="section" id="quiz">
-        <p class="eyebrow">Quiz: Pass Required</p>
-        <h2>Score at least 8/10</h2>
-        <p class="quiet">
-          The questions test the rebuild's intent and failure boundaries, not
-          file-name trivia.
-        </p>
-        <form id="changeQuiz">
-          <fieldset class="quiz-question" data-answer="b">
-            <legend>
-              1. Why does the days table say "Under close" / "Matches close" /
-              "Not closed yet" instead of a "reconciled" badge?
-            </legend>
-            <label class="option"
-              ><input type="radio" name="q1" value="a" /> Because reconciliation
-              is deprecated</label
-            >
-            <label class="option"
-              ><input type="radio" name="q1" value="b" /> Because "reconciled"
-              describes timing relative to the close, not whether the folded
-              numbers agree with it</label
-            >
-            <label class="option"
-              ><input type="radio" name="q1" value="c" /> Because the close doc
-              no longer stores a variance</label
-            >
-            <p class="explanation">
-              Settlement state and numeric agreement are different facts;
-              collapsing them into one badge hid which one had actually failed.
-            </p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="c">
-            <legend>
-              2. Why is <code>foldDay</code> the sole correctness authority
-              instead of the incrementally patched open-day doc?
-            </legend>
-            <label class="option"
-              ><input type="radio" name="q2" value="a" /> The incremental patch
-              is deleted after every sweep</label
-            >
-            <label class="option"
-              ><input type="radio" name="q2" value="b" /> The incremental patch
-              runs faster, so it wins ties</label
-            >
-            <label class="option"
-              ><input type="radio" name="q2" value="c" /> The incremental patch
-              is explicitly best-effort and can transiently double-count; only a
-              full fold over that day's facts is deterministic and
-              replayable</label
-            >
-            <p class="explanation">
-              The open-day patch exists only to keep numbers roughly current
-              between sweeps. The fold always overwrites it — there is no
-              reconciliation step between the two because only one is ever
-              authoritative.
-            </p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="a">
-            <legend>
-              3. Why is fact identity structural fields
-              <code>(storeId, sourceDomain, sourceId, lineId, factKind)</code>
-              rather than a concatenated string key?
-            </legend>
-            <label class="option"
-              ><input type="radio" name="q3" value="a" /> A composite index on
-              real fields removes the string-escaping/forgery bug class instead
-              of merely mitigating it</label
-            >
-            <label class="option"
-              ><input type="radio" name="q3" value="b" /> Convex indexes cannot
-              be built on string fields</label
-            >
-            <label class="option"
-              ><input type="radio" name="q3" value="c" /> String keys are slower
-              to hash</label
-            >
-            <p class="explanation">
-              A concatenated key can be crafted or mis-escaped to collide or
-              diverge; separate indexed fields have no such ambiguity.
-            </p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="b">
-            <legend>
-              4. What did the wigclub "ghs" vs "GHS" defect actually teach?
-            </legend>
-            <label class="option"
-              ><input type="radio" name="q4" value="a" /> Currency codes should
-              be optional</label
-            >
-            <label class="option"
-              ><input type="radio" name="q4" value="b" /> Any value compared
-              across the ingest/fold/overview boundary must go through one
-              shared normalization helper, or a casing mismatch silently zeroes
-              everything</label
-            >
-            <label class="option"
-              ><input type="radio" name="q4" value="c" /> The fold should ignore
-              currency entirely</label
-            >
-            <p class="explanation">
-              Because the raw store currency skipped normalization in one path,
-              every fact was excluded as "foreign," folding all 67 days to zero
-              — invisible until the independent verifier compared against domain
-              totals.
-            </p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="c">
-            <legend>
-              5. Why does reseed stamp facts with business time
-              (<code>occurredAt</code>) as the driver of operating date, rather
-              than the time the reseed job ran (<code>recordedAt</code>)?
-            </legend>
-            <label class="option"
-              ><input type="radio" name="q5" value="a" /> Because reseed cannot
-              access historical timestamps</label
-            >
-            <label class="option"
-              ><input type="radio" name="q5" value="b" /> Because Convex
-              requires monotonic timestamps</label
-            >
-            <label class="option"
-              ><input type="radio" name="q5" value="c" /> Because reseed
-              re-derives historical facts long after they occurred; using
-              arrival time would collapse months of history onto the reseed
-              run's date</label
-            >
-            <p class="explanation">
-              Business time is what makes reseed = backfill = disaster recovery
-              a single code path — the same emitter logic lands facts on the
-              correct historical day regardless of when it runs.
-            </p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="a">
-            <legend>
-              6. Why is the store overview a single denormalized document rather
-              than a query that aggregates day docs live?
-            </legend>
-            <label class="option"
-              ><input type="radio" name="q6" value="a" /> So a dashboard
-              subscription costs one document read, invalidated only by the
-              sweep, instead of scanning tens to hundreds of day/sku-day docs on
-              every execution</label
-            >
-            <label class="option"
-              ><input type="radio" name="q6" value="b" /> Because Convex cannot
-              aggregate across documents</label
-            >
-            <label class="option"
-              ><input type="radio" name="q6" value="c" /> Because the overview
-              only needs today's numbers</label
-            >
-            <p class="explanation">
-              The sweeper computes the aggregation once per cadence and writes
-              the result; the dashboard's job becomes reading one doc, not
-              repeating the aggregation on every reactive re-run.
-            </p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="b">
-            <legend>
-              7. What did the till-billed service-line defect reveal about
-              capturing revenue from a new domain?
-            </legend>
-            <label class="option"
-              ><input type="radio" name="q7" value="a" /> Service revenue should
-              never be reported</label
-            >
-            <label class="option"
-              ><input type="radio" name="q7" value="b" /> A source that bills at
-              the header level with no item rows needs an explicit revenue-only
-              fact — inferring facts purely from item rows silently drops that
-              revenue</label
-            >
-            <label class="option"
-              ><input type="radio" name="q7" value="c" /> Service lines must
-              always have a unit cost</label
-            >
-            <p class="explanation">
-              posTransactionServiceLine carried header revenue with no items;
-              the emitters were only walking items, so three real days were
-              undercounted until a revenue-only, zero-unit fact was added per
-              service line.
-            </p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="c">
-            <legend>
-              8. Why were the inventory valuation ledger and
-              operating-day/timezone authority moved to their own namespaces
-              instead of deleted with the rest of legacy reporting?
-            </legend>
-            <label class="option"
-              ><input type="radio" name="q8" value="a" /> They were left in
-              place for backward compatibility</label
-            >
-            <label class="option"
-              ><input type="radio" name="q8" value="b" /> They failed their
-              tests, so deletion was deferred</label
-            >
-            <label class="option"
-              ><input type="radio" name="q8" value="c" /> They were never
-              reporting code — other non-reporting domains (six for the cost
-              ledger; closes/POS/scheduling for operating-day math) depend on
-              them</label
-            >
-            <p class="explanation">
-              Deleting them with the rest of convex/reporting/ would have broken
-              unrelated domains; they were extracted to convex/inventoryLedger/
-              and convex/storeTime/ instead.
-            </p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="a">
-            <legend>
-              9. What does the source-truth verifier deliberately avoid using as
-              its reference?
-            </legend>
-            <label class="option"
-              ><input type="radio" name="q9" value="a" /> The legacy reporting
-              projections, which had known double-count and truncation
-              bugs</label
-            >
-            <label class="option"
-              ><input type="radio" name="q9" value="b" /> The store's daily
-              close documents</label
-            >
-            <label class="option"
-              ><input type="radio" name="q9" value="c" /> The reportFact ledger
-              itself</label
-            >
-            <p class="explanation">
-              verifyDayAgainstSources recomputes totals independently from
-              domain tables, deliberately not sharing code with the emitters,
-              and never compares against the known-buggy legacy projections.
-            </p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="b">
-            <legend>
-              10. What is the delivery status at report generation?
-            </legend>
-            <label class="option"
-              ><input type="radio" name="q10" value="a" /> Merged and deployed
-              to production, one week of read metrics collected</label
-            >
-            <label class="option"
-              ><input type="radio" name="q10" value="b" /> Delivery candidate:
-              local validation and dev deploy complete, wigclub dev verification
-              at 67/67; PR, merge, production deploy, and the week of
-              read-metric measurement are pending</label
-            >
-            <label class="option"
-              ><input type="radio" name="q10" value="c" /> Abandoned after the
-              dev verification failures</label
-            >
-            <p class="explanation">
-              The two defects the verifier found were fixed and are now at
-              67/67; nothing beyond dev has happened yet.
-            </p>
-          </fieldset>
-
-          <div class="quiz-actions">
-            <button type="submit">Grade quiz</button>
-            <button class="secondary" id="resetQuiz" type="button">
-              Reset
-            </button>
-            <span id="quizResult" aria-live="polite"></span>
-          </div>
-        </form>
-      </section>
-
-      <footer>
-        Generated 2026-07-29 for the reporting read-optimized rebuild.
-        Fingerprint <code>43eab2981ce42f502573861d89af13fa97c0b711fba6ca3bccdd1579a36c86fd</code>.
-      </footer>
-    </main>
-
-    <script>
-      (() => {
-        const form = document.getElementById("changeQuiz");
-        const reset = document.getElementById("resetQuiz");
-        const result = document.getElementById("quizResult");
-        const questions = [...form.querySelectorAll(".quiz-question")];
-
-        form.addEventListener("submit", (event) => {
-          event.preventDefault();
-          let score = 0;
-
-          questions.forEach((question, index) => {
-            const selected = form.querySelector(
-              `input[name="q${index + 1}"]:checked`,
-            );
-            const correct = selected?.value === question.dataset.answer;
-            if (correct) score += 1;
-            question.querySelector(".explanation").style.display = "block";
-            question.style.borderColor = correct ? "#7db797" : "#d79a93";
-          });
-
-          const passed = score >= 8;
-          result.textContent = `${score}/10 — ${passed ? "Pass" : "Review the explanations and try again"}`;
-          result.style.color = passed ? "#176b4a" : "#9d342f";
-        });
-
-        reset.addEventListener("click", () => {
-          form.reset();
-          result.textContent = "";
-          questions.forEach((question) => {
-            question.style.borderColor = "";
-            question.querySelector(".explanation").style.display = "none";
-          });
-        });
-      })();
-    </script>
-  </body>
+  </section>
+</article>
+</body>
 </html>

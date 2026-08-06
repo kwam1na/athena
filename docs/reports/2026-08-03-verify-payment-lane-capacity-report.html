@@ -1,109 +1,54 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="75b379367dc2942cfe9bc8d31ad843ea37227618487da43a773ead6b60855817" data-athena-report-base="origin/main" data-athena-report-head="codex/verify-payment-lane-capacity 8033dcce">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Making the payment verification lane usable at production volume</title>
-    <style>
-      :root {
-        --ink: #1f2933;
-        --muted: #596674;
-        --line: #d9e2ec;
-        --paper: #ffffff;
-        --soft: #f6f8fb;
-        --accent: #1d4ed8;
-        --accent-soft: #dbeafe;
-        --good: #166534;
-        --bad: #b91c1c;
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        background: var(--soft);
-        color: var(--ink);
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        line-height: 1.55;
-      }
-      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
-      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
-      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
-      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
-      h2 { font-size: 28px; margin: 0 0 16px; }
-      h3 { font-size: 19px; margin: 22px 0 10px; }
-      p { margin: 0 0 14px; }
-      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
-      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
-      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
-      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
-      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
-      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
-      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
-      .table-scroll { overflow-x: auto; }
-      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
-      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
-      tr:last-child td { border-bottom: 0; }
-      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
-      .quiz-question:first-child { border-top: 0; }
-      fieldset { border: 0; margin: 0; padding: 0; }
-      legend { font-weight: 700; margin-bottom: 10px; }
-      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
-      @media (hover: hover) and (pointer: fine) {
-        label:hover { border-color: #b6c5d8; }
-      }
-      button {
-        appearance: none;
-        border: 0;
-        border-radius: 8px;
-        background: var(--accent);
-        color: #ffffff;
-        cursor: pointer;
-        font-weight: 700;
-        padding: 11px 16px;
-        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
-      }
-      button:active { transform: scale(0.97); }
-      button.secondary { background: #475569; }
-      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
-      #quizResult { font-weight: 700; }
-      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
-      .answer-detail.visible { display: block; }
-      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
-      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
-      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
-      @media (max-width: 820px) { h1 { font-size: 32px; } main { padding: 32px 16px 56px; } }
-    </style>
-  </head>
-  <body>
-    <main>
-      <header>
-        <h1>Making the payment verification lane usable at production volume</h1>
-        <p class="lede">The report source verifier had a green test suite and could not return a verdict on a real store. When it did speak, it called GH&#8373;3,960 of untouched payment data a mismatch. Both defects were arithmetic against production row counts, and no test could have found either.</p>
-        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch codex/verify-payment-lane-capacity</span><span class="pill">Commit 8033dcce</span><span class="pill">Base origin/main</span><span class="pill">Linear V26-1155</span><span class="pill">No PR opened</span><span class="pill">Merge gate pending</span><span class="pill">Production not mutated</span><span class="pill">Root alignment pending</span></div>
-      </header>
-
-      <section class="panel"><h2>Executive Summary</h2>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Making the payment verification lane usable at production volume</title>
+</head>
+<body>
+<article
+  data-athena-landed-change-report="v2"
+  data-athena-report-diff-fingerprint="75b379367dc2942cfe9bc8d31ad843ea37227618487da43a773ead6b60855817"
+  data-athena-report-base="origin/main"
+  data-athena-report-head="codex/verify-payment-lane-capacity 8033dcce"
+>
+  <header data-report-section="header">
+    <h1>Making the payment verification lane usable at production volume</h1>
+    <p class="lede">The report source verifier had a green test suite and could not return a verdict on a real store. When it did speak, it called GH₵3,960 of untouched payment data a mismatch. Both defects were arithmetic against production row counts, and no test could have found either.</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch codex/verify-payment-lane-capacity</li>
+      <li>Commit 8033dcce</li>
+      <li>Base origin/main</li>
+      <li>Linear V26-1155</li>
+      <li>No PR opened</li>
+      <li>Merge gate pending</li>
+      <li>Production not mutated</li>
+      <li>Root alignment pending</li>
+    </ul>
+  </header>
+  <section data-report-section="summary">
+<h2>Executive Summary</h2>
         <p>Athena's report source verifier recomputes each day's metrics from primary tables and compares them against what the fold persisted. It was complete, it was tested, and the suite was green. Then it was <strong>run against production for the first time</strong>, and it failed in two ways at once.</p>
-        <p><strong>It could not return a verdict.</strong> <code>verifyCurrentWeekAgainstSources</code> on the production Wigclub store returned <code>{ outcome: "incomplete", reason: "source_cap_exceeded" }</code> &mdash; not a pass, not a mismatch, nothing. Every per-day run for 2026-07-27..08-02 returned the same. The payment allocation scan read a 90-day window under a 500-document cap; that window on production holds <strong>1,050 rows</strong>, about 12 allocations a day. One over-wide read was costing the entire lane.</p>
-        <p><strong>And when it did speak, it lied by omission.</strong> An incomplete lane fell back to an <code>expected</code> of <code>0</code>, and the diff builder dutifully compared that zero to the real folded total: <code>{ field: "paymentsCollectedMinor", expected: 0, actual: 396000 }</code> with <code>matches: false</code>. Monitoring output that reads as corrupted payment data when <em>nothing had been checked</em>. This is the more dangerous of the two bugs, because it makes a capacity limit and a genuine data discrepancy byte-identical &mdash; so a real finding would be dismissed as noise.</p>
-        <p>The fix is two independently bounded index reads with their ceiling arithmetic recorded beside the constants, and a third result state: <code>unverifiedFields</code>. Three files, 570 insertions against 52 deletions, one commit off <code>main</code>. The gate counts <strong>305 considerable source lines</strong> &mdash; tests excluded &mdash; against a 150-line solution-note threshold and a 300-line report threshold.</p>
+        <p><strong>It could not return a verdict.</strong> <code>verifyCurrentWeekAgainstSources</code> on the production Wigclub store returned <code>{ outcome: "incomplete", reason: "source_cap_exceeded" }</code> — not a pass, not a mismatch, nothing. Every per-day run for 2026-07-27..08-02 returned the same. The payment allocation scan read a 90-day window under a 500-document cap; that window on production holds <strong>1,050 rows</strong>, about 12 allocations a day. One over-wide read was costing the entire lane.</p>
+        <p><strong>And when it did speak, it lied by omission.</strong> An incomplete lane fell back to an <code>expected</code> of <code>0</code>, and the diff builder dutifully compared that zero to the real folded total: <code>{ field: "paymentsCollectedMinor", expected: 0, actual: 396000 }</code> with <code>matches: false</code>. Monitoring output that reads as corrupted payment data when <em>nothing had been checked</em>. This is the more dangerous of the two bugs, because it makes a capacity limit and a genuine data discrepancy byte-identical — so a real finding would be dismissed as noise.</p>
+        <p>The fix is two independently bounded index reads with their ceiling arithmetic recorded beside the constants, and a third result state: <code>unverifiedFields</code>. Three files, 570 insertions against 52 deletions, one commit off <code>main</code>. The gate counts <strong>305 considerable source lines</strong> — tests excluded — against a 150-line solution-note threshold and a 300-line report threshold.</p>
         <p>The sales lane, throughout all of this, was verifying clean on production on all seven days.</p>
-      </section>
-
-      <section class="panel"><h2>Problem and Context</h2>
+  </section>
+  <section data-report-section="problem">
+<h2>Problem and Context</h2>
         <p>The verifier exists because a reporting pipeline that only checks itself proves nothing. Its rule, inherited from the read-optimized redesign, is <em>verify against sources, not against the pipeline</em>: recompute the day from <code>posTransaction</code>, <code>paymentAllocation</code>, adjustments, storefront orders and service cases, then diff that against the projection.</p>
         <p>Every source scan is bounded, because an unbounded read in Convex is a production incident waiting for a busy store. The payment lane's bound had already been fixed once: an earlier change (<code>766bfe61</code>) introduced <code>PAYMENT_VOID_LOOKBACK_MS</code> and replaced a lifetime scan with the date-bounded window <code>[startAt - 90d, endAt]</code>. That was correct and necessary.</p>
-        <p>The 90 days are not arbitrary. <code>paymentAllocation</code> is indexed on <code>recordedAt</code> only, but a row contributes to a day at <em>two</em> instants: its original event at <code>recordedAt</code>, and &mdash; when voided with a server timestamp &mdash; its reversal at <code>voidedAt</code>. A row voided today may have been recorded months ago. To catch that, the scan reached back.</p>
-        <p><strong>Bounding a read is not the same as sizing it.</strong> A 90-day window under a 500-document ceiling is an unstated claim that the store does fewer than about 5.5 allocations a day. Nobody wrote that claim down, and nobody checked it. Production does twelve. So the lane went <code>incomplete</code> on day one of real use, on every day, permanently &mdash; even though the rows the period actually needed numbered in the dozens.</p>
-        <p>The second defect was waiting behind the first, and would have stayed invisible if the first had never fired. There was no way to say "unknown". The verifier had exactly two answers &mdash; agreed and differs &mdash; so an expectation that could not be established had nowhere to go but <code>differs</code>, against whatever the zero-value happened to be.</p>
-      </section>
-
-      <section class="panel"><h2>Mental Model</h2>
+        <p>The 90 days are not arbitrary. <code>paymentAllocation</code> is indexed on <code>recordedAt</code> only, but a row contributes to a day at <em>two</em> instants: its original event at <code>recordedAt</code>, and — when voided with a server timestamp — its reversal at <code>voidedAt</code>. A row voided today may have been recorded months ago. To catch that, the scan reached back.</p>
+        <p><strong>Bounding a read is not the same as sizing it.</strong> A 90-day window under a 500-document ceiling is an unstated claim that the store does fewer than about 5.5 allocations a day. Nobody wrote that claim down, and nobody checked it. Production does twelve. So the lane went <code>incomplete</code> on day one of real use, on every day, permanently — even though the rows the period actually needed numbered in the dozens.</p>
+        <p>The second defect was waiting behind the first, and would have stayed invisible if the first had never fired. There was no way to say "unknown". The verifier had exactly two answers — agreed and differs — so an expectation that could not be established had nowhere to go but <code>differs</code>, against whatever the zero-value happened to be.</p>
+  </section>
+  <section data-report-section="mental-model">
+<h2>Mental Model</h2>
         <p>Two ideas carry the change. The first is about reads:</p>
         <p><strong>One read cannot answer two questions with different volumes.</strong> The old scan was asking two things at once:</p>
         <pre><code>"What allocations belong to this period?"        ~30 rows   (common, essential)
 "Was an older allocation voided during it?"    ~1,050 rows (rare, cheap to lose)</code></pre>
-        <p>Under one ceiling, the rare question gets to veto the essential one. Split them and each gets a bound proportional to its own volume &mdash; and, more importantly, its own <em>failure mode</em>. Running out of in-period rows costs the day. Running out of lookback rows costs only the ability to spot a historical void.</p>
+        <p>Under one ceiling, the rare question gets to veto the essential one. Split them and each gets a bound proportional to its own volume — and, more importantly, its own <em>failure mode</em>. Running out of in-period rows costs the day. Running out of lookback rows costs only the ability to spot a historical void.</p>
         <p>The second idea is about outputs. A verifier needs three states, not two:</p>
         <div class="table-scroll">
         <table>
@@ -111,26 +56,26 @@
           <tbody>
             <tr><td>agreed</td><td>Checked, and the source matched the projection</td><td>absent from <code>differences</code></td></tr>
             <tr><td>differs</td><td>Checked, and they disagree</td><td><code>differences</code> / <code>paymentDifferences</code></td></tr>
-            <tr><td><strong>unverified</strong></td><td><strong>Not checked. No claim is made.</strong></td><td><code>unverifiedFields</code> &mdash; and nowhere else</td></tr>
+            <tr><td><strong>unverified</strong></td><td><strong>Not checked. No claim is made.</strong></td><td><code>unverifiedFields</code> — and nowhere else</td></tr>
           </tbody>
         </table>
         </div>
         <p>Collapsing the third into the second is what produced <code>expected: 0</code>. <code>matches</code> now means precisely <strong>"everything checked agreed"</strong>, so <code>matches: true</code> with a non-empty <code>unverifiedFields</code> is <em>partial</em> verification, not a clean bill of health. Alerting must read both.</p>
-      </section>
-
-      <section class="panel"><h2>Before and After</h2>
+  </section>
+  <section data-report-section="before-after">
+<h2>Before and After</h2>
         <ul>
           <li>Before: one scan, <code>[startAt - 90d, endAt]</code>, ceiling <code>VERIFY_MAX_DOCS_PER_DOMAIN</code> (500). After: two half-open scans on <code>by_storeId_recordedAt</code> with ceilings of 5,000 and 3,000, derived from a measured rate and documented beside the constants.</li>
           <li>Before: exhausting the read made the whole payment posture unreadable. After: exhausting the <em>lookback</em> ceiling degrades only reversal detection; the in-period posture still verifies.</li>
           <li>Before: an incomplete lane produced <code>expected: 0</code> and a false difference. After: the affected fields are withdrawn from comparison and named on <code>unverifiedFields</code>.</li>
           <li>Before: <code>matches</code> required <code>paymentPosture.outcome === "complete"</code>, so "we could not check" read as "it is wrong". After: <code>matches</code> is <code>!truncated &amp;&amp; differences.length === 0 &amp;&amp; paymentDifferences.length === 0</code>.</li>
-          <li>Before: one day with an incomplete payment lane returned <code>incomplete</code> for the entire week &mdash; six clean lanes discarded to say nothing about one. After: the week verifies and unions the withheld field names.</li>
+          <li>Before: one day with an incomplete payment lane returned <code>incomplete</code> for the entire week — six clean lanes discarded to say nothing about one. After: the week verifies and unions the withheld field names.</li>
           <li>Before: weekly reasons included <code>payment_source_incomplete</code> and <code>invalid_payment_allocation</code>. After: both unreachable, and removed from the union. (Repo-wide grep: zero remaining references in source.)</li>
-          <li>Unchanged: the sales, adjustment, storefront and service lanes; <code>PAYMENT_VOID_LOOKBACK_MS</code> at 90 days and its documented blind spot; the persisted schema. Nothing in this commit is stored &mdash; <code>unverifiedFields</code> is a return-shape addition only.</li>
+          <li>Unchanged: the sales, adjustment, storefront and service lanes; <code>PAYMENT_VOID_LOOKBACK_MS</code> at 90 days and its documented blind spot; the persisted schema. Nothing in this commit is stored — <code>unverifiedFields</code> is a return-shape addition only.</li>
         </ul>
-      </section>
-
-      <section class="panel"><h2>Layer-by-Layer Mechanics</h2>
+  </section>
+  <section data-report-section="changes">
+<h2>Layer-by-Layer Mechanics</h2>
 
         <h3>1. The two reads</h3>
         <pre><code>const inPeriodAllocations = await ctx.db
@@ -149,7 +94,7 @@ const reversalLookbackProbe = await ctx.db
   )
   .order("desc")
   .take(VERIFY_MAX_PAYMENT_REVERSAL_LOOKBACK_DOCS + 1);  // 3_000</code></pre>
-        <p>The lookback is <strong>newest-first</strong>. That is not a stylistic choice: a row voided during the period is far likelier to have been recorded recently, so when this read caps out, the rows it keeps are the ones most likely to matter. The two ranges are half-open against each other (<code>.lt("recordedAt", startAt)</code>), so nothing is counted twice. Rows from the lookback contribute <strong>only their reversal</strong> &mdash; their original event belongs to an earlier day by construction &mdash; so that loop opens with <code>if (allocation.status !== "voided") continue;</code>.</p>
+        <p>The lookback is <strong>newest-first</strong>. That is not a stylistic choice: a row voided during the period is far likelier to have been recorded recently, so when this read caps out, the rows it keeps are the ones most likely to matter. The two ranges are half-open against each other (<code>.lt("recordedAt", startAt)</code>), so nothing is counted twice. Rows from the lookback contribute <strong>only their reversal</strong> — their original event belongs to an earlier day by construction — so that loop opens with <code>if (allocation.status !== "voided") continue;</code>.</p>
         <p>Only <code>inPeriodCapExceeded</code> sets <code>truncated</code>. Neither read collects.</p>
 
         <h3>2. The ceiling arithmetic, written down</h3>
@@ -158,8 +103,8 @@ const reversalLookbackProbe = await ctx.db
         <table>
           <thead><tr><th>Read</th><th>Expected volume</th><th>Ceiling</th><th>Headroom</th></tr></thead>
           <tbody>
-            <tr><td>In-period</td><td>~30 rows (one operating day &plusmn;18h of slack &asymp; 2.5 days, at 12/day)</td><td>5,000</td><td>~2,000/day &mdash; ~165x measured, 10x the old 500 cap</td></tr>
-            <tr><td>Reversal lookback</td><td>~1,080 rows (90 days at 12/day)</td><td>3,000</td><td>~33/day &mdash; ~2.8x measured</td></tr>
+            <tr><td>In-period</td><td>~30 rows (one operating day ±18h of slack ≈ 2.5 days, at 12/day)</td><td>5,000</td><td>~2,000/day — ~165x measured, 10x the old 500 cap</td></tr>
+            <tr><td>Reversal lookback</td><td>~1,080 rows (90 days at 12/day)</td><td>3,000</td><td>~33/day — ~2.8x measured</td></tr>
           </tbody>
         </table>
         </div>
@@ -177,7 +122,7 @@ if (posture.reversalLookback.outcome === "incomplete") {
   ];                                                                          // 6
 }
 return [];</code></pre>
-        <p>The two degradations are <strong>deliberately unequal</strong>, and the asymmetry is the most interesting line of reasoning in the change. <strong>In-period collection cannot be moved by an unseen historical void.</strong> A void of a pre-window row lands as a <em>reversal</em>: it adds to <code>paymentsRefundedMinor</code> and subtracts from <code>paymentAllocatedMinor</code>. It never touches what was collected inside the period. So an exhausted lookback withholds refunds, allocation and every posture field derived from them &mdash; but <code>paymentsCollectedMinor</code> stays verified. Withholding it too would have been the easy, symmetrical, and strictly less useful choice.</p>
+        <p>The two degradations are <strong>deliberately unequal</strong>, and the asymmetry is the most interesting line of reasoning in the change. <strong>In-period collection cannot be moved by an unseen historical void.</strong> A void of a pre-window row lands as a <em>reversal</em>: it adds to <code>paymentsRefundedMinor</code> and subtracts from <code>paymentAllocatedMinor</code>. It never touches what was collected inside the period. So an exhausted lookback withholds refunds, allocation and every posture field derived from them — but <code>paymentsCollectedMinor</code> stays verified. Withholding it too would have been the easy, symmetrical, and strictly less useful choice.</p>
 
         <h3>4. Withheld before diffing, not filtered after</h3>
         <pre><code>const unverifiedFields = unverifiedPaymentFields(paymentPosture);
@@ -185,238 +130,184 @@ const unverified = new Set&lt;string&gt;(unverifiedFields);
 const differences = diffMetrics(expected, foldedMetrics(day)).filter(
   (difference) =&gt; !unverified.has(difference.field),
 );</code></pre>
-        <p>A withheld field is never a candidate for disagreement. Six channels apply the filter: the day's <code>differences</code> and <code>paymentDifferences</code>; the weekly <code>includedDifferences</code>, <code>outsideScheduleDifferences</code> and the two payment equivalents; the accepted-baseline comparison; and the amendment comparison. That last one carries its own reasoning &mdash; an amendment is a claim that the week <em>moved</em>, and a field nobody checked has not moved.</p>
+        <p>A withheld field is never a candidate for disagreement. Six channels apply the filter: the day's <code>differences</code> and <code>paymentDifferences</code>; the weekly <code>includedDifferences</code>, <code>outsideScheduleDifferences</code> and the two payment equivalents; the accepted-baseline comparison; and the amendment comparison. That last one carries its own reasoning — an amendment is a claim that the week <em>moved</em>, and a field nobody checked has not moved.</p>
 
         <h3>5. The week stops sinking</h3>
         <p><code>verifyCurrentWeekWithCtx</code> used to <code>return</code> early with <code>incomplete</code> the moment any day's payment posture failed. It now keeps iterating all seven dates and unions the withheld names into one set, so <code>daysChecked: 7</code> with <code>outcome: "verified"</code> and a populated <code>unverifiedFields</code> is now reachable where the old code returned nothing usable.</p>
 
         <h3>6. The deviation: pagination was not available</h3>
-        <p>The brief called for pagination on the in-period lane. <strong>Convex permits only one <code>.paginate()</code> per function execution</strong>, and this lane runs seven times inside a single <code>verifyCurrentWeekAgainstSources</code> &mdash; so pagination was structurally unavailable, not merely awkward. <code>convex-test</code> enforces the rule in the mock rather than letting it pass locally and fail in a deployed backend (<code>node_modules/convex-test/dist/index.js:951</code>):</p>
+        <p>The brief called for pagination on the in-period lane. <strong>Convex permits only one <code>.paginate()</code> per function execution</strong>, and this lane runs seven times inside a single <code>verifyCurrentWeekAgainstSources</code> — so pagination was structurally unavailable, not merely awkward. <code>convex-test</code> enforces the rule in the mock rather than letting it pass locally and fail in a deployed backend (<code>node_modules/convex-test/dist/index.js:951</code>):</p>
         <pre><code>"Only a single paginated query (`.paginate()`) is allowed per function
  execution. Calling `.paginate()` more than once in a single Convex function
  fails at runtime in a deployed backend."</code></pre>
         <p>A single bounded <code>.take(ceiling + 1)</code> is used instead. Anyone planning to paginate a per-day read inside a per-week aggregate in Convex will meet this wall; the workable answer is a well-sized bounded read with the arithmetic written down.</p>
-      </section>
-
-      <section class="panel"><h2>Failure Boundaries</h2>
+  </section>
+  <section data-report-section="failure-boundaries">
+<h2>Failure Boundaries</h2>
         <ul>
           <li><strong>In-period allocations exceed 5,000.</strong> An honest <code>incomplete</code>: a partial in-period read is a lower bound, never a total that happens to agree. It sets <code>truncated</code>, which forces <code>matches: false</code>, and withholds all seven payment fields. Asserted by <em>refuses a period that exceeds the in-period allocation ceiling</em>.</li>
           <li><strong>Pre-period allocations exceed 3,000.</strong> <code>reversalLookback = { outcome: "incomplete", reason: "lookback_cap_exceeded" }</code>. <code>truncated</code> stays false, the in-period posture still verifies, six of seven fields are withheld. Asserted by <em>degrades only reversal detection when the lookback bound is exhausted</em>.</li>
-          <li><strong>The boundary is narrower than the headline.</strong> It is the lookback <em>cap</em> that is isolated from the in-period posture, not the lookback lane as a whole. A pre-window row carrying <code>voided_refund_unsupported</code> or <code>legacy_void_missing_timestamp</code> still sets <code>paymentIncompleteReason</code> and so still degrades the in-period posture to <code>incomplete</code>. That is correct &mdash; those are unrepresentable facts, not a capacity limit &mdash; but worth knowing before reading the reversal lane as fully independent.</li>
+          <li><strong>The boundary is narrower than the headline.</strong> It is the lookback <em>cap</em> that is isolated from the in-period posture, not the lookback lane as a whole. A pre-window row carrying <code>voided_refund_unsupported</code> or <code>legacy_void_missing_timestamp</code> still sets <code>paymentIncompleteReason</code> and so still degrades the in-period posture to <code>incomplete</code>. That is correct — those are unrepresentable facts, not a capacity limit — but worth knowing before reading the reversal lane as fully independent.</li>
           <li><strong>A void older than 90 days.</strong> Still invisible, deliberately and unchanged. Documented in the module as a known blind spot: bounded staleness, not unbounded drift.</li>
-          <li><strong>A genuine payment mismatch.</strong> Still reported. When the lane completes, <code>unverifiedFields</code> is empty and nothing is filtered &mdash; asserted directly by <em>still reports a genuine payment mismatch when the lane completes</em>, which expects <code>expected: 9_000</code> against <code>actual: 396_000</code> and <code>matches: false</code>. Withholding must not become silencing, and only that test proves it does not.</li>
+          <li><strong>A genuine payment mismatch.</strong> Still reported. When the lane completes, <code>unverifiedFields</code> is empty and nothing is filtered — asserted directly by <em>still reports a genuine payment mismatch when the lane completes</em>, which expects <code>expected: 9_000</code> against <code>actual: 396_000</code> and <code>matches: false</code>. Withholding must not become silencing, and only that test proves it does not.</li>
           <li><strong><code>matches: true</code> read alone.</strong> This is the one boundary the code cannot close for you. It means "everything checked agreed", and with a non-empty <code>unverifiedFields</code> it is partial verification. The type carries the warning at the declaration site, but any consumer that ignores the list will draw a false conclusion.</li>
-          <li><strong>Nothing reads the new field yet.</strong> <code>unverifiedFields</code> has no consumer outside <code>verify.ts</code> and its two test files &mdash; no dashboard, alert, or UI branches on it. Until one does, the unchecked/wrong distinction lives in the return shape and not in anything an operator sees.</li>
+          <li><strong>Nothing reads the new field yet.</strong> <code>unverifiedFields</code> has no consumer outside <code>verify.ts</code> and its two test files — no dashboard, alert, or UI branches on it. Until one does, the unchecked/wrong distinction lives in the return shape and not in anything an operator sees.</li>
         </ul>
-      </section>
-
-      <section class="panel"><h2>What Intentionally Did Not Change</h2>
+  </section>
+  <section data-report-section="what-intentionally-did-not-change">
+<h2>What Intentionally Did Not Change</h2>
         <ul>
-          <li><code>VERIFY_MAX_DOCS_PER_DOMAIN</code> is still 500, and still governs the completed-transaction, voided-transaction, adjustment, storefront-order and service-case scans. Raising it to cover the payment lane's worst case would have loosened four unrelated bounds to fix one. <strong>Those four bounds have not been measured against production either</strong> &mdash; they were not the lane that failed, which is not evidence they are sized right.</li>
+          <li><code>VERIFY_MAX_DOCS_PER_DOMAIN</code> is still 500, and still governs the completed-transaction, voided-transaction, adjustment, storefront-order and service-case scans. Raising it to cover the payment lane's worst case would have loosened four unrelated bounds to fix one. <strong>Those four bounds have not been measured against production either</strong> — they were not the lane that failed, which is not evidence they are sized right.</li>
           <li><code>PAYMENT_VOID_LOOKBACK_MS</code> stays at 90 days. Only its <em>role</em> narrowed: it now governs the reversal read alone, and its doc comment was rewritten to say so.</li>
           <li>The sales lane. It was already verifying clean against production, and the whole point of the split is that the payment lane's capacity problem was never the sales lane's problem.</li>
           <li>The schema and the persisted contract. This commit touches three files and stores nothing new.</li>
           <li>The posture-level <code>"invalid_allocation"</code> reason and the weekly-fold <code>"payment_invalid_allocation"</code>. Different enums from the two that were removed, and untouched.</li>
         </ul>
-      </section>
-
-      <section class="panel">
-        <h2>Key Files</h2>
+  </section>
+  <section data-report-section="key-files">
+<h2>Key Files</h2>
         <div class="table-scroll">
         <table>
           <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
           <tbody>
-            <tr><td><code>convex/reports/verify.ts</code></td><td>305 changed lines &mdash; the entire source diff. Both ceilings and their arithmetic, the split reads, <code>VerifyUnverifiedField</code>, <code>unverifiedPaymentFields</code>, the six difference-channel filters, the new <code>matches</code> definition, and the weekly union that replaced the early return. Also holds the weekly verifier: there is no <code>weeklyVerify.ts</code>.</td></tr>
-            <tr><td><code>convex/reports/verify.test.ts</code></td><td>282 changed lines. Three large-fixture ceiling tests at <code>60_000</code>, the void-lands-in-period test, and the <em>unverified is not mismatched</em> block &mdash; including the paired test that proves a real mismatch still reports.</td></tr>
-            <tr><td><code>convex/reports/weeklyVerify.test.ts</code></td><td>35 changed lines, one test. <em>keeps the weekly gate incomplete for an untimed legacy payment void</em> became <em>withholds payment fields for an untimed legacy void, keeping the rest verified</em> &mdash; the rename is the behavior change in one line.</td></tr>
+            <tr><td><code>convex/reports/verify.ts</code></td><td>305 changed lines — the entire source diff. Both ceilings and their arithmetic, the split reads, <code>VerifyUnverifiedField</code>, <code>unverifiedPaymentFields</code>, the six difference-channel filters, the new <code>matches</code> definition, and the weekly union that replaced the early return. Also holds the weekly verifier: there is no <code>weeklyVerify.ts</code>.</td></tr>
+            <tr><td><code>convex/reports/verify.test.ts</code></td><td>282 changed lines. Three large-fixture ceiling tests at <code>60_000</code>, the void-lands-in-period test, and the <em>unverified is not mismatched</em> block — including the paired test that proves a real mismatch still reports.</td></tr>
+            <tr><td><code>convex/reports/weeklyVerify.test.ts</code></td><td>35 changed lines, one test. <em>keeps the weekly gate incomplete for an untimed legacy payment void</em> became <em>withholds payment fields for an untimed legacy void, keeping the rest verified</em> — the rename is the behavior change in one line.</td></tr>
           </tbody>
         </table>
         </div>
-      </section>
-
-      <section class="panel"><h2>Validation and Review Evidence</h2>
-        <p><strong>Re-executed while writing this report.</strong> <code>convex/reports/verify.test.ts</code> (22 tests) and <code>convex/reports/weeklyVerify.test.ts</code> (15 tests) &mdash; <strong>2 files, 37 tests, 0 failures</strong> in 8.79s. The <code>delivery:documentation-check</code> gate was falsified in both directions: it fails with these two artifacts absent (naming both the 150-line solution-note threshold and the 300-line report threshold against 305 changed source lines) and exits 0 with them in place.</p>
-        <p><strong>Recorded in the delivery session</strong> (attributed rather than restated as this report's own evidence): a full local run of 674 files / 7,535 tests. A full run also shows 1&ndash;2 failures in <code>usePosLocalSyncRuntime.test.ts</code> at around 5000ms. These are the <strong>known load flake</strong>, not a regression from this change: the file passes 96/96 in isolation, and different tests within it fail on different runs. The same load pressure is why the three new ceiling tests carry explicit <code>60_000</code> timeouts &mdash; they seed thousands of allocations to exercise the real bounds and outran vitest's 5s default under full-suite contention.</p>
+  </section>
+  <section data-report-section="validation">
+<h2>Validation and Review Evidence</h2>
+        <p><strong>Re-executed while writing this report.</strong> <code>convex/reports/verify.test.ts</code> (22 tests) and <code>convex/reports/weeklyVerify.test.ts</code> (15 tests) — <strong>2 files, 37 tests, 0 failures</strong> in 8.79s. The <code>delivery:documentation-check</code> gate was falsified in both directions: it fails with these two artifacts absent (naming both the 150-line solution-note threshold and the 300-line report threshold against 305 changed source lines) and exits 0 with them in place.</p>
+        <p><strong>Recorded in the delivery session</strong> (attributed rather than restated as this report's own evidence): a full local run of 674 files / 7,535 tests. A full run also shows 1–2 failures in <code>usePosLocalSyncRuntime.test.ts</code> at around 5000ms. These are the <strong>known load flake</strong>, not a regression from this change: the file passes 96/96 in isolation, and different tests within it fail on different runs. The same load pressure is why the three new ceiling tests carry explicit <code>60_000</code> timeouts — they seed thousands of allocations to exercise the real bounds and outran vitest's 5s default under full-suite contention.</p>
         <p><strong>Falsifications performed in the delivery session.</strong> Each was an executed perturbation, not a prediction:</p>
         <ul>
           <li>Restoring the in-period scan to the 90-day window under the 500 ceiling fails <em>verifies a day whose in-period allocations exceed the old 500 cap</em>.</li>
           <li>Making <code>unverifiedPaymentFields</code> return <code>[]</code> for an incomplete posture fails <em>withholds payment fields rather than diffing them against a fallback 0</em>.</li>
         </ul>
-        <p><strong>Production evidence</strong> (deployment <code>prod:colorless-cardinal-870</code>, store Wigclub, 2026-08-02). <code>verifyCurrentWeekAgainstSources</code> returned <code>incomplete/source_cap_exceeded</code>; per-day verification for 2026-07-27..08-02 returned the same on all seven days. The <strong>sales lane verified clean on every one of those days</strong> &mdash; zero differences in net, gross, units or refunds (Jul 27 GH&#8373;4,240/36u, Jul 28 GH&#8373;6,225/118u, Jul 29 GH&#8373;1,295/20u, Jul 30 GH&#8373;5,905/82u, Jul 31 GH&#8373;2,425/57u, Aug 1 GH&#8373;3,960/77u, Aug 2 zero). That run independently re-confirmed that the 106-day mass refold changed no values. Measured 1,050 allocations in the 90-day window, oldest 2026-05-12, newest 2026-08-01. These figures come from the production run itself and could not be re-executed while writing this report.</p>
-        <p><strong>Status.</strong> Delivery candidate on <code>codex/verify-payment-lane-capacity</code> at commit <code>8033dcce</code>, one commit off <code>main</code>, clean working tree apart from these two documentation artifacts. No PR opened. Not merged. The full <code>bun run pr:athena</code> merge gate is pending. Production was not mutated by this change &mdash; the production activity was read-only verifier invocation. Root/local alignment is pending. Linear V26-1155 is not claimed as Done.</p>
-      </section>
-
-      <section class="panel"><h2>Next-Time Guidance</h2>
+        <p><strong>Production evidence</strong> (deployment <code>prod:colorless-cardinal-870</code>, store Wigclub, 2026-08-02). <code>verifyCurrentWeekAgainstSources</code> returned <code>incomplete/source_cap_exceeded</code>; per-day verification for 2026-07-27..08-02 returned the same on all seven days. The <strong>sales lane verified clean on every one of those days</strong> — zero differences in net, gross, units or refunds (Jul 27 GH₵4,240/36u, Jul 28 GH₵6,225/118u, Jul 29 GH₵1,295/20u, Jul 30 GH₵5,905/82u, Jul 31 GH₵2,425/57u, Aug 1 GH₵3,960/77u, Aug 2 zero). That run independently re-confirmed that the 106-day mass refold changed no values. Measured 1,050 allocations in the 90-day window, oldest 2026-05-12, newest 2026-08-01. These figures come from the production run itself and could not be re-executed while writing this report.</p>
+        <p><strong>Status.</strong> Delivery candidate on <code>codex/verify-payment-lane-capacity</code> at commit <code>8033dcce</code>, one commit off <code>main</code>, clean working tree apart from these two documentation artifacts. No PR opened. Not merged. The full <code>bun run pr:athena</code> merge gate is pending. Production was not mutated by this change — the production activity was read-only verifier invocation. Root/local alignment is pending. Linear V26-1155 is not claimed as Done.</p>
+  </section>
+  <section data-report-section="guidance">
+<h2>Next-Time Guidance</h2>
         <ul>
           <li><strong>A green test suite does not establish that a tool works at production scale. Run it against production.</strong> Both defects here were arithmetic against real row counts, and every test passed the entire time. For any read-bounded tool, a production dry run is a delivery step, not a follow-up.</li>
           <li>Never choose a cap without measuring the volume it must clear, and record the measurement, the date, the store and the derivation beside the constant. A cap with no recorded arithmetic is indistinguishable from a guess.</li>
           <li>Treat a window and a ceiling as one decision. <code>[startAt - 90d, endAt]</code> under 500 docs is a claim about allocations per day; write that claim down and check it. Widening a range means re-deriving the ceiling, and vice versa.</li>
-          <li>A verifier whose failure mode is indistinguishable from a finding is worse than no verifier. The cost is not the false alarm &mdash; it is that the next genuine mismatch arrives in the same shape and gets dismissed.</li>
+          <li>A verifier whose failure mode is indistinguishable from a finding is worse than no verifier. The cost is not the false alarm — it is that the next genuine mismatch arrives in the same shape and gets dismissed.</li>
           <li>Never fall back to a sentinel in a comparison path. <code>expected: 0</code> is an assertion that the source side is zero. If a value cannot be computed, withhold the field; do not invent one and compare it.</li>
-          <li>Withhold before comparing, not after. Filtering a computed difference list leaves every future channel free to reintroduce the bug &mdash; six needed the filter here, and a seventh added later must not have to remember.</li>
+          <li>Withhold before comparing, not after. Filtering a computed difference list leaves every future channel free to reintroduce the bug — six needed the filter here, and a seventh added later must not have to remember.</li>
           <li>When one lane of a multi-lane check degrades, degrade that lane. Discarding six clean results to say nothing about one is a worse answer than a partial result with named gaps.</li>
           <li>Ask what a degradation can actually move. The unequal withholding came from reasoning about causality, not from picking the safe symmetrical answer. Symmetry is often a sign nobody worked it out.</li>
           <li>Size a regression test like the defect. A ceiling test that seeds ten rows tests nothing about the ceiling; if that means a 60s timeout, set one and say why in the file.</li>
           <li>To extend this area: the next honest step is a consumer that renders <code>unverifiedFields</code> distinctly from <code>differences</code>, and a production measurement of the five domains still reading under the unexamined 500 cap.</li>
         </ul>
-      </section>
-
-      <section class="panel">
-        <h2>Subagent Evidence</h2>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>The payment allocation scan was already date-bounded by an earlier fix. Why did it still fail on production?</p>
+        <ol data-quiz-options>
+          <li>The index <code>by_storeId_recordedAt</code> was missing, so the read fell back to a table scan</li>
+          <li>The bound was applied to <code>voidedAt</code> rather than <code>recordedAt</code></li>
+          <li data-quiz-correct>A 90-day window under a 500-document ceiling is an unstated claim that the store does under ~5.5 allocations a day; production does ~12, so the window held 1,050 rows</li>
+        </ol>
+        <p data-quiz-explanation>Bounding a read is not the same as sizing it. The window and the ceiling are one decision, and nobody had checked the claim the pair was making.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why two new ceilings instead of simply raising <code>VERIFY_MAX_DOCS_PER_DOMAIN</code>?</p>
+        <ol data-quiz-options>
+          <li>Convex enforces a hard per-query document limit that 500 was already near</li>
+          <li data-quiz-correct>One read was answering two questions with very different volumes and very different costs on failure; the shared cap would also have loosened four unrelated scans</li>
+          <li>The per-domain constant is generated and cannot be edited by hand</li>
+        </ol>
+        <p data-quiz-explanation>In-period is ~30 rows and essential; the lookback is ~1,080 rows and rare. Under one ceiling the rare question vetoes the essential one.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is the reversal lookback read newest-first (<code>.order("desc")</code>)?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>A row voided during the period is far likelier to be recent, so if the read caps out it keeps the rows most likely to matter</li>
+          <li>Descending index reads are cheaper in Convex than ascending ones</li>
+          <li>It guarantees the lookback and in-period ranges cannot overlap</li>
+        </ol>
+        <p data-quiz-explanation>Non-overlap comes from the half-open bound <code>.lt("recordedAt", startAt)</code>, not from the ordering. The ordering is about which rows survive truncation.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>An exhausted reversal lookback withholds six of the seven payment fields, keeping <code>paymentsCollectedMinor</code> verified. Why that one?</p>
+        <ol data-quiz-options>
+          <li>It is the only field the weekly projection persists, so it must always be comparable</li>
+          <li>It is derived from <code>posTransaction</code> rather than from <code>paymentAllocation</code>, so the lookback is irrelevant to it</li>
+          <li data-quiz-correct>A void of a pre-window row lands as a reversal — it moves refunds and allocation but can never change what was collected inside the period</li>
+        </ol>
+        <p data-quiz-explanation>The asymmetry comes from reasoning about causality rather than choosing the safe symmetrical answer. Symmetry here would have been strictly less useful.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does <code>matches: true</code> with a non-empty <code>unverifiedFields</code> mean?</p>
+        <ol data-quiz-options>
+          <li>The day verified cleanly; <code>unverifiedFields</code> is advisory metadata about read cost</li>
+          <li data-quiz-correct>Partial verification — everything <em>checked</em> agreed, but the named fields were never compared, and alerting must read both</li>
+          <li>An internal inconsistency that should never occur and indicates a verifier bug</li>
+        </ol>
+        <p data-quiz-explanation>This is the one boundary the code cannot close for you. The type carries the warning at its declaration, but a consumer that reads <code>matches</code> alone will draw a false conclusion.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>The old output was <code>{ field: "paymentsCollectedMinor", expected: 0, actual: 396000 }</code> with <code>matches: false</code>. Why was this called the more dangerous of the two defects?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Nothing had been checked, yet the output was byte-identical to a genuine discrepancy — so a real finding would later be dismissed as a known false alarm</li>
+          <li>The fallback zero was written back into the projection, corrupting the stored day</li>
+          <li>It masked the capacity problem, delaying discovery of the cap</li>
+        </ol>
+        <p data-quiz-explanation>A verifier whose failure mode is indistinguishable from a finding is worse than no verifier. The cost is the credibility of every future alert, not the single false one.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>The brief asked for pagination on the in-period lane. Why was a bounded <code>.take(ceiling + 1)</code> used instead?</p>
+        <ol data-quiz-options>
+          <li>Pagination cursors cannot be used inside a <code>QueryCtx</code> helper function</li>
+          <li>Pagination would have been correct but was deferred to a follow-up for time</li>
+          <li data-quiz-correct>Convex allows only one <code>.paginate()</code> per function execution, and this lane runs seven times inside one <code>verifyCurrentWeekAgainstSources</code></li>
+        </ol>
+        <p data-quiz-explanation><code>convex-test</code> enforces the rule in the mock rather than letting it pass locally and fail in a deployed backend. Anyone paginating a per-day read inside a per-week aggregate will hit this.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which pair of tests, taken together, proves the withholding mechanism is safe?</p>
+        <ol data-quiz-options>
+          <li>The two ceiling tests — one for the in-period bound, one for the lookback bound</li>
+          <li data-quiz-correct><em>withholds payment fields rather than diffing them against a fallback 0</em> together with <em>still reports a genuine payment mismatch when the lane completes</em></li>
+          <li>The weekly rename test together with <em>detects a void landing in-period against an older allocation</em></li>
+        </ol>
+        <p data-quiz-explanation>The first shows unchecked fields are withheld; the second shows withholding did not become silencing. Either alone would be consistent with a broken verifier.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A full local suite run shows 1–2 failures in <code>usePosLocalSyncRuntime.test.ts</code> at around 5000ms. How should this be read?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>The known load flake — the file passes 96/96 in isolation and different tests fail on different runs; separately, the three new ceiling tests carry explicit <code>60_000</code> timeouts for the same load reason</li>
+          <li>A regression introduced by the new large allocation fixtures competing for the same workers</li>
+          <li>Proof the 60s timeouts were set too high and are starving other suites</li>
+        </ol>
+        <p data-quiz-explanation>The 60s timeouts exist because the ceiling tests seed thousands of allocations to exercise the real bounds and outran the 5s default under contention. A ceiling test that seeds ten rows tests nothing about the ceiling.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is honestly still open after this change, and what is its delivery status?</p>
+        <ol data-quiz-options>
+          <li>Nothing — the lane is fully verified end to end, and the change is merged and deployed</li>
+          <li>Only the 90-day blind spot remains, and it is scheduled for removal in the next slice</li>
+          <li data-quiz-correct>No consumer reads <code>unverifiedFields</code> yet, and five other source domains still read under the unmeasured 500 cap — and the change is a delivery candidate at <code>8033dcce</code>, not merged, not deployed</li>
+        </ol>
+        <p data-quiz-explanation>Until something renders unchecked differently from wrong, the distinction lives in the return shape and not in anything an operator sees. And the four untouched bounds were not the lane that failed, which is not evidence they are sized right.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+<h2>Subagent Evidence</h2>
         <ul>
-          <li><strong>Delivered-diff subagent (read-only codebase researcher):</strong> Mapped <code>git show 8033dcce</code> against the files at HEAD across all three changed files. Contributed the verbatim ceiling-arithmetic comment and confirmation that its <code>&plusmn;18h</code> / 2.5-day claim matches <code>OPERATING_DAY_SLACK_MS</code> and the actual candidate window; the exact seven-field split and its correspondence to the four <code>diffPaymentPosture</code> emitters; confirmation of both query shapes as <code>.take</code>-bounded and half-open with no <code>.paginate()</code> or <code>.collect()</code>; verification that all six difference channels filter; a repo-wide grep proving <code>payment_source_incomplete</code> and <code>invalid_payment_allocation</code> have zero remaining source references while the distinct <code>invalid_allocation</code> and <code>payment_invalid_allocation</code> enums are untouched; and the test inventory with the three <code>60_000</code> timeouts. It also produced two findings that corrected the framing of this report: that the lookback lane is isolated from the in-period posture only on the <em>cap</em> path, and that <code>unverifiedFields</code> currently has no consumer anywhere in the codebase.</li>
-          <li><strong>Session and documentation context subagent (read-only):</strong> Established the lineage used in the companion solution note &mdash; the read-optimized redesign and its "verify against sources, not against the pipeline" rule, the implementation plan defining Slice F, the schedule-day-driven weekly lifecycle, the 2026-08-02 fold-version/refold note whose output this run cross-checked, and the Convex read-amplification prior art. It identified commit <code>766bfe61</code> (squash of <code>90d2823a</code>) as the earlier date-bounding fix that introduced <code>PAYMENT_VOID_LOOKBACK_MS</code>, confirmed that no existing note covers read caps or payment allocation posture, recovered the production-run figures and the deployment identifier from session history, and recommended <code>logic-errors/</code> over <code>architecture-patterns/</code> on the grounds that no boundary design changed &mdash; only the honesty and capacity of one lane.</li>
-          <li><strong>Report review:</strong> No separate reviewer subagent was dispatched. Instead every executable claim here was re-run by the orchestrator: both verify suites, the documentation gate falsified in both directions, the <code>convex-test</code> pagination error quoted from the installed package, and the removed reason codes grepped. Claims that could not be re-executed &mdash; the production figures, the full-suite counts, the load flake, and the two perturbation runs &mdash; are attributed above to the delivery session rather than restated as this report's own evidence.</li>
+          <li><strong>Delivered-diff subagent (read-only codebase researcher):</strong> Mapped <code>git show 8033dcce</code> against the files at HEAD across all three changed files. Contributed the verbatim ceiling-arithmetic comment and confirmation that its <code>±18h</code> / 2.5-day claim matches <code>OPERATING_DAY_SLACK_MS</code> and the actual candidate window; the exact seven-field split and its correspondence to the four <code>diffPaymentPosture</code> emitters; confirmation of both query shapes as <code>.take</code>-bounded and half-open with no <code>.paginate()</code> or <code>.collect()</code>; verification that all six difference channels filter; a repo-wide grep proving <code>payment_source_incomplete</code> and <code>invalid_payment_allocation</code> have zero remaining source references while the distinct <code>invalid_allocation</code> and <code>payment_invalid_allocation</code> enums are untouched; and the test inventory with the three <code>60_000</code> timeouts. It also produced two findings that corrected the framing of this report: that the lookback lane is isolated from the in-period posture only on the <em>cap</em> path, and that <code>unverifiedFields</code> currently has no consumer anywhere in the codebase.</li>
+          <li><strong>Session and documentation context subagent (read-only):</strong> Established the lineage used in the companion solution note — the read-optimized redesign and its "verify against sources, not against the pipeline" rule, the implementation plan defining Slice F, the schedule-day-driven weekly lifecycle, the 2026-08-02 fold-version/refold note whose output this run cross-checked, and the Convex read-amplification prior art. It identified commit <code>766bfe61</code> (squash of <code>90d2823a</code>) as the earlier date-bounding fix that introduced <code>PAYMENT_VOID_LOOKBACK_MS</code>, confirmed that no existing note covers read caps or payment allocation posture, recovered the production-run figures and the deployment identifier from session history, and recommended <code>logic-errors/</code> over <code>architecture-patterns/</code> on the grounds that no boundary design changed — only the honesty and capacity of one lane.</li>
+          <li><strong>Report review:</strong> No separate reviewer subagent was dispatched. Instead every executable claim here was re-run by the orchestrator: both verify suites, the documentation gate falsified in both directions, the <code>convex-test</code> pagination error quoted from the installed package, and the removed reason codes grepped. Claims that could not be re-executed — the production figures, the full-suite counts, the load flake, and the two perturbation runs — are attributed above to the delivery session rather than restated as this report's own evidence.</li>
         </ul>
-      </section>
-
-      <section id="quiz" class="panel">
-        <h2>Quiz: Pass Required</h2>
-        <p>You must score at least 8 out of 10 to pass.</p>
-        <form id="changeQuiz" data-threshold="8">
-
-<div class="quiz-question" data-answer="2">
-  <fieldset>
-    <legend>1. The payment allocation scan was already date-bounded by an earlier fix. Why did it still fail on production?</legend>
-    <label><input type="radio" name="q1" value="0" /> The index <code>by_storeId_recordedAt</code> was missing, so the read fell back to a table scan</label>
-    <label><input type="radio" name="q1" value="1" /> The bound was applied to <code>voidedAt</code> rather than <code>recordedAt</code></label>
-    <label><input type="radio" name="q1" value="2" /> A 90-day window under a 500-document ceiling is an unstated claim that the store does under ~5.5 allocations a day; production does ~12, so the window held 1,050 rows</label>
-  </fieldset>
-  <div class="answer-detail">Bounding a read is not the same as sizing it. The window and the ceiling are one decision, and nobody had checked the claim the pair was making.</div>
-</div>
-
-<div class="quiz-question" data-answer="1">
-  <fieldset>
-    <legend>2. Why two new ceilings instead of simply raising <code>VERIFY_MAX_DOCS_PER_DOMAIN</code>?</legend>
-    <label><input type="radio" name="q2" value="0" /> Convex enforces a hard per-query document limit that 500 was already near</label>
-    <label><input type="radio" name="q2" value="1" /> One read was answering two questions with very different volumes and very different costs on failure; the shared cap would also have loosened four unrelated scans</label>
-    <label><input type="radio" name="q2" value="2" /> The per-domain constant is generated and cannot be edited by hand</label>
-  </fieldset>
-  <div class="answer-detail">In-period is ~30 rows and essential; the lookback is ~1,080 rows and rare. Under one ceiling the rare question vetoes the essential one.</div>
-</div>
-
-<div class="quiz-question" data-answer="0">
-  <fieldset>
-    <legend>3. Why is the reversal lookback read newest-first (<code>.order("desc")</code>)?</legend>
-    <label><input type="radio" name="q3" value="0" /> A row voided during the period is far likelier to be recent, so if the read caps out it keeps the rows most likely to matter</label>
-    <label><input type="radio" name="q3" value="1" /> Descending index reads are cheaper in Convex than ascending ones</label>
-    <label><input type="radio" name="q3" value="2" /> It guarantees the lookback and in-period ranges cannot overlap</label>
-  </fieldset>
-  <div class="answer-detail">Non-overlap comes from the half-open bound <code>.lt("recordedAt", startAt)</code>, not from the ordering. The ordering is about which rows survive truncation.</div>
-</div>
-
-<div class="quiz-question" data-answer="2">
-  <fieldset>
-    <legend>4. An exhausted reversal lookback withholds six of the seven payment fields, keeping <code>paymentsCollectedMinor</code> verified. Why that one?</legend>
-    <label><input type="radio" name="q4" value="0" /> It is the only field the weekly projection persists, so it must always be comparable</label>
-    <label><input type="radio" name="q4" value="1" /> It is derived from <code>posTransaction</code> rather than from <code>paymentAllocation</code>, so the lookback is irrelevant to it</label>
-    <label><input type="radio" name="q4" value="2" /> A void of a pre-window row lands as a reversal &mdash; it moves refunds and allocation but can never change what was collected inside the period</label>
-  </fieldset>
-  <div class="answer-detail">The asymmetry comes from reasoning about causality rather than choosing the safe symmetrical answer. Symmetry here would have been strictly less useful.</div>
-</div>
-
-<div class="quiz-question" data-answer="1">
-  <fieldset>
-    <legend>5. What does <code>matches: true</code> with a non-empty <code>unverifiedFields</code> mean?</legend>
-    <label><input type="radio" name="q5" value="0" /> The day verified cleanly; <code>unverifiedFields</code> is advisory metadata about read cost</label>
-    <label><input type="radio" name="q5" value="1" /> Partial verification &mdash; everything <em>checked</em> agreed, but the named fields were never compared, and alerting must read both</label>
-    <label><input type="radio" name="q5" value="2" /> An internal inconsistency that should never occur and indicates a verifier bug</label>
-  </fieldset>
-  <div class="answer-detail">This is the one boundary the code cannot close for you. The type carries the warning at its declaration, but a consumer that reads <code>matches</code> alone will draw a false conclusion.</div>
-</div>
-
-<div class="quiz-question" data-answer="0">
-  <fieldset>
-    <legend>6. The old output was <code>{ field: "paymentsCollectedMinor", expected: 0, actual: 396000 }</code> with <code>matches: false</code>. Why was this called the more dangerous of the two defects?</legend>
-    <label><input type="radio" name="q6" value="0" /> Nothing had been checked, yet the output was byte-identical to a genuine discrepancy &mdash; so a real finding would later be dismissed as a known false alarm</label>
-    <label><input type="radio" name="q6" value="1" /> The fallback zero was written back into the projection, corrupting the stored day</label>
-    <label><input type="radio" name="q6" value="2" /> It masked the capacity problem, delaying discovery of the cap</label>
-  </fieldset>
-  <div class="answer-detail">A verifier whose failure mode is indistinguishable from a finding is worse than no verifier. The cost is the credibility of every future alert, not the single false one.</div>
-</div>
-
-<div class="quiz-question" data-answer="2">
-  <fieldset>
-    <legend>7. The brief asked for pagination on the in-period lane. Why was a bounded <code>.take(ceiling + 1)</code> used instead?</legend>
-    <label><input type="radio" name="q7" value="0" /> Pagination cursors cannot be used inside a <code>QueryCtx</code> helper function</label>
-    <label><input type="radio" name="q7" value="1" /> Pagination would have been correct but was deferred to a follow-up for time</label>
-    <label><input type="radio" name="q7" value="2" /> Convex allows only one <code>.paginate()</code> per function execution, and this lane runs seven times inside one <code>verifyCurrentWeekAgainstSources</code></label>
-  </fieldset>
-  <div class="answer-detail"><code>convex-test</code> enforces the rule in the mock rather than letting it pass locally and fail in a deployed backend. Anyone paginating a per-day read inside a per-week aggregate will hit this.</div>
-</div>
-
-<div class="quiz-question" data-answer="1">
-  <fieldset>
-    <legend>8. Which pair of tests, taken together, proves the withholding mechanism is safe?</legend>
-    <label><input type="radio" name="q8" value="0" /> The two ceiling tests &mdash; one for the in-period bound, one for the lookback bound</label>
-    <label><input type="radio" name="q8" value="1" /> <em>withholds payment fields rather than diffing them against a fallback 0</em> together with <em>still reports a genuine payment mismatch when the lane completes</em></label>
-    <label><input type="radio" name="q8" value="2" /> The weekly rename test together with <em>detects a void landing in-period against an older allocation</em></label>
-  </fieldset>
-  <div class="answer-detail">The first shows unchecked fields are withheld; the second shows withholding did not become silencing. Either alone would be consistent with a broken verifier.</div>
-</div>
-
-<div class="quiz-question" data-answer="0">
-  <fieldset>
-    <legend>9. A full local suite run shows 1&ndash;2 failures in <code>usePosLocalSyncRuntime.test.ts</code> at around 5000ms. How should this be read?</legend>
-    <label><input type="radio" name="q9" value="0" /> The known load flake &mdash; the file passes 96/96 in isolation and different tests fail on different runs; separately, the three new ceiling tests carry explicit <code>60_000</code> timeouts for the same load reason</label>
-    <label><input type="radio" name="q9" value="1" /> A regression introduced by the new large allocation fixtures competing for the same workers</label>
-    <label><input type="radio" name="q9" value="2" /> Proof the 60s timeouts were set too high and are starving other suites</label>
-  </fieldset>
-  <div class="answer-detail">The 60s timeouts exist because the ceiling tests seed thousands of allocations to exercise the real bounds and outran the 5s default under contention. A ceiling test that seeds ten rows tests nothing about the ceiling.</div>
-</div>
-
-<div class="quiz-question" data-answer="2">
-  <fieldset>
-    <legend>10. What is honestly still open after this change, and what is its delivery status?</legend>
-    <label><input type="radio" name="q10" value="0" /> Nothing &mdash; the lane is fully verified end to end, and the change is merged and deployed</label>
-    <label><input type="radio" name="q10" value="1" /> Only the 90-day blind spot remains, and it is scheduled for removal in the next slice</label>
-    <label><input type="radio" name="q10" value="2" /> No consumer reads <code>unverifiedFields</code> yet, and five other source domains still read under the unmeasured 500 cap &mdash; and the change is a delivery candidate at <code>8033dcce</code>, not merged, not deployed</label>
-  </fieldset>
-  <div class="answer-detail">Until something renders unchecked differently from wrong, the distinction lives in the return shape and not in anything an operator sees. And the four untouched bounds were not the lane that failed, which is not evidence they are sized right.</div>
-</div>
-
-          <div class="quiz-actions">
-            <button type="button" id="gradeQuiz">Grade quiz</button>
-            <button type="button" class="secondary" id="resetQuiz">Reset</button>
-            <span id="quizResult" aria-live="polite"></span>
-          </div>
-        </form>
-      </section>
-
-    </main>
-    <script>
-      const questions = Array.from(document.querySelectorAll(".quiz-question"));
-      const result = document.getElementById("quizResult");
-      const form = document.getElementById("changeQuiz");
-      const threshold = Number(form.dataset.threshold || 0);
-      function clearGrades() {
-        questions.forEach((question) => {
-          question.classList.remove("correct", "incorrect");
-          question.querySelector(".answer-detail").classList.remove("visible");
-        });
-        result.textContent = "";
-        result.style.color = "";
-      }
-      document.getElementById("gradeQuiz").addEventListener("click", () => {
-        clearGrades();
-        let score = 0;
-        questions.forEach((question, index) => {
-          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
-          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
-          if (isCorrect) score += 1;
-          question.classList.add(isCorrect ? "correct" : "incorrect");
-          question.querySelector(".answer-detail").classList.add("visible");
-        });
-        const passed = score >= threshold;
-        result.textContent = passed
-          ? `Passed: ${score}/${questions.length}.`
-          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
-        result.style.color = passed ? "var(--good)" : "var(--bad)";
-      });
-      document.getElementById("resetQuiz").addEventListener("click", () => {
-        form.reset();
-        clearGrades();
-      });
-    </script>
-  </body>
+  </section>
+</article>
+</body>
 </html>

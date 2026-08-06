@@ -1,6 +1,11 @@
 # Report Renderer Payload
 
-`scripts/render_report.py` accepts a JSON object and writes a standalone HTML report.
+`scripts/render_report.py` accepts a JSON object and writes a contract-v2
+semantic HTML report (see `report-html-contract.md`). Every section needs a
+`key` matching the contract's `data-report-section` vocabulary; the required
+keys are `summary`, `problem`, `mental-model`, `before-after`, `changes`,
+`validation`, and `guidance` (`key-files`, `quiz`, and `subagent-evidence` are
+built from their own payload fields).
 
 ## Minimal Shape
 
@@ -10,8 +15,10 @@
   "subtitle": "What changed and why",
   "metadata": ["PR #637", "Merged", "No production deploy"],
   "deliverableDiffFingerprint": "sha256 from `bun scripts/landed-change-report-check.ts --base origin/main --print-fingerprint`",
+  "meta": { "PR": "#637", "Status": "Landed" },
   "sections": [
     {
+      "key": "summary",
       "title": "Executive Summary",
       "body": ["Paragraph one.", "Paragraph two."]
     }
@@ -44,7 +51,10 @@
 
 ## Field Notes
 
-- `metadata` renders as compact pills.
+- `sections[].key` is required and must be kebab-case; unknown keys render as
+  extra sections placed before the quiz.
+- `metadata` renders as the required `data-report-pills` status pills.
+- `meta` (optional) renders as a `data-report-meta` definition list.
 - `deliverableDiffFingerprint` renders as `data-athena-report-diff-fingerprint` and must match the current deliverable diff for large-branch validation.
 - `sections[].body` may be a string array or a single string.
 - `sections[].bullets` may be an array of strings.

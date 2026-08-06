@@ -7,6 +7,10 @@ import {
   normalizeRepoPath,
   sortUniquePaths,
 } from "./delivery-diff-fingerprint";
+import {
+  collectSectionKeys,
+  REQUIRED_NARRATIVE_SECTION_KEYS,
+} from "./report-presentation-check";
 
 type LineChange = {
   additions: number;
@@ -18,6 +22,12 @@ type LandedChangeReportCheckInput = {
   existingFiles: Set<string>;
   reportContents: Map<string, string>;
   sourceLineChanges: Map<string, LineChange>;
+  /**
+   * Report paths that already existed at the base ref. Editing one of those is
+   * maintenance of a historical artifact; only a report *added* on this branch
+   * is newly authored and owes the full contract.
+   */
+  reportsExistingAtBase?: Set<string>;
   deliverableDiffFingerprint?: string;
   threshold?: number;
 };
@@ -27,7 +37,7 @@ type LandedChangeReportFinding = {
 };
 
 const DEFAULT_SOURCE_LINE_THRESHOLD = 300;
-const REPORT_MARKER = 'data-athena-landed-change-report="v1"';
+const REPORT_MARKER = 'data-athena-landed-change-report="v2"';
 const REPORT_DIFF_FINGERPRINT_ATTRIBUTE = "data-athena-report-diff-fingerprint";
 
 const SOURCE_PATTERNS = [
@@ -88,20 +98,32 @@ function reportMissingSections(
   const missingSections: string[] = [];
   const findings: LandedChangeReportFinding[] = [];
 
+
+  // Contract-v2 structural markers. The full presentation contract is
+  // enforced across the whole corpus by scripts/report-presentation-check.ts;
+  // this delivery-scoped check only asserts the report is a v2 artifact with
+  // its load-bearing sections present.
   if (!html.includes(REPORT_MARKER)) {
     missingSections.push(REPORT_MARKER);
   }
 
-  if (!html.includes("Subagent Evidence")) {
-    missingSections.push("Subagent Evidence");
+  if (!html.includes('data-report-section="quiz"')) {
+    missingSections.push('data-report-section="quiz"');
   }
 
-  if (!html.includes("Quiz: Pass Required")) {
-    missingSections.push("Quiz: Pass Required");
+  if (!html.includes("data-quiz-pass-threshold=")) {
+    missingSections.push("data-quiz-pass-threshold");
   }
 
-  if (!html.includes('id="changeQuiz"')) {
-    missingSections.push('id="changeQuiz"');
+  // A report authored or updated on this branch must carry the full narrative
+  // vocabulary. The corpus-wide presentation sensor deliberately does not
+  // require it, so historical reports are not retro-fitted with invented
+  // sections.
+  const sectionKeys = collectSectionKeys(html);
+  for (const key of REQUIRED_NARRATIVE_SECTION_KEYS) {
+    if (!sectionKeys.includes(key)) {
+      missingSections.push(`data-report-section="${key}"`);
+    }
   }
 
   if (expectedFingerprint) {
@@ -135,6 +157,7 @@ export function collectLandedChangeReportFindings({
   existingFiles,
   reportContents,
   sourceLineChanges,
+  reportsExistingAtBase = new Set<string>(),
   deliverableDiffFingerprint,
   threshold = DEFAULT_SOURCE_LINE_THRESHOLD,
 }: LandedChangeReportCheckInput) {
@@ -147,29 +170,42 @@ export function collectLandedChangeReportFindings({
     existingFiles.has(filePath)
   );
   const sourceLineTotal = totalReportableSourceLineChanges(sourceLineChanges);
-  const reportValidationFindings = new Map(
-    changedExistingReportDocs.map((reportPath) => [
-      reportPath,
-      reportMissingSections(
-        reportPath,
-        reportContents.get(reportPath) ?? "",
-        deliverableDiffFingerprint
-      ),
-    ])
-  );
-  const validChangedReportDocs = changedExistingReportDocs.filter(
-    (reportPath) => (reportValidationFindings.get(reportPath) ?? []).length === 0
+
+  // Only reports added on this branch are newly authored. Bulk maintenance of
+  // historical artifacts (a corpus migration, a typo fix) must not be asked to
+  // carry today's narrative vocabulary or today's diff fingerprint.
+  const newReportDocs = changedExistingReportDocs.filter(
+    (reportPath) => !reportsExistingAtBase.has(reportPath)
   );
 
+  const validate = (reportPath: string) =>
+    reportMissingSections(
+      reportPath,
+      reportContents.get(reportPath) ?? "",
+      deliverableDiffFingerprint
+    );
+
+  // A newly authored report owes the full contract whatever the branch size:
+  // the line threshold decides whether a report is *required*, never whether a
+  // report that is present is valid.
+  for (const reportPath of newReportDocs) {
+    findings.push(...validate(reportPath));
+  }
+
   if (sourceLineTotal >= threshold) {
-    if (changedExistingReportDocs.length === 0) {
+    // The report must be *current for this branch*, which is what the embedded
+    // diff fingerprint proves: it only matches when the report was generated
+    // after the branch's final code and workflow edits. Merely touching an
+    // older report does not count — otherwise a large change could satisfy the
+    // gate by editing history it does not describe.
+    const currentReports = changedExistingReportDocs.filter(
+      (reportPath) => validate(reportPath).length === 0
+    );
+
+    if (currentReports.length === 0) {
       findings.push({
-        message: `Large source change detected (${sourceLineTotal} changed source lines, threshold ${threshold}) without a docs/reports/**/*.html landed-change report update.`,
+        message: `Large source change detected (${sourceLineTotal} changed source lines, threshold ${threshold}) without a docs/reports/**/*.html landed-change report that is current for this branch. Editing an existing report does not satisfy this: the report must carry data-athena-report-diff-fingerprint="${deliverableDiffFingerprint ?? "<current deliverable diff>"}", which only a regeneration after the final code and workflow edits produces.`,
       });
-    } else if (validChangedReportDocs.length === 0) {
-      for (const reportPath of changedExistingReportDocs) {
-        findings.push(...(reportValidationFindings.get(reportPath) ?? []));
-      }
     }
   }
 
@@ -296,6 +332,20 @@ function collectExistingFiles(rootDir: string) {
   );
 }
 
+function collectReportsExistingAtBase(rootDir: string, baseRef: string) {
+  // `allowFailure` so a missing base ref (fresh clone, detached CI checkout)
+  // degrades to "nothing existed at base" rather than throwing.
+  return new Set(
+    parseChangedFiles(
+      runGit(
+        rootDir,
+        ["ls-tree", "-r", "--name-only", baseRef, "--", "docs/reports"],
+        true
+      )
+    ).map((filePath) => normalizeRepoPath(filePath))
+  );
+}
+
 function collectReportContents(rootDir: string, changedFiles: string[]) {
   const contents = new Map<string, string>();
 
@@ -370,6 +420,7 @@ export function assertLandedChangeReportCheck(
     existingFiles,
     reportContents: collectReportContents(rootDir, changedFiles),
     sourceLineChanges: collectSourceLineChanges(rootDir, baseRef, changedFiles),
+    reportsExistingAtBase: collectReportsExistingAtBase(rootDir, baseRef),
     deliverableDiffFingerprint,
     threshold,
   });

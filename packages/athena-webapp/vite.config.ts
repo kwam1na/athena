@@ -3,6 +3,7 @@ import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import path from "path";
 import { visualizer } from "rollup-plugin-visualizer";
 import { defineConfig } from "vitest/config";
+import { athenaDocsContentPlugin } from "./vite-docs-content-plugin";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   base: "/",
@@ -161,7 +162,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: (mode === "test"
-    ? [react()]
+    ? [react(), athenaDocsContentPlugin()]
     : [
         TanStackRouterVite({
           // Keep colocated route tests out of route generation.
@@ -169,6 +170,7 @@ export default defineConfig(({ mode }) => ({
           autoCodeSplitting: true,
         }),
         react(),
+        athenaDocsContentPlugin(),
       ]) as any,
   resolve: {
     alias: {

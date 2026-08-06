@@ -1,473 +1,26 @@
 <!doctype html>
-<html
-  lang="en"
-  data-athena-landed-change-report="v1"
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Admin notifications rail — delivery candidate report</title>
+</head>
+<body>
+<article
+  data-athena-landed-change-report="v2"
   data-athena-report-diff-fingerprint="3ce734c95c6149e8414caefb926a293fd471240b52e541dfdc7a530333a1d51b"
   data-athena-report-base="origin/main"
   data-athena-report-head="539e37cb"
 >
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Admin notifications rail — delivery candidate report</title>
-    <style>
-      :root {
-        color-scheme: light;
-        --ink: #17211d;
-        --muted: #5f6d66;
-        --line: #d9e1dc;
-        --paper: #f8faf8;
-        --panel: #ffffff;
-        --accent: #176b4a;
-        --accent-soft: #e7f3ec;
-        --warn: #805d10;
-        --warn-soft: #fff7dd;
-        --danger: #9d342f;
-        --danger-soft: #fff0ee;
-        --code: #eff3f0;
-        --shadow: 0 18px 44px rgba(23, 33, 29, 0.08);
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      html {
-        scroll-behavior: smooth;
-      }
-
-      body {
-        margin: 0;
-        background: var(--paper);
-        color: var(--ink);
-        font:
-          15px/1.62 Inter, ui-sans-serif, system-ui, -apple-system,
-          BlinkMacSystemFont, "Segoe UI", sans-serif;
-      }
-
-      a {
-        color: var(--accent);
-      }
-
-      .shell {
-        width: min(1120px, calc(100% - 32px));
-        margin: 0 auto;
-        padding: 34px 0 72px;
-      }
-
-      .hero,
-      .section {
-        border: 1px solid var(--line);
-        background: var(--panel);
-        box-shadow: var(--shadow);
-      }
-
-      .hero {
-        padding: clamp(26px, 5vw, 54px);
-        border-radius: 22px;
-      }
-
-      .eyebrow {
-        margin: 0 0 10px;
-        color: var(--accent);
-        font-size: 12px;
-        font-weight: 800;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }
-
-      h1,
-      h2,
-      h3 {
-        line-height: 1.18;
-        letter-spacing: -0.025em;
-      }
-
-      h1 {
-        max-width: 820px;
-        margin: 0;
-        font-size: clamp(34px, 6vw, 64px);
-      }
-
-      h2 {
-        margin: 0 0 18px;
-        font-size: clamp(23px, 3.2vw, 34px);
-      }
-
-      h3 {
-        margin: 0 0 8px;
-        font-size: 18px;
-      }
-
-      .lede {
-        max-width: 780px;
-        margin: 18px 0 0;
-        color: var(--muted);
-        font-size: 18px;
-      }
-
-      .pills {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 24px;
-      }
-
-      .pill {
-        display: inline-flex;
-        align-items: center;
-        min-height: 30px;
-        padding: 5px 11px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: #fbfcfb;
-        font-size: 12px;
-        font-weight: 750;
-      }
-
-      .pill.good {
-        border-color: #b8d8c7;
-        background: var(--accent-soft);
-        color: var(--accent);
-      }
-
-      .pill.pending {
-        border-color: #ead493;
-        background: var(--warn-soft);
-        color: var(--warn);
-      }
-
-      .meta {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
-        margin-top: 28px;
-      }
-
-      .meta div,
-      .metric,
-      .card {
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        background: #fbfcfb;
-      }
-
-      .meta div {
-        padding: 13px;
-      }
-
-      .meta dt {
-        color: var(--muted);
-        font-size: 11px;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      .meta dd {
-        margin: 4px 0 0;
-        font-weight: 720;
-        overflow-wrap: anywhere;
-      }
-
-      .toc {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px 16px;
-        margin: 22px 0 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .section {
-        margin-top: 20px;
-        padding: clamp(24px, 4vw, 42px);
-        border-radius: 18px;
-      }
-
-      .grid-2,
-      .grid-3,
-      .metrics {
-        display: grid;
-        gap: 14px;
-      }
-
-      .grid-2 {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .grid-3,
-      .metrics {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-
-      .card,
-      .metric {
-        padding: 18px;
-      }
-
-      .card p,
-      .metric p {
-        margin: 6px 0 0;
-        color: var(--muted);
-      }
-
-      .metric strong {
-        display: block;
-        color: var(--accent);
-        font-size: 28px;
-        line-height: 1.1;
-      }
-
-      .flow {
-        display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
-        gap: 8px;
-        margin: 18px 0;
-        padding: 0;
-        list-style: none;
-        counter-reset: flow;
-      }
-
-      .flow li {
-        min-height: 116px;
-        padding: 14px;
-        border: 1px solid var(--line);
-        border-radius: 13px;
-        background: #fbfcfb;
-        counter-increment: flow;
-      }
-
-      .flow li::before {
-        content: counter(flow);
-        display: grid;
-        width: 25px;
-        height: 25px;
-        margin-bottom: 10px;
-        place-items: center;
-        border-radius: 50%;
-        background: var(--accent);
-        color: white;
-        font-size: 12px;
-        font-weight: 800;
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-
-      th,
-      td {
-        padding: 12px 10px;
-        border-bottom: 1px solid var(--line);
-        text-align: left;
-        vertical-align: top;
-      }
-
-      th {
-        color: var(--muted);
-        font-size: 11px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      code {
-        padding: 2px 5px;
-        border-radius: 5px;
-        background: var(--code);
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 0.9em;
-      }
-
-      pre {
-        overflow-x: auto;
-        margin: 16px 0;
-        padding: 14px 16px;
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        background: var(--code);
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 13px;
-        line-height: 1.6;
-      }
-
-      pre code {
-        padding: 0;
-        background: transparent;
-      }
-
-      .callout {
-        margin: 18px 0;
-        padding: 16px 18px;
-        border-left: 4px solid var(--accent);
-        border-radius: 0 12px 12px 0;
-        background: var(--accent-soft);
-      }
-
-      .callout.warn {
-        border-color: var(--warn);
-        background: var(--warn-soft);
-      }
-
-      .callout.danger {
-        border-color: var(--danger);
-        background: var(--danger-soft);
-      }
-
-      .quiet {
-        color: var(--muted);
-      }
-
-      .quiz-question {
-        margin: 16px 0;
-        padding: 18px;
-        border: 1px solid var(--line);
-        border-radius: 14px;
-      }
-
-      .quiz-question legend {
-        padding: 0 6px;
-        font-weight: 800;
-      }
-
-      .option {
-        display: flex;
-        gap: 9px;
-        margin: 9px 0;
-        cursor: pointer;
-      }
-
-      .explanation {
-        display: none;
-        margin: 10px 0 0;
-        padding: 10px 12px;
-        border-radius: 10px;
-        background: var(--code);
-        color: var(--muted);
-      }
-
-      .quiz-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        align-items: center;
-        margin-top: 18px;
-      }
-
-      button {
-        min-height: 42px;
-        padding: 9px 16px;
-        border: 1px solid var(--accent);
-        border-radius: 10px;
-        background: var(--accent);
-        color: white;
-        font: inherit;
-        font-weight: 800;
-        cursor: pointer;
-        transition: transform 140ms ease-out;
-      }
-
-      button.secondary {
-        background: white;
-        color: var(--accent);
-      }
-
-      button:active {
-        transform: scale(0.97);
-      }
-
-      #quizResult {
-        min-height: 24px;
-        font-weight: 800;
-      }
-
-      footer {
-        padding: 26px 4px 0;
-        color: var(--muted);
-        font-size: 13px;
-      }
-
-      @media (max-width: 860px) {
-        .meta,
-        .grid-3,
-        .metrics {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        .flow {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
-      }
-
-      @media (max-width: 620px) {
-        .shell {
-          width: min(100% - 18px, 1120px);
-          padding-top: 10px;
-        }
-
-        .meta,
-        .grid-2,
-        .grid-3,
-        .metrics,
-        .flow {
-          grid-template-columns: 1fr;
-        }
-
-        .section,
-        .hero {
-          border-radius: 14px;
-        }
-
-        table,
-        thead,
-        tbody,
-        tr,
-        th,
-        td {
-          display: block;
-        }
-
-        th {
-          display: none;
-        }
-
-        td {
-          padding-left: 0;
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        html {
-          scroll-behavior: auto;
-        }
-
-        button {
-          transition: none;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <main class="shell">
-      <header class="hero">
-        <p class="eyebrow">Delivery candidate · Athena notifications</p>
-        <h1>Admin emails become one rail with a ledger, a lease, and a backstop.</h1>
-        <p class="lede">
+  <header data-report-section="header">
+    <h1>Admin emails become one rail with a ledger, a lease, and a backstop.</h1>
+    <p class="eyebrow">Delivery candidate · Athena notifications</p>
+    <p class="lede">
           Three hand-rolled admin email flows now emit intents into a
           centralized notifications rail: dedupe by intent ledger, audience from
           subscription data, render at send time, deliver under a lease with
           bounded retries, and recover everything through one sweeper cron.
         </p>
-        <div class="pills">
-          <span class="pill pending">Delivery candidate · pre-merge</span>
-          <span class="pill good">Focused validation: passed</span>
-          <span class="pill good">Adversarial review: 6 rounds closed</span>
-          <span class="pill pending">PR: pending</span>
-          <span class="pill pending">Deploy: pending</span>
-          <span class="pill pending">Post-deploy seed: pending</span>
-        </div>
-        <dl class="meta">
+    <dl class="meta">
           <div>
             <dt>Branch</dt>
             <dd>feat/notifications-rail</dd>
@@ -485,7 +38,7 @@
             <dd>Deferred until merge</dd>
           </div>
         </dl>
-        <ul class="toc">
+    <ul class="toc">
           <li><a href="#summary">Summary</a></li>
           <li><a href="#problem">Problem</a></li>
           <li><a href="#model">Mental model</a></li>
@@ -498,11 +51,18 @@
           <li><a href="#quiz">Quiz</a></li>
           <li><a href="#evidence">Evidence</a></li>
         </ul>
-      </header>
-
-      <section class="section" id="summary">
-        <p class="eyebrow">Executive summary</p>
-        <h2>One place to add a communication, one place for it to fail visibly.</h2>
+    <ul data-report-pills>
+      <li>Delivery candidate · pre-merge</li>
+      <li>Focused validation: passed</li>
+      <li>Adversarial review: 6 rounds closed</li>
+      <li>PR: pending</li>
+      <li>Deploy: pending</li>
+      <li>Post-deploy seed: pending</li>
+    </ul>
+  </header>
+  <section data-report-section="summary">
+<h2>One place to add a communication, one place for it to fail visibly.</h2><p class="eyebrow">Executive summary</p>
+        
         <div class="grid-3">
           <article class="card">
             <h3>Emit, don't send</h3>
@@ -556,11 +116,10 @@
           <code>deliveryPolicy.ts</code> module so it has one definition
           instead of a browser-side mirror and a stale test comment.
         </div>
-      </section>
-
-      <section class="section" id="problem">
-        <p class="eyebrow">Problem in plain language</p>
-        <h2>Three flows each reinvented email, badly.</h2>
+  </section>
+  <section data-report-section="problem">
+<h2>Three flows each reinvented email, badly.</h2><p class="eyebrow">Problem in plain language</p>
+        
         <p>
           Register closeout, the EOD daily manager report, and POS terminal
           health each looped over the hardcoded <code>ADMIN_EMAILS</code>
@@ -592,18 +151,17 @@
             with whether an email went out.
           </li>
         </ul>
-      </section>
-
-      <section class="section" id="model">
-        <p class="eyebrow">Mental model</p>
-        <h2>A ledger of moments, a lease per envelope, one janitor.</h2>
+  </section>
+  <section data-report-section="mental-model">
+<h2>A ledger of moments, a lease per envelope, one janitor.</h2><p class="eyebrow">Mental model</p>
+        
         <ol class="flow">
-          <li><strong>Emit</strong><br />Record the domain moment, dedupe-keyed.</li>
-          <li><strong>Resolve</strong><br />Turn category into recipients.</li>
-          <li><strong>Lease</strong><br />Reserve up to one bounded batch.</li>
-          <li><strong>Render</strong><br />Rebuild content from fresh data.</li>
-          <li><strong>Send</strong><br />Idempotency-keyed, classified result.</li>
-          <li><strong>Sweep</strong><br />Recover leases, retries, lost chains.</li>
+          <li><strong>Emit</strong><br>Record the domain moment, dedupe-keyed.</li>
+          <li><strong>Resolve</strong><br>Turn category into recipients.</li>
+          <li><strong>Lease</strong><br>Reserve up to one bounded batch.</li>
+          <li><strong>Render</strong><br>Rebuild content from fresh data.</li>
+          <li><strong>Send</strong><br>Idempotency-keyed, classified result.</li>
+          <li><strong>Sweep</strong><br>Recover leases, retries, lost chains.</li>
         </ol>
         <p class="quiet">
           The intent ledger is the <em>event</em>: it says a drawer was short at
@@ -673,11 +231,10 @@ prepareEmail throws        → transient fault (read limit, OCC, missing row)
           every subscription in a category <em>does</em> silence it, and the
           intent is suppressed as <code>no_recipients</code>.
         </p>
-      </section>
-
-      <section class="section" id="flow">
-        <p class="eyebrow">Before and after</p>
-        <h2>Where the behavior moved</h2>
+  </section>
+  <section data-report-section="before-after">
+<h2>Where the behavior moved</h2><p class="eyebrow">Before and after</p>
+        
         <table>
           <thead>
             <tr>
@@ -724,11 +281,10 @@ prepareEmail throws        → transient fault (read limit, OCC, missing row)
             </tr>
           </tbody>
         </table>
-      </section>
-
-      <section class="section" id="files">
-        <p class="eyebrow">Key files</p>
-        <h2>Read them in the order data flows</h2>
+  </section>
+  <section data-report-section="key-files">
+<h2>Read them in the order data flows</h2><p class="eyebrow">Key files</p>
+        
         <table>
           <thead>
             <tr>
@@ -795,11 +351,10 @@ prepareEmail throws        → transient fault (read limit, OCC, missing row)
             </tr>
           </tbody>
         </table>
-      </section>
-
-      <section class="section" id="scope">
-        <p class="eyebrow">Changed and deliberately unchanged</p>
-        <h2>What moved, and what was left alone on purpose</h2>
+  </section>
+  <section data-report-section="what-moved-and-what-was-left-alone-on-purpose">
+<h2>What moved, and what was left alone on purpose</h2><p class="eyebrow">Changed and deliberately unchanged</p>
+        
         <div class="grid-2">
           <article class="card">
             <h3>Changed</h3>
@@ -862,11 +417,10 @@ prepareEmail throws        → transient fault (read limit, OCC, missing row)
           is nothing to cut over. All three lanes are deletable after one
           release.
         </div>
-      </section>
-
-      <section class="section" id="validation">
-        <p class="eyebrow">Validation and review evidence</p>
-        <h2>Six rounds, and two of them broke what the round before fixed.</h2>
+  </section>
+  <section data-report-section="validation">
+<h2>Six rounds, and two of them broke what the round before fixed.</h2><p class="eyebrow">Validation and review evidence</p>
+        
         <div class="metrics">
           <article class="metric">
             <strong>465</strong>
@@ -1012,11 +566,10 @@ prepareEmail throws        → transient fault (read limit, OCC, missing row)
           <code>storeFront/supportTicket.ts</code>,
           <code>storeFront/users.ts</code>).
         </p>
-      </section>
-
-      <section class="section" id="deploy">
-        <p class="eyebrow">Deployment and rollout status</p>
-        <h2>Not deployed. Two manual steps after it is.</h2>
+  </section>
+  <section data-report-section="not-deployed-two-manual-steps-after-it-is">
+<h2>Not deployed. Two manual steps after it is.</h2><p class="eyebrow">Deployment and rollout status</p>
+        
         <div class="callout danger">
           <strong>Not yet claimed:</strong> open PR, remote CI green, merge,
           production deployment, Linear <code>Done</code>, or local-root
@@ -1065,11 +618,10 @@ prepareEmail throws        → transient fault (read limit, OCC, missing row)
             since <code>operatingDate</code> strings are never reused.
           </li>
         </ul>
-      </section>
-
-      <section class="section" id="nexttime">
-        <p class="eyebrow">Next-time guidance</p>
-        <h2>How to extend or debug this area</h2>
+  </section>
+  <section data-report-section="guidance">
+<h2>How to extend or debug this area</h2><p class="eyebrow">Next-time guidance</p>
+        
         <ol>
           <li>
             <strong>To add a communication:</strong> one registry entry plus one
@@ -1122,107 +674,106 @@ prepareEmail throws        → transient fault (read limit, OCC, missing row)
             <code>suppressed_non_prod</code> is the expected code.
           </li>
         </ol>
-      </section>
-
-      <section class="section" id="quiz">
-        <p class="eyebrow">Quiz: Pass Required</p>
-        <h2>Score at least 8/10</h2>
-        <p class="quiet">
-          The questions test the rail's intent and its failure boundaries, not
-          file-name trivia. Explanations appear after grading.
-        </p>
-        <form id="changeQuiz" data-threshold="8">
-          <fieldset class="quiz-question" data-answer="c">
-            <legend>1. A closeout's variance review exists but has already been resolved by a manager. What must the closeout path do?</legend>
-            <label class="option"><input type="radio" name="q1" value="a" /> Report the register as closed cleanly, since nothing is pending</label>
-            <label class="option"><input type="radio" name="q1" value="b" /> Emit the variance alert again for the resolved review</label>
-            <label class="option"><input type="radio" name="q1" value="c" /> Suppress the all-clear and emit nothing — a closeout under review is never also "closed cleanly"</label>
-            <p class="explanation">A pending-only lookup falling through to the all-clear is the false "register closed" report for a drawer that was short. Every status is queried; the alert itself is only for a review still awaiting a decision.</p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="b">
-            <legend>2. Why is the dispatch <em>batch</em> bounded instead of the delivery <em>lease</em> stretched to cover the whole audience?</legend>
-            <label class="option"><input type="radio" name="q2" value="a" /> To reduce database reads per sweep</label>
-            <label class="option"><input type="radio" name="q2" value="b" /> A 200-recipient serial send outlives the platform action limit, so the action is killed mid-batch with every leased row already holding an attempt — leaving the tail uncontacted and terminalized as failures never actually attempted</label>
-            <label class="option"><input type="radio" name="q2" value="c" /> MailerSend rejects more than 25 recipients per hour</label>
-            <p class="explanation">Each dispatch takes at most one bounded batch, sizes its lease to that batch capped below the action limit, and re-schedules itself for the remainder.</p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="a">
-            <legend>3. <code>prepareEmail</code> throws because it momentarily hit a read limit. What happens?</legend>
-            <label class="option"><input type="radio" name="q3" value="a" /> The batch stays retryable with backoff, and the dispatch chain continues</label>
-            <label class="option"><input type="radio" name="q3" value="b" /> The intent is suppressed as <code>payload_unavailable</code></label>
-            <label class="option"><input type="radio" name="q3" value="c" /> The delivery is marked <code>sent</code> with empty content</label>
-            <p class="explanation">A throw is a transient fault; only a <code>null</code> return means genuinely unsendable and suppresses. Collapsing the two would let one flaky query permanently silence an alert.</p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="c">
-            <legend>4. An org has subscription rows for <code>cash_controls</code>, but every one of them is disabled. What is the audience?</legend>
-            <label class="option"><input type="radio" name="q4" value="a" /> <code>ADMIN_EMAILS</code>, as the fallback</label>
-            <label class="option"><input type="radio" name="q4" value="b" /> Every admin user in the organization</label>
-            <label class="option"><input type="radio" name="q4" value="c" /> Intentionally empty — the intent is suppressed as <code>no_recipients</code></label>
-            <p class="explanation">The fallback fires only on <em>zero rows for the category</em>, never on an empty filtered match. Keying it off the filtered result would make disabling subscriptions re-broadcast to the hardcoded list.</p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="b">
-            <legend>5. Why must a delivery under a <em>suppressed</em> intent be terminalized by the sweeper?</legend>
-            <label class="option"><input type="radio" name="q5" value="a" /> To keep the delivery table small</label>
-            <label class="option"><input type="radio" name="q5" value="b" /> Reserve returns early for a suppressed intent, so the row is never advanced — a couple dozen of them sort to the head of the ascending retry index and permanently consume the sweeper's whole retry budget, killing the backstop for the entire rail</label>
-            <label class="option"><input type="radio" name="q5" value="c" /> Because suppressed intents can be requeued and would otherwise double-send</label>
-            <p class="explanation">Their <code>nextAttemptAt</code> never advances, so they starve every other notification's retries. Both sweeper phases now terminalize them, and <code>staleLeasesRecovered</code> no longer counts an orphan as recovered.</p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="a">
-            <legend>6. An audience larger than one batch has been partly leased. Why does the intent stay <code>pending</code> rather than becoming <code>dispatched</code>?</legend>
-            <label class="option"><input type="radio" name="q6" value="a" /> The un-leased tail has no delivery rows yet, so <code>pending</code> is what keeps the sweeper's pending-intent phase as the backstop if the continuation is lost</label>
-            <label class="option"><input type="radio" name="q6" value="b" /> Because <code>dispatched</code> is only set after every recipient is confirmed <code>sent</code></label>
-            <label class="option"><input type="radio" name="q6" value="c" /> To keep the intent eligible for a second dedupe check</label>
-            <p class="explanation">Status reflects <em>materialization</em> of the audience; <code>hasMore</code> drives scheduling only. Conflating them let a fully-materialized intent flip backwards to <code>pending</code> and be labelled <code>dispatch_unrecoverable</code> after partly delivering.</p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="c">
-            <legend>7. Two blockers recurred in new forms across the review. What was the shared root cause, and the fix?</legend>
-            <label class="option"><input type="radio" name="q7" value="a" /> Missing null checks; stricter TypeScript settings were enabled</label>
-            <label class="option"><input type="radio" name="q7" value="b" /> Insufficient test coverage; the suite was expanded broadly</label>
-            <label class="option"><input type="radio" name="q7" value="c" /> Silent drift — neither raising the batch past what the lease covers nor adding an unenumerated approval status produced a type error or a failing test. The batch/lease inequality is now asserted, and the status list is derived from the schema and validated at module load</label>
-            <p class="explanation">An invariant that only lives in a comment is not pinned. Both are now falsifiable: a batch of 40 fails the inequality test while every other test stays green.</p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="b">
-            <legend>8. What is the most important thing the six review rounds proved about the review process itself?</legend>
-            <label class="option"><input type="radio" name="q8" value="a" /> Six rounds is excessive; the first round found everything material</label>
-            <label class="option"><input type="radio" name="q8" value="b" /> Two rounds found defects <em>introduced by the previous round's fix</em>, so a fix must be re-reviewed as adversarially as the original code</label>
-            <label class="option"><input type="radio" name="q8" value="c" /> The lenses disagreed, so review outcomes were arbitrary</label>
-            <p class="explanation">Round 4's per-page bound was compared against a flattened total, suppressing legitimate all-clears; round 4's batch bound left the tail invisible to every sweeper phase. Both were new defects created by fixes.</p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="a">
-            <legend>9. In a staging environment with no <code>NOTIFICATIONS_DEV_RECIPIENT</code> set, what does the transport do?</legend>
-            <label class="option"><input type="radio" name="q9" value="a" /> Runs the full pipeline but records the delivery as <code>suppressed</code> without calling the provider</label>
-            <label class="option"><input type="radio" name="q9" value="b" /> Records the delivery as <code>sent</code> so dashboards stay green</label>
-            <label class="option"><input type="radio" name="q9" value="c" /> Skips emitting the intent entirely, as the old call sites did</label>
-            <p class="explanation">A row claiming <code>sent</code> for mail that was never transmitted is indistinguishable from a real send during an incident. The gate lives in the transport so every environment exercises the pipeline.</p>
-          </fieldset>
-
-          <fieldset class="quiz-question" data-answer="c">
-            <legend>10. What is the delivery's status at report generation, and what must happen after deploy?</legend>
-            <label class="option"><input type="radio" name="q10" value="a" /> Merged and deployed; the seed runs on a cron</label>
-            <label class="option"><input type="radio" name="q10" value="b" /> Delivery candidate; nothing manual is required because subscriptions self-seed on first emit</label>
-            <label class="option"><input type="radio" name="q10" value="c" /> Delivery candidate, pre-merge and not deployed; after deploy, <code>seedAdminSubscriptions</code> must be run by hand from the Convex dashboard, and <code>NOTIFICATIONS_DEV_RECIPIENT</code> optionally set in non-prod</label>
-            <p class="explanation">The seed has no cron or migration entry. Until it runs for an org, audience resolution falls back to <code>ADMIN_EMAILS</code> by design, which is why the deploy is not order-sensitive.</p>
-          </fieldset>
-
-          <div class="quiz-actions">
-            <button type="submit">Grade quiz</button>
-            <button class="secondary" id="resetQuiz" type="button">Reset</button>
-            <span id="quizResult" aria-live="polite"></span>
-          </div>
-        </form>
-      </section>
-
-      <section class="section" id="evidence">
-        <p class="eyebrow">Subagent Evidence</p>
-        <h2>What was independently gathered, and what was not</h2>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A closeout's variance review exists but has already been resolved by a manager. What must the closeout path do?</p>
+        <ol data-quiz-options>
+          <li>Report the register as closed cleanly, since nothing is pending</li>
+          <li>Emit the variance alert again for the resolved review</li>
+          <li data-quiz-correct>Suppress the all-clear and emit nothing — a closeout under review is never also "closed cleanly"</li>
+        </ol>
+        <p data-quiz-explanation>A pending-only lookup falling through to the all-clear is the false "register closed" report for a drawer that was short. Every status is queried; the alert itself is only for a review still awaiting a decision.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is the dispatch <em>batch</em> bounded instead of the delivery <em>lease</em> stretched to cover the whole audience?</p>
+        <ol data-quiz-options>
+          <li>To reduce database reads per sweep</li>
+          <li data-quiz-correct>A 200-recipient serial send outlives the platform action limit, so the action is killed mid-batch with every leased row already holding an attempt — leaving the tail uncontacted and terminalized as failures never actually attempted</li>
+          <li>MailerSend rejects more than 25 recipients per hour</li>
+        </ol>
+        <p data-quiz-explanation>Each dispatch takes at most one bounded batch, sizes its lease to that batch capped below the action limit, and re-schedules itself for the remainder.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt><code>prepareEmail</code> throws because it momentarily hit a read limit. What happens?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>The batch stays retryable with backoff, and the dispatch chain continues</li>
+          <li>The intent is suppressed as <code>payload_unavailable</code></li>
+          <li>The delivery is marked <code>sent</code> with empty content</li>
+        </ol>
+        <p data-quiz-explanation>A throw is a transient fault; only a <code>null</code> return means genuinely unsendable and suppresses. Collapsing the two would let one flaky query permanently silence an alert.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>An org has subscription rows for <code>cash_controls</code>, but every one of them is disabled. What is the audience?</p>
+        <ol data-quiz-options>
+          <li><code>ADMIN_EMAILS</code>, as the fallback</li>
+          <li>Every admin user in the organization</li>
+          <li data-quiz-correct>Intentionally empty — the intent is suppressed as <code>no_recipients</code></li>
+        </ol>
+        <p data-quiz-explanation>The fallback fires only on <em>zero rows for the category</em>, never on an empty filtered match. Keying it off the filtered result would make disabling subscriptions re-broadcast to the hardcoded list.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why must a delivery under a <em>suppressed</em> intent be terminalized by the sweeper?</p>
+        <ol data-quiz-options>
+          <li>To keep the delivery table small</li>
+          <li data-quiz-correct>Reserve returns early for a suppressed intent, so the row is never advanced — a couple dozen of them sort to the head of the ascending retry index and permanently consume the sweeper's whole retry budget, killing the backstop for the entire rail</li>
+          <li>Because suppressed intents can be requeued and would otherwise double-send</li>
+        </ol>
+        <p data-quiz-explanation>Their <code>nextAttemptAt</code> never advances, so they starve every other notification's retries. Both sweeper phases now terminalize them, and <code>staleLeasesRecovered</code> no longer counts an orphan as recovered.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>An audience larger than one batch has been partly leased. Why does the intent stay <code>pending</code> rather than becoming <code>dispatched</code>?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>The un-leased tail has no delivery rows yet, so <code>pending</code> is what keeps the sweeper's pending-intent phase as the backstop if the continuation is lost</li>
+          <li>Because <code>dispatched</code> is only set after every recipient is confirmed <code>sent</code></li>
+          <li>To keep the intent eligible for a second dedupe check</li>
+        </ol>
+        <p data-quiz-explanation>Status reflects <em>materialization</em> of the audience; <code>hasMore</code> drives scheduling only. Conflating them let a fully-materialized intent flip backwards to <code>pending</code> and be labelled <code>dispatch_unrecoverable</code> after partly delivering.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Two blockers recurred in new forms across the review. What was the shared root cause, and the fix?</p>
+        <ol data-quiz-options>
+          <li>Missing null checks; stricter TypeScript settings were enabled</li>
+          <li>Insufficient test coverage; the suite was expanded broadly</li>
+          <li data-quiz-correct>Silent drift — neither raising the batch past what the lease covers nor adding an unenumerated approval status produced a type error or a failing test. The batch/lease inequality is now asserted, and the status list is derived from the schema and validated at module load</li>
+        </ol>
+        <p data-quiz-explanation>An invariant that only lives in a comment is not pinned. Both are now falsifiable: a batch of 40 fails the inequality test while every other test stays green.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the most important thing the six review rounds proved about the review process itself?</p>
+        <ol data-quiz-options>
+          <li>Six rounds is excessive; the first round found everything material</li>
+          <li data-quiz-correct>Two rounds found defects <em>introduced by the previous round's fix</em>, so a fix must be re-reviewed as adversarially as the original code</li>
+          <li>The lenses disagreed, so review outcomes were arbitrary</li>
+        </ol>
+        <p data-quiz-explanation>Round 4's per-page bound was compared against a flattened total, suppressing legitimate all-clears; round 4's batch bound left the tail invisible to every sweeper phase. Both were new defects created by fixes.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>In a staging environment with no <code>NOTIFICATIONS_DEV_RECIPIENT</code> set, what does the transport do?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Runs the full pipeline but records the delivery as <code>suppressed</code> without calling the provider</li>
+          <li>Records the delivery as <code>sent</code> so dashboards stay green</li>
+          <li>Skips emitting the intent entirely, as the old call sites did</li>
+        </ol>
+        <p data-quiz-explanation>A row claiming <code>sent</code> for mail that was never transmitted is indistinguishable from a real send during an incident. The gate lives in the transport so every environment exercises the pipeline.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the delivery's status at report generation, and what must happen after deploy?</p>
+        <ol data-quiz-options>
+          <li>Merged and deployed; the seed runs on a cron</li>
+          <li>Delivery candidate; nothing manual is required because subscriptions self-seed on first emit</li>
+          <li data-quiz-correct>Delivery candidate, pre-merge and not deployed; after deploy, <code>seedAdminSubscriptions</code> must be run by hand from the Convex dashboard, and <code>NOTIFICATIONS_DEV_RECIPIENT</code> optionally set in non-prod</li>
+        </ol>
+        <p data-quiz-explanation>The seed has no cron or migration entry. Until it runs for an org, audience resolution falls back to <code>ADMIN_EMAILS</code> by design, which is why the deploy is not order-sensitive.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+<h2>What was independently gathered, and what was not</h2><p class="eyebrow">Subagent Evidence</p>
+        
         <div class="grid-2">
           <article class="card">
             <h3>Delivered-diff analysis · delegated agent</h3>
@@ -1285,52 +836,7 @@ prepareEmail throws        → transient fault (read limit, OCC, missing row)
             </p>
           </article>
         </div>
-      </section>
-
-      <footer>
-        Generated 2026-07-29 for branch
-        <code>feat/notifications-rail</code> at head <code>539e37cb</code>.
-        Deliverable diff fingerprint
-        <code>55a1ca8b58336d1762c52b061d1cdbaab75c488aaf6f4603ba4fb43cc8bcb18b</code>.
-      </footer>
-    </main>
-
-    <script>
-      (() => {
-        const form = document.getElementById("changeQuiz");
-        const reset = document.getElementById("resetQuiz");
-        const result = document.getElementById("quizResult");
-        const questions = [...form.querySelectorAll(".quiz-question")];
-        const threshold = Number(form.dataset.threshold || 0);
-
-        form.addEventListener("submit", (event) => {
-          event.preventDefault();
-          let score = 0;
-
-          questions.forEach((question, index) => {
-            const selected = form.querySelector(
-              `input[name="q${index + 1}"]:checked`,
-            );
-            const correct = selected?.value === question.dataset.answer;
-            if (correct) score += 1;
-            question.querySelector(".explanation").style.display = "block";
-            question.style.borderColor = correct ? "#7db797" : "#d79a93";
-          });
-
-          const passed = score >= threshold;
-          result.textContent = `${score}/${questions.length} — ${passed ? "Pass" : "Review the explanations and try again"}`;
-          result.style.color = passed ? "#176b4a" : "#9d342f";
-        });
-
-        reset.addEventListener("click", () => {
-          form.reset();
-          result.textContent = "";
-          questions.forEach((question) => {
-            question.style.borderColor = "";
-            question.querySelector(".explanation").style.display = "none";
-          });
-        });
-      })();
-    </script>
-  </body>
+  </section>
+</article>
+</body>
 </html>

@@ -1,159 +1,100 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="cbaf2f1d9235b4d91fef8512a01d33cf0a22c5a13482fe25703368f69d3fc9e3">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>POS Upload-Sequence Gap Reconciliation And Owed Daily-Close Sweep</title>
-    <style>
-      :root {
-        --ink: #1f2933;
-        --muted: #596674;
-        --line: #d9e2ec;
-        --paper: #ffffff;
-        --soft: #f6f8fb;
-        --accent: #1d4ed8;
-        --accent-soft: #dbeafe;
-        --good: #166534;
-        --bad: #b91c1c;
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        background: var(--soft);
-        color: var(--ink);
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        line-height: 1.55;
-      }
-      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
-      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
-      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
-      h1 { font-size: 40px; max-width: 880px; margin: 0 0 16px; }
-      h2 { font-size: 26px; margin: 0 0 16px; }
-      p { margin: 0 0 14px; }
-      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
-      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
-      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
-      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
-      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; word-break: break-word; }
-      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
-      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
-      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
-      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
-      tr:last-child td { border-bottom: 0; }
-      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
-      .quiz-question:first-child { border-top: 0; }
-      fieldset { border: 0; margin: 0; padding: 0; }
-      legend { font-weight: 700; margin-bottom: 10px; }
-      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
-      @media (hover: hover) and (pointer: fine) {
-        label:hover { border-color: #b6c5d8; }
-      }
-      button {
-        appearance: none;
-        border: 0;
-        border-radius: 8px;
-        background: var(--accent);
-        color: #ffffff;
-        cursor: pointer;
-        font-weight: 700;
-        padding: 11px 16px;
-        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
-      }
-      button:active { transform: scale(0.97); }
-      button.secondary { background: #475569; }
-      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
-      #quizResult { font-weight: 700; }
-      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
-      .answer-detail.visible { display: block; }
-      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
-      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
-      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
-      @media (max-width: 820px) { h1 { font-size: 30px; } main { padding: 32px 16px 56px; } }
-    </style>
-  </head>
-  <body>
-    <main>
-      <header>
-        <h1>POS Upload-Sequence Gap Reconciliation And Owed Daily-Close Sweep</h1>
-        <p class="lede">A burned upload sequence &mdash; a number allocated to an event that never became durable &mdash; parked every later POS event behind a predecessor that could never arrive, wedging terminals permanently and stranding a store day's books open. This delivery adds durable gap state, a pure escalation policy, a cloud reconciliation sweep, terminal-side blocker diagnosis, and an owed daily-close sweep.</p>
-        <div class="meta"><span class="pill">Status: delivery candidate</span><span class="pill">Branch: pos-sync-gap-reconciliation-and-owed-close-sweep</span><span class="pill">Base: origin/main</span><span class="pill">Root alignment: required after merge</span><span class="pill">Production deploy: not part of this delivery</span><span class="pill">Fingerprint: cbaf2f1d</span></div>
-      </header>
-
-      <section class="panel"><h2>Executive Summary</h2>
-        <p>POS terminals upload offline events under a per-cursor <code>uploadSequence</code>, and the server only ever projects <code>acceptedThroughSequence + 1</code>. Everything ahead of that is parked as <code>held</code>/<code>out_of_order</code> until its predecessor arrives. That rule keeps offline POS history in causal order and is correct as long as every allocated sequence eventually shows up &mdash; but a sequence can be <em>burned</em>: purged by ledger maintenance, lost to a torn write, or rejected client-side after its number was already allocated. The successors then wait on a predecessor that no longer exists anywhere, and the terminal wedges permanently.</p>
-        <p>This delivery gives the system a way out. Ingest records durable gap state on the cursor; a pure policy module decides when waiting has become pointless; a new cron drives a probe-then-bounded-skip ladder; and the terminal now diagnoses <em>why</em> it is held instead of guessing. Every skip records a manager-visible conflict naming the exact sequences that were stepped over. A companion sweep, <code>owedDailyCloseSweep</code>, removes the eligibility-window cliff that let this wedge strand a store day&rsquo;s books open permanently.</p>
-      </section>
-
-      <section class="panel"><h2>Problem And Context</h2>
-        <p>When a sequence is burned, no component was empowered to conclude &ldquo;that number is never coming.&rdquo; Sales and register closes stayed local forever while the scheduler looped the same held batch behind exponential backoff. The only exit was a human noticing a <code>sync_stuck</code> alert and invoking support tooling.</p>
-        <p>The terminal made this worse by guessing. It learned only that its batch was blocked, not by what, so it assumed a stuck <code>needs_review</code> precursor and drove a review-inclusive drain &mdash; a no-op whenever the real cause is a missing upload sequence.</p>
-        <p>The wedge then took out an unrelated subsystem. <code>runConfiguredDailyOperationsAutomation</code> closes a store day inside a roughly four-hour eligibility window. On 2026-07-24 a wedged terminal held the register-close event, so the day carried a <code>register_session</code> blocker through all five eligibility runs &mdash; and the wedge cleared 76 minutes after the last one. Nothing ever revisited the day, so the books stayed open permanently and only a support-invoked mutation could finish them.</p>
-      </section>
-
-      <section class="panel"><h2>Mental Model</h2>
-        <p>Think of the cursor as a ticket-window queue that serves strictly in numbered order. Normally that is exactly what you want: it guarantees a refund never gets processed before the sale it refunds. But if ticket 47 is destroyed on the way to the window, the queue does not stall for a moment &mdash; it stalls <em>forever</em>, and everyone holding 48 and up waits on a person who will never arrive.</p>
-        <p>The fix is not to abandon ordering. It is to give the window an escalation procedure: notice that 47 has been missing a while, page the person holding it, and only after they either confirm they lost it or fail to answer for a full day, call 48 &mdash; while writing down, publicly, that 47 was skipped. That written record is what turns a silent hole into something a manager can investigate.</p>
-      </section>
-
-      <section class="panel"><h2>Before And After</h2>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>POS Upload-Sequence Gap Reconciliation And Owed Daily-Close Sweep</title>
+</head>
+<body>
+<article
+  data-athena-landed-change-report="v2"
+  data-athena-report-diff-fingerprint="cbaf2f1d9235b4d91fef8512a01d33cf0a22c5a13482fe25703368f69d3fc9e3"
+>
+  <header data-report-section="header">
+    <h1>POS Upload-Sequence Gap Reconciliation And Owed Daily-Close Sweep</h1>
+    <p class="lede">A burned upload sequence — a number allocated to an event that never became durable — parked every later POS event behind a predecessor that could never arrive, wedging terminals permanently and stranding a store day's books open. This delivery adds durable gap state, a pure escalation policy, a cloud reconciliation sweep, terminal-side blocker diagnosis, and an owed daily-close sweep.</p>
+    <ul data-report-pills>
+      <li>Status: delivery candidate</li>
+      <li>Branch: pos-sync-gap-reconciliation-and-owed-close-sweep</li>
+      <li>Base: origin/main</li>
+      <li>Root alignment: required after merge</li>
+      <li>Production deploy: not part of this delivery</li>
+      <li>Fingerprint: cbaf2f1d</li>
+    </ul>
+  </header>
+  <section data-report-section="summary">
+<h2>Executive Summary</h2>
+        <p>POS terminals upload offline events under a per-cursor <code>uploadSequence</code>, and the server only ever projects <code>acceptedThroughSequence + 1</code>. Everything ahead of that is parked as <code>held</code>/<code>out_of_order</code> until its predecessor arrives. That rule keeps offline POS history in causal order and is correct as long as every allocated sequence eventually shows up — but a sequence can be <em>burned</em>: purged by ledger maintenance, lost to a torn write, or rejected client-side after its number was already allocated. The successors then wait on a predecessor that no longer exists anywhere, and the terminal wedges permanently.</p>
+        <p>This delivery gives the system a way out. Ingest records durable gap state on the cursor; a pure policy module decides when waiting has become pointless; a new cron drives a probe-then-bounded-skip ladder; and the terminal now diagnoses <em>why</em> it is held instead of guessing. Every skip records a manager-visible conflict naming the exact sequences that were stepped over. A companion sweep, <code>owedDailyCloseSweep</code>, removes the eligibility-window cliff that let this wedge strand a store day’s books open permanently.</p>
+  </section>
+  <section data-report-section="problem">
+<h2>Problem And Context</h2>
+        <p>When a sequence is burned, no component was empowered to conclude “that number is never coming.” Sales and register closes stayed local forever while the scheduler looped the same held batch behind exponential backoff. The only exit was a human noticing a <code>sync_stuck</code> alert and invoking support tooling.</p>
+        <p>The terminal made this worse by guessing. It learned only that its batch was blocked, not by what, so it assumed a stuck <code>needs_review</code> precursor and drove a review-inclusive drain — a no-op whenever the real cause is a missing upload sequence.</p>
+        <p>The wedge then took out an unrelated subsystem. <code>runConfiguredDailyOperationsAutomation</code> closes a store day inside a roughly four-hour eligibility window. On 2026-07-24 a wedged terminal held the register-close event, so the day carried a <code>register_session</code> blocker through all five eligibility runs — and the wedge cleared 76 minutes after the last one. Nothing ever revisited the day, so the books stayed open permanently and only a support-invoked mutation could finish them.</p>
+  </section>
+  <section data-report-section="mental-model">
+<h2>Mental Model</h2>
+        <p>Think of the cursor as a ticket-window queue that serves strictly in numbered order. Normally that is exactly what you want: it guarantees a refund never gets processed before the sale it refunds. But if ticket 47 is destroyed on the way to the window, the queue does not stall for a moment — it stalls <em>forever</em>, and everyone holding 48 and up waits on a person who will never arrive.</p>
+        <p>The fix is not to abandon ordering. It is to give the window an escalation procedure: notice that 47 has been missing a while, page the person holding it, and only after they either confirm they lost it or fail to answer for a full day, call 48 — while writing down, publicly, that 47 was skipped. That written record is what turns a silent hole into something a manager can investigate.</p>
+  </section>
+  <section data-report-section="before-after">
+<h2>Before And After</h2>
         <ul>
           <li>Before: a burned upload sequence wedged a terminal indefinitely; the only exit was a human reading a <code>sync_stuck</code> alert.</li>
-          <li>After: <code>reconcilePosLocalSyncSequenceGaps</code> runs every 15 minutes in prod and drives an automated <code>observe &rarr; probe &rarr; skip</code> ladder off durable cursor state.</li>
+          <li>After: <code>reconcilePosLocalSyncSequenceGaps</code> runs every 15 minutes in prod and drives an automated <code>observe → probe → skip</code> ladder off durable cursor state.</li>
           <li>Before: the terminal knew only <em>that</em> it was held, and guessed the cause was a stuck <code>needs_review</code> precursor.</li>
           <li>After: <code>diagnoseHeldSyncBlocker</code> compares the awaited sequence against the local ledger and reports <code>heldBlockerKind</code> plus <code>heldBehindMissingUploadSequence</code> on the heartbeat.</li>
           <li>Before: a skipped sequence would have been an invisible hole in history.</li>
           <li>After: every skip records a <code>sequence_gap_skipped</code> conflict naming each stepped-over sequence, surfaced to managers in <code>RegisterSessionView</code>.</li>
           <li>Before: a blocker outliving the ~4h daily-close eligibility window stranded the day open permanently.</li>
           <li>After: <code>owedDailyCloseSweep</code> derives the owed-day set from <code>dailyClose</code> rows and revisits each until it closes or is escalated.</li>
-          <li>Before: <code>usePrint</code> could double-print, and could call <code>print()</code> into a window already being torn down (&ldquo;The provided callback is no longer runnable&rdquo;).</li>
+          <li>Before: <code>usePrint</code> could double-print, and could call <code>print()</code> into a window already being torn down (“The provided callback is no longer runnable”).</li>
           <li>After: a single <code>runPrint</code> path guarded by <code>hasPrinted</code>/<code>isClosing</code> serves both the load handler and the slow-load fallback.</li>
         </ul>
-      </section>
-
-      <section class="panel"><h2>Layer Breakdown</h2>
-        <p><strong>Policy (pure).</strong> <code>convex/pos/application/sync/sequenceGapPolicy.ts</code> decides from durable gap state alone &mdash; no clock, no database &mdash; so the escalation ladder is unit-testable and every threshold is readable in one place: <code>SEQUENCE_GAP_PROBE_AFTER_MS</code> (15 min), <code>SEQUENCE_GAP_MIN_OBSERVATIONS_BEFORE_PROBE</code> (2), <code>SEQUENCE_GAP_SKIP_AFTER_UNANSWERED_MS</code> (24 h), and <code>SEQUENCE_GAP_MAX_SKIP_SPAN</code> (5).</p>
+  </section>
+  <section data-report-section="layer-breakdown">
+<h2>Layer Breakdown</h2>
+        <p><strong>Policy (pure).</strong> <code>convex/pos/application/sync/sequenceGapPolicy.ts</code> decides from durable gap state alone — no clock, no database — so the escalation ladder is unit-testable and every threshold is readable in one place: <code>SEQUENCE_GAP_PROBE_AFTER_MS</code> (15 min), <code>SEQUENCE_GAP_MIN_OBSERVATIONS_BEFORE_PROBE</code> (2), <code>SEQUENCE_GAP_SKIP_AFTER_UNANSWERED_MS</code> (24 h), and <code>SEQUENCE_GAP_MAX_SKIP_SPAN</code> (5).</p>
         <p><strong>State.</strong> <code>posLocalSyncCursor</code> gains an optional <code>gap</code> object (missing sequence, first/last observed, observation count, probe id and time). <code>ingestLocalEvents</code> writes it when a gap is observed and clears it the moment the cursor reaches the awaited sequence; <code>LocalSyncIngestionRepository</code> grows <code>getSequenceGap</code> and a required <code>gap</code> argument on <code>updateAcceptedThroughSequence</code> so no call site can forget to clear it.</p>
         <p><strong>I/O.</strong> <code>reconcileSequenceGaps.ts</code> gathers terminal evidence, asks the policy, then probes, skips, or leaves the gap alone. It is bounded: 20 cursors per sweep, 50 held successors re-projected per skip.</p>
         <p><strong>Terminal.</strong> <code>src/lib/pos/infrastructure/local/syncGapDiagnosis.ts</code> produces a <code>HeldSyncBlocker</code>; <code>usePosLocalSyncRuntime</code> reports it on the heartbeat via the <code>posTerminalRuntimeSyncValidator</code> fields.</p>
         <p><strong>Operations.</strong> <code>convex/operations/owedDailyCloseSweep.ts</code> derives owed days and delegates each to the existing <code>runHistoricEodAutoCloseForDate</code>, which already carries the idempotency key, schedule-range resolution, quarantine rules, and historical currentness mode. Three helpers in <code>dailyOperationsAutomation.ts</code> were exported to support it.</p>
-      </section>
-
-      <section class="panel"><h2>Failure Boundaries</h2>
+  </section>
+  <section data-report-section="failure-boundaries">
+<h2>Failure Boundaries</h2>
         <ul>
           <li><strong>Positive assertions are never overridden.</strong> <code>awaiting_local_upload</code> and <code>awaiting_review</code> are the terminal stating it still holds the awaited event; the policy must not skip past either. Only <code>missing_locally</code> evidence or an unanswered-probe timeout permits a skip.</li>
           <li><strong>Bounded skip span.</strong> More than 5 consecutive sequences means something structural (a ledger reset, a restored backup, a cursor pointed at the wrong session) and escalates rather than writing history past it.</li>
-          <li><strong>No silent skips.</strong> A skip that fails to record its <code>sequence_gap_skipped</code> conflict would defeat the entire safety argument &mdash; the conflict <em>is</em> the safety story, not a nicety.</li>
+          <li><strong>No silent skips.</strong> A skip that fails to record its <code>sequence_gap_skipped</code> conflict would defeat the entire safety argument — the conflict <em>is</em> the safety story, not a nicety.</li>
           <li><strong>Owed days are derived, never stored.</strong> <code>dailyClose</code> rows remain the sole authority; a parallel owed-days table could drift, and drift in an accounting ledger is worse than the original bug.</li>
           <li><strong>The sweep cannot force a close.</strong> A day closes only when the decision adapter judges it eligible; a real cash variance or pending approval keeps it open indefinitely and escalates past the staleness threshold.</li>
           <li><strong>Lookback is bounded.</strong> The sweep reaches back far enough to cover a long weekend plus a holiday; a backlog older than that is systemic and wants a human.</li>
         </ul>
-      </section>
-
-      <section class="panel"><h2>Validation Evidence</h2>
-        <p>The full dirty set (42 originally modified/new paths) was committed together; the pre-commit hook additionally regenerated Convex generated API and Graphify artifacts, bringing the commit to 91 paths. The delivery-diff fingerprint was computed <em>after</em> that commit landed &mdash; both <code>landed-change-report-check.ts</code> and <code>compound-solution-check.ts</code> independently returned <code>cbaf2f1d9235b4d91fef8512a01d33cf0a22c5a13482fe25703368f69d3fc9e3</code> &mdash; then stamped into this report and the companion solution note, and the commit amended.</p>
+  </section>
+  <section data-report-section="validation">
+<h2>Validation Evidence</h2>
+        <p>The full dirty set (42 originally modified/new paths) was committed together; the pre-commit hook additionally regenerated Convex generated API and Graphify artifacts, bringing the commit to 91 paths. The delivery-diff fingerprint was computed <em>after</em> that commit landed — both <code>landed-change-report-check.ts</code> and <code>compound-solution-check.ts</code> independently returned <code>cbaf2f1d9235b4d91fef8512a01d33cf0a22c5a13482fe25703368f69d3fc9e3</code> — then stamped into this report and the companion solution note, and the commit amended.</p>
         <pre><code>bun scripts/landed-change-report-check.ts --base origin/main --print-fingerprint
 bun scripts/compound-solution-check.ts --base origin/main --print-fingerprint
 bun run pr:athena</code></pre>
         <p>New test coverage lands alongside the code: <code>sequenceGapPolicy.test.ts</code> and <code>reconcileSequenceGaps.test.ts</code> for the ladder, <code>owedDailyCloseSweep.test.ts</code> plus an integration test for the sweep, <code>syncGapDiagnosis.test.ts</code> for terminal diagnosis, and additions to <code>ingestLocalEvents.test.ts</code>, <code>projectLocalEvents.test.ts</code>, <code>syncContract.test.ts</code>, <code>usePosLocalSyncRuntime.test.ts</code>, <code>usePrint.test.ts</code>, and a new <code>AppShellFullscreenContext.test.tsx</code>. This report does not claim results beyond what the recorded <code>bun run pr:athena</code> run produced; see the chat handoff for that outcome.</p>
-      </section>
-
-      <section class="panel"><h2>Intentionally Not Changed</h2>
+  </section>
+  <section data-report-section="intentionally-not-changed">
+<h2>Intentionally Not Changed</h2>
         <ul>
           <li>The strict-ordering projection rule itself is untouched. Ordering is correct; only the never-arrives case gained an exit.</li>
-          <li>The primary daily-operations eligibility window is unchanged &mdash; the sweep is additive and delegates to the existing historic close path rather than duplicating its rules.</li>
+          <li>The primary daily-operations eligibility window is unchanged — the sweep is additive and delegates to the existing historic close path rather than duplicating its rules.</li>
           <li>No existing conflict kinds, review flows, or terminal recovery commands were repurposed; <code>sequence_gap_skipped</code> is a new kind alongside them.</li>
           <li>Production deployment is not part of this delivery.</li>
         </ul>
-      </section>
-
-      <section class="panel"><h2>Next-Time Guidance</h2>
-        <p>Any protocol that allocates a sequence number <em>before</em> the payload is durable needs a documented, automated answer to &ldquo;what if this number never arrives?&rdquo; Strict ordering without a reconciliation path converts one lost event into permanent, unbounded data loss.</p>
-        <p>When a client can only observe <em>that</em> it is blocked, give it enough information to determine <em>why</em> before it acts &mdash; a remediation driven by a guessed cause is a no-op at best. And whenever an automation runs inside a time window, ask what happens if the blocker clears one minute after the last run; if the answer is &ldquo;nothing, ever,&rdquo; the window is a cliff and wants a sweep.</p>
-      </section>
-
-      <section class="panel">
-        <h2>Key Files</h2>
+  </section>
+  <section data-report-section="guidance">
+<h2>Next-Time Guidance</h2>
+        <p>Any protocol that allocates a sequence number <em>before</em> the payload is durable needs a documented, automated answer to “what if this number never arrives?” Strict ordering without a reconciliation path converts one lost event into permanent, unbounded data loss.</p>
+        <p>When a client can only observe <em>that</em> it is blocked, give it enough information to determine <em>why</em> before it acts — a remediation driven by a guessed cause is a no-op at best. And whenever an automation runs inside a time window, ask what happens if the blocker clears one minute after the last run; if the answer is “nothing, ever,” the window is a cliff and wants a sweep.</p>
+  </section>
+  <section data-report-section="key-files">
+<h2>Key Files</h2>
         <table>
           <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
           <tbody>
@@ -162,7 +103,7 @@ bun run pr:athena</code></pre>
             <tr><td><code>convex/pos/application/sync/ingestLocalEvents.ts</code></td><td>Records durable gap state when successors are parked, and clears it once the awaited sequence lands.</td></tr>
             <tr><td><code>convex/schemas/pos/posLocalSyncCursor.ts</code></td><td>Adds the optional <code>gap</code> object the whole ladder reads from.</td></tr>
             <tr><td><code>convex/schemas/pos/posTerminalRuntimeStatus.ts</code></td><td>Adds <code>heldBlockerKind</code> and <code>heldBehindMissingUploadSequence</code> to the heartbeat contract.</td></tr>
-            <tr><td><code>src/lib/pos/infrastructure/local/syncGapDiagnosis.ts</code></td><td>New terminal-side diagnosis turning &ldquo;we are held&rdquo; into a specific, reportable blocker.</td></tr>
+            <tr><td><code>src/lib/pos/infrastructure/local/syncGapDiagnosis.ts</code></td><td>New terminal-side diagnosis turning “we are held” into a specific, reportable blocker.</td></tr>
             <tr><td><code>convex/operations/owedDailyCloseSweep.ts</code></td><td>New sweep that derives owed store days and delegates each to the historic close path.</td></tr>
             <tr><td><code>convex/crons.ts</code></td><td>Registers both new sweeps with prod/non-prod cadences.</td></tr>
             <tr><td><code>shared/posLocalSyncContract.ts</code></td><td>Adds <code>supersededByLocalTransactionId</code> so a superseded clear uploads without voiding the session.</td></tr>
@@ -172,174 +113,121 @@ bun run pr:athena</code></pre>
             <tr><td><code>docs/solutions/logic-errors/athena-pos-upload-sequence-gap-reconciliation-2026-07-25.md</code></td><td>Captures the reusable lesson about pre-allocated sequence numbers and windowed automations.</td></tr>
           </tbody>
         </table>
-      </section>
-
-      <section class="panel">
-        <h2>Subagent Evidence</h2>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is a “burned” upload sequence?</p>
+        <ol data-quiz-options>
+          <li>A sequence number the server rejected as malformed.</li>
+          <li>A sequence number reused by two terminals at once.</li>
+          <li data-quiz-correct>A number that was allocated to an event which then never became durable, so it can never arrive.</li>
+          <li>A sequence number above the cursor's maximum value.</li>
+        </ol>
+        <p data-quiz-explanation>The event is purged, lost to a torn write, or rejected client-side <em>after</em> its number was allocated — permanently consuming that slot.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does one burned sequence wedge a terminal indefinitely rather than briefly?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>The server only projects <code>acceptedThroughSequence + 1</code>, so every successor is parked forever behind a predecessor that will never arrive.</li>
+          <li>The terminal deletes its local ledger on the first held response.</li>
+          <li>Exponential backoff eventually exceeds the cron interval.</li>
+          <li>The cursor resets to zero and replays from the beginning.</li>
+        </ol>
+        <p data-quiz-explanation>Strict in-order projection is correct only if every allocated sequence eventually shows up; when one cannot, the queue stalls permanently.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the escalation ladder the gap policy follows?</p>
+        <ol data-quiz-options>
+          <li>Skip immediately, then notify.</li>
+          <li>Alert a human, then wait for manual resolution.</li>
+          <li>Reset the cursor, then replay all events.</li>
+          <li data-quiz-correct>Observe, probe the terminal, then skip only on evidence or timeout.</li>
+        </ol>
+        <p data-quiz-explanation>Deliberately slow to skip and fast to close: skipping is the last resort.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is <code>sequenceGapPolicy.ts</code> written as a pure module with no clock and no database access?</p>
+        <ol data-quiz-options>
+          <li>Convex forbids database reads inside policy files.</li>
+          <li data-quiz-correct>So the escalation ladder is unit-testable and every threshold is readable in one place.</li>
+          <li>To let it run on the terminal instead of the cloud.</li>
+          <li>To avoid counting toward the delivery diff fingerprint.</li>
+        </ol>
+        <p data-quiz-explanation>It decides from durable gap state alone, which keeps the thresholds honest and testable.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What makes skipping a hole safe rather than silent data loss?</p>
+        <ol data-quiz-options>
+          <li>Skipped sequences are re-requested from the terminal afterward.</li>
+          <li>Only sequences confirmed empty by the server are ever skipped.</li>
+          <li data-quiz-correct>Every skip records a <code>sequence_gap_skipped</code> conflict naming each stepped-over sequence, so a lost sale surfaces as a drawer discrepancy for a manager.</li>
+          <li>Skips are reversible for 24 hours.</li>
+        </ol>
+        <p data-quiz-explanation>The conflict <em>is</em> the safety story — it converts a silent hole into a specific thing a human can investigate.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which terminal blocker kinds must reconciliation never skip past?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct><code>awaiting_local_upload</code> and <code>awaiting_review</code>, because both are the terminal positively asserting it still holds the awaited event.</li>
+          <li><code>missing_locally</code>, because the terminal may be wrong.</li>
+          <li><code>none</code>, because it carries no information.</li>
+          <li>All of them — skips are only ever driven by probe timeouts.</li>
+        </ol>
+        <p data-quiz-explanation>A positive assertion that the event still exists outranks the timer; only <code>missing_locally</code> or an unanswered-probe timeout permits a skip.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does <code>SEQUENCE_GAP_MAX_SKIP_SPAN</code> cap a single reconciliation at 5 consecutive sequences?</p>
+        <ol data-quiz-options>
+          <li>To stay inside Convex mutation size limits.</li>
+          <li data-quiz-correct>A handful of burned numbers is the known failure mode; a long contiguous run means something structural is wrong and a human should look before history is written past it.</li>
+          <li>Because conflicts can only reference five sequences.</li>
+          <li>To keep the sweep under its 20-cursor budget.</li>
+        </ol>
+        <p data-quiz-explanation>A ledger reset, restored backup, or misaimed cursor produces a long run — a fundamentally different problem than a burned number.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What did the terminal previously get wrong about being held, and what fixed it?</p>
+        <ol data-quiz-options>
+          <li>It ignored held responses entirely; now it retries them.</li>
+          <li>It retried too aggressively; now it backs off.</li>
+          <li data-quiz-correct>It knew only <em>that</em> it was held and guessed the cause was a stuck <code>needs_review</code> precursor; <code>diagnoseHeldSyncBlocker</code> checks the awaited sequence against the local ledger instead.</li>
+          <li>It reported the wrong terminal id; the heartbeat now carries the cursor id.</li>
+        </ol>
+        <p data-quiz-explanation>The guessed cause drove a review-inclusive drain, which is a no-op when the real blocker is a missing sequence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is the owed-day set for <code>owedDailyCloseSweep</code> derived rather than stored in its own table?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct><code>dailyClose</code> rows are already the authority on which days are closed, and a parallel table could drift from them — drift in an accounting ledger is worse than the original bug.</li>
+          <li>Convex does not support additional tables in this schema.</li>
+          <li>A stored set would be too large to query within limits.</li>
+          <li>It was derived only to avoid a schema migration and should be stored later.</li>
+        </ol>
+        <p data-quiz-explanation>Deriving keeps a single source of truth for closed days.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What general lesson should you carry to the next time-windowed automation?</p>
+        <ol data-quiz-options>
+          <li>Widen the window until blockers cannot outlive it.</li>
+          <li>Force the action once the window closes, regardless of blockers.</li>
+          <li>Store the pending work in a dedicated table so it is never lost.</li>
+          <li data-quiz-correct>Ask what happens if the blocker clears one minute after the last run — if the answer is “nothing, ever,” the window is a cliff and needs a companion sweep.</li>
+        </ol>
+        <p data-quiz-explanation>The sweep reframes the question from “is now the right time?” to “what is still owed, and is it possible now?”</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+<h2>Subagent Evidence</h2>
         <ul>
           <li><strong>Session context subagent:</strong> Not dispatched. The operator explicitly scoped this session to direct work without subagent dispatch, so no prior-session historian pass was run. This report is accordingly narrower than a full multi-subagent report and rests on direct inspection of the working tree.</li>
           <li><strong>Delivered diff subagent:</strong> Not dispatched, same constraint. Diff analysis was performed by reading <code>git diff</code> output and the new modules' source directly.</li>
           <li><strong>Main agent local evidence:</strong> Read the full diffs for crons, sync types, the local-sync contract, the cursor and runtime-status schemas, and the frontend changes; read the header documentation and public surface of all four new modules; computed the deliverable diff fingerprint from the landed commit via both gate scripts and confirmed they agreed; ran <code>bun run delivery:documentation-check</code> before adding docs to confirm which thresholds this branch trips.</li>
         </ul>
-      </section>
-
-      <section id="quiz" class="panel">
-        <h2>Quiz: Pass Required</h2>
-        <p>You must score at least 8 out of 10 to pass.</p>
-        <form id="changeQuiz" data-threshold="8">
-
-          <div class="quiz-question" data-answer="2">
-            <fieldset>
-              <legend>1. What is a &ldquo;burned&rdquo; upload sequence?</legend>
-              <label><input type="radio" name="q1" value="0" /> A sequence number the server rejected as malformed.</label>
-              <label><input type="radio" name="q1" value="1" /> A sequence number reused by two terminals at once.</label>
-              <label><input type="radio" name="q1" value="2" /> A number that was allocated to an event which then never became durable, so it can never arrive.</label>
-              <label><input type="radio" name="q1" value="3" /> A sequence number above the cursor's maximum value.</label>
-            </fieldset>
-            <div class="answer-detail">The event is purged, lost to a torn write, or rejected client-side <em>after</em> its number was allocated &mdash; permanently consuming that slot.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="0">
-            <fieldset>
-              <legend>2. Why does one burned sequence wedge a terminal indefinitely rather than briefly?</legend>
-              <label><input type="radio" name="q2" value="0" /> The server only projects <code>acceptedThroughSequence + 1</code>, so every successor is parked forever behind a predecessor that will never arrive.</label>
-              <label><input type="radio" name="q2" value="1" /> The terminal deletes its local ledger on the first held response.</label>
-              <label><input type="radio" name="q2" value="2" /> Exponential backoff eventually exceeds the cron interval.</label>
-              <label><input type="radio" name="q2" value="3" /> The cursor resets to zero and replays from the beginning.</label>
-            </fieldset>
-            <div class="answer-detail">Strict in-order projection is correct only if every allocated sequence eventually shows up; when one cannot, the queue stalls permanently.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="3">
-            <fieldset>
-              <legend>3. What is the escalation ladder the gap policy follows?</legend>
-              <label><input type="radio" name="q3" value="0" /> Skip immediately, then notify.</label>
-              <label><input type="radio" name="q3" value="1" /> Alert a human, then wait for manual resolution.</label>
-              <label><input type="radio" name="q3" value="2" /> Reset the cursor, then replay all events.</label>
-              <label><input type="radio" name="q3" value="3" /> Observe, probe the terminal, then skip only on evidence or timeout.</label>
-            </fieldset>
-            <div class="answer-detail">Deliberately slow to skip and fast to close: skipping is the last resort.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="1">
-            <fieldset>
-              <legend>4. Why is <code>sequenceGapPolicy.ts</code> written as a pure module with no clock and no database access?</legend>
-              <label><input type="radio" name="q4" value="0" /> Convex forbids database reads inside policy files.</label>
-              <label><input type="radio" name="q4" value="1" /> So the escalation ladder is unit-testable and every threshold is readable in one place.</label>
-              <label><input type="radio" name="q4" value="2" /> To let it run on the terminal instead of the cloud.</label>
-              <label><input type="radio" name="q4" value="3" /> To avoid counting toward the delivery diff fingerprint.</label>
-            </fieldset>
-            <div class="answer-detail">It decides from durable gap state alone, which keeps the thresholds honest and testable.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="2">
-            <fieldset>
-              <legend>5. What makes skipping a hole safe rather than silent data loss?</legend>
-              <label><input type="radio" name="q5" value="0" /> Skipped sequences are re-requested from the terminal afterward.</label>
-              <label><input type="radio" name="q5" value="1" /> Only sequences confirmed empty by the server are ever skipped.</label>
-              <label><input type="radio" name="q5" value="2" /> Every skip records a <code>sequence_gap_skipped</code> conflict naming each stepped-over sequence, so a lost sale surfaces as a drawer discrepancy for a manager.</label>
-              <label><input type="radio" name="q5" value="3" /> Skips are reversible for 24 hours.</label>
-            </fieldset>
-            <div class="answer-detail">The conflict <em>is</em> the safety story &mdash; it converts a silent hole into a specific thing a human can investigate.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="0">
-            <fieldset>
-              <legend>6. Which terminal blocker kinds must reconciliation never skip past?</legend>
-              <label><input type="radio" name="q6" value="0" /> <code>awaiting_local_upload</code> and <code>awaiting_review</code>, because both are the terminal positively asserting it still holds the awaited event.</label>
-              <label><input type="radio" name="q6" value="1" /> <code>missing_locally</code>, because the terminal may be wrong.</label>
-              <label><input type="radio" name="q6" value="2" /> <code>none</code>, because it carries no information.</label>
-              <label><input type="radio" name="q6" value="3" /> All of them &mdash; skips are only ever driven by probe timeouts.</label>
-            </fieldset>
-            <div class="answer-detail">A positive assertion that the event still exists outranks the timer; only <code>missing_locally</code> or an unanswered-probe timeout permits a skip.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="1">
-            <fieldset>
-              <legend>7. Why does <code>SEQUENCE_GAP_MAX_SKIP_SPAN</code> cap a single reconciliation at 5 consecutive sequences?</legend>
-              <label><input type="radio" name="q7" value="0" /> To stay inside Convex mutation size limits.</label>
-              <label><input type="radio" name="q7" value="1" /> A handful of burned numbers is the known failure mode; a long contiguous run means something structural is wrong and a human should look before history is written past it.</label>
-              <label><input type="radio" name="q7" value="2" /> Because conflicts can only reference five sequences.</label>
-              <label><input type="radio" name="q7" value="3" /> To keep the sweep under its 20-cursor budget.</label>
-            </fieldset>
-            <div class="answer-detail">A ledger reset, restored backup, or misaimed cursor produces a long run &mdash; a fundamentally different problem than a burned number.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="2">
-            <fieldset>
-              <legend>8. What did the terminal previously get wrong about being held, and what fixed it?</legend>
-              <label><input type="radio" name="q8" value="0" /> It ignored held responses entirely; now it retries them.</label>
-              <label><input type="radio" name="q8" value="1" /> It retried too aggressively; now it backs off.</label>
-              <label><input type="radio" name="q8" value="2" /> It knew only <em>that</em> it was held and guessed the cause was a stuck <code>needs_review</code> precursor; <code>diagnoseHeldSyncBlocker</code> checks the awaited sequence against the local ledger instead.</label>
-              <label><input type="radio" name="q8" value="3" /> It reported the wrong terminal id; the heartbeat now carries the cursor id.</label>
-            </fieldset>
-            <div class="answer-detail">The guessed cause drove a review-inclusive drain, which is a no-op when the real blocker is a missing sequence.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="0">
-            <fieldset>
-              <legend>9. Why is the owed-day set for <code>owedDailyCloseSweep</code> derived rather than stored in its own table?</legend>
-              <label><input type="radio" name="q9" value="0" /> <code>dailyClose</code> rows are already the authority on which days are closed, and a parallel table could drift from them &mdash; drift in an accounting ledger is worse than the original bug.</label>
-              <label><input type="radio" name="q9" value="1" /> Convex does not support additional tables in this schema.</label>
-              <label><input type="radio" name="q9" value="2" /> A stored set would be too large to query within limits.</label>
-              <label><input type="radio" name="q9" value="3" /> It was derived only to avoid a schema migration and should be stored later.</label>
-            </fieldset>
-            <div class="answer-detail">Deriving keeps a single source of truth for closed days.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="3">
-            <fieldset>
-              <legend>10. What general lesson should you carry to the next time-windowed automation?</legend>
-              <label><input type="radio" name="q10" value="0" /> Widen the window until blockers cannot outlive it.</label>
-              <label><input type="radio" name="q10" value="1" /> Force the action once the window closes, regardless of blockers.</label>
-              <label><input type="radio" name="q10" value="2" /> Store the pending work in a dedicated table so it is never lost.</label>
-              <label><input type="radio" name="q10" value="3" /> Ask what happens if the blocker clears one minute after the last run &mdash; if the answer is &ldquo;nothing, ever,&rdquo; the window is a cliff and needs a companion sweep.</label>
-            </fieldset>
-            <div class="answer-detail">The sweep reframes the question from &ldquo;is now the right time?&rdquo; to &ldquo;what is still owed, and is it possible now?&rdquo;</div>
-          </div>
-
-          <div class="quiz-actions">
-            <button type="button" id="gradeQuiz">Grade quiz</button>
-            <button type="button" class="secondary" id="resetQuiz">Reset</button>
-            <span id="quizResult" aria-live="polite"></span>
-          </div>
-        </form>
-      </section>
-
-    </main>
-    <script>
-      const questions = Array.from(document.querySelectorAll(".quiz-question"));
-      const result = document.getElementById("quizResult");
-      const form = document.getElementById("changeQuiz");
-      const threshold = Number(form.dataset.threshold || 0);
-      function clearGrades() {
-        questions.forEach((question) => {
-          question.classList.remove("correct", "incorrect");
-          question.querySelector(".answer-detail").classList.remove("visible");
-        });
-        result.textContent = "";
-        result.style.color = "";
-      }
-      document.getElementById("gradeQuiz").addEventListener("click", () => {
-        clearGrades();
-        let score = 0;
-        questions.forEach((question, index) => {
-          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
-          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
-          if (isCorrect) score += 1;
-          question.classList.add(isCorrect ? "correct" : "incorrect");
-          question.querySelector(".answer-detail").classList.add("visible");
-        });
-        const passed = score >= threshold;
-        result.textContent = passed
-          ? `Passed: ${score}/${questions.length}.`
-          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
-        result.style.color = passed ? "var(--good)" : "var(--bad)";
-      });
-      document.getElementById("resetQuiz").addEventListener("click", () => {
-        form.reset();
-        clearGrades();
-      });
-    </script>
-  </body>
+  </section>
+</article>
+</body>
 </html>

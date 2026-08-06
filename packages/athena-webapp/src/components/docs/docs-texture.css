@@ -1,0 +1,46 @@
+/* Ledger-paper dot grid for the docs workspace.
+   Same 26px grid the landing and public pages use, so the section reads as
+   part of the same product rather than a separate site. */
+
+.docs-texture {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+
+  /* Fainter than the marketing surfaces: those sit behind display type, this
+     sits behind long-form body copy. */
+  color: hsl(var(--foreground) / 0.11);
+  background-image: radial-gradient(currentColor 1px, transparent 1.5px);
+  background-size: 26px 26px;
+
+  /* The mask is inverted from the landing page's on purpose. There the grid
+     pools in the middle behind a headline; here the middle is where the
+     reading column lives, so the grid is cleared out of it and kept to the
+     margins. Texture in the periphery, nothing behind the prose. */
+  -webkit-mask-image: radial-gradient(
+    68% 56% at 50% 46%,
+    transparent 38%,
+    black 92%
+  );
+  mask-image: radial-gradient(68% 56% at 50% 46%, transparent 38%, black 92%);
+}
+
+/* On charcoal the dots are near-white and read hotter at the same alpha. */
+:root[data-theme="dark"] .docs-texture,
+.dark .docs-texture {
+  color: hsl(var(--foreground) / 0.07);
+}
+
+/* Decorative only: drop it wherever contrast headroom matters. */
+@media (prefers-contrast: more) {
+  .docs-texture {
+    display: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .docs-texture {
+    display: none;
+  }
+}

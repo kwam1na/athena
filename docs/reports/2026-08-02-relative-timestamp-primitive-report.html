@@ -1,57 +1,225 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="ffeba6794f0c388ff3b454fd52f3cd0e78e9ea000dd4e8096474e3d762724c64">
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Athena relative timestamp primitive — delivery report</title>
-  <style>
-    :root { color-scheme: light dark; --bg:#f5f5f3; --surface:#fff; --text:#191918; --muted:#696966; --line:#deded9; --accent:#315c4b; --soft:#e9f0ec; font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif; }
-    @media (prefers-color-scheme:dark){:root{--bg:#151615;--surface:#1d1f1d;--text:#f1f2ef;--muted:#a7aaa5;--line:#343734;--accent:#9bc9b5;--soft:#25342d}}
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);line-height:1.6} main{max-width:1040px;margin:auto;padding:40px 24px 80px}
-    h1{max-width:760px;margin:.45rem 0 1rem;font-size:clamp(2rem,5vw,3.5rem);line-height:1.03;letter-spacing:-.04em} h2{margin:0 0 1rem;font-size:1.35rem;letter-spacing:-.015em} h3{margin:1.2rem 0 .4rem;font-size:1rem} p{max-width:78ch} code{padding:.12rem .35rem;border-radius:4px;background:var(--soft);font-size:.92em}
-    .eyebrow{color:var(--muted);font-size:.75rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase}.pills{display:flex;flex-wrap:wrap;gap:.5rem;margin:1.25rem 0 2rem}.pill{border:1px solid var(--line);border-radius:999px;padding:.35rem .65rem;color:var(--muted);font-size:.78rem}.pill.good{border-color:var(--accent);color:var(--accent)}
-    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}.card{grid-column:span 12;padding:24px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}@media(min-width:800px){.half{grid-column:span 6}.wide{grid-column:span 8}.narrow{grid-column:span 4}}
-    .flow{display:grid;gap:10px;margin-top:1rem}.flow div{padding:12px 14px;border-left:3px solid var(--accent);background:var(--soft)} ul{padding-left:1.2rem} li+li{margin-top:.35rem} table{width:100%;border-collapse:collapse;font-size:.92rem}th,td{padding:.7rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--muted);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase}
-    .quiz fieldset{margin:1rem 0;padding:16px;border:1px solid var(--line);border-radius:10px}.quiz legend{padding:0 .35rem;font-weight:650}.option{display:block;margin:.45rem 0}.controls{display:flex;gap:.65rem;align-items:center;margin-top:1rem}.controls button{border:1px solid var(--accent);border-radius:8px;padding:.62rem .9rem;background:var(--accent);color:var(--surface);font:inherit;font-weight:650;cursor:pointer}.controls button.secondary{background:transparent;color:var(--accent)}.controls button:active{transform:scale(.97)}.result{min-height:1.6rem;font-weight:700}.explanation{display:none;margin:.5rem 0 0;color:var(--muted);font-size:.9rem}.graded .explanation{display:block}@media(prefers-reduced-motion:no-preference){.controls button{transition:transform 140ms cubic-bezier(.23,1,.32,1),background-color 140ms ease}}
-  </style>
 </head>
-<body><main>
-  <header><div class="eyebrow">Delivery candidate · Athena Admin UI</div><h1>One timestamp primitive, and the popper bug it uncovered.</h1><p>A relative label with the exact time one hover away, adopted across the surfaces where the exact time changes a decision. Measuring the tooltip in the browser turned up a global popper-positioning defect that predated the work.</p><div class="pills"><span class="pill">Branch: relative-timestamp-component</span><span class="pill good">Focused tests: 1,000+ passed</span><span class="pill">PR: pending</span><span class="pill">Deploy: pending merge</span><span class="pill">Root alignment: pending merge</span></div></header>
-  <div class="grid">
-    <section class="card wide"><h2>Executive summary</h2><p>The register session trace view's relative-label-with-tooltip pattern becomes a <code>ui/</code> primitive and is adopted at 28 call sites across transactions, orders, expense reports, the operations queue, five event timelines, SKU activity, and the order detail view. Roughly fifty sites previously rendered a relative label with no way to reach the exact time.</p><p>Verifying the primitive in the running app exposed a separate, pre-existing defect: the admin shell's <code>zoom: 0.95</code> made every Radix popper drift by up to ~70px. That fix is global and lands here. Two smaller asks ride along — weekdays on register session open/close dates, and a transaction count beside units in the reports trend tooltip, which required plumbing a new optional field onto the persisted overview projection.</p></section>
-    <aside class="card narrow"><h2>Status</h2><ul><li>Delivery candidate, not yet merged</li><li>Typecheck, convex lint, architecture check: clean</li><li>Every migrated surface verified in the running app</li><li>Production deploy: pending merge</li></ul></aside>
-    <section class="card half"><h2>Before</h2><ul><li>~50 sites showed a relative label with the exact time unreachable.</li><li>Two surfaces had independently reinvented the same pattern.</li><li>Every desktop popper was mispositioned by (1 − zoom) of its distance from the origin.</li><li>Register session dates gave no weekday for a day-reconciled record.</li><li>The trend tooltip could not report transaction volume at all.</li></ul></section>
-    <section class="card half"><h2>After</h2><ul><li>One primitive owns the label, the <code>&lt;time&gt;</code> value, and the tooltip.</li><li>The duplicate local formatter is deleted.</li><li>Poppers resolve in the coordinate space they were measured in.</li><li>Session open/close dates lead with the weekday.</li><li>The trend tooltip reads "31 units · 27 transactions".</li></ul></section>
-    <section class="card"><h2>Mental model: the label is a summary, not the value</h2><p>A relative label answers "roughly when", which is what scanning needs. The exact timestamp answers "which shift, which day, before or after the count" — which is what deciding needs. The primitive keeps both in one element so a surface never has to choose, and so the machine-readable value travels with the human-readable one.</p><div class="flow"><div><strong>lib/utils</strong> owns the two format functions; nothing about presentation.</div><div><strong>ui/relative-timestamp</strong> owns the label, the <code>&lt;time dateTime&gt;</code>, and the tooltip.</div><div><strong>index.css</strong> keeps overlays positioned correctly under the shell's zoom.</div><div><strong>Call sites</strong> pass a value and, where the copy needs it, a prefix or fallback.</div></div></section>
-    <section class="card"><h2>Key files</h2><table><thead><tr><th>File</th><th>Why it matters</th></tr></thead><tbody>
-      <tr><td><code>src/components/ui/relative-timestamp.tsx</code></td><td>The primitive. Nullable value, <code>prefix</code>, <code>fallback</code>, and <code>precision</code> cover every shape the call sites needed.</td></tr>
-      <tr><td><code>src/index.css</code></td><td>Cancels the root zoom on the popper wrapper and re-applies it to the content. Affects every Radix overlay on desktop.</td></tr>
-      <tr><td><code>src/components/cash-controls/registerSessionTimestamps.ts</code></td><td>Session-only date formatters. <code>dateStyle</code> cannot be combined with a <code>weekday</code> component, so the parts are spelled out.</td></tr>
-      <tr><td><code>convex/reports/overview.ts</code></td><td>Resolves each trend day's transaction count from its register close at sweep time, bounded by the trend window.</td></tr>
-      <tr><td><code>convex/reports/transactionCounts.ts</code></td><td>One definition of the close-summary read, shared by the overview builder and the items query.</td></tr>
-      <tr><td><code>shared/reportsContract.ts</code></td><td>The new field is optional, which is what makes the rolling projection refresh safe.</td></tr>
-    </tbody></table></section>
-    <section class="card half"><h2>Failure boundaries</h2><ul><li>The label does not tick; it is computed at render.</li><li>Radix tooltips do not open on tap, so the absolute value is unreachable on touch surfaces.</li><li>A day with no register close carries no transaction count.</li><li>Persisted overview documents show units alone until the next sweep.</li><li>Three string-building call sites keep the raw helper by design.</li></ul></section>
-    <section class="card half"><h2>Intentionally unchanged</h2><ul><li>No change to <code>getRelativeTime</code>.</li><li>No live transaction counting on any read path.</li><li>No widening of the mixed <code>formatTimestamp</code> in the session detail view.</li><li>~13 low-stakes analytics and user-table sites deliberately deferred.</li><li>No access-boundary or route changes.</li></ul></section>
-    <section class="card"><h2>Validation and review evidence</h2><ul><li>Typecheck clean across the package at every step; <code>lint:frontend:changed</code> and <code>lint:convex:changed</code> exit 0; <code>architecture:check</code> passes.</li><li>Focused Vitest runs across ui, traces, transactions, orders, expense reports, operations, product, analytics, users, cash controls, and reports — all green, including 298 reports tests and 96 cash-controls tests.</li><li>Every migrated surface was measured in the running app: trigger centre and tooltip centre agree to within 1px with a 4px gap on orders, transactions, operations queue, SKU activity, and order detail.</li><li>The trend tooltip was confirmed against real swept data — "31 units · 27 transactions" on Jul 10 — not only against tests.</li><li>Two false starts are recorded in the notes below rather than hidden: a wrong first diagnosis of the popper bug, and a chart test harness that made assertions vacuous.</li></ul></section>
-    <section class="card"><h2>Next-time guidance</h2><ol><li>Extract on the second independent implementation of a pattern, not the third.</li><li>Measure a positioning bug in the browser before naming a cause.</li><li>Pair a popper trigger to its content by <code>aria-describedby</code>, never by document order.</li><li>Add a dedicated formatter when a shared one serves several meanings.</li><li>Check what a chart-test harness actually feeds the component before trusting a green assertion.</li></ol></section>
-    <section class="card"><h2>Subagent Evidence</h2><p><strong>SubagentUnavailable.</strong> Athena's repository instructions map subagent/task work to sequential main-thread research, and this session's instructions further restrict agent delegation. Evidence was gathered directly: repository-wide greps to enumerate and tier the call sites, source reads of every producer and consumer touched, focused Vitest runs per area, and live measurement in the running dev server via the browser tools for each migrated surface.</p></section>
-    <section class="card quiz" id="changeQuiz"><h2>Quiz: Pass Required</h2><p>Pass threshold: 8 of 10. Grade locally; no answers leave this file.</p><form id="quizForm">
-      <fieldset><legend>1. What signalled that the timestamp pattern should be extracted?</legend><label class="option"><input type="radio" name="q0" value="0"> A lint rule</label><label class="option"><input type="radio" name="q0" value="1"> Two surfaces had independently implemented it</label><label class="option"><input type="radio" name="q0" value="2"> The file exceeded a size limit</label><p class="explanation">The trace view and ProductOperationalTimeline had the same shape, with byte-identical formatters.</p></fieldset>
-      <fieldset><legend>2. What actually caused the tooltip to render ~70px from its trigger?</legend><label class="option"><input type="radio" name="q1" value="0"> A missing Radix portal</label><label class="option"><input type="radio" name="q1" value="1"> The shell's <code>zoom: 0.95</code> scaling an already zoom-adjusted transform</label><label class="option"><input type="radio" name="q1" value="2"> A stale z-index</label><p class="explanation">The portal was the first hypothesis; measurement showed the offset unchanged, and that change was reverted.</p></fieldset>
-      <fieldset><legend>3. Why does the offset grow toward the right of the screen?</legend><label class="option"><input type="radio" name="q2" value="0"> It is a fixed pixel offset</label><label class="option"><input type="radio" name="q2" value="1"> The error is (1 − zoom) of the distance from the viewport origin</label><label class="option"><input type="radio" name="q2" value="2"> Table cells add padding</label><p class="explanation">Proportional error is invisible in a sidebar and worst in a right-hand column.</p></fieldset>
-      <fieldset><legend>4. Why was the native <code>title</code> attribute removed?</legend><label class="option"><input type="radio" name="q3" value="0"> It duplicated the Radix tooltip; the trade-off is no touch access</label><label class="option"><input type="radio" name="q3" value="1"> It broke typechecking</label><label class="option"><input type="radio" name="q3" value="2"> It is deprecated HTML</label><p class="explanation">A deliberate call: tap-to-open is the fix if a touch surface needs the value, not restoring title.</p></fieldset>
-      <fieldset><legend>5. Which call sites deliberately keep <code>getRelativeTime</code>?</legend><label class="option"><input type="radio" name="q4" value="0"> Table columns</label><label class="option"><input type="radio" name="q4" value="1"> Ones that interpolate the label into a string</label><label class="option"><input type="radio" name="q4" value="2"> Ones inside links</label><p class="explanation">A string has no JSX seam to hand a component.</p></fieldset>
-      <fieldset><legend>6. Why add session-only date formatters instead of changing the shared one?</legend><label class="option"><input type="radio" name="q5" value="0"> The shared one also renders sale, transaction, and activity times</label><label class="option"><input type="radio" name="q5" value="1"> The shared one is not exported</label><label class="option"><input type="radio" name="q5" value="2"> To reduce bundle size</label><p class="explanation">Widening it would have leaked weekdays into surfaces nobody asked about.</p></fieldset>
-      <fieldset><legend>7. Why can't <code>dateStyle: "medium"</code> simply gain a weekday?</legend><label class="option"><input type="radio" name="q6" value="0"> Intl rejects dateStyle combined with individual date components</label><label class="option"><input type="radio" name="q6" value="1"> Weekdays are locale-specific</label><label class="option"><input type="radio" name="q6" value="2"> It would change the year format</label><p class="explanation">Mixing them throws, which is why the parts are spelled out.</p></fieldset>
-      <fieldset><legend>8. Why are trend transaction counts resolved at sweep time?</legend><label class="option"><input type="radio" name="q7" value="0"> Sweeps are faster</label><label class="option"><input type="radio" name="q7" value="1"> The overview query holds a one-document steady-state read budget</label><label class="option"><input type="radio" name="q7" value="2"> Convex forbids reads in queries</label><p class="explanation">Resolving 30 closes per load — with a throwing open-day fallback — is the cost the projection exists to avoid.</p></fieldset>
-      <fieldset><legend>9. What does the tooltip show for a day with no register close?</legend><label class="option"><input type="radio" name="q8" value="0"> Zero transactions</label><label class="option"><input type="radio" name="q8" value="1"> Units alone</label><label class="option"><input type="radio" name="q8" value="2"> An error state</label><p class="explanation">An invented zero would later contradict the closeout.</p></fieldset>
-      <fieldset><legend>10. What is the finish-line status in this candidate report?</legend><label class="option"><input type="radio" name="q9" value="0"> Already merged and deployed</label><label class="option"><input type="radio" name="q9" value="1"> PR, merge, deploy, and root alignment are pending</label><label class="option"><input type="radio" name="q9" value="2"> No deploy is intended</label><p class="explanation">Candidate reports must not predict merge, deploy, or root alignment.</p></fieldset>
-      <div class="controls"><button type="submit">Grade quiz</button><button class="secondary" id="resetQuiz" type="button">Reset</button><span class="result" id="quizResult" aria-live="polite"></span></div>
-    </form></section>
-  </div>
-</main><script>
-  const answers=[1,1,1,0,1,0,0,1,1,1]; const form=document.getElementById('quizForm'); const result=document.getElementById('quizResult');
-  form.addEventListener('submit',event=>{event.preventDefault();let score=0;answers.forEach((answer,index)=>{const selected=form.querySelector(`input[name="q${index}"]:checked`);if(selected&&Number(selected.value)===answer)score+=1;});form.classList.add('graded');result.textContent=score>=8?`Pass — ${score}/10`:`Not yet — ${score}/10. Review the explanations and retry.`;});
-  document.getElementById('resetQuiz').addEventListener('click',()=>{form.reset();form.classList.remove('graded');result.textContent='';});
-</script></body></html>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="ffeba6794f0c388ff3b454fd52f3cd0e78e9ea000dd4e8096474e3d762724c64">
+  <header data-report-section="header">
+    <h1>One timestamp primitive, and the popper bug it uncovered.</h1>
+    <ul data-report-pills>
+      <li>Delivery candidate · Athena Admin UI</li>
+      <li>Branch: relative-timestamp-component</li>
+      <li>Focused tests: 1,000+ passed</li>
+      <li>PR: pending</li>
+      <li>Deploy: pending merge</li>
+      <li>Root alignment: pending merge</li>
+    </ul>
+    <p>A relative label with the exact time one hover away, adopted across the surfaces where the exact time changes a decision. Measuring the tooltip in the browser turned up a global popper-positioning defect that predated the work.</p>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+    <p>The register session trace view's relative-label-with-tooltip pattern becomes a <code>ui/</code> primitive and is adopted at 28 call sites across transactions, orders, expense reports, the operations queue, five event timelines, SKU activity, and the order detail view. Roughly fifty sites previously rendered a relative label with no way to reach the exact time.</p>
+    <p>Verifying the primitive in the running app exposed a separate, pre-existing defect: the admin shell's <code>zoom: 0.95</code> made every Radix popper drift by up to ~70px. That fix is global and lands here. Two smaller asks ride along — weekdays on register session open/close dates, and a transaction count beside units in the reports trend tooltip, which required plumbing a new optional field onto the persisted overview projection.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Problem</h2>
+    <p>Roughly fifty sites previously rendered a relative label with no way to reach the exact time.</p>
+    <p>Verifying the primitive in the running app exposed a separate, pre-existing defect: the admin shell's <code>zoom: 0.95</code> made every Radix popper drift by up to ~70px.</p>
+  </section>
+  <section data-report-section="status">
+    <h2>Status</h2>
+    <ul>
+      <li>Delivery candidate, not yet merged</li>
+      <li>Typecheck, convex lint, architecture check: clean</li>
+      <li>Every migrated surface verified in the running app</li>
+      <li>Production deploy: pending merge</li>
+    </ul>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+    <h3>Before</h3>
+    <ul>
+      <li>~50 sites showed a relative label with the exact time unreachable.</li>
+      <li>Two surfaces had independently reinvented the same pattern.</li>
+      <li>Every desktop popper was mispositioned by (1 − zoom) of its distance from the origin.</li>
+      <li>Register session dates gave no weekday for a day-reconciled record.</li>
+      <li>The trend tooltip could not report transaction volume at all.</li>
+    </ul>
+    <h3>After</h3>
+    <ul>
+      <li>One primitive owns the label, the <code>&lt;time&gt;</code> value, and the tooltip.</li>
+      <li>The duplicate local formatter is deleted.</li>
+      <li>Poppers resolve in the coordinate space they were measured in.</li>
+      <li>Session open/close dates lead with the weekday.</li>
+      <li>The trend tooltip reads "31 units · 27 transactions".</li>
+    </ul>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model: the label is a summary, not the value</h2>
+    <p>A relative label answers "roughly when", which is what scanning needs. The exact timestamp answers "which shift, which day, before or after the count" — which is what deciding needs. The primitive keeps both in one element so a surface never has to choose, and so the machine-readable value travels with the human-readable one.</p>
+    <ul>
+      <li><strong>lib/utils</strong> owns the two format functions; nothing about presentation.</li>
+      <li><strong>ui/relative-timestamp</strong> owns the label, the <code>&lt;time dateTime&gt;</code>, and the tooltip.</li>
+      <li><strong>index.css</strong> keeps overlays positioned correctly under the shell's zoom.</li>
+      <li><strong>Call sites</strong> pass a value and, where the copy needs it, a prefix or fallback.</li>
+    </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>src/components/ui/relative-timestamp.tsx</code></td><td>The primitive. Nullable value, <code>prefix</code>, <code>fallback</code>, and <code>precision</code> cover every shape the call sites needed.</td></tr>
+        <tr><td><code>src/index.css</code></td><td>Cancels the root zoom on the popper wrapper and re-applies it to the content. Affects every Radix overlay on desktop.</td></tr>
+        <tr><td><code>src/components/cash-controls/registerSessionTimestamps.ts</code></td><td>Session-only date formatters. <code>dateStyle</code> cannot be combined with a <code>weekday</code> component, so the parts are spelled out.</td></tr>
+        <tr><td><code>convex/reports/overview.ts</code></td><td>Resolves each trend day's transaction count from its register close at sweep time, bounded by the trend window.</td></tr>
+        <tr><td><code>convex/reports/transactionCounts.ts</code></td><td>One definition of the close-summary read, shared by the overview builder and the items query.</td></tr>
+        <tr><td><code>shared/reportsContract.ts</code></td><td>The new field is optional, which is what makes the rolling projection refresh safe.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+    <ul>
+      <li>The label does not tick; it is computed at render.</li>
+      <li>Radix tooltips do not open on tap, so the absolute value is unreachable on touch surfaces.</li>
+      <li>A day with no register close carries no transaction count.</li>
+      <li>Persisted overview documents show units alone until the next sweep.</li>
+      <li>Three string-building call sites keep the raw helper by design.</li>
+    </ul>
+  </section>
+  <section data-report-section="changes">
+    <h2>Intentionally unchanged</h2>
+    <ul>
+      <li>No change to <code>getRelativeTime</code>.</li>
+      <li>No live transaction counting on any read path.</li>
+      <li>No widening of the mixed <code>formatTimestamp</code> in the session detail view.</li>
+      <li>~13 low-stakes analytics and user-table sites deliberately deferred.</li>
+      <li>No access-boundary or route changes.</li>
+    </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and review evidence</h2>
+    <ul>
+      <li>Typecheck clean across the package at every step; <code>lint:frontend:changed</code> and <code>lint:convex:changed</code> exit 0; <code>architecture:check</code> passes.</li>
+      <li>Focused Vitest runs across ui, traces, transactions, orders, expense reports, operations, product, analytics, users, cash controls, and reports — all green, including 298 reports tests and 96 cash-controls tests.</li>
+      <li>Every migrated surface was measured in the running app: trigger centre and tooltip centre agree to within 1px with a 4px gap on orders, transactions, operations queue, SKU activity, and order detail.</li>
+      <li>The trend tooltip was confirmed against real swept data — "31 units · 27 transactions" on Jul 10 — not only against tests.</li>
+      <li>Two false starts are recorded in the notes below rather than hidden: a wrong first diagnosis of the popper bug, and a chart test harness that made assertions vacuous.</li>
+    </ul>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next-time guidance</h2>
+    <ol>
+      <li>Extract on the second independent implementation of a pattern, not the third.</li>
+      <li>Measure a positioning bug in the browser before naming a cause.</li>
+      <li>Pair a popper trigger to its content by <code>aria-describedby</code>, never by document order.</li>
+      <li>Add a dedicated formatter when a shared one serves several meanings.</li>
+      <li>Check what a chart-test harness actually feeds the component before trusting a green assertion.</li>
+    </ol>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Quiz: Pass Required</h2>
+    <p>Pass threshold: 8 of 10. Grade locally; no answers leave this file.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What signalled that the timestamp pattern should be extracted?</p>
+        <ol data-quiz-options>
+          <li>A lint rule</li>
+          <li data-quiz-correct>Two surfaces had independently implemented it</li>
+          <li>The file exceeded a size limit</li>
+        </ol>
+        <p data-quiz-explanation>The trace view and ProductOperationalTimeline had the same shape, with byte-identical formatters.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What actually caused the tooltip to render ~70px from its trigger?</p>
+        <ol data-quiz-options>
+          <li>A missing Radix portal</li>
+          <li data-quiz-correct>The shell's <code>zoom: 0.95</code> scaling an already zoom-adjusted transform</li>
+          <li>A stale z-index</li>
+        </ol>
+        <p data-quiz-explanation>The portal was the first hypothesis; measurement showed the offset unchanged, and that change was reverted.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the offset grow toward the right of the screen?</p>
+        <ol data-quiz-options>
+          <li>It is a fixed pixel offset</li>
+          <li data-quiz-correct>The error is (1 − zoom) of the distance from the viewport origin</li>
+          <li>Table cells add padding</li>
+        </ol>
+        <p data-quiz-explanation>Proportional error is invisible in a sidebar and worst in a right-hand column.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why was the native <code>title</code> attribute removed?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>It duplicated the Radix tooltip; the trade-off is no touch access</li>
+          <li>It broke typechecking</li>
+          <li>It is deprecated HTML</li>
+        </ol>
+        <p data-quiz-explanation>A deliberate call: tap-to-open is the fix if a touch surface needs the value, not restoring title.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which call sites deliberately keep <code>getRelativeTime</code>?</p>
+        <ol data-quiz-options>
+          <li>Table columns</li>
+          <li data-quiz-correct>Ones that interpolate the label into a string</li>
+          <li>Ones inside links</li>
+        </ol>
+        <p data-quiz-explanation>A string has no JSX seam to hand a component.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why add session-only date formatters instead of changing the shared one?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>The shared one also renders sale, transaction, and activity times</li>
+          <li>The shared one is not exported</li>
+          <li>To reduce bundle size</li>
+        </ol>
+        <p data-quiz-explanation>Widening it would have leaked weekdays into surfaces nobody asked about.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why can't <code>dateStyle: "medium"</code> simply gain a weekday?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Intl rejects dateStyle combined with individual date components</li>
+          <li>Weekdays are locale-specific</li>
+          <li>It would change the year format</li>
+        </ol>
+        <p data-quiz-explanation>Mixing them throws, which is why the parts are spelled out.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why are trend transaction counts resolved at sweep time?</p>
+        <ol data-quiz-options>
+          <li>Sweeps are faster</li>
+          <li data-quiz-correct>The overview query holds a one-document steady-state read budget</li>
+          <li>Convex forbids reads in queries</li>
+        </ol>
+        <p data-quiz-explanation>Resolving 30 closes per load — with a throwing open-day fallback — is the cost the projection exists to avoid.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does the tooltip show for a day with no register close?</p>
+        <ol data-quiz-options>
+          <li>Zero transactions</li>
+          <li data-quiz-correct>Units alone</li>
+          <li>An error state</li>
+        </ol>
+        <p data-quiz-explanation>An invented zero would later contradict the closeout.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the finish-line status in this candidate report?</p>
+        <ol data-quiz-options>
+          <li>Already merged and deployed</li>
+          <li data-quiz-correct>PR, merge, deploy, and root alignment are pending</li>
+          <li>No deploy is intended</li>
+        </ol>
+        <p data-quiz-explanation>Candidate reports must not predict merge, deploy, or root alignment.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent Evidence</h2>
+    <p><strong>SubagentUnavailable.</strong> Athena's repository instructions map subagent/task work to sequential main-thread research, and this session's instructions further restrict agent delegation. Evidence was gathered directly: repository-wide greps to enumerate and tier the call sites, source reads of every producer and consumer touched, focused Vitest runs per area, and live measurement in the running dev server via the browser tools for each migrated surface.</p>
+  </section>
+</article>
+</body>
+</html>

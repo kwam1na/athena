@@ -1,100 +1,42 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="615f240bea97887757c4fea636eac844f1a40f2f4a516a2cff4d7c4b4275a327">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Public Operation Admission And Shared-Demo/POS Polish</title>
-    <style>
-      :root {
-        --ink: #1f2933;
-        --muted: #596674;
-        --line: #d9e2ec;
-        --paper: #ffffff;
-        --soft: #f6f8fb;
-        --accent: #1d4ed8;
-        --accent-soft: #dbeafe;
-        --good: #166534;
-        --bad: #b91c1c;
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        background: var(--soft);
-        color: var(--ink);
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        line-height: 1.55;
-      }
-      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
-      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
-      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
-      h1 { font-size: 40px; max-width: 880px; margin: 0 0 16px; }
-      h2 { font-size: 26px; margin: 0 0 16px; }
-      p { margin: 0 0 14px; }
-      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
-      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
-      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
-      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
-      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; word-break: break-word; }
-      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
-      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
-      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
-      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
-      tr:last-child td { border-bottom: 0; }
-      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
-      .quiz-question:first-child { border-top: 0; }
-      fieldset { border: 0; margin: 0; padding: 0; }
-      legend { font-weight: 700; margin-bottom: 10px; }
-      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
-      @media (hover: hover) and (pointer: fine) {
-        label:hover { border-color: #b6c5d8; }
-      }
-      button {
-        appearance: none;
-        border: 0;
-        border-radius: 8px;
-        background: var(--accent);
-        color: #ffffff;
-        cursor: pointer;
-        font-weight: 700;
-        padding: 11px 16px;
-        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
-      }
-      button:active { transform: scale(0.97); }
-      button.secondary { background: #475569; }
-      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
-      #quizResult { font-weight: 700; }
-      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
-      .answer-detail.visible { display: block; }
-      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
-      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
-      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
-      @media (max-width: 820px) { h1 { font-size: 30px; } main { padding: 32px 16px 56px; } }
-    </style>
-  </head>
-  <body>
-    <main>
-      <header>
-        <h1>Public Operation Admission And Shared-Demo/POS Polish</h1>
-        <p class="lede">Delivery candidate that adds a public (anonymous) actor kind to Convex operation admission for the new register-interest surface, extracts shared-demo register-open timing into a tested module, and carries a batch of daily-operations, cash-controls, checkout, POS terminal, landing-story, and route/navigation fixes.</p>
-        <div class="meta"><span class="pill">Status: delivery candidate</span><span class="pill">Branch: dirty-set</span><span class="pill">Base: origin/main</span><span class="pill">Root alignment: not applicable (worktree)</span><span class="pill">Production deploy: not applicable</span><span class="pill">Fingerprint: 2078e5ad</span></div>
-      </header>
-
-      <section class="panel"><h2>Executive Summary</h2>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Public Operation Admission And Shared-Demo/POS Polish</title>
+</head>
+<body>
+<article
+  data-athena-landed-change-report="v2"
+  data-athena-report-diff-fingerprint="615f240bea97887757c4fea636eac844f1a40f2f4a516a2cff4d7c4b4275a327"
+>
+  <header data-report-section="header">
+    <h1>Public Operation Admission And Shared-Demo/POS Polish</h1>
+    <p class="lede">Delivery candidate that adds a public (anonymous) actor kind to Convex operation admission for the new register-interest surface, extracts shared-demo register-open timing into a tested module, and carries a batch of daily-operations, cash-controls, checkout, POS terminal, landing-story, and route/navigation fixes.</p>
+    <ul data-report-pills>
+      <li>Status: delivery candidate</li>
+      <li>Branch: dirty-set</li>
+      <li>Base: origin/main</li>
+      <li>Root alignment: not applicable (worktree)</li>
+      <li>Production deploy: not applicable</li>
+      <li>Fingerprint: 2078e5ad</li>
+    </ul>
+  </header>
+  <section data-report-section="summary">
+<h2>Executive Summary</h2>
         <p>This branch closes a gap in Convex's <code>operationAdmission</code> module: every mutation previously assumed a signed-in caller and threw for anonymous access. The new register-interest public form needs anonymous write access, so this delivery adds a third actor kind, <code>public</code>, that is admitted only when a mutation's definition explicitly opts in via <code>actors.public: "admit"</code>. Everything else defaults to the existing fail-closed sign-in error.</p>
         <p>Alongside that, the branch carries a wide but shallow batch of related fixes: shared-demo register-open timing moved into a dedicated, tested <code>registerBaseline</code> module; a store <code>website</code> field threaded through shared-demo provisioning; a resiliency fix for <code>useManagerElevation</code> so a transient Convex external-store tear no longer crashes the app; and touch-ups across cash-controls deposits, Paystack routes, checkout session creation, daily operations/opening/approval mutations, POS terminal health/detail views, landing story scenes, and route/navigation registration.</p>
-      </section>
-
-      <section class="panel"><h2>Problem And Context</h2>
+  </section>
+  <section data-report-section="problem">
+<h2>Problem And Context</h2>
         <p>Register-interest needed a Convex mutation that visitors without an Athena account could call. The only existing options were: bypass <code>resolveOperationAdmission</code> entirely for that mutation (losing the audit trail every other write goes through), or widen the normal-user adapter to tolerate missing auth (weakening the signal for every other, still-authenticated-only, mutation). Neither was acceptable, so admission needed a real third state.</p>
         <p>Separately, shared-demo register-open timing (<code>Math.max(operatingDayStart, now - 14_400_000)</code>) was duplicated inline in two places in <code>provision.ts</code> with no test coverage of its edge cases, and <code>useManagerElevation</code> threw a fatal error whenever it rendered without a provider in the tree — including during a recoverable single-render Convex store tear.</p>
-      </section>
-
-      <section class="panel"><h2>Mental Model</h2>
+  </section>
+  <section data-report-section="mental-model">
+<h2>Mental Model</h2>
         <p>Think of <code>resolveOperationAdmission</code> as a bouncer with two doors: the members-only door (normal user) and a side door (public) that is only unlocked for events that put it on the guest list. The bouncer always tries the members door first. If that fails because the person has no membership card (anonymous caller), it checks whether this specific event allows the side door before turning them away. Most events never unlock the side door, so the default behavior for every existing mutation is unchanged.</p>
-      </section>
-
-      <section class="panel"><h2>Before And After</h2>
+  </section>
+  <section data-report-section="before-after">
+<h2>Before And After</h2>
         <ul>
           <li>Before: <code>OperationActor</code> had two kinds (<code>normal_user</code>, <code>shared_demo</code>); any anonymous call threw "Sign in again to continue." with no opt-in path.</li>
           <li>After: a third kind, <code>public</code>, exists. <code>resolveOperationAdmission</code> only reaches it when the normal-user adapter throws, and only admits when <code>definition.actors.public === "admit"</code>; otherwise the original sign-in error is preserved and rethrown.</li>
@@ -103,43 +45,42 @@
           <li>Before: <code>useManagerElevation</code> threw when called outside a provider, including during a transient concurrent-render tear.</li>
           <li>After: it falls back to an inert, safe default value (<code>INERT_MANAGER_ELEVATION</code>) instead of throwing, so a recoverable render does not escalate to an error boundary.</li>
         </ul>
-      </section>
-
-      <section class="panel"><h2>Layer Breakdown</h2>
+  </section>
+  <section data-report-section="layer-breakdown">
+<h2>Layer Breakdown</h2>
         <p><code>convex/operationAdmission/{types,definitions,adapters,actors}.ts</code> define the actor/adapter contract. A new mutation opts into anonymous access by setting <code>actors.public: "admit"</code> in its definition; <code>createPublicOperationAdapter</code> reads that flag and either resolves scope constraints for an admitted anonymous actor or reports <code>not_applicable</code>. Call sites that read <code>actor.athenaUserId</code> (e.g. <code>convex/lib/athenaUserAuth.ts</code>) were updated to treat <code>public</code> as carrying no user id, using the new <code>getOperationActorAthenaUserId</code>/<code>requireOperationActorAthenaUserId</code> helpers from <code>actors.ts</code> rather than reading the field directly.</p>
         <p>Independently, <code>convex/sharedDemo/registerBaseline.ts</code> is a new module (with <code>registerBaseline.test.ts</code>) that <code>provision.ts</code> now imports for register-open timing, and <code>shared/sharedDemoStory.ts</code> carries a store <code>website</code> field that flows through provisioning into the store config.</p>
-      </section>
-
-      <section class="panel"><h2>Failure Boundaries</h2>
+  </section>
+  <section data-report-section="failure-boundaries">
+<h2>Failure Boundaries</h2>
         <ul>
           <li>A mutation that omits <code>actors.public</code> (or sets it to <code>"deny"</code>) continues to throw "Sign in again to continue." for anonymous callers — the default is unchanged and fail-closed.</li>
           <li>The public adapter only resolves scope constraints; it never fabricates an authenticated identity, so downstream code that needs a user id must call <code>requireOperationActorAthenaUserId</code>, which throws the same sign-in error for a public actor.</li>
           <li><code>useManagerElevation</code>'s inert fallback only covers a single missing-provider render; it does not change behavior once the real provider mounts on the next render.</li>
         </ul>
-      </section>
-
-      <section class="panel"><h2>Validation Evidence</h2>
+  </section>
+  <section data-report-section="validation">
+<h2>Validation Evidence</h2>
         <p>All 56 originally modified/new files were committed together (the pre-commit hook additionally regenerated Convex/Graphify artifacts, bringing the commit to 62 files). The delivery-diff fingerprint was computed after that commit landed and stamped into this report and the companion solution note.</p>
         <pre><code>bun scripts/landed-change-report-check.ts --base origin/main --print-fingerprint
 bun scripts/compound-solution-check.ts --base origin/main --print-fingerprint
 bun run pr:athena</code></pre>
         <p>See the chat handoff for the actual <code>bun run pr:athena</code> outcome; this report does not claim results beyond what that run produced.</p>
-      </section>
-
-      <section class="panel"><h2>Intentionally Not Changed</h2>
+  </section>
+  <section data-report-section="intentionally-not-changed">
+<h2>Intentionally Not Changed</h2>
         <ul>
           <li>Existing mutations that do not opt into <code>actors.public: "admit"</code> keep rejecting anonymous callers exactly as before.</li>
           <li>The normal-user and shared-demo admission paths are untouched other than the added try/catch fallthrough to the public adapter.</li>
           <li>Production deployment and root-repo alignment are not part of this delivery.</li>
         </ul>
-      </section>
-
-      <section class="panel"><h2>Next-Time Guidance</h2>
+  </section>
+  <section data-report-section="guidance">
+<h2>Next-Time Guidance</h2>
         <p>When a new mutation needs anonymous access, add <code>public: "admit"</code> to its <code>actors</code> block instead of bypassing <code>resolveOperationAdmission</code>. When touching any code that reads <code>OperationActor.athenaUserId</code>, use the <code>actors.ts</code> helpers rather than accessing the field directly, since a public actor carries no user id.</p>
-      </section>
-
-      <section class="panel">
-        <h2>Key Files</h2>
+  </section>
+  <section data-report-section="key-files">
+<h2>Key Files</h2>
         <table>
           <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
           <tbody>
@@ -154,174 +95,121 @@ bun run pr:athena</code></pre>
             <tr><td><code>docs/solutions/architecture-patterns/athena-public-operation-admission-2026-07-24.md</code></td><td>Captures the public-actor admission pattern for future anonymous-facing mutations.</td></tr>
           </tbody>
         </table>
-      </section>
-
-      <section class="panel">
-        <h2>Subagent Evidence</h2>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What new actor kind does this delivery add to operation admission?</p>
+        <ol data-quiz-options>
+          <li>admin</li>
+          <li data-quiz-correct>public</li>
+          <li>guest_demo</li>
+          <li>service_account</li>
+        </ol>
+        <p data-quiz-explanation>A third <code>OperationActor</code> kind, <code>public</code>, represents an admitted anonymous caller.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens by default when a mutation does not set <code>actors.public: "admit"</code>?</p>
+        <ol data-quiz-options>
+          <li>Anonymous callers are admitted with a limited scope.</li>
+          <li>The mutation is disabled entirely.</li>
+          <li data-quiz-correct>Anonymous callers still receive the original "Sign in again to continue." error.</li>
+          <li>The public adapter throws a new distinct error.</li>
+        </ol>
+        <p data-quiz-explanation>The default is fail-closed: without an explicit opt-in, the pre-existing sign-in error is preserved.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How does <code>resolveOperationAdmission</code> decide whether to try the public adapter?</p>
+        <ol data-quiz-options>
+          <li>It always tries the public adapter first.</li>
+          <li data-quiz-correct>It catches the normal-user adapter's throw and only then tries the public adapter.</li>
+          <li>It checks a global feature flag.</li>
+          <li>It never tries the public adapter for mutations with a scope.</li>
+        </ol>
+        <p data-quiz-explanation>The normal-user adapter runs first; only on its throw does the public adapter get a chance, and only if the operation opted in does it admit.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does <code>getOperationActorAthenaUserId</code> return for a public actor?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>undefined</li>
+          <li>A synthetic anonymous user id</li>
+          <li>Throws immediately</li>
+          <li>The store owner's id</li>
+        </ol>
+        <p data-quiz-explanation>Public actors carry no identity, so the getter returns undefined instead of fabricating one.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does <code>requireOperationActorAthenaUserId</code> do for a public actor?</p>
+        <ol data-quiz-options>
+          <li>Returns undefined silently.</li>
+          <li>Returns a placeholder id.</li>
+          <li data-quiz-correct>Throws "Sign in again to continue."</li>
+          <li>Admits the actor as normal_user.</li>
+        </ol>
+        <p data-quiz-explanation>It is used at call sites that must have an identified user, so it throws the same sign-in error for a public actor.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What was extracted into the new <code>registerBaseline.ts</code> module?</p>
+        <ol data-quiz-options>
+          <li>Shared-demo product image versioning logic.</li>
+          <li data-quiz-correct>Shared-demo register-open timing math, previously duplicated inline in provision.ts.</li>
+          <li>The public operation adapter.</li>
+          <li>Paystack webhook signature verification.</li>
+        </ol>
+        <p data-quiz-explanation>The register-open timing calculation (<code>Math.max(operatingDayStart, now - 14_400_000)</code>) moved into a single tested function.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why was <code>useManagerElevation</code> changed to return an inert fallback instead of throwing?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>A transient, recoverable Convex external-store tear could render the hook outside its provider for one pass, and throwing escalated that into a fatal error boundary.</li>
+          <li>The provider was removed from the app entirely.</li>
+          <li>Manager elevation was deprecated.</li>
+          <li>Tests required a non-throwing hook.</li>
+        </ol>
+        <p data-quiz-explanation>The inert value absorbs a recoverable single-render inconsistency; the next render restores the real provider value.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where should the deliverable diff fingerprint be computed relative to committing?</p>
+        <ol data-quiz-options>
+          <li>Before committing, so it can be included in the same working-tree diff.</li>
+          <li data-quiz-correct>After the commit lands, because the pre-commit hook regenerates files that count toward the fingerprint.</li>
+          <li>It does not matter.</li>
+          <li>Only after merging to main.</li>
+        </ol>
+        <p data-quiz-explanation>The pre-commit hook regenerates generated docs/Graphify artifacts, which are part of the diff; computing the fingerprint first goes stale immediately.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is NOT claimed by this report?</p>
+        <ol data-quiz-options>
+          <li>That the fingerprint was computed from the actual committed diff.</li>
+          <li>That the public actor default is fail-closed.</li>
+          <li data-quiz-correct>That this PR has been merged to main.</li>
+          <li>That registerBaseline.ts has dedicated tests.</li>
+        </ol>
+        <p data-quiz-explanation>This report is written as a delivery candidate before merge; it does not claim a merged/landed state.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>If you need to add another anonymous-facing mutation in the future, what should you do?</p>
+        <ol data-quiz-options>
+          <li>Bypass resolveOperationAdmission for that mutation.</li>
+          <li>Widen the normal-user adapter to tolerate missing auth globally.</li>
+          <li>Hand-roll a separate auth check inside the mutation body.</li>
+          <li data-quiz-correct>Set actors.public: "admit" on that operation's definition.</li>
+        </ol>
+        <p data-quiz-explanation>The pattern this delivery establishes is to opt in per-operation via the actors.public field, keeping the default fail-closed everywhere else.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+<h2>Subagent Evidence</h2>
         <ul>
           <li><strong>Session context subagent:</strong> SubagentUnavailable — this delivery ran as a single subordinate agent session without a subagent-dispatch capability, so no prior-session historian pass was run. This report is accordingly less complete than a full multi-subagent report and relies on direct git/diff inspection instead.</li>
           <li><strong>Delivered diff subagent:</strong> SubagentUnavailable — same constraint; diff analysis below was performed directly by reading <code>git diff</code>/<code>git show</code> output for each touched area rather than through a dispatched research subagent.</li>
           <li><strong>Main agent local evidence:</strong> Read the full diffs for operationAdmission, sharedDemo, and the context/route changes directly; computed the deliverable diff fingerprint via <code>scripts/landed-change-report-check.ts --print-fingerprint</code> and <code>scripts/compound-solution-check.ts --print-fingerprint</code> (both returned the same hash); ran the gate scripts before and after adding docs to confirm the threshold triggers and clears.</li>
         </ul>
-      </section>
-
-      <section id="quiz" class="panel">
-        <h2>Quiz: Pass Required</h2>
-        <p>You must score at least 8 out of 10 to pass.</p>
-        <form id="changeQuiz" data-threshold="8">
-
-          <div class="quiz-question" data-answer="1">
-            <fieldset>
-              <legend>1. What new actor kind does this delivery add to operation admission?</legend>
-              <label><input type="radio" name="q1" value="0" /> admin</label>
-              <label><input type="radio" name="q1" value="1" /> public</label>
-              <label><input type="radio" name="q1" value="2" /> guest_demo</label>
-              <label><input type="radio" name="q1" value="3" /> service_account</label>
-            </fieldset>
-            <div class="answer-detail">A third <code>OperationActor</code> kind, <code>public</code>, represents an admitted anonymous caller.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="2">
-            <fieldset>
-              <legend>2. What happens by default when a mutation does not set <code>actors.public: "admit"</code>?</legend>
-              <label><input type="radio" name="q2" value="0" /> Anonymous callers are admitted with a limited scope.</label>
-              <label><input type="radio" name="q2" value="1" /> The mutation is disabled entirely.</label>
-              <label><input type="radio" name="q2" value="2" /> Anonymous callers still receive the original "Sign in again to continue." error.</label>
-              <label><input type="radio" name="q2" value="3" /> The public adapter throws a new distinct error.</label>
-            </fieldset>
-            <div class="answer-detail">The default is fail-closed: without an explicit opt-in, the pre-existing sign-in error is preserved.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="1">
-            <fieldset>
-              <legend>3. How does <code>resolveOperationAdmission</code> decide whether to try the public adapter?</legend>
-              <label><input type="radio" name="q3" value="0" /> It always tries the public adapter first.</label>
-              <label><input type="radio" name="q3" value="1" /> It catches the normal-user adapter's throw and only then tries the public adapter.</label>
-              <label><input type="radio" name="q3" value="2" /> It checks a global feature flag.</label>
-              <label><input type="radio" name="q3" value="3" /> It never tries the public adapter for mutations with a scope.</label>
-            </fieldset>
-            <div class="answer-detail">The normal-user adapter runs first; only on its throw does the public adapter get a chance, and only if the operation opted in does it admit.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="0">
-            <fieldset>
-              <legend>4. What does <code>getOperationActorAthenaUserId</code> return for a public actor?</legend>
-              <label><input type="radio" name="q4" value="0" /> undefined</label>
-              <label><input type="radio" name="q4" value="1" /> A synthetic anonymous user id</label>
-              <label><input type="radio" name="q4" value="2" /> Throws immediately</label>
-              <label><input type="radio" name="q4" value="3" /> The store owner's id</label>
-            </fieldset>
-            <div class="answer-detail">Public actors carry no identity, so the getter returns undefined instead of fabricating one.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="2">
-            <fieldset>
-              <legend>5. What does <code>requireOperationActorAthenaUserId</code> do for a public actor?</legend>
-              <label><input type="radio" name="q5" value="0" /> Returns undefined silently.</label>
-              <label><input type="radio" name="q5" value="1" /> Returns a placeholder id.</label>
-              <label><input type="radio" name="q5" value="2" /> Throws "Sign in again to continue."</label>
-              <label><input type="radio" name="q5" value="3" /> Admits the actor as normal_user.</label>
-            </fieldset>
-            <div class="answer-detail">It is used at call sites that must have an identified user, so it throws the same sign-in error for a public actor.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="1">
-            <fieldset>
-              <legend>6. What was extracted into the new <code>registerBaseline.ts</code> module?</legend>
-              <label><input type="radio" name="q6" value="0" /> Shared-demo product image versioning logic.</label>
-              <label><input type="radio" name="q6" value="1" /> Shared-demo register-open timing math, previously duplicated inline in provision.ts.</label>
-              <label><input type="radio" name="q6" value="2" /> The public operation adapter.</label>
-              <label><input type="radio" name="q6" value="3" /> Paystack webhook signature verification.</label>
-            </fieldset>
-            <div class="answer-detail">The register-open timing calculation (<code>Math.max(operatingDayStart, now - 14_400_000)</code>) moved into a single tested function.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="0">
-            <fieldset>
-              <legend>7. Why was <code>useManagerElevation</code> changed to return an inert fallback instead of throwing?</legend>
-              <label><input type="radio" name="q7" value="0" /> A transient, recoverable Convex external-store tear could render the hook outside its provider for one pass, and throwing escalated that into a fatal error boundary.</label>
-              <label><input type="radio" name="q7" value="1" /> The provider was removed from the app entirely.</label>
-              <label><input type="radio" name="q7" value="2" /> Manager elevation was deprecated.</label>
-              <label><input type="radio" name="q7" value="3" /> Tests required a non-throwing hook.</label>
-            </fieldset>
-            <div class="answer-detail">The inert value absorbs a recoverable single-render inconsistency; the next render restores the real provider value.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="1">
-            <fieldset>
-              <legend>8. Where should the deliverable diff fingerprint be computed relative to committing?</legend>
-              <label><input type="radio" name="q8" value="0" /> Before committing, so it can be included in the same working-tree diff.</label>
-              <label><input type="radio" name="q8" value="1" /> After the commit lands, because the pre-commit hook regenerates files that count toward the fingerprint.</label>
-              <label><input type="radio" name="q8" value="2" /> It does not matter.</label>
-              <label><input type="radio" name="q8" value="3" /> Only after merging to main.</label>
-            </fieldset>
-            <div class="answer-detail">The pre-commit hook regenerates generated docs/Graphify artifacts, which are part of the diff; computing the fingerprint first goes stale immediately.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="2">
-            <fieldset>
-              <legend>9. What is NOT claimed by this report?</legend>
-              <label><input type="radio" name="q9" value="0" /> That the fingerprint was computed from the actual committed diff.</label>
-              <label><input type="radio" name="q9" value="1" /> That the public actor default is fail-closed.</label>
-              <label><input type="radio" name="q9" value="2" /> That this PR has been merged to main.</label>
-              <label><input type="radio" name="q9" value="3" /> That registerBaseline.ts has dedicated tests.</label>
-            </fieldset>
-            <div class="answer-detail">This report is written as a delivery candidate before merge; it does not claim a merged/landed state.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="3">
-            <fieldset>
-              <legend>10. If you need to add another anonymous-facing mutation in the future, what should you do?</legend>
-              <label><input type="radio" name="q10" value="0" /> Bypass resolveOperationAdmission for that mutation.</label>
-              <label><input type="radio" name="q10" value="1" /> Widen the normal-user adapter to tolerate missing auth globally.</label>
-              <label><input type="radio" name="q10" value="2" /> Hand-roll a separate auth check inside the mutation body.</label>
-              <label><input type="radio" name="q10" value="3" /> Set actors.public: "admit" on that operation's definition.</label>
-            </fieldset>
-            <div class="answer-detail">The pattern this delivery establishes is to opt in per-operation via the actors.public field, keeping the default fail-closed everywhere else.</div>
-          </div>
-
-          <div class="quiz-actions">
-            <button type="button" id="gradeQuiz">Grade quiz</button>
-            <button type="button" class="secondary" id="resetQuiz">Reset</button>
-            <span id="quizResult" aria-live="polite"></span>
-          </div>
-        </form>
-      </section>
-
-    </main>
-    <script>
-      const questions = Array.from(document.querySelectorAll(".quiz-question"));
-      const result = document.getElementById("quizResult");
-      const form = document.getElementById("changeQuiz");
-      const threshold = Number(form.dataset.threshold || 0);
-      function clearGrades() {
-        questions.forEach((question) => {
-          question.classList.remove("correct", "incorrect");
-          question.querySelector(".answer-detail").classList.remove("visible");
-        });
-        result.textContent = "";
-        result.style.color = "";
-      }
-      document.getElementById("gradeQuiz").addEventListener("click", () => {
-        clearGrades();
-        let score = 0;
-        questions.forEach((question, index) => {
-          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
-          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
-          if (isCorrect) score += 1;
-          question.classList.add(isCorrect ? "correct" : "incorrect");
-          question.querySelector(".answer-detail").classList.add("visible");
-        });
-        const passed = score >= threshold;
-        result.textContent = passed
-          ? `Passed: ${score}/${questions.length}.`
-          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
-        result.style.color = passed ? "var(--good)" : "var(--bad)";
-      });
-      document.getElementById("resetQuiz").addEventListener("click", () => {
-        form.reset();
-        clearGrades();
-      });
-    </script>
-  </body>
+  </section>
+</article>
+</body>
 </html>

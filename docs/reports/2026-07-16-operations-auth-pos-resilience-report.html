@@ -1,250 +1,34 @@
 <!doctype html>
-<html
-  lang="en"
-  data-athena-landed-change-report="v1"
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Athena Operations, Login, and POS Resilience Batch</title>
+</head>
+<body>
+<article
+  data-athena-landed-change-report="v2"
   data-athena-report-diff-fingerprint="ffb12e1d12285dae5654d92f8999a0c202f2cd0344eb74f96f29a4d8177bb9a0"
   data-athena-report-base="origin/main"
   data-athena-report-head="working-tree"
 >
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Athena Operations, Login, and POS Resilience Batch</title>
-    <style>
-      :root {
-        --ink: #1f2933;
-        --muted: #596674;
-        --line: #d9e2ec;
-        --paper: #ffffff;
-        --soft: #f6f8fb;
-        --accent: #1d4ed8;
-        --accent-soft: #dbeafe;
-        --good: #166534;
-        --bad: #b91c1c;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        background: var(--soft);
-        color: var(--ink);
-        font-family:
-          Inter,
-          ui-sans-serif,
-          system-ui,
-          -apple-system,
-          BlinkMacSystemFont,
-          "Segoe UI",
-          sans-serif;
-        line-height: 1.55;
-      }
-      main {
-        max-width: 1120px;
-        margin: 0 auto;
-        padding: 48px 24px 72px;
-      }
-      header {
-        border-bottom: 1px solid var(--line);
-        margin-bottom: 28px;
-        padding-bottom: 28px;
-      }
-      h1,
-      h2,
-      h3 {
-        line-height: 1.18;
-        letter-spacing: 0;
-      }
-      h1 {
-        font-size: 42px;
-        max-width: 880px;
-        margin: 0 0 16px;
-      }
-      h2 {
-        font-size: 28px;
-        margin: 0 0 16px;
-      }
-      p {
-        margin: 0 0 14px;
-      }
-      .lede {
-        color: var(--muted);
-        font-size: 18px;
-        max-width: 880px;
-      }
-      .meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 20px;
-      }
-      .pill {
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: var(--paper);
-        color: var(--muted);
-        font-size: 13px;
-        padding: 6px 10px;
-      }
-      .panel {
-        background: var(--paper);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        margin: 18px 0;
-        padding: 22px;
-      }
-      code {
-        background: #eef2f7;
-        border: 1px solid #d8dee8;
-        border-radius: 5px;
-        padding: 1px 5px;
-      }
-      pre {
-        overflow: auto;
-        background: #111827;
-        color: #e5e7eb;
-        border-radius: 8px;
-        padding: 16px;
-      }
-      pre code {
-        background: transparent;
-        border: 0;
-        color: inherit;
-        padding: 0;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        overflow: hidden;
-      }
-      th,
-      td {
-        border-bottom: 1px solid var(--line);
-        padding: 11px 12px;
-        text-align: left;
-        vertical-align: top;
-      }
-      th {
-        background: #eef2f7;
-        color: var(--muted);
-        font-size: 13px;
-        text-transform: uppercase;
-      }
-      tr:last-child td {
-        border-bottom: 0;
-      }
-      .quiz-question {
-        border-top: 1px solid var(--line);
-        padding: 18px 0;
-      }
-      .quiz-question:first-child {
-        border-top: 0;
-      }
-      fieldset {
-        border: 0;
-        margin: 0;
-        padding: 0;
-      }
-      legend {
-        font-weight: 700;
-        margin-bottom: 10px;
-      }
-      label {
-        display: block;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #fbfdff;
-        margin: 8px 0;
-        padding: 10px 12px;
-        cursor: pointer;
-      }
-      @media (hover: hover) and (pointer: fine) {
-        label:hover {
-          border-color: #b6c5d8;
-        }
-      }
-      button {
-        appearance: none;
-        border: 0;
-        border-radius: 8px;
-        background: var(--accent);
-        color: #ffffff;
-        cursor: pointer;
-        font-weight: 700;
-        padding: 11px 16px;
-        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
-      }
-      button:active {
-        transform: scale(0.97);
-      }
-      button.secondary {
-        background: #475569;
-      }
-      .quiz-actions {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin-top: 20px;
-      }
-      #quizResult {
-        font-weight: 700;
-      }
-      .answer-detail {
-        display: none;
-        border-top: 1px dashed var(--line);
-        color: var(--muted);
-        margin-top: 10px;
-        padding-top: 10px;
-      }
-      .answer-detail.visible {
-        display: block;
-      }
-      .correct {
-        border-color: #86efac !important;
-        background: #f0fdf4 !important;
-      }
-      .incorrect {
-        border-color: #fecaca !important;
-        background: #fef2f2 !important;
-      }
-      @media (prefers-reduced-motion: reduce) {
-        button {
-          transition-duration: 0ms;
-        }
-      }
-      @media (max-width: 820px) {
-        h1 {
-          font-size: 32px;
-        }
-        main {
-          padding: 32px 16px 56px;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <main>
-      <header>
-        <h1>Athena Operations, Login, and POS Resilience Batch</h1>
-        <p class="lede">
+  <header data-report-section="header">
+    <h1>Athena Operations, Login, and POS Resilience Batch</h1>
+    <p class="lede">
           A delivery-candidate guide to the bounded read, access-policy,
           historical Opening, and offline presentation changes accumulated
           through iterative operator feedback.
         </p>
-        <div class="meta">
-          <span class="pill">Delivery candidate</span
-          ><span class="pill">Branch codex/operations-auth-pos-delivery</span
-          ><span class="pill">Base fa891afb</span
-          ><span class="pill">PR pending</span
-          ><span class="pill">Production deploy skipped</span
-          ><span class="pill">Local root alignment pending</span>
-        </div>
-      </header>
-      <section class="panel">
-        <h2>Executive Summary</h2>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch codex/operations-auth-pos-delivery</li>
+      <li>Base fa891afb</li>
+      <li>PR pending</li>
+      <li>Production deploy skipped</li>
+      <li>Local root alignment pending</li>
+    </ul>
+  </header>
+  <section data-report-section="summary">
+<h2>Executive Summary</h2>
         <p>
           This candidate packages several related operational-hardening slices
           from iterative feedback. It makes app-login admission explicit and
@@ -262,9 +46,9 @@
           checkpoint remains Hold because the required Usage artifacts were
           unavailable.
         </p>
-      </section>
-      <section class="panel">
-        <h2>Why This Batch Mattered</h2>
+  </section>
+  <section data-report-section="why-this-batch-mattered">
+<h2>Why This Batch Mattered</h2>
 
         <ul>
           <li>
@@ -291,9 +75,9 @@
             after mount.
           </li>
         </ul>
-      </section>
-      <section class="panel">
-        <h2>Mental Model: Posture, Evidence, Authority</h2>
+  </section>
+  <section data-report-section="mental-model">
+<h2>Mental Model: Posture, Evidence, Authority</h2>
         <p>
           Think of the new summaries and UI states as an instrument panel. They
           tell the operator where attention exists and whether the observation
@@ -310,9 +94,9 @@
 client preflight -&gt; OTP provider send gate -&gt; verification-time authorization
 
 historical member ids -&gt; logical carry-forward group -&gt; one acknowledgement</code></pre>
-      </section>
-      <section class="panel">
-        <h2>Before and After</h2>
+  </section>
+  <section data-report-section="before-after">
+<h2>Before and After</h2>
 
         <ul>
           <li>
@@ -334,7 +118,7 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
           </li>
           <li>
             Opening before: legacy carry-forward rows became separate items.
-            Opening after: only the prior close&#x27;s referenced rows enter the
+            Opening after: only the prior close's referenced rows enter the
             logical projection, preserving history while consolidating one
             operator decision.
           </li>
@@ -344,9 +128,9 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
             package placeholder.
           </li>
         </ul>
-      </section>
-      <section class="panel">
-        <h2>Failure Boundaries</h2>
+  </section>
+  <section data-report-section="failure-boundaries">
+<h2>Failure Boundaries</h2>
 
         <ul>
           <li>
@@ -385,9 +169,9 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
             selection, quantity, cart, or checkout behavior.
           </li>
         </ul>
-      </section>
-      <section class="panel">
-        <h2>What Intentionally Did Not Change</h2>
+  </section>
+  <section data-report-section="changes">
+<h2>What Intentionally Did Not Change</h2>
 
         <ul>
           <li>
@@ -415,9 +199,9 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
             finish line is merged PR and local root alignment.
           </li>
         </ul>
-      </section>
-      <section class="panel">
-        <h2>Validation and Review Evidence</h2>
+  </section>
+  <section data-report-section="validation">
+<h2>Validation and Review Evidence</h2>
 
         <ul>
           <li>Initial focused validation: 13 files and 292 tests passed.</li>
@@ -439,7 +223,7 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
           </li>
           <li>
             The first full pr:athena run passed preflight and stopped only at
-            the repository&#x27;s required solution-note and landed-report
+            the repository's required solution-note and landed-report
             policy gates.
           </li>
           <li>
@@ -448,9 +232,9 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
             included.
           </li>
         </ul>
-      </section>
-      <section class="panel">
-        <h2>Operational Evidence and Finish Line</h2>
+  </section>
+  <section data-report-section="guidance">
+<h2>Operational Evidence and Finish Line</h2>
         <p>
           The staged 72-hour Convex I/O checkpoint records Hold, not Pass or
           Rollback. Exact Usage exports and the referenced 24-hour artifact were
@@ -463,9 +247,9 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
           checks, and local root alignment are pending. Production deployment is
           explicitly skipped by user instruction.
         </p>
-      </section>
-      <section class="panel">
-        <h2>Next-Time Guidance</h2>
+  </section>
+  <section data-report-section="next-time-guidance">
+<h2>Next-Time Guidance</h2>
 
         <ul>
           <li>
@@ -494,10 +278,9 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
             URL-selection helpers.
           </li>
         </ul>
-      </section>
-
-      <section class="panel">
-        <h2>Key Files</h2>
+  </section>
+  <section data-report-section="key-files">
+<h2>Key Files</h2>
         <table>
           <thead>
             <tr>
@@ -517,9 +300,7 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
             </tr>
             <tr>
               <td>
-                <code
-                  >packages/athena-webapp/convex/otp/appLoginEmailAllowlist.ts</code
-                >
+                <code>packages/athena-webapp/convex/otp/appLoginEmailAllowlist.ts</code>
               </td>
               <td>
                 Owns the server-side approved-email decision without exposing
@@ -528,9 +309,7 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
             </tr>
             <tr>
               <td>
-                <code
-                  >packages/athena-webapp/src/components/auth/Login/LoginForm.tsx</code
-                >
+                <code>packages/athena-webapp/src/components/auth/Login/LoginForm.tsx</code>
               </td>
               <td>
                 Runs the server preflight and presents restrained, focus-safe
@@ -539,9 +318,7 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
             </tr>
             <tr>
               <td>
-                <code
-                  >packages/athena-webapp/convex/operations/operationalWorkItems.ts</code
-                >
+                <code>packages/athena-webapp/convex/operations/operationalWorkItems.ts</code>
               </td>
               <td>
                 Builds bounded logical Open Work and Approval summaries with
@@ -550,9 +327,7 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
             </tr>
             <tr>
               <td>
-                <code
-                  >packages/athena-webapp/convex/operations/dailyOpening.ts</code
-                >
+                <code>packages/athena-webapp/convex/operations/dailyOpening.ts</code>
               </td>
               <td>
                 Consolidates exact legacy carry-forward membership without
@@ -561,9 +336,7 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
             </tr>
             <tr>
               <td>
-                <code
-                  >packages/athena-webapp/convex/operations/dailyClose.ts</code
-                >
+                <code>packages/athena-webapp/convex/operations/dailyClose.ts</code>
               </td>
               <td>
                 Reads the exact indexed operating-day deposit slice and records
@@ -572,9 +345,7 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
             </tr>
             <tr>
               <td>
-                <code
-                  >packages/athena-webapp/src/components/app-sidebar.tsx</code
-                >
+                <code>packages/athena-webapp/src/components/app-sidebar.tsx</code>
               </td>
               <td>
                 Mounts count summaries only when relevant and renders exact or
@@ -583,9 +354,7 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
             </tr>
             <tr>
               <td>
-                <code
-                  >packages/athena-webapp/src/routes/-authed-layout.tsx</code
-                >
+                <code>packages/athena-webapp/src/routes/-authed-layout.tsx</code>
               </td>
               <td>
                 Keeps offline shell presentation reactive without treating
@@ -594,9 +363,7 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
             </tr>
             <tr>
               <td>
-                <code
-                  >docs/reports/convex-io-containment/2026-07-16-72h.md</code
-                >
+                <code>docs/reports/convex-io-containment/2026-07-16-72h.md</code>
               </td>
               <td>
                 Records the bounded production checkpoint, missing evidence, and
@@ -605,10 +372,149 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
             </tr>
           </tbody>
         </table>
-      </section>
-
-      <section class="panel">
-        <h2>Subagent Evidence</h2>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which layer is authoritative for app-login eligibility?</p>
+        <ol data-quiz-options>
+          <li>The inline warning
+                in LoginForm</li>
+          <li data-quiz-correct>The server checks at
+                OTP delivery and verification</li>
+          <li>The browser's
+                local terminal seed</li>
+        </ol>
+        <p data-quiz-explanation>The preflight improves feedback, but server delivery and
+              redemption checks enforce policy.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why can the sidebar show a count such as 100+?</p>
+        <ol data-quiz-options>
+          <li>The exact count is
+                rounded for visual simplicity</li>
+          <li data-quiz-correct>The read reached a
+                bounded budget, so 100 is only an observed lower bound</li>
+          <li>Approvals are always
+                grouped in batches of 100</li>
+        </ol>
+        <p data-quiz-explanation>Completeness travels with the count so a capped observation is
+              never presented as exact.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is counted for Open Work navigation metadata?</p>
+        <ol data-quiz-options>
+          <li>Raw operational
+                rows</li>
+          <li data-quiz-correct>Logical work groups
+                projected through the queue's grouping boundary</li>
+          <li>Only approval
+                requests</li>
+        </ol>
+        <p data-quiz-explanation>Multiple rows can represent one operator decision, so navigation
+              uses the same logical projection as queue detail.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What fixed unrelated allocation history hiding current-day
+                deposits?</p>
+        <ol data-quiz-options>
+          <li>Increasing the cap
+                without changing the query</li>
+          <li>Filtering rows in
+                React</li>
+          <li data-quiz-correct>Applying type,
+                direction, status, and date range in a compound index before
+                probing the cap</li>
+        </ol>
+        <p data-quiz-explanation>Selectivity must happen before the cap so unrelated rows cannot
+              consume the budget.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How does legacy Opening avoid absorbing work created after
+                the prior close?</p>
+        <ol data-quiz-options>
+          <li>It groups all
+                current rows with the same SKU</li>
+          <li data-quiz-correct>It projects only the
+                exact member ids referenced by the prior close</li>
+          <li>It ignores logical
+                grouping</li>
+        </ol>
+        <p data-quiz-explanation>Historical membership is the boundary; later equivalent-looking
+              work is excluded.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What authority does navigator.onLine provide?</p>
+        <ol data-quiz-options>
+          <li>Permission to sell
+                offline</li>
+          <li>Terminal
+                identity</li>
+          <li data-quiz-correct>Presentation and
+                rehydration state only</li>
+        </ol>
+        <p data-quiz-explanation>Connectivity adjusts the shell but cannot authorize terminal or
+              sale operations.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens when a product image URL fails?</p>
+        <ol data-quiz-options>
+          <li>The product is
+                removed from results</li>
+          <li data-quiz-correct>An accessible
+                placeholder replaces the image while product behavior remains
+                available</li>
+          <li>Checkout is
+                blocked</li>
+        </ol>
+        <p data-quiz-explanation>The fallback is visual resilience, not a change to product or
+              checkout authority.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What review defect was fixed before final delivery?</p>
+        <ol data-quiz-options>
+          <li>Open Work used no
+                authorization</li>
+          <li data-quiz-correct>Sync-conflict
+                overflow could be reported as complete in the approval
+                count</li>
+          <li>Daily Close had no
+                cap</li>
+        </ol>
+        <p data-quiz-explanation>The helper now propagates completeness and a 101-row regression
+              proves the boundary.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does the 72-hour Convex checkpoint conclude?</p>
+        <ol data-quiz-options>
+          <li>Pass with proven
+                savings</li>
+          <li>Rollback</li>
+          <li data-quiz-correct>Hold because exact
+                Usage evidence and clean build attribution were
+                unavailable</li>
+        </ol>
+        <p data-quiz-explanation>The checkpoint deliberately makes no savings claim without
+              comparable evidence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the requested finish line for this delivery?</p>
+        <ol data-quiz-options>
+          <li>Merged PR,
+                production deploy, and local alignment</li>
+          <li>Open PR only</li>
+          <li data-quiz-correct>Merged PR and local
+                root alignment, with production deploy skipped</li>
+        </ol>
+        <p data-quiz-explanation>The user explicitly excluded production deployment from this
+              delivery.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+<h2>Subagent Evidence</h2>
         <ul>
           <li>
             <strong>delivery context and session historian:</strong> Recovered
@@ -626,295 +532,7 @@ historical member ids -&gt; logical carry-forward group -&gt; one acknowledgemen
             instead of creating a duplicate catch-all.
           </li>
         </ul>
-      </section>
-
-      <section id="quiz" class="panel">
-        <h2>Quiz: Pass Required</h2>
-        <p>You must score at least 8 out of 10 to pass.</p>
-        <form id="changeQuiz" data-threshold="8">
-          <div class="quiz-question" data-answer="1">
-            <fieldset>
-              <legend>
-                1. Which layer is authoritative for app-login eligibility?
-              </legend>
-              <label
-                ><input type="radio" name="q1" value="0" /> The inline warning
-                in LoginForm</label
-              >
-              <label
-                ><input type="radio" name="q1" value="1" /> The server checks at
-                OTP delivery and verification</label
-              >
-              <label
-                ><input type="radio" name="q1" value="2" /> The browser&#x27;s
-                local terminal seed</label
-              >
-            </fieldset>
-            <div class="answer-detail">
-              The preflight improves feedback, but server delivery and
-              redemption checks enforce policy.
-            </div>
-          </div>
-
-          <div class="quiz-question" data-answer="1">
-            <fieldset>
-              <legend>2. Why can the sidebar show a count such as 100+?</legend>
-              <label
-                ><input type="radio" name="q2" value="0" /> The exact count is
-                rounded for visual simplicity</label
-              >
-              <label
-                ><input type="radio" name="q2" value="1" /> The read reached a
-                bounded budget, so 100 is only an observed lower bound</label
-              >
-              <label
-                ><input type="radio" name="q2" value="2" /> Approvals are always
-                grouped in batches of 100</label
-              >
-            </fieldset>
-            <div class="answer-detail">
-              Completeness travels with the count so a capped observation is
-              never presented as exact.
-            </div>
-          </div>
-
-          <div class="quiz-question" data-answer="1">
-            <fieldset>
-              <legend>
-                3. What is counted for Open Work navigation metadata?
-              </legend>
-              <label
-                ><input type="radio" name="q3" value="0" /> Raw operational
-                rows</label
-              >
-              <label
-                ><input type="radio" name="q3" value="1" /> Logical work groups
-                projected through the queue&#x27;s grouping boundary</label
-              >
-              <label
-                ><input type="radio" name="q3" value="2" /> Only approval
-                requests</label
-              >
-            </fieldset>
-            <div class="answer-detail">
-              Multiple rows can represent one operator decision, so navigation
-              uses the same logical projection as queue detail.
-            </div>
-          </div>
-
-          <div class="quiz-question" data-answer="2">
-            <fieldset>
-              <legend>
-                4. What fixed unrelated allocation history hiding current-day
-                deposits?
-              </legend>
-              <label
-                ><input type="radio" name="q4" value="0" /> Increasing the cap
-                without changing the query</label
-              >
-              <label
-                ><input type="radio" name="q4" value="1" /> Filtering rows in
-                React</label
-              >
-              <label
-                ><input type="radio" name="q4" value="2" /> Applying type,
-                direction, status, and date range in a compound index before
-                probing the cap</label
-              >
-            </fieldset>
-            <div class="answer-detail">
-              Selectivity must happen before the cap so unrelated rows cannot
-              consume the budget.
-            </div>
-          </div>
-
-          <div class="quiz-question" data-answer="1">
-            <fieldset>
-              <legend>
-                5. How does legacy Opening avoid absorbing work created after
-                the prior close?
-              </legend>
-              <label
-                ><input type="radio" name="q5" value="0" /> It groups all
-                current rows with the same SKU</label
-              >
-              <label
-                ><input type="radio" name="q5" value="1" /> It projects only the
-                exact member ids referenced by the prior close</label
-              >
-              <label
-                ><input type="radio" name="q5" value="2" /> It ignores logical
-                grouping</label
-              >
-            </fieldset>
-            <div class="answer-detail">
-              Historical membership is the boundary; later equivalent-looking
-              work is excluded.
-            </div>
-          </div>
-
-          <div class="quiz-question" data-answer="2">
-            <fieldset>
-              <legend>6. What authority does navigator.onLine provide?</legend>
-              <label
-                ><input type="radio" name="q6" value="0" /> Permission to sell
-                offline</label
-              >
-              <label
-                ><input type="radio" name="q6" value="1" /> Terminal
-                identity</label
-              >
-              <label
-                ><input type="radio" name="q6" value="2" /> Presentation and
-                rehydration state only</label
-              >
-            </fieldset>
-            <div class="answer-detail">
-              Connectivity adjusts the shell but cannot authorize terminal or
-              sale operations.
-            </div>
-          </div>
-
-          <div class="quiz-question" data-answer="1">
-            <fieldset>
-              <legend>7. What happens when a product image URL fails?</legend>
-              <label
-                ><input type="radio" name="q7" value="0" /> The product is
-                removed from results</label
-              >
-              <label
-                ><input type="radio" name="q7" value="1" /> An accessible
-                placeholder replaces the image while product behavior remains
-                available</label
-              >
-              <label
-                ><input type="radio" name="q7" value="2" /> Checkout is
-                blocked</label
-              >
-            </fieldset>
-            <div class="answer-detail">
-              The fallback is visual resilience, not a change to product or
-              checkout authority.
-            </div>
-          </div>
-
-          <div class="quiz-question" data-answer="1">
-            <fieldset>
-              <legend>
-                8. What review defect was fixed before final delivery?
-              </legend>
-              <label
-                ><input type="radio" name="q8" value="0" /> Open Work used no
-                authorization</label
-              >
-              <label
-                ><input type="radio" name="q8" value="1" /> Sync-conflict
-                overflow could be reported as complete in the approval
-                count</label
-              >
-              <label
-                ><input type="radio" name="q8" value="2" /> Daily Close had no
-                cap</label
-              >
-            </fieldset>
-            <div class="answer-detail">
-              The helper now propagates completeness and a 101-row regression
-              proves the boundary.
-            </div>
-          </div>
-
-          <div class="quiz-question" data-answer="2">
-            <fieldset>
-              <legend>
-                9. What does the 72-hour Convex checkpoint conclude?
-              </legend>
-              <label
-                ><input type="radio" name="q9" value="0" /> Pass with proven
-                savings</label
-              >
-              <label><input type="radio" name="q9" value="1" /> Rollback</label>
-              <label
-                ><input type="radio" name="q9" value="2" /> Hold because exact
-                Usage evidence and clean build attribution were
-                unavailable</label
-              >
-            </fieldset>
-            <div class="answer-detail">
-              The checkpoint deliberately makes no savings claim without
-              comparable evidence.
-            </div>
-          </div>
-
-          <div class="quiz-question" data-answer="2">
-            <fieldset>
-              <legend>
-                10. What is the requested finish line for this delivery?
-              </legend>
-              <label
-                ><input type="radio" name="q10" value="0" /> Merged PR,
-                production deploy, and local alignment</label
-              >
-              <label
-                ><input type="radio" name="q10" value="1" /> Open PR only</label
-              >
-              <label
-                ><input type="radio" name="q10" value="2" /> Merged PR and local
-                root alignment, with production deploy skipped</label
-              >
-            </fieldset>
-            <div class="answer-detail">
-              The user explicitly excluded production deployment from this
-              delivery.
-            </div>
-          </div>
-
-          <div class="quiz-actions">
-            <button type="button" id="gradeQuiz">Grade quiz</button>
-            <button type="button" class="secondary" id="resetQuiz">
-              Reset
-            </button>
-            <span id="quizResult" aria-live="polite"></span>
-          </div>
-        </form>
-      </section>
-    </main>
-    <script>
-      const questions = Array.from(document.querySelectorAll(".quiz-question"));
-      const result = document.getElementById("quizResult");
-      const form = document.getElementById("changeQuiz");
-      const threshold = Number(form.dataset.threshold || 0);
-      function clearGrades() {
-        questions.forEach((question) => {
-          question.classList.remove("correct", "incorrect");
-          question.querySelector(".answer-detail").classList.remove("visible");
-        });
-        result.textContent = "";
-        result.style.color = "";
-      }
-      document.getElementById("gradeQuiz").addEventListener("click", () => {
-        clearGrades();
-        let score = 0;
-        questions.forEach((question, index) => {
-          const selected = document.querySelector(
-            `input[name="q${index + 1}"]:checked`,
-          );
-          const isCorrect =
-            selected &&
-            Number(selected.value) === Number(question.dataset.answer);
-          if (isCorrect) score += 1;
-          question.classList.add(isCorrect ? "correct" : "incorrect");
-          question.querySelector(".answer-detail").classList.add("visible");
-        });
-        const passed = score >= threshold;
-        result.textContent = passed
-          ? `Passed: ${score}/${questions.length}.`
-          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
-        result.style.color = passed ? "var(--good)" : "var(--bad)";
-      });
-      document.getElementById("resetQuiz").addEventListener("click", () => {
-        form.reset();
-        clearGrades();
-      });
-    </script>
-  </body>
+  </section>
+</article>
+</body>
 </html>
