@@ -77,12 +77,18 @@ export function buildSharedDemoActivityAppendArgs(
     surface: "shared_demo" as const,
     eventId: activity.eventId,
     schemaVersion: activity.schemaVersion,
-    idempotencyKey: activity.idempotencyKey,
+    // Namespaced by the server-resolved visitor, not by the client's session
+    // alone. Idempotency uniqueness is scoped to storeId + surface + key, so a
+    // browser that guessed another visitor's session id could otherwise
+    // pre-claim their keys and have their real events dropped as duplicates.
+    idempotencyKey: `shared-demo:${actor.authUserId}:${activity.idempotencyKey}`,
     occurredAt: activity.occurredAt,
     payload: activity.payload,
     // Every demo visitor shares one `athenaUser`, so that id cannot separate
     // visitors. The auth user behind the demo principal is per-visitor and is
-    // resolved by the server, so a browser cannot claim to be someone else.
+    // resolved by the server, so a browser cannot attribute its activity to
+    // another visitor. `sessionRef` below is the client's own claim and groups
+    // tabs only — never trust it for identity.
     actorRef: { kind: "guest" as const, id: actor.authUserId },
     sessionRef: {
       kind: "shared_demo_session" as const,

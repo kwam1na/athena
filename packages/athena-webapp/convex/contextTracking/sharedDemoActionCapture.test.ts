@@ -59,6 +59,23 @@ describe("shared demo action append args", () => {
 
     expect(first.idempotencyKey).not.toBe(second.idempotencyKey);
   });
+
+  it("separates two actions landing in the same millisecond", () => {
+    // A timestamp alone collides: same visitor, same operation, same ms would
+    // dedupe the second sale away and under-report the visitor's activity.
+    const first = buildSharedDemoActionAppendArgs(
+      demoAdmission as never,
+      now,
+      "occurrence-a",
+    );
+    const second = buildSharedDemoActionAppendArgs(
+      demoAdmission as never,
+      now,
+      "occurrence-b",
+    );
+
+    expect(first.idempotencyKey).not.toBe(second.idempotencyKey);
+  });
 });
 
 describe("capturing an admitted demo action", () => {

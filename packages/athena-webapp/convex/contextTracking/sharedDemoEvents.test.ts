@@ -102,6 +102,20 @@ describe("shared demo activity append args", () => {
     expect(args.visibilityMode).toBe("support");
   });
 
+  it("namespaces the idempotency key by the server-resolved visitor", () => {
+    // Idempotency uniqueness is scoped to storeId + surface + key. Without the
+    // visitor prefix, a browser that guessed another visitor's session id could
+    // pre-claim their keys and have their real events dropped as duplicates.
+    const mine = buildSharedDemoActivityAppendArgs(activity(), actor);
+    const theirs = buildSharedDemoActivityAppendArgs(activity(), {
+      ...actor,
+      authUserId: "users_visitor_2",
+    });
+
+    expect(mine.idempotencyKey).toContain("users_visitor_1");
+    expect(mine.idempotencyKey).not.toBe(theirs.idempotencyKey);
+  });
+
   it("partitions the write quota per visitor, not per store", () => {
     const args = buildSharedDemoActivityAppendArgs(activity(), actor);
     const otherVisitor = buildSharedDemoActivityAppendArgs(activity(), {

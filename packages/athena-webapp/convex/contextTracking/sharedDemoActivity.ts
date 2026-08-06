@@ -46,7 +46,10 @@ export function foldSharedDemoActivity(events: SharedDemoActivityRow[]) {
 
   for (const row of events) {
     const visitor = row.actorRefId ?? "unattributed";
-    visitors.add(visitor);
+    // Only a resolved actor counts as a visitor. Folding the synthetic
+    // "unattributed" bucket into visitorCount would report one more person
+    // than ever visited.
+    if (row.actorRefId) visitors.add(row.actorRefId);
     if (row.sessionRefId) sessions.add(row.sessionRefId);
     observedFromAt =
       observedFromAt === undefined
@@ -163,24 +166,27 @@ export const getSharedDemoActivityRollup = internalQuery({
     windowEndAt: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<SharedDemoActivityRollup> => {
+    const windowEndAt = args.windowEndAt;
+    // The window bound belongs in the index range, not in a post-filter. A
+    // take-then-filter drops every in-window row whenever more than
+    // MAX_ACTIVITY_EVENTS rows sit after windowEndAt, which reads as "nothing
+    // happened" for a window that was actually full.
     const events = await ctx.db
       .query("contextEvent")
-      .withIndex("by_storeId_surface_status_occurredAt", (q) =>
-        q
+      .withIndex("by_storeId_surface_status_occurredAt", (q) => {
+        const scoped = q
           .eq("storeId", args.storeId)
           .eq("surface", "shared_demo")
           .eq("status", "recorded")
-          .gte("occurredAt", args.windowStartAt),
-      )
+          .gte("occurredAt", args.windowStartAt);
+        return windowEndAt === undefined
+          ? scoped
+          : scoped.lte("occurredAt", windowEndAt);
+      })
       .order("desc")
       .take(MAX_ACTIVITY_EVENTS);
 
-    const windowEndAt = args.windowEndAt;
-    return foldSharedDemoActivity(
-      windowEndAt === undefined
-        ? events
-        : events.filter((event) => event.occurredAt <= windowEndAt),
-    );
+    return foldSharedDemoActivity(events);
   },
 });
 

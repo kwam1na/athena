@@ -17,6 +17,7 @@ type AppendContextEvent = typeof appendContextEventWithCtx;
 export function buildSharedDemoActionAppendArgs(
   admission: OperationAdmissionContext,
   now: number,
+  occurrenceId: string = crypto.randomUUID(),
 ) {
   const actor = admission.actor as Extract<
     OperationAdmissionContext["actor"],
@@ -30,8 +31,11 @@ export function buildSharedDemoActionAppendArgs(
     eventId: "shared_demo.action_admitted",
     schemaVersion: 1,
     // Each admitted action is its own occurrence: a visitor completing three
-    // sales must show up as three, not one deduplicated row.
-    idempotencyKey: `shared-demo-action:${actor.authUserId}:${admission.operation.operationId}:${now}`,
+    // sales must show up as three, not one deduplicated row. The timestamp
+    // alone is not enough — two admitted actions in the same millisecond would
+    // produce the same key and the second would be dropped as a duplicate — so
+    // the key carries a per-execution discriminator too.
+    idempotencyKey: `shared-demo-action:${actor.authUserId}:${admission.operation.operationId}:${now}:${occurrenceId}`,
     occurredAt: now,
     payload: {
       operationId: admission.operation.operationId,

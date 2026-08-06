@@ -32,6 +32,16 @@ describe("shared demo activity fold", () => {
     expect(rollup.visitorsWhoActed).toBe(0);
   });
 
+  it("does not count an unattributed event as a visitor", () => {
+    const rollup = foldSharedDemoActivity([
+      { ...event("shared_demo.session_started", "visitor_a", { entryKind: "fresh" }), actorRefId: undefined },
+      event("shared_demo.session_started", "visitor_a", { entryKind: "fresh" }),
+    ]);
+
+    // The synthetic "unattributed" bucket must not inflate the headline count.
+    expect(rollup.visitorCount).toBe(1);
+  });
+
   it("counts visitors by auth user and sessions by browser session", () => {
     const rollup = foldSharedDemoActivity([
       event("shared_demo.session_started", "visitor_a", { entryKind: "fresh" }),
