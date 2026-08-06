@@ -1,0 +1,130 @@
+/* Floating scroll-to-top control.
+   Motion values come from the app's own tokens (--motion-*, --ease-standard)
+   so this reads as part of the same system rather than a one-off. */
+
+.docs-scroll-top {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 30;
+  display: inline-flex;
+  height: 2.75rem;
+  width: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+
+  /* A translucent floating layer: content scrolls under it rather than the
+     control carving out an opaque strip. */
+  border: 1px solid hsl(var(--border) / 0.7);
+  background: hsl(var(--card) / 0.72);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  box-shadow: var(--shadow-surface);
+  color: hsl(var(--muted-foreground));
+
+  /* Enter/exit travel along the same path (up-and-in, down-and-out) so the
+     control reads as returning to where it came from. */
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity var(--motion-standard) var(--ease-standard),
+    transform var(--motion-standard) var(--ease-standard),
+    color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease;
+  will-change: transform, opacity;
+}
+
+/* Never animate from scale(0) — the control shrinks toward its resting place
+   rather than materializing out of nothing. */
+.docs-scroll-top[data-visible="false"] {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(0.5rem) scale(0.9);
+  /* Exit is quicker than entry: the system responding, not the user deciding. */
+  transition-duration: var(--motion-fast), var(--motion-fast),
+    var(--motion-fast), var(--motion-fast);
+}
+
+/* Hover is gated so a tap on a touch device does not leave the control stuck
+   in its hover state. */
+@media (hover: hover) and (pointer: fine) {
+  .docs-scroll-top:hover {
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--primary-border));
+  }
+}
+
+/* Press feedback fires on pointer-down, which is when the user is watching. */
+.docs-scroll-top:active {
+  transform: scale(0.97);
+  transition-duration: var(--motion-fast);
+}
+
+.docs-scroll-top:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+
+.docs-scroll-top__ring {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  /* Start the sweep at 12 o'clock instead of 3. */
+  transform: rotate(-90deg);
+}
+
+.docs-scroll-top__track {
+  stroke: hsl(var(--border) / 0.55);
+}
+
+.docs-scroll-top__progress {
+  stroke: hsl(var(--primary));
+  /* pathLength="1" normalizes the circle, so the offset is just 1 - progress
+     and no circumference math has to agree with the radius. */
+  stroke-dasharray: 1;
+  transition: stroke-dashoffset 80ms linear;
+}
+
+.docs-scroll-top__glyph {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Gentler equivalent, not no feedback: keep the fade, drop the travel. */
+  .docs-scroll-top,
+  .docs-scroll-top[data-visible="false"] {
+    transition-property: opacity, color, border-color;
+  }
+
+  .docs-scroll-top[data-visible="false"] {
+    transform: none;
+  }
+
+  .docs-scroll-top:active {
+    transform: none;
+  }
+
+  .docs-scroll-top__progress {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .docs-scroll-top {
+    background: hsl(var(--card));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .docs-scroll-top {
+    background: hsl(var(--card));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-color: hsl(var(--foreground));
+    color: hsl(var(--foreground));
+  }
+}

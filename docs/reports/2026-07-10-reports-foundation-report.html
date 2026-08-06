@@ -1,699 +1,27 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1"
-  data-athena-report-diff-fingerprint="e57fb8e248b848bf57d4d28716d1d22bbf1445493f0c0f89a5a51c1b1a0ecbcd">
-
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="icon" href="data:," />
   <title>Athena Reports Foundation Delivery Report</title>
-  <style>
-    :root {
-      color-scheme: light;
-      --ink: #182026;
-      --muted: #5b6770;
-      --quiet: #7b8790;
-      --line: #d9dfe3;
-      --line-strong: #bcc6cc;
-      --paper: #ffffff;
-      --surface: #f5f7f8;
-      --surface-strong: #e9eef1;
-      --accent: #126e82;
-      --accent-soft: #e1f2f5;
-      --good: #217346;
-      --good-soft: #e7f4ec;
-      --warn: #9a6700;
-      --warn-soft: #fff3cd;
-      --bad: #b42318;
-      --bad-soft: #fdecea;
-      --focus: #0b6bcb;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
-    body {
-      margin: 0;
-      background: var(--paper);
-      color: var(--ink);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: 16px;
-      line-height: 1.6;
-    }
-
-    a {
-      color: var(--accent);
-      text-underline-offset: 3px;
-    }
-
-    a:focus-visible,
-    button:focus-visible,
-    input:focus-visible+span {
-      outline: 3px solid color-mix(in srgb, var(--focus) 32%, transparent);
-      outline-offset: 3px;
-    }
-
-    code {
-      overflow-wrap: anywhere;
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      background: var(--surface);
-      padding: 1px 5px;
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-      font-size: 0.9em;
-    }
-
-    h1,
-    h2,
-    h3 {
-      letter-spacing: 0;
-      line-height: 1.2;
-    }
-
-    h1 {
-      max-width: 900px;
-      margin: 0 0 14px;
-      font-size: 42px;
-    }
-
-    h2 {
-      margin: 0 0 18px;
-      font-size: 28px;
-    }
-
-    h3 {
-      margin: 0 0 10px;
-      font-size: 18px;
-    }
-
-    p {
-      margin: 0 0 14px;
-    }
-
-    ul {
-      margin: 0;
-      padding-left: 21px;
-    }
-
-    li+li {
-      margin-top: 7px;
-    }
-
-    .skip-link {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      z-index: 20;
-      transform: translateY(-160%);
-      border-radius: 4px;
-      background: var(--ink);
-      color: #fff;
-      padding: 8px 12px;
-    }
-
-    .skip-link:focus {
-      transform: translateY(0);
-    }
-
-    .wrap {
-      width: min(1120px, calc(100% - 48px));
-      margin: 0 auto;
-    }
-
-    .report-header {
-      border-bottom: 1px solid var(--line);
-      background: var(--surface);
-      padding: 48px 0 32px;
-    }
-
-    .eyebrow {
-      margin-bottom: 10px;
-      color: var(--accent);
-      font-size: 13px;
-      font-weight: 750;
-      text-transform: uppercase;
-    }
-
-    .lede {
-      max-width: 860px;
-      color: var(--muted);
-      font-size: 19px;
-    }
-
-    .metadata {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 22px;
-    }
-
-    .pill {
-      display: inline-flex;
-      min-height: 30px;
-      align-items: center;
-      border: 1px solid var(--line-strong);
-      border-radius: 999px;
-      background: var(--paper);
-      color: var(--muted);
-      font-size: 13px;
-      font-weight: 650;
-      padding: 4px 10px;
-    }
-
-    .pill.good {
-      border-color: #9dcdb0;
-      background: var(--good-soft);
-      color: var(--good);
-    }
-
-    .pill.warn {
-      border-color: #e6c466;
-      background: var(--warn-soft);
-      color: #725000;
-    }
-
-    .section-nav {
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      overflow-x: auto;
-      border-bottom: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.96);
-      backdrop-filter: blur(10px);
-    }
-
-    .section-nav .wrap {
-      display: flex;
-      gap: 22px;
-      min-width: max-content;
-    }
-
-    .section-nav a {
-      display: inline-flex;
-      min-height: 46px;
-      align-items: center;
-      color: var(--muted);
-      font-size: 14px;
-      font-weight: 650;
-      text-decoration: none;
-    }
-
-    .section-nav a:hover {
-      color: var(--ink);
-    }
-
-    main section {
-      scroll-margin-top: 64px;
-      border-bottom: 1px solid var(--line);
-      padding: 44px 0;
-    }
-
-    main section:last-child {
-      border-bottom: 0;
-    }
-
-    .prose {
-      max-width: 870px;
-    }
-
-    .summary-grid,
-    .status-grid,
-    .boundary-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 18px;
-    }
-
-    .summary-item,
-    .status-item,
-    .boundary-item {
-      border-top: 3px solid var(--line-strong);
-      padding-top: 14px;
-    }
-
-    .summary-item:nth-child(1) {
-      border-color: var(--accent);
-    }
-
-    .summary-item:nth-child(2) {
-      border-color: var(--good);
-    }
-
-    .summary-item:nth-child(3) {
-      border-color: var(--warn);
-    }
-
-    .summary-item p,
-    .status-item p,
-    .boundary-item p {
-      color: var(--muted);
-    }
-
-    .flow {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 22px;
-    }
-
-    .flow-step {
-      position: relative;
-      min-height: 142px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--surface);
-      padding: 15px;
-    }
-
-    .flow-step:not(:last-child)::after {
-      content: "";
-      position: absolute;
-      top: 30px;
-      right: -11px;
-      z-index: 2;
-      width: 11px;
-      border-top: 2px solid var(--accent);
-    }
-
-    .step-number {
-      display: block;
-      margin-bottom: 9px;
-      color: var(--accent);
-      font-size: 12px;
-      font-weight: 800;
-      text-transform: uppercase;
-    }
-
-    .flow-step p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    .consistency-lanes {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
-      margin-top: 22px;
-    }
-
-    .lane {
-      border: 1px solid var(--line);
-      border-top: 4px solid var(--accent);
-      border-radius: 6px;
-      background: var(--surface);
-      padding: 18px;
-    }
-
-    .lane.inventory {
-      border-top-color: var(--good);
-    }
-
-    .lane p {
-      color: var(--muted);
-    }
-
-    .lane-path {
-      margin-top: 12px;
-      color: var(--ink);
-      font-size: 14px;
-      font-weight: 700;
-    }
-
-    .authority-states {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 1px;
-      margin-top: 18px;
-      overflow: hidden;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--line);
-    }
-
-    .authority-state {
-      background: var(--paper);
-      padding: 16px;
-    }
-
-    .authority-state p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    .comparison {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 1px;
-      overflow: hidden;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--line);
-    }
-
-    .comparison article {
-      background: var(--paper);
-      padding: 22px;
-    }
-
-    .comparison .before {
-      border-top: 4px solid var(--bad);
-    }
-
-    .comparison .after {
-      border-top: 4px solid var(--good);
-    }
-
-    .comparison h3 span {
-      display: block;
-      margin-bottom: 4px;
-      color: var(--quiet);
-      font-size: 12px;
-      text-transform: uppercase;
-    }
-
-    .table-wrap {
-      overflow-x: auto;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-    }
-
-    table {
-      width: 100%;
-      min-width: 720px;
-      border-collapse: collapse;
-    }
-
-    th,
-    td {
-      border-bottom: 1px solid var(--line);
-      padding: 12px 14px;
-      text-align: left;
-      vertical-align: top;
-    }
-
-    th {
-      background: var(--surface);
-      color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
-    }
-
-    tbody tr:last-child td {
-      border-bottom: 0;
-    }
-
-    td:first-child {
-      width: 36%;
-    }
-
-    .callout {
-      max-width: 900px;
-      border-left: 4px solid var(--warn);
-      background: var(--warn-soft);
-      padding: 15px 18px;
-    }
-
-    .callout strong {
-      color: #725000;
-    }
-
-    .check-list {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px 26px;
-    }
-
-    .check-list li::marker {
-      color: var(--good);
-    }
-
-    .evidence-list {
-      display: grid;
-      gap: 14px;
-    }
-
-    .evidence-item {
-      border-left: 3px solid var(--accent);
-      padding-left: 15px;
-    }
-
-    .evidence-item p {
-      color: var(--muted);
-    }
-
-    .quiz-intro {
-      max-width: 760px;
-      color: var(--muted);
-    }
-
-    .quiz-question {
-      border-top: 1px solid var(--line);
-      padding: 24px 0;
-    }
-
-    .quiz-question:first-of-type {
-      margin-top: 20px;
-    }
-
-    fieldset {
-      min-width: 0;
-      margin: 0;
-      border: 0;
-      padding: 0;
-    }
-
-    legend {
-      width: 100%;
-      margin-bottom: 12px;
-      font-size: 17px;
-      font-weight: 750;
-    }
-
-    .option {
-      display: flex;
-      min-height: 46px;
-      align-items: flex-start;
-      gap: 10px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--paper);
-      cursor: pointer;
-      margin-top: 8px;
-      padding: 10px 12px;
-    }
-
-    .option:hover {
-      border-color: var(--line-strong);
-      background: var(--surface);
-    }
-
-    .option input {
-      flex: 0 0 auto;
-      margin-top: 5px;
-    }
-
-    .option span {
-      min-width: 0;
-    }
-
-    .answer-detail {
-      display: none;
-      margin-top: 12px;
-      border-left: 3px solid var(--accent);
-      color: var(--muted);
-      padding-left: 12px;
-    }
-
-    .answer-detail.visible {
-      display: block;
-    }
-
-    .quiz-question.correct .option:has(input:checked) {
-      border-color: #86bd9b;
-      background: var(--good-soft);
-    }
-
-    .quiz-question.incorrect .option:has(input:checked) {
-      border-color: #e7a39d;
-      background: var(--bad-soft);
-    }
-
-    .quiz-question.graded .option.correct-answer {
-      border-color: #86bd9b;
-      background: var(--good-soft);
-    }
-
-    .quiz-actions {
-      display: flex;
-      min-height: 48px;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 22px;
-    }
-
-    button {
-      appearance: none;
-      min-height: 42px;
-      border: 1px solid var(--accent);
-      border-radius: 6px;
-      background: var(--accent);
-      color: #fff;
-      cursor: pointer;
-      font: inherit;
-      font-weight: 750;
-      padding: 8px 14px;
-      transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), background-color 140ms ease;
-    }
-
-    button:hover {
-      background: #0d5f70;
-    }
-
-    button:active {
-      transform: scale(0.97);
-    }
-
-    button.secondary {
-      border-color: var(--line-strong);
-      background: var(--paper);
-      color: var(--ink);
-    }
-
-    button.secondary:hover {
-      background: var(--surface);
-    }
-
-    #quizResult {
-      min-width: 230px;
-      font-weight: 750;
-    }
-
-    #quizResult.pass {
-      color: var(--good);
-    }
-
-    #quizResult.fail {
-      color: var(--bad);
-    }
-
-    footer {
-      border-top: 1px solid var(--line);
-      background: var(--surface);
-      color: var(--muted);
-      padding: 24px 0 42px;
-      font-size: 14px;
-    }
-
-    @media (max-width: 900px) {
-
-      .summary-grid,
-      .status-grid,
-      .boundary-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .flow {
-        grid-template-columns: 1fr 1fr;
-      }
-
-      .flow-step:not(:last-child)::after {
-        display: none;
-      }
-    }
-
-    @media (max-width: 650px) {
-      .wrap {
-        width: min(100% - 30px, 1120px);
-      }
-
-      .report-header {
-        padding: 34px 0 26px;
-      }
-
-      h1 {
-        font-size: 32px;
-      }
-
-      h2 {
-        font-size: 24px;
-      }
-
-      .lede {
-        font-size: 17px;
-      }
-
-      main section {
-        padding: 34px 0;
-      }
-
-      .flow,
-      .consistency-lanes,
-      .authority-states,
-      .comparison,
-      .check-list {
-        grid-template-columns: 1fr;
-      }
-
-      .comparison {
-        gap: 1px;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      html {
-        scroll-behavior: auto;
-      }
-
-      button {
-        transition-duration: 0ms;
-      }
-    }
-  </style>
 </head>
-
 <body>
-  <a class="skip-link" href="#report-content">Skip to report</a>
-  <header class="report-header">
-    <div class="wrap">
-      <div class="eyebrow">Delivery report / V26-989 through V26-996</div>
-      <h1>A durable money and inventory foundation for Athena reports</h1>
-      <p class="lede">This delivery gives Athena a store-scoped, auditable reporting pipeline for sales, cost, inventory
-        movement, settlements, service work, and Daily Close. It creates the backend foundation for the future Reports
-        workspace; it does not ship that workspace UI or activate reporting in production.</p>
-      <div class="metadata" aria-label="Delivery metadata">
-        <span class="pill good">5,320 tests passed</span>
-        <span class="pill good">Merge candidate</span>
-        <span class="pill">Branch: codex/reports-foundation-delivery</span>
-        <span class="pill">Store-scoped full admin</span>
-        <span class="pill warn">No production deploy</span>
-      </div>
-    </div>
+<article
+  data-athena-landed-change-report="v2"
+  data-athena-report-diff-fingerprint="e57fb8e248b848bf57d4d28716d1d22bbf1445493f0c0f89a5a51c1b1a0ecbcd"
+>
+  <header data-report-section="header">
+    <h1>A durable money and inventory foundation for Athena reports</h1>
+    <ul data-report-pills>
+      <li>5,320 tests passed</li>
+      <li>Merge candidate</li>
+      <li>Branch: codex/reports-foundation-delivery</li>
+      <li>Store-scoped full admin</li>
+      <li>No production deploy</li>
+    </ul>
   </header>
-
-  <nav class="section-nav" aria-label="Report sections">
-    <div class="wrap">
-      <a href="#summary">Summary</a>
-      <a href="#model">Mental model</a>
-      <a href="#mechanics">Mechanics</a>
-      <a href="#boundaries">Boundaries</a>
-      <a href="#validation">Validation</a>
-      <a href="#evidence">Evidence</a>
-      <a href="#quiz">Quiz</a>
-    </div>
-  </nav>
-
-  <main id="report-content">
-    <section id="summary">
-      <div class="wrap">
-        <h2>Executive Summary</h2>
+  <section data-report-section="summary">
+<h2>Executive Summary</h2><div class="wrap">
+        
         <div class="summary-grid">
           <article class="summary-item">
             <h3>Money stays honest</h3>
@@ -712,11 +40,10 @@
           </article>
         </div>
       </div>
-    </section>
-
-    <section id="context">
-      <div class="wrap prose">
-        <h2>Why This Foundation Was Needed</h2>
+  </section>
+  <section data-report-section="why-this-foundation-was-needed">
+<h2>Why This Foundation Was Needed</h2><div class="wrap prose">
+        
         <p>The intended Reports workspace must replace manual ledgers as the operator's source for money and items
           moving through the business. Existing operational records were useful, but they did not share a durable
           reporting identity, common currency semantics, consistent operating-day boundaries, or a replayable projection
@@ -728,11 +55,10 @@
           projections, health, maintenance, access control, source integration, and existing correction inputs. A new
           operator-facing Reports workspace is intentionally a later delivery.</div>
       </div>
-    </section>
-
-    <section id="model">
-      <div class="wrap">
-        <h2>The Mental Model</h2>
+  </section>
+  <section data-report-section="mental-model">
+<h2>The Mental Model</h2><div class="wrap">
+        
         <p class="prose">Treat reporting as two coupled consistency lanes created by the same source transition.
           Operational records remain authoritative for doing business. Reporting retains durable evidence and builds
           replaceable views, but public reads only use a store-specific generation after explicit activation.</p>
@@ -743,7 +69,7 @@
             <p>The source command appends canonical pending ingress in its transaction. Best-effort scheduling later
               creates versioned facts and bounded projections. A durable failure ledger and store-scoped recovery sweep
               retain unscheduled or failed work without rolling back the business operation.</p>
-            <div class="lane-path">Source transition -> pending ingress -> facts -> attributed projections -> recovery
+            <div class="lane-path">Source transition -&gt; pending ingress -&gt; facts -&gt; attributed projections -&gt; recovery
             </div>
           </article>
           <article class="lane inventory">
@@ -752,7 +78,7 @@
             <p>The same command records movement evidence, SKU Activity, quantity, and valuation intent atomically.
               Before activation, compatibility shadow preserves legacy balance authority; after activation, the kernel
               owns authoritative quantity and valuation.</p>
-            <div class="lane-path">Source transition -> inventory effect -> balance, evidence, and valuation state</div>
+            <div class="lane-path">Source transition -&gt; inventory effect -&gt; balance, evidence, and valuation state</div>
           </article>
         </div>
         <div class="authority-states" aria-label="Reporting authority transition">
@@ -773,11 +99,10 @@
           </article>
         </div>
       </div>
-    </section>
-
-    <section id="before-after">
-      <div class="wrap">
-        <h2>Before and After</h2>
+  </section>
+  <section data-report-section="before-after">
+<h2>Before and After</h2><div class="wrap">
+        
         <div class="comparison">
           <article class="before">
             <h3><span>Before</span>Operational records without a shared reporting contract</h3>
@@ -802,11 +127,10 @@
           </article>
         </div>
       </div>
-    </section>
-
-    <section id="mechanics">
-      <div class="wrap">
-        <h2>Layer-by-Layer Mechanics</h2>
+  </section>
+  <section data-report-section="changes">
+<h2>Layer-by-Layer Mechanics</h2><div class="wrap">
+        
         <div class="table-wrap">
           <table>
             <thead>
@@ -918,11 +242,10 @@
           </table>
         </div>
       </div>
-    </section>
-
-    <section id="boundaries">
-      <div class="wrap">
-        <h2>Failure Boundaries</h2>
+  </section>
+  <section data-report-section="failure-boundaries">
+<h2>Failure Boundaries</h2><div class="wrap">
+        
         <div class="boundary-grid">
           <article class="boundary-item">
             <h3>Missing cost</h3>
@@ -956,11 +279,10 @@
           </article>
         </div>
       </div>
-    </section>
-
-    <section id="changed">
-      <div class="wrap">
-        <h2>Changed and Intentionally Unchanged</h2>
+  </section>
+  <section data-report-section="changed-and-intentionally-unchanged">
+<h2>Changed and Intentionally Unchanged</h2><div class="wrap">
+        
         <div class="status-grid">
           <article class="status-item">
             <h3>Delivered</h3>
@@ -980,11 +302,10 @@
           </article>
         </div>
       </div>
-    </section>
-
-    <section id="validation">
-      <div class="wrap">
-        <h2>Validation and Delivery State</h2>
+  </section>
+  <section data-report-section="validation">
+<h2>Validation and Delivery State</h2><div class="wrap">
+        
         <ul class="check-list">
           <li>Full Athena webapp suite: 498 files, 5,320 tests passed.</li>
           <li>Reporting suite: 46 files, 326 tests passed during final implementation review.</li>
@@ -998,14 +319,13 @@
           <li>Foundation, architecture, and money/inventory reviewers each returned exact <strong>APPROVED</strong> on
             the final combined tree.</li>
         </ul>
-        <div class="callout" style="margin-top: 22px"><strong>Finish line:</strong> merged pull request and local root
+        <div class="callout"><strong>Finish line:</strong> merged pull request and local root
           alignment. Production deployment is explicitly excluded.</div>
       </div>
-    </section>
-
-    <section id="guidance">
-      <div class="wrap prose">
-        <h2>How to Extend This Safely</h2>
+  </section>
+  <section data-report-section="guidance">
+<h2>How to Extend This Safely</h2><div class="wrap prose">
+        
         <ul>
           <li>Add a versioned fact or contribution contract before adding a metric to a view.</li>
           <li>Preserve canonical identity and semantic fingerprints across live, retry, and backfill paths; do not
@@ -1022,11 +342,168 @@
             reconciliation, and rollback rehearsal against production-scale data.</li>
         </ul>
       </div>
-    </section>
-
-    <section id="evidence">
-      <div class="wrap">
-        <h2>Subagent Evidence</h2>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is authoritative in the new reporting mental model?</p>
+        <ol data-quiz-options>
+          <li><span>The daily projection, because it is
+                  the fastest read.</span></li>
+          <li data-quiz-correct><span>Operational source records for doing
+                  business and versioned reporting facts for reporting evidence.</span></li>
+          <li><span>The future Reports UI, because it
+                  will own metric definitions.</span></li>
+          <li><span>The manual ledger until every SKU
+                  has unit cost.</span></li>
+        </ol>
+        <p data-quiz-explanation>Operational domains remain authoritative for business workflows. Reporting facts
+              are the durable evidence used to derive replaceable reporting views.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens when a sale includes an SKU with no unit cost?</p>
+        <ol data-quiz-options>
+          <li><span>The sale is blocked until a full
+                  admin enters cost.</span></li>
+          <li><span>A zero cost is assumed so gross
+                  profit remains available.</span></li>
+          <li data-quiz-correct><span>The sale continues; known COGS and
+                  uncovered quantity are recorded, unsupported profit is withheld, and correction is
+                  routed.</span></li>
+          <li><span>The line is omitted from
+                  reporting.</span></li>
+        </ol>
+        <p data-quiz-explanation>Trade continuity is explicit. Unknown cost is not zero, and partial known cost
+              remains useful without overstating profit certainty.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How do live ingestion and backfill avoid double-counting the same business event?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct><span>They share canonical business-event
+                  and fact identities, with fingerprints detecting conflicting payloads.</span></li>
+          <li><span>Backfill always deletes live facts
+                  first.</span></li>
+          <li><span>Live facts use timestamps while
+                  backfill uses random IDs.</span></li>
+          <li><span>Duplicates are removed manually
+                  after activation.</span></li>
+        </ol>
+        <p data-quiz-explanation>One identity policy spans live, retry, and backfill. Matching fingerprints are
+              idempotent; mismatches quarantine instead of certifying conflicting truth.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is reporting scheduling best effort?</p>
+        <ol data-quiz-options>
+          <li><span>Scheduling must succeed in the
+                  source transaction so every report is immediately fresh.</span></li>
+          <li><span>Best effort permits the source
+                  command to continue even if durable ingress itself failed to append.</span></li>
+          <li><span>Best effort also applies to the
+                  inline inventory effect, so stock and movement evidence may commit separately.</span></li>
+          <li data-quiz-correct><span>Once pending ingress is durable, a
+                  scheduler outage must not roll back a completed business operation.</span></li>
+        </ol>
+        <p data-quiz-explanation>Durability comes before scheduling. Pending work can be retried, while sales and
+              other source operations remain available.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>When may Athena calculate profit across revenue and valuation amounts?</p>
+        <ol data-quiz-options>
+          <li><span>Whenever both amounts are
+                  nonzero.</span></li>
+          <li data-quiz-correct><span>When the currencies align or
+                  supported conversion evidence exists; otherwise profit is withheld.</span></li>
+          <li><span>Only after a manual ledger
+                  reconciliation.</span></li>
+          <li><span>Always, because all stores use the
+                  same currency.</span></li>
+        </ol>
+        <p data-quiz-explanation>The foundation preserves revenue and valuation currency independently and refuses
+              to manufacture cross-currency profit.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What authority does the inventory kernel have before a store is activated?</p>
+        <ol data-quiz-options>
+          <li><span>It is already authoritative because
+                  every writer now calls the effect boundary.</span></li>
+          <li><span>It owns valuation but legacy
+                  inventory still owns physical quantity.</span></li>
+          <li data-quiz-correct><span>It runs in compatibility shadow,
+                  preserving the legacy balance result while journaling typed effects for verification.</span></li>
+          <li><span>It serves any verified candidate
+                  even when no active store pointer exists.</span></li>
+        </ol>
+        <p data-quiz-explanation>Calling one kernel does not itself transfer authority. Compatibility shadow keeps
+              legacy stock authoritative until a verified, reconciled, explicitly approved cutover.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which boundary defines week-to-date and same-elapsed comparisons?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct><span>The store's configured Store
+                  Schedule and operating periods.</span></li>
+          <li><span>UTC midnight for every
+                  store.</span></li>
+          <li><span>The browser timezone of the full
+                  admin.</span></li>
+          <li><span>The time the report query first
+                  runs.</span></li>
+        </ol>
+        <p data-quiz-explanation>Store Schedule is the shared operational calendar, so comparable periods reflect
+              how the store actually trades.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the difference between a verified and an active projection generation?</p>
+        <ol data-quiz-options>
+          <li><span>A verified generation automatically
+                  serves reads; active only records who approved it.</span></li>
+          <li><span>Verified means tests passed in CI;
+                  active means the code was deployed to production.</span></li>
+          <li><span>They are interchangeable states once
+                  reconciliation reaches zero.</span></li>
+          <li data-quiz-correct><span>Verified is a stable reconciled
+                  candidate; active is the store-selected generation that public reads may serve.</span></li>
+        </ol>
+        <p data-quiz-explanation>Verification establishes readiness, not authority. A separate store-scoped
+              compare-and-swap activation selects what readers may see.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A future labor-cost metric does not fit the merchandise COGS contract. What should happen
+                first?</p>
+        <ol data-quiz-options>
+          <li><span>Add labor into merchandise COGS and
+                  distinguish it only in the UI.</span></li>
+          <li data-quiz-correct><span>Add a versioned labor contribution
+                  contract with identity, evidence, currency, coverage, and rebuild semantics.</span></li>
+          <li><span>Join service records during each
+                  public read and treat missing labor as zero.</span></li>
+          <li><span>Write labor totals directly into the
+                  active daily projection and backfill facts later.</span></li>
+        </ol>
+        <p data-quiz-explanation>A separate versioned contribution preserves merchandise semantics and makes labor
+              evidence, unknown coverage, replay, and future projection changes explicit.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the finish line for this delivery?</p>
+        <ol data-quiz-options>
+          <li><span>A production deploy and full
+                  historical backfill.</span></li>
+          <li><span>A complete Reports workspace
+                  UI.</span></li>
+          <li data-quiz-correct><span>A merged pull request and local
+                  root alignment, with no production deployment.</span></li>
+          <li><span>An unmerged draft branch for later
+                  review.</span></li>
+        </ol>
+        <p data-quiz-explanation>The user explicitly changed the finish line to a merged PR and excluded
+              production deployment.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+<h2>Subagent Evidence</h2><div class="wrap">
+        
         <div class="evidence-list">
           <article class="evidence-item">
             <h3>Session context researcher</h3>
@@ -1056,247 +533,7 @@
           </article>
         </div>
       </div>
-    </section>
-
-    <section id="quiz">
-      <div class="wrap">
-        <h2>Quiz: Pass Required</h2>
-        <p class="quiz-intro">Score at least 8 out of 10. Grading reveals the explanation for every answer.</p>
-        <form id="changeQuiz" data-threshold="8">
-          <div class="quiz-question" data-answer="1">
-            <fieldset>
-              <legend>1. What is authoritative in the new reporting mental model?</legend>
-              <label class="option"><input type="radio" name="q1" value="0" /><span>The daily projection, because it is
-                  the fastest read.</span></label>
-              <label class="option"><input type="radio" name="q1" value="1" /><span>Operational source records for doing
-                  business and versioned reporting facts for reporting evidence.</span></label>
-              <label class="option"><input type="radio" name="q1" value="2" /><span>The future Reports UI, because it
-                  will own metric definitions.</span></label>
-              <label class="option"><input type="radio" name="q1" value="3" /><span>The manual ledger until every SKU
-                  has unit cost.</span></label>
-            </fieldset>
-            <div class="answer-detail">Operational domains remain authoritative for business workflows. Reporting facts
-              are the durable evidence used to derive replaceable reporting views.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="2">
-            <fieldset>
-              <legend>2. What happens when a sale includes an SKU with no unit cost?</legend>
-              <label class="option"><input type="radio" name="q2" value="0" /><span>The sale is blocked until a full
-                  admin enters cost.</span></label>
-              <label class="option"><input type="radio" name="q2" value="1" /><span>A zero cost is assumed so gross
-                  profit remains available.</span></label>
-              <label class="option"><input type="radio" name="q2" value="2" /><span>The sale continues; known COGS and
-                  uncovered quantity are recorded, unsupported profit is withheld, and correction is
-                  routed.</span></label>
-              <label class="option"><input type="radio" name="q2" value="3" /><span>The line is omitted from
-                  reporting.</span></label>
-            </fieldset>
-            <div class="answer-detail">Trade continuity is explicit. Unknown cost is not zero, and partial known cost
-              remains useful without overstating profit certainty.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="0">
-            <fieldset>
-              <legend>3. How do live ingestion and backfill avoid double-counting the same business event?</legend>
-              <label class="option"><input type="radio" name="q3" value="0" /><span>They share canonical business-event
-                  and fact identities, with fingerprints detecting conflicting payloads.</span></label>
-              <label class="option"><input type="radio" name="q3" value="1" /><span>Backfill always deletes live facts
-                  first.</span></label>
-              <label class="option"><input type="radio" name="q3" value="2" /><span>Live facts use timestamps while
-                  backfill uses random IDs.</span></label>
-              <label class="option"><input type="radio" name="q3" value="3" /><span>Duplicates are removed manually
-                  after activation.</span></label>
-            </fieldset>
-            <div class="answer-detail">One identity policy spans live, retry, and backfill. Matching fingerprints are
-              idempotent; mismatches quarantine instead of certifying conflicting truth.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="3">
-            <fieldset>
-              <legend>4. Why is reporting scheduling best effort?</legend>
-              <label class="option"><input type="radio" name="q4" value="0" /><span>Scheduling must succeed in the
-                  source transaction so every report is immediately fresh.</span></label>
-              <label class="option"><input type="radio" name="q4" value="1" /><span>Best effort permits the source
-                  command to continue even if durable ingress itself failed to append.</span></label>
-              <label class="option"><input type="radio" name="q4" value="2" /><span>Best effort also applies to the
-                  inline inventory effect, so stock and movement evidence may commit separately.</span></label>
-              <label class="option"><input type="radio" name="q4" value="3" /><span>Once pending ingress is durable, a
-                  scheduler outage must not roll back a completed business operation.</span></label>
-            </fieldset>
-            <div class="answer-detail">Durability comes before scheduling. Pending work can be retried, while sales and
-              other source operations remain available.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="1">
-            <fieldset>
-              <legend>5. When may Athena calculate profit across revenue and valuation amounts?</legend>
-              <label class="option"><input type="radio" name="q5" value="0" /><span>Whenever both amounts are
-                  nonzero.</span></label>
-              <label class="option"><input type="radio" name="q5" value="1" /><span>When the currencies align or
-                  supported conversion evidence exists; otherwise profit is withheld.</span></label>
-              <label class="option"><input type="radio" name="q5" value="2" /><span>Only after a manual ledger
-                  reconciliation.</span></label>
-              <label class="option"><input type="radio" name="q5" value="3" /><span>Always, because all stores use the
-                  same currency.</span></label>
-            </fieldset>
-            <div class="answer-detail">The foundation preserves revenue and valuation currency independently and refuses
-              to manufacture cross-currency profit.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="2">
-            <fieldset>
-              <legend>6. What authority does the inventory kernel have before a store is activated?</legend>
-              <label class="option"><input type="radio" name="q6" value="0" /><span>It is already authoritative because
-                  every writer now calls the effect boundary.</span></label>
-              <label class="option"><input type="radio" name="q6" value="1" /><span>It owns valuation but legacy
-                  inventory still owns physical quantity.</span></label>
-              <label class="option"><input type="radio" name="q6" value="2" /><span>It runs in compatibility shadow,
-                  preserving the legacy balance result while journaling typed effects for verification.</span></label>
-              <label class="option"><input type="radio" name="q6" value="3" /><span>It serves any verified candidate
-                  even when no active store pointer exists.</span></label>
-            </fieldset>
-            <div class="answer-detail">Calling one kernel does not itself transfer authority. Compatibility shadow keeps
-              legacy stock authoritative until a verified, reconciled, explicitly approved cutover.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="0">
-            <fieldset>
-              <legend>7. Which boundary defines week-to-date and same-elapsed comparisons?</legend>
-              <label class="option"><input type="radio" name="q7" value="0" /><span>The store's configured Store
-                  Schedule and operating periods.</span></label>
-              <label class="option"><input type="radio" name="q7" value="1" /><span>UTC midnight for every
-                  store.</span></label>
-              <label class="option"><input type="radio" name="q7" value="2" /><span>The browser timezone of the full
-                  admin.</span></label>
-              <label class="option"><input type="radio" name="q7" value="3" /><span>The time the report query first
-                  runs.</span></label>
-            </fieldset>
-            <div class="answer-detail">Store Schedule is the shared operational calendar, so comparable periods reflect
-              how the store actually trades.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="3">
-            <fieldset>
-              <legend>8. What is the difference between a verified and an active projection generation?</legend>
-              <label class="option"><input type="radio" name="q8" value="0" /><span>A verified generation automatically
-                  serves reads; active only records who approved it.</span></label>
-              <label class="option"><input type="radio" name="q8" value="1" /><span>Verified means tests passed in CI;
-                  active means the code was deployed to production.</span></label>
-              <label class="option"><input type="radio" name="q8" value="2" /><span>They are interchangeable states once
-                  reconciliation reaches zero.</span></label>
-              <label class="option"><input type="radio" name="q8" value="3" /><span>Verified is a stable reconciled
-                  candidate; active is the store-selected generation that public reads may serve.</span></label>
-            </fieldset>
-            <div class="answer-detail">Verification establishes readiness, not authority. A separate store-scoped
-              compare-and-swap activation selects what readers may see.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="1">
-            <fieldset>
-              <legend>9. A future labor-cost metric does not fit the merchandise COGS contract. What should happen
-                first?</legend>
-              <label class="option"><input type="radio" name="q9" value="0" /><span>Add labor into merchandise COGS and
-                  distinguish it only in the UI.</span></label>
-              <label class="option"><input type="radio" name="q9" value="1" /><span>Add a versioned labor contribution
-                  contract with identity, evidence, currency, coverage, and rebuild semantics.</span></label>
-              <label class="option"><input type="radio" name="q9" value="2" /><span>Join service records during each
-                  public read and treat missing labor as zero.</span></label>
-              <label class="option"><input type="radio" name="q9" value="3" /><span>Write labor totals directly into the
-                  active daily projection and backfill facts later.</span></label>
-            </fieldset>
-            <div class="answer-detail">A separate versioned contribution preserves merchandise semantics and makes labor
-              evidence, unknown coverage, replay, and future projection changes explicit.</div>
-          </div>
-
-          <div class="quiz-question" data-answer="2">
-            <fieldset>
-              <legend>10. What is the finish line for this delivery?</legend>
-              <label class="option"><input type="radio" name="q10" value="0" /><span>A production deploy and full
-                  historical backfill.</span></label>
-              <label class="option"><input type="radio" name="q10" value="1" /><span>A complete Reports workspace
-                  UI.</span></label>
-              <label class="option"><input type="radio" name="q10" value="2" /><span>A merged pull request and local
-                  root alignment, with no production deployment.</span></label>
-              <label class="option"><input type="radio" name="q10" value="3" /><span>An unmerged draft branch for later
-                  review.</span></label>
-            </fieldset>
-            <div class="answer-detail">The user explicitly changed the finish line to a merged PR and excluded
-              production deployment.</div>
-          </div>
-
-          <div class="quiz-actions">
-            <button type="button" id="gradeQuiz">Grade quiz</button>
-            <button type="button" class="secondary" id="resetQuiz">Reset</button>
-            <span id="quizResult" aria-live="polite"></span>
-          </div>
-        </form>
-      </div>
-    </section>
-  </main>
-
-  <footer>
-    <div class="wrap">Prepared from the delivery branch and reviewer record on July 10, 2026. This artifact contains no
-      production activation or deployment claim.</div>
-  </footer>
-
-  <script>
-    const form = document.getElementById("changeQuiz");
-    const questions = Array.from(form.querySelectorAll(".quiz-question"));
-    const result = document.getElementById("quizResult");
-    const threshold = Number(form.dataset.threshold || 8);
-
-    questions.forEach((question) => {
-      const detail = question.querySelector(".answer-detail");
-      detail.dataset.explanation = detail.textContent.trim();
-      detail.setAttribute("role", "status");
-      detail.setAttribute("aria-live", "polite");
-    });
-
-    function clearGrades() {
-      questions.forEach((question) => {
-        question.classList.remove("correct", "incorrect", "graded");
-        question.querySelectorAll(".option").forEach((option) => option.classList.remove("correct-answer"));
-        const detail = question.querySelector(".answer-detail");
-        detail.classList.remove("visible");
-        detail.textContent = detail.dataset.explanation;
-      });
-      result.className = "";
-      result.textContent = "";
-    }
-
-    document.getElementById("gradeQuiz").addEventListener("click", () => {
-      let score = 0;
-      questions.forEach((question) => {
-        const selected = question.querySelector("input:checked");
-        const isCorrect = selected && selected.value === question.dataset.answer;
-        const correctInput = question.querySelector(`input[value="${question.dataset.answer}"]`);
-        const correctOption = correctInput.closest(".option");
-        const correctText = correctOption.querySelector("span").textContent.trim();
-        const detail = question.querySelector(".answer-detail");
-        if (isCorrect) score += 1;
-        question.classList.add("graded");
-        question.classList.toggle("correct", Boolean(isCorrect));
-        question.classList.toggle("incorrect", !isCorrect);
-        correctOption.classList.add("correct-answer");
-        detail.textContent = isCorrect
-          ? `Correct. ${detail.dataset.explanation}`
-          : `Incorrect. Correct answer: ${correctText} ${detail.dataset.explanation}`;
-        detail.classList.add("visible");
-      });
-      const passed = score >= threshold;
-      result.className = passed ? "pass" : "fail";
-      result.textContent = passed
-        ? `Passed: ${score}/${questions.length}`
-        : `Not yet: ${score}/${questions.length}. ${threshold}/${questions.length} required.`;
-    });
-
-    document.getElementById("resetQuiz").addEventListener("click", () => {
-      form.reset();
-      clearGrades();
-      document.getElementById("quiz").scrollIntoView({ block: "start" });
-    });
-  </script>
+  </section>
+</article>
 </body>
-
 </html>

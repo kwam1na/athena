@@ -1,49 +1,42 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Reports item workspace — delivery candidate</title>
-    <style>
-      :root { color-scheme: light; --ink:#18212b; --muted:#5b6775; --line:#dce3ea; --paper:#fff; --wash:#f5f8fa; --accent:#175d9f; --good:#18794e; --warn:#a15c00; }
-      * { box-sizing:border-box; } body { margin:0; background:var(--wash); color:var(--ink); font:15px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-      main { max-width:960px; margin:0 auto; padding:48px 24px 80px; } header,section { background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:28px; margin-bottom:18px; }
-      h1 { font-size:clamp(28px,5vw,42px); letter-spacing:-.04em; line-height:1.08; margin:8px 0 14px; } h2 { font-size:21px; letter-spacing:-.02em; margin:0 0 12px; } h3 { font-size:16px; margin:20px 0 8px; } p,li { max-width:78ch; } .eyebrow { color:var(--accent); font-weight:700; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
-      .meta,.pills { display:flex; flex-wrap:wrap; gap:8px; } .pill { border-radius:999px; padding:4px 9px; font-size:12px; font-weight:650; background:#e8f1fa; color:var(--accent); } .pill.pending { background:#fff1d6; color:var(--warn); } .pill.good { background:#e4f5eb; color:var(--good); }
-      table { width:100%; border-collapse:collapse; font-size:14px; } th,td { text-align:left; vertical-align:top; padding:10px; border-top:1px solid var(--line); } th { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; } code { background:#eef2f5; padding:1px 4px; border-radius:4px; } pre { overflow:auto; padding:16px; background:#101923; color:#e5edf5; border-radius:10px; font-size:13px; }
-      .flow { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; } .flow div { border:1px solid var(--line); border-radius:8px; padding:10px; background:var(--wash); font-size:13px; } .flow b { display:block; color:var(--accent); } .callout { border-left:4px solid var(--accent); background:#f0f7fd; padding:12px 15px; border-radius:0 8px 8px 0; } .risk { border-left-color:var(--warn); background:#fff8eb; }
-      fieldset { border:0; padding:0; margin:0 0 18px; } legend { font-weight:700; margin-bottom:8px; } label { display:block; margin:7px 0; cursor:pointer; } button { border:0; border-radius:8px; padding:10px 14px; background:var(--accent); color:white; font:inherit; font-weight:700; cursor:pointer; transition:transform 140ms ease-out,background 140ms ease; } button:active { transform:scale(.97); } button.secondary { background:#e8eef3; color:var(--ink); margin-left:8px; } #grade { font-weight:700; margin-top:14px; } .explanation { color:var(--muted); margin:3px 0 0 24px; display:none; } .answered .explanation { display:block; } @media (max-width:700px) { main { padding:24px 14px 48px; } header,section { padding:20px; } .flow { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } } @media (prefers-reduced-motion:reduce) { button { transition:none; } }
-    </style>
-  </head>
-  <body>
-    <main data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="3109e90121b28a94a628484feceda9d4173f18c8700c88039aab38a1200deaeb">
-      <header>
-        <div class="eyebrow">Delivery candidate</div>
-        <h1>Make an item report useful when a number needs explaining</h1>
-        <p>This candidate turns an SKU report from a period summary into a focused investigation workspace: recognizable product identity, correct inherited dates, and a bounded transaction drill-down for a selected day.</p>
-        <div class="pills"><span class="pill">PR #709</span><span class="pill pending">Merge pending</span><span class="pill pending">Deploy not applicable</span><span class="pill pending">Local main alignment pending</span></div>
-        <p class="meta"><a href="https://github.com/kwam1na/athena/pull/709">Pull request #709</a> · Source branch: <code>reports-workspace-link-refinements</code> · Candidate local head: <code>60be75ed</code></p>
-      </header>
-
-      <section>
-        <h2>Executive summary</h2>
+<head>
+  <meta charset="utf-8" />
+  <title>Reports item workspace — delivery candidate</title>
+</head>
+<body>
+<article
+  data-athena-landed-change-report="v2"
+  data-athena-report-diff-fingerprint="3109e90121b28a94a628484feceda9d4173f18c8700c88039aab38a1200deaeb"
+>
+  <header data-report-section="header">
+    <h1>Make an item report useful when a number needs explaining</h1>
+    <div class="eyebrow">Delivery candidate</div>
+    <p>This candidate turns an SKU report from a period summary into a focused investigation workspace: recognizable product identity, correct inherited dates, and a bounded transaction drill-down for a selected day.</p>
+    <p class="meta"><a href="https://github.com/kwam1na/athena/pull/709">Pull request #709</a> · Source branch: <code>reports-workspace-link-refinements</code> · Candidate local head: <code>60be75ed</code></p>
+    <ul data-report-pills>
+      <li>PR #709</li>
+      <li>Merge pending</li>
+      <li>Deploy not applicable</li>
+      <li>Local main alignment pending</li>
+    </ul>
+  </header>
+  <section data-report-section="summary">
+<h2>Executive summary</h2>
         <p>Items now carry their selected day, week, or month into an SKU detail page. The page identifies the product with its image, SKU, current catalog net price, and a deliberate product-management link. Selecting an activity day opens a sheet of contributing POS and storefront transactions, rather than forcing an operator to infer causes from a daily total.</p>
         <div class="callout risk"><strong>Candidate integrity note.</strong> At report creation, PR #709 still points to remote head <code>d55e2f1</code>, not local candidate <code>60be75ed</code>; it is also conflicting/dirty against <code>main</code>. The remote CI failures describe the old PR head and do not establish a failure in this candidate. Rebase and resolve the branch, rerun the gate, push, await fresh CI, merge, and align local <code>main</code> remain finish-line work.</div>
-      </section>
-
-      <section>
-        <h2>Before → after</h2>
+  </section>
+  <section data-report-section="before-after">
+<h2>Before → after</h2>
         <table><thead><tr><th>Before</th><th>After</th></tr></thead><tbody><tr><td>SKU detail showed rollups and daily totals, but a selected day had no source-level investigation path. Links could lose their period meaning, future dates could be chosen, and catalog identity was sparse.</td><td>The detail page preserves day/week/month intent, blocks future dates, leads with product identity, and opens a selected-day sheet of bounded, store-scoped sales evidence.</td></tr><tr><td>The generic Reports layout headed every report surface.</td><td>SKU detail owns its full-page header and back treatment, so it does not repeat the layout tabs and heading inside an investigation workspace.</td></tr></tbody></table>
-      </section>
-
-      <section>
-        <h2>The mental model: summary first, evidence only on demand</h2>
+  </section>
+  <section data-report-section="mental-model">
+<h2>The mental model: summary first, evidence only on demand</h2>
         <div class="flow"><div><b>Items</b>period link preserves day/week/month intent</div><div><b>Route</b>resolves the exact date range and selected evidence day</div><div><b>SKU detail</b>reads rollups and catalog identity</div><div><b>Day selected</b>asks for evidence only then</div><div><b>Sheet</b>shows grouped source transactions or orders</div></div>
         <p>The important boundary is that reporting summaries remain cheap. A transaction sheet is an investigation tool, so it has its own authorized Convex query and its own read budget; it is not silently loaded for every daily rollup.</p>
-      </section>
-
-      <section>
-        <h2>What changed, layer by layer</h2>
+  </section>
+  <section data-report-section="changes">
+<h2>What changed, layer by layer</h2>
         <table><thead><tr><th>Layer</th><th>Files</th><th>Why it matters</th></tr></thead><tbody>
           <tr><td>Contract and backend</td><td><code>shared/reportsContract.ts</code><br><code>convex/reports/queries.ts</code></td><td>Adds image and current net price to SKU identity, plus an authenticated day-evidence query that groups facts by source transaction/order.</td></tr>
           <tr><td>Detail workspace</td><td><code>ReportsSkuDetailView.tsx</code></td><td>Owns the page header, identity block, period summary, activity table, and selected-day evidence sheet.</td></tr>
@@ -51,10 +44,9 @@
           <tr><td>Calendar, Items, and layout</td><td><code>ReportCalendar.tsx</code><br><code>ReportsItemsView.tsx</code><br><code>ReportsLayout.tsx</code></td><td>The shared calendar prevents future-date selection across Items, custom range, and detail range controls; Items passes semantic period context, while SKU detail owns its header rather than duplicating layout tabs.</td></tr>
           <tr><td>Proof and navigation</td><td>tests, agent indexes, Graphify artifacts, requirements note</td><td>Exercises the new contract and interaction boundaries and refreshes generated repository navigation.</td></tr>
         </tbody></table>
-      </section>
-
-      <section>
-        <h2>Trust and failure boundaries</h2>
+  </section>
+  <section data-report-section="trust-and-failure-boundaries">
+<h2>Trust and failure boundaries</h2>
         <ul>
           <li>Both the summary and evidence queries require reports access for the requested store. A loaded POS transaction or storefront order must also belong to that same store.</li>
           <li>Evidence examines at most 501 report facts and returns at most 500 grouped evidence rows. The extra fact is a sentinel: it makes truncation explicit instead of presenting a partial list as complete.</li>
@@ -63,15 +55,13 @@
           <li>Current catalog price is identity metadata, not historical accounting. Unknown cost and profit stay unavailable rather than being guessed from today’s price.</li>
         </ul>
         <div class="callout risk"><strong>Residual edge case.</strong> The fact cap is applied before filtering non-POS/storefront facts. A noisy day can therefore yield a disclosed but incomplete sales-evidence list. This is an intentional budget boundary, but a later refinement could target the source-domain filter more directly if that becomes operationally important.</div>
-      </section>
-
-      <section>
-        <h2>What intentionally did not change</h2>
+  </section>
+  <section data-report-section="what-intentionally-did-not-change">
+<h2>What intentionally did not change</h2>
         <p>The report-fact and rollup schemas, aggregation rules, and primary Items query retain their existing meaning. This candidate does not rebuild report facts in React, add ingestion or migration work merely to support the sheet, or substitute current catalog values for historical sales cost.</p>
-      </section>
-
-      <section>
-        <h2>Validation evidence and status</h2>
+  </section>
+  <section data-report-section="validation">
+<h2>Validation evidence and status</h2>
         <table><tbody>
           <tr><th>Local candidate</th><td><code>bun run graphify:rebuild</code> completed and the pre-push <code>graphify:check</code> passed. The solution note and this report carry exact delivery-diff fingerprint <code>3109e…deaeb</code>.</td></tr>
           <tr><th>Focused coverage</th><td><code>bun run test -- convex/reports/queries.test.ts … ReportsSkuDetailView.test.tsx … $productSkuId.test.ts</code> passed: 6 files, 49 tests. It covers backend grouping, identity metadata, calendar future restriction, period propagation/range resolution, and sheet interactions/links. The full gate remains pending and must run after the rebase.</td></tr>
@@ -79,40 +69,121 @@
           <tr><th>Remote checks</th><td>Existing failures belong to divergent remote head <code>d55e2f1</code>. Resolve the PR conflict/rebase first, then push for candidate-specific CI before merge.</td></tr>
           <tr><th>Deployment / root alignment</th><td>Deployment: not applicable for this candidate. Root alignment: pending until merge and local <code>main</code> fast-forwards to remote.</td></tr>
         </tbody></table>
-      </section>
-
-      <section>
-        <h2>Next-time operating guidance</h2>
+  </section>
+  <section data-report-section="guidance">
+<h2>Next-time operating guidance</h2>
         <ol><li>Preserve semantic period state in links; clear it only when a user chooses a custom range.</li><li>Keep new report summaries on indexed rollups. Put source evidence behind a deliberate drill-down with a budget and a truncation signal.</li><li>When adding a source domain, decide explicitly whether it belongs in sales evidence and add ownership, missing-source, and truncation coverage.</li><li>For a broad report change, refresh Graphify and delivery artifacts before running the merge gate. If <code>main</code> moved, rebase and resolve conflicts before treating any remote check as candidate evidence.</li></ol>
-      </section>
-
-      <section>
-        <h2>Subagent Evidence</h2>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is transaction evidence a separate query?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>To keep the normal SKU summary read path bounded</li>
+          <li>To bypass reports authorization</li>
+          <li>To replace rollups with source rows</li>
+          <li>To update catalog price</li>
+        </ol>
+        <p data-quiz-explanation>Evidence is an optional investigation, not a cost added to every summary subscription.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does the 501st fact do?</p>
+        <ol data-quiz-options>
+          <li>It is rendered as a warning row</li>
+          <li data-quiz-correct>It determines whether the 500-result response is truncated</li>
+          <li>It is a retry record</li>
+          <li>It loads the next page automatically</li>
+        </ol>
+        <p data-quiz-explanation>The extra read is a sentinel that makes partial evidence explicit.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which sources are included in the sheet?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>POS and storefront</li>
+          <li>All inventory movement</li>
+          <li>Only Daily Close</li>
+          <li>Only POS</li>
+        </ol>
+        <p data-quiz-explanation>The candidate limits this sheet to POS and storefront evidence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How is cross-store exposure prevented?</p>
+        <ol data-quiz-options>
+          <li>No check is needed for IDs</li>
+          <li data-quiz-correct>Both reports access and source-record store ownership are checked</li>
+          <li>The UI hides transaction IDs</li>
+          <li>The sheet uses client filtering</li>
+        </ol>
+        <p data-quiz-explanation>Backend authorization and ownership validation are both required.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How should an unknown historical cost appear?</p>
+        <ol data-quiz-options>
+          <li>Use current catalog net price</li>
+          <li>Show zero</li>
+          <li data-quiz-correct>Remain unavailable</li>
+          <li>Use the latest invoice</li>
+        </ol>
+        <p data-quiz-explanation>Current catalog data is identity metadata, not a historical cost substitute.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens when the source record is missing?</p>
+        <ol data-quiz-options>
+          <li>The entire query fails</li>
+          <li data-quiz-correct>It becomes an unavailable reference</li>
+          <li>It is fetched from another store</li>
+          <li>The report fact is deleted</li>
+        </ol>
+        <p data-quiz-explanation>The evidence preserves a safe unavailable reference.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What URL state should an Items-to-detail link preserve?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Semantic period type and anchor date</li>
+          <li>Only a display label</li>
+          <li>The entire item list payload</li>
+          <li>Nothing</li>
+        </ol>
+        <p data-quiz-explanation>The route resolves an exact range from semantic period state.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is intentionally unchanged?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Report aggregation semantics</li>
+          <li>The item page header</li>
+          <li>Selected-day state</li>
+          <li>Catalog identity</li>
+        </ol>
+        <p data-quiz-explanation>The candidate changes investigation and presentation, not rollup meaning.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What should happen after committing this candidate?</p>
+        <ol data-quiz-options>
+          <li>Merge based on old CI</li>
+          <li data-quiz-correct>Resolve the PR conflict/rebase, rerun the gate, push, await fresh checks, then merge</li>
+          <li>Deploy directly</li>
+          <li>Delete the report</li>
+        </ol>
+        <p data-quiz-explanation>The old PR head is divergent and conflicting, so candidate-specific validation only begins after reconciliation.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>When adding a third source domain, what must be decided and tested?</p>
+        <ol data-quiz-options>
+          <li>Only its label color</li>
+          <li data-quiz-correct>Whether it belongs in sales evidence, plus ownership, missing-source, and truncation coverage</li>
+          <li>Whether to remove the read cap</li>
+          <li>How to infer historical cost from current price</li>
+        </ol>
+        <p data-quiz-explanation>A source domain changes both the evidence policy and the failure-boundary test matrix.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+<h2>Subagent Evidence</h2>
         <p><strong>Session Context subagent</strong> searched five relevant July 23–30 sessions and established the read-optimized reporting decisions, period-link behavior, catalog identity fallback rationale, and delivery lessons. <strong>Delivered Diff subagent</strong> inspected current <code>HEAD</code>, PR metadata, and changed files to map the summary-to-evidence flow, bounded-read contract, intentional limits, and remote-head mismatch. <strong>Quiz/report reviewer subagent</strong> checked the draft against PR truth and the report contract, requiring the conflict/rebase finish line, the distinction between documentation and old CI failures, explicit validation evidence, and stronger quiz coverage.</p>
-      </section>
-
-      <section id="quiz">
-        <div class="eyebrow">Quiz: Pass Required</div><h2>Can you safely extend this workspace?</h2><p>Pass threshold: 8/10. Grade locally; no answers leave this document.</p>
-        <form id="changeQuiz"></form><button type="button" id="submitQuiz">Grade quiz</button><button type="button" class="secondary" id="resetQuiz">Reset</button><p id="grade" aria-live="polite"></p>
-      </section>
-    </main>
-    <script>
-      const questions=[
-        ['Why is transaction evidence a separate query?', ['To keep the normal SKU summary read path bounded','To bypass reports authorization','To replace rollups with source rows','To update catalog price'],0,'Evidence is an optional investigation, not a cost added to every summary subscription.'],
-        ['What does the 501st fact do?', ['It is rendered as a warning row','It determines whether the 500-result response is truncated','It is a retry record','It loads the next page automatically'],1,'The extra read is a sentinel that makes partial evidence explicit.'],
-        ['Which sources are included in the sheet?', ['POS and storefront','All inventory movement','Only Daily Close','Only POS'],0,'The candidate limits this sheet to POS and storefront evidence.'],
-        ['How is cross-store exposure prevented?', ['No check is needed for IDs','Both reports access and source-record store ownership are checked','The UI hides transaction IDs','The sheet uses client filtering'],1,'Backend authorization and ownership validation are both required.'],
-        ['How should an unknown historical cost appear?', ['Use current catalog net price','Show zero','Remain unavailable','Use the latest invoice'],2,'Current catalog data is identity metadata, not a historical cost substitute.'],
-        ['What happens when the source record is missing?', ['The entire query fails','It becomes an unavailable reference','It is fetched from another store','The report fact is deleted'],1,'The evidence preserves a safe unavailable reference.'],
-        ['What URL state should an Items-to-detail link preserve?', ['Semantic period type and anchor date','Only a display label','The entire item list payload','Nothing'],0,'The route resolves an exact range from semantic period state.'],
-        ['What is intentionally unchanged?', ['Report aggregation semantics','The item page header','Selected-day state','Catalog identity'],0,'The candidate changes investigation and presentation, not rollup meaning.'],
-        ['What should happen after committing this candidate?', ['Merge based on old CI','Resolve the PR conflict/rebase, rerun the gate, push, await fresh checks, then merge','Deploy directly','Delete the report'],1,'The old PR head is divergent and conflicting, so candidate-specific validation only begins after reconciliation.'],
-        ['When adding a third source domain, what must be decided and tested?', ['Only its label color','Whether it belongs in sales evidence, plus ownership, missing-source, and truncation coverage','Whether to remove the read cap','How to infer historical cost from current price'],1,'A source domain changes both the evidence policy and the failure-boundary test matrix.']
-      ];
-      const form=document.querySelector('#changeQuiz');
-      function render(){ form.innerHTML=questions.map((q,i)=>`<fieldset data-q="${i}"><legend>${i+1}. ${q[0]}</legend>${q[1].map((a,j)=>`<label><input type="radio" name="q${i}" value="${j}"> ${a}</label>`).join('')}<p class="explanation">${q[3]}</p></fieldset>`).join(''); document.querySelector('#grade').textContent=''; }
-      document.querySelector('#submitQuiz').onclick=()=>{let score=0; questions.forEach((q,i)=>{const set=form.querySelector(`[data-q="${i}"]`), selected=set.querySelector('input:checked'); set.classList.add('answered'); if(selected&&Number(selected.value)===q[2]) score++;}); document.querySelector('#grade').textContent=`${score}/10 — ${score>=8?'Pass. You understand the delivery boundaries.':'Not yet. Review the explanations and try again.'}`;};
-      document.querySelector('#resetQuiz').onclick=render; render();
-    </script>
-  </body>
+  </section>
+</article>
+</body>
 </html>

@@ -1,140 +1,84 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="36ae45561f4545c5119d44f14ce3455afa3d116de092806e2b484dd291263155" data-athena-report-base="origin/main" data-athena-report-head="feat/report-units-moved-tabs">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Scaling Units moved into top-mover and granular tabs</title>
-    <style>
-      :root {
-        --ink: #1f2933;
-        --muted: #596674;
-        --line: #d9e2ec;
-        --paper: #ffffff;
-        --soft: #f6f8fb;
-        --accent: #1d4ed8;
-        --accent-soft: #dbeafe;
-        --good: #166534;
-        --bad: #b91c1c;
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        background: var(--soft);
-        color: var(--ink);
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        line-height: 1.55;
-      }
-      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
-      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
-      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
-      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
-      h2 { font-size: 28px; margin: 0 0 16px; }
-      h3 { font-size: 19px; margin: 22px 0 10px; }
-      p { margin: 0 0 14px; }
-      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
-      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
-      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
-      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
-      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
-      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
-      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
-      .table-scroll { overflow-x: auto; }
-      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
-      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
-      tr:last-child td { border-bottom: 0; }
-      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
-      .quiz-question:first-child { border-top: 0; }
-      fieldset { border: 0; margin: 0; padding: 0; }
-      legend { font-weight: 700; margin-bottom: 10px; }
-      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
-      @media (hover: hover) and (pointer: fine) {
-        label:hover { border-color: #b6c5d8; }
-      }
-      button {
-        appearance: none;
-        border: 0;
-        border-radius: 8px;
-        background: var(--accent);
-        color: #ffffff;
-        cursor: pointer;
-        font-weight: 700;
-        padding: 11px 16px;
-        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
-      }
-      button:active { transform: scale(0.97); }
-      button.secondary { background: #475569; }
-      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
-      #quizResult { font-weight: 700; }
-      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
-      .answer-detail.visible { display: block; }
-      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
-      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
-      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
-      @media (max-width: 820px) { h1 { font-size: 32px; } main { padding: 32px 16px 56px; } }
-    </style>
-  </head>
-  <body>
-    <main>
-      <header>
-        <h1>Scaling Units moved into top-mover and granular tabs</h1>
-        <p class="lede">A trailing-30-day period could not open the Units moved sheet, because the answer was computed in one transaction with a 100-SKU ceiling on top of it. It is now a resumable, fenced snapshot whose identity includes the certified fold revision of every day it read &mdash; a field that did not exist on a single historical row until this change forced a refold.</p>
-        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch feat/report-units-moved-tabs</span><span class="pill">Base origin/main</span><span class="pill">Uncommitted working tree</span><span class="pill">No PR opened</span><span class="pill">Merge gate pending</span><span class="pill">Dev deployment rollout executed</span><span class="pill">Production not mutated</span></div>
-      </header>
-
-      <section class="panel"><h2>Executive Summary</h2>
-        <p>The Units moved sheet aggregated a whole range inside one Convex query. <code>listRangeSkuMovement</code> read <code>reportSkuDay</code> for the span with a 5,000-row ceiling, then rejected any result with more than 100 distinct SKUs. A normal trailing-30-day period at a busy store failed both checks &mdash; while the canonical projections held every unit of the evidence.</p>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Scaling Units moved into top-mover and granular tabs</title>
+</head>
+<body>
+<article
+  data-athena-landed-change-report="v2"
+  data-athena-report-diff-fingerprint="36ae45561f4545c5119d44f14ce3455afa3d116de092806e2b484dd291263155"
+  data-athena-report-base="origin/main"
+  data-athena-report-head="feat/report-units-moved-tabs"
+>
+  <header data-report-section="header">
+    <h1>Scaling Units moved into top-mover and granular tabs</h1>
+    <p class="lede">A trailing-30-day period could not open the Units moved sheet, because the answer was computed in one transaction with a 100-SKU ceiling on top of it. It is now a resumable, fenced snapshot whose identity includes the certified fold revision of every day it read — a field that did not exist on a single historical row until this change forced a refold.</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch feat/report-units-moved-tabs</li>
+      <li>Base origin/main</li>
+      <li>Uncommitted working tree</li>
+      <li>No PR opened</li>
+      <li>Merge gate pending</li>
+      <li>Dev deployment rollout executed</li>
+      <li>Production not mutated</li>
+    </ul>
+  </header>
+  <section data-report-section="summary">
+<h2>Executive Summary</h2>
+        <p>The Units moved sheet aggregated a whole range inside one Convex query. <code>listRangeSkuMovement</code> read <code>reportSkuDay</code> for the span with a 5,000-row ceiling, then rejected any result with more than 100 distinct SKUs. A normal trailing-30-day period at a busy store failed both checks — while the canonical projections held every unit of the evidence.</p>
         <p><strong>Removing the 100-SKU check would not have fixed it.</strong> The 5,000-row ceiling sits behind it, the transaction read budget sits behind that, and each ceiling resolves into unbounded identity hydration and a complete result shipped to the browser. The ceiling was a symptom; doing unbounded work in one transaction was the defect.</p>
         <p>The delivery extends the <em>existing</em> <code>reportRangeResult</code> lifecycle with a second request kind rather than building a parallel framework. One admitted request is one immutable snapshot, accumulated one operating day at a time into indexed child rows, ranked in bounded batches, and published only after a fresh recheck of its source lineage. The sheet reads a single 20-row page at a time behind Top movers and All items tabs.</p>
-        <p><strong>The hard part was not the worker.</strong> Snapshot trust needs per-day fold provenance, and <code>reportDay</code>/<code>reportSkuDay</code> had none. Stamping <code>certifiedFoldRevision</code> in the fold path certifies only <em>future</em> folds &mdash; a clean historical day is never refolded, so it would have stayed inadmissible forever. The plan originally claimed no historical backfill was required; a planning review falsified that before implementation. The delivery therefore bumps <code>REPORTS_FOLD_VERSION</code> 2&nbsp;&rarr;&nbsp;3 and runs the existing per-store <code>foldVersionRepair</code>, making the migration a hard rollout prerequisite with an observable coverage gate.</p>
-      </section>
-
-      <section class="panel"><h2>Problem and Context</h2>
-        <p>Two ceilings and a missing fact. <code>RANGE_SKU_MOVEMENT_LIMIT</code> is 100 distinct SKUs; <code>RANGE_SKU_MIX_ROW_LIMIT</code> is 5,000 <code>reportSkuDay</code> rows. Both are enforced inside a single query, and the supported Units moved contract is up to 92 inclusive days. The two are simply incompatible at real volume, and the operator-facing failure &mdash; "choose a shorter range" &mdash; blames the operator for asking a supported question.</p>
-        <p>Making the work resumable is the only structural answer, and it immediately raises a correctness question the old design never had to face. Work spread across ten transactions reads evidence that can change between them. "What did this range move?" is only meaningful if every batch sees the same generation of source data, and if publication can <em>prove</em> it did. The canonical projections carried <code>foldedAt</code> and a <code>foldVersion</code> &mdash; nothing identifying which fold produced a given row.</p>
+        <p><strong>The hard part was not the worker.</strong> Snapshot trust needs per-day fold provenance, and <code>reportDay</code>/<code>reportSkuDay</code> had none. Stamping <code>certifiedFoldRevision</code> in the fold path certifies only <em>future</em> folds — a clean historical day is never refolded, so it would have stayed inadmissible forever. The plan originally claimed no historical backfill was required; a planning review falsified that before implementation. The delivery therefore bumps <code>REPORTS_FOLD_VERSION</code> 2&nbsp;→&nbsp;3 and runs the existing per-store <code>foldVersionRepair</code>, making the migration a hard rollout prerequisite with an observable coverage gate.</p>
+  </section>
+  <section data-report-section="problem">
+<h2>Problem and Context</h2>
+        <p>Two ceilings and a missing fact. <code>RANGE_SKU_MOVEMENT_LIMIT</code> is 100 distinct SKUs; <code>RANGE_SKU_MIX_ROW_LIMIT</code> is 5,000 <code>reportSkuDay</code> rows. Both are enforced inside a single query, and the supported Units moved contract is up to 92 inclusive days. The two are simply incompatible at real volume, and the operator-facing failure — "choose a shorter range" — blames the operator for asking a supported question.</p>
+        <p>Making the work resumable is the only structural answer, and it immediately raises a correctness question the old design never had to face. Work spread across ten transactions reads evidence that can change between them. "What did this range move?" is only meaningful if every batch sees the same generation of source data, and if publication can <em>prove</em> it did. The canonical projections carried <code>foldedAt</code> and a <code>foldVersion</code> — nothing identifying which fold produced a given row.</p>
         <p>And a fold-written field does not reach history. Athena's sweeper folds a day only when a <code>reportDirtyDay</code> mark exists for it. Clean days never refold. So stamping revisions in <code>foldAndReplaceDay</code> would have left every existing day permanently uncertified: not loudly broken, just perpetually "waiting" behind a spinner no operator could clear.</p>
-      </section>
-
-      <section class="panel"><h2>Mental Model</h2>
+  </section>
+  <section data-report-section="mental-model">
+<h2>Mental Model</h2>
         <p>Think of a movement result as a <strong>photograph with its negatives attached</strong>, not as a query result. The request key <em>is</em> the photograph's identity:</p>
         <pre><code>movement:hash([
   "sku_movement", storeId, startDate, endDate,
   REPORTS_FOLD_VERSION, REPORT_MOVEMENT_CONTRACT_VERSION,
   [ [day, certifiedFoldRevision | "empty"], ... ]   // one entry per included day
 ])</code></pre>
-        <p>Everything else follows from that one decision. Reopening with unchanged sources reuses the completed snapshot. Any included day changing revision yields a <em>successor</em> request instead of mutating a published one. A custom-summary and a movement request over identical dates cannot collide, because the kind is inside the hash. An absent day is an explicit <code>"empty"</code> sentinel &mdash; "this day had no fold" is part of the identity, not an omission from it.</p>
+        <p>Everything else follows from that one decision. Reopening with unchanged sources reuses the completed snapshot. Any included day changing revision yields a <em>successor</em> request instead of mutating a published one. A custom-summary and a movement request over identical dates cannot collide, because the kind is inside the hash. An absent day is an explicit <code>"empty"</code> sentinel — "this day had no fold" is part of the identity, not an omission from it.</p>
         <p>The second model is the division of background responsibility, which this change deliberately splits in two and writes down in the sweeper's own header comment:</p>
-        <pre><code>FOLDS      declarative dirty marks  -> sweeper is the single fold authority
-MOVEMENT   own eligible-work queue -> prompt action continuations,
+        <pre><code>FOLDS      declarative dirty marks  -&gt; sweeper is the single fold authority
+MOVEMENT   own eligible-work queue -&gt; prompt action continuations,
                                       cron is a BACKSTOP that only SCHEDULES</code></pre>
-        <p>The sweeper's movement section runs unconditionally &mdash; never gated on <code>touchedStores</code> &mdash; because a dropped continuation has to be recoverable at a store with no dirty days at all.</p>
-      </section>
-
-      <section class="panel"><h2>Before and After</h2>
+        <p>The sweeper's movement section runs unconditionally — never gated on <code>touchedStores</code> — because a dropped continuation has to be recoverable at a store with no dirty days at all.</p>
+  </section>
+  <section data-report-section="before-after">
+<h2>Before and After</h2>
         <ul>
-          <li>Before: a range with more than 100 moving SKUs threw. After: SKU count is never a terminal reason &mdash; a live 30-day dev range completed with 138 moving SKUs across 7 pages.</li>
+          <li>Before: a range with more than 100 moving SKUs threw. After: SKU count is never a terminal reason — a live 30-day dev range completed with 138 moving SKUs across 7 pages.</li>
           <li>Before: more than 5,000 <code>reportSkuDay</code> rows threw. After: source evidence is accumulated one operating day at a time, and a day is already capped at 2,000 rows by the fold.</li>
           <li>Before: the complete ranked result was hydrated and shipped. After: at most 20 identities are resolved <em>after</em> rank selection, and the browser holds one 20-row page.</li>
           <li>Before: <code>reportDay</code>/<code>reportSkuDay</code> carried no fold provenance. After: every fold stamps a monotonic <code>certifiedFoldRevision</code> on the day and every SKU row it replaces, together.</li>
           <li>Before: the sheet was one list. After: Top movers (one ranked page, chart-first) and All items (20-row table with numbered pagination), sharing one absolute-net ordering.</li>
-          <li>Before: Overview used <code>replace: true</code> for the <code>units</code> key and Weekly did not, so browser Back behaved differently per route. After: one convention &mdash; replace for open/close and intra-sheet state, a real history entry only for the drill-down itself.</li>
+          <li>Before: Overview used <code>replace: true</code> for the <code>units</code> key and Weekly did not, so browser Back behaved differently per route. After: one convention — replace for open/close and intra-sheet state, a real history entry only for the drill-down itself.</li>
           <li>Unchanged: the legacy <code>listRangeSkuMovement</code> query and its exact response, kept additively so already-open clients survive the rollout.</li>
         </ul>
-      </section>
-
-      <section class="panel"><h2>The Lifecycle State Machine</h2>
-        <p>Public states are a separate discriminated union from durable phases, and three of them carry no durable row at all &mdash; the ensure mutation returns them having written and scheduled nothing.</p>
+  </section>
+  <section data-report-section="the-lifecycle-state-machine">
+<h2>The Lifecycle State Machine</h2>
+        <p>Public states are a separate discriminated union from durable phases, and three of them carry no durable row at all — the ensure mutation returns them having written and scheduled nothing.</p>
         <div class="table-scroll">
         <table>
           <thead><tr><th>State</th><th>Durable?</th><th>Meaning and exit</th></tr></thead>
           <tbody>
-            <tr><td><code>not_available</code></td><td>No write</td><td>Store is outside <code>REPORTS_SWEEP_STORE_ALLOWLIST</code>. Checked first, before validation. Non-retrying &mdash; such a store never folds, so it can never certify, so waiting would be forever.</td></tr>
+            <tr><td><code>not_available</code></td><td>No write</td><td>Store is outside <code>REPORTS_SWEEP_STORE_ALLOWLIST</code>. Checked first, before validation. Non-retrying — such a store never folds, so it can never certify, so waiting would be forever.</td></tr>
             <tr><td><code>waiting</code></td><td>No write</td><td>An included day is dirty or not yet revision-certified (repair still draining). Client re-polls ensure after a jittered server-supplied interval.</td></tr>
             <tr><td><code>backpressure</code></td><td>No write</td><td>A principal / store / global fixed-window admission budget is saturated. Zero writes, zero schedules, retryable.</td></tr>
             <tr><td><code>queued</code></td><td>Yes</td><td>Reset lane: deletes children left by a superseded attempt in bounded batches so accumulation cannot double-count. Fresh requests fall straight through.</td></tr>
             <tr><td><code>aggregating</code></td><td>Yes</td><td>One operating day per batch. Verifies no dirty marker, that the day's revision equals the admitted one, and that each SKU row carries that same revision, then accumulates into indexed child rows.</td></tr>
             <tr><td><code>ranking</code></td><td>Yes</td><td>Resumes off the maximum assigned rank and continues exactly across the compound sort-key index: the remainder of the resume key's group first, then strictly greater keys.</td></tr>
-            <tr><td><code>retry_wait</code></td><td>Yes</td><td>Capped exponential backoff (30s base, 10min ceiling, 5 attempts). Re-entry phase is inferred from durable state: no cursor &rarr; ranking; cursor at start with children present &rarr; queued reset; otherwise aggregating.</td></tr>
+            <tr><td><code>retry_wait</code></td><td>Yes</td><td>Capped exponential backoff (30s base, 10min ceiling, 5 attempts). Re-entry phase is inferred from durable state: no cursor → ranking; cursor at start with children present → queued reset; otherwise aggregating.</td></tr>
             <tr><td><code>completed</code></td><td>Yes</td><td>Published only after a fresh bounded recheck finds the identical clean revision vector. Totals, count, completion time, and ranked pages are immutable.</td></tr>
             <tr><td><code>terminal_error</code></td><td>Yes</td><td>Sanitized code (<code>movement_worker_failed</code> or <code>movement_source_stale</code>) plus an opaque correlation id. Retry creates a <em>new</em> fenced attempt, never the failed row's state.</td></tr>
             <tr><td><code>cleaning</code></td><td>Yes</td><td>Expired: children drain first through their own <code>by_expiresAt</code> index; the header is deleted only once none remain.</td></tr>
@@ -151,7 +95,7 @@ MOVEMENT   own eligible-work queue -> prompt action continuations,
         <p>A duplicate scheduled worker, a superseded attempt, or a replayed continuation observes the mismatch and no-ops. In a resumable worker these are the normal case, not the edge case.</p>
 
         <h3>Atomic work, separate failure record</h3>
-        <p>The module's first <code>internalAction</code> never touches the database. It invokes one batch mutation, and that mutation deliberately does <strong>not</strong> catch unexpected defects &mdash; Convex rolls back aggregates, cursor, and fence together. The action then records retry metadata in a different transaction, so attempt count, backoff, and eligibility survive the rollback that discarded the work:</p>
+        <p>The module's first <code>internalAction</code> never touches the database. It invokes one batch mutation, and that mutation deliberately does <strong>not</strong> catch unexpected defects — Convex rolls back aggregates, cursor, and fence together. The action then records retry metadata in a different transaction, so attempt count, backoff, and eligibility survive the rollback that discarded the work:</p>
         <pre><code>} catch (error) {
   const outcome = await ctx.runMutation(MOVEMENT_FAILURE_REF, {
     rangeResultId: args.rangeResultId,
@@ -162,14 +106,14 @@ MOVEMENT   own eligible-work queue -> prompt action continuations,
         <p>The failure mutation is itself fenced, so a late report from a superseded attempt records nothing.</p>
 
         <h3>Conservative completion</h3>
-        <p><code>deriveMovementRequestLifecycle</code> reports <code>completed</code> only when phase, totals, <em>and</em> completion time are all present together, and <code>terminal_error</code> only when both the sanitized code and the correlation id are. Partial aggregation or ranking state can therefore only ever surface as pending &mdash; a header cannot half-publish.</p>
-      </section>
-
-      <section class="panel"><h2>Fold Provenance and the Migration</h2>
+        <p><code>deriveMovementRequestLifecycle</code> reports <code>completed</code> only when phase, totals, <em>and</em> completion time are all present together, and <code>terminal_error</code> only when both the sanitized code and the correlation id are. Partial aggregation or ranking state can therefore only ever surface as pending — a header cannot half-publish.</p>
+  </section>
+  <section data-report-section="fold-provenance-and-the-migration">
+<h2>Fold Provenance and the Migration</h2>
         <p><code>foldAndReplaceDay</code> now computes a per-day monotonic counter and stamps it on the day document and on every <code>reportSkuDay</code> row the fold replaces, in the same mutation:</p>
         <pre><code>const certifiedFoldRevision = (existingDay?.certifiedFoldRevision ?? 0) + 1;</code></pre>
-        <p>A counter, not the fold timestamp: two folds in the same millisecond must not collide, and a counter is deterministic inside the transaction. Because a fold already rewrites the day's SKU rows wholesale, the SKU rows ride along at no extra cost &mdash; which is what lets <code>movementSourceRowMatchesRevision</code> prove a SKU row belongs to exactly the day generation the snapshot admitted.</p>
-        <p><strong>That change alone certifies nothing that already exists.</strong> Clean days never refold. So <code>REPORTS_FOLD_VERSION</code> goes 2&nbsp;&rarr;&nbsp;3 in the same change, purely so the repair's staleness predicate can see pre-revision days:</p>
+        <p>A counter, not the fold timestamp: two folds in the same millisecond must not collide, and a counter is deterministic inside the transaction. Because a fold already rewrites the day's SKU rows wholesale, the SKU rows ride along at no extra cost — which is what lets <code>movementSourceRowMatchesRevision</code> prove a SKU row belongs to exactly the day generation the snapshot admitted.</p>
+        <p><strong>That change alone certifies nothing that already exists.</strong> Clean days never refold. So <code>REPORTS_FOLD_VERSION</code> goes 2&nbsp;→&nbsp;3 in the same change, purely so the repair's staleness predicate can see pre-revision days:</p>
         <pre><code>export function needsCertifiedRefold(day) {
   return (
     day.foldVersion !== REPORTS_FOLD_VERSION ||
@@ -177,32 +121,32 @@ MOVEMENT   own eligible-work queue -> prompt action continuations,
     day.certifiedFoldRevision === null
   );
 }</code></pre>
-        <p>The repair marks stale days <code>reason: "fold_version_bump"</code> and lets the sweeper &mdash; the single fold authority &mdash; rewrite them. No second writer was introduced: an in-place backfill script would have been exactly that, and the module forbids it. A new read-only <code>countUncertifiedDays</code> reports per page <code>staleFoldVersionCount</code>, <code>missingRevisionCount</code>, <code>uncertifiedCount</code> and <code>certifiedCount</code>, so readiness is observable rather than assumed.</p>
+        <p>The repair marks stale days <code>reason: "fold_version_bump"</code> and lets the sweeper — the single fold authority — rewrite them. No second writer was introduced: an in-place backfill script would have been exactly that, and the module forbids it. A new read-only <code>countUncertifiedDays</code> reports per page <code>staleFoldVersionCount</code>, <code>missingRevisionCount</code>, <code>uncertifiedCount</code> and <code>certifiedCount</code>, so readiness is observable rather than assumed.</p>
 
         <h3>Rollout ordering (hard sequence)</h3>
         <ol>
-          <li>Deploy the schema fields &mdash; optional on both generations, so a mixed-generation store validates.</li>
+          <li>Deploy the schema fields — optional on both generations, so a mixed-generation store validates.</li>
           <li>Deploy fold stamping plus the version bump. New folds certify from here.</li>
           <li>Run <code>markStaleFoldVersionDays</code> per allowlisted store and let the sweeper drain. The bump refolds <em>every</em> historical day of each repaired store; the drain rate is bounded by <code>SWEEP_DIRTY_BATCH</code> (10 days) per five-minute tick, so the window is computable from history length.</li>
           <li>Confirm <code>uncertifiedCount: 0</code> on every page of <code>countUncertifiedDays</code>.</li>
           <li>Only then deploy the movement backend and enable the UI for that store.</li>
         </ol>
         <p>Admission's two negative outcomes are deliberately asymmetric. An allowlisted store mid-repair returns <code>waiting</code>, because the repair genuinely will finish. A non-allowlisted store returns <code>not_available</code> before any validation or read, because for that store the wait can never end.</p>
-      </section>
-
-      <section class="panel"><h2>Security and Tenancy Boundaries</h2>
+  </section>
+  <section data-report-section="security-and-tenancy-boundaries">
+<h2>Security and Tenancy Boundaries</h2>
         <ul>
           <li><strong>Generation vs. read.</strong> <code>ensureMovementRange</code> and <code>retryMovementRange</code> are registered under <code>reporting.generate</code> in <code>capabilityCatalog.ts</code>, beside <code>reports/customRange</code>. Page and status reads sit behind the ordinary <code>requireReportsStoreAccess</code> boundary.</li>
           <li><strong>Shared demo cannot generate.</strong> <code>requireSharedDemoCapabilityIfApplicable(ctx, "reporting.generate")</code> runs first on both mutations, so a demo actor is denied server-side regardless of any client-side demo gating. The demo sheet renders <code>createSharedDemoReportMovementPage</code>, an always-completed page derived from the transaction fixture already in the browser.</li>
           <li><strong>Workers are private.</strong> The batch mutation, the failure mutation, and the worker action are all internal; the sweeper hooks are plain functions invoked from <code>sweepWithCtx</code>.</li>
           <li><strong>Every lookup is store-prefixed.</strong> Headers resolve through <code>by_storeId_requestKey</code>, children through <code>by_storeId_rangeResultId_*</code>. A cross-tenant request key substitution resolves to nothing rather than to another store's snapshot.</li>
-          <li><strong>Strict validation on the durable path.</strong> Movement uses <code>validateReportRangeRequest</code> &mdash; strict <code>YYYY-MM-DD</code> shape <em>and</em> calendar validity plus the 92-day ceiling &mdash; not the legacy loose span-only check, because a malformed label must never enter a durable request identity. Page input must be a positive safe integer and is then canonicalized against the completed count.</li>
+          <li><strong>Strict validation on the durable path.</strong> Movement uses <code>validateReportRangeRequest</code> — strict <code>YYYY-MM-DD</code> shape <em>and</em> calendar validity plus the 92-day ceiling — not the legacy loose span-only check, because a malformed label must never enter a durable request identity. Page input must be a positive safe integer and is then canonicalized against the completed count.</li>
           <li><strong>Nothing internal crosses the public boundary.</strong> Cursors, fences, revision vectors, and exception text stay server-side; a terminal state exposes a generic code and an opaque correlation id, with the real error logged against that id.</li>
           <li><strong>Admission before writes.</strong> Principal, store, and global fixed-window counters are all checked before anything is written; reuse of an existing request never spends budget, while a retry does, because a retry creates work.</li>
         </ul>
-      </section>
-
-      <section class="panel"><h2>The UI State Matrix and the Direction-Word Decision</h2>
+  </section>
+  <section data-report-section="the-ui-state-matrix-and-the-direction-word-decis">
+<h2>The UI State Matrix and the Direction-Word Decision</h2>
         <p>The sheet shell is persistent in every state: title and date, then tabs (<em>Top movers</em> / <em>All items</em>), then the lifecycle or count message, then the active tab's content.</p>
         <div class="table-scroll">
         <table>
@@ -217,32 +161,32 @@ MOVEMENT   own eligible-work queue -> prompt action continuations,
           </tbody>
         </table>
         </div>
-        <p><strong>Poll-then-subscribe.</strong> Waiting, backpressure, and not-available write nothing, so there is no document to subscribe to &mdash; and inventing one would make backpressure durable. The sheet calls the idempotent ensure mutation on open, re-polls on the server-supplied jittered interval while the outcome is waiting or backpressure, and subscribes to <code>getMovementRange</code> only once a request key exists. The timer belongs to the effect that armed it, so closing the sheet cancels it and a StrictMode double effect tears down its first timer before arming the second. Duplicate ensures land on the same request because dedupe is checked <em>before</em> admission budget is consumed.</p>
-        <p><strong>Signs are data; direction is presentation.</strong> Ranking is by absolute net movement and the stored value keeps its sign, so <code>&minus;24</code> ranks ahead of <code>+18</code> and a fully cancelled SKU still appears at net zero with its real sold and returned counts. But in a retail context a leading <code>+</code> reads as stock <em>received</em>, which inverts the meaning for the reader. So no user-facing value carries a sign:</p>
+        <p><strong>Poll-then-subscribe.</strong> Waiting, backpressure, and not-available write nothing, so there is no document to subscribe to — and inventing one would make backpressure durable. The sheet calls the idempotent ensure mutation on open, re-polls on the server-supplied jittered interval while the outcome is waiting or backpressure, and subscribes to <code>getMovementRange</code> only once a request key exists. The timer belongs to the effect that armed it, so closing the sheet cancels it and a StrictMode double effect tears down its first timer before arming the second. Duplicate ensures land on the same request because dedupe is checked <em>before</em> admission budget is consumed.</p>
+        <p><strong>Signs are data; direction is presentation.</strong> Ranking is by absolute net movement and the stored value keeps its sign, so <code>−24</code> ranks ahead of <code>+18</code> and a fully cancelled SKU still appears at net zero with its real sold and returned counts. But in a retail context a leading <code>+</code> reads as stock <em>received</em>, which inverts the meaning for the reader. So no user-facing value carries a sign:</p>
         <pre><code>export function formatNetUnitsMoved(netUnits) {
-  if (netUnits > 0) return `${formatUnits(netUnits)} out`;
-  if (netUnits < 0) return `${formatUnits(-netUnits)} returned`;
+  if (netUnits &gt; 0) return `${formatUnits(netUnits)} out`;
+  if (netUnits &lt; 0) return `${formatUnits(-netUnits)} returned`;
   return "0 net";
 }</code></pre>
         <p>with a matching spoken form ("289 units out"), direction-aware bar corners on a zero-centered axis, and axis labels reading <code>returned</code> / <code>out</code> where the ticks no longer carry direction. The signed number is untouched in the data, the ranking, and the contract.</p>
         <p><strong>Navigation continuity.</strong> <code>reportRouteSearch.ts</code> gains <code>unitsTab</code>, <code>unitsPage</code>, <code>unitsFocus</code> and <code>unitsScroll</code>, shared by both Reports routes and omitted at their defaults so a plain <code>units=true</code> URL stays canonical. The sheet's existing scroll map survives only within one mount, so returning from SKU detail uses a new mechanism: the underlying report offset is captured into sheet-owned navigation state on drill-down and reapplied on animation frames once the settled content has laid out. If the originating SKU disappeared or its page contracted, focus falls back to the Granular heading with an announcement rather than landing on a different item.</p>
-      </section>
-
-      <section class="panel"><h2>Failure Boundaries</h2>
+  </section>
+  <section data-report-section="failure-boundaries">
+<h2>Failure Boundaries</h2>
         <ul>
           <li><strong>A day goes dirty mid-flight.</strong> The aggregating batch checks for a dirty marker and revision equality before touching the day; a mismatch goes terminal as <code>movement_source_stale</code> rather than mixing generations.</li>
-          <li><strong>A day changes after its batch but before publication.</strong> Rank finalization re-reads the bounded revision vector and compares entry for entry. A mismatch goes terminal and <em>erases</em> the running totals &mdash; a terminal row carries no totals, partial or otherwise.</li>
+          <li><strong>A day changes after its batch but before publication.</strong> Rank finalization re-reads the bounded revision vector and compares entry for entry. A mismatch goes terminal and <em>erases</em> the running totals — a terminal row carries no totals, partial or otherwise.</li>
           <li><strong>A continuation is dropped.</strong> The sweeper's unconditional <code>by_movementEligibleAt</code> scan reschedules it, budgeted per tick, pushing each rescheduled row's eligibility one stall window out so a poison row cannot monopolize every tick.</li>
           <li><strong>A poison job.</strong> Capped attempts move it to terminal instead of letting it retry forever; backoff doubles from 30s to a 10-minute ceiling.</li>
           <li><strong>Duplicate workers.</strong> The phase/fence expectation makes the second application a no-op, so no day is aggregated twice and no rank interval is assigned twice.</li>
           <li><strong>A superseded attempt's children.</strong> The <code>queued</code> reset lane deletes them in bounded batches before re-aggregation, so a retry cannot double-count.</li>
           <li><strong>An expired identity is re-requested.</strong> Inserting beside a draining row would break <code>(store, requestKey)</code> uniqueness, so ensure returns <code>waiting</code> until cleanup finishes.</li>
-          <li><strong>A movement row reaches the summary path.</strong> <code>computePendingRanges</code> and <code>expireRangeResults</code> both skip <code>sku_movement</code>, and <code>computeRange</code> short-circuits on it as defense in depth &mdash; the summary compute path can never overwrite movement lifecycle state, and header deletion can never skip child-first cleanup.</li>
+          <li><strong>A movement row reaches the summary path.</strong> <code>computePendingRanges</code> and <code>expireRangeResults</code> both skip <code>sku_movement</code>, and <code>computeRange</code> short-circuits on it as defense in depth — the summary compute path can never overwrite movement lifecycle state, and header deletion can never skip child-first cleanup.</li>
           <li><strong>An uncertified store.</strong> Waiting, not a wrong answer; a non-allowlisted store gets the distinct sanitized outcome instead.</li>
         </ul>
-      </section>
-
-      <section class="panel"><h2>What Intentionally Did Not Change</h2>
+  </section>
+  <section data-report-section="changes">
+<h2>What Intentionally Did Not Change</h2>
         <ul>
           <li><strong>The legacy reader.</strong> <code>listRangeSkuMovement</code> keeps its exact response and both of its ceilings, so clients open during the rollout are unaffected. Removing it is later cleanup.</li>
           <li><strong>Legacy custom-summary rows.</strong> A <code>reportRangeResult</code> row without a <code>kind</code> is still a custom summary with its original request-key shape, failed-row reuse until TTL, and 366-day span. Span limits became per-kind rather than global.</li>
@@ -250,10 +194,9 @@ MOVEMENT   own eligible-work queue -> prompt action continuations,
           <li><strong>The custom-summary compute lane.</strong> It keeps its existing <code>touchedStores</code> coupling; generalizing it is deferred.</li>
           <li><strong>The demo gate as a non-authorization boundary.</strong> The demo fixture derives its page client-side, and the server independently denies demo generation.</li>
         </ul>
-      </section>
-
-      <section class="panel">
-        <h2>Key Files</h2>
+  </section>
+  <section data-report-section="key-files">
+<h2>Key Files</h2>
         <div class="table-scroll">
         <table>
           <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
@@ -262,7 +205,7 @@ MOVEMENT   own eligible-work queue -> prompt action continuations,
             <tr><td><code>convex/reports/skuMovementRange.test.ts</code></td><td>New, ~1,556 lines. Scale, fencing, rollback, admission, isolation, sanitization, and cleanup-throughput fixtures.</td></tr>
             <tr><td><code>convex/reports/sweeper.ts</code></td><td>Certified revision stamping in <code>foldAndReplaceDay</code>; the unconditional movement backstop and cleanup section; the revised header design comment naming the new split.</td></tr>
             <tr><td><code>convex/reports/foldVersionRepair.ts</code></td><td><code>needsCertifiedRefold</code>, the <code>countUncertifiedDays</code> coverage query, and the rollout runbook docstring.</td></tr>
-            <tr><td><code>shared/reportsContract.ts</code></td><td>Fold version 2&nbsp;&rarr;&nbsp;3, request kinds, per-kind span limits, strict date validation, the movement request-key identity, the admissibility helpers, the sort-key convention, and the public lifecycle union.</td></tr>
+            <tr><td><code>shared/reportsContract.ts</code></td><td>Fold version 2&nbsp;→&nbsp;3, request kinds, per-kind span limits, strict date validation, the movement request-key identity, the admissibility helpers, the sort-key convention, and the public lifecycle union.</td></tr>
             <tr><td><code>convex/schemas/reports/derived.ts</code>, <code>convex/schema.ts</code></td><td>Optional <code>certifiedFoldRevision</code> on both projections; the movement fields on the shared header; the <code>reportRangeMovementSku</code> child table and the <code>reportMovementAdmission</code> bucket table.</td></tr>
             <tr><td><code>src/components/reports/ReportUnitsMovedChartSheet.tsx</code></td><td>New, ~1,214 lines. Tabbed sheet, poll-then-subscribe admission, settled <code>{request, page}</code> context, direction-word copy, restore machinery.</td></tr>
             <tr><td><code>src/components/reports/reportRouteSearch.ts</code></td><td>The four shared sheet keys, the sheet-context reset, the focus token encoding, and the closed-sheet clear.</td></tr>
@@ -272,25 +215,12 @@ MOVEMENT   own eligible-work queue -> prompt action continuations,
           </tbody>
         </table>
         </div>
-      </section>
-
-      <section class="panel">
-        <h2>Subagent Evidence</h2>
-        <p>The validation below is what was actually executed for this delivery, attributed to the lane that ran it. Nothing here is a prediction.</p>
-        <ul>
-          <li><strong>Backend validation lane.</strong> 230 focused tests across 8 suites, covering the contract, the movement lifecycle, the sweeper, the fold-version repair, and the existing reports queries. Coverage included: a 30-day scale fixture beyond both legacy ceilings completing across multiple source and rank batches; revision stamping and repair backfill; mixed-generation stores reading as not-yet-ready; admission saturation writing nothing; fencing against duplicate workers; injected mid-batch defects rolling back and then recording retry metadata separately; cross-store substitution returning nothing; sanitized error hygiene; and cleanup throughput against steady-state creation.</li>
-          <li><strong>Frontend validation lane.</strong> 173 tests across 8 suites: the sheet's state matrix and polling behavior, the shared-demo movement page parity, the route search serialization, and both Reports route integrations including the restore path.</li>
-          <li><strong>Static checks.</strong> <code>tsc</code> clean. ESLint clean across the changed Convex files and the changed frontend files.</li>
-          <li><strong>Dev deployment rollout (executed, in runbook order).</strong> The repair marked <strong>72 stale days</strong>; the sweeper drained them; <code>countUncertifiedDays</code> then reported <strong>0 uncertified</strong> across every page. A live 30-day <code>ensureMovementRange</code> against the repaired store completed with <strong>138 moving SKUs</strong>, <strong>777 net units</strong>, and <strong>7 pages</strong> &mdash; a range the legacy reader rejects on both its ceilings.</li>
-          <li><strong>Planning review.</strong> The review that preceded implementation falsified the plan's original "no historical backfill is required" claim. That single correction is why the fold-version bump, the repair step, the coverage query, and the allowlist gate exist at all; without it the feature would have shipped and waited forever on every historical range.</li>
-          <li><strong>Not run here.</strong> The full <code>bun run pr:athena</code> merge gate is pending, and production was not mutated. The rollout evidence above is from the dev deployment only.</li>
-        </ul>
-      </section>
-
-      <section class="panel"><h2>Next-Time Guidance</h2>
+  </section>
+  <section data-report-section="guidance">
+<h2>Next-Time Guidance</h2>
         <ul>
           <li>Assume any new fold-time metadata is invisible on history until proven otherwise. Clean days never refold, so "no backfill required" is a claim to falsify against the refold trigger, not to read off the diff.</li>
-          <li>Migrate with a version bump plus the existing repair, and gate acceptance on a coverage query reading zero &mdash; not on a successful deploy.</li>
+          <li>Migrate with a version bump plus the existing repair, and gate acceptance on a coverage query reading zero — not on a successful deploy.</li>
           <li>Never add a second writer for a projection with a single fold authority. A one-field in-place backfill is still a second authority.</li>
           <li>Check the never-reachable case before the wait state. A precondition some tenants can never satisfy needs a distinct non-retrying outcome; a wait that cannot end is a hang.</li>
           <li>Put provenance inside the request identity. Reuse, invalidation, and successor creation then fall out of one hash comparison instead of bespoke freshness logic.</li>
@@ -299,158 +229,118 @@ MOVEMENT   own eligible-work queue -> prompt action continuations,
           <li>Let the atomic batch fail and record the retry separately, or the rollback that saves correctness will also discard the backoff that saves liveness.</li>
           <li>Require every field that makes a state meaningful before reporting it. Completed means phase <em>and</em> totals <em>and</em> completion time.</li>
           <li>When a new lane contradicts a module's written design stance, rewrite the stance. A comment that disagrees with the code teaches the wrong invariant.</li>
-          <li>Waiting states that write nothing need a poll, not a subscription &mdash; server-supplied interval, jitter, one timer per effect, dedupe before charging admission.</li>
+          <li>Waiting states that write nothing need a poll, not a subscription — server-supplied interval, jitter, one timer per effect, dedupe before charging admission.</li>
           <li>Keep signs in the data and direction words in the UI wherever a <code>+</code> carries a domain meaning that conflicts with the reader's.</li>
         </ul>
-      </section>
-
-      <section id="quiz" class="panel">
-        <h2>Quiz: Pass Required</h2>
-        <p>You must score at least 8 out of 10 to pass.</p>
-        <form id="changeQuiz" data-threshold="8">
-
-<div class="quiz-question" data-answer="2">
-  <fieldset>
-    <legend>1. Why was removing the 100-SKU check in <code>listRangeSkuMovement</code> rejected as the fix?</legend>
-    <label><input type="radio" name="q1" value="0" /> The check is required by the Reports read-model boundary document</label>
-    <label><input type="radio" name="q1" value="1" /> Removing it would have broken the shared-demo fixture's parity assertions</label>
-    <label><input type="radio" name="q1" value="2" /> The 5,000-row read ceiling sits behind it, the transaction read budget behind that, and each one resolves into unbounded identity hydration and a complete result shipped to the browser</label>
-  </fieldset>
-  <div class="answer-detail">The ceiling was a symptom. Doing an unbounded amount of work in one transaction — and calling the result trustworthy because it happened to finish — was the defect.</div>
-</div>
-
-<div class="quiz-question" data-answer="1">
-  <fieldset>
-    <legend>2. Stamping <code>certifiedFoldRevision</code> in <code>foldAndReplaceDay</code> is not enough on its own. Why?</legend>
-    <label><input type="radio" name="q2" value="0" /> The fold writes <code>reportDay</code> but not <code>reportSkuDay</code>, so SKU rows need a second pass</label>
-    <label><input type="radio" name="q2" value="1" /> The sweeper only folds days marked dirty, so a clean historical day never refolds and would never acquire the field</label>
-    <label><input type="radio" name="q2" value="2" /> Convex optional fields default to <code>0</code>, which movement admission would misread as a valid revision</label>
-  </fieldset>
-  <div class="answer-detail">The plan originally claimed no historical backfill was required. A planning review falsified that, which is why the version bump, the repair step, and the coverage query exist.</div>
-</div>
-
-<div class="quiz-question" data-answer="0">
-  <fieldset>
-    <legend>3. What is the specific role of bumping <code>REPORTS_FOLD_VERSION</code> from 2 to 3?</legend>
-    <label><input type="radio" name="q3" value="0" /> It makes <code>foldVersionRepair</code>'s staleness predicate see every pre-revision day as stale, so the repair can mark them dirty and the sweeper rewrites them with revisions</label>
-    <label><input type="radio" name="q3" value="1" /> It invalidates cached movement snapshots computed under the old contract</label>
-    <label><input type="radio" name="q3" value="2" /> It switches the fold to a new aggregation algorithm for units sold and returned</label>
-  </fieldset>
-  <div class="answer-detail">Without the bump, existing rows are simply invisible to the repair. The bump is the mechanism that turns "history is uncertified" into "history is stale", which the module already knows how to fix.</div>
-</div>
-
-<div class="quiz-question" data-answer="2">
-  <fieldset>
-    <legend>4. A store is not in <code>REPORTS_SWEEP_STORE_ALLOWLIST</code>. What does ensure return, and why is it different from the uncertified-history case?</legend>
-    <label><input type="radio" name="q4" value="0" /> The same <code>waiting</code> state, since both resolve once the operator acts</label>
-    <label><input type="radio" name="q4" value="1" /> A validation error naming the allowlist, so the operator knows what to change</label>
-    <label><input type="radio" name="q4" value="2" /> A distinct sanitized non-retrying <code>not_available</code>, checked before validation and any read — that store never folds, so it can never certify, so waiting would be forever</label>
-  </fieldset>
-  <div class="answer-detail">An allowlisted store mid-repair legitimately waits, because the repair will finish. A wait that cannot end is a hang wearing a spinner.</div>
-</div>
-
-<div class="quiz-question" data-answer="1">
-  <fieldset>
-    <legend>5. What is folded into the movement request key, and what does that buy?</legend>
-    <label><input type="radio" name="q5" value="0" /> Store, range, and a request timestamp — so each open gets a fresh snapshot</label>
-    <label><input type="radio" name="q5" value="1" /> Kind, store, range, fold and contract versions, and the certified revision of every included day — so unchanged sources reuse the snapshot, any revision change yields a successor request, and a summary request over the same dates cannot collide</label>
-    <label><input type="radio" name="q5" value="2" /> Store, range, and the requesting principal — so admission budgets can be charged per user</label>
-  </fieldset>
-  <div class="answer-detail">An absent day is an explicit <code>"empty"</code> sentinel, so "this day had no fold" is part of the identity rather than an omission from it.</div>
-</div>
-
-<div class="quiz-question" data-answer="0">
-  <fieldset>
-    <legend>6. The batch mutation deliberately does not catch unexpected exceptions. What handles the failure, and why is that split necessary?</legend>
-    <label><input type="radio" name="q6" value="0" /> The internal action catches the failed call after Convex has rolled back aggregates, cursor, and fence together, then records attempt, backoff, and eligibility in a separate mutation — so retry state survives the rollback that discarded the work</label>
-    <label><input type="radio" name="q6" value="1" /> The batch mutation retries itself in a loop with backoff before returning</label>
-    <label><input type="radio" name="q6" value="2" /> The sweeper detects the missing progress on its next tick and resets the row</label>
-  </fieldset>
-  <div class="answer-detail">A mutation that catches its own defect cannot roll back cleanly; a rollback that also discards attempt counters cannot back off. The failure mutation is itself fenced, so a superseded attempt's late report records nothing.</div>
-</div>
-
-<div class="quiz-question" data-answer="2">
-  <fieldset>
-    <legend>7. An included day changes revision after its aggregation batch but before ranking finishes. What happens?</legend>
-    <label><input type="radio" name="q7" value="0" /> The snapshot completes; the changed day is re-aggregated on the next open</label>
-    <label><input type="radio" name="q7" value="1" /> Only the affected day's child rows are recomputed, then publication proceeds</label>
-    <label><input type="radio" name="q7" value="2" /> Rank finalization's fresh recheck of the revision vector mismatches, so the request goes terminal as <code>movement_source_stale</code> with its running totals erased — it never publishes as complete</label>
-  </fieldset>
-  <div class="answer-detail">Evidence that was clean when the work started is not evidence that was clean when it finished. A terminal row carries no totals, partial or otherwise.</div>
-</div>
-
-<div class="quiz-question" data-answer="1">
-  <fieldset>
-    <legend>8. Why does the sheet poll the ensure mutation instead of subscribing while it waits?</legend>
-    <label><input type="radio" name="q8" value="0" /> Convex subscriptions are unavailable inside a Sheet dialog</label>
-    <label><input type="radio" name="q8" value="1" /> Waiting, backpressure, and not-available deliberately write nothing durable, so there is no document to subscribe to — and creating one would make backpressure durable</label>
-    <label><input type="radio" name="q8" value="2" /> Polling is cheaper than a subscription for a query that changes rarely</label>
-  </fieldset>
-  <div class="answer-detail">The interval is server-supplied and jittered, the timer belongs to the effect that armed it so closing cancels it, and dedupe runs before admission budget is charged so StrictMode double effects are free.</div>
-</div>
-
-<div class="quiz-question" data-answer="0">
-  <fieldset>
-    <legend>9. Signed net units are the ranking basis, yet no user-facing value carries a sign. Why?</legend>
-    <label><input type="radio" name="q9" value="0" /> In a retail context a leading <code>+</code> reads as stock <em>received</em>, inverting the meaning — so the UI says "289 out", "24 returned", "0 net" while the signed value stays untouched in data, ranking, and contract</label>
-    <label><input type="radio" name="q9" value="1" /> The chart library cannot render negative values on a zero-centered axis</label>
-    <label><input type="radio" name="q9" value="2" /> Screen readers announce minus signs inconsistently, so signs were dropped for accessibility</label>
-  </fieldset>
-  <div class="answer-detail">Presentation only. <code>&minus;24</code> still ranks ahead of <code>+18</code> by absolute net, and a SKU whose sold and returned units cancel still appears at net zero with its real counts.</div>
-</div>
-
-<div class="quiz-question" data-answer="2">
-  <fieldset>
-    <legend>10. What did the dev deployment rollout actually demonstrate, and what is the change's status?</legend>
-    <label><input type="radio" name="q10" value="0" /> A production rollout completed and the legacy reader was removed; the branch is merged</label>
-    <label><input type="radio" name="q10" value="1" /> The repair was skipped because the dev store had no historical days; the live range returned an empty snapshot</label>
-    <label><input type="radio" name="q10" value="2" /> The repair marked 72 stale days, the sweeper drained them, <code>countUncertifiedDays</code> then reported 0 uncertified, and a live 30-day ensure completed with 138 moving SKUs / 777 net units / 7 pages — on a delivery candidate whose merge gate is still pending, with production not mutated</label>
-  </fieldset>
-  <div class="answer-detail">That range fails the legacy reader on both of its ceilings. The full <code>bun run pr:athena</code> gate has not been run, and the legacy query is retained additively for the rollout.</div>
-</div>
-
-          <div class="quiz-actions">
-            <button type="button" id="gradeQuiz">Grade quiz</button>
-            <button type="button" class="secondary" id="resetQuiz">Reset</button>
-            <span id="quizResult" aria-live="polite"></span>
-          </div>
-        </form>
-      </section>
-
-    </main>
-    <script>
-      const questions = Array.from(document.querySelectorAll(".quiz-question"));
-      const result = document.getElementById("quizResult");
-      const form = document.getElementById("changeQuiz");
-      const threshold = Number(form.dataset.threshold || 0);
-      function clearGrades() {
-        questions.forEach((question) => {
-          question.classList.remove("correct", "incorrect");
-          question.querySelector(".answer-detail").classList.remove("visible");
-        });
-        result.textContent = "";
-        result.style.color = "";
-      }
-      document.getElementById("gradeQuiz").addEventListener("click", () => {
-        clearGrades();
-        let score = 0;
-        questions.forEach((question, index) => {
-          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
-          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
-          if (isCorrect) score += 1;
-          question.classList.add(isCorrect ? "correct" : "incorrect");
-          question.querySelector(".answer-detail").classList.add("visible");
-        });
-        const passed = score >= threshold;
-        result.textContent = passed
-          ? `Passed: ${score}/${questions.length}.`
-          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
-        result.style.color = passed ? "var(--good)" : "var(--bad)";
-      });
-      document.getElementById("resetQuiz").addEventListener("click", () => {
-        form.reset();
-        clearGrades();
-      });
-    </script>
-  </body>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why was removing the 100-SKU check in <code>listRangeSkuMovement</code> rejected as the fix?</p>
+        <ol data-quiz-options>
+          <li>The check is required by the Reports read-model boundary document</li>
+          <li>Removing it would have broken the shared-demo fixture's parity assertions</li>
+          <li data-quiz-correct>The 5,000-row read ceiling sits behind it, the transaction read budget behind that, and each one resolves into unbounded identity hydration and a complete result shipped to the browser</li>
+        </ol>
+        <p data-quiz-explanation>The ceiling was a symptom. Doing an unbounded amount of work in one transaction — and calling the result trustworthy because it happened to finish — was the defect.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Stamping <code>certifiedFoldRevision</code> in <code>foldAndReplaceDay</code> is not enough on its own. Why?</p>
+        <ol data-quiz-options>
+          <li>The fold writes <code>reportDay</code> but not <code>reportSkuDay</code>, so SKU rows need a second pass</li>
+          <li data-quiz-correct>The sweeper only folds days marked dirty, so a clean historical day never refolds and would never acquire the field</li>
+          <li>Convex optional fields default to <code>0</code>, which movement admission would misread as a valid revision</li>
+        </ol>
+        <p data-quiz-explanation>The plan originally claimed no historical backfill was required. A planning review falsified that, which is why the version bump, the repair step, and the coverage query exist.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the specific role of bumping <code>REPORTS_FOLD_VERSION</code> from 2 to 3?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>It makes <code>foldVersionRepair</code>'s staleness predicate see every pre-revision day as stale, so the repair can mark them dirty and the sweeper rewrites them with revisions</li>
+          <li>It invalidates cached movement snapshots computed under the old contract</li>
+          <li>It switches the fold to a new aggregation algorithm for units sold and returned</li>
+        </ol>
+        <p data-quiz-explanation>Without the bump, existing rows are simply invisible to the repair. The bump is the mechanism that turns "history is uncertified" into "history is stale", which the module already knows how to fix.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A store is not in <code>REPORTS_SWEEP_STORE_ALLOWLIST</code>. What does ensure return, and why is it different from the uncertified-history case?</p>
+        <ol data-quiz-options>
+          <li>The same <code>waiting</code> state, since both resolve once the operator acts</li>
+          <li>A validation error naming the allowlist, so the operator knows what to change</li>
+          <li data-quiz-correct>A distinct sanitized non-retrying <code>not_available</code>, checked before validation and any read — that store never folds, so it can never certify, so waiting would be forever</li>
+        </ol>
+        <p data-quiz-explanation>An allowlisted store mid-repair legitimately waits, because the repair will finish. A wait that cannot end is a hang wearing a spinner.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is folded into the movement request key, and what does that buy?</p>
+        <ol data-quiz-options>
+          <li>Store, range, and a request timestamp — so each open gets a fresh snapshot</li>
+          <li data-quiz-correct>Kind, store, range, fold and contract versions, and the certified revision of every included day — so unchanged sources reuse the snapshot, any revision change yields a successor request, and a summary request over the same dates cannot collide</li>
+          <li>Store, range, and the requesting principal — so admission budgets can be charged per user</li>
+        </ol>
+        <p data-quiz-explanation>An absent day is an explicit <code>"empty"</code> sentinel, so "this day had no fold" is part of the identity rather than an omission from it.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>The batch mutation deliberately does not catch unexpected exceptions. What handles the failure, and why is that split necessary?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>The internal action catches the failed call after Convex has rolled back aggregates, cursor, and fence together, then records attempt, backoff, and eligibility in a separate mutation — so retry state survives the rollback that discarded the work</li>
+          <li>The batch mutation retries itself in a loop with backoff before returning</li>
+          <li>The sweeper detects the missing progress on its next tick and resets the row</li>
+        </ol>
+        <p data-quiz-explanation>A mutation that catches its own defect cannot roll back cleanly; a rollback that also discards attempt counters cannot back off. The failure mutation is itself fenced, so a superseded attempt's late report records nothing.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>An included day changes revision after its aggregation batch but before ranking finishes. What happens?</p>
+        <ol data-quiz-options>
+          <li>The snapshot completes; the changed day is re-aggregated on the next open</li>
+          <li>Only the affected day's child rows are recomputed, then publication proceeds</li>
+          <li data-quiz-correct>Rank finalization's fresh recheck of the revision vector mismatches, so the request goes terminal as <code>movement_source_stale</code> with its running totals erased — it never publishes as complete</li>
+        </ol>
+        <p data-quiz-explanation>Evidence that was clean when the work started is not evidence that was clean when it finished. A terminal row carries no totals, partial or otherwise.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the sheet poll the ensure mutation instead of subscribing while it waits?</p>
+        <ol data-quiz-options>
+          <li>Convex subscriptions are unavailable inside a Sheet dialog</li>
+          <li data-quiz-correct>Waiting, backpressure, and not-available deliberately write nothing durable, so there is no document to subscribe to — and creating one would make backpressure durable</li>
+          <li>Polling is cheaper than a subscription for a query that changes rarely</li>
+        </ol>
+        <p data-quiz-explanation>The interval is server-supplied and jittered, the timer belongs to the effect that armed it so closing cancels it, and dedupe runs before admission budget is charged so StrictMode double effects are free.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Signed net units are the ranking basis, yet no user-facing value carries a sign. Why?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>In a retail context a leading <code>+</code> reads as stock <em>received</em>, inverting the meaning — so the UI says "289 out", "24 returned", "0 net" while the signed value stays untouched in data, ranking, and contract</li>
+          <li>The chart library cannot render negative values on a zero-centered axis</li>
+          <li>Screen readers announce minus signs inconsistently, so signs were dropped for accessibility</li>
+        </ol>
+        <p data-quiz-explanation>Presentation only. <code>−24</code> still ranks ahead of <code>+18</code> by absolute net, and a SKU whose sold and returned units cancel still appears at net zero with its real counts.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What did the dev deployment rollout actually demonstrate, and what is the change's status?</p>
+        <ol data-quiz-options>
+          <li>A production rollout completed and the legacy reader was removed; the branch is merged</li>
+          <li>The repair was skipped because the dev store had no historical days; the live range returned an empty snapshot</li>
+          <li data-quiz-correct>The repair marked 72 stale days, the sweeper drained them, <code>countUncertifiedDays</code> then reported 0 uncertified, and a live 30-day ensure completed with 138 moving SKUs / 777 net units / 7 pages — on a delivery candidate whose merge gate is still pending, with production not mutated</li>
+        </ol>
+        <p data-quiz-explanation>That range fails the legacy reader on both of its ceilings. The full <code>bun run pr:athena</code> gate has not been run, and the legacy query is retained additively for the rollout.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+<h2>Subagent Evidence</h2>
+        <p>The validation below is what was actually executed for this delivery, attributed to the lane that ran it. Nothing here is a prediction.</p>
+        <ul>
+          <li><strong>Backend validation lane.</strong> 230 focused tests across 8 suites, covering the contract, the movement lifecycle, the sweeper, the fold-version repair, and the existing reports queries. Coverage included: a 30-day scale fixture beyond both legacy ceilings completing across multiple source and rank batches; revision stamping and repair backfill; mixed-generation stores reading as not-yet-ready; admission saturation writing nothing; fencing against duplicate workers; injected mid-batch defects rolling back and then recording retry metadata separately; cross-store substitution returning nothing; sanitized error hygiene; and cleanup throughput against steady-state creation.</li>
+          <li><strong>Frontend validation lane.</strong> 173 tests across 8 suites: the sheet's state matrix and polling behavior, the shared-demo movement page parity, the route search serialization, and both Reports route integrations including the restore path.</li>
+          <li><strong>Static checks.</strong> <code>tsc</code> clean. ESLint clean across the changed Convex files and the changed frontend files.</li>
+          <li><strong>Dev deployment rollout (executed, in runbook order).</strong> The repair marked <strong>72 stale days</strong>; the sweeper drained them; <code>countUncertifiedDays</code> then reported <strong>0 uncertified</strong> across every page. A live 30-day <code>ensureMovementRange</code> against the repaired store completed with <strong>138 moving SKUs</strong>, <strong>777 net units</strong>, and <strong>7 pages</strong> — a range the legacy reader rejects on both its ceilings.</li>
+          <li><strong>Planning review.</strong> The review that preceded implementation falsified the plan's original "no historical backfill is required" claim. That single correction is why the fold-version bump, the repair step, the coverage query, and the allowlist gate exist at all; without it the feature would have shipped and waited forever on every historical range.</li>
+          <li><strong>Not run here.</strong> The full <code>bun run pr:athena</code> merge gate is pending, and production was not mutated. The rollout evidence above is from the dev deployment only.</li>
+        </ul>
+  </section>
+</article>
+</body>
 </html>

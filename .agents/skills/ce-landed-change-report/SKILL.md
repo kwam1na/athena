@@ -11,13 +11,23 @@ This skill is intentionally subagent-driven. Do not create the report from only 
 
 ## Output Contract
 
-Produce one standalone static HTML file under `docs/reports/` by default:
+Produce one static HTML file under `docs/reports/` by default:
 
 ```text
 docs/reports/YYYY-MM-DD-<short-change-slug>-report.html
 ```
 
-Generated reports must keep the root marker `data-athena-landed-change-report="v1"` so repo sensors can distinguish intentional landed-change reports from ordinary HTML artifacts. For large branches, also embed the current deliverable diff fingerprint from:
+Reports are **semantic content documents**, not styled pages. The Athena
+webapp renders every report as a themed page at `/docs/reports/<slug>` and
+hydrates the quiz; the report file itself must carry **no CSS, no JavaScript,
+and no form controls**. The presentation contract (v2) is defined in
+`references/report-html-contract.md` and enforced across the whole corpus by:
+
+```bash
+bun run reports:presentation:check
+```
+
+Generated reports must keep the root marker `data-athena-landed-change-report="v2"` on a single `<article>` element so repo sensors can distinguish intentional landed-change reports from ordinary HTML artifacts. For large branches, also embed the current deliverable diff fingerprint from:
 
 ```bash
 bun scripts/landed-change-report-check.ts --base origin/main --print-fingerprint
@@ -25,19 +35,24 @@ bun scripts/landed-change-report-check.ts --base origin/main --print-fingerprint
 
 Run that command after final code/workflow edits and before final report rendering. If review-loop changes land after report creation, regenerate the report so `data-athena-report-diff-fingerprint` matches the final deliverable diff.
 
-The report must include:
+The report must include, as contract sections (`data-report-section` keys in
+parentheses; see `references/report-html-contract.md` for exact markup):
 
-- title, PR/issue/source metadata, candidate-or-landed status, and status pills
-- executive summary
-- problem/context in plain language
-- intuition or mental model
-- before/after flow or layer breakdown
-- key file table with why each file matters
-- what changed and what intentionally did not change
-- validation and review evidence, plus accurate deployment/root-alignment status (`pending`, `deferred`, `not applicable`, or completed evidence)
-- next-time workflow or operational guidance
-- interactive quiz with grade/reset behavior, answer explanations, and a pass threshold
-- subagent evidence summary naming the subagents used and what each contributed
+- header with title, status pills, and PR/issue/source metadata (`header`)
+- executive summary (`summary`)
+- problem/context in plain language (`problem`)
+- intuition or mental model (`mental-model`)
+- before/after flow or layer breakdown (`before-after`)
+- key file table with why each file matters (`key-files`)
+- what changed and what intentionally did not change (`changes`)
+- validation and review evidence, plus accurate deployment/root-alignment status (`pending`, `deferred`, `not applicable`, or completed evidence) (`validation`)
+- next-time workflow or operational guidance (`guidance`)
+- quiz data with a pass threshold, one correct option per question, and answer explanations (`quiz`) — the webapp renders the interactive grading UI
+- subagent evidence summary naming the subagents used and what each contributed (`subagent-evidence`)
+
+`quiz` and `subagent-evidence` must be the last two sections, in that order.
+Extra sections (e.g. `failure-boundaries`, `mechanics`) may use any other
+kebab-case key.
 
 Default quiz size is 10 questions with a pass threshold of 8/10. Use fewer only for very small changes, and never below 5 questions.
 
@@ -167,61 +182,54 @@ Each question must have:
 - plausible wrong answers based on real misunderstandings
 - a short answer explanation shown after grading
 
-### 6. Design The HTML Shell
+### 6. Structure The Content Document
 
-Before designing or substantially changing the HTML shell, load repo-local `$emil-design-eng` from `.agents/skills/emil-design-eng/SKILL.md` and apply it to the report UI.
+Presentation is owned by the Athena webapp (its docs section styles every
+report identically and hydrates the quiz), so there is no HTML shell to
+design. Your job is the content structure: section prose, the key-file table,
+quiz data, and metadata — expressed in the contract markup from
+`references/report-html-contract.md`.
 
-For this reporting surface, the default design posture is:
-
-- quiet, work-focused document UI
-- strong information hierarchy
-- compact metadata and scannable sections
-- no decorative motion
-- responsive layout with stable dimensions
-- quiz controls with clear press feedback and no layout shift
-- exact CSS transition properties only, if transitions are used
-- `prefers-reduced-motion` support for any nonessential motion
-
-Do not create a marketing landing page. The first viewport should immediately explain the landed change and show the reader where they are.
+Do not add styling hooks, decorative markup, or interactive elements. If a
+change to how reports *look* is needed, that is a webapp change
+(`packages/athena-webapp/src/components/docs/`), not a report change.
 
 ### 7. Render HTML
 
-Prefer a handcrafted report when the change needs nuanced layout. For a repeatable shell, use:
+Prefer the renderer for a repeatable, contract-conformant document:
 
 ```bash
 python3 .agents/skills/ce-landed-change-report/scripts/render_report.py input.json docs/reports/<report>.html
 ```
 
-The script expects structured sections and quiz questions. Read `references/report-payload.md` when using the script.
+The script expects structured sections and quiz questions. Read `references/report-payload.md` when using the script. Handcrafting is fine when the change needs nuanced tables or nested structure — follow the contract exactly.
 
 HTML requirements:
 
-- standalone file with embedded CSS and JavaScript
+- semantic content document per `references/report-html-contract.md`
+- **no** embedded or inline CSS, **no** scripts, **no** form controls
 - no remote assets
-- no external scripts
-- responsive layout
-- accessible headings and form labels
-- local quiz grading in the browser
-- report-shell design informed by `$emil-design-eng`
+- accessible heading order (`h1` in the header, `h2` per section)
+- quiz encoded as data (`data-quiz-*` markup); the webapp grades it
 - no secrets, raw tokens, private credentials, or sensitive customer data
 
 ### 8. Validate The Report
 
-Run lightweight checks:
+Run the checks:
 
 ```bash
 test -f docs/reports/<report>.html
-rg -n "data-athena-landed-change-report|data-athena-report-diff-fingerprint|Subagent Evidence|Quiz: Pass Required|changeQuiz" docs/reports/<report>.html
+bun run reports:presentation:check
 bun run landed-report:check
 ```
 
-If you used the renderer script, also run it on a minimal sample or the actual payload before finalizing.
+The presentation check validates the whole corpus, so it also catches your new report. If it fails, fix the report markup — do not adjust the sensor.
 
 Check manually:
 
 - every major claim traces back to git, PR, Linear, local files, or subagent evidence
 - no secrets are present
-- quiz pass threshold is visible and enforced in JavaScript
+- quiz pass threshold and correct options are encoded in the `data-quiz-*` markup
 - report states the accurate production-deploy status without predicting a pending event
 - report states the accurate root/local-alignment status without predicting a pending event
 - report mentions subagents used

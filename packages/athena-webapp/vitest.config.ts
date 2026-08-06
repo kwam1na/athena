@@ -1,7 +1,9 @@
 import { defineConfig } from "vitest/config";
 import path from "path";
+import { athenaDocsContentPlugin } from "./vite-docs-content-plugin";
 
 export default defineConfig({
+  plugins: [athenaDocsContentPlugin()],
   test: {
     setupFiles: "./vitest.setup.ts",
     environment: "jsdom",

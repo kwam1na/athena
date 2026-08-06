@@ -74,12 +74,31 @@ function lineChanges(entries: Array<[string, number, number]>) {
 }
 
 function validReport(title = "Procurement Change", fingerprint = "current-fingerprint") {
+  const narrative = [
+    "summary",
+    "problem",
+    "mental-model",
+    "before-after",
+    "key-files",
+    "changes",
+    "validation",
+    "guidance",
+  ]
+    .map(
+      (key) =>
+        `  <section data-report-section="${key}"><h2>${key}</h2><p>Body.</p></section>`
+    )
+    .join("\n");
+
   return `<!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="${fingerprint}">
+<html lang="en">
 <head><title>${title}</title></head>
 <body>
-  <section><h2>Subagent Evidence</h2></section>
-  <section><h2>Quiz: Pass Required</h2><form id="changeQuiz"></form></section>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="${fingerprint}">
+${narrative}
+  <section data-report-section="quiz" data-quiz-pass-threshold="4"><h2>Comprehension quiz</h2></section>
+  <section data-report-section="subagent-evidence"><h2>Subagent evidence</h2></section>
+</article>
 </body>
 </html>
 `;
@@ -142,7 +161,7 @@ describe("collectLandedChangeReportFindings", () => {
     expect(findings).toEqual([
       {
         message:
-          "Large source change detected (301 changed source lines, threshold 300) without a docs/reports/**/*.html landed-change report update.",
+          "Large source change detected (301 changed source lines, threshold 300) without a docs/reports/**/*.html landed-change report that is current for this branch. Editing an existing report does not satisfy this: the report must carry data-athena-report-diff-fingerprint=\"<current deliverable diff>\", which only a regeneration after the final code and workflow edits produces.",
       },
     ]);
   });
@@ -182,7 +201,7 @@ describe("collectLandedChangeReportFindings", () => {
     expect(findings).toEqual([]);
   });
 
-  it("fails large source changes when changed report artifacts do not look like landed-change reports", () => {
+  it("fails a newly added report artifact that does not look like a landed-change report", () => {
     const findings = collectLandedChangeReportFindings({
       changedFiles: [
         "docs/reports/procurement.html",
@@ -199,11 +218,10 @@ describe("collectLandedChangeReportFindings", () => {
       deliverableDiffFingerprint: "current-fingerprint",
     });
 
-    expect(findings).toEqual([
-      {
-        message:
-          'Landed-change report docs/reports/procurement.html is missing required report markers: data-athena-landed-change-report="v1", Subagent Evidence, Quiz: Pass Required, id="changeQuiz", data-athena-report-diff-fingerprint.',
-      },
+    expect(findings.map((finding) => finding.message)).toEqual([
+      'Landed-change report docs/reports/procurement.html is missing required report markers: data-athena-landed-change-report="v2", data-report-section="quiz", data-quiz-pass-threshold, data-report-section="subagent-evidence", data-report-section="summary", data-report-section="problem", data-report-section="mental-model", data-report-section="before-after", data-report-section="key-files", data-report-section="changes", data-report-section="validation", data-report-section="guidance", data-athena-report-diff-fingerprint.',
+      // The malformed report also leaves the branch with no current report.
+      expect.stringContaining("without a docs/reports/**/*.html landed-change report that is current"),
     ]);
   });
 
@@ -226,10 +244,68 @@ describe("collectLandedChangeReportFindings", () => {
       sourceLineChanges: lineChanges([
         ["packages/athena-webapp/src/components/ProcurementView.tsx", 301, 0],
       ]),
+      // The stale artifact predates the branch, so touching it is maintenance.
+      reportsExistingAtBase: new Set(["docs/reports/old-local-artifact.html"]),
       deliverableDiffFingerprint: "current-fingerprint",
     });
 
     expect(findings).toEqual([]);
+  });
+
+  // The line threshold decides whether a report is *required*. It must not
+  // decide whether a report that exists is valid, or a small branch could add
+  // a malformed report unchecked.
+  it("validates a newly added report even on a small branch", () => {
+    const findings = collectLandedChangeReportFindings({
+      changedFiles: ["docs/reports/new-delivery.html"],
+      existingFiles: new Set(["docs/reports/new-delivery.html"]),
+      reportContents: new Map([["docs/reports/new-delivery.html", "<html></html>"]]),
+      sourceLineChanges: lineChanges([]),
+      reportsExistingAtBase: new Set(),
+      deliverableDiffFingerprint: "current-fingerprint",
+    });
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0].message).toContain(
+      'docs/reports/new-delivery.html is missing required report markers',
+    );
+  });
+
+  // A corpus migration touches every historical report; asking those to carry
+  // today's narrative vocabulary and today's fingerprint would mean rewriting
+  // history rather than maintaining it.
+  it("exempts an edited historical report per-file, but does not let it satisfy the gate", () => {
+    const findings = collectLandedChangeReportFindings({
+      changedFiles: [
+        "docs/reports/historical.html",
+        "packages/athena-webapp/src/components/ProcurementView.tsx",
+      ],
+      existingFiles: new Set([
+        "docs/reports/historical.html",
+        "packages/athena-webapp/src/components/ProcurementView.tsx",
+      ]),
+      reportContents: new Map([
+        [
+          "docs/reports/historical.html",
+          '<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="ancient"><section data-report-section="quiz" data-quiz-pass-threshold="2"></section></article>',
+        ],
+      ]),
+      sourceLineChanges: lineChanges([
+        ["packages/athena-webapp/src/components/ProcurementView.tsx", 301, 0],
+      ]),
+      reportsExistingAtBase: new Set(["docs/reports/historical.html"]),
+      deliverableDiffFingerprint: "current-fingerprint",
+    });
+
+    // No per-file demand for narrative sections or today's fingerprint...
+    expect(
+      findings.some((finding) => finding.message.includes("historical.html")),
+    ).toBe(false);
+    // ...but the branch still owes a report that is current for it.
+    expect(findings).toHaveLength(1);
+    expect(findings[0].message).toContain(
+      "without a docs/reports/**/*.html landed-change report that is current",
+    );
   });
 
   it("fails large source changes when the report fingerprint is stale", () => {
@@ -251,12 +327,65 @@ describe("collectLandedChangeReportFindings", () => {
       deliverableDiffFingerprint: "current-fingerprint",
     });
 
-    expect(findings).toEqual([
-      {
-        message:
-          "Landed-change report docs/reports/procurement.html is stale: embedded diff fingerprint old-fingerprint does not match current deliverable diff current-fingerprint. Regenerate the report after final code and workflow changes.",
-      },
+    // The canonical drift case: the report was written, then code kept
+    // changing. It is named directly, and the branch is also told it has no
+    // current report.
+    expect(findings.map((finding) => finding.message)).toEqual([
+      "Landed-change report docs/reports/procurement.html is stale: embedded diff fingerprint old-fingerprint does not match current deliverable diff current-fingerprint. Regenerate the report after final code and workflow changes.",
+      expect.stringContaining("without a docs/reports/**/*.html landed-change report that is current"),
     ]);
+  });
+
+  // The same drift, but on a report that already existed: it is exempt from
+  // the per-file demand, yet a stale fingerprint still means the branch has no
+  // report describing what it actually shipped.
+  it("fails a large change whose only report is a pre-existing one left un-regenerated", () => {
+    const findings = collectLandedChangeReportFindings({
+      changedFiles: [
+        "docs/reports/procurement.html",
+        "packages/athena-webapp/src/components/ProcurementView.tsx",
+      ],
+      existingFiles: new Set([
+        "docs/reports/procurement.html",
+        "packages/athena-webapp/src/components/ProcurementView.tsx",
+      ]),
+      reportContents: new Map([
+        ["docs/reports/procurement.html", validReport("Procurement", "old-fingerprint")],
+      ]),
+      sourceLineChanges: lineChanges([
+        ["packages/athena-webapp/src/components/ProcurementView.tsx", 301, 0],
+      ]),
+      reportsExistingAtBase: new Set(["docs/reports/procurement.html"]),
+      deliverableDiffFingerprint: "current-fingerprint",
+    });
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0].message).toContain(
+      "without a docs/reports/**/*.html landed-change report that is current",
+    );
+  });
+
+  it("passes once that report is regenerated against the final diff", () => {
+    const findings = collectLandedChangeReportFindings({
+      changedFiles: [
+        "docs/reports/procurement.html",
+        "packages/athena-webapp/src/components/ProcurementView.tsx",
+      ],
+      existingFiles: new Set([
+        "docs/reports/procurement.html",
+        "packages/athena-webapp/src/components/ProcurementView.tsx",
+      ]),
+      reportContents: new Map([
+        ["docs/reports/procurement.html", validReport("Procurement", "current-fingerprint")],
+      ]),
+      sourceLineChanges: lineChanges([
+        ["packages/athena-webapp/src/components/ProcurementView.tsx", 301, 0],
+      ]),
+      reportsExistingAtBase: new Set(["docs/reports/procurement.html"]),
+      deliverableDiffFingerprint: "current-fingerprint",
+    });
+
+    expect(findings).toEqual([]);
   });
 });
 
@@ -277,7 +406,7 @@ describe("assertLandedChangeReportCheck", () => {
         threshold: 10,
       })
     ).toThrow(
-      "Large source change detected (13 changed source lines, threshold 10) without a docs/reports/**/*.html landed-change report update."
+      "Large source change detected (13 changed source lines, threshold 10) without a docs/reports/**/*.html landed-change report that is current for this branch."
     );
   });
 

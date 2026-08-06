@@ -1,238 +1,26 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="ee57fb63b15b352657f271cfffcdd31432428a048d590d332ee48fae8b807f0a">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Shared Demo Read Admission Rail</title>
-    <style>
-      :root {
-        color-scheme: light;
-        --bg: #f7f7f4;
-        --paper: #ffffff;
-        --ink: #20211f;
-        --muted: #666b61;
-        --line: #deded7;
-        --accent: #126a5a;
-        --accent-soft: #e4f3ef;
-        --warn: #7b4a11;
-        --warn-soft: #f8ecd7;
-        --code: #f1f2ee;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--ink);
-        font-family:
-          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-          "Segoe UI", sans-serif;
-        line-height: 1.5;
-      }
-
-      main {
-        max-width: 1080px;
-        margin: 0 auto;
-        padding: 40px 20px 56px;
-      }
-
-      header {
-        border-bottom: 1px solid var(--line);
-        padding-bottom: 24px;
-      }
-
-      h1,
-      h2,
-      h3 {
-        margin: 0;
-        letter-spacing: 0;
-      }
-
-      h1 {
-        max-width: 840px;
-        font-size: clamp(2rem, 5vw, 4.25rem);
-        line-height: 0.98;
-      }
-
-      h2 {
-        font-size: 1.35rem;
-        margin-bottom: 12px;
-      }
-
-      h3 {
-        font-size: 1rem;
-        margin-bottom: 8px;
-      }
-
-      p {
-        margin: 0 0 12px;
-      }
-
-      .subtitle {
-        max-width: 780px;
-        margin-top: 18px;
-        color: var(--muted);
-        font-size: 1.05rem;
-      }
-
-      .pills {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 22px;
-      }
-
-      .pill {
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: var(--paper);
-        color: var(--muted);
-        font-size: 0.82rem;
-        padding: 6px 10px;
-      }
-
-      .pill.strong {
-        background: var(--accent-soft);
-        border-color: #b8d8cf;
-        color: var(--accent);
-        font-weight: 650;
-      }
-
-      section {
-        padding: 28px 0;
-        border-bottom: 1px solid var(--line);
-      }
-
-      .grid {
-        display: grid;
-        gap: 16px;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .card {
-        background: var(--paper);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 16px;
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        background: var(--paper);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        overflow: hidden;
-      }
-
-      th,
-      td {
-        border-bottom: 1px solid var(--line);
-        padding: 10px 12px;
-        text-align: left;
-        vertical-align: top;
-      }
-
-      th {
-        color: var(--muted);
-        font-size: 0.78rem;
-        text-transform: uppercase;
-      }
-
-      tr:last-child td {
-        border-bottom: 0;
-      }
-
-      code {
-        background: var(--code);
-        border-radius: 4px;
-        padding: 2px 5px;
-        font-size: 0.92em;
-      }
-
-      ul {
-        margin: 0;
-        padding-left: 20px;
-      }
-
-      li + li {
-        margin-top: 6px;
-      }
-
-      .warning {
-        background: var(--warn-soft);
-        border-color: #e4c891;
-        color: var(--warn);
-      }
-
-      .question {
-        margin-top: 14px;
-      }
-
-      .question label {
-        display: block;
-        margin-top: 8px;
-      }
-
-      button {
-        appearance: none;
-        border: 0;
-        border-radius: 6px;
-        background: var(--accent);
-        color: white;
-        cursor: pointer;
-        font-weight: 700;
-        margin-top: 16px;
-        padding: 10px 14px;
-        transition: transform 140ms ease-out;
-      }
-
-      button:active {
-        transform: scale(0.98);
-      }
-
-      #quizResult {
-        margin-top: 12px;
-        font-weight: 700;
-      }
-
-      .explanation {
-        color: var(--muted);
-        font-size: 0.9rem;
-        margin-top: 4px;
-      }
-
-      @media (max-width: 760px) {
-        main {
-          padding: 28px 16px 44px;
-        }
-
-        .grid {
-          grid-template-columns: 1fr;
-        }
-      }
-    </style>
   </head>
   <body>
-    <main>
-      <header>
+    <article
+      data-athena-landed-change-report="v2"
+      data-athena-report-diff-fingerprint="ee57fb63b15b352657f271cfffcdd31432428a048d590d332ee48fae8b807f0a"
+    >
+      <header data-report-section="header">
         <h1>Shared Demo Read Admission Rail</h1>
-        <p class="subtitle">
-          Delivery candidate for proving actor-aware read admission on Operations viewing, then moving demo-visible Operations, cash controls, POS, and stock-adjustment reads onto the same rail while leaving hidden reporting reads outside this migration.
-        </p>
-        <div class="pills">
-          <span class="pill strong">Candidate PR pending</span>
-          <span class="pill">Linear V26-1098</span>
-          <span class="pill">Branch codex/V26-1098-shared-demo-read-admission</span>
-          <span class="pill">Deploy not applicable</span>
-          <span class="pill">Root alignment pending merge</span>
-        </div>
+        <ul data-report-pills>
+          <li>Candidate PR pending</li>
+          <li>Linear V26-1098</li>
+          <li>Branch codex/V26-1098-shared-demo-read-admission</li>
+          <li>Deploy not applicable</li>
+          <li>Root alignment pending merge</li>
+        </ul>
       </header>
 
-      <section>
+      <section data-report-section="summary">
         <h2>Executive Summary</h2>
         <p>
           This change adds a public-query counterpart to the existing operation admission rail. Shared-demo reads now have explicit read definitions, adapter-based actor resolution, and store/org scope clamps before a query handler builds its read model.
@@ -245,25 +33,36 @@
         </p>
       </section>
 
-      <section>
-        <h2>Mental Model</h2>
-        <div class="grid">
-          <div class="card">
-            <h3>Before</h3>
-            <p>
-              Read surfaces could call ad hoc shared-demo helpers inside domain authorization. In Daily Operations, a read-only snapshot relied on a write capability to recognize the demo actor.
-            </p>
-          </div>
-          <div class="card">
-            <h3>After</h3>
-            <p>
-              The exported query handler is the admission boundary. Definitions declare read intent, adapters admit the current actor, and domain helpers consume the admitted actor from context while membership-role redaction remains independent.
-            </p>
-          </div>
-        </div>
+      <section data-report-section="problem">
+        <h2>Problem</h2>
+        <p>
+          Delivery candidate for proving actor-aware read admission on Operations viewing, then moving demo-visible Operations, cash controls, POS, and stock-adjustment reads onto the same rail while leaving hidden reporting reads outside this migration.
+        </p>
+        <p>
+          Read surfaces could call ad hoc shared-demo helpers inside domain authorization. In Daily Operations, a read-only snapshot relied on a write capability to recognize the demo actor.
+        </p>
       </section>
 
-      <section>
+      <section data-report-section="mental-model">
+        <h2>Mental Model</h2>
+        <p>
+          The exported query handler is the admission boundary. Definitions declare read intent, adapters admit the current actor, and domain helpers consume the admitted actor from context while membership-role redaction remains independent.
+        </p>
+      </section>
+
+      <section data-report-section="before-after">
+        <h2>Before and After</h2>
+        <h3>Before</h3>
+        <p>
+          Read surfaces could call ad hoc shared-demo helpers inside domain authorization. In Daily Operations, a read-only snapshot relied on a write capability to recognize the demo actor.
+        </p>
+        <h3>After</h3>
+        <p>
+          The exported query handler is the admission boundary. Definitions declare read intent, adapters admit the current actor, and domain helpers consume the admitted actor from context while membership-role redaction remains independent.
+        </p>
+      </section>
+
+      <section data-report-section="key-files">
         <h2>Key Files</h2>
         <table>
           <thead>
@@ -314,7 +113,7 @@
         </table>
       </section>
 
-      <section>
+      <section data-report-section="failure-boundaries">
         <h2>Failure Boundaries</h2>
         <ul>
           <li>Shared-demo actors are admitted only for definitions that allow <code>sharedDemo: "admit"</code>.</li>
@@ -328,7 +127,7 @@
         </ul>
       </section>
 
-      <section>
+      <section data-report-section="validation">
         <h2>Validation Evidence</h2>
         <ul>
           <li><code>bun run test -- convex/operationAdmission/readDefinitions.test.ts convex/pos/public/catalog.test.ts convex/operations/dailyOpening.test.ts convex/operations/staffProfiles.test.ts convex/serviceOps/catalogAppointments.test.ts convex/inventory/posSessions.trace.test.ts</code>: 166 passing focused tests for the final POS register read extension.</li>
@@ -340,7 +139,117 @@
         </ul>
       </section>
 
-      <section>
+      <section data-report-section="changes">
+        <h2>What Did Not Change</h2>
+        <p>
+          This delivery candidate does not migrate reporting reads, does not grant shared-demo write authority through read intent, and does not make redaction decisions from the shared-demo actor check. Financial visibility remains governed by the admitted user's membership role.
+        </p>
+      </section>
+
+      <section data-report-section="guidance">
+        <h2>Next-Time Guidance</h2>
+        <p>Definitions alone are not coverage; the exported handler must be wrapped.</p>
+        <p>The PR gate is the merge-readiness boundary for this repo.</p>
+      </section>
+
+      <section data-report-section="quiz" data-quiz-pass-threshold="8">
+        <h2>Quiz: Pass Required</h2>
+        <p>Pass threshold: 8 of 10.</p>
+        <ol data-quiz>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Where should read admission run?</p>
+            <ol data-quiz-options>
+              <li>Inside a React route guard only</li>
+              <li data-quiz-correct>At the exported Convex public query handler</li>
+              <li>After the read model has been built</li>
+            </ol>
+            <p data-quiz-explanation>The exported public query is the boundary where admission should run before domain read logic.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What admits Daily Operations viewing for shared demo?</p>
+            <ol data-quiz-options>
+              <li data-quiz-correct><code>daily_operations.view</code></li>
+              <li><code>daily_operations.write</code></li>
+              <li>Route visibility alone</li>
+            </ol>
+            <p data-quiz-explanation>Read intent avoids implying write authority.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What happens on a shared-demo store mismatch?</p>
+            <ol data-quiz-options>
+              <li>The read falls back to normal user auth</li>
+              <li>The query returns a redacted cross-store snapshot</li>
+              <li data-quiz-correct>Admission denies before the read model runs</li>
+            </ol>
+            <p data-quiz-explanation>The demo actor must stay clamped to its server-owned tenant scope.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Which area is intentionally excluded?</p>
+            <ol data-quiz-options>
+              <li>Daily Operations viewing</li>
+              <li data-quiz-correct>Reporting reads</li>
+              <li>Store membership checks</li>
+            </ol>
+            <p data-quiz-explanation>Reporting is a hidden workspace and stays outside this branch.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What proves a migrated read is on the rail?</p>
+            <ol data-quiz-options>
+              <li data-quiz-correct>Definition plus exported handler wrapper plus tests</li>
+              <li>A definition file entry only</li>
+              <li>A frontend component check</li>
+            </ol>
+            <p data-quiz-explanation>Definitions alone are not coverage; the exported handler must be wrapped.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What does <code>ctx.operationAdmission</code> carry?</p>
+            <ol data-quiz-options>
+              <li>CSS state for the Operations workspace</li>
+              <li>A generated API route name only</li>
+              <li data-quiz-correct>Actor, scope constraints, decision, definition, and provenance</li>
+            </ol>
+            <p data-quiz-explanation>The wrapper injects the admitted actor and metadata into context.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What remains true for normal users?</p>
+            <ol data-quiz-options>
+              <li>They skip organization membership checks</li>
+              <li data-quiz-correct>They still require auth and store membership</li>
+              <li>They use the shared-demo actor</li>
+            </ol>
+            <p data-quiz-explanation>Normal users still need authenticated Athena user identity and membership authorization.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What controls financial redaction?</p>
+            <ol data-quiz-options>
+              <li data-quiz-correct>The admitted user's store membership role</li>
+              <li>Whether the actor is a shared-demo actor</li>
+              <li>The frontend route path</li>
+            </ol>
+            <p data-quiz-explanation>Demo financial visibility is still decided by membership role, not by shared-demo actor kind.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Which command is the merge gate?</p>
+            <ol data-quiz-options>
+              <li><code>bun test</code> directly on one file</li>
+              <li><code>npm start</code></li>
+              <li data-quiz-correct><code>bun run pr:athena</code></li>
+            </ol>
+            <p data-quiz-explanation>The PR gate is the merge-readiness boundary for this repo.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What is the current delivery status?</p>
+            <ol data-quiz-options>
+              <li>Already merged and deployed</li>
+              <li data-quiz-correct>Candidate PR work in progress</li>
+              <li>Documentation-only change</li>
+            </ol>
+            <p data-quiz-explanation>This report is part of the delivery candidate before PR creation and merge.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section data-report-section="subagent-evidence">
         <h2>Subagent Evidence</h2>
         <ul>
           <li>Repo research subagents mapped the existing write admission rail, shared-demo helpers, and non-reporting read surfaces.</li>
@@ -349,109 +258,6 @@
           <li>Execution reviewers approved after looped fixes: correctness caught the online-order public-query split, project standards caught protected-effect enforcement, testing required custom resolver fallback coverage, and security approved the final auth boundary.</li>
         </ul>
       </section>
-
-      <section>
-        <h2>What Did Not Change</h2>
-        <div class="card warning">
-          <p>
-            This delivery candidate does not migrate reporting reads, does not grant shared-demo write authority through read intent, and does not make redaction decisions from the shared-demo actor check. Financial visibility remains governed by the admitted user's membership role.
-          </p>
-        </div>
-      </section>
-
-      <section>
-        <h2>Quiz: Pass Required</h2>
-        <p>Pass threshold: 8 of 10.</p>
-        <form id="changeQuiz">
-          <div class="question" data-answer="1" data-explanation="The exported public query is the boundary where admission should run before domain read logic.">
-            <h3>1. Where should read admission run?</h3>
-            <label><input type="radio" name="q1" value="0" /> Inside a React route guard only</label>
-            <label><input type="radio" name="q1" value="1" /> At the exported Convex public query handler</label>
-            <label><input type="radio" name="q1" value="2" /> After the read model has been built</label>
-          </div>
-          <div class="question" data-answer="0" data-explanation="Read intent avoids implying write authority.">
-            <h3>2. What admits Daily Operations viewing for shared demo?</h3>
-            <label><input type="radio" name="q2" value="0" /> <code>daily_operations.view</code></label>
-            <label><input type="radio" name="q2" value="1" /> <code>daily_operations.write</code></label>
-            <label><input type="radio" name="q2" value="2" /> Route visibility alone</label>
-          </div>
-          <div class="question" data-answer="2" data-explanation="The demo actor must stay clamped to its server-owned tenant scope.">
-            <h3>3. What happens on a shared-demo store mismatch?</h3>
-            <label><input type="radio" name="q3" value="0" /> The read falls back to normal user auth</label>
-            <label><input type="radio" name="q3" value="1" /> The query returns a redacted cross-store snapshot</label>
-            <label><input type="radio" name="q3" value="2" /> Admission denies before the read model runs</label>
-          </div>
-          <div class="question" data-answer="1" data-explanation="Reporting is a hidden workspace and stays outside this branch.">
-            <h3>4. Which area is intentionally excluded?</h3>
-            <label><input type="radio" name="q4" value="0" /> Daily Operations viewing</label>
-            <label><input type="radio" name="q4" value="1" /> Reporting reads</label>
-            <label><input type="radio" name="q4" value="2" /> Store membership checks</label>
-          </div>
-          <div class="question" data-answer="0" data-explanation="Definitions alone are not coverage; the exported handler must be wrapped.">
-            <h3>5. What proves a migrated read is on the rail?</h3>
-            <label><input type="radio" name="q5" value="0" /> Definition plus exported handler wrapper plus tests</label>
-            <label><input type="radio" name="q5" value="1" /> A definition file entry only</label>
-            <label><input type="radio" name="q5" value="2" /> A frontend component check</label>
-          </div>
-          <div class="question" data-answer="2" data-explanation="The wrapper injects the admitted actor and metadata into context.">
-            <h3>6. What does <code>ctx.operationAdmission</code> carry?</h3>
-            <label><input type="radio" name="q6" value="0" /> CSS state for the Operations workspace</label>
-            <label><input type="radio" name="q6" value="1" /> A generated API route name only</label>
-            <label><input type="radio" name="q6" value="2" /> Actor, scope constraints, decision, definition, and provenance</label>
-          </div>
-          <div class="question" data-answer="1" data-explanation="Normal users still need authenticated Athena user identity and membership authorization.">
-            <h3>7. What remains true for normal users?</h3>
-            <label><input type="radio" name="q7" value="0" /> They skip organization membership checks</label>
-            <label><input type="radio" name="q7" value="1" /> They still require auth and store membership</label>
-            <label><input type="radio" name="q7" value="2" /> They use the shared-demo actor</label>
-          </div>
-          <div class="question" data-answer="0" data-explanation="Demo financial visibility is still decided by membership role, not by shared-demo actor kind.">
-            <h3>8. What controls financial redaction?</h3>
-            <label><input type="radio" name="q8" value="0" /> The admitted user's store membership role</label>
-            <label><input type="radio" name="q8" value="1" /> Whether the actor is a shared-demo actor</label>
-            <label><input type="radio" name="q8" value="2" /> The frontend route path</label>
-          </div>
-          <div class="question" data-answer="2" data-explanation="The PR gate is the merge-readiness boundary for this repo.">
-            <h3>9. Which command is the merge gate?</h3>
-            <label><input type="radio" name="q9" value="0" /> <code>bun test</code> directly on one file</label>
-            <label><input type="radio" name="q9" value="1" /> <code>npm start</code></label>
-            <label><input type="radio" name="q9" value="2" /> <code>bun run pr:athena</code></label>
-          </div>
-          <div class="question" data-answer="1" data-explanation="This report is part of the delivery candidate before PR creation and merge.">
-            <h3>10. What is the current delivery status?</h3>
-            <label><input type="radio" name="q10" value="0" /> Already merged and deployed</label>
-            <label><input type="radio" name="q10" value="1" /> Candidate PR work in progress</label>
-            <label><input type="radio" name="q10" value="2" /> Documentation-only change</label>
-          </div>
-          <button type="submit">Grade Quiz</button>
-          <button type="button" id="resetQuiz">Reset</button>
-          <div id="quizResult" aria-live="polite"></div>
-        </form>
-      </section>
-    </main>
-    <script>
-      const form = document.getElementById("changeQuiz");
-      const result = document.getElementById("quizResult");
-      const reset = document.getElementById("resetQuiz");
-      form.addEventListener("submit", (event) => {
-        event.preventDefault();
-        let score = 0;
-        const explanations = [];
-        document.querySelectorAll(".question").forEach((question, index) => {
-          const selected = question.querySelector("input:checked");
-          const correct = question.dataset.answer;
-          if (selected && selected.value === correct) score += 1;
-          explanations.push(`${index + 1}. ${question.dataset.explanation}`);
-        });
-        result.textContent =
-          score >= 8
-            ? `Passed: ${score}/10. ${explanations.join(" ")}`
-            : `Not passed: ${score}/10. Review the report and try again. ${explanations.join(" ")}`;
-      });
-      reset.addEventListener("click", () => {
-        form.reset();
-        result.textContent = "";
-      });
-    </script>
+    </article>
   </body>
 </html>

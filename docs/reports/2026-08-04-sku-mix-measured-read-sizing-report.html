@@ -1,116 +1,59 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="c737a6d7b0f5dc71be442caf4e726ff10b0dcd40528a90a99ad324e74eff2b13" data-athena-report-base="origin/main" data-athena-report-head="feat/reports-sku-mix-measured-read-sizing">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>The cheap query sizes the expensive one: measured read routing for SKU mix</title>
-    <style>
-      :root {
-        --ink: #1f2933;
-        --muted: #596674;
-        --line: #d9e2ec;
-        --paper: #ffffff;
-        --soft: #f6f8fb;
-        --accent: #1d4ed8;
-        --accent-soft: #dbeafe;
-        --good: #166534;
-        --bad: #b91c1c;
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        background: var(--soft);
-        color: var(--ink);
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        line-height: 1.55;
-      }
-      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
-      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
-      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
-      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
-      h2 { font-size: 28px; margin: 0 0 16px; }
-      h3 { font-size: 19px; margin: 22px 0 10px; }
-      p { margin: 0 0 14px; }
-      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
-      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
-      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
-      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
-      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
-      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
-      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
-      .table-scroll { overflow-x: auto; }
-      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
-      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
-      tr:last-child td { border-bottom: 0; }
-      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
-      .quiz-question:first-child { border-top: 0; }
-      fieldset { border: 0; margin: 0; padding: 0; }
-      legend { font-weight: 700; margin-bottom: 10px; }
-      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
-      @media (hover: hover) and (pointer: fine) {
-        label:hover { border-color: #b6c5d8; }
-      }
-      button {
-        appearance: none;
-        border: 0;
-        border-radius: 8px;
-        background: var(--accent);
-        color: #ffffff;
-        cursor: pointer;
-        font-weight: 700;
-        padding: 11px 16px;
-        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
-      }
-      button:active { transform: scale(0.97); }
-      button.secondary { background: #475569; }
-      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
-      #quizResult { font-weight: 700; }
-      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
-      .answer-detail.visible { display: block; }
-      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
-      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
-      .warn { background: #fffbeb; border-color: #fde68a; }
-      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
-      @media (max-width: 820px) { h1 { font-size: 32px; } main { padding: 32px 16px 56px; } }
-    </style>
-  </head>
-  <body>
-    <main>
-      <header>
-        <h1>The cheap query sizes the expensive one: measured read routing for SKU mix</h1>
-        <p class="lede">The SKU mix chart routed every selection longer than two days through admission control and a snapshot build &mdash; to fold, in production, a few hundred rows. The span rule was provable but calibrated to a worst case wigclub sits 23&times; below. This delivery publishes the fold&rsquo;s own row count onto the days rail, so the read that is already loaded can measure the read that is about to be issued.</p>
-        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch feat/reports-sku-mix-measured-read-sizing</span><span class="pill">Base origin/main</span><span class="pill">737 focused reports tests green</span><span class="pill">Merge gate: pr:athena</span><span class="pill">Schema: one optional field</span><span class="pill">No fold-version bump</span><span class="pill">Backfill required</span></div>
-      </header>
-
-      <section class="panel"><h2>Executive Summary</h2>
-        <p>Multi-day SKU mix was moved onto the bounded resumable range-snapshot lifecycle in the previous delivery. Correct, but the routing predicate was a <em>proxy</em>: a selection qualified as cheap only by being at most two days long. That threshold was provable from the fold&rsquo;s 2,000-rows-per-operating-day ceiling &mdash; two days &times; 2,000 = 4,000 rows, under the reader&rsquo;s 5,000-row cap.</p>
-        <p><strong>Production sits nowhere near that ceiling.</strong> Wigclub&rsquo;s busiest day in seventeen months folds 88 SKU rows; the median day folds 30. The entire 184-day window reads 2,366 rows &mdash; inside the synchronous cap. The chart was buying admission control to fold a few hundred rows.</p>
-        <p><strong>The fold already knows the number.</strong> <code>foldDay</code> returns a <code>skuDays</code> map that <em>is</em> the day&rsquo;s row set, so <code>skuDays.size</code> equals the post-fold <code>reportSkuDay</code> count exactly. The sweeper now writes it onto the day document in the same mutation as those rows, and the days rail publishes it as <code>skuDayRowCount</code>.</p>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>The cheap query sizes the expensive one: measured read routing for SKU mix</title>
+</head>
+<body>
+<article
+  data-athena-landed-change-report="v2"
+  data-athena-report-diff-fingerprint="c737a6d7b0f5dc71be442caf4e726ff10b0dcd40528a90a99ad324e74eff2b13"
+  data-athena-report-base="origin/main"
+  data-athena-report-head="feat/reports-sku-mix-measured-read-sizing"
+>
+  <header data-report-section="header">
+    <h1>The cheap query sizes the expensive one: measured read routing for SKU mix</h1>
+    <p class="lede">The SKU mix chart routed every selection longer than two days through admission control and a snapshot build — to fold, in production, a few hundred rows. The span rule was provable but calibrated to a worst case wigclub sits 23× below. This delivery publishes the fold’s own row count onto the days rail, so the read that is already loaded can measure the read that is about to be issued.</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch feat/reports-sku-mix-measured-read-sizing</li>
+      <li>Base origin/main</li>
+      <li>737 focused reports tests green</li>
+      <li>Merge gate: pr:athena</li>
+      <li>Schema: one optional field</li>
+      <li>No fold-version bump</li>
+      <li>Backfill required</li>
+    </ul>
+  </header>
+  <section data-report-section="summary">
+<h2>Executive Summary</h2>
+        <p>Multi-day SKU mix was moved onto the bounded resumable range-snapshot lifecycle in the previous delivery. Correct, but the routing predicate was a <em>proxy</em>: a selection qualified as cheap only by being at most two days long. That threshold was provable from the fold’s 2,000-rows-per-operating-day ceiling — two days × 2,000 = 4,000 rows, under the reader’s 5,000-row cap.</p>
+        <p><strong>Production sits nowhere near that ceiling.</strong> Wigclub’s busiest day in seventeen months folds 88 SKU rows; the median day folds 30. The entire 184-day window reads 2,366 rows — inside the synchronous cap. The chart was buying admission control to fold a few hundred rows.</p>
+        <p><strong>The fold already knows the number.</strong> <code>foldDay</code> returns a <code>skuDays</code> map that <em>is</em> the day’s row set, so <code>skuDays.size</code> equals the post-fold <code>reportSkuDay</code> count exactly. The sweeper now writes it onto the day document in the same mutation as those rows, and the days rail publishes it as <code>skuDayRowCount</code>.</p>
         <p><strong>Routing became two tiers.</strong> The span rule survives as an unconditional floor that never depends on loaded data. Above it, <code>skuMixSyncRowProbe</code> sums the counts across the selection from rows the panel already holds and stays synchronous when the total clears a 4,000-row budget. Day, week, month and quarter selections now avoid admission entirely.</p>
-        <p><strong>What this does not fix.</strong> At wigclub&rsquo;s current run rate a fully operating 184-day window is roughly 6,214 rows &mdash; genuinely over the cap. The six-month window legitimately belongs on the async rail from around 2026-10-07. The win is everything narrower, which was never actually expensive.</p>
-      </section>
-
-      <section class="panel"><h2>Problem and Context</h2>
+        <p><strong>What this does not fix.</strong> At wigclub’s current run rate a fully operating 184-day window is roughly 6,214 rows — genuinely over the cap. The six-month window legitimately belongs on the async rail from around 2026-10-07. The win is everything narrower, which was never actually expensive.</p>
+  </section>
+  <section data-report-section="problem">
+<h2>Problem and Context</h2>
         <p>The reported symptom was interaction latency: the mix chart felt unresponsive after it moved onto the heavy rail, while the days table loaded the same range quickly.</p>
-        <p><strong>The obvious fix does not work.</strong> <code>listDays</code> and the mix chart share a metric name, not a grain. <code>reportDay</code> holds one document per operating day with store-wide scalars &mdash; its <code>unitsSold</code> means &ldquo;the store sold 412 units that day&rdquo;. The pie slices <em>by SKU</em>, which exists only in <code>reportSkuDay</code>, one row per (day, SKU). For a 184-day window that is 184 documents versus up to 368,000 rows. Routing the chart at the days rail yields a single total with nothing to divide it into.</p>
-        <p><strong>The pre-aggregated rail is also not the answer.</strong> <code>reportPeriodSkuRollup</code> already stores per-SKU totals per period key, and trailing-six-month windows are month-aligned at the start. Measured against production it compresses only 1.0&times;&ndash;2.8&times; per month; across the window, 2,366 rows collapse to 1,082. Wigclub&rsquo;s catalogue is long-tail &mdash; 628 distinct SKUs over 2,366 SKU-days, so a SKU sells on about 3.8 days total &mdash; and month rollups only help when SKUs repeat across days. A hybrid whole-months-plus-partial-tail fold to save ~1,300 row reads was rejected as not worth the seam.</p>
+        <p><strong>The obvious fix does not work.</strong> <code>listDays</code> and the mix chart share a metric name, not a grain. <code>reportDay</code> holds one document per operating day with store-wide scalars — its <code>unitsSold</code> means “the store sold 412 units that day”. The pie slices <em>by SKU</em>, which exists only in <code>reportSkuDay</code>, one row per (day, SKU). For a 184-day window that is 184 documents versus up to 368,000 rows. Routing the chart at the days rail yields a single total with nothing to divide it into.</p>
+        <p><strong>The pre-aggregated rail is also not the answer.</strong> <code>reportPeriodSkuRollup</code> already stores per-SKU totals per period key, and trailing-six-month windows are month-aligned at the start. Measured against production it compresses only 1.0×–2.8× per month; across the window, 2,366 rows collapse to 1,082. Wigclub’s catalogue is long-tail — 628 distinct SKUs over 2,366 SKU-days, so a SKU sells on about 3.8 days total — and month rollups only help when SKUs repeat across days. A hybrid whole-months-plus-partial-tail fold to save ~1,300 row reads was rejected as not worth the seam.</p>
         <p><strong>The real defect was the question being asked.</strong> The predicate asked <em>how wide is this range</em> as a stand-in for <em>how much will this read cost</em>, because cost was not knowable without doing the read.</p>
-      </section>
-
-      <section class="panel"><h2>Mental Model</h2>
+  </section>
+  <section data-report-section="mental-model">
+<h2>Mental Model</h2>
         <p>Four ideas carry the change.</p>
         <h3>1. A span ceiling is a proxy for cost</h3>
         <p>Span, page count and item count are all stand-ins. If another query on screen already covers the same range, cost is knowable for free. The days rail is the right source not because it holds the data, but because it already covers the range. <strong>The cheap query sizes the expensive one.</strong></p>
-        <h3>2. Unknown is not zero &mdash; but a missing row is</h3>
-        <p>A day whose count is absent makes the whole range indeterminate, not &ldquo;the sum of the rest&rdquo;. But <code>reportDay</code> is <em>sparse</em>: wigclub has 108 day documents across 511 calendar days, and a day with no document had no activity and so no SKU rows. A missing <em>field</em> means unknown; a missing <em>row</em> legitimately means zero. Both are encoded, and callers must pass explicit coverage bounds so &ldquo;the reader never looked&rdquo; cannot masquerade as &ldquo;there was nothing there&rdquo;.</p>
+        <h3>2. Unknown is not zero — but a missing row is</h3>
+        <p>A day whose count is absent makes the whole range indeterminate, not “the sum of the rest”. But <code>reportDay</code> is <em>sparse</em>: wigclub has 108 day documents across 511 calendar days, and a day with no document had no activity and so no SKU rows. A missing <em>field</em> means unknown; a missing <em>row</em> legitimately means zero. Both are encoded, and callers must pass explicit coverage bounds so “the reader never looked” cannot masquerade as “there was nothing there”.</p>
         <h3>3. A derived counter is only as trustworthy as its slowest writer</h3>
         <p><code>reportDay</code> has two writers. The sweeper folds it; <code>ingest.ts</code> maintains it incrementally between folds, including inserting new <code>reportSkuDay</code> rows as facts arrive for the open day. A count written only by the fold goes stale-low all day, on exactly the day operators watch most.</p>
         <h3>4. Trust predicates and performance predicates are different claims</h3>
-        <p>Both send a day through the same refold, which makes merging them tempting. But <code>certifiedFoldRevision</code> is the movement lane&rsquo;s <em>trust</em> boundary, while <code>skuDayRowCount</code> is the mix lane&rsquo;s <em>sizing</em> hint. A day missing the count is fully trustworthy.</p>
-      </section>
-
-      <section class="panel"><h2>Before and After</h2>
+        <p>Both send a day through the same refold, which makes merging them tempting. But <code>certifiedFoldRevision</code> is the movement lane’s <em>trust</em> boundary, while <code>skuDayRowCount</code> is the mix lane’s <em>sizing</em> hint. A day missing the count is fully trustworthy.</p>
+  </section>
+  <section data-report-section="before-after">
+<h2>Before and After</h2>
         <div class="table-scroll">
           <table>
             <thead><tr><th>Selection</th><th>Before</th><th>After</th><th>Rows (wigclub today)</th></tr></thead>
@@ -125,16 +68,16 @@
           </table>
         </div>
         <p>The async lifecycle is unchanged and remains correct for the widest window. What changed is which selections are sent to it.</p>
-      </section>
-
-      <section class="panel"><h2>Key Files</h2>
+  </section>
+  <section data-report-section="key-files">
+<h2>Key Files</h2>
         <div class="table-scroll">
           <table>
             <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
             <tbody>
-              <tr><td><code>shared/reportsContract.ts</code></td><td>Adds <code>skuDayRowCount</code> to <code>ReportDayRow</code>, the <code>REPORT_SKU_MIX_SYNC_ROW_BUDGET</code> constant, and <code>skuMixSyncRowProbe</code> &mdash; the pure sizing function, with coverage bounds as required arguments.</td></tr>
+              <tr><td><code>shared/reportsContract.ts</code></td><td>Adds <code>skuDayRowCount</code> to <code>ReportDayRow</code>, the <code>REPORT_SKU_MIX_SYNC_ROW_BUDGET</code> constant, and <code>skuMixSyncRowProbe</code> — the pure sizing function, with coverage bounds as required arguments.</td></tr>
               <tr><td><code>convex/reports/sweeper.ts</code></td><td>Writes <code>skuDayRowCount: result.skuDays.size</code> into the day document in the same mutation that patches, inserts and deletes the SKU rows it counts.</td></tr>
-              <tr><td><code>convex/reports/ingest.ts</code></td><td>The second writer. SKU upserts moved <em>ahead of</em> the day write so this batch&rsquo;s inserts land in the same patch; a pre-U8 day deliberately stays uncounted rather than guessing from an unknown base.</td></tr>
+              <tr><td><code>convex/reports/ingest.ts</code></td><td>The second writer. SKU upserts moved <em>ahead of</em> the day write so this batch’s inserts land in the same patch; a pre-U8 day deliberately stays uncounted rather than guessing from an unknown base.</td></tr>
               <tr><td><code>convex/schemas/reports/derived.ts</code></td><td>Declares the field optional. Absent means unknown, never zero.</td></tr>
               <tr><td><code>convex/reports/queries.ts</code></td><td>Passes the count through <code>toReportDayRow</code>, and moves <code>listRangeSkuMix</code> off the 92-day proxy cap onto the 184-day drill-down ceiling. The 5,000-row cap still fails closed and always was the real bound.</td></tr>
               <tr><td><code>convex/reports/foldVersionRepair.ts</code></td><td>Adds <code>skuDayRowCountBackfillNeeded</code> as a predicate separate from <code>needsCertifiedRefold</code>, with its own counter; also fixes <code>missingRevisionCount</code>, which inferred its answer rather than testing it.</td></tr>
@@ -142,186 +85,145 @@
             </tbody>
           </table>
         </div>
-      </section>
-
-      <section class="panel"><h2>What Intentionally Did Not Change</h2>
-        <p><strong>No fold-version bump.</strong> The fold&rsquo;s output is unchanged, so refolding is not a correctness repair. A bump would have invalidated certified provenance for stores already cleared for the movement lane.</p>
-        <p><strong>The async lifecycle.</strong> <code>rangeSnapshotLifecycle.ts</code> and the mix snapshot path are untouched. So is the held-snapshot UI: the prior donut already stays on screen, dimmed and desaturated, while a new range builds &mdash; that behavior shipped previously and was left alone rather than rebuilt.</p>
+  </section>
+  <section data-report-section="changes">
+<h2>What Intentionally Did Not Change</h2>
+        <p><strong>No fold-version bump.</strong> The fold’s output is unchanged, so refolding is not a correctness repair. A bump would have invalidated certified provenance for stores already cleared for the movement lane.</p>
+        <p><strong>The async lifecycle.</strong> <code>rangeSnapshotLifecycle.ts</code> and the mix snapshot path are untouched. So is the held-snapshot UI: the prior donut already stays on screen, dimmed and desaturated, while a new range builds — that behavior shipped previously and was left alone rather than rebuilt.</p>
         <p><strong>The legacy movement reader.</strong> <code>listRangeSkuMovement</code> keeps <code>RANGE_SYNC_READER_MAX_SPAN_DAYS</code> at 92. It has no probe, so span remains its only proxy for cost.</p>
         <p><strong>The span floor.</strong> Selections of at most two days route synchronously without consulting any loaded data, so a day click cannot regress because the days rail has not answered yet.</p>
         <p><strong>Shared-demo behavior.</strong> Demo fixtures carry no counts, so the probe is indeterminate there and the span rule governs exactly as before.</p>
-      </section>
-
-      <section class="panel"><h2>Validation and Review Evidence</h2>
+  </section>
+  <section data-report-section="validation">
+<h2>Validation and Review Evidence</h2>
         <p><strong>Focused suites:</strong> 737 tests green across <code>convex/reports</code> and <code>src/components/reports</code>. <code>tsc --noEmit</code> clean; <code>eslint</code> clean across all changed files.</p>
         <p><strong>New coverage:</strong> probe unit tests for summation, sparse-day zeroing, out-of-range exclusion, indeterminacy on an uncounted day, and indeterminacy on insufficient coverage in both directions; a sweeper test asserting the published count equals the actual row count (compared against <code>skuDays.length</code>, not a literal) and drops to zero when a day sheds its last row; ingest tests for incremental exactness, zero-as-measurement, and absent-stays-absent; panel tests for both routing tiers and for deferred admission.</p>
         <p><strong>Production data grounding:</strong> all three reporting tables were pulled in full from prod and reconciled locally. 1,130 of 1,130 month-SKU rollup pairs matched a local re-fold exactly; <code>reportDay.unitsSold</code> equalled the sum of its SKU rows on all 108 days; <code>factCount</code> was never below the SKU-row count on any day.</p>
-        <p><strong>Dev end-to-end:</strong> the backfill was marked and drained on dev wigclub &mdash; 73/73 days counted, zero marks remaining, and <strong>73/73 published counts equal the actual <code>reportSkuDay</code> row count</strong> (830 rows, 830 summed), with no SKU-day date lacking a day document.</p>
-        <div class="panel warn"><p><strong>Untested path.</strong> Refolds advance <code>certifiedFoldRevision</code>, which should invalidate range snapshots covering a refolded day via <code>sameRevisionVector</code>. The dev drain reported <code>rangesComputed: 0</code> throughout &mdash; there were no pending snapshots &mdash; so that cascade was not exercised. It will first run for real during the production backfill.</p>
-        <p><strong>Dev cron not firing.</strong> The dev deployment&rsquo;s 5-minute sweep cron did not tick; the drain was driven by invoking <code>reports/sweeper:sweep</code> directly (10 days per call, zero failures). Unrelated to this change, but it invalidates dev as a witness for any cron-driven behavior until fixed.</p></div>
-        <p><strong>Deployment status:</strong> <em>pending</em> at report time. Planned sequence: merge to <code>origin/main</code> &rarr; align local main &rarr; <code>scripts/deploy-vps.sh convex-athena-local</code> (<code>deploy_convex_prod</code> + <code>deploy_athena_local</code>) &rarr; production backfill for wigclub.</p>
-      </section>
-
-      <section class="panel"><h2>Operational Guidance</h2>
-        <p><strong>The backfill is required, not optional.</strong> Historical settled days never refold under normal traffic, so they never acquire the count on their own, and one uncounted day makes its whole range indeterminate. Without it the feature self-heals forward at one day per day &mdash; full six-month coverage in six months.</p>
+        <p><strong>Dev end-to-end:</strong> the backfill was marked and drained on dev wigclub — 73/73 days counted, zero marks remaining, and <strong>73/73 published counts equal the actual <code>reportSkuDay</code> row count</strong> (830 rows, 830 summed), with no SKU-day date lacking a day document.</p>
+        <div class="panel warn"><p><strong>Untested path.</strong> Refolds advance <code>certifiedFoldRevision</code>, which should invalidate range snapshots covering a refolded day via <code>sameRevisionVector</code>. The dev drain reported <code>rangesComputed: 0</code> throughout — there were no pending snapshots — so that cascade was not exercised. It will first run for real during the production backfill.</p>
+        <p><strong>Dev cron not firing.</strong> The dev deployment’s 5-minute sweep cron did not tick; the drain was driven by invoking <code>reports/sweeper:sweep</code> directly (10 days per call, zero failures). Unrelated to this change, but it invalidates dev as a witness for any cron-driven behavior until fixed.</p></div>
+        <p><strong>Deployment status:</strong> <em>pending</em> at report time. Planned sequence: merge to <code>origin/main</code> → align local main → <code>scripts/deploy-vps.sh convex-athena-local</code> (<code>deploy_convex_prod</code> + <code>deploy_athena_local</code>) → production backfill for wigclub.</p>
+  </section>
+  <section data-report-section="guidance">
+<h2>Operational Guidance</h2>
+        <p><strong>The backfill is required, not optional.</strong> Historical settled days never refold under normal traffic, so they never acquire the count on their own, and one uncounted day makes its whole range indeterminate. Without it the feature self-heals forward at one day per day — full six-month coverage in six months.</p>
         <p><strong>Run it off-peak.</strong> Each refold advances <code>certifiedFoldRevision</code>, so completed Units moved and multi-day mix snapshots covering refolded days go <code>terminal_source_stale</code> and rebuild on next ensure. Self-healing, but visible to anyone with a wide sheet open.</p>
-        <p><strong>Command and drain rate:</strong> <code>markStaleFoldVersionDays</code> per store with <code>autoContinue</code>, then let the sweeper drain at <code>SWEEP_DIRTY_BATCH</code> (10 days) per 5-minute tick. Prod wigclub is 108 days &mdash; about 55 minutes, sharing the queue with real dirty days.</p>
+        <p><strong>Command and drain rate:</strong> <code>markStaleFoldVersionDays</code> per store with <code>autoContinue</code>, then let the sweeper drain at <code>SWEEP_DIRTY_BATCH</code> (10 days) per 5-minute tick. Prod wigclub is 108 days — about 55 minutes, sharing the queue with real dirty days.</p>
         <p><strong>Confirm with</strong> <code>countStaleFoldVersionDays</code>, whose <code>missingSkuDayRowCountCount</code> should reach zero. Note this is deliberately <em>not</em> on <code>countUncertifiedDays</code>, which remains the movement-readiness gate.</p>
-        <p><strong>Watch the budget over time.</strong> The 4,000-row budget is not permanent headroom. At wigclub&rsquo;s run rate the quarter view crosses it at roughly 2&times; volume and the month view at roughly 3&times;. Re-measure before assuming a range is still cheap.</p>
-      </section>
-
-      <section class="panel"><h2>Subagent Evidence</h2>
-        <p><strong>SubagentUnavailable</strong> &mdash; and the reason is a policy restriction rather than a platform limitation, so this is stated plainly rather than claimed as unavailability. The operating harness for this session instructed that agent dispatch not be used unless explicitly requested, and no such request was made. The session-context, delivered-diff and reviewer subagents this skill normally requires were therefore not run.</p>
+        <p><strong>Watch the budget over time.</strong> The 4,000-row budget is not permanent headroom. At wigclub’s run rate the quarter view crosses it at roughly 2× volume and the month view at roughly 3×. Re-measure before assuming a range is still cheap.</p>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why can the days table’s rail not simply supply the pie chart’s data?</p>
+        <ol data-quiz-options>
+          <li>It is too slow at six-month spans.</li>
+          <li data-quiz-correct>It stores store-wide daily scalars, not per-SKU rows, so it has no breakdown to divide a total into.</li>
+          <li>Its rows are not certified for the mix lane.</li>
+          <li>It is capped at 92 days.</li>
+        </ol>
+        <p data-quiz-explanation><code>reportDay</code> holds one document per day with store-wide scalars. Per-SKU attribution exists only in <code>reportSkuDay</code>. The two share a metric name, not a grain.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>The old two-day span threshold was described as “provable”. Provable from what?</p>
+        <ol data-quiz-options>
+          <li>Measured production percentiles.</li>
+          <li>The 92-day synchronous reader cap.</li>
+          <li data-quiz-correct>The fold’s 2,000-rows-per-day ceiling: 2 × 2,000 = 4,000, under the 5,000-row reader cap.</li>
+          <li>The 184-day drill-down ceiling.</li>
+        </ol>
+        <p data-quiz-explanation>It was a sound proof from a safety ceiling — but that ceiling sits about 23× above what production actually folds, which is why the rule was so conservative.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is <code>result.skuDays.size</code> an exact count rather than an estimate?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>The map is the day’s row set: every entry is patched or inserted, and every existing row absent from it is deleted.</li>
+          <li>The fold recounts the table after writing.</li>
+          <li>It is validated against <code>factCount</code>.</li>
+          <li>A database trigger keeps it in sync.</li>
+        </ol>
+        <p data-quiz-explanation>And it is written in the same mutation as those rows, so the count cannot disagree with them at fold time.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A day in the selected range has no <code>reportDay</code> document at all. What does the probe do?</p>
+        <ol data-quiz-options>
+          <li>Returns <code>undefined</code> — the range is unprovable.</li>
+          <li>Assumes the 2,000-row worst case for that day.</li>
+          <li>Throws.</li>
+          <li data-quiz-correct>Counts it as zero, because <code>reportDay</code> is sparse and no document means no activity.</li>
+        </ol>
+        <p data-quiz-explanation>A missing <em>row</em> means zero; a missing <em>field</em> means unknown. Conflating them would make the cheapest ranges — quiet ones — unprovable.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the probe take explicit coverage bounds instead of inferring coverage from the rows it was given?</p>
+        <ol data-quiz-options>
+          <li>To support multiple stores in one call.</li>
+          <li data-quiz-correct>Because rows are sparse, so their presence cannot prove the reader looked at the range — a range past the loaded window would otherwise sum to a confident understatement.</li>
+          <li>To let the caller override the budget.</li>
+          <li>To keep the function pure.</li>
+        </ol>
+        <p data-quiz-explanation>With a sparse table, “no rows here” and “I never looked here” are indistinguishable without separate coverage evidence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is the sync budget 4,000 when the reader’s cap is 5,000?</p>
+        <ol data-quiz-options>
+          <li>4,000 is the fold’s per-day ceiling.</li>
+          <li>To leave room for the top-5 identity lookups.</li>
+          <li data-quiz-correct>The probe sizes rows folded before the read happens; the gap absorbs a concurrent fold rather than letting the reader’s fail-closed throw reach the operator.</li>
+          <li>It matches the rollup row cap.</li>
+        </ol>
+        <p data-quiz-explanation>Sizing and reading are separated in time, so the budget deliberately under-commits.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What made <code>ingest.ts</code> a necessary part of this change?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>It is a second writer that inserts <code>reportSkuDay</code> rows between folds, so a fold-only count would go stale-low on the open day.</li>
+          <li>It owns the dirty-mark queue.</li>
+          <li>It validates the schema.</li>
+          <li>It computes the rollups.</li>
+        </ol>
+        <p data-quiz-explanation>Hence the rule: when a derived counter has more than one writer, every writer must maintain it in the same transaction as the rows it counts.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Ingest sees a new fact for a pre-backfill day that carries no count. What does it write?</p>
+        <ol data-quiz-options>
+          <li>The number of rows it just inserted.</li>
+          <li data-quiz-correct>Nothing — the field stays absent, because base-plus-inserts on an unknown base would be a guess presented as a measurement.</li>
+          <li>Zero, to initialize it.</li>
+          <li>A full recount of the day’s rows.</li>
+        </ol>
+        <p data-quiz-explanation>The day stays unprovable until its backfill refold supplies the real value.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is <code>skuDayRowCountBackfillNeeded</code> kept separate from <code>needsCertifiedRefold</code>?</p>
+        <ol data-quiz-options>
+          <li>They mark different dirty reasons.</li>
+          <li>Only one is allowed to trigger a refold.</li>
+          <li>They run on different schedules.</li>
+          <li data-quiz-correct>Certification is the movement lane’s trust boundary while the count is the mix lane’s sizing hint — merging them would make a performance shortfall read as a movement-readiness failure.</li>
+        </ol>
+        <p data-quiz-explanation>A day missing the count is fully trustworthy. <code>countUncertifiedDays</code> must keep answering only the trust question.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the main operational side effect of running the backfill?</p>
+        <ol data-quiz-options>
+          <li>Day totals are briefly wrong.</li>
+          <li>The mix chart is unavailable during the drain.</li>
+          <li data-quiz-correct>Refolds advance <code>certifiedFoldRevision</code>, so range snapshots covering refolded days go stale and rebuild on next ensure.</li>
+          <li>The fold version is bumped for every store.</li>
+        </ol>
+        <p data-quiz-explanation>Self-healing but visible, which is why it should run off-peak. There is deliberately no fold-version bump.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+<h2>Subagent Evidence</h2>
+        <p><strong>SubagentUnavailable</strong> — and the reason is a policy restriction rather than a platform limitation, so this is stated plainly rather than claimed as unavailability. The operating harness for this session instructed that agent dispatch not be used unless explicitly requested, and no such request was made. The session-context, delivered-diff and reviewer subagents this skill normally requires were therefore not run.</p>
         <p><strong>This report is correspondingly less complete than standard.</strong> In particular it carries no independent review of its own claims or quiz quality, and no cross-session historical sweep for prior attempts at this problem.</p>
-        <p>What stands in for that evidence, all first-hand from the delivery session: full-table reconciliation against production data for the routing premises; a complete read of both <code>reportDay</code> writers before adding the derived counter; an end-to-end backfill on dev with row-level verification; and a self-review pass against stated intent that found and fixed three defects &mdash; the ingest staleness gap, admission firing before the probe resolved, and the probe reading the stable seam&rsquo;s previous-range rows instead of the raw subscription result.</p>
-      </section>
-
-      <section class="panel"><h2>Comprehension Quiz: Pass Required</h2>
-        <p>Ten questions, pass at 8/10.</p>
-        <form id="changeQuiz" data-threshold="8">
-
-          <div class="quiz-question" data-answer="2">
-            <fieldset><legend>1. Why can the days table&rsquo;s rail not simply supply the pie chart&rsquo;s data?</legend>
-              <label><input type="radio" name="q1" value="1" /> It is too slow at six-month spans.</label>
-              <label><input type="radio" name="q1" value="2" /> It stores store-wide daily scalars, not per-SKU rows, so it has no breakdown to divide a total into.</label>
-              <label><input type="radio" name="q1" value="3" /> Its rows are not certified for the mix lane.</label>
-              <label><input type="radio" name="q1" value="4" /> It is capped at 92 days.</label>
-            </fieldset>
-            <p class="answer-detail"><strong>Correct: B.</strong> <code>reportDay</code> holds one document per day with store-wide scalars. Per-SKU attribution exists only in <code>reportSkuDay</code>. The two share a metric name, not a grain.</p>
-          </div>
-
-          <div class="quiz-question" data-answer="3">
-            <fieldset><legend>2. The old two-day span threshold was described as &ldquo;provable&rdquo;. Provable from what?</legend>
-              <label><input type="radio" name="q2" value="1" /> Measured production percentiles.</label>
-              <label><input type="radio" name="q2" value="2" /> The 92-day synchronous reader cap.</label>
-              <label><input type="radio" name="q2" value="3" /> The fold&rsquo;s 2,000-rows-per-day ceiling: 2 &times; 2,000 = 4,000, under the 5,000-row reader cap.</label>
-              <label><input type="radio" name="q2" value="4" /> The 184-day drill-down ceiling.</label>
-            </fieldset>
-            <p class="answer-detail"><strong>Correct: C.</strong> It was a sound proof from a safety ceiling &mdash; but that ceiling sits about 23&times; above what production actually folds, which is why the rule was so conservative.</p>
-          </div>
-
-          <div class="quiz-question" data-answer="1">
-            <fieldset><legend>3. Why is <code>result.skuDays.size</code> an exact count rather than an estimate?</legend>
-              <label><input type="radio" name="q3" value="1" /> The map is the day&rsquo;s row set: every entry is patched or inserted, and every existing row absent from it is deleted.</label>
-              <label><input type="radio" name="q3" value="2" /> The fold recounts the table after writing.</label>
-              <label><input type="radio" name="q3" value="3" /> It is validated against <code>factCount</code>.</label>
-              <label><input type="radio" name="q3" value="4" /> A database trigger keeps it in sync.</label>
-            </fieldset>
-            <p class="answer-detail"><strong>Correct: A.</strong> And it is written in the same mutation as those rows, so the count cannot disagree with them at fold time.</p>
-          </div>
-
-          <div class="quiz-question" data-answer="4">
-            <fieldset><legend>4. A day in the selected range has no <code>reportDay</code> document at all. What does the probe do?</legend>
-              <label><input type="radio" name="q4" value="1" /> Returns <code>undefined</code> &mdash; the range is unprovable.</label>
-              <label><input type="radio" name="q4" value="2" /> Assumes the 2,000-row worst case for that day.</label>
-              <label><input type="radio" name="q4" value="3" /> Throws.</label>
-              <label><input type="radio" name="q4" value="4" /> Counts it as zero, because <code>reportDay</code> is sparse and no document means no activity.</label>
-            </fieldset>
-            <p class="answer-detail"><strong>Correct: D.</strong> A missing <em>row</em> means zero; a missing <em>field</em> means unknown. Conflating them would make the cheapest ranges &mdash; quiet ones &mdash; unprovable.</p>
-          </div>
-
-          <div class="quiz-question" data-answer="2">
-            <fieldset><legend>5. Why does the probe take explicit coverage bounds instead of inferring coverage from the rows it was given?</legend>
-              <label><input type="radio" name="q5" value="1" /> To support multiple stores in one call.</label>
-              <label><input type="radio" name="q5" value="2" /> Because rows are sparse, so their presence cannot prove the reader looked at the range &mdash; a range past the loaded window would otherwise sum to a confident understatement.</label>
-              <label><input type="radio" name="q5" value="3" /> To let the caller override the budget.</label>
-              <label><input type="radio" name="q5" value="4" /> To keep the function pure.</label>
-            </fieldset>
-            <p class="answer-detail"><strong>Correct: B.</strong> With a sparse table, &ldquo;no rows here&rdquo; and &ldquo;I never looked here&rdquo; are indistinguishable without separate coverage evidence.</p>
-          </div>
-
-          <div class="quiz-question" data-answer="3">
-            <fieldset><legend>6. Why is the sync budget 4,000 when the reader&rsquo;s cap is 5,000?</legend>
-              <label><input type="radio" name="q6" value="1" /> 4,000 is the fold&rsquo;s per-day ceiling.</label>
-              <label><input type="radio" name="q6" value="2" /> To leave room for the top-5 identity lookups.</label>
-              <label><input type="radio" name="q6" value="3" /> The probe sizes rows folded before the read happens; the gap absorbs a concurrent fold rather than letting the reader&rsquo;s fail-closed throw reach the operator.</label>
-              <label><input type="radio" name="q6" value="4" /> It matches the rollup row cap.</label>
-            </fieldset>
-            <p class="answer-detail"><strong>Correct: C.</strong> Sizing and reading are separated in time, so the budget deliberately under-commits.</p>
-          </div>
-
-          <div class="quiz-question" data-answer="1">
-            <fieldset><legend>7. What made <code>ingest.ts</code> a necessary part of this change?</legend>
-              <label><input type="radio" name="q7" value="1" /> It is a second writer that inserts <code>reportSkuDay</code> rows between folds, so a fold-only count would go stale-low on the open day.</label>
-              <label><input type="radio" name="q7" value="2" /> It owns the dirty-mark queue.</label>
-              <label><input type="radio" name="q7" value="3" /> It validates the schema.</label>
-              <label><input type="radio" name="q7" value="4" /> It computes the rollups.</label>
-            </fieldset>
-            <p class="answer-detail"><strong>Correct: A.</strong> Hence the rule: when a derived counter has more than one writer, every writer must maintain it in the same transaction as the rows it counts.</p>
-          </div>
-
-          <div class="quiz-question" data-answer="2">
-            <fieldset><legend>8. Ingest sees a new fact for a pre-backfill day that carries no count. What does it write?</legend>
-              <label><input type="radio" name="q8" value="1" /> The number of rows it just inserted.</label>
-              <label><input type="radio" name="q8" value="2" /> Nothing &mdash; the field stays absent, because base-plus-inserts on an unknown base would be a guess presented as a measurement.</label>
-              <label><input type="radio" name="q8" value="3" /> Zero, to initialize it.</label>
-              <label><input type="radio" name="q8" value="4" /> A full recount of the day&rsquo;s rows.</label>
-            </fieldset>
-            <p class="answer-detail"><strong>Correct: B.</strong> The day stays unprovable until its backfill refold supplies the real value.</p>
-          </div>
-
-          <div class="quiz-question" data-answer="4">
-            <fieldset><legend>9. Why is <code>skuDayRowCountBackfillNeeded</code> kept separate from <code>needsCertifiedRefold</code>?</legend>
-              <label><input type="radio" name="q9" value="1" /> They mark different dirty reasons.</label>
-              <label><input type="radio" name="q9" value="2" /> Only one is allowed to trigger a refold.</label>
-              <label><input type="radio" name="q9" value="3" /> They run on different schedules.</label>
-              <label><input type="radio" name="q9" value="4" /> Certification is the movement lane&rsquo;s trust boundary while the count is the mix lane&rsquo;s sizing hint &mdash; merging them would make a performance shortfall read as a movement-readiness failure.</label>
-            </fieldset>
-            <p class="answer-detail"><strong>Correct: D.</strong> A day missing the count is fully trustworthy. <code>countUncertifiedDays</code> must keep answering only the trust question.</p>
-          </div>
-
-          <div class="quiz-question" data-answer="3">
-            <fieldset><legend>10. What is the main operational side effect of running the backfill?</legend>
-              <label><input type="radio" name="q10" value="1" /> Day totals are briefly wrong.</label>
-              <label><input type="radio" name="q10" value="2" /> The mix chart is unavailable during the drain.</label>
-              <label><input type="radio" name="q10" value="3" /> Refolds advance <code>certifiedFoldRevision</code>, so range snapshots covering refolded days go stale and rebuild on next ensure.</label>
-              <label><input type="radio" name="q10" value="4" /> The fold version is bumped for every store.</label>
-            </fieldset>
-            <p class="answer-detail"><strong>Correct: C.</strong> Self-healing but visible, which is why it should run off-peak. There is deliberately no fold-version bump.</p>
-          </div>
-
-          <div class="quiz-actions">
-            <button type="button" id="gradeQuiz">Grade quiz</button>
-            <button type="button" class="secondary" id="resetQuiz">Reset</button>
-            <span id="quizResult" aria-live="polite"></span>
-          </div>
-        </form>
-      </section>
-
-    </main>
-    <script>
-      const questions = Array.from(document.querySelectorAll(".quiz-question"));
-      const result = document.getElementById("quizResult");
-      const form = document.getElementById("changeQuiz");
-      const threshold = Number(form.dataset.threshold || 0);
-      function clearGrades() {
-        questions.forEach((question) => {
-          question.classList.remove("correct", "incorrect");
-          question.querySelector(".answer-detail").classList.remove("visible");
-        });
-        result.textContent = "";
-        result.style.color = "";
-      }
-      document.getElementById("gradeQuiz").addEventListener("click", () => {
-        clearGrades();
-        let score = 0;
-        questions.forEach((question, index) => {
-          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
-          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
-          if (isCorrect) score += 1;
-          question.classList.add(isCorrect ? "correct" : "incorrect");
-          question.querySelector(".answer-detail").classList.add("visible");
-        });
-        const passed = score >= threshold;
-        result.textContent = passed
-          ? `Passed: ${score}/${questions.length}.`
-          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
-        result.style.color = passed ? "var(--good)" : "var(--bad)";
-      });
-      document.getElementById("resetQuiz").addEventListener("click", () => {
-        form.reset();
-        clearGrades();
-      });
-    </script>
-  </body>
+        <p>What stands in for that evidence, all first-hand from the delivery session: full-table reconciliation against production data for the routing premises; a complete read of both <code>reportDay</code> writers before adding the derived counter; an end-to-end backfill on dev with row-level verification; and a self-review pass against stated intent that found and fixed three defects — the ingest staleness gap, admission firing before the probe resolved, and the probe reading the stable seam’s previous-range rows instead of the raw subscription result.</p>
+  </section>
+</article>
+</body>
 </html>

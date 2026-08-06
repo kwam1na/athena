@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>In-App Docs Viewer and Landed-Change Report Contract v2</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="998036a77377d8e8053b875ce035eb12678690bef8f55079d6cf6747fc16279f">
+  <header data-report-section="header">
+    <h1>In-App Docs Viewer and Landed-Change Report Contract v2</h1>
+    <p>docs/solutions and docs/reports become a real app section, and reports become themable content instead of styled pages</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch docs-workspace</li>
+      <li>176 harness tests green</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>PR</dt><dd>Not yet opened</dd>
+      <dt>Status</dt><dd>Delivery candidate</dd>
+      <dt>Deploy</dt><dd>Pending</dd>
+      <dt>Root alignment</dt><dd>Pending</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive Summary</h2>
+      <p>docs/solutions/**/*.md and docs/reports/**/*.html were repo files with no in-app way to browse them, and landed-change reports were standalone HTML pages with embedded CSS, JS, and forms authored ad hoc by whichever agent generated them. This branch adds a themed /docs section to the Athena webapp that indexes and renders both content types, and migrates every landed-change report to a semantic &#x27;contract-v2&#x27; format that carries no styling or scripting of its own — the webapp owns presentation and hydrates the quiz.</p>
+      <p>The two changes ship together because the viewer is what makes report presentation worth standardizing: previously reports could only be shown in a sandboxed iframe.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Problem</h2>
+      <p>There was no route in the app to read a solution note or a landed-change report; readers had to find the raw file in the repo. Reports that did exist were structurally consistent (they followed the render_report.py payload contract) but visually inconsistent, because rendering style was left to whichever agent authored the CSS for a given report.</p>
+      <p>This was a direct product ask, not a bug: expose solution docs and delivery reports as an in-app docs section styled like the rest of Athena, then encode and enforce report style at the skill level instead of leaving it to each agent.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental Model</h2>
+      <p>Think of it as a two-layer split: an index layer and a content layer.</p>
+      <p>The index layer is a Vite plugin (vite-docs-content-plugin.ts) that walks docs/solutions and docs/reports at build/dev time and emits a virtual module (virtual:athena-docs-index) containing only metadata — titles, dates, categories, slugs. It never embeds file bodies.</p>
+      <p>The content layer loads lazily per page via import.meta.glob, so opening the docs index page never pays the cost of parsing every report or solution doc — only the one a reader opens.</p>
+      <ul>
+        <li>Index: cheap, built once, holds metadata for every doc</li>
+        <li>Content: lazy, one file loaded per page view</li>
+        <li>Reports: semantic content only; the app supplies all styling and the quiz UI</li>
+      </ul>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before vs After</h2>
+      <p>Before: docs/solutions/*.md had no reader surface at all. docs/reports/*.html were self-contained pages — each with its own &lt;style&gt;, &lt;script&gt;, and a scripted quiz form (id=&quot;changeQuiz&quot;) — opened as raw static files or shown inside a sandboxed iframe by the one place the app referenced them.</p>
+      <p>After: /docs, /docs/solutions/:category/:slug, and /docs/reports/:slug are TanStack Router routes behind the same auth gate as the rest of the app. Reports are a single &lt;article data-athena-landed-change-report=&quot;v2&quot;&gt; with no CSS/JS/forms; the webapp parses that DOM (reportContract.ts), themes it, and renders the quiz as a React component (DocsReportQuiz.tsx) that grades client-side against the encoded answer key.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>What Changed</h2>
+      <p>Changed: report rendering pipeline (render_report.py rewritten to emit v2 markup from the same JSON payload contract), a new corpus-wide presentation sensor (report-presentation-check.ts) and an updated per-branch gate sensor (landed-change-report-check.ts) that now also checks diff-fingerprint staleness against v2 markup, a deterministic migration script that converted all ~65 existing reports in place, and the new docs viewer routes/components/vite plugin in packages/athena-webapp.</p>
+      <p>Not changed: the report-authoring workflow. Agents still produce the same JSON payload (title, sections, keyFiles, quiz, subagents) described in report-payload.md; only what render_report.py emits from that payload changed. Report prose was not rewritten during migration — the converter moves existing DOM text nodes rather than retyping them, so wording is preserved exactly, only the structural wrapper changed.</p>
+      <p>Enforcement is intentionally split: reports:presentation:check runs over the whole corpus always (root marker, no styling/scripting, header/pills, section order, well-formed quiz). landed-report:check additionally requires the full section vocabulary, key-files table, subagent evidence, and a five-question quiz — but only for reports authored or changed on the current branch, so historical reports are never held to requirements they never had.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure Boundaries</h2>
+      <p>A report missing the v2 root marker is not a hard failure at read time: parseReportDocument returns null and DocsReportView falls back to a sandboxed &lt;iframe sandbox=&quot;allow-scripts&quot;&gt;, isolated from the app shell but still executing that file&#x27;s own embedded script if one exists. reports:presentation:check exists specifically to make this fallback path unreachable in normal operation.</p>
+      <p>Empty docs/solutions or docs/reports directories do not crash the index: safeReadDir catches a missing directory and returns an empty list, so the index and list pages simply render empty.</p>
+      <p>The /docs section is not public — DocsAuthGate redirects unauthenticated visitors to the login route, the same gate the rest of the app uses. There is no additional role check beyond being signed in.</p>
+      <p>A malformed or unresolvable cross-reference link in a solution doc renders as muted, non-clickable text rather than a dead route — links only become real TanStack Links when verified against the doc index.</p>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation</h2>
+      <p>Local: bun run harness:generate plus the focused harness contract suite (harness-contract-preflight.test.ts, harness-review.test.ts, harness-audit.test.ts, harness-app-registry.test.ts, harness-inferential-review.test.ts) — 176 pass, 0 fail, after adding vite-docs-content-plugin.ts to the &#x27;Route runtime or build-pipeline edits&#x27; validation scenario and its harness-audit fixture.</p>
+      <p>Unit coverage: content.test.ts, parsing.test.ts, navigation.test.ts, reportContract.test.ts, scrollProgress.test.ts, DocsReportQuiz.test.tsx cover the new viewer/index/report-parsing code; report-presentation-check.test.ts and landed-change-report-check.test.ts cover the corpus-wide and branch-scoped sensors respectively, including malformed-markup and fingerprint-staleness cases.</p>
+      <p>Deploy status: pending — this is a delivery candidate, not yet merged.</p>
+      <p>Root-alignment status: pending — local main will be fast-forwarded after merge.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next-Time Guidance</h2>
+      <p>When adding a new docs/reports/*.html by hand instead of via render_report.py, follow report-html-contract.md exactly: no &lt;style&gt;/&lt;script&gt;/&lt;img&gt;/&lt;form&gt;, exactly one &lt;h2&gt; per section, quiz and subagent-evidence sections last, in that order.</p>
+      <p>When a new build-pipeline file is added under packages/athena-webapp (like a new vite plugin), add it to the matching harness validation scenario&#x27;s touchedPaths in scripts/harness-app-registry.ts and its harness-audit fixture, or the contract preflight will flag it as an uncovered surface.</p>
+      <p>Regenerate a report&#x27;s diff fingerprint after the final code/workflow edit on a branch, not before — an earlier fingerprint goes stale the moment later edits land, and the delivery gate will reject it as stale.</p>
+      <p>If bulk-migrating many generated files, prefer a deterministic script over per-file subagents once the file count is large — subagent-per-file migration hit a spend limit partway through this branch&#x27;s own report migration.</p>
+      <p>Run bun install with the exact bun version pinned in package.json&#x27;s packageManager field. This branch&#x27;s own delivery hit a CI-only failure (&#x27;error parsing lockfile: Outdated lockfile version&#x27;) because a newer local bun rewrote bun.lockb into a format the CI-pinned bun couldn&#x27;t read; scripts/bun-version-check.ts now runs first in pr:athena:prepare so that drift fails locally instead of only in CI.</p>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/vite-docs-content-plugin.ts</code></td><td>Builds the virtual:athena-docs-index module by walking docs/solutions and docs/reports at build/dev time; metadata only, no file bodies.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/lib/docs/content.ts</code></td><td>Lazy-loads a doc&#x27;s body via import.meta.glob once a reader opens it.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/lib/docs/parsing.ts</code></td><td>Parses frontmatter/metadata for solutions and reports and resolves cross-reference links against the index.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/lib/docs/reportContract.ts</code></td><td>Parses and re-sanitizes the v2 report DOM (pills, meta, sections, quiz) for rendering; returns null for non-v2 markup.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/docs/DocsReportQuiz.tsx</code></td><td>Client-side quiz grading component hydrated from the report&#x27;s encoded answer key.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/routes/-docs-layout.tsx</code></td><td>Auth-gates the /docs section and provides shared docs navigation chrome.</td></tr>
+        <tr><td><code>.agents/skills/ce-landed-change-report/references/report-html-contract.md</code></td><td>The authoritative v2 markup contract: what&#x27;s required, what&#x27;s forbidden, quiz structure.</td></tr>
+        <tr><td><code>.agents/skills/ce-landed-change-report/scripts/render_report.py</code></td><td>Renders a JSON payload into contract-v2 HTML; unchanged payload contract, rewritten output shape.</td></tr>
+        <tr><td><code>scripts/report-presentation-check.ts</code></td><td>Corpus-wide sensor enforcing the v2 presentation contract on every docs/reports/*.html file.</td></tr>
+        <tr><td><code>scripts/landed-change-report-check.ts</code></td><td>Branch-scoped delivery gate: full section vocabulary, key-files table, subagent evidence, quiz, and diff-fingerprint staleness for reports touched on the current branch.</td></tr>
+        <tr><td><code>scripts/migrate-reports-to-v2.mjs</code></td><td>Deterministic DOM-based converter that moved all ~65 existing reports to v2 in place, preserving prose text nodes verbatim.</td></tr>
+        <tr><td><code>scripts/harness-app-registry.ts</code></td><td>Registered vite-docs-content-plugin.ts under the &#x27;Route runtime or build-pipeline edits&#x27; validation scenario so the harness contract preflight covers it.</td></tr>
+        <tr><td><code>scripts/bun-version-check.ts</code></td><td>Fails pr:athena:prepare locally when the installed bun does not match package.json&#x27;s packageManager pin, catching bun.lockb format drift before it reaches CI.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does vite-docs-content-plugin.ts build a metadata-only virtual module instead of embedding full document bodies?</p>
+        <ol data-quiz-options>
+          <li>Embedding bodies would break TypeScript&#x27;s module resolution</li>
+          <li data-quiz-correct>So the index stays cheap to build and load; bodies lazy-load per page via import.meta.glob only when a reader opens that page</li>
+          <li>Convex does not allow static file imports larger than 64KB</li>
+          <li>The webapp&#x27;s router requires all route data to be metadata-only</li>
+        </ol>
+        <p data-quiz-explanation>The index layer is deliberately separated from the content layer so opening the docs list never pays the cost of parsing every report or solution doc — only the one a reader actually opens.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens when DocsReportView encounters a docs/reports/*.html file that is missing the v2 root marker?</p>
+        <ol data-quiz-options>
+          <li>The build fails immediately</li>
+          <li>The file is silently skipped from the index</li>
+          <li data-quiz-correct>parseReportDocument returns null and the view falls back to rendering the raw file in a sandboxed iframe</li>
+          <li>The webapp auto-converts it to v2 at render time</li>
+        </ol>
+        <p data-quiz-explanation>The fallback exists as a safety net, not an intended path — reports:presentation:check is what should make this branch unreachable in normal operation, since the iframe still executes the file&#x27;s own embedded script if one exists.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is reports:presentation:check applied corpus-wide while the full narrative section requirement (landed-report:check) only applies to reports touched on the current branch?</p>
+        <ol data-quiz-options>
+          <li>Corpus-wide checks are faster to run in CI</li>
+          <li data-quiz-correct>Historical reports predate parts of the v2 narrative contract; requiring the full section vocabulary retroactively would mean fabricating content they never had</li>
+          <li>The distinction is arbitrary and could be merged</li>
+          <li>Presentation rules only apply to reports created after 2026-07-01</li>
+        </ol>
+        <p data-quiz-explanation>Presentation rules (no styling/scripting, structural shape) are cheap and universal, but narrative completeness (validation section, key-files table, subagent evidence) is a delivery-time requirement that only makes sense for new or edited work.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why did the bulk migration of all ~65 existing reports end up using a deterministic script instead of one subagent per file?</p>
+        <ol data-quiz-options>
+          <li>Subagents cannot write HTML files</li>
+          <li data-quiz-correct>The per-file subagent approach hit a spend limit partway through and could not guarantee verbatim text preservation, so a DOM-based converter that moves existing prose nodes was used instead</li>
+          <li>The script was required by the report-html-contract.md spec</li>
+          <li>Subagents do not have access to docs/reports/</li>
+        </ol>
+        <p data-quiz-explanation>Subagent-per-file migration died mid-run after converting only 9 of 65 files; the deterministic script also guarantees byte-for-byte prose preservation, which a rewriting agent cannot.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Does report authoring change for agents generating a new landed-change report after this branch merges?</p>
+        <ol data-quiz-options>
+          <li>Yes — agents must now hand-write HTML directly instead of using a script</li>
+          <li>Yes — the JSON payload contract gained required new top-level fields</li>
+          <li data-quiz-correct>No — agents still produce the same JSON payload described in report-payload.md; only what render_report.py emits from that payload changed</li>
+          <li>Yes — quizzes are now optional</li>
+        </ol>
+        <p data-quiz-explanation>The authoring workflow is intentionally unchanged. Only the renderer&#x27;s output shape moved from styled/scripted v1 HTML to semantic contract-v2 markup that the webapp themes and hydrates.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Who can view the new /docs section in the running app?</p>
+        <ol data-quiz-options>
+          <li>Anyone, unauthenticated, since it&#x27;s just documentation</li>
+          <li>Only admins with a specific role flag</li>
+          <li data-quiz-correct>Any signed-in user — DocsAuthGate uses the same auth check as the rest of the app shell with no additional role check</li>
+          <li>Only the user who authored the report being viewed</li>
+        </ol>
+        <p data-quiz-explanation>DocsAuthGate redirects unauthenticated visitors to the login route, matching the rest of Athena, but does not add a separate authorization layer on top of being signed in.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the correct order to compute a report&#x27;s data-athena-report-diff-fingerprint before delivery?</p>
+        <ol data-quiz-options>
+          <li>Compute it before the final code edits so it&#x27;s stable throughout review</li>
+          <li>Compute it once at branch creation and never touch it again</li>
+          <li data-quiz-correct>Compute it after the final code/workflow edit on the branch, since an earlier fingerprint goes stale the moment later edits land</li>
+          <li>The fingerprint is generated automatically by git on commit</li>
+        </ol>
+        <p data-quiz-explanation>The delivery gate compares the stamped fingerprint against the current deliverable diff; computing it before final edits means the very next source change invalidates it and the gate rejects the stale value.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>If a new build-pipeline file (like a Vite plugin) is added to packages/athena-webapp, what additional step is required for the harness gate?</p>
+        <ol data-quiz-options>
+          <li>Nothing — the harness auto-discovers all .ts files in the package root</li>
+          <li data-quiz-correct>It must be added to the matching validation scenario&#x27;s touchedPaths in scripts/harness-app-registry.ts (and its harness-audit fixture), or the contract preflight flags it as an uncovered surface</li>
+          <li>It must be renamed to match an existing vite.config.ts pattern</li>
+          <li>It must be moved into src/ to be discoverable</li>
+        </ol>
+        <p data-quiz-explanation>This branch itself hit this: vite-docs-content-plugin.ts had to be registered under the &#x27;Route runtime or build-pipeline edits&#x27; scenario, with a matching fixture file added to harness-audit.test.ts, before the harness contract preflight passed.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Does report prose (the written explanation text) change as part of the v1-to-v2 migration of the ~65 existing reports?</p>
+        <ol data-quiz-options>
+          <li>Yes, every report was rewritten and shortened for the new format</li>
+          <li data-quiz-correct>No — the migration script moves existing DOM prose nodes rather than retyping them, so wording is preserved exactly; only the structural wrapper changes</li>
+          <li>Only reports older than 30 days had their prose rewritten</li>
+          <li>Prose is regenerated on every page load by the webapp</li>
+        </ol>
+        <p data-quiz-explanation>migrate-reports-to-v2.mjs is explicitly a structural converter, not a rewriter — it repositions existing text nodes into the new contract shape rather than generating new prose.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the current deploy and root-alignment status of this change as described in this report?</p>
+        <ol data-quiz-options>
+          <li>Both completed — the branch was merged and deployed before this report was written</li>
+          <li data-quiz-correct>Both pending — this report describes a delivery candidate that has not yet been merged, deployed, or root-aligned</li>
+          <li>Deploy completed but root-alignment pending</li>
+          <li>Not applicable — this change has no deploy step</li>
+        </ol>
+        <p data-quiz-explanation>This report is generated in delivery-candidate mode, before the PR is opened, merged, or deployed — those events are explicitly pending, not claimed as done.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>delivered diff analyst (Explore)</dt><dd>Read the committed diff directly (git show) to produce the changed-file map by concern, architectural before/after, failure-boundary behavior (iframe fallback, empty-directory handling, auth gate), the test inventory, and confirmation that generated artifacts (graphify-out, docs/agent/*.md) were mechanical pre-commit output, not hand-authored.</dd>
+      <dt>session context (general-purpose)</dt><dd>Searched prior session transcripts to establish that this was a direct, explicit product request (expose docs/reports in-app; standardize report presentation and drop the iframe), surfaced the subagent-migration spend-limit failure that led to the deterministic migration script, the five legacy quiz-dialect edge cases handled during migration, the delivery-scoping regression caught and fixed during review, and the corpus-wide vs branch-scoped enforcement split decision.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>
