@@ -133,6 +133,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/notifications/registry.test.ts`](../../convex/notifications/registry.test.ts)
 - [`convex/notifications/subscriptions.test.ts`](../../convex/notifications/subscriptions.test.ts)
 - [`convex/notifications/transport.test.ts`](../../convex/notifications/transport.test.ts)
+- [`convex/operationAdmission/actionAdmission.test.ts`](../../convex/operationAdmission/actionAdmission.test.ts)
 - [`convex/operationAdmission/adapters.test.ts`](../../convex/operationAdmission/adapters.test.ts)
 - [`convex/operationAdmission/definitions.test.ts`](../../convex/operationAdmission/definitions.test.ts)
 - [`convex/operationAdmission/migrationInventory.test.ts`](../../convex/operationAdmission/migrationInventory.test.ts)

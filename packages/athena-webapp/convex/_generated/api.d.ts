@@ -211,6 +211,7 @@ import type * as notifications_seed from "../notifications/seed.js";
 import type * as notifications_subscriptions from "../notifications/subscriptions.js";
 import type * as notifications_sweeper from "../notifications/sweeper.js";
 import type * as notifications_transport from "../notifications/transport.js";
+import type * as operationAdmission_actionAdmission from "../operationAdmission/actionAdmission.js";
 import type * as operationAdmission_actors from "../operationAdmission/actors.js";
 import type * as operationAdmission_adapters from "../operationAdmission/adapters.js";
 import type * as operationAdmission_capabilities from "../operationAdmission/capabilities.js";
@@ -809,6 +810,7 @@ declare const fullApi: ApiFromModules<{
   "notifications/subscriptions": typeof notifications_subscriptions;
   "notifications/sweeper": typeof notifications_sweeper;
   "notifications/transport": typeof notifications_transport;
+  "operationAdmission/actionAdmission": typeof operationAdmission_actionAdmission;
   "operationAdmission/actors": typeof operationAdmission_actors;
   "operationAdmission/adapters": typeof operationAdmission_adapters;
   "operationAdmission/capabilities": typeof operationAdmission_capabilities;

@@ -493,6 +493,24 @@ export const returnItemsToStockOperationDefinition = defineOperation({
   actors: { normalUser: "admit", sharedDemo: "admit" },
 });
 
+// Customer-email actions. These are Convex actions, not mutations, so they
+// enter the rail through `actionAdmission` rather than `admitPublicMutation`.
+// Both declare a protected gateway so the demo adapter simulates the send
+// instead of denying the operation outright.
+export const sendOrderUpdateEmailOperationDefinition = orderStoreWriteOperation({
+  functionName: "storeFront/onlineOrderUtilFns:sendOrderUpdateEmail",
+  operationId: "storeFront/onlineOrderUtilFns.sendOrderUpdateEmail",
+  capability: "customer.messaging.send",
+  effects: { mode: "protected", gateways: ["order_notification.send"] },
+});
+
+export const sendFeedbackRequestOperationDefinition = orderStoreWriteOperation({
+  functionName: "storeFront/reviews:sendFeedbackRequest",
+  operationId: "storeFront/reviews.sendFeedbackRequest",
+  capability: "reviews.manage",
+  effects: { mode: "protected", gateways: ["customer_message.send"] },
+});
+
 // Line-item edits resolve their store through the item's own order, so the
 // admitted scope is the row's store rather than anything the caller names.
 export const updateOnlineOrderItemOperationDefinition = defineOperation({
@@ -675,6 +693,8 @@ export const OPERATION_ADMISSION_DEFINITIONS = [
   returnAllItemsToStockOperationDefinition,
   returnItemsToStockOperationDefinition,
   updateOnlineOrderItemOperationDefinition,
+  sendOrderUpdateEmailOperationDefinition,
+  sendFeedbackRequestOperationDefinition,
   stageInventoryImportReviewVersionPayloadChunkOperationDefinition,
   finalizeInventoryImportReviewVersionPayloadOperationDefinition,
   createCostOverlayRunOperationDefinition,

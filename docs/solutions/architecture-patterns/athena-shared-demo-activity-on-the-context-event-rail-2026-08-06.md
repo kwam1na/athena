@@ -12,7 +12,7 @@ applies_when:
   - Capturing what a shared-demo visitor did, tried, or was refused
   - "Recording anything about a caller whose write was denied inside a Convex mutation"
 tags: [shared-demo, context-events, telemetry, operation-admission, convex-transactions]
-delivery_diff_fingerprint: 57612c56f24cc3ba3be665256238a7e4632c5d75bd78c67f7f826db7ebc925a6
+delivery_diff_fingerprint: 8d1f4e3668e4894eb7df1c37e26d9bb37d135baf2cdd50b686345a471179357e
 ---
 
 # Shared-demo visitor activity rides the context event rail, with denials observed from the browser
@@ -74,6 +74,16 @@ Two smaller rules that fall out of the rail's own validation:
   pathname, so no org slug, store slug, product slug, or record id is captured.
   `resolveAthenaViewRoute` in the surface catalog returns the matched template
   alongside the surface for exactly this.
+
+**Actions reach the rail through a mutation.** `admitPublicMutation` needs a
+`MutationCtx`, and a Convex action has no `db`, so an action cannot be admitted
+in place. `convex/operationAdmission/actionAdmission.ts` closes this: the action
+calls `admitOperationForAction` through `ctx.runMutation`, which carries the
+caller's identity, and the same definition, capability, store clamp, restore
+fence, and gateway policy apply. Because an action is not transactional, its
+admission and recorded event commit independently — an action's row means
+"admitted and started", where a mutation's row means "committed". That
+difference is inherent to actions and should be stated rather than hidden.
 
 ## Why This Matters
 
