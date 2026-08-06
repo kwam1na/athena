@@ -12,7 +12,7 @@ applies_when:
   - Capturing what a shared-demo visitor did, tried, or was refused
   - "Recording anything about a caller whose write was denied inside a Convex mutation"
 tags: [shared-demo, context-events, telemetry, operation-admission, convex-transactions]
-delivery_diff_fingerprint: c8348baff69cb15e383e42a5dd95eda3cbf8749e1024da606eaa119213ca7b78
+delivery_diff_fingerprint: e389af29f4b01f27be2e32d7f036194cd734d9ea3ce81faa805d5b2e297d0064
 ---
 
 # Shared-demo visitor activity rides the context event rail, with denials observed from the browser
