@@ -1,4 +1,7 @@
-export type ContextTrackingSurface = "storefront" | "athena_webapp";
+export type ContextTrackingSurface =
+  | "storefront"
+  | "athena_webapp"
+  | "shared_demo";
 
 export type CompiledContextBundle = {
   bundleKind: string;

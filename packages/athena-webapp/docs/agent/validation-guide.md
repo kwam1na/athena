@@ -6,11 +6,11 @@ Use this decision guide to answer “what should I run for this change?” based
 
 ## Shared demo admission, restore, and orientation edits
 
-Touched surfaces: `assets/shared-demo-products`, `docs/shared-demo-backend-coverage.md`, `convex/sharedDemo`, `convex/auth.ts`, `convex/auth/SharedDemoTicket.ts`, `convex/crons.ts`, `convex/http.ts`, `src/components/shared-demo`, `src/routes/demo.tsx`, `src/routes/_authed.tsx`
+Touched surfaces: `assets/shared-demo-products`, `docs/shared-demo-backend-coverage.md`, `convex/sharedDemo`, `convex/auth.ts`, `convex/auth/SharedDemoTicket.ts`, `convex/contextTracking`, `convex/crons.ts`, `convex/http.ts`, `convex/operationAdmission/publicMutation.ts`, `src/components/shared-demo`, `src/lib/errors/sharedDemoDenialObserver.ts`, `src/routes/demo.tsx`, `src/routes/_authed.tsx`
 
 Run:
 
-- `bun run --filter '@athena/webapp' test -- convex/sharedDemo src/components/shared-demo src/routes/demo.test.tsx src/routes/_authed.test.tsx`
+- `bun run --filter '@athena/webapp' test -- convex/sharedDemo convex/contextTracking convex/operationAdmission src/components/shared-demo src/lib/errors/sharedDemoDenialObserver.test.ts src/routes/demo.test.tsx src/routes/_authed.test.tsx`
 - `bun run --filter '@athena/webapp' audit:convex`
 - `bun run --filter '@athena/webapp' lint:convex:changed`
 - `bun run --filter '@athena/webapp' lint:frontend:changed`
@@ -21,7 +21,7 @@ Behavior scenarios:
 
 - `athena-admin-shell-boot`
 
-Use this when the configured shared demo changes admission, shared-store authority, restore semantics, effect restrictions, or the owner-oriented application shell. It validates the server boundary, credentialless entry, orientation layer, and generated application contracts together.
+Use this when the configured shared demo changes admission, shared-store authority, restore semantics, effect restrictions, visitor-activity tracking on the context event rail, or the owner-oriented application shell. It validates the server boundary, credentialless entry, orientation layer, demo telemetry capture, and generated application contracts together. Demo activity events are support-visible and non-compilable on purpose: demo visitors are store admins of the one shared store, so store-visible telemetry would expose one visitor's behavior to another.
 
 ## Route or UI-only edits
 

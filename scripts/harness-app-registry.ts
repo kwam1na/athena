@@ -313,9 +313,12 @@ export const HARNESS_APP_REGISTRY = [
           "convex/sharedDemo",
           "convex/auth.ts",
           "convex/auth/SharedDemoTicket.ts",
+          "convex/contextTracking",
           "convex/crons.ts",
           "convex/http.ts",
+          "convex/operationAdmission/publicMutation.ts",
           "src/components/shared-demo",
+          "src/lib/errors/sharedDemoDenialObserver.ts",
           "src/routes/demo.tsx",
           "src/routes/_authed.tsx",
         ],
@@ -323,7 +326,7 @@ export const HARNESS_APP_REGISTRY = [
           {
             kind: "raw",
             command:
-              "bun run --filter '@athena/webapp' test -- convex/sharedDemo src/components/shared-demo src/routes/demo.test.tsx src/routes/_authed.test.tsx",
+              "bun run --filter '@athena/webapp' test -- convex/sharedDemo convex/contextTracking convex/operationAdmission src/components/shared-demo src/lib/errors/sharedDemoDenialObserver.test.ts src/routes/demo.test.tsx src/routes/_authed.test.tsx",
           },
           { kind: "script", script: "audit:convex" },
           { kind: "script", script: "lint:convex:changed" },
@@ -336,7 +339,7 @@ export const HARNESS_APP_REGISTRY = [
           { kind: "script", script: "build" },
         ],
         behaviorScenarios: ["athena-admin-shell-boot"],
-        note: "Use this when the configured shared demo changes admission, shared-store authority, restore semantics, effect restrictions, or the owner-oriented application shell. It validates the server boundary, credentialless entry, orientation layer, and generated application contracts together.",
+        note: "Use this when the configured shared demo changes admission, shared-store authority, restore semantics, effect restrictions, visitor-activity tracking on the context event rail, or the owner-oriented application shell. It validates the server boundary, credentialless entry, orientation layer, demo telemetry capture, and generated application contracts together. Demo activity events are support-visible and non-compilable on purpose: demo visitors are store admins of the one shared store, so store-visible telemetry would expose one visitor's behavior to another.",
       },
       {
         title: "Route or UI-only edits",

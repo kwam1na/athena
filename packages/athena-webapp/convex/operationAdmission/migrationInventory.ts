@@ -250,6 +250,17 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     functions: ["contextTracking/athenaWebappEvents:recordDocsWorkspaceVisit"],
   },
   {
+    wave: "intelligence",
+    capability: "workspace.telemetry.write",
+    owner: "V26-1094",
+    reason:
+      "Shared-demo visitor activity telemetry. It resolves the demo principal " +
+      "itself and reports only that visitor's own behavior, so routing it " +
+      "through operation admission would make a demo observation depend on " +
+      "the demo write-capability allowlist it is meant to observe.",
+    functions: ["contextTracking/sharedDemoEvents:recordSharedDemoActivity"],
+  },
+  {
     wave: "operations-support",
     capability: "appointments.manage",
     owner: "V26-1094",

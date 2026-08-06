@@ -168,6 +168,37 @@ truth is restored. Adding a new demo-writable source table requires adding it to
 `SHARED_DEMO_MUTABLE_TABLES`; the static coverage review treats an omitted table
 as a release blocker.
 
+## Visitor activity visibility
+
+Demo visitor behavior is recorded on the context event rail under its own
+`shared_demo` surface, registered in
+`convex/contextTracking/eventDefinitions.ts`. Six events cover session start,
+surface views, blocked surfaces, admitted actions, denied actions, and observed
+restores.
+
+Capture splits by outcome because of a transaction rule, not a preference. A
+denied shared-demo admission throws, and a Convex mutation throw rolls back
+every write in its transaction, so the server cannot record its own denial.
+Admitted actions are appended inside the operation's transaction from
+`convex/operationAdmission/publicMutation.ts` — a surviving row therefore means
+the operation committed. Denials are reported by the browser through
+`src/lib/errors/sharedDemoDenialObserver.ts`, and carry only the surface the
+visitor was on, because the denial error exposes no capability or reason.
+
+Only writes that already route through operation admission emit
+`shared_demo.action_admitted`. Legacy shared-demo writes still enforced through
+`convex/lib/athenaUserAuth.ts` exemptions are not covered, and become covered as
+they migrate.
+
+Every `shared_demo` event is `support`-visible and non-compilable. This is a
+privacy boundary, not a preference: demo visitors are store admins of the one
+shared store, so store-visible telemetry would expose one visitor's behavior to
+the next. The per-visitor key is the auth user behind the demo principal —
+every principal shares one `athenaUser`, which cannot separate visitors.
+Navigation records the catalog's route template rather than the visited
+pathname, so no slug or record id is captured. The rollup
+(`convex/contextTracking/sharedDemoActivity.ts`) is an internal query.
+
 ## Provisioning
 
 Run the internal `sharedDemo/provision:provisionSharedDemo` mutation once on the
