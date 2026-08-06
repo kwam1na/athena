@@ -15803,7 +15803,7 @@
       "relation": "calls",
       "source": "eventdefinitions_ispubliccontextvalue",
       "source_file": "packages/athena-webapp/convex/contextTracking/eventDefinitions.ts",
-      "source_location": "L238",
+      "source_location": "L239",
       "target": "eventdefinitions_containssensitivetext",
       "weight": 1
     },
@@ -15815,7 +15815,7 @@
       "relation": "calls",
       "source": "eventdefinitions_ispubliccontextvalue",
       "source_file": "packages/athena-webapp/convex/contextTracking/eventDefinitions.ts",
-      "source_location": "L250",
+      "source_location": "L251",
       "target": "eventdefinitions_validatepayloadvalue",
       "weight": 1
     },
@@ -15827,7 +15827,7 @@
       "relation": "calls",
       "source": "eventdefinitions_validateregisteredcontexteventpayload",
       "source_file": "packages/athena-webapp/convex/contextTracking/eventDefinitions.ts",
-      "source_location": "L223",
+      "source_location": "L224",
       "target": "eventdefinitions_invalidpayloadmessage",
       "weight": 1
     },
@@ -15839,7 +15839,7 @@
       "relation": "calls",
       "source": "eventdefinitions_validateregisteredcontexteventpayload",
       "source_file": "packages/athena-webapp/convex/contextTracking/eventDefinitions.ts",
-      "source_location": "L222",
+      "source_location": "L223",
       "target": "eventdefinitions_validatepayloadvalue",
       "weight": 1
     },
@@ -34691,7 +34691,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_contexttracking_eventdefinitions_ts",
       "source_file": "packages/athena-webapp/convex/contextTracking/eventDefinitions.ts",
-      "source_location": "L266",
+      "source_location": "L267",
       "target": "eventdefinitions_containssensitivetext",
       "weight": 1
     },
@@ -34703,7 +34703,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_contexttracking_eventdefinitions_ts",
       "source_file": "packages/athena-webapp/convex/contextTracking/eventDefinitions.ts",
-      "source_location": "L195",
+      "source_location": "L196",
       "target": "eventdefinitions_findregisteredcontextevent",
       "weight": 1
     },
@@ -34715,7 +34715,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_contexttracking_eventdefinitions_ts",
       "source_file": "packages/athena-webapp/convex/contextTracking/eventDefinitions.ts",
-      "source_location": "L230",
+      "source_location": "L231",
       "target": "eventdefinitions_invalidpayloadmessage",
       "weight": 1
     },
@@ -34727,7 +34727,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_contexttracking_eventdefinitions_ts",
       "source_file": "packages/athena-webapp/convex/contextTracking/eventDefinitions.ts",
-      "source_location": "L236",
+      "source_location": "L237",
       "target": "eventdefinitions_ispubliccontextvalue",
       "weight": 1
     },
@@ -34739,7 +34739,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_contexttracking_eventdefinitions_ts",
       "source_file": "packages/athena-webapp/convex/contextTracking/eventDefinitions.ts",
-      "source_location": "L246",
+      "source_location": "L247",
       "target": "eventdefinitions_validatepayloadvalue",
       "weight": 1
     },
@@ -34751,7 +34751,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_contexttracking_eventdefinitions_ts",
       "source_file": "packages/athena-webapp/convex/contextTracking/eventDefinitions.ts",
-      "source_location": "L208",
+      "source_location": "L209",
       "target": "eventdefinitions_validateregisteredcontexteventpayload",
       "weight": 1
     },
@@ -234907,7 +234907,7 @@
       "label": "containsSensitiveText()",
       "norm_label": "containssensitivetext()",
       "source_file": "packages/athena-webapp/convex/contextTracking/eventDefinitions.ts",
-      "source_location": "L266"
+      "source_location": "L267"
     },
     {
       "community": 354,
@@ -234916,7 +234916,7 @@
       "label": "findRegisteredContextEvent()",
       "norm_label": "findregisteredcontextevent()",
       "source_file": "packages/athena-webapp/convex/contextTracking/eventDefinitions.ts",
-      "source_location": "L195"
+      "source_location": "L196"
     },
     {
       "community": 354,
@@ -234925,7 +234925,7 @@
       "label": "invalidPayloadMessage()",
       "norm_label": "invalidpayloadmessage()",
       "source_file": "packages/athena-webapp/convex/contextTracking/eventDefinitions.ts",
-      "source_location": "L230"
+      "source_location": "L231"
     },
     {
       "community": 354,
@@ -234934,7 +234934,7 @@
       "label": "isPublicContextValue()",
       "norm_label": "ispubliccontextvalue()",
       "source_file": "packages/athena-webapp/convex/contextTracking/eventDefinitions.ts",
-      "source_location": "L236"
+      "source_location": "L237"
     },
     {
       "community": 354,
@@ -234943,7 +234943,7 @@
       "label": "validatePayloadValue()",
       "norm_label": "validatepayloadvalue()",
       "source_file": "packages/athena-webapp/convex/contextTracking/eventDefinitions.ts",
-      "source_location": "L246"
+      "source_location": "L247"
     },
     {
       "community": 354,
@@ -234952,7 +234952,7 @@
       "label": "validateRegisteredContextEventPayload()",
       "norm_label": "validateregisteredcontexteventpayload()",
       "source_file": "packages/athena-webapp/convex/contextTracking/eventDefinitions.ts",
-      "source_location": "L208"
+      "source_location": "L209"
     },
     {
       "community": 354,

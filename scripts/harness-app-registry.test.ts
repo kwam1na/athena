@@ -232,9 +232,12 @@ describe("HARNESS_APP_REGISTRY", () => {
         "convex/sharedDemo",
         "convex/auth.ts",
         "convex/auth/SharedDemoTicket.ts",
+        "convex/contextTracking",
         "convex/crons.ts",
         "convex/http.ts",
+        "convex/operationAdmission/publicMutation.ts",
         "src/components/shared-demo",
+        "src/lib/errors/sharedDemoDenialObserver.ts",
         "src/routes/demo.tsx",
         "src/routes/_authed.tsx",
       ],
@@ -242,7 +245,7 @@ describe("HARNESS_APP_REGISTRY", () => {
         {
           kind: "raw",
           command:
-            "bun run --filter '@athena/webapp' test -- convex/sharedDemo src/components/shared-demo src/routes/demo.test.tsx src/routes/_authed.test.tsx",
+            "bun run --filter '@athena/webapp' test -- convex/sharedDemo convex/contextTracking convex/operationAdmission src/components/shared-demo src/lib/errors/sharedDemoDenialObserver.test.ts src/routes/demo.test.tsx src/routes/_authed.test.tsx",
         },
         { kind: "script", script: "audit:convex" },
         { kind: "script", script: "lint:convex:changed" },
