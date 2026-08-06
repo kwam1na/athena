@@ -458,6 +458,63 @@ export const processReturnExchangeOperationDefinition =
     effects: { mode: "protected", gateways: ["payment.refund"] },
   });
 
+// Returning stock is scoped by the order the caller names, never by a
+// caller-supplied store: `returnAllItemsToStock` resolves from its `orderId`,
+// and `returnItemsToStock` resolves from the order behind its external
+// transaction reference. Both stay demo-writable — restocking a cancelled
+// order is real shared-store inventory work with no external effect.
+export const returnAllItemsToStockOperationDefinition =
+  orderStoreWriteOperation({
+    functionName: "storeFront/onlineOrder:returnAllItemsToStock",
+    operationId: "storeFront/onlineOrder.returnAllItemsToStock",
+    capability: "orders.return",
+  });
+
+export const returnItemsToStockOperationDefinition = defineOperation({
+  functionName: "storeFront/onlineOrder:returnItemsToStock",
+  operationId: "storeFront/onlineOrder.returnItemsToStock",
+  capability: "orders.return",
+  scope: {
+    kind: "store",
+    resolve: async (ctx, operationArgs) => {
+      const externalTransactionId = operationArgs.externalTransactionId;
+      if (typeof externalTransactionId !== "string") return {};
+      const order = await ctx.db
+        .query("onlineOrder")
+        .withIndex("by_externalTransactionId", (q) =>
+          q.eq("externalTransactionId", externalTransactionId),
+        )
+        .first();
+      return order ? { storeId: order.storeId } : {};
+    },
+  },
+  readiness: { kind: "store_write" },
+  effects: { mode: "none" },
+  actors: { normalUser: "admit", sharedDemo: "admit" },
+});
+
+// Line-item edits resolve their store through the item's own order, so the
+// admitted scope is the row's store rather than anything the caller names.
+export const updateOnlineOrderItemOperationDefinition = defineOperation({
+  functionName: "storeFront/onlineOrderItem:update",
+  operationId: "storeFront/onlineOrderItem.update",
+  capability: "orders.manage",
+  scope: {
+    kind: "store",
+    resolve: async (ctx, operationArgs) => {
+      const id = operationArgs.id;
+      if (typeof id !== "string") return {};
+      const orderItem = await ctx.db.get("onlineOrderItem", id as never);
+      if (!orderItem) return {};
+      const order = await ctx.db.get("onlineOrder", orderItem.orderId);
+      return order ? { storeId: order.storeId } : {};
+    },
+  },
+  readiness: { kind: "store_write" },
+  effects: { mode: "none" },
+  actors: { normalUser: "admit", sharedDemo: "admit" },
+});
+
 function inventoryImportReviewPayloadWriteOperation(
   functionName:
     | "stageInventoryImportReviewVersionPayloadChunk"
@@ -615,6 +672,9 @@ export const OPERATION_ADMISSION_DEFINITIONS = [
   submitActiveCycleCountDraftsOperationDefinition,
   updateOnlineOrderOperationDefinition,
   processReturnExchangeOperationDefinition,
+  returnAllItemsToStockOperationDefinition,
+  returnItemsToStockOperationDefinition,
+  updateOnlineOrderItemOperationDefinition,
   stageInventoryImportReviewVersionPayloadChunkOperationDefinition,
   finalizeInventoryImportReviewVersionPayloadOperationDefinition,
   createCostOverlayRunOperationDefinition,

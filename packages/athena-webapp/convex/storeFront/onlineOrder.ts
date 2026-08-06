@@ -2,6 +2,8 @@
 import { v } from "convex/values";
 import {
   processReturnExchangeOperationDefinition,
+  returnAllItemsToStockOperationDefinition,
+  returnItemsToStockOperationDefinition,
   updateOnlineOrderOperationDefinition,
 } from "../operationAdmission/definitions";
 import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
@@ -2173,7 +2175,15 @@ export const returnItemsToStock = mutation({
     externalTransactionId: v.string(),
     onlineOrderItemIds: v.optional(v.array(v.id("onlineOrderItem"))),
   },
-  handler: async (ctx, args) => {
+  handler: withOperationMutationAdmission(
+    returnItemsToStockOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        externalTransactionId: string;
+        onlineOrderItemIds?: Id<"onlineOrderItem">[];
+      },
+    ) => {
     if (args.externalTransactionId) {
       const order = await findOrderByExternalTransactionId(
         ctx,
@@ -2181,12 +2191,6 @@ export const returnItemsToStock = mutation({
       );
 
       if (!order) return false;
-
-      await requireReadySharedDemoStoreCapabilityIfApplicable(
-        ctx,
-        "orders.return",
-        order.storeId,
-      );
 
       if (args.onlineOrderItemIds?.length) {
         await returnSelectedOnlineOrderItemsToStock(ctx, {
@@ -2203,7 +2207,8 @@ export const returnItemsToStock = mutation({
 
       return true;
     }
-  },
+    },
+  ),
 });
 
 export const returnItemsToStockInternal = internalMutation({
@@ -2268,17 +2273,15 @@ export const updateOrderItemsInternal = internalMutation({
 
 export const returnAllItemsToStock = mutation({
   args: { orderId: v.id("onlineOrder") },
-  handler: async (ctx, args) => {
-    const order = await ctx.db.get("onlineOrder", args.orderId);
-    if (!order) return false;
-    await requireReadySharedDemoStoreCapabilityIfApplicable(
-      ctx,
-      "orders.return",
-      order.storeId,
-    );
-    await returnOrderItemsToStock(ctx, args.orderId);
-    return true;
-  },
+  handler: withOperationMutationAdmission(
+    returnAllItemsToStockOperationDefinition,
+    async (ctx: OperationMutationCtx, args: { orderId: Id<"onlineOrder"> }) => {
+      const order = await ctx.db.get("onlineOrder", args.orderId);
+      if (!order) return false;
+      await returnOrderItemsToStock(ctx, args.orderId);
+      return true;
+    },
+  ),
 });
 
 export const returnAllItemsToStockInternal = internalMutation({

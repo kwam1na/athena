@@ -11,7 +11,9 @@ import {
   applyCommerceInventoryEffectWithCtx,
   outboundBasisFromEffect,
 } from "../inventoryLedger/commerceEffects";
-import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
+import { updateOnlineOrderItemOperationDefinition } from "../operationAdmission/definitions";
+import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
+import type { OperationMutationCtx } from "../operationAdmission/types";
 
 const entity = "onlineOrderItem";
 
@@ -52,11 +54,6 @@ const updateOnlineOrderItem = async (
 
   const order = await ctx.db.get("onlineOrder", existingOrderItem.orderId);
   if (!order) return;
-  await requireReadySharedDemoStoreCapabilityIfApplicable(
-    ctx,
-    "orders.manage",
-    order.storeId,
-  );
 
   await ctx.db.patch("onlineOrderItem", args.id, args.updates);
 
@@ -174,9 +171,18 @@ export const update = mutation({
   args: {
     ...updateArgs,
   },
-  handler: async (ctx, args) => {
-    await updateOnlineOrderItem(ctx, args);
-  },
+  // Admission resolves the store from the item's own order and applies the
+  // demo capability, store clamp, and restore fence before the handler runs.
+  // The internal twin below stays unadmitted: it is server-invoked only.
+  handler: withOperationMutationAdmission(
+    updateOnlineOrderItemOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: { id: Id<"onlineOrderItem">; updates: Record<string, any> },
+    ) => {
+      await updateOnlineOrderItem(ctx, args);
+    },
+  ),
 });
 
 export const updateInternal = internalMutation({

@@ -41,6 +41,29 @@ describe("operation admission definitions", () => {
     );
   });
 
+  it("defines the demo-reachable order-management writes on the admission rail", () => {
+    // These carry no storeId argument: each resolves its store from the row it
+    // touches, so a demo caller cannot widen scope by passing another store.
+    for (const functionName of [
+      "storeFront/onlineOrderItem:update",
+      "storeFront/onlineOrder:returnItemsToStock",
+      "storeFront/onlineOrder:returnAllItemsToStock",
+    ]) {
+      const definition = OPERATION_ADMISSION_DEFINITIONS.find(
+        (candidate) => candidate.functionName === functionName,
+      );
+
+      expect(definition, functionName).toBeDefined();
+      expect(definition!.actors.sharedDemo, functionName).toBe("admit");
+      expect(definition!.scope.kind, functionName).toBe("store");
+      expect(
+        "resolve" in definition!.scope && definition!.scope.resolve,
+        functionName,
+      ).toBeTruthy();
+      expect(definition!.readiness.kind, functionName).toBe("store_write");
+    }
+  });
+
   it("accepts a valid store-scoped write definition", () => {
     const definition = defineOperation({
       operationId: "operations/openWorkInventoryReviews.resolveGroup",

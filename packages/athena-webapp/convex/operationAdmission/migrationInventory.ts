@@ -508,17 +508,6 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
       "storeFront/onlineOrder:create",
       "storeFront/onlineOrder:updateOrderItems",
       "storeFront/onlineOrder:updateOwner",
-      "storeFront/onlineOrderItem:update",
-    ],
-  },
-  {
-    wave: "storefront",
-    capability: "orders.return",
-    owner: "V26-1094",
-    reason: LEGACY_REASON,
-    functions: [
-      "storeFront/onlineOrder:returnAllItemsToStock",
-      "storeFront/onlineOrder:returnItemsToStock",
     ],
   },
   {
