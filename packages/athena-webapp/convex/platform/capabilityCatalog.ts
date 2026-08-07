@@ -215,6 +215,7 @@ const PUBLIC_WRITE_MODULE_CAPABILITIES = {
   "cashControls/deposits": "cash.control.write",
   "cloudflare/stream": "integrations.manage",
   "contextTracking/athenaWebappEvents": "workspace.telemetry.write",
+  "contextTracking/sharedDemoEvents": "workspace.telemetry.write",
   "customerMessaging/public": "customer.messaging.send",
   devPatchBadTransaction: "administration.maintenance",
   "intelligence/capabilities/actions": "intelligence.generate",

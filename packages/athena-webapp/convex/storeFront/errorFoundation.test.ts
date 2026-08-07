@@ -130,13 +130,11 @@ describe("storefront error foundation", () => {
 
   it("returns a precondition_failed user_error when feedback has already been requested", async () => {
     const ctx = {
-      runQuery: vi
-        .fn()
-        .mockResolvedValueOnce(false)
-        .mockResolvedValueOnce({
-          _id: "order-item-1",
-          feedbackRequested: true,
-        }),
+      runMutation: vi.fn(async () => ({ actorKind: "normal_user" })),
+      runQuery: vi.fn().mockResolvedValueOnce({
+        _id: "order-item-1",
+        feedbackRequested: true,
+      }),
     };
 
     const result = await getHandler(sendFeedbackRequest)(ctx as never, {
@@ -163,7 +161,7 @@ describe("storefront error foundation", () => {
     });
 
     const result = await getHandler(sendOrderUpdateEmail)({
-      runQuery: vi.fn(async () => false),
+      runMutation: vi.fn(async () => ({ actorKind: "normal_user" })),
     } as never, {
       newStatus: "completed",
       orderId: "order-1",
@@ -184,19 +182,21 @@ describe("storefront error foundation", () => {
   });
 
   it("records demo feedback requests without sending a customer email", async () => {
-    const runMutation = vi.fn(async () => null);
+    // The first runMutation is the admission itself, which now also carries
+    // the store clamp the handler used to re-check through a second query.
+    const runMutation = vi
+      .fn()
+      .mockResolvedValueOnce({ actorKind: "shared_demo", storeId: "store-1" })
+      .mockResolvedValue(null);
     const ctx = {
       runMutation,
       runQuery: vi
         .fn()
-        .mockResolvedValueOnce(true)
         .mockResolvedValueOnce({
           _id: "order-item-1",
           feedbackRequested: false,
           orderId: "order-1",
         })
-        .mockResolvedValueOnce({ _id: "order-1", storeId: "store-1" })
-        .mockResolvedValueOnce(true)
         .mockResolvedValueOnce({
           _id: "sku-1",
           images: [],
@@ -214,7 +214,11 @@ describe("storefront error foundation", () => {
 
     expect(result).toEqual(ok(null));
     expect(mocks.sendFeedbackRequestEmail).not.toHaveBeenCalled();
-    expect(runMutation).toHaveBeenCalledTimes(1);
+    // Admission, then the feedback-requested write it admitted.
+    expect(runMutation).toHaveBeenCalledTimes(2);
+    expect(runMutation.mock.calls[0][1]).toMatchObject({
+      operationId: "storeFront/reviews.sendFeedbackRequest",
+    });
   });
 
   it("accepts representative migrated storefront return contracts", () => {

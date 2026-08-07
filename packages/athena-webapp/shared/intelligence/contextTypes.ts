@@ -38,7 +38,11 @@ export type ContextActorRef = {
 };
 
 export type ContextSessionRef = {
-  kind: "browser_session" | "storefront_session" | "athena_webapp_session";
+  kind:
+    | "browser_session"
+    | "storefront_session"
+    | "athena_webapp_session"
+    | "shared_demo_session";
   id: string;
 };
 

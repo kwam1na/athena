@@ -5,6 +5,7 @@ import {
 } from "./adapters";
 import { validateOperationDefinition } from "./definitions";
 import { createSharedDemoOperationAdapter } from "../sharedDemo/operationAdapter";
+import { captureSharedDemoAdmittedActionWithCtx } from "../contextTracking/sharedDemoActionCapture";
 import type {
   OperationAdmissionContext,
   OperationDefinition,
@@ -52,6 +53,11 @@ export function admitPublicMutation<
           },
         ))
     )(ctx, args, definition);
+
+    // Demo visitors are the only actors observed here. The append shares this
+    // transaction on purpose: if the handler throws, the observation rolls
+    // back with it, so recorded actions are ones that actually happened.
+    await captureSharedDemoAdmittedActionWithCtx(ctx, operationAdmission);
 
     return handler(
       Object.assign(Object.create(Object.getPrototypeOf(ctx)), ctx, {

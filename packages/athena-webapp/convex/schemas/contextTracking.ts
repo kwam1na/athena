@@ -8,6 +8,7 @@ import {
 export const contextTrackingSurfaceValidator = v.union(
   v.literal("storefront"),
   v.literal("athena_webapp"),
+  v.literal("shared_demo"),
 );
 
 export const contextEventStatusValidator = v.union(
@@ -52,6 +53,7 @@ export const contextSessionRefValidator = v.object({
     v.literal("browser_session"),
     v.literal("storefront_session"),
     v.literal("athena_webapp_session"),
+    v.literal("shared_demo_session"),
   ),
   id: v.string(),
 });

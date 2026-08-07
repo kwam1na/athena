@@ -41,6 +41,7 @@ import { SharedDemoRestoreOverlay } from "./sharedDemoRestoreOverlay";
 import { resolveSharedDemoRestoreOverlayPhase } from "./sharedDemoRestoreOverlayModel";
 import { resolveSharedDemoProvidedBootstrapStatus } from "./sharedDemoProviderStatus";
 import { isSharedDemoRegisterUnavailableError } from "~/shared/sharedDemoRegisterError";
+import { useSharedDemoActivityTracking } from "./useSharedDemoActivityTracking";
 
 export type SharedDemoRegisterBootstrapStatus =
   "idle" | "provisioning" | "projecting" | "ready" | "failed";
@@ -116,6 +117,13 @@ export function SharedDemoRuntime({
   const [bootstrapStatus, setBootstrapStatus] =
     useState<SharedDemoRegisterBootstrapStatus>("idle");
   const [isRestoreRetryPending, setIsRestoreRetryPending] = useState(false);
+  useSharedDemoActivityTracking({
+    baselineVersion: context?.baselineVersion,
+    isDemoVisitor: Boolean(context),
+    pathname: currentPathname,
+    restoreEpoch: contextRestoreEpoch,
+    restoreStatus: contextRestoreStatus,
+  });
   useEffect(() => {
     if (
       !storeId ||

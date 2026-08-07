@@ -1043,6 +1043,11 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/src/lib/errors/sharedDemoDenialObserver.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/lib/pos/application/results.ts",
     "export {};\n",
     rootDir
@@ -1214,6 +1219,16 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/convex/crons.ts", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/convex/sharedDemo/public.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/contextTracking/contextEvents.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/operationAdmission/publicMutation.ts",
     "export {};\n",
     rootDir
   );

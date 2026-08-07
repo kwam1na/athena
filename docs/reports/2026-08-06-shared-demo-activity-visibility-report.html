@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>The server cannot record its own refusal</title>
+</head>
+<body>
+<article
+  data-athena-landed-change-report="v2"
+  data-athena-report-diff-fingerprint="ef0b0f651533bb0b7c8cf512a320947c08cf416eb69237fb96c1f88353984b96"
+  data-athena-report-base="origin/main"
+  data-athena-report-head="claude/demo-user-action-visibility-1c4ab8"
+>
+  <header data-report-section="header">
+    <h1>The server cannot record its own refusal</h1>
+    <p>The shared demo is a real store that strangers walk into, and until now nothing recorded what they did there. This delivery puts demo visitor behavior on the existing context event rail — and discovers, on the way, that half the story <strong>cannot</strong> be captured where you would naturally reach for it, because a Convex mutation that refuses an action destroys the evidence of the refusal in the same breath.</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch claude/demo-user-action-visibility-1c4ab8</li>
+      <li>Base origin/main</li>
+      <li>9 commits</li>
+      <li>New rail surface: shared_demo</li>
+      <li>6 registered events</li>
+      <li>5 writes migrated to operation admission</li>
+      <li>Merge gate: pr:athena</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Status</dt><dd>Delivery candidate — not merged, not deployed</dd>
+      <dt>Schema</dt><dd>Additive only: one surface literal, one session-ref literal</dd>
+      <dt>Deploy</dt><dd>Pending — no deploy attempted from this branch</dd>
+      <dt>Root alignment</dt><dd>Pending — root checkout still on pre-merge main</dd>
+    </dl>
+  </header>
+
+  <section data-report-section="summary">
+    <h2>Executive Summary</h2>
+    <p>Athena's shared demo had admission, restore, capability policy and effect simulation — a complete machine for letting strangers safely operate a real store — and <strong>no record whatsoever of what any of them did</strong>. There was no evidence for which parts of the demo land, which parts people never find, and which parts turn them away.</p>
+    <p>This delivery adds a first-class <code>shared_demo</code> surface to the context event rail with six registered events, a fold that answers operator questions (how many visitors, how deep did they go, what did they finish, where did they hit a wall), and an internal rollup query.</p>
+    <p>The design is shaped by one constraint that is easy to miss and fails silently if you miss it: <strong>a denied shared-demo admission throws, and a Convex mutation throw rolls back every write in its transaction.</strong> An event recording the denial — or a <code>ctx.scheduler</code> call arranging to record it — dies with the transaction that refused. So denials are observed from the browser, and admitted actions are recorded server-side <em>inside the operation's own transaction</em>, which turns the rollback rule from an obstacle into a guarantee: a surviving row is an operation that committed.</p>
+    <p>Closing the coverage gap then forced a second discovery. Two of the five demo-reachable writes still off the rail were Convex <em>actions</em>, and <code>admitPublicMutation</code> requires a <code>MutationCtx</code> an action does not have. Rather than leave them uncovered, actions now enter the rail through <code>ctx.runMutation</code>, which carries caller identity.</p>
+  </section>
+
+  <section data-report-section="problem">
+    <h2>Problem and Context</h2>
+    <p>The shared demo is deliberately not a sandbox of fake data. A visitor rings real sales against a real store, and a nightly restore resets it. That realism is the product bet — and it made the absence of telemetry expensive, because nobody could answer basic questions about it.</p>
+    <table>
+      <thead><tr><th>Question</th><th>Evidence available before</th></tr></thead>
+      <tbody>
+        <tr><td>How many people actually try the demo?</td><td>None</td></tr>
+        <tr><td>Do they get past the landing surface?</td><td>None</td></tr>
+        <tr><td>Which surfaces do visitors never reach?</td><td>None</td></tr>
+        <tr><td>Do they complete a sale, or just look?</td><td>None</td></tr>
+        <tr><td>Where does the demo refuse them?</td><td>None</td></tr>
+        <tr><td>Do failed restores interrupt sessions?</td><td>None</td></tr>
+      </tbody>
+    </table>
+    <p>Two properties of the demo make naive telemetry actively wrong rather than merely incomplete.</p>
+    <p><strong>Every demo visitor is a store admin of the same store.</strong> Each admission mints its own Convex Auth user and <code>sharedDemoPrincipal</code>, but every principal points at one synthetic <code>athenaUser</code>, one organization, one store. Telemetry written at <code>store_admin</code> visibility would be readable by the next visitor who walks in. And grouping by <code>athenaUser</code> would collapse every visitor in history into a single actor.</p>
+    <p><strong>The demo's own policy documents forbid careless capture.</strong> The principal-policy note is explicit: never include visitor payloads in telemetry, keep free text bounded and rate-limited. A demo pathname such as <code>/demo/store/central/products/lace-front-24/edit</code> carries slugs; a naive route capture leaks them.</p>
+  </section>
+
+  <section data-report-section="mental-model">
+    <h2>Mental Model</h2>
+    <p><strong>Think of the transaction boundary as a door that locks behind a refusal.</strong></p>
+    <p>When a demo visitor attempts something the demo does not allow, the shared-demo adapter throws. In Convex, that throw rolls back the entire mutation — every <code>db.insert</code>, every <code>scheduler.runAfter</code>. There is no "log it on the way out", because the way out <em>is</em> the rollback. Anything you wrote to explain the refusal is erased by the refusal.</p>
+    <p>This cuts the observation problem cleanly in two, and the seam is not a matter of taste:</p>
+    <dl>
+      <dt>Things that succeeded</dt>
+      <dd>Record them <em>inside</em> the transaction. The rollback rule now works <em>for</em> you: if the handler throws later, the observation vanishes too, so a row that survives is an operation that actually committed. No reconciliation, no phantom successes.</dd>
+      <dt>Things that were refused</dt>
+      <dd>Cannot be recorded by the refusing server at all. The only witness still standing is the browser that received the error.</dd>
+    </dl>
+    <p>The second model worth holding: <strong>identity is whatever the server can prove, not what the browser says.</strong> The browser supplies an opaque session id for grouping tabs; the <em>visitor</em> is always the auth user the server resolved from the demo principal. That is why the client may report navigation but is structurally forbidden from claiming <code>action_admitted</code>.</p>
+  </section>
+
+  <section data-report-section="before-after">
+    <h2>Before and After</h2>
+    <table>
+      <thead><tr><th>Concern</th><th>Before</th><th>After</th></tr></thead>
+      <tbody>
+        <tr><td>Rail surfaces</td><td><code>storefront</code>, <code>athena_webapp</code></td><td>plus <code>shared_demo</code></td></tr>
+        <tr><td>Demo visitor behavior</td><td>Unrecorded</td><td>Six registered events</td></tr>
+        <tr><td>Completed demo actions</td><td>Unrecorded</td><td>Captured at the admission boundary, in-transaction</td></tr>
+        <tr><td>Refused demo actions</td><td>Unrecorded</td><td>Captured from the browser via a one-slot observer</td></tr>
+        <tr><td>Operation admission scope</td><td>Mutations only</td><td>Mutations and actions</td></tr>
+        <tr><td>Demo-reachable write bindings on the rail</td><td>22 of 27</td><td>27 of 27</td></tr>
+        <tr><td>Operator read path</td><td>None</td><td><code>getSharedDemoActivityRollup</code> internal query</td></tr>
+      </tbody>
+    </table>
+    <p>The write-migration count deserves precision. Of 29 demo-allowed <em>bindings</em> in the shared-demo inventory, 22 were already admitted. The 7 outstanding split three ways: <strong>3 mutations</strong> (straightforward migration), <strong>2 actions</strong> (needed a new rail entry point), and <strong>2 queries</strong> — the <code>reports.read</code> entries, which are reads, emit no action event, and stay out of scope per the read-admission plan. Bindings are counted rather than functions because one function, <code>pos/public/sync:ingestLocalEvents</code>, is listed under two capabilities.</p>
+    <p>One consequence worth stating plainly: <strong>the five new definitions apply to every caller, not only demo visitors.</strong> Normal operators now also pass store-scope resolution, the readiness fence, and gateway policy on these five paths. That is the intended direction of the rail, but it is a behavior change beyond demo telemetry and should be read as one.</p>
+  </section>
+
+  <section data-report-section="mechanics">
+    <h2>Layer-by-layer Mechanics</h2>
+    <h3>1. Registration is the authority</h3>
+    <p>Six events are registered in <code>eventDefinitions.ts</code> with required and allowed payload keys. The append path stamps <code>visibilityMode</code> and <code>retentionClass</code> <em>from the registration</em>, never from the caller — so a caller cannot request wider visibility than its event class allows. All six are <code>support</code>.</p>
+    <h3>2. Two capture paths, one identity</h3>
+    <p>Server-side, <code>captureSharedDemoAdmittedActionWithCtx</code> is invoked from <code>publicMutation.ts</code> after admission resolves and before the handler runs. It no-ops for non-demo actors and swallows its own failures — visibility must never decide whether a demo operation succeeds.</p>
+    <p>Client-side, <code>runCommand</code> already normalizes every command failure in one place, but it must stay browser-safe and free of Convex imports. So it calls <code>notifySharedDemoDenial()</code>, a one-slot observer that the demo runtime hook registers and detaches.</p>
+    <h3>3. Closed identifiers versus free text</h3>
+    <p>The rail scans payload values for sensitive text — patterns covering email, phone, tokens and payment words. <code>capability</code> and <code>operationId</code> skip that scan and validate against a strict identifier shape instead, because they are generated server-side from a compile-time catalog and never pass through a browser. The scan is tuned for visitor-authored text, and a future catalog id such as <code>payment.collect</code> would trip it on a word boundary.</p>
+    <p><strong>The dividing line is who supplies the value, not how it looks.</strong> An early draft of this change also gave <code>surfaceKey</code> the bypass — which was wrong, and the report review caught it. <code>surfaceKey</code> is an allowed payload key on the client-reportable events, so a crafted browser could have put anything identifier-shaped into it and skipped the scan entirely. It now stays on the normal validation path, with a regression test asserting both halves: a token-shaped value is rejected, and every key in the shipped surface catalog still passes.</p>
+    <h3>4. Route templates, never pathnames</h3>
+    <p><code>resolveAthenaViewRoute</code> was extracted from the existing surface catalog so a pathname resolves to the matched <em>template</em>. The payload records <code>/:orgUrlSlug/store/:storeUrlSlug/products/:productSlug/edit</code>, never the slugs.</p>
+    <p>Be precise about where that guarantee lives: it is enforced <strong>by the client builder</strong>. The server's safe-route pattern rejects unsafe characters, but it cannot tell a template from a pathname — a slug-bearing path passes it cleanly. So this is one fence, not two, and the same is true of <code>surfaceKey</code>: the server validates its shape and scans it, but does not check it against the catalog.</p>
+    <h3>5. Actions reach the rail through a mutation</h3>
+    <p><code>admitOperationForAction</code> is an internal mutation an action calls via <code>ctx.runMutation</code>, which carries caller identity. It looks the definition up by <code>operationId</code>, resolves admission, and captures the event. Both email actions declare a protected gateway so the demo adapter simulates the send rather than denying it.</p>
+  </section>
+
+  <section data-report-section="key-files">
+    <h2>Key Files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>convex/contextTracking/eventDefinitions.ts</code></td><td>The closed registry. Six new registrations, the closed-identifier escape hatch, and the enum code sets. Visibility is decided here, not by callers.</td></tr>
+        <tr><td><code>convex/contextTracking/sharedDemoActionCapture.ts</code></td><td>Server-side capture of admitted actions. Carries the comment explaining why denials cannot live here.</td></tr>
+        <tr><td><code>convex/operationAdmission/publicMutation.ts</code></td><td>Six added lines. Capture shares the handler's transaction on purpose, so a surviving row means a committed operation.</td></tr>
+        <tr><td><code>convex/operationAdmission/actionAdmission.ts</code></td><td>New. The rail's entry point for actions, plus the honest note that an action row means "admitted and started", not "committed".</td></tr>
+        <tr><td><code>convex/contextTracking/sharedDemoEvents.ts</code></td><td>The client-reportable mutation. Its event-id validator deliberately excludes <code>action_admitted</code> so a browser cannot claim work it never did.</td></tr>
+        <tr><td><code>convex/contextTracking/sharedDemoActivity.ts</code></td><td>The fold and the internal rollup. Visitors by auth user, sessions by browser session, exploration depth, denial hotspots, acted-vs-only-looked.</td></tr>
+        <tr><td><code>src/lib/errors/sharedDemoDenialObserver.ts</code></td><td>The one-slot seam that lets browser-safe <code>runCommand</code> report a denial without importing Convex.</td></tr>
+        <tr><td><code>src/components/shared-demo/sharedDemoActivityTracking.ts</code></td><td>Pure observation builders. Where the route-template-not-pathname rule is implemented.</td></tr>
+        <tr><td><code>convex/operationAdmission/definitions.ts</code></td><td>Five new definitions. All resolve store scope from the row they touch, never from a caller-supplied id.</td></tr>
+        <tr><td><code>convex/operationAdmission/migrationInventory.ts</code></td><td>Three writes leave the legacy list; one reasoned exemption is added for the telemetry mutation itself.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section data-report-section="changes">
+    <h2>What Changed, and What Deliberately Did Not</h2>
+    <h3>Changed</h3>
+    <ul>
+      <li>A <code>shared_demo</code> surface across the shared primitives, the Convex schema validator, and the tracking types — additive literals only.</li>
+      <li>Six registered events, a client-reportable mutation, a server-side capture helper, and a fold plus internal rollup query.</li>
+      <li>A one-slot denial observer seam in the browser error foundation.</li>
+      <li>Five operation definitions; three mutations and two actions routed onto the rail.</li>
+      <li><code>resolveAthenaViewRoute</code> extracted additively from the surface catalog; <code>classifyAthenaViewSurface</code> keeps its signature and delegates.</li>
+      <li>Harness registry scenario extended to cover the new paths, then regenerated.</li>
+    </ul>
+    <h3>Deliberately not changed</h3>
+    <ul>
+      <li><strong>The two <code>reports.read</code> queries.</strong> They are reads, not actions; they emit no admitted-action event, and public read migration stays out of scope per the read-admission plan. Migrating them would not have moved visibility.</li>
+      <li><strong><code>SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY</code>.</strong> Migrated functions stay listed. It is the demo capability <em>representation</em> registry, not a list of unmigrated writes — removing the <code>orders.return</code> entries would have broken the coverage check that requires every allowed capability to have a representative.</li>
+      <li><strong>Internal mutation twins.</strong> They remain unadmitted because they are server-invoked only, matching the existing pattern.</li>
+      <li><strong>The telemetry mutation itself is not on the rail.</strong> Routing it through admission would make a demo observation depend on the demo write-capability allowlist it exists to observe. It carries a reasoned migration-inventory exemption instead.</li>
+      <li><strong><code>runCommand</code>'s denial presentation.</strong> Only a notify call was inserted; the visitor-facing copy and the Convex-free boundary are untouched.</li>
+    </ul>
+  </section>
+
+  <section data-report-section="failure-boundaries">
+    <h2>Failure Boundaries</h2>
+    <table>
+      <thead><tr><th>Condition</th><th>Behavior</th></tr></thead>
+      <tbody>
+        <tr><td>Telemetry write fails (server)</td><td>Swallowed. The observed operation proceeds unaffected.</td></tr>
+        <tr><td>Telemetry write fails (client)</td><td>Promise rejection dropped; the observer callback is itself try/caught so observing a denial cannot become a second visible failure.</td></tr>
+        <tr><td>Write quota exhausted</td><td>Append returns <code>rejected</code>. The partition key is per visitor, so one noisy visitor cannot silence others.</td></tr>
+        <tr><td>Demo session expired</td><td>Returns <code>rejected</code> with "No active demo session" — a normal end state, not an error surfaced to someone already leaving.</td></tr>
+        <tr><td>Unknown event or bad payload</td><td>Append returns <code>rejected</code>, never throws, so it cannot roll back a host transaction.</td></tr>
+        <tr><td>Forged envelope</td><td>Rejected on session-id shape, idempotency-key prefix, or clock skew beyond five minutes.</td></tr>
+        <tr><td>Admission denied</td><td>Throws, stopping the operation. No server event; the browser records the denial.</td></tr>
+        <tr><td>Action fails after admission</td><td><strong>Residual risk, accepted.</strong> An action is not transactional, so the admission row survives. Documented as "admitted and started" rather than hidden.</td></tr>
+        <tr><td>Very busy rollup window</td><td>Bounded at 2,000 rows, newest first, so a busy window truncates rather than degrading.</td></tr>
+        <tr><td>Scope resolver cannot find the row</td><td>Returns no constraints, so admission proceeds without a store clamp. Safe in practice because each handler then finds no row and returns early without writing — but it is the pre-existing pattern for order-scoped operations, not a guarantee this change adds.</td></tr>
+        <tr><td>Client sends an arbitrary <code>surfaceKey</code></td><td>Shape-checked and sensitivity-scanned, but not verified against the surface catalog. A well-formed but fictional key would be stored and would show up in the rollup.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section data-report-section="validation">
+    <h2>Validation and Review Evidence</h2>
+    <p>Delivery-candidate status. Nothing below claims merge, deploy, or root alignment.</p>
+    <ul>
+      <li><strong>Focused suite:</strong> 689 tests across 75 files green over <code>convex/sharedDemo</code>, <code>convex/contextTracking</code>, <code>convex/operationAdmission</code>, <code>convex/storeFront</code>, <code>convex/platform</code>, <code>src/components/shared-demo</code>, <code>src/lib/errors</code>, and the demo routes.</li>
+      <li><strong>Typecheck:</strong> <code>tsc --noEmit</code> clean. <strong>Build:</strong> clean.</li>
+      <li><strong>Convex gates:</strong> <code>audit:convex</code>, <code>lint:convex:changed</code> (including the return-validator contract check), <code>lint:frontend:changed</code> — 0 errors.</li>
+      <li><strong>Harness:</strong> <code>harness:check</code> and <code>harness:audit</code> pass after regenerating from the registry.</li>
+      <li><strong>Compound:</strong> <code>compound:check</code> passes with a stamped solution note.</li>
+      <li><strong>Merge gate:</strong> <code>pr:athena</code> — the authority for this branch.</li>
+      <li><strong>Deploy:</strong> pending. <strong>Root alignment:</strong> pending.</li>
+    </ul>
+    <h3>Three repo sensors caught real gaps</h3>
+    <p>Worth recording because they are the system working: the shared-demo coverage test and the migration-inventory test both failed on the new public mutation until it was classified in the capability catalog and inventoried; the Convex lint refused it until a return-validator contract test asserted every outcome shape.</p>
+    <h3>Two defects this delivery found in itself</h3>
+    <p><strong>A NUL byte in source.</strong> The blocked-surface fold key joined its two parts with a literal NUL byte and split on the same byte. Both sides agreed, so every test passed — but git classified the whole module as <em>binary</em>, making it unreviewable in a diff, and any tool that normalized or stripped the byte would have silently desynchronized the join from the split. Caught by reading the diffstat, not by a test. Fixed to use <code>|</code>, which neither part can contain.</p>
+    <p><strong>A scan bypass on a client-supplied key.</strong> The report review found that <code>surfaceKey</code> had been given the closed-identifier bypass alongside <code>capability</code> and <code>operationId</code>. Those two are server-generated; <code>surfaceKey</code> is not — it arrives on the client-reportable events, so a crafted browser could have skipped the sensitive-text scan with any identifier-shaped string. Fixed, with a regression test covering both directions. This one surfaced from adversarial review of the report's own privacy claims, which is an argument for writing such claims down.</p>
+    <h3>Four more defects found by pre-merge code review</h3>
+    <p>An adversarial review of the delivered diff returned no blocking findings, but four real bugs in the new code — all fixed before merge rather than deferred:</p>
+    <ul>
+      <li><strong>The rollup dropped rows inside its own window.</strong> The query took the newest 2,000 rows at or after the window start and filtered the end bound afterwards, so any window with more than 2,000 events after it returned <em>zero</em> — reading as "nothing happened" for a window that was full. The end bound now lives in the index range.</li>
+      <li><strong>Two actions in the same millisecond deduplicated to one.</strong> The admitted-action idempotency key was visitor + operation + timestamp, directly contradicting the comment above it promising that three sales show up as three. The key now carries a per-execution discriminator.</li>
+      <li><strong>Unattributed events inflated the visitor count.</strong> A synthetic bucket was folded into the headline number, reporting one more person than ever visited.</li>
+      <li><strong>Session ids were not namespaced by visitor.</strong> Idempotency uniqueness is scoped to store and key, so a browser that guessed another visitor's session id could pre-claim their keys and have their real events dropped as duplicates. Keys are now prefixed with the server-resolved visitor, and the comment that overstated this guarantee has been corrected.</li>
+    </ul>
+    <h3>Diff size note</h3>
+    <p>The raw diff reads as 44 files and roughly 28,000 insertions. About 25,700 of those lines are the regenerated <code>graphify-out/graph.json</code> and <code>GRAPH_REPORT.md</code> artifacts, which change because the delivery adds Convex modules. The hand-written change is approximately 2,300 lines across 42 files.</p>
+  </section>
+
+  <section data-report-section="guidance">
+    <h2>Guidance for Next Time</h2>
+    <ul>
+      <li><strong>Before recording anything about a rejected call inside a Convex mutation, find the transaction boundary.</strong> If the call throws, your record is gone — including scheduled work. This failure is silent and reads as "it never happened".</li>
+      <li><strong>Choose event visibility from who can read the store, not from who the event is about.</strong> A shared store inverts the usual intuition.</li>
+      <li><strong>Never key per-user analytics on an identity the product shares.</strong> Check whether the id you are grouping by is actually per-person.</li>
+      <li><strong>Capture route templates, not paths.</strong> If a catalog of route templates exists, resolve through it; a pathname is a slug leak waiting to happen.</li>
+      <li><strong>Telemetry must never decide whether real work succeeds.</strong> Swallow capture failures deliberately and say so in a comment.</li>
+      <li><strong>Read the diffstat, not just the test output.</strong> A source file reported as <code>Bin</code> is a defect even when everything passes.</li>
+      <li><strong>Adding a public Convex mutation is a three-registry change</strong> — capability catalog, migration inventory, and a return-validator contract test. The focused suite catches all three.</li>
+      <li><strong>Actions are not mutations.</strong> If work must be admitted and it lives in an action, route it through <code>ctx.runMutation</code> and state the non-transactional consequence rather than pretending the semantics match.</li>
+    </ul>
+  </section>
+
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Eight of ten to pass.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why can the server not record a shared-demo action it just denied?</p>
+        <ol data-quiz-options>
+          <li>The denial happens before authentication resolves, so there is no actor to attribute.</li>
+          <li data-quiz-correct>The denial throws, and a Convex mutation throw rolls back every write in the transaction, including the event insert and any scheduled work.</li>
+          <li>Denied actions have no operation id, so the payload would fail validation.</li>
+          <li>The context event rail rejects events whose status is not <code>recorded</code>.</li>
+        </ol>
+        <p data-quiz-explanation>The rollback is total. Anything written to explain the refusal is erased by the refusal itself, and <code>ctx.scheduler</code> offers no escape because scheduling is also transactional.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Admitted actions are captured inside the operation's own transaction. Why is sharing that transaction a feature rather than a risk?</p>
+        <ol data-quiz-options>
+          <li>It makes the write cheaper by batching it with the handler's writes.</li>
+          <li>It guarantees the event is written before the handler can overwrite it.</li>
+          <li data-quiz-correct>If the handler throws, the observation rolls back with it, so a row that survives corresponds to an operation that actually committed.</li>
+          <li>It allows the event to reuse the handler's idempotency key.</li>
+        </ol>
+        <p data-quiz-explanation>The same rollback rule that blocks denial capture becomes a correctness guarantee for success capture — no phantom successes, no reconciliation.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why are all six <code>shared_demo</code> events registered as <code>support</code> visibility rather than <code>store_admin</code>?</p>
+        <ol data-quiz-options>
+          <li>Support visibility has a longer retention window.</li>
+          <li>Store-admin events are compiled into insight bundles and would be too expensive.</li>
+          <li data-quiz-correct>Every demo visitor is a store admin of the one shared demo store, so store-visible telemetry would let one visitor read another visitor's activity.</li>
+          <li>The demo store has no admin, so store-admin events would be unreadable.</li>
+        </ol>
+        <p data-quiz-explanation>The shared store inverts the usual assumption that store-scoped means private to one merchant.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What identifies an individual demo visitor across their events?</p>
+        <ol data-quiz-options>
+          <li>The shared <code>athenaUser</code> that every demo principal points at.</li>
+          <li>The browser session id the client mints and sends.</li>
+          <li data-quiz-correct>The auth user behind that visitor's demo principal, resolved server-side.</li>
+          <li>The store id, since each visitor gets their own demo store.</li>
+        </ol>
+        <p data-quiz-explanation>Each admission mints its own auth user, but all principals share one <code>athenaUser</code> — grouping by that would collapse every visitor into one. The client session groups tabs, and cannot be trusted for identity.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>The client-reportable event validator deliberately omits <code>shared_demo.action_admitted</code>. Why?</p>
+        <ol data-quiz-options>
+          <li>Admitted actions are too frequent and would exhaust the write quota.</li>
+          <li data-quiz-correct>A browser must not be able to claim it performed an operation it never performed; that event is server-captured only.</li>
+          <li>The client has no way to learn the operation id.</li>
+          <li>It is captured by the storefront surface instead.</li>
+        </ol>
+        <p data-quiz-explanation>The split is a trust boundary, not a convenience: the client may report where it navigated, but not what work it did.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt><code>capability</code> and <code>operationId</code> skip the rail's sensitive-text scan, but <code>surfaceKey</code> does not. What decides which side a payload key falls on?</p>
+        <ol data-quiz-options>
+          <li>Whether the value is required or optional on the event.</li>
+          <li>Whether the value is a dotted identifier or free prose.</li>
+          <li data-quiz-correct>Whether a browser can supply the value: the first two are generated server-side and never client-supplied, while <code>surfaceKey</code> arrives on client-reportable events.</li>
+          <li>Whether the event is compiled into insight bundles.</li>
+        </ol>
+        <p data-quiz-explanation>The bypass is safe only for values a client cannot influence. An early draft extended it to <code>surfaceKey</code>, which would have let a crafted browser skip the scan with anything identifier-shaped; it now stays on the normal path.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Navigation events record the matched route template instead of the visited pathname. What does that prevent?</p>
+        <ol data-quiz-options>
+          <li>Duplicate events when a visitor refreshes the page.</li>
+          <li data-quiz-correct>Leaking org slugs, store slugs, product slugs, and record ids into telemetry.</li>
+          <li>Events being attributed to the wrong store.</li>
+          <li>The payload exceeding the maximum allowed length.</li>
+        </ol>
+        <p data-quiz-explanation>A concrete demo path carries slugs; resolving through the catalog yields the parameterized template. Note the guarantee is enforced by the client builder — the server's safe-route pattern cannot tell a template from a pathname.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why could the two customer-email functions not be migrated with <code>admitPublicMutation</code>?</p>
+        <ol data-quiz-options>
+          <li>They send external email, and the rail refuses operations with external effects.</li>
+          <li>They are internal functions and therefore already exempt.</li>
+          <li data-quiz-correct>They are Convex actions, and <code>admitPublicMutation</code> requires a <code>MutationCtx</code>, which an action does not have.</li>
+          <li>Their store scope cannot be resolved from their arguments.</li>
+        </ol>
+        <p data-quiz-explanation>Actions have no <code>db</code>. They now reach the rail through <code>ctx.runMutation</code>, which carries caller identity so the same definition applies.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How does an <code>action_admitted</code> row written from an action differ in meaning from one written from a mutation?</p>
+        <ol data-quiz-options>
+          <li>It carries no capability, because actions have no definition.</li>
+          <li data-quiz-correct>An action is not transactional, so its row means "admitted and started"; a mutation's row means "committed".</li>
+          <li>It is written at a different visibility level.</li>
+          <li>There is no difference; both mean the operation completed.</li>
+        </ol>
+        <p data-quiz-explanation>The admission mutation commits independently of whatever the action does afterward. The difference is inherent to actions and is documented rather than hidden.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>The blocked-surface fold key used a literal NUL byte and every test still passed. What actually went wrong?</p>
+        <ol data-quiz-options>
+          <li>The fold silently dropped every blocked-surface event.</li>
+          <li>The NUL byte was rejected by the payload validator at append time.</li>
+          <li data-quiz-correct>Both sides agreed so the logic worked, but git classified the module as binary — making it unreviewable — and any tool normalizing the byte would desynchronize the join from the split.</li>
+          <li>It caused the rollup query to exceed its row limit.</li>
+        </ol>
+        <p data-quiz-explanation>A passing test suite is not proof a file is well-formed. This was caught by reading the diffstat, and fixed with a delimiter neither part can contain.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent Evidence</h2>
+    <dl>
+      <dt>Delivered-diff subagent (read-only repository explorer)</dt>
+      <dd>Analyzed <code>git diff origin/main...HEAD</code> across all 40 changed files. Contributed the layered changed-file map, the before/after of both the demo-visibility and operation-admission stories, the precise server-versus-client capture boundaries with file and line citations, the privacy property inventory, the failure-boundary table, the per-file test inventory, and the list of intentionally unchanged surfaces.</dd>
+      <dt>Repository-context subagent (read-only repository explorer)</dt>
+      <dd>Read the prior solution notes for the operation-admission rail, the read-admission rail, and the shared-demo principal/restore boundary, plus the admission README, migration inventory, shared-demo policy, existing rail surfaces, and harness registry. Contributed the design constraints this delivery had to respect, where it lands in the migration waves, the capability and gateway classification model, how <code>nonCompilable</code> acts as a second fence beneath the surface filter in bundle compilation, and the expected validation lane.</dd>
+      <dt>Adversarial code reviewer (read-only repository explorer)</dt>
+      <dd>Reviewed the delivered diff for merge-blocking defects, with specific instructions to attack the admission migration: whether capture can break a non-demo operation, whether the removed checks in <code>onlineOrderItem</code>, <code>reviews</code> and <code>onlineOrder</code> lost enforcement, and whether the action path can be abused. It returned <strong>no blocking findings</strong> and confirmed each removed check has an equivalent or stronger replacement. It also found four real non-blocking bugs in the new code — the windowed-rollup drop, the same-millisecond dedupe, the inflated visitor count, and the un-namespaced session key — all fixed before merge.</dd>
+      <dt>Adversarial report reviewer (read-only repository explorer)</dt>
+      <dd>Checked every factual assertion in the draft against the source and was explicitly asked to find false or unsupported claims. It found a genuine code defect — the <code>surfaceKey</code> scan bypass described above, which was fixed rather than merely reworded — plus a false justification for the closed-identifier hatch (<code>payments.refund</code> does <em>not</em> trip the sensitivity scan, because the trailing <code>s</code> defeats the word boundary), an overstated "belt-and-braces" claim about server-side route-template validation, an undercount of changed files, and a conflation of write bindings with functions. All were corrected. It also flagged two omissions now covered: that the new definitions apply to normal callers too, and that a scope resolver which cannot find its row admits without a store clamp.</dd>
+      <dd>One reviewer finding was <em>not</em> accepted: it reported the focused suite as 626 tests rather than 684. Re-running the exact scope named in this report gives 686 (two added by the regression test above). The reviewer had run a narrower glob. The number here was verified by running it.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

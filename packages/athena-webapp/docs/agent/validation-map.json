@@ -10,16 +10,19 @@
         "packages/athena-webapp/convex/sharedDemo",
         "packages/athena-webapp/convex/auth.ts",
         "packages/athena-webapp/convex/auth/SharedDemoTicket.ts",
+        "packages/athena-webapp/convex/contextTracking",
         "packages/athena-webapp/convex/crons.ts",
         "packages/athena-webapp/convex/http.ts",
+        "packages/athena-webapp/convex/operationAdmission/publicMutation.ts",
         "packages/athena-webapp/src/components/shared-demo",
+        "packages/athena-webapp/src/lib/errors/sharedDemoDenialObserver.ts",
         "packages/athena-webapp/src/routes/demo.tsx",
         "packages/athena-webapp/src/routes/_authed.tsx"
       ],
       "commands": [
         {
           "kind": "raw",
-          "command": "bun run --filter '@athena/webapp' test -- convex/sharedDemo src/components/shared-demo src/routes/demo.test.tsx src/routes/_authed.test.tsx"
+          "command": "bun run --filter '@athena/webapp' test -- convex/sharedDemo convex/contextTracking convex/operationAdmission src/components/shared-demo src/lib/errors/sharedDemoDenialObserver.test.ts src/routes/demo.test.tsx src/routes/_authed.test.tsx"
         },
         {
           "kind": "script",

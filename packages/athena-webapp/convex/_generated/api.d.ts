@@ -35,6 +35,9 @@ import type * as contextTracking_eventDefinitions from "../contextTracking/event
 import type * as contextTracking_historicalStorefrontContextImport from "../contextTracking/historicalStorefrontContextImport.js";
 import type * as contextTracking_historicalStorefrontContextImportReport from "../contextTracking/historicalStorefrontContextImportReport.js";
 import type * as contextTracking_legacyStorefrontAnalytics from "../contextTracking/legacyStorefrontAnalytics.js";
+import type * as contextTracking_sharedDemoActionCapture from "../contextTracking/sharedDemoActionCapture.js";
+import type * as contextTracking_sharedDemoActivity from "../contextTracking/sharedDemoActivity.js";
+import type * as contextTracking_sharedDemoEvents from "../contextTracking/sharedDemoEvents.js";
 import type * as contextTracking_types from "../contextTracking/types.js";
 import type * as crons from "../crons.js";
 import type * as customerMessaging_domain from "../customerMessaging/domain.js";
@@ -208,6 +211,7 @@ import type * as notifications_seed from "../notifications/seed.js";
 import type * as notifications_subscriptions from "../notifications/subscriptions.js";
 import type * as notifications_sweeper from "../notifications/sweeper.js";
 import type * as notifications_transport from "../notifications/transport.js";
+import type * as operationAdmission_actionAdmission from "../operationAdmission/actionAdmission.js";
 import type * as operationAdmission_actors from "../operationAdmission/actors.js";
 import type * as operationAdmission_adapters from "../operationAdmission/adapters.js";
 import type * as operationAdmission_capabilities from "../operationAdmission/capabilities.js";
@@ -630,6 +634,9 @@ declare const fullApi: ApiFromModules<{
   "contextTracking/historicalStorefrontContextImport": typeof contextTracking_historicalStorefrontContextImport;
   "contextTracking/historicalStorefrontContextImportReport": typeof contextTracking_historicalStorefrontContextImportReport;
   "contextTracking/legacyStorefrontAnalytics": typeof contextTracking_legacyStorefrontAnalytics;
+  "contextTracking/sharedDemoActionCapture": typeof contextTracking_sharedDemoActionCapture;
+  "contextTracking/sharedDemoActivity": typeof contextTracking_sharedDemoActivity;
+  "contextTracking/sharedDemoEvents": typeof contextTracking_sharedDemoEvents;
   "contextTracking/types": typeof contextTracking_types;
   crons: typeof crons;
   "customerMessaging/domain": typeof customerMessaging_domain;
@@ -803,6 +810,7 @@ declare const fullApi: ApiFromModules<{
   "notifications/subscriptions": typeof notifications_subscriptions;
   "notifications/sweeper": typeof notifications_sweeper;
   "notifications/transport": typeof notifications_transport;
+  "operationAdmission/actionAdmission": typeof operationAdmission_actionAdmission;
   "operationAdmission/actors": typeof operationAdmission_actors;
   "operationAdmission/adapters": typeof operationAdmission_adapters;
   "operationAdmission/capabilities": typeof operationAdmission_capabilities;

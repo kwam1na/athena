@@ -350,10 +350,21 @@ function routeTemplateMatches(pathname: string, routeTemplate: string) {
   );
 }
 
-export function classifyAthenaViewSurface(
+export type AthenaViewRouteMatch = {
+  presentation: AthenaSurfacePresentation;
+  routeTemplate: string;
+  surface: AthenaViewSurface;
+};
+
+/**
+ * Resolves a concrete pathname to the catalog entry that owns it, including
+ * the matched route *template*. Telemetry reports the template rather than the
+ * pathname so no store slug, product slug, or record id is ever recorded.
+ */
+export function resolveAthenaViewRoute(
   pathname: string,
-): AthenaViewSurface | null {
-  let bestMatch: { literalSegments: number; surface: AthenaViewSurface } | null =
+): AthenaViewRouteMatch | null {
+  let bestMatch: { literalSegments: number; match: AthenaViewRouteMatch } | null =
     null;
   for (const [surface, definition] of Object.entries(
     ATHENA_VIEW_SURFACE_CATALOG,
@@ -367,11 +378,24 @@ export function classifyAthenaViewSurface(
         .filter((segment) => segment && !segment.startsWith(":"))
         .length;
       if (!bestMatch || literalSegments > bestMatch.literalSegments) {
-        bestMatch = { literalSegments, surface };
+        bestMatch = {
+          literalSegments,
+          match: {
+            presentation: definition.presentation,
+            routeTemplate,
+            surface,
+          },
+        };
       }
     }
   }
-  return bestMatch?.surface ?? null;
+  return bestMatch?.match ?? null;
+}
+
+export function classifyAthenaViewSurface(
+  pathname: string,
+): AthenaViewSurface | null {
+  return resolveAthenaViewRoute(pathname)?.surface ?? null;
 }
 
 export function isSharedDemoSurfaceVisible(pathname: string) {

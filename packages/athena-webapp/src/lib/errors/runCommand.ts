@@ -10,6 +10,7 @@ import {
   isSharedDemoActionDeniedData,
   SHARED_DEMO_ACTION_DENIED_MESSAGE,
 } from "~/shared/sharedDemoActionError";
+import { notifySharedDemoDenial } from "./sharedDemoDenialObserver";
 
 export type ApprovalRequiredCommandResult = ApprovalRequiredResult;
 
@@ -47,6 +48,8 @@ function extractTraceId(error: unknown): string | undefined {
 function getSharedDemoDenial(error: unknown): CommandResult<never> | null {
   if (!error || typeof error !== "object" || !("data" in error)) return null;
   if (!isSharedDemoActionDeniedData(error.data)) return null;
+
+  notifySharedDemoDenial();
 
   return userError({
     code: "authorization_failed",

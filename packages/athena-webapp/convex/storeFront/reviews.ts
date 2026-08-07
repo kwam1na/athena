@@ -15,8 +15,6 @@ import { ok, userError } from "../../shared/commandResult";
 
 const entity = "review" as const;
 const MAX_REVIEWS = 500;
-const enforceSharedDemoActionCapabilityRef =
-  (internal as any).sharedDemo.actor.enforceSharedDemoActionCapability;
 
 async function getStoreFrontActorById(
   ctx: MutationCtx | QueryCtx,
@@ -620,10 +618,17 @@ export const sendFeedbackRequest = action({
   },
   returns: commandResultValidator(v.null()),
   handler: async (ctx, args) => {
-    const isSharedDemo = await ctx.runQuery(
-      enforceSharedDemoActionCapabilityRef,
-      { capability: "reviews.manage" },
+    // Actions enter the admission rail through a mutation because they have no
+    // `db` of their own. Scope resolves from the named order, so the store
+    // clamp that used to need a second explicit check is applied here.
+    const admission = await ctx.runMutation(
+      internal.operationAdmission.actionAdmission.admitOperationForAction,
+      {
+        operationId: "storeFront/reviews.sendFeedbackRequest",
+        operationArgs: { orderId: args.orderId },
+      },
     );
+    const isSharedDemo = admission.actorKind === "shared_demo";
 
     // Get the order item
     const orderItem = await ctx.runQuery(internal.storeFront.onlineOrderItem.get, {
@@ -648,20 +653,6 @@ export const sendFeedbackRequest = action({
       return userError({
         code: "validation_failed",
         message: "Order item does not belong to this order.",
-      });
-    }
-
-    if (isSharedDemo) {
-      const order = await ctx.runQuery(
-        internal.storeFront.onlineOrder.getInternal,
-        { identifier: args.orderId },
-      );
-      if (!order) {
-        return userError({ code: "not_found", message: "Order not found." });
-      }
-      await ctx.runQuery(enforceSharedDemoActionCapabilityRef, {
-        capability: "reviews.manage",
-        storeId: order.storeId,
       });
     }
 
