@@ -14,7 +14,7 @@ applies_when:
   - "Open Work contains repeated synced-sale inventory reviews for one product SKU"
   - "EOD Review and Opening Handoff must preserve exact logical-work membership across store days"
 tags: [athena, daily-operations, cash-controls, closeout, open-work, local-sync, logical-groups, eod-snapshot]
-delivery_diff_fingerprint: 6a335d507132d5f3fa1854f10b659eca071590fd67cbcefcebc389480cb38b03
+delivery_diff_fingerprint: fe76fccea7917f55e2d5fa687cef14fd82034e7c9e03d4782d8cca7a9c80ffb3
 ---
 
 # Daily Operations review and cash closeout continuity
@@ -153,7 +153,7 @@ If the membership changed, the command returns no writes and the UI presents:
 
 - [EOD Review automation completion](../architecture/athena-eod-review-automation-completion-2026-06-22.md)
 - [Manager-gated operational surfaces](athena-manager-gated-operational-surfaces-2026-07-07.md)
-- [Open Work resolution ownership](../architecture/athena-open-work-resolution-ownership-2026-07-02.md)
+- [Open Work resolution ownership](athena-open-work-resolution-ownership-2026-07-02.md)
 - [Pending checkout inventory resolution](athena-pending-checkout-inventory-resolution-2026-07-03.md)
 - [Daily Operations aggregate read model](../logic-errors/athena-daily-operations-aggregate-read-model-2026-05-08.md)
 - [Immutable Daily Close history snapshots](../logic-errors/athena-daily-close-history-snapshots-2026-05-09.md)

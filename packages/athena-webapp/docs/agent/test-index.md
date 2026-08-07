@@ -572,6 +572,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/app-update/updateDetectionSequencer.test.ts`](../../src/lib/app-update/updateDetectionSequencer.test.ts)
 - [`src/lib/docs/access.test.ts`](../../src/lib/docs/access.test.ts)
 - [`src/lib/docs/content.test.ts`](../../src/lib/docs/content.test.ts)
+- [`src/lib/docs/delivery.test.ts`](../../src/lib/docs/delivery.test.ts)
 - [`src/lib/docs/navigation.test.ts`](../../src/lib/docs/navigation.test.ts)
 - [`src/lib/docs/parsing.test.ts`](../../src/lib/docs/parsing.test.ts)
 - [`src/lib/docs/reportContract.test.ts`](../../src/lib/docs/reportContract.test.ts)

@@ -5,18 +5,26 @@ import { createTimeline, cubicBezier } from "animejs";
 
 import dailyOperationsShot from "@/assets/landing/daily-operations-hero.png";
 import dailyOperationsShotDark from "@/assets/landing/daily-operations-hero-dark.png";
-import dailyOpsMetricsShot from "@/assets/landing/daily-ops-metrics.png";
-import dailyOpsMetricsShotDark from "@/assets/landing/daily-ops-metrics-dark.png";
+import dailyOpsClip from "@/assets/landing/daily-ops.mp4";
+import dailyOpsClipDark from "@/assets/landing/daily-ops-dark.mp4";
+import dailyOpsClipPoster from "@/assets/landing/daily-ops-poster.jpg";
+import dailyOpsClipPosterDark from "@/assets/landing/daily-ops-poster-dark.jpg";
 import eodReviewShot from "@/assets/landing/eod-review.png";
 import eodReviewShotDark from "@/assets/landing/eod-review-dark.png";
 import openingHandoffShot from "@/assets/landing/opening-handoff.png";
 import openingHandoffShotDark from "@/assets/landing/opening-handoff-dark.png";
 import posPendingShot from "@/assets/landing/pos-pending.png";
 import posPendingShotDark from "@/assets/landing/pos-pending-dark.png";
-import posRegisterReadyShot from "@/assets/landing/pos-register-ready.png";
-import posRegisterReadyShotDark from "@/assets/landing/pos-register-ready-dark.png";
+import posSaleClip from "@/assets/landing/pos-sale.mp4";
+import posSaleClipDark from "@/assets/landing/pos-sale-dark.mp4";
+import posSaleClipPoster from "@/assets/landing/pos-sale-poster.jpg";
+import posSaleClipPosterDark from "@/assets/landing/pos-sale-poster-dark.jpg";
 import posSyncedShot from "@/assets/landing/pos-synced.png";
 import posSyncedShotDark from "@/assets/landing/pos-synced-dark.png";
+import reportsClip from "@/assets/landing/reports.mp4";
+import reportsClipDark from "@/assets/landing/reports-dark.mp4";
+import reportsClipPoster from "@/assets/landing/reports-poster.jpg";
+import reportsClipPosterDark from "@/assets/landing/reports-poster-dark.jpg";
 import { LandingGrain } from "@/components/landing/LandingGrain";
 import { AutomationRevealScene } from "@/components/landing/story/AutomationRevealScene";
 import { CashControlsScene } from "@/components/landing/story/CashControlsScene";
@@ -26,6 +34,7 @@ import {
   WholeLoopFigure,
 } from "@/components/landing/story/ControlLoopFigures";
 import { LandingWorkspaceShot } from "@/components/landing/story/LandingWorkspaceShot";
+import { LandingWorkspaceVideo } from "@/components/landing/story/LandingWorkspaceVideo";
 import { PosHubRoleSwitcher } from "@/components/landing/story/PosHubRoleSwitcher";
 import { RegisterSessionScene } from "@/components/landing/story/RegisterSessionScene";
 import { SyncBridgeScene } from "@/components/landing/story/SyncBridgeScene";
@@ -35,10 +44,9 @@ import { emitLandingFunnelEvent } from "@/lib/marketing/landingFunnelClient";
 import { DEMO_PATH, WALKTHROUGH_PATH } from "@/lib/navigation/appEntryRoutes";
 import { PublicLayout } from "./-public-layout";
 
-// Scroll-linked reveal for the hero shot: it starts faint while only its top
-// edge peeks above the fold, then ramps to full opacity as the reader scrolls
-// and it comes into view. Honors reduced-motion by rendering fully opaque.
-const HERO_SHOT_MIN_OPACITY = 0.35;
+// Scroll-linked reveal for the hero shot: it sits at full opacity from the
+// start and grows from slightly small to full size as the reader scrolls and it
+// comes into view. Honors reduced-motion by rendering at its resting size.
 const HERO_SHOT_MIN_SCALE = 0.9;
 // Fraction of a viewport the reader scrolls before the shot is fully revealed.
 const HERO_SHOT_REVEAL_VH = 0.55;
@@ -51,7 +59,6 @@ function useHeroShotRevealRef() {
     if (!el) return;
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      el.style.opacity = "1";
       el.style.transform = "none";
       return;
     }
@@ -60,15 +67,12 @@ function useHeroShotRevealRef() {
     const update = () => {
       raf = 0;
       const vh = window.innerHeight || 1;
-      // 0 at the top of the page (shot faint, only peeking); 1 once the reader
-      // has scrolled ~half a viewport and the shot has come into view.
+      // 0 at the top of the page (shot slightly small, only peeking); 1 once
+      // the reader has scrolled ~half a viewport and it has come into view.
       const progress = window.scrollY / (vh * HERO_SHOT_REVEAL_VH);
       const clamped = Math.min(1, Math.max(0, progress));
       // Subtle ease-out: reveal moves a touch quicker early, then settles.
       const eased = 1 - Math.pow(1 - clamped, 1.6);
-      el.style.opacity = String(
-        HERO_SHOT_MIN_OPACITY + (1 - HERO_SHOT_MIN_OPACITY) * eased,
-      );
       // Grow from slightly small to full size as it comes into view.
       el.style.transform = `scale(${HERO_SHOT_MIN_SCALE + (1 - HERO_SHOT_MIN_SCALE) * eased
         })`;
@@ -90,6 +94,101 @@ function useHeroShotRevealRef() {
   return ref;
 }
 
+// Pointer-driven tilt for the hero shot: it leans toward the cursor and lifts
+// slightly off the page, so the exhibit reads as a physical panel rather than a
+// flat image. Deliberately understated — a couple of degrees at the far corner,
+// eased slowly enough that it drifts rather than tracks the cursor. The tilt
+// lives on its own layer so it never fights the scroll reveal's scale transform.
+const HERO_TILT_MAX_DEG = 2.2;
+const HERO_TILT_LIFT_PX = 12;
+// Per-frame approach toward the pointer's target. Lower is lazier.
+const HERO_TILT_EASE = 0.07;
+
+function useHeroShotTiltRef() {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // Tilt is a pointer affordance; touch input has no hover to track.
+    if (!window.matchMedia("(hover: hover)").matches) return;
+
+    let raf = 0;
+    let targetX = 0;
+    let targetY = 0;
+    let lift = 0;
+    // Eased toward the pointer each frame so the panel glides instead of
+    // snapping, and settles back to flat when the pointer leaves.
+    let currentX = 0;
+    let currentY = 0;
+    let currentLift = 0;
+
+    const frame = () => {
+      raf = 0;
+      currentX += (targetX - currentX) * HERO_TILT_EASE;
+      currentY += (targetY - currentY) * HERO_TILT_EASE;
+      currentLift += (lift - currentLift) * HERO_TILT_EASE;
+      el.style.transform = `rotateX(${currentY.toFixed(3)}deg) rotateY(${currentX.toFixed(3)}deg) translateZ(${currentLift.toFixed(2)}px)`;
+      const settled =
+        Math.abs(targetX - currentX) < 0.01 &&
+        Math.abs(targetY - currentY) < 0.01 &&
+        Math.abs(lift - currentLift) < 0.05;
+      if (!settled) raf = requestAnimationFrame(frame);
+    };
+    const tick = () => {
+      if (!raf) raf = requestAnimationFrame(frame);
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      const rect = el.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      // -1..1 from the shot's center, so the lean follows which edge the
+      // pointer is nearest.
+      const px = (event.clientX - rect.left) / rect.width - 0.5;
+      const py = (event.clientY - rect.top) / rect.height - 0.5;
+      targetX = Math.max(-1, Math.min(1, px * 2)) * HERO_TILT_MAX_DEG;
+      // Pointer above center should tip the top edge away, so invert Y.
+      targetY = -Math.max(-1, Math.min(1, py * 2)) * HERO_TILT_MAX_DEG;
+      lift = HERO_TILT_LIFT_PX;
+      tick();
+    };
+    const onPointerLeave = () => {
+      targetX = 0;
+      targetY = 0;
+      lift = 0;
+      tick();
+    };
+
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerleave", onPointerLeave);
+    return () => {
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerleave", onPointerLeave);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  return ref;
+}
+
+// The hero's grid field: 1px rules on a 48px lattice, masked to a soft oval so
+// the lines dissolve before they reach any edge. Drawn in currentColor off the
+// foreground token, so it inverts with the theme instead of assuming a dark page.
+function HeroGrid() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 text-foreground/[0.055] [mask-image:radial-gradient(80%_60%_at_50%_40%,black_40%,transparent_100%)]"
+      style={{
+        backgroundImage:
+          "linear-gradient(90deg, currentColor 1px, transparent 1px), linear-gradient(currentColor 1px, transparent 1px)",
+        backgroundSize: "48px 48px, 48px 48px",
+      }}
+    />
+  );
+}
+
 function DemoCtaButton() {
   return (
     <Link
@@ -103,85 +202,126 @@ function DemoCtaButton() {
   );
 }
 
-// Hidden starting state for the copy layers: sunk 12px, faded, softened from an
-// 8px frost. anime.js tweens these back to rest on mount; declaring them inline
+// Master switch for the hero's entrance wipe. Off renders the hero at rest from
+// the first paint — the hidden starting styles are never applied, so there is no
+// frame of frosted, sunk copy to flash before the effect runs. Annotated
+// `boolean` rather than inferred, so flipping it doesn't leave TypeScript
+// narrowing the other branch to `never` and reporting the code as unreachable.
+const HERO_ENTRANCE_ENABLED: boolean = false;
+
+// Hidden starting state for the copy layers: sunk 10px, faded, softened from a
+// frost. anime.js tweens these back to rest on mount; declaring them inline
 // means no flash of the finished layout before the timeline takes over.
+const HERO_BLUR_PX = 8;
 const HERO_COPY_HIDDEN = {
   opacity: 0,
-  transform: "translateY(12px)",
-  filter: "blur(8px)",
+  transform: "translateY(10px)",
+  filter: `blur(${HERO_BLUR_PX}px)`,
 } as const;
+
+// Resting state, used both as the entrance's destination and as the initial
+// inline style when the entrance is switched off.
+const HERO_LAYER_AT_REST = { opacity: 1 } as const;
 
 function HeroSection() {
   const shotRef = useHeroShotRevealRef();
+  const tiltRef = useHeroShotTiltRef();
   // Entrance choreography for the whole hero, driven by a single anime.js
-  // timeline: the copy cascades in top-down (eyebrow → headline → subhead →
-  // CTA), the glow breathes in behind it, and the shot arrives last as the
-  // payoff. Per-element positions on the timeline set the rhythm. Honors
+  // timeline. The copy animates as ONE layer, not four: staggering the eyebrow,
+  // headline, subhead and CTA separately read as four arrivals, and ran four
+  // concurrent blur repaints over overlapping text — the stutter. Blurring the
+  // block once is a single rasterization and lands as one wipe. Honors
   // reduced-motion by snapping everything to its resting state.
-  const eyebrowRef = useRef<HTMLParagraphElement>(null);
-  const headlineRef = useRef<HTMLHeadingElement>(null);
-  const subheadRef = useRef<HTMLParagraphElement>(null);
-  const ctaRef = useRef<HTMLDivElement>(null);
+  const copyRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
   const shotWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const eyebrow = eyebrowRef.current;
-    const headline = headlineRef.current;
-    const subhead = subheadRef.current;
-    const cta = ctaRef.current;
+    const copy = copyRef.current;
     const glow = glowRef.current;
     const shot = shotWrapRef.current;
-    if (!eyebrow || !headline || !subhead || !cta || !glow || !shot) return;
+    if (!copy || !glow || !shot) return;
 
+    const layers = [copy, glow, shot];
     const rest = (el: HTMLElement) => {
       el.style.opacity = "1";
       el.style.transform = "none";
       el.style.filter = "none";
     };
 
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      [eyebrow, headline, subhead, cta, glow, shot].forEach(rest);
+    // Switched off, or the reader asked for less motion: land everything at
+    // rest and skip the timeline entirely.
+    if (
+      !HERO_ENTRANCE_ENABLED ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      layers.forEach(rest);
       return;
     }
 
-    // Rise + fade + sharpen, one shared ease. Copy staggers by ~280ms; the
-    // shot rises from further down and lingers longest. START holds the hidden
-    // frame for half a second before anything moves.
-    const ease = cubicBezier(0.22, 1, 0.36, 1);
-    const rise = {
-      opacity: [0, 1],
-      translateY: [12, 0],
-      filter: ["blur(8px)", "blur(0px)"],
-    };
-    const START = 500;
+    // Promote the layers up front so the blur rasterizes into a cached texture
+    // instead of re-rendering the text tree each frame, and release them once
+    // the wipe is done — a permanent will-change holds memory for nothing.
+    layers.forEach((el) => {
+      el.style.willChange = "opacity, transform, filter";
+    });
 
-    const timeline = createTimeline({ defaults: { ease } });
+    const ease = cubicBezier(0.22, 1, 0.36, 1);
+    // The frost clears over most of the travel, on a gentler curve than the
+    // motion: under the shared ease-out the blur was below half a pixel by
+    // ~200ms — paid for but never seen. `outQuad` keeps it legible while the
+    // block is still rising. Measured at 120Hz this costs no dropped frames.
+    const START = 120;
+    const DURATION = 720;
+
+    const timeline = createTimeline({
+      defaults: { ease },
+      onComplete: () => {
+        layers.forEach((el) => {
+          el.style.willChange = "auto";
+        });
+      },
+    });
     timeline
-      .add(glow, { opacity: [0, 1], duration: 3600 }, START)
-      .add(eyebrow, { ...rise, duration: 1400 }, START)
-      .add(headline, { ...rise, duration: 1500 }, START + 280)
-      .add(subhead, { ...rise, duration: 1500 }, START + 560)
-      .add(cta, { ...rise, duration: 1500 }, START + 840)
+      .add(glow, { opacity: [0, 1], duration: 1100 }, START)
+      .add(
+        copy,
+        {
+          opacity: [0, 1],
+          translateY: [10, 0],
+          filter: {
+            to: "blur(0px)",
+            duration: Math.round(DURATION * 0.8),
+            ease: "outQuad",
+          },
+          duration: DURATION,
+        },
+        START,
+      )
+      // The shot rides the same wipe, overlapping rather than following, so the
+      // hero lands as one motion instead of a sequence.
       .add(
         shot,
-        { opacity: [0, 1], translateY: [40, 0], duration: 2400 },
-        START + 1100,
+        { opacity: [0, 1], translateY: [22, 0], duration: DURATION + 120 },
+        START + 70,
       );
 
     return () => {
       timeline.pause();
+      layers.forEach((el) => {
+        el.style.willChange = "auto";
+      });
     };
   }, []);
 
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-background via-background to-app-canvas px-layout-md pb-layout-2xl sm:px-layout-xl">
+      <HeroGrid />
       {/* Primary-tinted glow breathes in slowly behind the copy. */}
       <div
         ref={glowRef}
-        className="absolute inset-0 bg-[radial-gradient(circle_at_82%_12%,hsl(var(--primary)/0.08),transparent_38%)]"
-        style={{ opacity: 0 }}
+        className="absolute inset-0 bg-[radial-gradient(circle_at_82%_12%,hsl(var(--primary)/0.022),transparent_34%)]"
+        style={HERO_ENTRANCE_ENABLED ? { opacity: 0 } : HERO_LAYER_AT_REST}
         aria-hidden="true"
       />
       {/* Hero content — blurb and shot — nudged up ~10% together on desktop.
@@ -189,37 +329,26 @@ function HeroSection() {
           desktop-only upward nudge and fixed height are dropped to avoid the
           shot colliding with the CTA. */}
       <div className="relative mx-auto w-full max-w-7xl sm:-translate-y-[10vh]">
-        {/* Blurb centered in the first screen, cascading in top-down. */}
+        {/* Blurb centered in the first screen. The whole block is one animated
+            layer — see the entrance timeline. */}
         <div className="flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center text-center">
-          <div className="max-w-2xl">
-            <p
-              ref={eyebrowRef}
-              style={HERO_COPY_HIDDEN}
-              className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground"
-            >
+          <div
+            ref={copyRef}
+            style={HERO_ENTRANCE_ENABLED ? HERO_COPY_HIDDEN : undefined}
+            className="max-w-2xl"
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
               For the retail owner who can&apos;t be everywhere
             </p>
-            <h1
-              ref={headlineRef}
-              style={HERO_COPY_HIDDEN}
-              className="mt-layout-md text-balance font-display text-5xl font-light leading-[0.96] text-foreground sm:text-7xl"
-            >
+            <h1 className="mt-layout-md text-balance font-display text-5xl font-light leading-[0.96] text-foreground sm:text-7xl">
               The day runs itself. You see all of it — from anywhere.
             </h1>
-            <p
-              ref={subheadRef}
-              style={HERO_COPY_HIDDEN}
-              className="mx-auto mt-layout-lg max-w-xl text-lg leading-8 text-muted-foreground sm:text-xl"
-            >
+            <p className="mx-auto mt-layout-lg max-w-xl text-lg leading-8 text-muted-foreground sm:text-xl">
               Athena runs the till, the stock, and the cash for your store, from
               opening to the final count, and asks for you only when something
               needs your judgment.
             </p>
-            <div
-              ref={ctaRef}
-              style={HERO_COPY_HIDDEN}
-              className="mt-layout-xl flex flex-col items-center gap-layout-sm sm:flex-row sm:justify-center"
-            >
+            <div className="mt-layout-xl flex flex-col items-center gap-layout-sm sm:flex-row sm:justify-center">
               <DemoCtaButton />
               <span className="text-sm text-muted-foreground">
                 No signup. A working store, open in seconds.
@@ -228,26 +357,34 @@ function HeroSection() {
           </div>
         </div>
 
-        {/* Hero shot peeks above the fold on desktop, then reveals to full
-            opacity on scroll. On mobile the blurb leaves no room to peek into,
-            so the shot follows it with a normal gap instead of overlapping. */}
-        <div ref={shotWrapRef} className="mt-layout-2xl sm:-mt-[22vh]" style={{ opacity: 0 }}>
+        {/* Hero shot peeks above the fold on desktop, then grows to full size
+            on scroll. On mobile the blurb leaves no room to peek into, so the
+            shot follows it with a normal gap instead of overlapping. */}
+        <div
+          ref={shotWrapRef}
+          className="mt-layout-2xl sm:-mt-[25vh]"
+          style={HERO_ENTRANCE_ENABLED ? { opacity: 0 } : HERO_LAYER_AT_REST}
+        >
           <div
             ref={shotRef}
             style={{
-              opacity: HERO_SHOT_MIN_OPACITY,
+              // Depth for the pointer tilt on the layer below. Generous, so
+              // the lean reads as a lift rather than a warp.
+              perspective: "1400px",
               transform: `scale(${HERO_SHOT_MIN_SCALE})`,
             }}
           >
-            <LandingWorkspaceShot
-              alt="Athena's Daily Operations workspace mid-week: a pending approval, the open register, today's net sales, cash, card and mobile money tiles, and the week at a glance with Wednesday selected."
-              className="max-w-7xl"
-              eager
-              height={2350}
-              src={dailyOperationsShot}
-              srcDark={dailyOperationsShotDark}
-              width={3840}
-            />
+            <div ref={tiltRef} className="will-change-transform">
+              <LandingWorkspaceShot
+                alt="Athena's Daily Operations workspace mid-week: a pending approval, the store day status with Athena's automation activity and the open register beside it, today's net sales, cash, card and mobile money tiles, and the week at a glance with Wednesday selected."
+                className="max-w-7xl"
+                eager
+                height={2210}
+                src={dailyOperationsShot}
+                srcDark={dailyOperationsShotDark}
+                width={3840}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -442,7 +579,7 @@ export function Index() {
   }, []);
 
   return (
-    <PublicLayout trackFunnelCtas hideSecondaryNav showThemeToggle>
+    <PublicLayout trackFunnelCtas hideDemoCta hideSecondaryNav showThemeToggle>
       <LandingGrain />
       {/* Every exhibit on this page reserves its space (explicit width/height),
           so browser scroll anchoring has nothing to protect against — but it
@@ -484,14 +621,16 @@ export function Index() {
           copy="How the week is tracking, today's trend and best-sellers, how customers are paying, and every sale the moment it syncs: the store's rhythm in full, whether you're on the floor or nowhere near it."
           automation="The numbers keep themselves current as sales sync from the counter to wherever you're reading them."
         >
-          <LandingWorkspaceShot
-            alt="Athena's Daily Operations workspace: today's money tiles, the week's sales at a glance, today's sales trend, top items and payment mix, and the live activity timeline."
+          <LandingWorkspaceVideo
             bordered={false}
             className="max-w-none"
-            height={2720}
-            src={dailyOpsMetricsShot}
-            srcDark={dailyOpsMetricsShotDark}
-            width={3072}
+            height={1080}
+            label="A recorded pass through Athena's Daily Operations workspace: the week's sales at a glance, today's top items, how customers paid, and the live feed of sales syncing in."
+            poster={dailyOpsClipPoster}
+            posterDark={dailyOpsClipPosterDark}
+            src={dailyOpsClip}
+            srcDark={dailyOpsClipDark}
+            width={1920}
           />
         </StoryAct>
 
@@ -527,22 +666,24 @@ export function Index() {
             {/* Establishing beat: the full register, clear and waiting, before
                 the sale the next two beats follow through the network drop. */}
             <div>
-              <LandingWorkspaceShot
-                alt="The POS register ready for the next sale: an empty cart, a fresh sale started, and the product lookup entry in focus."
+              <LandingWorkspaceVideo
                 bordered={false}
                 className="max-w-none"
-                height={1318}
-                src={posRegisterReadyShot}
-                srcDark={posRegisterReadyShotDark}
-                width={2506}
+                height={1080}
+                label="A recorded sale at the POS register: products searched and added to the cart, the cash tender counted out, and the sale completed — all on the terminal."
+                poster={posSaleClipPoster}
+                posterDark={posSaleClipPosterDark}
+                src={posSaleClip}
+                srcDark={posSaleClipDark}
+                width={1920}
               />
               <p className="mt-layout-sm flex items-start gap-layout-sm text-sm leading-6 text-muted-foreground">
                 <span
                   aria-hidden="true"
                   className="mt-[8px] h-2 w-2 shrink-0 rounded-full bg-primary"
                 />
-                Register ready. A new sale is open, running entirely on the
-                terminal.
+                A whole sale — lookup, cart, tender, done — running entirely on
+                the terminal.
               </p>
             </div>
             <div className="max-w-5xl">
@@ -673,6 +814,28 @@ export function Index() {
             src={eodReviewShot}
             srcDark={eodReviewShotDark}
             width={3072}
+          />
+        </StoryAct>
+
+        <StoryAct
+          background="bg-app-canvas"
+          layout="stacked"
+          stackedGap="space-y-layout-3xl"
+          workspace="Reports"
+          title="Every closed day becomes the record."
+          copy="Settled days line up into the store's history: net sales and units day by day, and what actually sold across any stretch you pick. Pick a day and see its mix; zoom out and see the month. The question “how are we really doing?” stops being a feeling."
+          automation="Reports build themselves from the days Athena already closed — no exporting, no spreadsheet night."
+        >
+          <LandingWorkspaceVideo
+            bordered={false}
+            className="max-w-none"
+            height={1080}
+            label="A recorded pass through Athena's Reports workspace: net sales and units sold for each day in the range, and the products-sold breakdown re-slicing as days are selected."
+            poster={reportsClipPoster}
+            posterDark={reportsClipPosterDark}
+            src={reportsClip}
+            srcDark={reportsClipDark}
+            width={1920}
           />
         </StoryAct>
 

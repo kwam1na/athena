@@ -2,13 +2,16 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 
 import DocsReportView from "@/components/docs/DocsReportView";
+import { useAuth } from "@/hooks/useAuth";
+import { filterAccessibleSolutionDocs } from "@/lib/docs/access";
 import {
   findDeliveryReport,
+  findSolutionDocsDeliveredWith,
   loadDeliveryReportHtml,
   type DeliveryReportMeta,
 } from "@/lib/docs/content";
 import { DocsBackLink } from "./-docs-back-link";
-import { formatDocDate } from "./-docs-shared";
+import { DeliveredWithSolutionDocs, formatDocDate } from "./-docs-shared";
 
 type ReportLoaderData = {
   report: DeliveryReportMeta | null;
@@ -17,6 +20,7 @@ type ReportLoaderData = {
 
 function DeliveryReportPage() {
   const { report, html } = Route.useLoaderData();
+  const { user } = useAuth();
 
   if (!report || html === null) {
     return (
@@ -52,6 +56,14 @@ function DeliveryReportPage() {
         ) : null}
       </div>
       <DocsReportView html={html} title={report.title} />
+      {/* Security notes stay out of the public listing, so a signed-out
+          reader never learns one exists from this cross-link either. */}
+      <DeliveredWithSolutionDocs
+        docs={filterAccessibleSolutionDocs(
+          findSolutionDocsDeliveredWith(report),
+          Boolean(user),
+        )}
+      />
     </article>
   );
 }

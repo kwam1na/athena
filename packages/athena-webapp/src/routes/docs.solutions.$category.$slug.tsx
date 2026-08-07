@@ -7,6 +7,7 @@ import Spinner from "@/components/ui/spinner";
 import { useAuth } from "@/hooks/useAuth";
 import { DocsBackLink } from "./-docs-back-link";
 import {
+  findReportsDeliveredWith,
   loadSolutionDocBody,
   type SolutionDocMeta,
 } from "@/lib/docs/content";
@@ -16,6 +17,7 @@ import {
 } from "@/lib/docs/solutionPage";
 import { LOGIN_PATH } from "@/lib/navigation/appEntryRoutes";
 import {
+  DeliveredWithReports,
   formatCategoryLabel,
   formatDocDate,
   SeverityIndicator,
@@ -138,6 +140,7 @@ function SolutionDocContent({
         ) : null}
       </div>
       <DocsMarkdown markdown={body} category={doc.category} />
+      <DeliveredWithReports reports={findReportsDeliveredWith(doc)} />
     </article>
   );
 }

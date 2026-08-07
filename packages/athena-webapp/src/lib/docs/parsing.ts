@@ -14,6 +14,12 @@ export type SolutionDocMeta = {
   severity: string | null;
   module: string | null;
   tags: string[];
+  /**
+   * sha256 of the deliverable diff this note was written for, when the note
+   * carries one. Shared with the landed-change report generated on the same
+   * branch, so it joins the two.
+   */
+  deliveryFingerprint: string | null;
 };
 
 export type DeliveryReportMeta = {
@@ -23,6 +29,8 @@ export type DeliveryReportMeta = {
   title: string;
   /** ISO date parsed from the filename prefix. */
   date: string | null;
+  /** sha256 of the deliverable diff the report was generated from, when present. */
+  deliveryFingerprint: string | null;
 };
 
 export type DocsIndex = {
@@ -142,8 +150,12 @@ export function solutionDocMetaFromFile(
     severity: scalar("severity"),
     module: scalar("module"),
     tags,
+    deliveryFingerprint: scalar("delivery_diff_fingerprint"),
   };
 }
+
+const REPORT_FINGERPRINT_PATTERN =
+  /data-athena-report-diff-fingerprint\s*=\s*"([^"]*)"/i;
 
 const REPORT_DATE_PATTERN = /^(\d{4}-\d{2}-\d{2})-/;
 
@@ -158,11 +170,15 @@ export function deliveryReportMetaFromFile(
     ? titleMatch[1].replace(/\s+/g, " ").trim()
     : titleCaseFromSlug(slug.replace(REPORT_DATE_PATTERN, ""));
 
+  const fingerprintMatch = REPORT_FINGERPRINT_PATTERN.exec(html);
+  const fingerprint = fingerprintMatch ? fingerprintMatch[1].trim() : "";
+
   return {
     slug,
     fileName,
     title,
     date: dateMatch ? dateMatch[1] : null,
+    deliveryFingerprint: fingerprint.length > 0 ? fingerprint : null,
   };
 }
 

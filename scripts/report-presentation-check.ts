@@ -61,6 +61,47 @@ const FORBIDDEN_MARKUP: { pattern: RegExp; label: string }[] = [
   { pattern: /javascript:/i, label: "javascript: URL" },
 ];
 
+/**
+ * The webapp never emits `id` attributes for report sections, so an in-page
+ * anchor only lands if the report itself defines the id. Migrated reports kept
+ * pre-v2 tables of contents whose ids the migration dropped — links that point
+ * nowhere. The app also drops any nav it doesn't recognize, so these were dead
+ * twice over and invisible while being wrong.
+ */
+function checkInPageAnchors(html: string, messages: string[]) {
+  const ids = new Set(
+    [...html.matchAll(/\sid="([^"]*)"/g)].map((match) => match[1]),
+  );
+  const dead = new Set<string>();
+  for (const match of html.matchAll(/href="#([^"]*)"/g)) {
+    if (!ids.has(match[1])) dead.add(match[1]);
+  }
+  for (const fragment of dead) {
+    messages.push(
+      `in-page anchor href="#${fragment}" has no matching id in the report; the app does not generate section ids`,
+    );
+  }
+}
+
+/**
+ * Header metadata renders only through `data-report-meta`. A `<dl>` in the
+ * header without it is content the reader never sees — the failure mode that
+ * hid three reports' branch and status rows after the v2 migration.
+ */
+function checkHeaderMetadata(html: string, messages: string[]) {
+  const header = /<header[^>]*data-report-section="header"[^>]*>([\s\S]*?)<\/header>/.exec(
+    html,
+  );
+  if (!header) return; // Reported as a missing header already.
+  for (const match of header[1].matchAll(/<dl\b([^>]*)>/g)) {
+    if (!/\bdata-report-meta\b/.test(match[1])) {
+      messages.push(
+        "header <dl> is missing data-report-meta; the app renders no other definition list, so its rows never reach the page",
+      );
+    }
+  }
+}
+
 function findingsFor(reportPath: string, messages: string[]) {
   return messages.map((message) => ({ reportPath, message }));
 }
@@ -242,6 +283,8 @@ export function collectReportPresentationFindings(
     }
   }
 
+  checkHeaderMetadata(html, messages);
+  checkInPageAnchors(html, messages);
   checkQuiz(html, messages, requireNarrativeSections);
 
   return findingsFor(reportPath, messages);

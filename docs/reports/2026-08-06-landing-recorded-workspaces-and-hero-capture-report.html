@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Landing: recorded workspaces, a steadier hero, and the zoom that ate card borders</title>
+  </head>
+  <body>
+    <article
+      data-athena-landed-change-report="v2"
+      data-athena-report-diff-fingerprint="fe76fccea7917f55e2d5fa687cef14fd82034e7c9e03d4782d8cca7a9c80ffb3"
+    >
+      <header data-report-section="header">
+        <h1>Landing: recorded workspaces, a steadier hero, and the zoom that ate card borders</h1>
+        <ul data-report-pills>
+          <li>Delivery candidate</li>
+          <li>Branch feat/landing-hero-video-story</li>
+          <li>920 changed source lines</li>
+          <li>Hero entrance shipped behind an off switch</li>
+        </ul>
+        <dl data-report-meta>
+          <dt>Status</dt><dd>Landed</dd>
+          <dt>Area</dt><dd>Marketing landing, screenshot capture tooling</dd>
+        </dl>
+      </header>
+
+      <section data-report-section="summary">
+        <h2>Summary</h2>
+        <p>
+          The landing page told its story with static screenshots. Three of those
+          exhibits are now recorded clips of the real workspaces, and a new Reports
+          act carries the narrative past a single day. Alongside that, the hero got
+          a grid field, a pointer tilt, and a rebuilt entrance animation.
+        </p>
+        <p>
+          The most consequential find was not on the landing page at all. Chasing a
+          report that the hero screenshot looked <em>clipped on the right</em>, pixel
+          sampling showed card borders painted on their left edge and simply absent
+          on their right. The cause is the authenticated app's
+          <code>zoom: 0.95</code>: under fractional zoom Chrome rasterizes a 1px
+          border to less than one device pixel and, depending on where the edge
+          falls, rounds it away entirely. The capture script now pins zoom to 1.
+          That fixes the screenshots; it does not fix the app, which is why a
+          follow-up is called out in the guidance section.
+        </p>
+      </section>
+
+      <section data-report-section="problem">
+        <h2>Problem</h2>
+        <p>
+          Three separate problems arrived as one request to "update the story with
+          the videos".
+        </p>
+        <p>
+          <strong>The story was static.</strong> Every exhibit was a PNG pair. The
+          copy claimed numbers "keep themselves current" and that sales sync on
+          their own, but nothing on the page moved to show it, and no act covered
+          Reports at all.
+        </p>
+        <p>
+          <strong>The hero entrance stuttered.</strong> The eyebrow, headline,
+          subhead, and CTA each animated separately, staggered 280ms apart over
+          1.4–1.5s, and each tween animated <code>filter: blur()</code>. Up to four
+          concurrent blurs ran over large overlapping text, and the stagger read as
+          four arrivals rather than one motion.
+        </p>
+        <p>
+          <strong>The hero screenshot was stale and then wrong.</strong> The Daily
+          Operations workspace had consolidated its automation and open-register
+          sections into a single "Store day status" card, so the committed shot no
+          longer matched the app. Re-capturing surfaced two further faults: the
+          capture session rendered the nav sidebar expanded where the original had
+          it collapsed, and card borders went missing on one edge.
+        </p>
+      </section>
+
+      <section data-report-section="mental-model">
+        <h2>Mental model</h2>
+        <p>
+          Think of a screenshot capture as a <em>third rendering target</em>,
+          alongside the browser and the test runner. It has its own viewport, its
+          own device pixel ratio, its own persisted UI state, and its own zoom. Any
+          of those can differ from what a developer sees locally, and each
+          difference is invisible until it shows up baked into a PNG.
+        </p>
+        <p>
+          Three of this branch's bugs are the same shape: state the capture
+          inherited rather than declared.
+        </p>
+        <ul>
+          <li>
+            <strong>Sidebar state</strong> lives in a <code>sidebar_state</code>
+            cookie. The capture inherited whatever the demo session last had.
+          </li>
+          <li>
+            <strong>App zoom</strong> is <code>0.95</code> on desktop. The capture
+            inherited it, and fractional zoom is hostile to hairlines.
+          </li>
+          <li>
+            <strong>Crop height</strong> was a constant tuned against a layout that
+            had since changed, so it cut through the wrong section.
+          </li>
+        </ul>
+        <p>
+          The general rule the script now follows: <em>declare every input that
+          affects the pixels</em>. Theme was already declared. Sidebar and zoom now
+          are. Crop height cannot be declared away, so it carries a comment saying
+          how to re-measure it rather than a bare magic number.
+        </p>
+      </section>
+
+      <section data-report-section="before-after">
+        <h2>Before and after</h2>
+        <h3>Landing story</h3>
+        <p>
+          Before: hero shot, Opening Handoff, Daily Operations, POS hub,
+          Terminal-first three-beat, sync bridge, Cash Controls, EOD Review, reveal,
+          CTA — all static PNGs.
+        </p>
+        <p>
+          After: the Daily Operations act and the Terminal-first establishing beat
+          are recorded clips, and a Reports act sits after EOD Review. The remaining
+          acts stay static where motion adds nothing.
+        </p>
+        <h3>Hero entrance</h3>
+        <table>
+          <thead>
+            <tr><th>Aspect</th><th>Before</th><th>After</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Animated layers</td>
+              <td>Four (eyebrow, headline, subhead, CTA)</td>
+              <td>One (the copy block)</td>
+            </tr>
+            <tr>
+              <td>Stagger</td>
+              <td>280ms between layers</td>
+              <td>None; copy and shot overlap</td>
+            </tr>
+            <tr>
+              <td>Concurrent blur tweens</td>
+              <td>Up to four over overlapping text</td>
+              <td>One, over a single container</td>
+            </tr>
+            <tr>
+              <td>Total duration</td>
+              <td>~3.5s</td>
+              <td>~0.85s</td>
+            </tr>
+            <tr>
+              <td>Measured frame cost</td>
+              <td>Not measured</td>
+              <td>8.33ms mean, 0 frames over 20ms</td>
+            </tr>
+          </tbody>
+        </table>
+        <h3>Hero capture</h3>
+        <p>
+          Before: sidebar expanded, app zoom 0.95, clip height 1175 CSS px,
+          producing 3840&times;2350 with a squeezed content column and missing right
+          borders. After: sidebar collapsed, zoom pinned to 1, clip height 1105,
+          producing 3840&times;2210 with borders painted on both edges.
+        </p>
+      </section>
+
+      <section data-report-section="key-files">
+        <h2>Key files</h2>
+        <table>
+          <thead>
+            <tr><th>File</th><th>Role</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>packages/athena-webapp/src/components/landing/story/LandingWorkspaceVideo.tsx</code></td>
+              <td>
+                New. The moving sibling of <code>LandingWorkspaceShot</code>:
+                in-view playback, theme-swapped source and poster, playhead carried
+                across theme flips, poster-only under reduced motion.
+              </td>
+            </tr>
+            <tr>
+              <td><code>packages/athena-webapp/src/routes/-index-route-view.tsx</code></td>
+              <td>
+                Hero grid, pointer tilt, rebuilt entrance timeline and its
+                <code>HERO_ENTRANCE_ENABLED</code> switch, the new Reports act, and
+                the video wiring.
+              </td>
+            </tr>
+            <tr>
+              <td><code>packages/athena-webapp/src/routes/-public-layout.tsx</code></td>
+              <td>
+                Nav underline now keyed to scroll position with its own fade clock;
+                new <code>hideDemoCta</code> prop so the landing drops the nav CTA
+                without affecting other public pages.
+              </td>
+            </tr>
+            <tr>
+              <td><code>packages/athena-webapp/scripts/capture-hero-shot.mjs</code></td>
+              <td>
+                Collapses the sidebar via cookie, pins <code>app-scaled</code> zoom
+                to 1, and carries the re-measured clip height.
+              </td>
+            </tr>
+            <tr>
+              <td><code>packages/athena-webapp/src/assets/landing/</code></td>
+              <td>
+                Six re-encoded clips with poster frames, and the re-captured hero
+                pair at 3840&times;2210.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="changes">
+        <h2>What changed, and what deliberately did not</h2>
+        <h3>Changed</h3>
+        <ul>
+          <li>
+            Videos re-encoded from the supplied solid-background recordings to
+            H.264 with audio stripped and <code>faststart</code>: daily-ops
+            5.7MB&nbsp;&rarr;&nbsp;2.0MB, reports 3.3MB&nbsp;&rarr;&nbsp;1.2MB, POS
+            720KB&nbsp;&rarr;&nbsp;230KB per variant, each with a poster frame.
+          </li>
+          <li>
+            The nav underline is transparent at the top of the page and drawn once
+            scrolled, fading on <code>--motion-slow</code> while the background
+            wash keeps <code>--motion-standard</code>.
+          </li>
+          <li>
+            The hero entrance animates the copy as one layer, and is gated behind
+            <code>HERO_ENTRANCE_ENABLED</code>, currently <code>false</code>.
+          </li>
+          <li>
+            The capture script pins zoom and sidebar state, and its clip-height
+            default carries a comment on how to re-measure rather than a bare
+            constant.
+          </li>
+        </ul>
+        <h3>Deliberately not changed</h3>
+        <ul>
+          <li>
+            <strong>The app's <code>zoom: 0.95</code>.</strong> Pinning zoom in the
+            capture fixes screenshots only. Whether real desktop users lose hairline
+            borders is a separate question with its own blast radius, tracked as
+            follow-up rather than fixed opportunistically inside a landing-page
+            branch.
+          </li>
+          <li>
+            <strong>The nav demo CTA on other public pages.</strong> It is gated per
+            page, not deleted. The privacy and walkthrough pages assert it is
+            visible, and it is their only demo entry point.
+          </li>
+          <li>
+            <strong>The EOD Review and Opening Handoff shots.</strong> Their crop
+            ends exactly on <code>main</code>'s content-box right edge, so flush
+            elements have their borders sliced. A fix was written, reviewed against
+            the actual rendering, and then reverted when the reported symptom turned
+            out to be elsewhere. Noted, not smuggled in.
+          </li>
+          <li>
+            <strong>The hero shot's scroll-linked scale.</strong> Only the opacity
+            ramp was removed; the shot still grows from 0.9 to 1 on scroll.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="validation">
+        <h2>Validation</h2>
+        <ul>
+          <li>
+            <strong>Border fix proven by pixel sampling, not by eye.</strong> A row
+            through the "Store day status" card was decoded to raw RGB. Before: left
+            edge <code>(230,233,236)</code>, right edge no border pixel at all.
+            After: the border colour appears at both x=432 and x=3502, and the tiles
+            row shows <code>(220,223,229)</code> on both outer edges.
+          </li>
+          <li>
+            <strong>Entrance measured, not asserted.</strong> A frame monitor
+            installed on <code>window</code> survived a client-side route change,
+            so the entrance could be replayed and sampled: 174 frames, 8.33ms mean,
+            9.2ms p95, <strong>0 frames over 20ms, 0 long tasks</strong>, with blur
+            sampled stepping 8&nbsp;&rarr;&nbsp;6.7&nbsp;&rarr;&nbsp;4.9&nbsp;&rarr;&nbsp;3.4&nbsp;&rarr;&nbsp;2.2&nbsp;&rarr;&nbsp;1.25&nbsp;&rarr;&nbsp;0.
+          </li>
+          <li>
+            <strong>A false green was caught by that same instrumentation.</strong>
+            The first measurement reported a flawless 120fps while the copy sat
+            frozen at <code>blur(6px)</code>, <code>opacity: 0</code> — a stale HMR
+            module had thrown the route into its error boundary. Frame timing alone
+            would have been read as success.
+          </li>
+          <li>
+            <strong>Video behaviour verified live</strong>: all three clips resumed
+            at their carried playhead across a theme flip (14.25s, 9.1s, 5.4s each
+            preserved), and sources and posters swapped together.
+          </li>
+          <li>
+            <code>tsc --noEmit</code> clean and the landing, privacy, and
+            walkthrough suites green throughout. Two <code>tsc</code> runs failed
+            mid-session with a JavaScript heap OOM under memory pressure; they pass
+            with a raised heap, and that is an environment limit rather than a type
+            error.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="guidance">
+        <h2>Guidance for next time</h2>
+        <ul>
+          <li>
+            <strong>Sample pixels before theorising about a visual bug.</strong>
+            Several plausible explanations were entertained for the missing borders
+            — crop geometry, device-pixel alignment, an overflow ancestor — and a
+            viewport sweep disproved the alignment theory outright. One row of RGB
+            settled it in a single command.
+          </li>
+          <li>
+            <strong>Instrument the property you are tuning, not just the frame
+            rate.</strong> Frame timing said "smooth" for an animation that was not
+            running at all. Sampling the computed <code>filter</code> alongside the
+            frame deltas is what made the measurement trustworthy.
+          </li>
+          <li>
+            <strong>A capture script should declare its inputs.</strong> Theme was
+            declared; sidebar and zoom were not, and both silently changed the
+            output. When adding a new capture, ask what persisted state the page
+            reads at load.
+          </li>
+          <li>
+            <strong>Follow-up owed:</strong> determine whether
+            <code>zoom: 0.95</code> drops hairline borders for real desktop users at
+            common viewport and DPR combinations. The capture-side pin does not help
+            them.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="quiz" data-quiz-pass-threshold="4">
+        <h2>Comprehension quiz</h2>
+        <p>Five questions on the reasoning behind this branch.</p>
+        <ol data-quiz>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why were the card borders missing on one edge of the hero screenshot?
+            </p>
+            <ol data-quiz-options>
+              <li>The crop ended before the card's right edge.</li>
+              <li>An ancestor with overflow hidden clipped the border.</li>
+              <li data-quiz-correct>
+                The app renders at <code>zoom: 0.95</code>, so a 1px border becomes
+                less than one device pixel and rounds away depending on where the
+                edge falls.
+              </li>
+              <li>The card's CSS omitted a right border.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The affected elements reported a computed border width of
+              1.05263px — exactly 1 &divide; 0.95. The crop had over 200 CSS px of
+              margin beyond the card, and the nearest clipping ancestor ended at the
+              viewport edge, so neither of those explanations survived measurement.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What made the hero entrance stutter, given that the blur was kept in
+              the final version?
+            </p>
+            <ol data-quiz-options>
+              <li>The blur radius was too large at 8px.</li>
+              <li data-quiz-correct>
+                Four separately staggered layers ran up to four concurrent blur
+                repaints over overlapping text.
+              </li>
+              <li>anime.js cannot animate the <code>filter</code> property.</li>
+              <li>The animation ran before fonts had loaded.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Collapsing the copy into a single animated container makes the frost
+              one rasterization instead of four. With that change the original 8px
+              radius measured zero dropped frames, which is why the blur could stay.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              A frame monitor reported 8.33ms mean with zero dropped frames on the
+              first entrance measurement. Why was that result rejected?
+            </p>
+            <ol data-quiz-options>
+              <li>The sample size of 174 frames was too small.</li>
+              <li>The display refreshes at 120Hz, so 8.33ms is the floor.</li>
+              <li data-quiz-correct>
+                Sampled alongside the frames, the copy sat at
+                <code>blur(6px)</code> and <code>opacity: 0</code> the whole time —
+                a stale module had broken the route, so nothing was animating.
+              </li>
+              <li>The monitor did not survive the route change.</li>
+            </ol>
+            <p data-quiz-explanation>
+              A perfect frame rate is exactly what you get when no work happens.
+              Measuring the animated property alongside the timing is what
+              distinguished a smooth animation from an absent one.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why was the nav's "Try the demo" button gated per page rather than
+              deleted outright?
+            </p>
+            <ol data-quiz-options>
+              <li>Deleting it would have broken the funnel event schema.</li>
+              <li data-quiz-correct>
+                It is the only demo entry point on the privacy and walkthrough
+                pages, which assert it is visible; only the landing carries its own
+                demo CTAs.
+              </li>
+              <li>The layout reserves space for it on every page.</li>
+              <li>It is required for the landing funnel to record a page view.</li>
+            </ol>
+            <p data-quiz-explanation>
+              <code>PublicLayout</code> is shared. A global deletion would have
+              stripped two other public pages of their only route into the demo and
+              broken the tests encoding that intent.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What is the general lesson the sidebar, zoom, and clip-height bugs
+              share?
+            </p>
+            <ol data-quiz-options>
+              <li>Headless Chromium renders differently from a real browser.</li>
+              <li>Screenshots should be captured at a device pixel ratio of 1.</li>
+              <li data-quiz-correct>
+                A capture inherits persisted state and layout constants it does not
+                declare, and every undeclared input can silently change the pixels.
+              </li>
+              <li>Product screenshots should be regenerated on every commit.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Theme was declared and behaved. Sidebar state came from a cookie, zoom
+              from a class on the document root, and the crop height from a constant
+              tuned against an older layout — all three inherited, all three wrong.
+            </p>
+          </li>
+        </ol>
+      </section>
+
+      <section data-report-section="subagent-evidence">
+        <h2>Subagents used</h2>
+        <p>
+          One subagent contributed to this branch. The rest of the work was done in
+          the main session, where the browser and capture tooling were already
+          driving live state that would have been costly to hand off.
+        </p>
+        <dl>
+          <dt>Explore — locate the screenshot capture tooling</dt>
+          <dd>
+            Asked whether a script existed for the landing PNGs, or whether capture
+            was manual. It returned all three capture scripts
+            (<code>capture-hero-shot.mjs</code>,
+            <code>capture-operations-shot.mjs</code>,
+            <code>capture-register-shot.mjs</code>), their exact invocations and
+            defaults, the <code>?fixture=</code> registry mapping with every fixture
+            name, and the fact that no Playwright config is involved. That answer is
+            what made the hero re-capture a single command rather than a
+            reconstruction, and it correctly identified
+            <code>busy-wednesday</code> as the hero's fixture.
+          </dd>
+        </dl>
+      </section>
+    </article>
+  </body>
+</html>

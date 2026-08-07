@@ -33,10 +33,15 @@ const PATH = arg(
 const WAIT_TEXT = arg("wait", "Week at a glance");
 // 1920 CSS px wide at deviceScaleFactor 2 → a 3840px-wide shot. The clip height
 // lands just below the "Week at a glance" days row and above "Sales trend" — a
-// clean section boundary that keeps the selected day in frame.
+// clean section boundary that keeps the selected day in frame. It tracks the
+// workspace's own layout: consolidating the automation and open-register
+// sections into one "Store day status" card, then pinning the capture to 100%
+// zoom (see the style tag below), moved that boundary 1175 → 1050 → 1105. If
+// the page grows or shrinks again, re-measure rather than eyeball — the day
+// cards' bottom and the "Sales trend" heading's top bracket the target.
 const VIEWPORT_WIDTH = Number(arg("viewport-width", "1920"));
 const VIEWPORT_HEIGHT = Number(arg("viewport-height", "1300"));
-const CLIP_HEIGHT = Number(arg("clip-height", "1175"));
+const CLIP_HEIGHT = Number(arg("clip-height", "1105"));
 
 if (!OUT) {
   console.error("Required: --out <png>  [--theme light|dark] [--clip-height <css px>]");
@@ -56,6 +61,11 @@ await context.addInitScript((theme) => {
   } catch {
     /* storage unavailable — colorScheme still drives system resolution */
   }
+  // Collapse the nav to its icon rail. The sidebar reads this cookie for its
+  // initial state (see components/ui/sidebar.tsx), and an expanded rail eats
+  // ~230 CSS px of the frame — squeezing the workspace and pushing the header
+  // controls hard against the shot's right edge.
+  document.cookie = "sidebar_state=false; path=/; max-age=604800";
 }, THEME);
 const page = await context.newPage();
 
@@ -75,6 +85,16 @@ for (let attempt = 0; attempt < 4; attempt += 1) {
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(6000);
 }
+
+// The authed shell zooms <html> to 0.95 on desktop (index.css `app-scaled`).
+// Under fractional zoom Chrome rasterizes 1px borders to <1 device px and,
+// depending on subpixel position, rounds an edge to nothing — captured shots
+// showed card left borders painted and right borders missing. Pin the capture
+// to 100% so every border rasterizes at full strength.
+await page.addStyleTag({
+  content:
+    "html.app-scaled { zoom: 1 !important; --app-zoom: 1 !important; }",
+});
 
 try {
   await page.getByText(WAIT_TEXT).first().waitFor({ timeout: 30_000 });
