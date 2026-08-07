@@ -435,7 +435,7 @@ export function ReportSkuMixChart({
             <div className="relative" ref={chartMotionRef}>
               <ChartContainer
                 className={cn(
-                  "relative z-10 mx-auto aspect-square h-auto max-h-96 w-full",
+                  "relative z-10 mx-auto aspect-square w-full max-w-96",
                   // Keep the settled geometry legible while its color recedes
                   // behind the in-place loading label. On release, color eases
                   // back from the current on-screen value; reduced motion

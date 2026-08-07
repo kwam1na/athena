@@ -1334,7 +1334,11 @@ describe("ReportDaysPanel", () => {
     );
     expect(screen.getByTestId("report-sku-mix-chart")).toHaveClass("h-full");
     expect(screen.getByTestId("report-sku-mix-graphic")).toHaveClass(
+      "max-w-96",
+    );
+    expect(screen.getByTestId("report-sku-mix-graphic")).not.toHaveClass(
       "max-h-96",
+      "h-auto",
     );
     expect(screen.getByTestId("report-sku-mix-graphic")).toHaveClass("z-10");
     expect(screen.getByTestId("report-sku-mix-total")).toHaveClass("z-0");
