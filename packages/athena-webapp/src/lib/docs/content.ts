@@ -5,6 +5,10 @@
 import { docsIndex } from "virtual:athena-docs-index";
 
 import {
+  reportsDeliveredWithSolutionDoc,
+  solutionDocsDeliveredWithReport,
+} from "./delivery";
+import {
   compareByDateDesc,
   type DeliveryReportMeta,
   type DocsIndex,
@@ -55,6 +59,20 @@ export function findSolutionDoc(
 
 export function findDeliveryReport(slug: string): DeliveryReportMeta | undefined {
   return index.reports.find((report) => report.slug === slug);
+}
+
+/** Landed-change reports generated from the same deliverable diff as `doc`. */
+export function findReportsDeliveredWith(
+  doc: SolutionDocMeta,
+): DeliveryReportMeta[] {
+  return reportsDeliveredWithSolutionDoc(doc, index.reports);
+}
+
+/** Solution notes written for the same deliverable diff as `report`. */
+export function findSolutionDocsDeliveredWith(
+  report: DeliveryReportMeta,
+): SolutionDocMeta[] {
+  return solutionDocsDeliveredWithReport(report, index.solutions);
 }
 
 export async function loadSolutionDocBody(doc: SolutionDocMeta): Promise<string> {

@@ -100,6 +100,20 @@ describe("solutionDocMetaFromFile", () => {
       solutionDocMetaFromFile("architecture", "some-doc.md", "plain text").title,
     ).toBe("Some Doc");
   });
+
+  it("carries the delivery fingerprint when the note declares one", () => {
+    expect(
+      solutionDocMetaFromFile("architecture", "some-doc.md", SAMPLE_DOC)
+        .deliveryFingerprint,
+    ).toBeNull();
+    expect(
+      solutionDocMetaFromFile(
+        "architecture",
+        "some-doc.md",
+        "---\ntitle: Note\ndelivery_diff_fingerprint: 557f87faf1ff\n---\n\nBody.\n",
+      ).deliveryFingerprint,
+    ).toBe("557f87faf1ff");
+  });
 });
 
 describe("deliveryReportMetaFromFile", () => {
@@ -114,6 +128,7 @@ describe("deliveryReportMetaFromFile", () => {
       fileName: "2026-07-09-landed-change-report-gate.html",
       title: "Landed Change Report Gate",
       date: "2026-07-09",
+      deliveryFingerprint: null,
     });
   });
 
@@ -123,6 +138,22 @@ describe("deliveryReportMetaFromFile", () => {
       "<html></html>",
     );
     expect(meta.title).toBe("Landed Change Report Gate");
+  });
+
+  it("reads the delivery fingerprint off the contract-v2 root element", () => {
+    const meta = deliveryReportMetaFromFile(
+      "2026-07-09-landed-change-report-gate.html",
+      '<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="6d2d87fccf98"></article>',
+    );
+    expect(meta.deliveryFingerprint).toBe("6d2d87fccf98");
+  });
+
+  it("treats an empty fingerprint attribute as absent", () => {
+    const meta = deliveryReportMetaFromFile(
+      "2026-07-09-landed-change-report-gate.html",
+      '<article data-athena-report-diff-fingerprint=""></article>',
+    );
+    expect(meta.deliveryFingerprint).toBeNull();
   });
 });
 

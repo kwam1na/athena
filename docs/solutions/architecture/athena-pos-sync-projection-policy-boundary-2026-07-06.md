@@ -17,6 +17,7 @@ tags:
   - inventory-import
   - projection-policy
   - cash-controls
+delivery_diff_fingerprint: fe76fccea7917f55e2d5fa687cef14fd82034e7c9e03d4782d8cca7a9c80ffb3
 ---
 
 # Athena POS Sync Projection Policy Boundary
@@ -112,4 +113,4 @@ inventory review work item.
 - [Athena POS Provisional Import Trust Boundary](../architecture/athena-pos-provisional-import-trust-boundary-2026-06-10.md)
 - [Athena Product Page Single-SKU Provisional Trusted Finalization](../architecture/athena-product-page-single-sku-provisional-trusted-finalization-2026-06-23.md)
 - [Athena POS Sync Review Workspace Boundaries](../logic-errors/athena-pos-sync-review-workspace-boundaries-2026-06-19.md)
-- [Athena Open Work Resolution Ownership](./athena-open-work-resolution-ownership-2026-07-02.md)
+- [Athena Open Work Resolution Ownership](../architecture-patterns/athena-open-work-resolution-ownership-2026-07-02.md)

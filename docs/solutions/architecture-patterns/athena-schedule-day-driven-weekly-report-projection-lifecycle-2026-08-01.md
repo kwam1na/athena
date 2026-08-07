@@ -27,7 +27,7 @@ tags:
   - "amendments"
   - "dirty-marker"
   - "legacy-evidence"
-delivery_diff_fingerprint: 9699b291a6900a92d1e3017762f7da8fa41a23dc717dcb256b4f040cea1eaa35
+delivery_diff_fingerprint: fe76fccea7917f55e2d5fa687cef14fd82034e7c9e03d4782d8cca7a9c80ffb3
 ---
 
 # Athena Weekly Reports Use a Schedule-Day-Driven Projection Lifecycle
@@ -123,9 +123,9 @@ fail-closed behavior for actual foreign-currency facts.
 
 ## Related
 
-- [Athena reporting read-optimized redesign](../../architecture/athena-reporting-read-optimized-redesign-2026-07-28.md)
-- [Athena Store Schedule foundation](../../architecture/athena-store-schedule-foundation-2026-06-27.md)
-- [Athena Daily Close history snapshots](../../logic-errors/athena-daily-close-history-snapshots-2026-05-09.md)
+- [Athena reporting read-optimized redesign](../architecture/athena-reporting-read-optimized-redesign-2026-07-28.md)
+- [Athena Store Schedule foundation](../architecture/athena-store-schedule-foundation-2026-06-27.md)
+- [Athena Daily Close history snapshots](../logic-errors/athena-daily-close-history-snapshots-2026-05-09.md)
 - [Athena report prior-period comparisons](athena-report-prior-period-comparisons-2026-08-01.md)
 - [Athena reporting period focus and lifecycle authority](athena-reporting-period-focus-and-lifecycle-authority-2026-08-01.md)
 

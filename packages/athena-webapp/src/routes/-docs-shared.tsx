@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 
 import type { DeliveryReportMeta, SolutionDocMeta } from "@/lib/docs/content";
@@ -69,6 +70,70 @@ export function SolutionDocCard({ doc }: { doc: SolutionDocMeta }) {
         {doc.title}
       </h3>
     </Link>
+  );
+}
+
+/**
+ * Cross-link between the two halves of one delivery. Rendered only when the
+ * shared delivery fingerprint actually matched — an absent section means the
+ * companion could not be identified, not that none was written.
+ */
+function CompanionSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="mt-12 border-t border-border/70 pt-8">
+      <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {title}
+      </h2>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">{children}</div>
+    </section>
+  );
+}
+
+export function DeliveredWithReports({
+  reports,
+}: {
+  reports: DeliveryReportMeta[];
+}) {
+  if (reports.length === 0) return null;
+  return (
+    <CompanionSection
+      title={
+        reports.length === 1
+          ? "Landed-change report for this delivery"
+          : "Landed-change reports for this delivery"
+      }
+    >
+      {reports.map((report) => (
+        <DeliveryReportCard key={report.slug} report={report} />
+      ))}
+    </CompanionSection>
+  );
+}
+
+export function DeliveredWithSolutionDocs({
+  docs,
+}: {
+  docs: SolutionDocMeta[];
+}) {
+  if (docs.length === 0) return null;
+  return (
+    <CompanionSection
+      title={
+        docs.length === 1
+          ? "Solution note from this delivery"
+          : "Solution notes from this delivery"
+      }
+    >
+      {docs.map((doc) => (
+        <SolutionDocCard key={`${doc.category}/${doc.slug}`} doc={doc} />
+      ))}
+    </CompanionSection>
   );
 }
 

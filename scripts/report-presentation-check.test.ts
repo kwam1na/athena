@@ -288,6 +288,54 @@ describe("collectReportPresentationFindings", () => {
     expect(messages(html)).toEqual([]);
   });
 
+  it("rejects an in-page anchor with no matching id", () => {
+    const html = validReport().replace(
+      "<p>Summary.</p>",
+      '<p><a href="#mental-model">Jump to the model</a></p>',
+    );
+    expect(messages(html).join("\n")).toContain(
+      'in-page anchor href="#mental-model" has no matching id in the report',
+    );
+  });
+
+  it("accepts an in-page anchor the report defines an id for", () => {
+    const html = validReport()
+      .replace(
+        '<section data-report-section="mental-model">',
+        '<section data-report-section="mental-model" id="model">',
+      )
+      .replace("<p>Summary.</p>", '<p><a href="#model">Jump to the model</a></p>');
+    expect(messages(html)).toEqual([]);
+  });
+
+  it("reports each dead fragment once however often it is linked", () => {
+    const html = validReport().replace(
+      "<p>Summary.</p>",
+      '<p><a href="#gone">One</a><a href="#gone">Two</a></p>',
+    );
+    expect(
+      messages(html).filter((message) => message.includes('href="#gone"')),
+    ).toHaveLength(1);
+  });
+
+  it("rejects header metadata that is not marked data-report-meta", () => {
+    const html = validReport().replace(
+      "<dl data-report-meta>",
+      '<dl class="meta">',
+    );
+    expect(messages(html).join("\n")).toContain(
+      "header <dl> is missing data-report-meta",
+    );
+  });
+
+  it("leaves definition lists outside the header alone", () => {
+    const html = validReport().replace(
+      "<p>Summary.</p>",
+      "<dl><dt>Term</dt><dd>Body prose, not header metadata.</dd></dl>",
+    );
+    expect(messages(html)).toEqual([]);
+  });
+
   it("rejects non-kebab-case section keys", () => {
     const html = validReport({
       extraSections:

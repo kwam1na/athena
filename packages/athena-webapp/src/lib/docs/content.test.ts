@@ -56,16 +56,12 @@ describe("docs content index", () => {
 
   // A resolved ref that the index cannot serve would dead-end on the
   // not-found page, so the renderer checks the index before emitting a Link
-  // and degrades the rest to plain text. Two source docs currently need that
-  // fallback: both cite athena-open-work-resolution-ownership-2026-07-02 under
-  // `architecture`, but it lives under `architecture-patterns`. Pinning them
-  // means a NEW broken reference fails here instead of quietly joining them.
-  const KNOWN_MISCATEGORIZED_REFERENCES = [
-    "architecture-patterns/athena-operations-review-and-cash-closeout-continuity-2026-07-11 -> ../architecture/athena-open-work-resolution-ownership-2026-07-02.md",
-    "architecture/athena-pos-sync-projection-policy-boundary-2026-07-06 -> ./athena-open-work-resolution-ownership-2026-07-02.md",
-  ];
-
-  it("resolves every cross-reference to a servable doc, bar the known miscategorized pair", async () => {
+  // and degrades the rest to plain text. The corpus no longer needs that
+  // fallback anywhere: the miscategorized citations of
+  // athena-open-work-resolution-ownership-2026-07-02 (filed under
+  // `architecture`, actually under `architecture-patterns`) were repointed.
+  // Keeping the expectation empty means a NEW broken reference fails here.
+  it("resolves every cross-reference to a servable doc", async () => {
     const unserviceable: string[] = [];
 
     for (const doc of listSolutionDocs()) {
@@ -79,9 +75,7 @@ describe("docs content index", () => {
       }
     }
 
-    expect(unserviceable.sort()).toEqual(
-      [...KNOWN_MISCATEGORIZED_REFERENCES].sort(),
-    );
+    expect(unserviceable.sort()).toEqual([]);
   });
 
   it("resolves the bulk of the corpus cross-references to real docs", async () => {

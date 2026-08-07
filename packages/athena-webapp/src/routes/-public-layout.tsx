@@ -68,10 +68,14 @@ function PublicFooter() {
 export function PublicLayout({
   children,
   trackFunnelCtas = false,
+  hideDemoCta = false,
   hideSecondaryNav = false,
   showThemeToggle = false,
 }: {
   children: ReactNode;
+  // The landing page carries its own demo CTAs in the hero and closing band, so
+  // it drops the nav's; other public pages keep it as their one demo entry.
+  hideDemoCta?: boolean;
   // The marketing landing page presents the demo as its sole CTA and hides the
   // secondary nav; other public pages keep the walkthrough and sign-in links.
   hideSecondaryNav?: boolean;
@@ -80,8 +84,9 @@ export function PublicLayout({
   trackFunnelCtas?: boolean;
 }) {
   // Sticky nav: translucent (blurred) throughout so the hero mesh, page
-  // content, and paper grain read faintly through it — with its underline
-  // always drawn, firming up a touch once the reader scrolls off the top.
+  // content, and paper grain read faintly through it — firming up a touch, and
+  // drawing its underline, once the reader scrolls off the top. At the very top
+  // the nav carries no rule, so the hero opens on an uninterrupted field.
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -93,9 +98,12 @@ export function PublicLayout({
   return (
     <div className="relative min-h-svh bg-background text-foreground">
       <header
-        className={`sticky top-0 z-40 border-b border-border/70 backdrop-blur-md transition-colors duration-standard ease-standard ${scrolled
-          ? "bg-background/70 supports-[backdrop-filter]:bg-background/60"
-          : "bg-background/40 supports-[backdrop-filter]:bg-background/25"
+        // The underline fades on its own, slower clock than the background
+        // wash: it is the element the reader actually notices arriving, and at
+        // the shared 240ms it snapped in rather than drew.
+        className={`sticky top-0 z-40 border-b backdrop-blur-md [transition:border-color_var(--motion-slow)_var(--ease-standard),background-color_var(--motion-standard)_var(--ease-standard)] ${scrolled
+          ? "border-border/70 bg-background/70 supports-[backdrop-filter]:bg-background/60"
+          : "border-transparent bg-background/40 supports-[backdrop-filter]:bg-background/25"
           }`}
       >
         <nav
@@ -132,17 +140,19 @@ export function PublicLayout({
                 </Link>
               </>
             )}
-            <Link
-              to={DEMO_PATH}
-              onClick={
-                trackFunnelCtas
-                  ? () => emitLandingFunnelEvent("demo_cta")
-                  : undefined
-              }
-              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-md bg-primary px-layout-sm text-sm font-medium text-primary-foreground transition-colors duration-standard ease-standard hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:px-layout-md"
-            >
-              Try the demo
-            </Link>
+            {hideDemoCta ? null : (
+              <Link
+                to={DEMO_PATH}
+                onClick={
+                  trackFunnelCtas
+                    ? () => emitLandingFunnelEvent("demo_cta")
+                    : undefined
+                }
+                className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-md bg-primary px-layout-sm text-sm font-medium text-primary-foreground transition-colors duration-standard ease-standard hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:px-layout-md"
+              >
+                Try the demo
+              </Link>
+            )}
           </div>
         </nav>
       </header>

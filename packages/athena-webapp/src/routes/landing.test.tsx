@@ -128,6 +128,11 @@ describe("landing route", () => {
         name: /today closes where tomorrow begins/i,
       }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: /every closed day becomes the record/i,
+      }),
+    ).toBeInTheDocument();
 
     // The automation reveal pays off the hero's objection.
     expect(
@@ -144,11 +149,14 @@ describe("landing route", () => {
     const saleAmounts = screen.getAllByText(/GH₵385/);
     expect(saleAmounts.length).toBeGreaterThanOrEqual(2);
 
-    // Demo is the primary CTA (header, hero, closing band); the secondary nav
-    // stays hidden. The header labels it "Try the demo"; the hero and closing
-    // band say "Demo Athena".
+    // Demo is the primary CTA, carried by the hero and the closing band. The
+    // nav drops its own "Try the demo" here so the page's demo invitations are
+    // the story's, not the chrome's; the secondary nav stays hidden too.
+    expect(
+      screen.queryByRole("link", { name: "Try the demo" }),
+    ).not.toBeInTheDocument();
     const demoLinks = screen.getAllByRole("link", { name: /demo/i });
-    expect(demoLinks).toHaveLength(3);
+    expect(demoLinks).toHaveLength(2);
     for (const link of demoLinks) {
       expect(link).toHaveAttribute("href", "/demo");
       expect(link).not.toHaveAttribute("target", "_blank");
@@ -191,8 +199,16 @@ describe("landing route", () => {
     expect(
       screen.getByAltText(/opening handoff workspace/i),
     ).toBeInTheDocument();
+    // Recorded workspace clips: in jsdom (no IntersectionObserver) they stay
+    // on their poster frames, matching the reduced-motion path.
     expect(
-      screen.getByAltText(/daily operations workspace:/i),
+      screen.getByLabelText(/daily operations workspace/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/recorded sale at the pos register/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/reports workspace/i),
     ).toBeInTheDocument();
     // The POS hub is a live exhibit (not a shot); its manager pulse defaults to
     // the this-week window.

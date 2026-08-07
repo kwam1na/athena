@@ -10,8 +10,9 @@ Enforcement is split in two, on purpose:
 - **`bun run reports:presentation:check`** runs over every file in
   `docs/reports/*.html`, always. It enforces the *presentational* rules: the
   v2 root marker, no styling or scripting, the header and pills, one `<h2>`
-  opening each section, kebab-case keys, a well-formed quiz, and quiz/evidence
-  ordering.
+  opening each section, kebab-case keys, a well-formed quiz, quiz/evidence
+  ordering, header metadata carried on `data-report-meta`, and in-page anchors
+  that actually land.
 - **`bun run landed-report:check`** additionally requires the full narrative
   vocabulary, the key-files table, subagent evidence, and a five-question quiz
   — but only of reports authored or changed on the current branch.
@@ -82,7 +83,12 @@ The article starts with:
 
 - `<h1>` is required and must be the only `h1` in the file.
 - `<ul data-report-pills>` is required with at least one `<li>` (status pills).
-- `<dl data-report-meta>` is optional.
+- `<dl data-report-meta>` is optional, but it is the *only* definition list the
+  app renders from the header. A header `<dl>` without the attribute is content
+  the reader never sees, so the sensor rejects it rather than letting it vanish.
+- No table of contents. The app owns navigation and generates no section `id`s,
+  so an `href="#…"` only lands if the report defines that `id` itself; the
+  sensor rejects fragments that match nothing.
 
 ## Sections
 

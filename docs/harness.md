@@ -422,6 +422,8 @@ type and where the output lands.
 | `bun run architecture:check` | Run architecture boundary checks. |
 | `bun run compound:check` | Enforce the solution-note delivery guardrail. |
 | `bun run delivery:documentation-check` | Combined solution-note and landed-change-report policy check. |
+| `bun run reports:presentation:check` | Presentation contract for every `docs/reports/*.html`. |
+| `bun run docs:links:check` | Cross-references in `docs/solutions/**/*.md` resolve to servable docs. |
 | `bun run graphify:check` | Freshness gate for tracked graphify artifacts. |
 | `bun run graphify:rebuild` | Repair path for stale graphify artifacts. |
 | `bun run pre-push:review` | The pre-push gate; also runnable by hand. |
@@ -445,7 +447,7 @@ so CI and local harness runs read the same declared version.
 | --- | --- | --- |
 | Prepare | `pr:athena:prepare` | Dependency check, generated-artifact repair, then blocks if unstaged or untracked files would prevent reusable proof. |
 | Preflight | `pr:athena:preflight` | Validation-map coverage, live harness audit, audit-fixture consistency, and harness-script sibling-test policy. |
-| Validate | `pr:athena:validate` | Provider half (docs check, workflow check, Convex audit and lint, frontend lint, architecture, `tsc --noEmit`, coverage), then writes provider evidence, then the review half (harness review, inferential review, audit, graphify check). |
+| Validate | `pr:athena:validate` | Provider half (docs checks — policy, report presentation, docs cross-references — workflow check, Convex audit and lint, frontend lint, architecture, `tsc --noEmit`, coverage), then writes provider evidence, then the review half (harness review, inferential review, audit, graphify check). |
 | Record proof | `pr:athena:record-proof` | Records the git-private proof for the validated tree. |
 | Scorecard | `pr:athena:scorecard` | Runs against the current delivery-run ledger. |
 
