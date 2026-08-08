@@ -871,103 +871,113 @@ export const listRangeSkuMix = query({
   },
   handler: async (ctx, args): Promise<ReportSkuMixData> => {
     await requireReportsStoreAccess(ctx, args.storeId);
-    /**
-     * Span ceiling widened to the drill-down maximum in U8. The span is no
-     * longer what bounds this read — `RANGE_SKU_MIX_ROW_LIMIT` is, and it
-     * always was. Until U8 the client could only prove a range was cheap by
-     * being short (<=2 days), so a narrow span cap was the proxy; now it
-     * proves it directly from folded `skuDayRowCount` totals
-     * (`skuMixSyncRowProbe`) and can legitimately ask for a 120-day range
-     * that reads 3,000 rows. Rejecting that on span alone would send a read
-     * this reader can serve to the async snapshot instead.
-     *
-     * The row cap below still fails closed, and it is the real bound: no span
-     * this validator now admits can exceed it without the `.take()` tripping.
-     * The legacy movement reader keeps `RANGE_SYNC_READER_MAX_SPAN_DAYS` —
-     * it has no probe, so span remains its only proxy.
-     */
-    requireValidDateRange(
-      args.startDate,
-      args.endDate,
-      REPORT_DRILLDOWN_RANGE_MAX_DAYS,
-    );
-
-    // SKU-day density depends on both range length and catalogue breadth.
-    // Fail closed at a bounded read instead of presenting an understated mix.
-    const skuDays = await ctx.db
-      .query("reportSkuDay")
-      .withIndex("by_storeId_operatingDate_productSkuId", (q) =>
-        q
-          .eq("storeId", args.storeId)
-          .gte("operatingDate", args.startDate)
-          .lte("operatingDate", args.endDate),
-      )
-      .take(RANGE_SKU_MIX_ROW_LIMIT + 1);
-
-    if (skuDays.length > RANGE_SKU_MIX_ROW_LIMIT) {
-      throw new Error(
-        "SKU mix covers too much activity to summarize accurately. Choose a shorter range.",
-      );
-    }
-
-    const unitsBySku = new Map<Id<"productSku">, number>();
-    for (const row of skuDays) {
-      unitsBySku.set(
-        row.productSkuId,
-        (unitsBySku.get(row.productSkuId) ?? 0) + row.unitsSold,
-      );
-    }
-
-    const ranked = Array.from(unitsBySku, ([productSkuId, unitsSold]) => ({
-      productSkuId,
-      unitsSold,
-    }))
-      .filter((row) => row.unitsSold > 0)
-      .sort(
-        (left, right) =>
-          right.unitsSold - left.unitsSold ||
-          String(left.productSkuId).localeCompare(String(right.productSkuId)),
-      );
-    const totalUnitsSold = ranked.reduce(
-      (total, row) => total + row.unitsSold,
-      0,
-    );
-    const leadingRows = ranked.slice(0, RANGE_SKU_MIX_VISIBLE_LIMIT);
-    const rows: ReportSkuMixData["rows"] = await Promise.all(
-      leadingRows.map(async (row) => {
-        const identity = await resolveSkuIdentity(ctx, row.productSkuId);
-        return {
-          key: String(row.productSkuId),
-          productSkuId: String(row.productSkuId),
-          label:
-            identity?.sku ?? identity?.displayName ?? String(row.productSkuId),
-          unitsSold: row.unitsSold,
-          shareBasisPoints:
-            totalUnitsSold === 0
-              ? 0
-              : Math.round((row.unitsSold / totalUnitsSold) * 10_000),
-          ...(identity ? { identity } : {}),
-        };
-      }),
-    );
-    const otherUnitsSold = ranked
-      .slice(RANGE_SKU_MIX_VISIBLE_LIMIT)
-      .reduce((total, row) => total + row.unitsSold, 0);
-
-    if (otherUnitsSold > 0) {
-      rows.push({
-        key: "other",
-        label: "Other SKUs",
-        unitsSold: otherUnitsSold,
-        shareBasisPoints: Math.round(
-          (otherUnitsSold / totalUnitsSold) * 10_000,
-        ),
-      });
-    }
-
-    return { rows, totalUnitsSold, skuCount: ranked.length };
+    return readRangeSkuMixWithCtx(ctx, args);
   },
 });
+
+/**
+ * Reports-owned bounded SKU-mix reader. Internal report consumers use this
+ * seam so browser views and generated reports share one ranking contract,
+ * identity hydration path, and overflow posture.
+ */
+export async function readRangeSkuMixWithCtx(
+  ctx: QueryCtx,
+  args: { storeId: Id<"store">; startDate: string; endDate: string },
+): Promise<ReportSkuMixData> {
+  /**
+   * Span ceiling widened to the drill-down maximum in U8. The span is no
+   * longer what bounds this read — `RANGE_SKU_MIX_ROW_LIMIT` is, and it
+   * always was. Until U8 the client could only prove a range was cheap by
+   * being short (<=2 days), so a narrow span cap was the proxy; now it
+   * proves it directly from folded `skuDayRowCount` totals
+   * (`skuMixSyncRowProbe`) and can legitimately ask for a 120-day range
+   * that reads 3,000 rows. Rejecting that on span alone would send a read
+   * this reader can serve to the async snapshot instead.
+   *
+   * The row cap below still fails closed, and it is the real bound: no span
+   * this validator now admits can exceed it without the `.take()` tripping.
+   * The legacy movement reader keeps `RANGE_SYNC_READER_MAX_SPAN_DAYS` —
+   * it has no probe, so span remains its only proxy.
+   */
+  requireValidDateRange(
+    args.startDate,
+    args.endDate,
+    REPORT_DRILLDOWN_RANGE_MAX_DAYS,
+  );
+
+  // SKU-day density depends on both range length and catalogue breadth.
+  // Fail closed at a bounded read instead of presenting an understated mix.
+  const skuDays = await ctx.db
+    .query("reportSkuDay")
+    .withIndex("by_storeId_operatingDate_productSkuId", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .gte("operatingDate", args.startDate)
+        .lte("operatingDate", args.endDate),
+    )
+    .take(RANGE_SKU_MIX_ROW_LIMIT + 1);
+
+  if (skuDays.length > RANGE_SKU_MIX_ROW_LIMIT) {
+    throw new Error(
+      "SKU mix covers too much activity to summarize accurately. Choose a shorter range.",
+    );
+  }
+
+  const unitsBySku = new Map<Id<"productSku">, number>();
+  for (const row of skuDays) {
+    unitsBySku.set(
+      row.productSkuId,
+      (unitsBySku.get(row.productSkuId) ?? 0) + row.unitsSold,
+    );
+  }
+
+  const ranked = Array.from(unitsBySku, ([productSkuId, unitsSold]) => ({
+    productSkuId,
+    unitsSold,
+  }))
+    .filter((row) => row.unitsSold > 0)
+    .sort(
+      (left, right) =>
+        right.unitsSold - left.unitsSold ||
+        String(left.productSkuId).localeCompare(String(right.productSkuId)),
+    );
+  const totalUnitsSold = ranked.reduce(
+    (total, row) => total + row.unitsSold,
+    0,
+  );
+  const leadingRows = ranked.slice(0, RANGE_SKU_MIX_VISIBLE_LIMIT);
+  const rows: ReportSkuMixData["rows"] = await Promise.all(
+    leadingRows.map(async (row) => {
+      const identity = await resolveSkuIdentity(ctx, row.productSkuId);
+      return {
+        key: String(row.productSkuId),
+        productSkuId: String(row.productSkuId),
+        label:
+          identity?.sku ?? identity?.displayName ?? String(row.productSkuId),
+        unitsSold: row.unitsSold,
+        shareBasisPoints:
+          totalUnitsSold === 0
+            ? 0
+            : Math.round((row.unitsSold / totalUnitsSold) * 10_000),
+        ...(identity ? { identity } : {}),
+      };
+    }),
+  );
+  const otherUnitsSold = ranked
+    .slice(RANGE_SKU_MIX_VISIBLE_LIMIT)
+    .reduce((total, row) => total + row.unitsSold, 0);
+
+  if (otherUnitsSold > 0) {
+    rows.push({
+      key: "other",
+      label: "Other SKUs",
+      unitsSold: otherUnitsSold,
+      shareBasisPoints: Math.round((otherUnitsSold / totalUnitsSold) * 10_000),
+    });
+  }
+
+  return { rows, totalUnitsSold, skuCount: ranked.length };
+}
 
 // ---------------------------------------------------------------------------
 // listRangeSkuMovement

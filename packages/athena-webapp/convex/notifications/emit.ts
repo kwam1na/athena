@@ -18,6 +18,18 @@ export type EmitNotificationResult = {
   created: boolean;
 };
 
+export async function scheduleNotificationWithCtx(
+  ctx: Pick<MutationCtx, "scheduler">,
+  args: EmitNotificationArgs & { deliverAt: number },
+): Promise<Id<"_scheduled_functions">> {
+  const { deliverAt, ...notification } = args;
+  return ctx.scheduler.runAt(
+    deliverAt,
+    internal.notifications.emit.emitNotification,
+    notification,
+  );
+}
+
 // The one function domain code calls. Runs inside the domain mutation's
 // transaction; idempotent by the kind's structural dedupe key, so replayed
 // domain mutations are no-ops. Dispatch is scheduled immediately here; the

@@ -6,6 +6,7 @@ import { approvalRequestPendingPreviewProps } from "../emails/ApprovalRequestPen
 import { dailyManagerReportPreviewProps } from "../emails/DailyManagerReport";
 import { posTerminalHealthAlertPreviewProps } from "../emails/PosTerminalHealthAlert";
 import { registerCloseoutVarianceAlertPreviewProps } from "../emails/RegisterCloseoutVarianceAlert";
+import { weeklyManagerReportPreviewProps } from "../emails/WeeklyManagerReport";
 import {
   findNotificationKind,
   getNotificationKind,
@@ -69,10 +70,11 @@ const dailyReport = {
 };
 
 describe("registry catalog", () => {
-  it("registers exactly the five shipped kinds with their categories and channels", () => {
+  it("registers exactly the six shipped kinds with their categories and channels", () => {
     expect(listNotificationKinds().sort()).toEqual([
       "approvals.request_created",
       "eod.daily_manager_report",
+      "eod.weekly_manager_report",
       "pos.terminal_health",
       "register.closeout_match",
       "register.closeout_variance",
@@ -90,6 +92,9 @@ describe("registry catalog", () => {
       "cash_controls",
     );
     expect(getNotificationKind("eod.daily_manager_report").category).toBe(
+      "eod",
+    );
+    expect(getNotificationKind("eod.weekly_manager_report").category).toBe(
       "eod",
     );
     for (const kind of listNotificationKinds()) {
@@ -115,6 +120,25 @@ describe("registry catalog", () => {
       );
     }
     expect(listNotificationKinds()).not.toContain("constructor");
+  });
+});
+
+describe("weekly manager report preparation", () => {
+  it("loads the accepted baseline and renders the weekly report", async () => {
+    const acceptedWeekId = "accepted-week-1" as Id<"reportWeekAccepted">;
+    const { prepared, calls } = await prepare(
+      "eod.weekly_manager_report",
+      { acceptedWeekId },
+      [weeklyManagerReportPreviewProps],
+    );
+
+    expect(calls).toEqual([
+      "operations/weeklyManagerReportEmail:getAcceptedWeeklyManagerReportPayload",
+    ]);
+    expect(prepared?.subject).toBe(
+      "Wigclub weekly report - Aug 3–8, 2026",
+    );
+    expect(prepared?.html).toContain("Top items by units sold");
   });
 });
 
@@ -179,9 +203,9 @@ describe("registry subjects", () => {
     );
 
     expect(prepared?.subject).toBe(
-      "Wigclub approval needed - Transaction void - #532044",
+      "Wigclub approval needed - Transaction void - #532108",
     );
-    expect(prepared?.html).toContain("#532044");
+    expect(prepared?.html).toContain("#532108");
     expect(calls).toEqual([
       "operations/approvalRequestEmail:getApprovalRequestPendingPayload",
     ]);
@@ -450,6 +474,13 @@ describe("registry dedupe key recipes", () => {
       .toBe(`${prefix}:action_required`);
     expect(dedupeKey("eod.daily_manager_report", { ...base, status: "failed" }))
       .toBe(`${prefix}:action_required`);
+  });
+
+  it("keys the weekly report by its immutable accepted baseline", () => {
+    const acceptedWeekId = "accepted-week-1" as Id<"reportWeekAccepted">;
+    expect(
+      dedupeKey("eod.weekly_manager_report", { acceptedWeekId }),
+    ).toBe(`eod.weekly_manager_report:${acceptedWeekId}`);
   });
 
   it("collapses skipped and failed to one key per store-day but keeps applied and prepared distinct", () => {

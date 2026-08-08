@@ -673,7 +673,7 @@ describe("dirty-mark lifecycle", () => {
     expect(day?.skuDayRowCount).toBe(skuDays.length);
   });
 
-  it("folds a day_open mark keeping the day open, and does not re-mark it", async () => {
+  it("keeps a final scheduled day open before its close exists", async () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t, "sweep-open-day");
     allow(storeId);
@@ -681,7 +681,7 @@ describe("dirty-mark lifecycle", () => {
     await t.run(async (ctx) => {
       await ctx.db.insert("reportDay", {
         storeId,
-        operatingDate: "2026-07-28",
+        operatingDate: "2026-07-04",
         currency: "GHS",
         status: "open",
         grossSalesMinor: 0,
@@ -704,7 +704,7 @@ describe("dirty-mark lifecycle", () => {
         },
       });
     });
-    await mark(t, storeId, "2026-07-28", "day_open");
+    await mark(t, storeId, "2026-07-04", "day_open");
 
     await sweep(t);
 
@@ -720,7 +720,7 @@ describe("dirty-mark lifecycle", () => {
       ctx.db
         .query("reportDay")
         .withIndex("by_storeId_operatingDate", (q) =>
-          q.eq("storeId", storeId).eq("operatingDate", "2026-07-28"),
+          q.eq("storeId", storeId).eq("operatingDate", "2026-07-04"),
         )
         .unique(),
     );

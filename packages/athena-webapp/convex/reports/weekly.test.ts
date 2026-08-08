@@ -29,9 +29,12 @@ import {
   MAX_WEEKLY_FACTS,
   MAX_WEEKLY_LIVE_PRIOR_CUTOFF_FACTS,
   WEEKLY_SCHEDULE_READ_LIMIT,
+  acceptedTopSkuLeaders,
   foldWeekFromAcceptedFacts,
   foldWeekFromDays,
   materializeAcceptedWeek,
+  nextWeeklyReportDeliveryAt,
+  scheduleWeeklyManagerReportNotificationWithCtx,
   markWeekDirty,
   reconcileRecentAcceptedWeeksForStore,
   rebuildCurrentWeek,
@@ -46,6 +49,66 @@ afterEach(() => {
 
 const modules = import.meta.glob("../**/*.ts");
 const NOW = Date.parse("2026-07-04T12:00:00.000Z");
+
+describe("weekly report delivery schedule", () => {
+  it("schedules 8 AM on the next store-local day", () => {
+    expect(
+      nextWeeklyReportDeliveryAt({
+        acceptedAt: Date.parse("2026-08-08T20:47:00.000Z"),
+        timezone: "Africa/Accra",
+      }),
+    ).toBe(Date.parse("2026-08-09T08:00:00.000Z"));
+  });
+
+  it("uses the next local date across a timezone boundary", () => {
+    expect(
+      nextWeeklyReportDeliveryAt({
+        acceptedAt: Date.parse("2026-08-09T03:30:00.000Z"),
+        timezone: "America/New_York",
+      }),
+    ).toBe(Date.parse("2026-08-09T12:00:00.000Z"));
+  });
+
+  it("schedules one weekly intent for the accepted baseline", async () => {
+    const t = convexTest(schema, modules);
+    const storeId = await seedStore(t, "weekly-email-schedule");
+    const store = await t.run((ctx) => ctx.db.get("store", storeId));
+    if (!store) throw new Error("missing fixture store");
+    const acceptedWeekId = "accepted-week-1" as Id<"reportWeekAccepted">;
+
+    const scheduledId = await t.run((ctx) =>
+      scheduleWeeklyManagerReportNotificationWithCtx(ctx, {
+          acceptedAt: Date.now(),
+          acceptedWeekId,
+          organizationId: store.organizationId,
+          storeId,
+          timezone: "Africa/Accra",
+      }),
+    );
+    const scheduled = await t.run((ctx) =>
+      ctx.db.system.get("_scheduled_functions", scheduledId),
+    );
+
+    expect(scheduled).toMatchObject({
+      args: [
+        {
+          kind: "eod.weekly_manager_report",
+          organizationId: store.organizationId,
+          payload: { acceptedWeekId },
+          storeId,
+          subjectId: String(acceptedWeekId),
+          subjectType: "reportWeekAccepted",
+        },
+      ],
+      name: "notifications/emit:emitNotification",
+      scheduledTime: nextWeeklyReportDeliveryAt({
+        acceptedAt: Date.now(),
+        timezone: "Africa/Accra",
+      }),
+      state: { kind: "pending" },
+    });
+  });
+});
 
 function period() {
   const result = resolveWeeklyPeriod({
@@ -121,6 +184,43 @@ function fact(overrides: Partial<Doc<"reportFact">> = {}) {
     ...overrides,
   } as Doc<"reportFact">;
 }
+
+describe("accepted weekly SKU leaders", () => {
+  it("freezes the top three sold SKUs from cutoff facts", () => {
+    const skuA = "sku-a" as Id<"productSku">;
+    const skuB = "sku-b" as Id<"productSku">;
+    const skuC = "sku-c" as Id<"productSku">;
+    const skuD = "sku-d" as Id<"productSku">;
+
+    expect(
+      acceptedTopSkuLeaders({
+        currency: "GHS",
+        factsByDate: new Map([
+          [
+            "2026-08-03",
+            [
+              fact({ productSkuId: skuA, quantity: 3 }),
+              fact({ _id: "fact-2" as Id<"reportFact">, productSkuId: skuB, quantity: 5 }),
+              fact({ _id: "fact-3" as Id<"reportFact">, productSkuId: skuC, quantity: 2 }),
+              fact({ _id: "fact-4" as Id<"reportFact">, productSkuId: skuD, quantity: 1 }),
+            ],
+          ],
+          [
+            "2026-08-08",
+            [
+              fact({ _id: "fact-5" as Id<"reportFact">, productSkuId: skuA, quantity: 4 }),
+              fact({ _id: "fact-6" as Id<"reportFact">, productSkuId: skuC, quantity: 2 }),
+            ],
+          ],
+        ]),
+      }),
+    ).toEqual([
+      { productSkuId: skuA, unitsSold: 7 },
+      { productSkuId: skuB, unitsSold: 5 },
+      { productSkuId: skuC, unitsSold: 4 },
+    ]);
+  });
+});
 
 describe("foldWeekFromDays", () => {
   it("synthesizes missing scheduled report days as complete zero-activity slots", () => {
@@ -1456,6 +1556,33 @@ describe("weekly materialization", () => {
           observedCount: 1,
         },
       });
+    });
+  });
+
+  it("does not requeue an open final scheduled day before its close exists", async () => {
+    const t = convexTest(schema, modules);
+    const storeId = await seedStore(t, "weekly-open-final-day");
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("reportDay", {
+        ...day({ operatingDate: "2026-07-04", status: "open" }),
+        storeId,
+        foldVersion: 1,
+        factCount: 1,
+        lastFactRecordedAt: NOW,
+      });
+
+      expect(
+        await refreshAcceptedWeekForDate(ctx, storeId, "2026-07-04", NOW),
+      ).toBe(0);
+      expect(
+        await ctx.db
+          .query("reportDirtyDay")
+          .withIndex("by_storeId_operatingDate", (q) =>
+            q.eq("storeId", storeId).eq("operatingDate", "2026-07-04"),
+          )
+          .unique(),
+      ).toBeNull();
     });
   });
 

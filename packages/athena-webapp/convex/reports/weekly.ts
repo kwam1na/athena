@@ -27,6 +27,9 @@ import {
   hasCompletedWeeklyObservedAtVerification,
   isCloseWithinWeeklyAcceptanceFloor,
 } from "../platform/capabilityCatalog";
+import { addDaysToDate } from "./rollups";
+import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
+import { scheduleNotificationWithCtx } from "../notifications/emit";
 
 /**
  * Active/candidate schedule versions read to resolve one seven-date reporting
@@ -43,6 +46,71 @@ export const WEEKLY_DAY_READ_LIMIT = 8;
 export const MAX_WEEKLY_FACTS = 4_000;
 /** One live partial prior-day fact fold, with a single overflow probe. */
 export const MAX_WEEKLY_LIVE_PRIOR_CUTOFF_FACTS = 500;
+
+export function acceptedTopSkuLeaders(args: {
+  currency: string;
+  factsByDate: ReadonlyMap<string, readonly Doc<"reportFact">[]>;
+}): Array<{ productSkuId: Id<"productSku">; unitsSold: number }> {
+  const unitsBySku = new Map<string, number>();
+  for (const facts of args.factsByDate.values()) {
+    const { skuDays } = foldDay(args.currency, facts.map(toFoldFact));
+    for (const [productSkuId, metrics] of skuDays) {
+      unitsBySku.set(
+        productSkuId,
+        (unitsBySku.get(productSkuId) ?? 0) + metrics.unitsSold,
+      );
+    }
+  }
+
+  return Array.from(unitsBySku, ([productSkuId, unitsSold]) => ({
+    productSkuId: productSkuId as Id<"productSku">,
+    unitsSold,
+  }))
+    .filter((row) => row.unitsSold > 0)
+    .sort(
+      (left, right) =>
+        right.unitsSold - left.unitsSold ||
+        String(left.productSkuId).localeCompare(String(right.productSkuId)),
+    )
+    .slice(0, 3);
+}
+
+export function nextWeeklyReportDeliveryAt(args: {
+  acceptedAt: number;
+  timezone: string;
+}): number {
+  const acceptedLocalDate = localDateAt(args.acceptedAt, args.timezone);
+  const deliveryAt = localDateTimeAt({
+    localDate: addDaysToDate(acceptedLocalDate, 1),
+    time: { hour: 8, minute: 0, second: 0, millisecond: 0 },
+    timezone: args.timezone,
+  });
+  if (deliveryAt === null) {
+    throw new Error("Could not resolve weekly report delivery time.");
+  }
+  return deliveryAt;
+}
+
+export async function scheduleWeeklyManagerReportNotificationWithCtx(
+  ctx: Pick<MutationCtx, "scheduler">,
+  args: {
+    acceptedAt: number;
+    acceptedWeekId: Id<"reportWeekAccepted">;
+    organizationId: Id<"organization">;
+    storeId: Id<"store">;
+    timezone: string;
+  },
+): Promise<Id<"_scheduled_functions">> {
+  return scheduleNotificationWithCtx(ctx, {
+    deliverAt: nextWeeklyReportDeliveryAt(args),
+    kind: "eod.weekly_manager_report",
+    organizationId: args.organizationId,
+    payload: { acceptedWeekId: args.acceptedWeekId },
+    storeId: args.storeId,
+    subjectId: String(args.acceptedWeekId),
+    subjectType: "reportWeekAccepted",
+  });
+}
 /** Recent closes inspected per store to recover a missed acceptance intent. */
 export const WEEKLY_CLOSE_RECONCILIATION_LIMIT = 16;
 /** Recent accepted frames inspected only as a missed-marker fallback. */
@@ -1377,6 +1445,10 @@ export async function materializeAcceptedWeek(args: {
     );
     return "incomplete";
   }
+  const topSkuLeaders = acceptedTopSkuLeaders({
+    currency: normalizeCurrencyCode(store.currency),
+    factsByDate,
+  });
   const frameStartAt = await periodStartAt(args.ctx, period);
   if (frameStartAt === null) return "unavailable";
   const acceptedRead = await readWeekDays(
@@ -1429,6 +1501,7 @@ export async function materializeAcceptedWeek(args: {
       included: folded.included,
       outsideSchedule: folded.outsideSchedule,
       scheduleLineage: folded.scheduleLineage,
+      topSkuLeaders,
     }),
   );
   const baselineId = await args.ctx.db.insert("reportWeekAccepted", {
@@ -1448,6 +1521,7 @@ export async function materializeAcceptedWeek(args: {
       scheduleVersionId: row.scheduleVersionId as Id<"storeSchedule"> | null,
     })),
     completeness: folded.completeness,
+    topSkuLeaders,
     lifecyclePosture: closePosture.status,
     amendmentPosture: amendment ? "amended" : "none",
     inventoryAttention: acceptedInventoryFromClose(close, frameStartAt),
@@ -1455,6 +1529,20 @@ export async function materializeAcceptedWeek(args: {
     amendment,
     priorPeriod,
     variancePosture: computeWeeklyVariancePosture(period, acceptedDays),
+  });
+  const deliverySchedule = await getStoreScheduleContextForStoreAtWithCtx(
+    args.ctx,
+    { at: acceptedAt, storeId: args.storeId },
+  );
+  if (deliverySchedule.context.kind !== "resolved") {
+    throw new Error("Accepted weekly report has no delivery timezone.");
+  }
+  await scheduleWeeklyManagerReportNotificationWithCtx(args.ctx, {
+    acceptedAt,
+    acceptedWeekId: baselineId,
+    organizationId: store.organizationId,
+    storeId: args.storeId,
+    timezone: deliverySchedule.context.timezone,
   });
   const current = await args.ctx.db
     .query("reportWeekCurrent")
@@ -1732,7 +1820,22 @@ export async function refreshAcceptedWeekForDate(
         (left.completedAt ?? left.updatedAt),
     )[0];
   if (!close) {
-    await retainAcceptedWeekDateRetry(ctx, storeId, operatingDate, now);
+    // An open final scheduled day has no baseline to recover yet. Requeueing
+    // it as `late_fact` gives the next day fold lifecycle authority and
+    // demotes the current day to `provisional`; the following sale reasserts
+    // `day_open`, producing an open/provisional loop. Completing Daily Close
+    // emits `close_accepted`, which is the durable retry signal once a close
+    // actually exists. Historical or missing day evidence keeps the retry:
+    // its delayed close may have fallen outside the bounded recovery scan.
+    const finalDay = await ctx.db
+      .query("reportDay")
+      .withIndex("by_storeId_operatingDate", (q) =>
+        q.eq("storeId", storeId).eq("operatingDate", operatingDate),
+      )
+      .unique();
+    if (finalDay?.status !== "open") {
+      await retainAcceptedWeekDateRetry(ctx, storeId, operatingDate, now);
+    }
     return 0;
   }
   // A pre-activation close will never become acceptable; do not retry it.

@@ -3,12 +3,14 @@ import { internal } from "../_generated/api";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { joinKeyComponents } from "./deliveryPolicy";
-import ApprovalRequestPending, {
+import {
+  ApprovalRequestPending,
   buildApprovalRequestPendingSubject,
 } from "../emails/ApprovalRequestPending";
 import DailyManagerReport from "../emails/DailyManagerReport";
-import PosTerminalHealthAlert from "../emails/PosTerminalHealthAlert";
-import RegisterCloseoutVarianceAlert from "../emails/RegisterCloseoutVarianceAlert";
+import { WeeklyManagerReport } from "../emails/WeeklyManagerReport";
+import { PosTerminalHealthAlert } from "../emails/PosTerminalHealthAlert";
+import { RegisterCloseoutVarianceAlert } from "../emails/RegisterCloseoutVarianceAlert";
 
 export type NotificationCategory =
   | "cash_controls"
@@ -74,6 +76,10 @@ type DailyManagerReportPayload = {
   status: DailyManagerReportSendStatus;
   preparedAt?: number;
   automationRunId?: Id<"automationRun">;
+};
+
+type WeeklyManagerReportPayload = {
+  acceptedWeekId: Id<"reportWeekAccepted">;
 };
 
 const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
@@ -239,6 +245,30 @@ const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
           ? `Action required: ${report.storeName} EOD Review - ${report.operatingDate}`
           : `${report.storeName} daily report - ${report.operatingDate}`,
         html: await render(DailyManagerReport(report)),
+      };
+    },
+  },
+  "eod.weekly_manager_report": {
+    category: "eod",
+    channels: ["email"],
+    dedupeKey: (payload) => {
+      const p = payload as WeeklyManagerReportPayload;
+      return joinKeyComponents([
+        "eod.weekly_manager_report",
+        String(p.acceptedWeekId),
+      ]);
+    },
+    prepareEmail: async (ctx, payload) => {
+      const p = payload as WeeklyManagerReportPayload;
+      const report = await ctx.runQuery(
+        internal.operations.weeklyManagerReportEmail
+          .getAcceptedWeeklyManagerReportPayload,
+        { acceptedWeekId: p.acceptedWeekId },
+      );
+      if (!report) return null;
+      return {
+        subject: `${report.storeName} weekly report - ${report.operatingDate}`,
+        html: await render(WeeklyManagerReport(report)),
       };
     },
   },

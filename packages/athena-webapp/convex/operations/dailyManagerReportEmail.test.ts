@@ -9,6 +9,7 @@ import type { MutationCtx } from "../_generated/server";
 import schema from "../schema";
 import {
   buildCashMetrics,
+  buildDailyTopMoversUrl,
   buildPaymentTotals,
   buildPreparedBlockers,
   buildSummaryMetrics,
@@ -565,6 +566,60 @@ describe("units sold in the closed-day report payload", () => {
     });
   }
 
+  async function insertSkuDay(
+    ctx: MutationCtx,
+    seeded: { organizationId: Id<"organization">; storeId: Id<"store"> },
+    name: string,
+    sku: string,
+    unitsSold: number,
+  ) {
+    const categoryId = await ctx.db.insert("category", {
+      name: `${name} category`,
+      slug: `${sku.toLowerCase()}-category`,
+      storeId: seeded.storeId,
+    });
+    const subcategoryId = await ctx.db.insert("subcategory", {
+      categoryId,
+      name: `${name} subcategory`,
+      slug: `${sku.toLowerCase()}-subcategory`,
+      storeId: seeded.storeId,
+    });
+    const productId = await ctx.db.insert("product", {
+      availability: "live",
+      categoryId,
+      createdByUserId: (await ctx.db.get("organization", seeded.organizationId))!
+        .createdByUserId,
+      currency: "GHS",
+      inventoryCount: 10,
+      name,
+      organizationId: seeded.organizationId,
+      slug: sku.toLowerCase(),
+      storeId: seeded.storeId,
+      subcategoryId,
+    });
+    const productSkuId = await ctx.db.insert("productSku", {
+      images: [],
+      inventoryCount: 10,
+      price: 100,
+      productId,
+      quantityAvailable: 10,
+      sku,
+      storeId: seeded.storeId,
+    });
+    await ctx.db.insert("reportSkuDay", {
+      grossProfitMinor: 0,
+      grossSalesMinor: 0,
+      netSalesMinor: 0,
+      operatingDate: OPERATING_DATE,
+      productSkuId,
+      refundsMinor: 0,
+      storeId: seeded.storeId,
+      uncostedRevenueMinor: 0,
+      unitsReturned: 0,
+      unitsSold,
+    });
+  }
+
   const unitsMetric = (payloads: Array<{ summaryMetrics?: unknown }>) =>
     (
       (payloads[0].summaryMetrics ?? []) as Array<{
@@ -604,6 +659,44 @@ describe("units sold in the closed-day report payload", () => {
       value: "1,000",
       comparison: "25% higher vs prior day",
     });
+  });
+
+  it("includes the three top items and links to Top movers for the report day", async () => {
+    process.env.ATHENA_BASE_URL = "https://athena.example.com";
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(seedStore);
+    await t.run(async (ctx) => {
+      await insertCompletedClose(ctx, seeded, OPERATING_DATE);
+      await insertReportDay(ctx, seeded.storeId, OPERATING_DATE, 20);
+      await insertSkuDay(ctx, seeded, "Silk Press", "SP-18", 8);
+      await insertSkuDay(ctx, seeded, "Body Wave", "BW-20", 6);
+      await insertSkuDay(ctx, seeded, "Lace Closure", "LC-14", 4);
+      await insertSkuDay(ctx, seeded, "Deep Wave", "DW-22", 2);
+    });
+
+    const [payload] = await askForDay(t, seeded.storeId);
+    expect(payload.topItems).toEqual([
+      { name: "Silk Press", detail: "SP-18", unitsSold: 8 },
+      { name: "Body Wave", detail: "BW-20", unitsSold: 6 },
+      { name: "Lace Closure", detail: "LC-14", unitsSold: 4 },
+    ]);
+    expect(payload.topItemsUrl).toBe(
+      buildDailyTopMoversUrl({
+        operatingDate: OPERATING_DATE,
+        storeSlug: "accra",
+      }),
+    );
+    const url = new URL(payload.topItemsUrl!);
+    expect(url.pathname).toBe("/accra/store/accra/reports");
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      daysEnd: OPERATING_DATE,
+      daysStart: OPERATING_DATE,
+      daysTableEnd: OPERATING_DATE,
+      daysTableStart: OPERATING_DATE,
+      selectedDay: OPERATING_DATE,
+      units: "true",
+    });
+    expect(url.searchParams.has("unitsTab")).toBe(false);
   });
 
   it("reports an unstamped legacy day — certification gates movement, not this", async () => {

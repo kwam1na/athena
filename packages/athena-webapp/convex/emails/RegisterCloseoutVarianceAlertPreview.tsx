@@ -1,4 +1,5 @@
-import RegisterCloseoutVarianceAlert, {
+import {
+  RegisterCloseoutVarianceAlert,
   registerCloseoutVarianceAlertPreviewProps,
 } from "./RegisterCloseoutVarianceAlert";
 

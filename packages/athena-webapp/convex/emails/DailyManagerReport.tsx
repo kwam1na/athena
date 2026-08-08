@@ -6,12 +6,14 @@ import {
   Container,
   Head,
   Html,
+  Link,
   Preview,
   Row,
   Section,
   Text,
 } from "@react-email/components";
 import { currencyFormatter } from "../utils";
+import { operationalEmailOutlineButton } from "./emailOperationalCtaStyles";
 
 type DailyReportStatus =
   | "applied"
@@ -54,6 +56,18 @@ export interface DailyManagerReportPaymentTotal {
   transactionCountComparison?: string;
 }
 
+export interface DailyManagerReportSection {
+  title: string;
+  message: string;
+  meta?: string;
+}
+
+export interface DailyManagerReportTopItem {
+  name: string;
+  unitsSold: number;
+  detail?: string;
+}
+
 export interface DailyManagerReportProps {
   storeName: string;
   operatingDate: string;
@@ -72,89 +86,107 @@ export interface DailyManagerReportProps {
   cashMetrics?: DailyManagerReportMetric[];
   paymentTotals?: DailyManagerReportPaymentTotal[];
   notes?: string;
+  presentation?: DailyManagerReportPresentation;
+  attentionItems?: DailyManagerReportItem[];
+  reportSections?: DailyManagerReportSection[];
+  topItems?: DailyManagerReportTopItem[];
+  topItemsUrl?: string;
 }
 
-const sampleBlockers: DailyManagerReportItem[] = [
-  {
-    title: "Register session is still open",
-    message: "Front Counter is still open.",
-    meta: "Resolve before completing EOD Review.",
-    tone: "danger",
-  },
-];
+export interface DailyManagerReportPresentation {
+  previewText?: string;
+  eyebrow?: string;
+  timestampLabel?: string;
+  timestampDate?: string;
+  handoffSectionTitle?: string;
+  emptyAttentionCopy?: string;
+  summarySectionTitle?: string;
+  cashSectionTitle?: string;
+  paymentSectionTitle?: string;
+  notesLabel?: string;
+  actionLabel?: string;
+  summaryMetricLayout?: "stacked" | "lead";
+  topItemsPlacement?: "after-summary" | "after-cash";
+}
 
 const previewMoney = formatReportAmount("GHS");
 
 export const dailyManagerReportPreviewProps = {
-  blockers: sampleBlockers,
+  blockers: [],
   cashMetrics: sampleCashMetricsFor(previewMoney),
   carryForwardItems: [],
-  completedAt: "8:42 PM",
+  completedAt: "8:47 PM",
   completedBy: "Athena",
-  operatingDate: "Friday, July 3",
+  operatingDate: "Saturday, Aug 8",
   paymentTotals: samplePaymentTotalsFor(previewMoney),
   reportUrl:
-    "https://athena.wigclub.store/wigclub/store/wigclub/operations/daily-close",
+    "https://athena.wigclub.store/wigclub/store/wigclub/operations/daily-close?operatingDate=2026-08-08",
   reviewedItems: sampleReviewedItemsFor(previewMoney),
-  status: "prepared",
+  status: "applied",
   storeCurrency: "GHS",
   storeName: "Wigclub",
   summaryMetrics: sampleSummaryMetricsFor(previewMoney),
+  topItems: [
+    { name: 'Silk Press 18"', detail: "SP18-NAT", unitsSold: 8 },
+    { name: 'Body Wave 20"', detail: "BW20-1B", unitsSold: 6 },
+    { name: "HD Lace Closure", detail: "HDLC-14", unitsSold: 4 },
+  ],
+  topItemsUrl:
+    "https://athena.wigclub.store/wigclub/store/wigclub/reports?daysStart=2026-08-08&daysEnd=2026-08-08&daysTableStart=2026-08-08&daysTableEnd=2026-08-08&selectedDay=2026-08-08&units=true",
 } satisfies DailyManagerReportProps;
 
 const statusCopy: Record<DailyReportStatus, DailyReportStatusCopy> = {
   applied: {
-    label: "Completed under policy",
-    preview: "EOD completion applied.",
-    summary: "Athena completed EOD Review under store policy.",
+    label: "Day closed",
+    preview: "The operating day is closed.",
+    summary: "The day is closed and the report is ready to review.",
     tone: "success",
   },
   prepared: {
-    label: "Ready for manager review",
-    preview: "EOD Review is ready for manager review.",
-    summary: "",
+    label: "Ready to close",
+    preview: "The daily close is ready for review.",
+    summary: "Review the remaining details, then complete the close.",
     tone: "warning",
   },
   skipped: {
-    label: "Manager action required",
-    preview: "EOD Review needs manager action.",
+    label: "Close needs attention",
+    preview: "The daily close needs attention.",
     summary:
-      "Athena did not close this operating day. Open EOD Review, resolve the remaining items, and complete the close.",
+      "The day is still open. Resolve the remaining items, then complete the close.",
     tone: "warning",
   },
   failed: {
-    label: "Automation needs attention",
-    preview: "EOD automation needs attention.",
+    label: "Close could not be completed",
+    preview: "The daily close could not be completed.",
     summary:
-      "Athena could not complete the automated EOD check. Open EOD Review and complete the close manually. Contact support if the workflow is unavailable.",
+      "Athena could not complete the close. Open EOD Review and finish it manually. Contact support if the workflow is unavailable.",
     tone: "danger",
   },
   dry_run: {
-    label: "Dry run",
-    preview: "EOD automation checked the workflow in dry run.",
+    label: "Review complete",
+    preview: "Athena checked the daily close without making changes.",
     summary:
-      "Athena checked EOD Review in dry run. No workflow changes were made.",
+      "Athena checked the daily close. No changes were made.",
     tone: "neutral",
   },
   disabled: {
-    label: "Automation off",
-    preview: "EOD automation is off for this store day.",
-    summary: "EOD Review automation is off for this store day.",
+    label: "Automatic close is off",
+    preview: "Automatic close is off for this operating day.",
+    summary: "Complete the close manually when the day is ready.",
     tone: "neutral",
   },
   eligible: {
-    label: "Eligible",
-    preview: "EOD Review is ready for automation.",
-    summary:
-      "Athena found EOD Review ready for automation. No workflow changes were made.",
+    label: "Ready for automatic close",
+    preview: "The operating day is ready for automatic close.",
+    summary: "Athena can complete the close when the scheduled check runs.",
     tone: "neutral",
   },
 };
 
 const unavailableStatusCopy: DailyReportStatusCopy = {
-  label: "Status unavailable",
-  preview: "Daily report status was not included.",
-  summary: "Open Athena to review the daily report.",
+  label: "Report needs review",
+  preview: "The daily report needs review.",
+  summary: "Open Athena to review this report.",
   tone: "neutral",
 };
 
@@ -176,38 +208,49 @@ export default function DailyManagerReport({
   cashMetrics = [],
   paymentTotals = [],
   notes,
+  presentation,
+  attentionItems: suppliedAttentionItems,
+  reportSections = [],
+  topItems = [],
+  topItemsUrl,
 }: DailyManagerReportProps) {
   const copy = statusCopy[status] ?? unavailableStatusCopy;
   const resolvedStatusLabel = statusLabel ?? copy.label;
   const resolvedStatusSummary = statusSummary ?? copy.summary;
-  const previewText = `${storeName ?? "Athena"} EOD: ${resolvedStatusLabel}. ${copy.preview}`;
+  const previewText =
+    presentation?.previewText ??
+    `${storeName ?? "Athena"} EOD: ${resolvedStatusLabel}. ${copy.preview}`;
   const timestampLabel =
-    status === "applied"
+    presentation?.timestampLabel ??
+    (status === "applied"
       ? "Closed"
       : status === "prepared"
         ? "Prepared"
-        : "Updated";
-  const attentionItems = buildAttentionItems({
-    blockers,
-    carryForwardItems,
-  });
+        : "Updated");
+  const attentionItems =
+    suppliedAttentionItems ??
+    buildAttentionItems({ blockers, carryForwardItems });
   const actionRequired = status === "skipped" || status === "failed";
   const hasRegisterSessionBlocker = blockers.some(isRegisterSessionBlocker);
   const expectedCashMetrics = cashMetrics.filter((metric) =>
     /expected cash/i.test(metric.label),
   );
-  const handoffSectionTitle = actionRequired
-    ? "Required action"
-    : status === "prepared"
-      ? "Manager review"
-      : blockers.length > 0
-        ? "Before close"
-        : "Next opening";
-  const emptyAttentionCopy = actionRequired
-    ? "Open EOD Review and complete the close manually."
-    : status === "prepared"
-      ? "Review EOD Review before completing the store day."
-      : "No follow-up needed for this operating day.";
+  const handoffSectionTitle =
+    presentation?.handoffSectionTitle ??
+    (actionRequired
+      ? "Required action"
+      : status === "prepared"
+        ? "Manager review"
+        : blockers.length > 0
+          ? "Before close"
+          : "Next opening");
+  const emptyAttentionCopy =
+    presentation?.emptyAttentionCopy ??
+    (actionRequired
+      ? "Open EOD Review and complete the close manually."
+      : status === "prepared"
+        ? "Review EOD Review before completing the store day."
+        : "No follow-up needed for this operating day.");
   const attentionSummary = buildAttentionSummary({
     blockers: blockers.length,
     carryForward: carryForwardItems.length,
@@ -230,11 +273,16 @@ export default function DailyManagerReport({
         >
           <Section style={styles.header}>
             <Text style={styles.eyebrow}>
-              {actionRequired ? "Athena EOD alert" : "Athena daily report"}
+              {presentation?.eyebrow ??
+                (actionRequired ? "Athena EOD alert" : "Athena daily report")}
             </Text>
             <Text style={styles.title}>{storeName}</Text>
             <Text style={styles.subtitle}>
-              {operatingDate} | {timestampLabel} at {completedAt} by{" "}
+              {operatingDate} | {timestampLabel}
+              {presentation?.timestampDate
+                ? ` ${presentation.timestampDate}`
+                : ""}{" "}
+              at {completedAt} by{" "}
               {completedBy}
             </Text>
           </Section>
@@ -242,8 +290,9 @@ export default function DailyManagerReport({
           <Section style={statusPanelStyleFor(copy.tone)}>
             <Row>
               <Column style={styles.statusColumn}>
-                <Text style={styles.statusLabel}>Status</Text>
-                <Text style={styles.statusTitle}>{resolvedStatusLabel}</Text>
+                <Text style={styles.statusTitleStandalone}>
+                  {resolvedStatusLabel}
+                </Text>
                 {resolvedStatusSummary ? (
                   <Text style={styles.statusSummary}>
                     {resolvedStatusSummary}
@@ -282,12 +331,25 @@ export default function DailyManagerReport({
           </Section>
 
           <Section style={styles.separatedSection}>
-            <SectionHeading title="Operating summary" quietTitle />
-            <OperatingSummaryGrid metrics={summaryMetrics} />
+            <SectionHeading
+              title={presentation?.summarySectionTitle ?? "Operating summary"}
+              quietTitle
+            />
+            <OperatingSummaryGrid
+              layout={presentation?.summaryMetricLayout}
+              metrics={summaryMetrics}
+            />
           </Section>
 
+          {presentation?.topItemsPlacement !== "after-cash" ? (
+            <TopItemsSection items={topItems} url={topItemsUrl} />
+          ) : null}
+
           <Section style={styles.separatedSection}>
-            <SectionHeading title="Cash position" quietTitle />
+            <SectionHeading
+              title={presentation?.cashSectionTitle ?? "Cash position"}
+              quietTitle
+            />
             {hasRegisterSessionBlocker ? (
               <>
                 {expectedCashMetrics.length > 0 ? (
@@ -303,16 +365,35 @@ export default function DailyManagerReport({
             )}
           </Section>
 
+          {presentation?.topItemsPlacement === "after-cash" ? (
+            <TopItemsSection items={topItems} url={topItemsUrl} />
+          ) : null}
+
           {paymentTotals.length > 0 && (
             <Section style={styles.separatedSection}>
-              <SectionHeading title="Payment mix" quietTitle />
+              <SectionHeading
+                title={presentation?.paymentSectionTitle ?? "Payment mix"}
+                quietTitle
+              />
               <PaymentTotalsGrid payments={paymentTotals} />
             </Section>
           )}
 
+          {reportSections.map((section) => (
+            <Section key={section.title} style={styles.separatedSection}>
+              <SectionHeading title={section.title} quietTitle />
+              <Text style={styles.reportSectionMessage}>{section.message}</Text>
+              {section.meta ? (
+                <Text style={styles.reportSectionMeta}>{section.meta}</Text>
+              ) : null}
+            </Section>
+          ))}
+
           {notes && (
             <Section style={styles.noteSection}>
-              <Text style={styles.noteLabel}>Close notes</Text>
+              <Text style={styles.noteLabel}>
+                {presentation?.notesLabel ?? "Close notes"}
+              </Text>
               <Text style={styles.noteText}>{notes}</Text>
             </Section>
           )}
@@ -323,7 +404,8 @@ export default function DailyManagerReport({
               style={actionRequired ? styles.buttonPrimary : styles.button}
             >
               <span style={styles.buttonLabel}>
-                {actionRequired ? "Open EOD Review" : "View EOD Review"}
+                {presentation?.actionLabel ??
+                  (actionRequired ? "Open EOD Review" : "View EOD Review")}
               </span>
               <span aria-hidden="true" style={styles.buttonIcon}>
                 ↗
@@ -428,9 +510,9 @@ function sampleSummaryMetricsFor(
   money: (amount: number) => string,
 ): DailyManagerReportMetric[] {
   return [
-    { label: "Sales", value: money(12430), detail: "84 transactions" },
-    { label: "Expenses", value: money(340), detail: "1 report" },
-    { label: "Voids", value: "1" },
+    { label: "Net sales", value: money(1935) },
+    { label: "Units sold", value: "23" },
+    { label: "Transactions", value: "5" },
   ];
 }
 
@@ -438,9 +520,9 @@ function sampleCashMetricsFor(
   money: (amount: number) => string,
 ): DailyManagerReportMetric[] {
   return [
-    { label: "Expected cash", value: money(1244) },
-    { label: "Counted cash", value: money(1201.82) },
-    { label: "Net variance", value: money(-42.18) },
+    { label: "Expected cash", value: money(615) },
+    { label: "Counted cash", value: money(573) },
+    { label: "Net variance", value: money(-42) },
   ];
 }
 
@@ -448,9 +530,9 @@ function samplePaymentTotalsFor(
   money: (amount: number) => string,
 ): DailyManagerReportPaymentTotal[] {
   return [
-    { method: "Cash", amount: money(1201.82), transactionCount: 18 },
-    { method: "Card", amount: money(8420), transactionCount: 52 },
-    { method: "Mobile money", amount: money(2808.18), transactionCount: 14 },
+    { method: "Cash", amount: money(615), transactionCount: 2 },
+    { method: "Card", amount: money(820), transactionCount: 2 },
+    { method: "Mobile money", amount: money(500), transactionCount: 1 },
   ];
 }
 
@@ -540,29 +622,84 @@ function AttentionMetricGrid({
 }
 
 function OperatingSummaryGrid({
+  layout = "stacked",
   metrics,
 }: {
+  layout?: "stacked" | "lead";
   metrics: DailyManagerReportMetric[];
 }) {
+  if (layout === "lead" && metrics.length > 0) {
+    const [leadMetric, ...supportingMetrics] = metrics;
+
+    return (
+      <Section style={styles.operatingGrid}>
+        <OperatingMetric metric={leadMetric} />
+        {supportingMetrics.length > 0 ? (
+          <SummaryMetricGrid metrics={supportingMetrics} />
+        ) : null}
+      </Section>
+    );
+  }
+
   return (
     <Section style={styles.operatingGrid}>
       {metrics.map((metric) => (
-        <Section key={metric.label} style={styles.operatingMetric}>
-          <Text style={styles.operatingLabel}>{metric.label}</Text>
-          <Text style={styles.operatingValue}>{metric.value}</Text>
-          {metric.detail ? (
-            <Text style={styles.operatingDetail}>{metric.detail}</Text>
-          ) : null}
-          <MetricComparison
-            comparison={metric.comparison}
-            detailComparison={metric.detailComparison}
-            detailLabel={comparisonDetailLabel(metric.detail)}
-            primaryLabel={
-              metric.detail ? metric.label.toLowerCase() : undefined
-            }
-          />
-        </Section>
+        <OperatingMetric key={metric.label} metric={metric} />
       ))}
+    </Section>
+  );
+}
+
+function TopItemsSection({
+  items,
+  url,
+}: {
+  items: DailyManagerReportTopItem[];
+  url?: string;
+}) {
+  if (items.length === 0 || !url) return null;
+
+  return (
+    <Section style={styles.separatedSection}>
+      <SectionHeading title="Top items by units sold" quietTitle />
+      <Section style={styles.topItemsList}>
+        {items.slice(0, 3).map((item, index) => (
+          <Row key={`${item.name}-${index}`} style={styles.topItemRow}>
+            <Column>
+              <Text style={styles.topItemName}>{item.name}</Text>
+              {item.detail ? (
+                <Text style={styles.topItemDetail}>{item.detail}</Text>
+              ) : null}
+            </Column>
+            <Column style={styles.topItemUnitsColumn}>
+              <Text style={styles.topItemUnits}>
+                {`${item.unitsSold} ${item.unitsSold === 1 ? "unit" : "units"}`}
+              </Text>
+            </Column>
+          </Row>
+        ))}
+      </Section>
+      <Link href={url} style={styles.topItemsLink}>
+        View all top movers ↗
+      </Link>
+    </Section>
+  );
+}
+
+function OperatingMetric({ metric }: { metric: DailyManagerReportMetric }) {
+  return (
+    <Section style={styles.operatingMetric}>
+      <Text style={styles.operatingLabel}>{metric.label}</Text>
+      <Text style={styles.operatingValue}>{metric.value}</Text>
+      {metric.detail ? (
+        <Text style={styles.operatingDetail}>{metric.detail}</Text>
+      ) : null}
+      <MetricComparison
+        comparison={metric.comparison}
+        detailComparison={metric.detailComparison}
+        detailLabel={comparisonDetailLabel(metric.detail)}
+        primaryLabel={metric.detail ? metric.label.toLowerCase() : undefined}
+      />
     </Section>
   );
 }
@@ -837,30 +974,10 @@ const styles: Record<string, CSSProperties> = {
     padding: "36px 0",
   },
   button: {
-    backgroundColor: "transparent",
-    border: `1px solid ${colors.border}`,
-    borderRadius: "6px",
-    color: colors.foreground,
-    display: "inline-block",
-    fontFamily: fontSans,
-    fontSize: "13px",
-    fontWeight: 600,
-    lineHeight: "20px",
-    padding: "10px 14px",
-    textDecoration: "none",
+    ...operationalEmailOutlineButton,
   },
   buttonPrimary: {
-    backgroundColor: colors.foreground,
-    border: `1px solid ${colors.foreground}`,
-    borderRadius: "6px",
-    color: colors.raised,
-    display: "inline-block",
-    fontFamily: fontSans,
-    fontSize: "13px",
-    fontWeight: 600,
-    lineHeight: "20px",
-    padding: "10px 14px",
-    textDecoration: "none",
+    ...operationalEmailOutlineButton,
   },
   buttonIcon: {
     display: "inline-block",
@@ -985,6 +1102,20 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: "36px",
     margin: 0,
   },
+  reportSectionMessage: {
+    color: colors.foreground,
+    fontSize: "18px",
+    fontWeight: 500,
+    letterSpacing: "-0.01em",
+    lineHeight: "25px",
+    margin: "18px 0 0",
+  },
+  reportSectionMeta: {
+    color: colors.muted,
+    fontSize: "13px",
+    lineHeight: "19px",
+    margin: "7px 0 0",
+  },
   paymentDetail: {
     color: colors.muted,
     fontSize: "11px",
@@ -1073,15 +1204,6 @@ const styles: Record<string, CSSProperties> = {
   statusColumn: {
     verticalAlign: "top",
   },
-  statusLabel: {
-    color: colors.muted,
-    fontSize: "11px",
-    fontWeight: 700,
-    letterSpacing: "0.06em",
-    lineHeight: "16px",
-    margin: 0,
-    textTransform: "uppercase",
-  },
   statusPanel: {
     backgroundColor: colors.surface,
     borderBottom: `1px solid ${colors.border}`,
@@ -1094,13 +1216,13 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: "19px",
     margin: "6px 0 0",
   },
-  statusTitle: {
+  statusTitleStandalone: {
     color: colors.foreground,
     fontSize: "20px",
     fontWeight: 600,
     letterSpacing: "-0.01em",
     lineHeight: "26px",
-    margin: "5px 0 0",
+    margin: 0,
   },
   subtitle: {
     color: colors.muted,
@@ -1115,6 +1237,49 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.025em",
     lineHeight: "37px",
     margin: "0 0 7px",
+  },
+  topItemDetail: {
+    color: colors.muted,
+    fontSize: "11px",
+    lineHeight: "16px",
+    margin: "3px 0 0",
+  },
+  topItemName: {
+    color: colors.foreground,
+    fontSize: "13px",
+    fontWeight: 600,
+    lineHeight: "19px",
+    margin: 0,
+  },
+  topItemRow: {
+    borderBottom: `1px solid ${colors.border}`,
+    padding: "12px 0",
+  },
+  topItemUnits: {
+    color: colors.foreground,
+    fontFamily: fontNumeric,
+    fontSize: "13px",
+    fontWeight: 600,
+    lineHeight: "19px",
+    margin: 0,
+    whiteSpace: "nowrap",
+  },
+  topItemUnitsColumn: {
+    textAlign: "right",
+    verticalAlign: "top",
+    width: "92px",
+  },
+  topItemsLink: {
+    color: colors.foreground,
+    display: "inline-block",
+    fontSize: "12px",
+    fontWeight: 600,
+    lineHeight: "18px",
+    marginTop: "16px",
+    textDecoration: "none",
+  },
+  topItemsList: {
+    marginTop: "8px",
   },
   summaryDetail: {
     color: colors.muted,
