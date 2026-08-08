@@ -10,6 +10,7 @@ import schema from "../schema";
 import {
   buildCashMetrics,
   buildPaymentTotals,
+  buildPreparedBlockers,
   buildSummaryMetrics,
   resolveAppUrl,
 } from "./dailyManagerReportEmail";
@@ -98,6 +99,33 @@ describe("daily manager report email URLs", () => {
         money,
       ),
     ).toContainEqual({ label: "Voids", value: "2" });
+  });
+
+  it("identifies the terminal and register for an open-session blocker", () => {
+    expect(
+      buildPreparedBlockers({
+        blockers: [
+          {
+            category: "register_session",
+            message:
+              "Close the register session before completing the end of day review.",
+            metadata: {
+              register: "Register 3",
+              terminal: "Front Counter",
+            },
+            severity: "blocker",
+            title: "Register session is still open",
+          },
+        ],
+      } as never),
+    ).toEqual([
+      {
+        message:
+          "Front Counter · Register 3. Close the register session before completing the end of day review.",
+        title: "Register session is still open",
+        tone: "danger",
+      },
+    ]);
   });
 
   it("builds cash metrics from register expected and counted totals", () => {

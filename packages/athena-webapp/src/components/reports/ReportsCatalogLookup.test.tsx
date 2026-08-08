@@ -74,6 +74,16 @@ function result(
 }
 
 describe("ReportsCatalogLookup", () => {
+  it("keeps the search container focus ring transparent", () => {
+    render(
+      <ReportsCatalogLookup endDate="2026-07-29" startDate="2026-06-30" />,
+    );
+
+    expect(
+      screen.getByTestId("reports-catalog-lookup").firstElementChild,
+    ).toHaveClass("focus-within:ring-transparent");
+  });
+
   beforeEach(() => {
     activeStoreId = "store-1";
     sharedDemoContext = null;
@@ -247,7 +257,14 @@ describe("ReportsCatalogLookup", () => {
       "123456789012",
     );
 
-    expect(screen.getByText(/Archived/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Archived product")).toHaveClass(
+      "opacity-45",
+    );
+    expect(
+      screen
+        .getByRole("heading", { name: "Body Wave Bundle" })
+        .parentElement?.parentElement?.parentElement,
+    ).toHaveClass("[&_span]:opacity-45");
     expect(screen.getByText(/Refine your search/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /BW-18/ })).toBeEnabled();
     expect(

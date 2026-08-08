@@ -541,6 +541,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/ui/button.test.tsx`](../../src/components/ui/button.test.tsx)
 - [`src/components/ui/calendar.test.tsx`](../../src/components/ui/calendar.test.tsx)
 - [`src/components/ui/input-otp.test.tsx`](../../src/components/ui/input-otp.test.tsx)
+- [`src/components/ui/input.test.tsx`](../../src/components/ui/input.test.tsx)
 - [`src/components/ui/primitives.test.tsx`](../../src/components/ui/primitives.test.tsx)
 - [`src/components/ui/relative-timestamp.test.tsx`](../../src/components/ui/relative-timestamp.test.tsx)
 - [`src/components/ui/sidebar.test.tsx`](../../src/components/ui/sidebar.test.tsx)

@@ -1333,6 +1333,28 @@ describe("getSkuDetail", () => {
     expect(result?.identity?.quantityAvailable).toBe(10);
   });
 
+  it("includes the archived catalog status in SKU identity", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const productSkuId = await seedSku(t, storeId);
+    await t.run(async (ctx) => {
+      const sku = await ctx.db.get("productSku", productSkuId);
+      if (!sku) throw new Error("Seeded SKU missing");
+      await ctx.db.patch("product", sku.productId, { availability: "archived" });
+    });
+
+    const result = await t.run((ctx) =>
+      handlerOf(getSkuDetail)(ctx, {
+        storeId,
+        productSkuId,
+        startDate: "2026-07-01",
+        endDate: "2026-07-28",
+      }),
+    );
+
+    expect(result?.identity?.productAvailability).toBe("archived");
+  });
+
   it("sums metrics across days, with operatingDate per row", async () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);

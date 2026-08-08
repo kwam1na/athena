@@ -372,6 +372,22 @@ describe("ReportsSkuDetailView", () => {
     expect(productHref.searchParams.get("variant")).toBe("6N2Y-JY3-5G6");
   });
 
+  it("shows a quiet archived status beside an archived SKU identity", () => {
+    useQuery.mockReturnValue({
+      days: [],
+      totals: null,
+      identity: {
+        displayName: "Archived Oshe",
+        productAvailability: "archived",
+        sku: "6N2Y-ARCHIVED",
+      },
+    });
+
+    render(<ReportsSkuDetailView {...baseProps} />);
+
+    expect(screen.getByLabelText("Archived product")).toBeInTheDocument();
+  });
+
   it("includes the weekday in a single-day reporting period", () => {
     useQuery.mockReturnValue({
       days: [],

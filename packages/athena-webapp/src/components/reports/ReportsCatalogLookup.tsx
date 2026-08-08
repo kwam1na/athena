@@ -1,10 +1,11 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { ChevronRight, Search, X } from "lucide-react";
+import { Archive, ChevronRight, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AnimatedHeight } from "@/components/common/AnimatedHeight";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -162,7 +163,7 @@ export function ReportsCatalogLookup({
     >
       <div
         className={cn(
-          "border border-border bg-surface-raised focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background",
+          "border border-border bg-surface-raised focus-within:ring-2 focus-within:ring-transparent focus-within:ring-offset-2 focus-within:ring-offset-background",
           hasQuery ? "rounded-t-xl" : "rounded-xl",
         )}
       >
@@ -236,20 +237,37 @@ export function ReportsCatalogLookup({
                     const productName = capitalizeProductName(
                       group.productName,
                     );
+                    const isArchived = group.skus.some(
+                      (option) =>
+                        option.searchResult.productAvailability === "archived",
+                    );
 
                     return (
                       <div
-                        className={
-                          groupIndex === 0
-                            ? undefined
-                            : "border-t border-border"
-                        }
+                        className={cn(
+                          groupIndex !== 0 && "border-t border-border",
+                          isArchived &&
+                            "bg-muted/30 [&_h3]:opacity-45 [&_span]:opacity-45",
+                        )}
                         key={group.productId}
                       >
                         <div className="flex items-baseline justify-between gap-layout-sm px-layout-md pb-1 pt-layout-sm">
-                          <h3 className="truncate text-sm font-semibold tracking-tight text-foreground">
-                            {productName}
-                          </h3>
+                          <div className="flex min-w-0 items-center gap-layout-sm">
+                            <h3 className="truncate text-sm font-semibold tracking-tight text-foreground">
+                              {productName}
+                            </h3>
+                            {isArchived ? (
+                              <Badge
+                                aria-label="Archived product"
+                                className="h-5 shrink-0 gap-1 border-border/80 bg-background/70 px-1.5 text-[10px] font-medium text-muted-foreground opacity-45"
+                                size="sm"
+                                variant="outline"
+                              >
+                                <Archive aria-hidden="true" className="h-3 w-3" />
+                                Archived
+                              </Badge>
+                            ) : null}
+                          </div>
                           <span className="shrink-0 text-xs text-muted-foreground">
                             {group.skus.length}{" "}
                             {group.skus.length === 1 ? "variant" : "variants"}

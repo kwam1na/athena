@@ -367,6 +367,11 @@ export default function Products() {
                   <GenericDataTable
                     data={filteredProducts}
                     columns={productColumns}
+                    getRowClassName={(row) =>
+                      row.original.availability === "archived"
+                        ? "border-y border-dashed border-border/70 bg-background hover:bg-background [&>td]:opacity-45"
+                        : undefined
+                    }
                     pageIndex={searchPageIndex}
                     onPageIndexChange={handleSearchPageIndexChange}
                     tableId="all-products-search"
