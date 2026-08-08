@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>POS Print Lifecycle Instrumentation</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="ba282280aa9bde795390030a9b56ac05644071ce61ff596155ef2e6fc6738a30">
+  <header data-report-section="header">
+    <h1>POS Print Lifecycle Instrumentation</h1>
+    <p>A delivery-candidate guide to the temporary evidence canary</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Linear V26-1181</li>
+      <li>41 focused tests green</li>
+      <li>PR pending</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Linear</dt><dd>V26-1181 — Urgent, In Progress</dd>
+      <dt>Branch</dt><dd>codex/v26-1181-pos-print-instrumentation</dd>
+      <dt>Candidate commit</dt><dd>83f33899</dd>
+      <dt>PR</dt><dd>Pending until required documentation is committed</dd>
+      <dt>Production deploy</dt><dd>Pending merge</dd>
+      <dt>Root alignment</dt><dd>Pending merge</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>This delivery candidate adds a temporary, one-terminal diagnostic around Athena&#x27;s existing POS receipt print flow. It does not attempt another print fix. It records enough branch, document, return, and popup-lifecycle evidence to compare attempts with versus without the matching rejection using the telemetry rail already deployed in production.</p>
+      <p>Detailed capture is restricted to the affected terminal&#x27;s known browser fingerprint. The exact known rejection can receive a recent attempt snapshot when correlation is unambiguous. No Convex schema, backend query, receipt caller, product UI, or print condition changes are included.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why evidence had to come before another fix</h2>
+      <p>Production repeatedly reported: Failed to execute &#x27;print&#x27; on &#x27;Window&#x27;: The provided callback is no longer runnable. Two earlier lifecycle fixes continued to fail in the field: print-once/closed-window guards in PR #701 and afterprint-based teardown in PR #718.</p>
+      <p>Backend inspection found a persistent incident cluster on one affected terminal after POS completion across multiple deployed builds. The existing rows had a stack and fingerprint, but not the invocation branch, ready state, event order, return classification, or stable attempt ID required to choose a fix. Customer-linked counts, timings, and deployment history remain in the access-controlled incident record rather than this public report.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model: a flight recorder, not an autopilot</h2>
+      <p>The helper is a small flight recorder attached to an existing print attempt. usePrint writes lifecycle checkpoints into one in-memory slot. Finalization emits one compact baseline through the existing offline buffer when capacity permits. The global rejection listener asks for the same snapshot only when the browser error exactly matches and one recent candidate is safe to name.</p>
+      <p>The recorder observes; it does not steer. The suspicious one-second fallback still invokes print only while readyState is not complete. Existing 250 ms afterprint close timing, 60-second fallback cleanup, print-once guards, and all receipt callers remain authoritative and unchanged.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after data flow</h2>
+      <p>Before: usePrint opened, wrote, printed, and closed a popup. An asynchronous browser failure reached the global unhandled-rejection listener as a generic error, entered the local buffer, drained to Convex, and appeared in the backend export without an attempt context.</p>
+      <p>After, on the affected terminal only: an attempt begins before window.open; usePrint records load versus one-second fallback, readyState, print invocation and return, safe return type, ordered beforeprint/afterprint/beforeunload/unload/cleanup checkpoints, closed state, timing, and causal completion reason. When the baseline is emitted, a stable printAttemptId joins it to the matching rejection; correlation metadata remains available in memory when buffer pressure skips the baseline.</p>
+      <ul>
+        <li>A second attempt inside the 60-second retention window makes correlation ambiguous instead of assigning the error to the wrong print.</li>
+        <li>An exact target rejection without a recent attempt receives a no-candidate marker.</li>
+        <li>Unrelated errors and all non-target terminals remain on the generic path.</li>
+      </ul>
+  </section>
+  <section data-report-section="mechanics">
+    <h2>How the browser lifecycle is recorded safely</h2>
+      <p>window.close may dispatch unload synchronously, queue it, or omit it. The implementation carries the initiating reason—afterprint, fallback cleanup, or a throw—across close. Unload appends its checkpoints and finalizes with that pending reason. A one-second diagnostic-only grace timer finalizes with the same reason when unload never arrives.</p>
+      <p>Reference return values are recorded as not_inspected. Reading an arbitrary .then property could execute a getter or proxy trap and perturb the race under observation. Primitive and null returns can be classified without property access.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries and deliberate tradeoffs</h2>
+      <ul>
+        <li>The fingerprint gate is a rollout selector, not authorization. Backend analysis must still restrict rows to the known affected store and terminal association.</li>
+        <li>Metadata is limited to primitive values, no more than 20 keys, and a lifecycle event string no longer than 300 characters. Receipt, order, customer, payment, and function-source content never enter the helper.</li>
+        <li>At 150 buffered events, this canary stops consuming buffer capacity, leaving headroom that other telemetry may still use. The in-memory candidate can still correlate an exact rejection.</li>
+        <li>Duplicate global listeners may produce duplicate raw error rows. Analysis must report raw rows separately and deduplicate by attempt ID.</li>
+        <li>Object-window unit tests do not reproduce Chromium callback ownership or deferred printing. The production canary is the decisive sensor.</li>
+        <li>The canary cannot observe physical printer output, distinguish user cancellation from a completed print, or classify failure signatures other than the exact targeted rejection.</li>
+      </ul>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what intentionally did not</h2>
+      <p>Changed: one temporary attempt-state helper, print lifecycle checkpoints in usePrint, exact-error metadata enrichment in the existing telemetry drain, focused tests, the approved plan artifacts, generated repository indexes, and a reusable diagnostic-pattern note.</p>
+      <p>Intentionally unchanged: print branching and timers, receipt generation and callers, telemetry transport and backend persistence, Convex schema and indexes, terminal authorization, UI, expense flows, and rejection handling. The error remains unhandled and visible; correlation only adds evidence.</p>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and delivery status</h2>
+      <p>Local evidence: 41 focused Vitest cases passed across the helper, telemetry drain, and usePrint suites. TypeScript, changed-frontend lint, and Graphify rebuild passed. Three independent implementation reviewers reached unanimous no-finding sign-off after the unload race, thenable probe, popup fallback coverage, metadata bounds, non-target behavior, and offline buffer pressure were corrected.</p>
+      <p>Current delivery status: candidate commits exist locally. The documentation-dependent full gate advanced through its documentation, report, links, workflow, audit, lint, and architecture checks, then exposed a test-mock TypeScript inference mismatch; that test-only annotation is fixed and focused tests plus TypeScript pass, but the full gate still requires a clean rerun. There is no PR. Merge, Linear completion, clean-root fast-forward, production local build deployment, and terminal adoption confirmation are pending and must not be inferred from this report.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Collection and next decision</h2>
+      <p>After merge and the narrow Athena web deployment, collect for five business days, review early at 50 attempts plus five failures, and force review by day seven. A full administrator should export only the target store/terminal, evidence window, and required fields into the approved encrypted workspace; share summaries instead of raw rows and delete the raw export after sign-off.</p>
+      <p>Compare attempts with versus without the matching rejection by invocation branch, ready state, return type, event order, closed state, and completion reason. If no stable discriminator emerges, do not change printing: reproduce the captured Chrome/build with browser-level tracing. The follow-up must remove the detailed canary and temporary baseline rows or explicitly justify retaining a coarse outcome signal.</p>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/src/lib/pos/infrastructure/telemetry/printAttemptTelemetry.ts</code></td><td>Owns the one-attempt recorder, target gate, bounded snapshot, ambiguity rules, capacity guard, and exact-error correlation.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/hooks/usePrint.ts</code></td><td>Places checkpoints at the existing print and popup lifecycle seams without changing branch conditions or cleanup timing.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/lib/pos/infrastructure/telemetry/usePosClientTelemetryDrain.ts</code></td><td>Adds a safe attempt snapshot to the existing unhandled-rejection row; transport remains unchanged.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/lib/pos/infrastructure/telemetry/printAttemptTelemetry.test.ts</code></td><td>Proves target gating, exact matching, ambiguity, expiry, idempotency, privacy bounds, and buffer reservation.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/tests/pos/usePrint.test.ts</code></td><td>Characterizes unchanged load/fallback/current-window behavior, synchronous unload, and the no-unload grace fallback.</td></tr>
+        <tr><td><code>docs/plans/2026-08-08-001-fix-pos-print-lifecycle-instrumentation-plan.md</code></td><td>Defines the temporary scope, evidence window, export handling, cleanup, and authorized follow-up decisions.</td></tr>
+        <tr><td><code>docs/solutions/design-patterns/athena-pos-browser-lifecycle-diagnostics-2026-08-08.md</code></td><td>Captures the reusable non-perturbing browser-lifecycle instrumentation pattern without claiming the print root cause is solved.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the primary purpose of this delivery candidate?</p>
+        <ol data-quiz-options>
+          <li>Correct the one-second readyState condition immediately</li>
+          <li data-quiz-correct>Collect discriminating production evidence without changing print behavior</li>
+          <li>Replace POS telemetry with a browser tracing service</li>
+          <li>Instrument every receipt caller across the fleet</li>
+        </ol>
+        <p data-quiz-explanation>Previous behavioral guesses failed. This candidate records the existing lifecycle so a later fix can be selected from evidence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is one module-level attempt slot sufficient?</p>
+        <ol data-quiz-options>
+          <li>The backend accepts only one row per store</li>
+          <li>The terminal can run only one JavaScript timer</li>
+          <li data-quiz-correct>Popup printing is modal, while sequential overlap is handled as ambiguous correlation</li>
+          <li>Receipt callers share one React component instance</li>
+        </ol>
+        <p data-quiz-explanation>The active print flow is modal. A retained previous candidate is still treated carefully: a sequential attempt makes attribution ambiguous.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens when a second print begins inside the previous attempt&#x27;s 60-second correlation window?</p>
+        <ol data-quiz-options>
+          <li>The rejection is assigned to the newest attempt</li>
+          <li>Both attempt snapshots are attached</li>
+          <li>The older attempt is deleted from telemetry</li>
+          <li data-quiz-correct>Correlation is marked ambiguous and neither attempt is guessed</li>
+        </ol>
+        <p data-quiz-explanation>Incorrect attribution would corrupt the with-versus-without-the-matching-rejection comparison, so the recorder explicitly sacrifices correlation when candidates overlap.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why are reference return values marked not_inspected?</p>
+        <ol data-quiz-options>
+          <li>TypeScript cannot represent Promise values</li>
+          <li data-quiz-correct>Reading .then could execute a getter or proxy trap and perturb the observed lifecycle</li>
+          <li>The backend rejects string metadata</li>
+          <li>Window.print always returns null</li>
+        </ol>
+        <p data-quiz-explanation>Instrumentation must not introduce observable behavior. Return type is safe to record, while structural thenable probing is not guaranteed to be side-effect free.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How does the implementation preserve both unload evidence and the causal completion reason?</p>
+        <ol data-quiz-options>
+          <li>It ignores unload whenever afterprint fires</li>
+          <li>It finalizes before calling window.close</li>
+          <li data-quiz-correct>It carries the pending reason through close, lets unload append checkpoints, and uses a short fallback grace</li>
+          <li>It replaces unload with a polling loop</li>
+        </ol>
+        <p data-quiz-explanation>Unload timing differs across browsers. The pending reason retains causality while unload gets a bounded opportunity to append its checkpoint before the no-unload fallback finalizes.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens when the local telemetry buffer already contains 150 events?</p>
+        <ol data-quiz-options>
+          <li>The print attempt is cancelled</li>
+          <li data-quiz-correct>The baseline warning is skipped but the in-memory correlation candidate remains</li>
+          <li>All older error rows are deleted</li>
+          <li>The buffer grows beyond 200 events</li>
+        </ol>
+        <p data-quiz-explanation>The canary itself stops adding baselines at 150 events, creating headroom without promising that other telemetry producers will leave it unused.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which behavior is intentionally unchanged?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>The suspicious fallback still calls print only while readyState is not complete</li>
+          <li>The rejection is now caught and suppressed</li>
+          <li>Expense receipt callers pass new source identifiers</li>
+          <li>Convex stores a new first-class print attempt table</li>
+        </ol>
+        <p data-quiz-explanation>This is evidence gathering. Branch conditions, timers, callers, backend schema, and error handling stay unchanged.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What proves the implementation does not transmit receipt content?</p>
+        <ol data-quiz-options>
+          <li>The telemetry backend drops all strings</li>
+          <li>Only error rows are persisted</li>
+          <li data-quiz-correct>A customer-like sentinel is passed through receipt input and asserted absent from every telemetry helper call</li>
+          <li>The target fingerprint encrypts the receipt</li>
+        </ol>
+        <p data-quiz-explanation>The tests exercise the actual receipt input boundary and verify that helper arguments contain lifecycle primitives only.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the decisive validation sensor for selecting the eventual print fix?</p>
+        <ol data-quiz-options>
+          <li>The object-window Vitest mock alone</li>
+          <li data-quiz-correct>Production comparison from the affected terminal canary</li>
+          <li>A new Convex index benchmark</li>
+          <li>The number of generated Graphify nodes</li>
+        </ol>
+        <p data-quiz-explanation>Unit tests prove instrumentation behavior but cannot reproduce Chromium callback ownership and deferred printing. Production evidence decides the next change.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which finish-line statement is accurate at the time of this report?</p>
+        <ol data-quiz-options>
+          <li>The PR is merged and production is deployed</li>
+          <li>Linear is Done but the root checkout is stale</li>
+          <li data-quiz-correct>The candidate is local with focused validation complete; the documentation-dependent full delivery gate, PR, merge, root alignment, deployment, and adoption confirmation remain pending</li>
+          <li>No local commit exists</li>
+        </ol>
+        <p data-quiz-explanation>The full delivery run found a test-only TypeScript inference mismatch after earlier checks passed. That issue is fixed locally, but the report must not predict a successful clean rerun or any downstream delivery event.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>Mendel — session context</dt><dd>Recovered prior fixes, backend evidence, plan/reviewer decisions, Linear state, and the merge/deploy/root finish line from session, git, plan, and work-record sources.</dd>
+      <dt>Galileo — delivered diff</dt><dd>Mapped the candidate diff by runtime, telemetry, tests, docs, and generated artifacts; independently reran and confirmed the 41 focused tests.</dd>
+      <dt>Lorentz — quiz and report reviewer</dt><dd>Removed public customer incident details, corrected delivery status and rejection-based outcome language, narrowed buffer and unload-test claims, and verified the report does not overstate what the canary can observe.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

@@ -1,5 +1,22 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
+
+const printTelemetryMocks = vi.hoisted(() => ({
+  begin: vi.fn((): string | undefined => "attempt-1"),
+  event: vi.fn(),
+  finalize: vi.fn(),
+  invocation: vi.fn(),
+  returned: vi.fn(),
+}));
+
+vi.mock("@/lib/pos/infrastructure/telemetry/printAttemptTelemetry", () => ({
+  beginPrintAttempt: printTelemetryMocks.begin,
+  finalizePrintAttempt: printTelemetryMocks.finalize,
+  recordPrintAttemptEvent: printTelemetryMocks.event,
+  recordPrintInvocation: printTelemetryMocks.invocation,
+  recordPrintReturn: printTelemetryMocks.returned,
+}));
+
 import { usePrint } from "@/hooks/usePrint";
 
 // Mock window.open and related APIs
@@ -49,6 +66,11 @@ describe("usePrint Hook", () => {
     mockPrintWindow.close.mockReset();
     mockPrintWindow.addEventListener.mockReset();
     mockPrintWindow.removeEventListener.mockReset();
+    printTelemetryMocks.begin.mockClear();
+    printTelemetryMocks.event.mockClear();
+    printTelemetryMocks.finalize.mockClear();
+    printTelemetryMocks.invocation.mockClear();
+    printTelemetryMocks.returned.mockClear();
 
     // Reset window.open mock
     setWindowOpenMock(mockPrintWindow as unknown as Window);
@@ -102,6 +124,25 @@ describe("usePrint Hook", () => {
       expect(htmlContent).toContain('<div class="receipt">');
     });
 
+    it("never passes receipt content into the telemetry helper", () => {
+      const sensitiveSentinel = "CUSTOMER-SENTINEL-4471";
+      const { result } = renderHook(() => usePrint());
+
+      act(() => {
+        result.current.printReceipt(`<div>${sensitiveSentinel}</div>`);
+        mockPrintWindow.onload?.();
+      });
+
+      expect(
+        JSON.stringify({
+          event: printTelemetryMocks.event.mock.calls,
+          finalize: printTelemetryMocks.finalize.mock.calls,
+          invocation: printTelemetryMocks.invocation.mock.calls,
+          returned: printTelemetryMocks.returned.mock.calls,
+        }),
+      ).not.toContain(sensitiveSentinel);
+    });
+
     it("should include CSS styles for receipt formatting", () => {
       const { result } = renderHook(() => usePrint());
 
@@ -146,6 +187,46 @@ describe("usePrint Hook", () => {
   });
 
   describe("Print Window Management", () => {
+    it("keeps the same print path when the terminal is not targeted", () => {
+      printTelemetryMocks.begin.mockReturnValueOnce(undefined);
+      const { result } = renderHook(() => usePrint());
+
+      act(() => {
+        result.current.printReceipt("<div>Test</div>");
+        mockPrintWindow.onload?.();
+      });
+
+      expect(mockPrintWindow.print).toHaveBeenCalledTimes(1);
+      expect(printTelemetryMocks.invocation).toHaveBeenCalledWith(undefined, {
+        source: "load",
+        readyState: "complete",
+        windowClosed: false,
+      });
+    });
+
+    it("records the unchanged load branch and synchronous print return", () => {
+      const { result } = renderHook(() => usePrint());
+
+      act(() => {
+        result.current.printReceipt("<div>Test</div>");
+        mockPrintWindow.onload?.();
+      });
+
+      expect(printTelemetryMocks.begin).toHaveBeenCalledTimes(1);
+      expect(printTelemetryMocks.invocation).toHaveBeenCalledWith(
+        "attempt-1",
+        {
+          source: "load",
+          readyState: "complete",
+          windowClosed: false,
+        },
+      );
+      expect(printTelemetryMocks.returned).toHaveBeenCalledWith(
+        "attempt-1",
+        undefined,
+      );
+    });
+
     it("should call print when window loads", () => {
       const { result } = renderHook(() => usePrint());
 
@@ -191,6 +272,10 @@ describe("usePrint Hook", () => {
       // The old fixed teardown timer discarded the browsing context mid-print,
       // which is what produced "The provided callback is no longer runnable".
       vi.useFakeTimers();
+      mockPrintWindow.close.mockImplementation(() => {
+        emitPrintWindowEvent("beforeunload");
+        emitPrintWindowEvent("unload");
+      });
       const { result } = renderHook(() => usePrint());
 
       act(() => {
@@ -213,6 +298,21 @@ describe("usePrint Hook", () => {
       vi.useRealTimers();
 
       expect(mockPrintWindow.close).toHaveBeenCalledTimes(1);
+      expect(printTelemetryMocks.event).toHaveBeenCalledWith(
+        "attempt-1",
+        "beforeunload",
+        false,
+      );
+      expect(printTelemetryMocks.event).toHaveBeenCalledWith(
+        "attempt-1",
+        "unload",
+        false,
+      );
+      expect(printTelemetryMocks.finalize).toHaveBeenCalledWith(
+        "attempt-1",
+        "fallback_cleanup",
+        false,
+      );
     });
 
     it("should prevent multiple close attempts", () => {
@@ -261,6 +361,58 @@ describe("usePrint Hook", () => {
       vi.useRealTimers();
 
       expect(mockPrintWindow.print).toHaveBeenCalled();
+      expect(printTelemetryMocks.invocation).toHaveBeenCalledWith(
+        "attempt-1",
+        {
+          source: "1s-fallback",
+          readyState: "loading",
+          windowClosed: false,
+        },
+      );
+    });
+
+    it("records afterprint before print returns and finalizes afterwards", () => {
+      vi.useFakeTimers();
+      mockPrintWindow.print.mockImplementation(() => {
+        emitPrintWindowEvent("afterprint");
+      });
+      mockPrintWindow.close.mockImplementation(() => {
+        emitPrintWindowEvent("beforeunload");
+        emitPrintWindowEvent("unload");
+      });
+      const { result } = renderHook(() => usePrint());
+
+      act(() => {
+        result.current.printReceipt("<div>Test</div>");
+        mockPrintWindow.onload?.();
+        vi.advanceTimersByTime(250);
+      });
+      vi.useRealTimers();
+
+      expect(printTelemetryMocks.event).toHaveBeenCalledWith(
+        "attempt-1",
+        "afterprint",
+        false,
+      );
+      expect(printTelemetryMocks.event).toHaveBeenCalledWith(
+        "attempt-1",
+        "beforeunload",
+        false,
+      );
+      expect(printTelemetryMocks.event).toHaveBeenCalledWith(
+        "attempt-1",
+        "unload",
+        false,
+      );
+      expect(printTelemetryMocks.returned).toHaveBeenCalled();
+      expect(printTelemetryMocks.finalize).toHaveBeenCalledWith(
+        "attempt-1",
+        "afterprint",
+        false,
+      );
+      expect(
+        printTelemetryMocks.returned.mock.invocationCallOrder[0],
+      ).toBeLessThan(printTelemetryMocks.finalize.mock.invocationCallOrder[0]);
     });
   });
 
@@ -329,6 +481,16 @@ describe("usePrint Hook", () => {
       vi.useRealTimers();
 
       expect(mockPrintWindow.print).not.toHaveBeenCalled();
+      expect(printTelemetryMocks.event).toHaveBeenCalledWith(
+        "attempt-1",
+        "unload",
+        false,
+      );
+      expect(printTelemetryMocks.finalize).toHaveBeenCalledWith(
+        "attempt-1",
+        "unload",
+        false,
+      );
     });
 
     it("does not close the window a second time after it unloads itself", () => {
@@ -380,6 +542,10 @@ describe("usePrint Hook", () => {
         .spyOn(console, "error")
         .mockImplementation(() => {});
       const { result } = renderHook(() => usePrint());
+      mockPrintWindow.close.mockImplementation(() => {
+        emitPrintWindowEvent("beforeunload");
+        emitPrintWindowEvent("unload");
+      });
 
       // Mock print to throw an error
       mockPrintWindow.print.mockImplementation(() => {
@@ -404,6 +570,11 @@ describe("usePrint Hook", () => {
         "Error during printing:",
         expect.any(Error)
       );
+      expect(printTelemetryMocks.finalize).toHaveBeenCalledWith(
+        "attempt-1",
+        "sync_throw",
+        false,
+      );
     });
 
     it("should handle document.write errors", () => {
@@ -411,6 +582,10 @@ describe("usePrint Hook", () => {
         .spyOn(console, "error")
         .mockImplementation(() => {});
       const { result } = renderHook(() => usePrint());
+      mockPrintWindow.close.mockImplementation(() => {
+        emitPrintWindowEvent("beforeunload");
+        emitPrintWindowEvent("unload");
+      });
 
       // Mock document.write to throw an error
       mockPrintWindow.document.write.mockImplementation(() => {
@@ -425,6 +600,11 @@ describe("usePrint Hook", () => {
       expect(consoleError).toHaveBeenCalledWith(
         "Error preparing print window:",
         expect.any(Error)
+      );
+      expect(printTelemetryMocks.finalize).toHaveBeenCalledWith(
+        "attempt-1",
+        "preparation_throw",
+        false,
       );
     });
 
@@ -592,9 +772,15 @@ describe("usePrint Hook", () => {
         .mockReturnValue(mockDiv);
 
       const originalBodyInnerHTML = document.body.innerHTML;
+      const bodySetter = vi.fn();
+      const printSpy = vi.fn();
+      Object.defineProperty(window, "print", {
+        configurable: true,
+        value: printSpy,
+      });
       Object.defineProperty(document.body, "innerHTML", {
         get: () => originalBodyInnerHTML,
-        set: vi.fn(),
+        set: bodySetter,
         configurable: true,
       });
 
@@ -610,7 +796,53 @@ describe("usePrint Hook", () => {
       expect(mockDiv.innerHTML).toContain("<style>");
       expect(mockDiv.innerHTML).toContain("color: #000 !important");
       expect(mockDiv.innerHTML).toContain("border: 0 !important");
+      expect(printSpy).toHaveBeenCalledTimes(1);
+      expect(bodySetter).toHaveBeenNthCalledWith(
+        2,
+        originalBodyInnerHTML,
+      );
+      expect(printTelemetryMocks.invocation).toHaveBeenCalledWith(
+        "attempt-1",
+        {
+          source: "current-window",
+          readyState: document.readyState,
+          windowClosed: false,
+        },
+      );
+      expect(printTelemetryMocks.returned).toHaveBeenCalledWith(
+        "attempt-1",
+        undefined,
+      );
+      expect(printTelemetryMocks.finalize).toHaveBeenCalledWith(
+        "attempt-1",
+        "popup_blocked_fallback",
+        false,
+      );
+    });
 
+    it("preserves a blocked-popup print throw while recording it", () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      setWindowOpenMock(null);
+      const printError = new Error("Current window print failed");
+      Object.defineProperty(window, "print", {
+        configurable: true,
+        value: vi.fn(() => {
+          throw printError;
+        }),
+      });
+      const { result } = renderHook(() => usePrint());
+
+      expect(() => {
+        act(() => {
+          result.current.printReceipt("<div>Test</div>");
+        });
+      }).toThrow(printError);
+
+      expect(printTelemetryMocks.finalize).toHaveBeenCalledWith(
+        "attempt-1",
+        "sync_throw",
+        false,
+      );
     });
   });
 });
