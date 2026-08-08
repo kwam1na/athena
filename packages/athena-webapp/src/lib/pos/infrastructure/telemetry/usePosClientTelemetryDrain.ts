@@ -5,6 +5,7 @@ import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { setPosErrorTelemetrySink } from "@/lib/pos/application/errorTelemetry";
 import { readStoredTerminalFingerprintHash } from "@/lib/pos/infrastructure/terminal/fingerprint";
+import { getPrintRejectionMetadata } from "./printAttemptTelemetry";
 import {
   enqueuePosClientEvent,
   peekPosClientEventBatch,
@@ -112,11 +113,13 @@ export function usePosClientTelemetryDrain(input: {
       });
     };
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const printMetadata = getPrintRejectionMetadata(event.reason);
       enqueuePosClientEvent({
         level: "error",
         flow: "unhandled",
         message: "Unhandled promise rejection",
         error: event.reason,
+        metadata: printMetadata,
       });
     };
     window.addEventListener("error", handleWindowError);

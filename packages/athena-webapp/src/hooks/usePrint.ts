@@ -1,5 +1,13 @@
 import { useCallback } from "react";
 
+import {
+  beginPrintAttempt,
+  finalizePrintAttempt,
+  recordPrintAttemptEvent,
+  recordPrintInvocation,
+  recordPrintReturn,
+} from "@/lib/pos/infrastructure/telemetry/printAttemptTelemetry";
+
 const RECEIPT_PAGE_WIDTH_MM = 80;
 const RECEIPT_MIN_PAGE_HEIGHT_MM = 120;
 const RECEIPT_PAGE_HEIGHT_BUFFER_MM = 8;
@@ -7,6 +15,9 @@ const CSS_PIXELS_PER_MM = 96 / 25.4;
 // Small breather after `afterprint` so the browser finishes unwinding the print
 // pipeline before the browsing context goes away.
 const AFTER_PRINT_CLOSE_DELAY_MS = 250;
+// `window.close()` may queue `unload` instead of dispatching it synchronously.
+// Give that diagnostic event a moment to arrive before using the close reason.
+const POST_CLOSE_OBSERVATION_GRACE_MS = 1_000;
 // Only for browsers that never fire `afterprint`. Long enough that it cannot
 // fire while a print dialog is still open on the terminal.
 const PRINT_FALLBACK_CLOSE_MS = 60_000;
@@ -299,6 +310,7 @@ function setContinuousReceiptPageSize(printWindow: Window) {
 
 export const usePrint = () => {
   const printReceipt = useCallback((receiptContent: string) => {
+    const printAttemptId = beginPrintAttempt();
     // Create a new window for printing with specific dimensions for receipt
     const printWindow = window.open(
       "",
@@ -321,7 +333,23 @@ export const usePrint = () => {
 
       const originalContent = document.body.innerHTML;
       document.body.innerHTML = printDiv.innerHTML;
-      window.print();
+      recordPrintInvocation(printAttemptId, {
+        source: "current-window",
+        readyState: document.readyState,
+        windowClosed: false,
+      });
+      try {
+        const printReturn = window.print();
+        recordPrintReturn(printAttemptId, printReturn);
+        finalizePrintAttempt(
+          printAttemptId,
+          "popup_blocked_fallback",
+          false,
+        );
+      } catch (error) {
+        finalizePrintAttempt(printAttemptId, "sync_throw", false);
+        throw error;
+      }
       document.body.innerHTML = originalContent;
 
       return;
@@ -330,6 +358,13 @@ export const usePrint = () => {
     // Set up close event handler to prevent reopening
     let isClosing = false;
     let fallbackCloseTimer: ReturnType<typeof setTimeout> | undefined;
+    let postCloseFinalizeTimer: ReturnType<typeof setTimeout> | undefined;
+    let pendingCloseReason:
+      | "afterprint"
+      | "fallback_cleanup"
+      | "sync_throw"
+      | "preparation_throw"
+      | undefined;
 
     const cancelFallbackClose = () => {
       if (fallbackCloseTimer !== undefined) {
@@ -345,8 +380,25 @@ export const usePrint = () => {
       }
     };
 
-    const closeWindow = () => {
-      if (isClosing) return;
+    const closeWindow = (
+      reason?:
+        | "afterprint"
+        | "fallback_cleanup"
+        | "sync_throw"
+        | "preparation_throw",
+    ) => {
+      if (isClosing) {
+        if (reason) {
+          finalizePrintAttempt(printAttemptId, reason, printWindow.closed);
+        }
+        return;
+      }
+      pendingCloseReason = reason;
+      recordPrintAttemptEvent(
+        printAttemptId,
+        "cleanup",
+        printWindow.closed,
+      );
       isClosing = true;
       cancelFallbackClose();
 
@@ -356,11 +408,43 @@ export const usePrint = () => {
         }
       } catch (error) {
         console.error("Error closing print window:", error);
+      } finally {
+        if (reason && pendingCloseReason === reason) {
+          postCloseFinalizeTimer = setTimeout(() => {
+            postCloseFinalizeTimer = undefined;
+            pendingCloseReason = undefined;
+            finalizePrintAttempt(printAttemptId, reason, printWindow.closed);
+          }, POST_CLOSE_OBSERVATION_GRACE_MS);
+        }
       }
     };
 
-    printWindow.addEventListener("beforeunload", handleClose);
-    printWindow.addEventListener("unload", handleClose);
+    const handleBeforeUnload = () => {
+      recordPrintAttemptEvent(
+        printAttemptId,
+        "beforeunload",
+        printWindow.closed,
+      );
+      handleClose();
+    };
+    const handleUnload = () => {
+      recordPrintAttemptEvent(printAttemptId, "unload", printWindow.closed);
+      handleClose();
+      if (postCloseFinalizeTimer !== undefined) {
+        clearTimeout(postCloseFinalizeTimer);
+        postCloseFinalizeTimer = undefined;
+      }
+      const completionReason = pendingCloseReason ?? "unload";
+      pendingCloseReason = undefined;
+      finalizePrintAttempt(
+        printAttemptId,
+        completionReason,
+        printWindow.closed,
+      );
+    };
+
+    printWindow.addEventListener("beforeunload", handleBeforeUnload);
+    printWindow.addEventListener("unload", handleUnload);
 
     try {
       printWindow.document.write(`
@@ -394,26 +478,52 @@ ${receiptPrintStyles}
       // never fire it, and must stay well clear of a dialog a cashier is still
       // reading.
       const closeAfterPrintCompletes = () => {
+        const handleBeforePrint = () => {
+          recordPrintAttemptEvent(
+            printAttemptId,
+            "beforeprint",
+            printWindow.closed,
+          );
+        };
         const handleAfterPrint = () => {
+          recordPrintAttemptEvent(
+            printAttemptId,
+            "afterprint",
+            printWindow.closed,
+          );
+          printWindow.removeEventListener("beforeprint", handleBeforePrint);
           printWindow.removeEventListener("afterprint", handleAfterPrint);
-          setTimeout(closeWindow, AFTER_PRINT_CLOSE_DELAY_MS);
+          setTimeout(
+            () => closeWindow("afterprint"),
+            AFTER_PRINT_CLOSE_DELAY_MS,
+          );
         };
 
+        printWindow.addEventListener("beforeprint", handleBeforePrint);
         printWindow.addEventListener("afterprint", handleAfterPrint);
         cancelFallbackClose();
-        fallbackCloseTimer = setTimeout(closeWindow, PRINT_FALLBACK_CLOSE_MS);
+        fallbackCloseTimer = setTimeout(
+          () => closeWindow("fallback_cleanup"),
+          PRINT_FALLBACK_CLOSE_MS,
+        );
       };
 
       // Only ever print once: the load handler and the slow-load fallback below
       // both route through here, and re-entering would both double-print and
       // print into a tearing-down window.
       let hasPrinted = false;
-      const runPrint = () => {
+      const runPrint = (source: "load" | "1s-fallback") => {
         if (hasPrinted || isClosing) return;
         hasPrinted = true;
 
         try {
           if (!printWindow || printWindow.closed) {
+            recordPrintAttemptEvent(
+              printAttemptId,
+              "window_closed",
+              true,
+            );
+            finalizePrintAttempt(printAttemptId, "window_closed", true);
             return;
           }
 
@@ -421,15 +531,21 @@ ${receiptPrintStyles}
           // Registered before `print()` because the call is modal — the
           // afterprint event can fire before it returns.
           closeAfterPrintCompletes();
-          printWindow.print();
+          recordPrintInvocation(printAttemptId, {
+            source,
+            readyState: printWindow.document.readyState,
+            windowClosed: printWindow.closed,
+          });
+          const printReturn = printWindow.print();
+          recordPrintReturn(printAttemptId, printReturn);
         } catch (error) {
           console.error("Error during printing:", error);
-          closeWindow();
+          closeWindow("sync_throw");
         }
       };
 
       // Wait for content to load, then print
-      printWindow.onload = runPrint;
+      printWindow.onload = () => runPrint("load");
 
       // Fallback in case onload never fires. Documents built with
       // document.write can finish before the handler is attached, leaving no
@@ -440,12 +556,12 @@ ${receiptPrintStyles}
           !printWindow.closed &&
           printWindow.document.readyState !== "complete"
         ) {
-          runPrint();
+          runPrint("1s-fallback");
         }
       }, 1000);
     } catch (error) {
       console.error("Error preparing print window:", error);
-      closeWindow();
+      closeWindow("preparation_throw");
     }
   }, []);
 
