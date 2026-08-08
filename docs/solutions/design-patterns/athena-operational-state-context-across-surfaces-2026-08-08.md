@@ -65,4 +65,4 @@ underlying status, authorization, and closeout behavior remain unchanged.
 
 ## Related
 
-- [Register Closeout Variance Alerts and Operations IA](register-closeout-variance-alerts-and-operations-ia-2026-07-08.md)
+- [Register Closeout Variance Alerts and Operations IA](athena-register-closeout-variance-alerts-and-ops-ia-2026-07-08.md)
