@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest";
 
 import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
-import type { WeeklyManagerReportTopItems } from "./weeklyManagerReportEmail";
 import type { DailyManagerReportProps } from "../emails/DailyManagerReport";
 
 const modules = Object.fromEntries(
@@ -17,11 +16,6 @@ const modules = Object.fromEntries(
     loader,
   ]),
 );
-const getTopItems = makeFunctionReference<
-  "query",
-  { acceptedWeekId: Id<"reportWeekAccepted"> },
-  WeeklyManagerReportTopItems
->("operations/weeklyManagerReportEmail:getAcceptedWeeklyManagerReportTopItems");
 const getPayload = makeFunctionReference<
   "query",
   { acceptedWeekId: Id<"reportWeekAccepted"> },
@@ -97,6 +91,11 @@ describe("accepted weekly manager report top items", () => {
         slug: "featured",
         storeId,
       });
+      const skuLeaders: Array<{
+        productSkuId: Id<"productSku">;
+        unitsSold: number;
+      }> = [];
+      let lateProductSkuId: Id<"productSku"> | null = null;
 
       for (const [index, item] of [
         { name: "Silk Press", sku: "SP-18", units: [3, 5] },
@@ -125,6 +124,11 @@ describe("accepted weekly manager report top items", () => {
           sku: item.sku,
           storeId,
         });
+        skuLeaders.push({
+          productSkuId,
+          unitsSold: item.units.reduce((total, units) => total + units, 0),
+        });
+        if (index === 3) lateProductSkuId = productSkuId;
         for (const [dayIndex, unitsSold] of item.units.entries()) {
           await ctx.db.insert("reportSkuDay", {
             grossProfitMinor: 0,
@@ -141,7 +145,7 @@ describe("accepted weekly manager report top items", () => {
         }
       }
 
-      return ctx.db.insert("reportWeekAccepted", {
+      const acceptedWeekId = await ctx.db.insert("reportWeekAccepted", {
         acceptedAt: Date.parse("2026-08-08T20:47:00.000Z"),
         baselineFingerprint: "baseline",
         closeId,
@@ -153,34 +157,58 @@ describe("accepted weekly manager report top items", () => {
         included: metrics,
         metricVersion: 1,
         outsideSchedule: { ...metrics, unitsSold: 0 },
+        priorPeriod: {
+          cycleEndDate: "2026-08-02",
+          cycleStartDate: "2026-07-27",
+          comparabilityReason: "comparable",
+          currentScheduledPositionCount: 0,
+          equivalentScheduledPositions: true,
+          outsideScheduleValues: { ...metrics, unitsSold: 0 },
+          priorScheduledPositionCount: 0,
+          values: { ...metrics, netSalesMinor: 500 },
+        },
         scheduleLineage: [],
         storeId,
+        topSkuLeaders: skuLeaders.slice(0, 3),
       });
+      if (!lateProductSkuId) throw new Error("missing late SKU fixture");
+      await ctx.db.insert("reportSkuDay", {
+        grossProfitMinor: 0,
+        grossSalesMinor: 0,
+        netSalesMinor: 0,
+        operatingDate: "2026-08-08",
+        productSkuId: lateProductSkuId,
+        refundsMinor: 0,
+        storeId,
+        uncostedRevenueMinor: 0,
+        unitsReturned: 0,
+        unitsSold: 100,
+      });
+      return acceptedWeekId;
     });
 
-    const result = await t.query(getTopItems, { acceptedWeekId });
+    const payload = await t.query(getPayload, { acceptedWeekId });
 
-    expect(result.topItems).toEqual([
+    expect(payload?.topItems).toEqual([
       { detail: "SP-18", name: "Silk Press", unitsSold: 8 },
       { detail: "BW-20", name: "Body Wave", unitsSold: 6 },
       { detail: "LC-14", name: "Lace Closure", unitsSold: 4 },
     ]);
-    expect(result.topItemsUrl).toContain(
+    expect(payload?.topItemsUrl).toContain(
       "/wigclub/store/wigclub/reports/weekly?reportId=week%3A2026-08-03&units=true",
     );
 
-    const payload = await t.query(getPayload, { acceptedWeekId });
     expect(payload).toMatchObject({
       completedBy: "Athena",
       operatingDate: "Aug 3–8, 2026",
       presentation: {
+        emptyAttentionCopy:
+          "Net sales finished GH₵5 lower than the prior week. 0 of 0 scheduled days closed. Payments were fully accounted for.",
         timestampDate: "Aug 8",
         timestampLabel: "Accepted",
       },
       status: "applied",
       storeName: "Wigclub",
-      topItems: result.topItems,
-      topItemsUrl: result.topItemsUrl,
     });
   });
 });

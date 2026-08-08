@@ -1,5 +1,4 @@
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import {
   type FoldFact,
@@ -30,6 +29,7 @@ import {
 } from "../platform/capabilityCatalog";
 import { addDaysToDate } from "./rollups";
 import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
+import { scheduleNotificationWithCtx } from "../notifications/emit";
 
 /**
  * Active/candidate schedule versions read to resolve one seven-date reporting
@@ -46,6 +46,34 @@ export const WEEKLY_DAY_READ_LIMIT = 8;
 export const MAX_WEEKLY_FACTS = 4_000;
 /** One live partial prior-day fact fold, with a single overflow probe. */
 export const MAX_WEEKLY_LIVE_PRIOR_CUTOFF_FACTS = 500;
+
+export function acceptedTopSkuLeaders(args: {
+  currency: string;
+  factsByDate: ReadonlyMap<string, readonly Doc<"reportFact">[]>;
+}): Array<{ productSkuId: Id<"productSku">; unitsSold: number }> {
+  const unitsBySku = new Map<string, number>();
+  for (const facts of args.factsByDate.values()) {
+    const { skuDays } = foldDay(args.currency, facts.map(toFoldFact));
+    for (const [productSkuId, metrics] of skuDays) {
+      unitsBySku.set(
+        productSkuId,
+        (unitsBySku.get(productSkuId) ?? 0) + metrics.unitsSold,
+      );
+    }
+  }
+
+  return Array.from(unitsBySku, ([productSkuId, unitsSold]) => ({
+    productSkuId: productSkuId as Id<"productSku">,
+    unitsSold,
+  }))
+    .filter((row) => row.unitsSold > 0)
+    .sort(
+      (left, right) =>
+        right.unitsSold - left.unitsSold ||
+        String(left.productSkuId).localeCompare(String(right.productSkuId)),
+    )
+    .slice(0, 3);
+}
 
 export function nextWeeklyReportDeliveryAt(args: {
   acceptedAt: number;
@@ -73,18 +101,15 @@ export async function scheduleWeeklyManagerReportNotificationWithCtx(
     timezone: string;
   },
 ): Promise<Id<"_scheduled_functions">> {
-  return ctx.scheduler.runAt(
-    nextWeeklyReportDeliveryAt(args),
-    internal.notifications.emit.emitNotification,
-    {
-      kind: "eod.weekly_manager_report",
-      organizationId: args.organizationId,
-      payload: { acceptedWeekId: args.acceptedWeekId },
-      storeId: args.storeId,
-      subjectId: String(args.acceptedWeekId),
-      subjectType: "reportWeekAccepted",
-    },
-  );
+  return scheduleNotificationWithCtx(ctx, {
+    deliverAt: nextWeeklyReportDeliveryAt(args),
+    kind: "eod.weekly_manager_report",
+    organizationId: args.organizationId,
+    payload: { acceptedWeekId: args.acceptedWeekId },
+    storeId: args.storeId,
+    subjectId: String(args.acceptedWeekId),
+    subjectType: "reportWeekAccepted",
+  });
 }
 /** Recent closes inspected per store to recover a missed acceptance intent. */
 export const WEEKLY_CLOSE_RECONCILIATION_LIMIT = 16;
@@ -1420,6 +1445,10 @@ export async function materializeAcceptedWeek(args: {
     );
     return "incomplete";
   }
+  const topSkuLeaders = acceptedTopSkuLeaders({
+    currency: normalizeCurrencyCode(store.currency),
+    factsByDate,
+  });
   const frameStartAt = await periodStartAt(args.ctx, period);
   if (frameStartAt === null) return "unavailable";
   const acceptedRead = await readWeekDays(
@@ -1472,6 +1501,7 @@ export async function materializeAcceptedWeek(args: {
       included: folded.included,
       outsideSchedule: folded.outsideSchedule,
       scheduleLineage: folded.scheduleLineage,
+      topSkuLeaders,
     }),
   );
   const baselineId = await args.ctx.db.insert("reportWeekAccepted", {
@@ -1491,6 +1521,7 @@ export async function materializeAcceptedWeek(args: {
       scheduleVersionId: row.scheduleVersionId as Id<"storeSchedule"> | null,
     })),
     completeness: folded.completeness,
+    topSkuLeaders,
     lifecyclePosture: closePosture.status,
     amendmentPosture: amendment ? "amended" : "none",
     inventoryAttention: acceptedInventoryFromClose(close, frameStartAt),

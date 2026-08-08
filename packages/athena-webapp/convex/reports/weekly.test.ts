@@ -29,6 +29,7 @@ import {
   MAX_WEEKLY_FACTS,
   MAX_WEEKLY_LIVE_PRIOR_CUTOFF_FACTS,
   WEEKLY_SCHEDULE_READ_LIMIT,
+  acceptedTopSkuLeaders,
   foldWeekFromAcceptedFacts,
   foldWeekFromDays,
   materializeAcceptedWeek,
@@ -183,6 +184,43 @@ function fact(overrides: Partial<Doc<"reportFact">> = {}) {
     ...overrides,
   } as Doc<"reportFact">;
 }
+
+describe("accepted weekly SKU leaders", () => {
+  it("freezes the top three sold SKUs from cutoff facts", () => {
+    const skuA = "sku-a" as Id<"productSku">;
+    const skuB = "sku-b" as Id<"productSku">;
+    const skuC = "sku-c" as Id<"productSku">;
+    const skuD = "sku-d" as Id<"productSku">;
+
+    expect(
+      acceptedTopSkuLeaders({
+        currency: "GHS",
+        factsByDate: new Map([
+          [
+            "2026-08-03",
+            [
+              fact({ productSkuId: skuA, quantity: 3 }),
+              fact({ _id: "fact-2" as Id<"reportFact">, productSkuId: skuB, quantity: 5 }),
+              fact({ _id: "fact-3" as Id<"reportFact">, productSkuId: skuC, quantity: 2 }),
+              fact({ _id: "fact-4" as Id<"reportFact">, productSkuId: skuD, quantity: 1 }),
+            ],
+          ],
+          [
+            "2026-08-08",
+            [
+              fact({ _id: "fact-5" as Id<"reportFact">, productSkuId: skuA, quantity: 4 }),
+              fact({ _id: "fact-6" as Id<"reportFact">, productSkuId: skuC, quantity: 2 }),
+            ],
+          ],
+        ]),
+      }),
+    ).toEqual([
+      { productSkuId: skuA, unitsSold: 7 },
+      { productSkuId: skuB, unitsSold: 5 },
+      { productSkuId: skuC, unitsSold: 4 },
+    ]);
+  });
+});
 
 describe("foldWeekFromDays", () => {
   it("synthesizes missing scheduled report days as complete zero-activity slots", () => {

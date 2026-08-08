@@ -5,9 +5,8 @@ import type {
   DailyManagerReportProps,
   DailyManagerReportTopItem,
 } from "../emails/DailyManagerReport";
-import { readRangeSkuMixWithCtx } from "../reports/queries";
+import { resolveSkuIdentity } from "../reports/queries";
 import { resolveAppUrl } from "./dailyManagerReportEmail";
-import { managerReportTopItemsFromMix } from "./managerReportTopItems";
 import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
 import { addWeekMetrics } from "../../shared/reportsContract";
 import { currencyFormatter } from "../utils";
@@ -47,41 +46,34 @@ export const getAcceptedWeeklyManagerReportPayload = internalQuery({
  * Resolve the product leaders for one immutable accepted weekly baseline.
  * The accepted row owns the range; callers cannot substitute mutable dates.
  */
-export const getAcceptedWeeklyManagerReportTopItems = internalQuery({
-  args: {
-    acceptedWeekId: v.id("reportWeekAccepted"),
-  },
-  handler: async (ctx, args): Promise<WeeklyManagerReportTopItems> => {
-    const accepted = await ctx.db.get(
-      "reportWeekAccepted",
-      args.acceptedWeekId,
-    );
-    if (!accepted) throw new Error("Accepted weekly report was not found.");
-
-    const store = await ctx.db.get("store", accepted.storeId);
-    if (!store)
-      throw new Error("Store for accepted weekly report was not found.");
-
-    return buildAcceptedWeeklyTopItems(ctx, accepted, store);
-  },
-});
-
 export async function buildAcceptedWeeklyTopItems(
   ctx: QueryCtx,
   accepted: Pick<
     Doc<"reportWeekAccepted">,
-    "cycleEndDate" | "cycleStartDate" | "storeId"
+    "cycleEndDate" | "cycleStartDate" | "storeId" | "topSkuLeaders"
   >,
   store: Pick<Doc<"store">, "slug">,
 ): Promise<WeeklyManagerReportTopItems> {
-  const mix = await readRangeSkuMixWithCtx(ctx, {
-    storeId: accepted.storeId,
-    startDate: accepted.cycleStartDate,
-    endDate: accepted.cycleEndDate,
-  });
+  const topItems = accepted.topSkuLeaders
+    ? await Promise.all(
+        accepted.topSkuLeaders.map(async (leader) => {
+          const identity = await resolveSkuIdentity(ctx, leader.productSkuId);
+          const name =
+            identity?.displayName ?? identity?.sku ?? String(leader.productSkuId);
+          const detail = [identity?.sku, identity?.size]
+            .filter((value) => value && value !== name)
+            .join(" · ");
+          return {
+            name,
+            unitsSold: leader.unitsSold,
+            ...(detail ? { detail } : {}),
+          };
+        }),
+      )
+    : [];
 
   return {
-    topItems: managerReportTopItemsFromMix(mix),
+    topItems,
     topItemsUrl: buildWeeklyTopMoversUrl({
       cycleStartDate: accepted.cycleStartDate,
       storeSlug: store.slug,
@@ -134,7 +126,7 @@ function buildAcceptedWeeklyManagerReportPayload(args: {
     : undefined;
   const executiveSummary = [
     netSalesComparison
-      ? `Net sales finished ${netSalesComparison.replace("vs prior week", "the prior week")}.`
+      ? `Net sales finished ${netSalesComparison.replace("vs prior week", "than the prior week")}.`
       : undefined,
     `${closedDayCount} of ${scheduledDayCount} scheduled days closed.`,
     total.paymentAllocationCoverage === "complete"

@@ -322,6 +322,14 @@ export const reportWeekAcceptedSchema = v.object({
   outsideSchedule: v.object(weeklyMetrics),
   scheduleLineage: v.array(weeklyLineage),
   completeness: weeklyCompleteness,
+  topSkuLeaders: v.optional(
+    v.array(
+      v.object({
+        productSkuId: v.id("productSku"),
+        unitsSold: v.number(),
+      }),
+    ),
+  ),
   lifecyclePosture: v.optional(weeklyLifecyclePosture),
   amendmentPosture: v.optional(weeklyAmendmentPosture),
   inventoryAttention: v.optional(weeklyInventoryAttention),
