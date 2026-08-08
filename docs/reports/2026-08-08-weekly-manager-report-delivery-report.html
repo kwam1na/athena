@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Accepted Weekly Manager Reports</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="1dfc54d056e7421bc03126e7bf20fe70ab8b76aa427ef789b9e008ea50dbbc55">
+  <header data-report-section="header">
+    <h1>Accepted Weekly Manager Reports</h1>
+    <p>A frozen weekly baseline, delivered at 8 AM after the final close</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>PR pending</li>
+      <li>Production deploy pending</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Branch</dt><dd>codex/fix-report-open-day-lifecycle</dd>
+      <dt>Scope</dt><dd>Reports, notifications, operational email, theme switcher</dd>
+      <dt>Validation</dt><dd>Focused tests and typecheck passed; authoritative gate pending rerun</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive Summary</h2>
+      <p>Athena now turns the final accepted close of a reporting week into a durable weekly manager report scheduled for 8:00 AM on the following store-local day. The final daily report remains on its existing path, so managers receive the day close first and the weekly synthesis the next morning.</p>
+      <p>The weekly email is built from the immutable accepted-week baseline, including its top three SKU leaders. Daily reports now use the same top-item presentation posture, report and alert calls to action share an outlined treatment, and operational status copy is calmer and less technical.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Problem and Constraints</h2>
+      <p>Accepted weeks existed as durable reporting truth, but they did not trigger a manager-facing weekly delivery. Reconstructing the email from current SKU-day projections would let late facts change the ranking after acceptance, contradicting the frozen weekly totals.</p>
+      <p>The sequence also had to preserve the final daily report, schedule in the store timezone, reuse the existing EOD notification category, remain idempotent, and keep missing or legacy evidence honest rather than inventing zeroes.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental Model</h2>
+      <p>Acceptance is the evidence boundary; notification delivery is a later operational action. During weekly acceptance, Athena folds cutoff-bounded report facts, freezes totals and the top three positive-unit SKU leaders, persists the accepted baseline, and schedules a notification through the notifications boundary. At send time, the rail loads that baseline, hydrates product display identity, renders the email, and applies the existing subscription, retry, environment, and transport policies.</p>
+      <p>Only labels are hydrated later. SKU IDs, units, weekly totals, close variance, and other accepted evidence remain fixed. Legacy accepted baselines without frozen leaders omit the top-items section instead of recomputing it from mutable data.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and After</h2>
+      <ul>
+        <li>Before: weekly acceptance persisted a baseline but emitted no manager report. After: it transactionally schedules one for 8 AM the next store-local day.</li>
+        <li>Before: a weekly top-items implementation could drift with reportSkuDay updates. After: leaders are ranked from the same cutoff facts as accepted totals and included in the accepted fingerprint.</li>
+        <li>Before: daily emails omitted item leaders and email CTAs/status blocks varied. After: daily and weekly reports show a consistent top-three pattern and operational templates use the same outlined CTA posture.</li>
+        <li>Before: an open final scheduled day could retain a retry posture that contributed to open/provisional oscillation. After: the open day waits for close acceptance, while historical missing evidence retains bounded recovery.</li>
+        <li>Before: the compact theme switcher exposed a system cycle. After: it presents explicit light and dark choices; system remains available in App Settings.</li>
+      </ul>
+  </section>
+  <section data-report-section="changes">
+    <h2>Implementation Changes</h2>
+      <ul>
+        <li>Added eod.weekly_manager_report to the notification registry with acceptedWeekId structural deduplication and render-at-send payload loading.</li>
+        <li>Added scheduleNotificationWithCtx so delayed domain notifications still cross the notification-owned boundary.</li>
+        <li>Extended reportWeekAccepted with optional frozen topSkuLeaders and included those leaders in accepted-baseline fingerprinting.</li>
+        <li>Built WeeklyManagerReport and generalized DailyManagerReport presentation, including executive summary, comparison percentages, top items, report-range links, variance and inventory sections, and consistent outlined actions.</li>
+        <li>Added bounded SKU mix and identity hydration shared by browser and email paths without changing report authority.</li>
+        <li>Simplified the compact theme switcher to light/dark while preserving system selection in the settings surface.</li>
+      </ul>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure Boundaries</h2>
+      <ul>
+        <li>Timezone resolution is part of the acceptance mutation; failure aborts the transaction rather than persisting an accepted week with no scheduled delivery.</li>
+        <li>A missing accepted baseline or deleted store makes the notification unsendable; rendering and data-read failures continue through the rail retry contract.</li>
+        <li>Delivery retries are bounded to the rail attempt cap. Intent creation is structurally deduplicated by acceptedWeekId, while an ambiguous provider outcome can still result in a duplicate external email.</li>
+        <li>Product renames or deletions can change or remove hydrated labels, but frozen SKU IDs and unit counts cannot drift.</li>
+        <li>Pre-change accepted baselines are not backfilled and intentionally omit top items because they lack frozen ranking evidence.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation</h2>
+      <ul>
+        <li>86 focused weekly, weekly-email, and SKU-mix tests passed after the frozen-evidence review fixes.</li>
+        <li>52 notification rail tests passed, including weekly registry render and dedupe behavior.</li>
+        <li>Athena webapp TypeScript typecheck passed.</li>
+        <li>Convex code generation completed and Graphify was rebuilt after source changes.</li>
+        <li>Review passes covered correctness, maintainability, reliability, performance, TypeScript, agent-native parity, project standards, and institutional learnings.</li>
+      </ul>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Operator and Maintainer Guidance</h2>
+      <p>To verify the sequence, accept the final scheduled close for a store and confirm that the daily report follows its existing delivery path while one weekly emit is scheduled for 8:00 AM the next local day. At delivery time, confirm that the scheduled emit creates or finds the deduplicated notification intent. The email byline includes the acceptance date and time so next-day delivery remains unambiguous.</p>
+      <p>When evolving the weekly email, add new accepted evidence during materialization and fingerprint it. Do not rebuild frozen claims from current projections at delivery time. Keep new report and alert messages on the notification registry so dedupe, audience, retries, and transport remain centralized.</p>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/convex/reports/weekly.ts</code></td><td>Materializes the accepted week, freezes SKU leaders, and registers next-day delivery.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/schemas/reports/derived.ts</code></td><td>Defines the optional frozen topSkuLeaders accepted-baseline field.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/notifications/emit.ts</code></td><td>Owns immediate and scheduled notification emission boundaries.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/notifications/registry.ts</code></td><td>Registers weekly report rendering, category, and acceptedWeekId dedupe.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/weeklyManagerReportEmail.ts</code></td><td>Builds the weekly payload only from accepted evidence and hydrated identity.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/emails/WeeklyManagerReport.tsx</code></td><td>Renders the weekly manager email and report drilldowns.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/dailyManagerReportEmail.ts</code></td><td>Adds daily top-item data using the shared bounded reports machinery.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/emails/DailyManagerReport.tsx</code></td><td>Provides the shared operational report hierarchy and outlined actions.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/routes/-authed-layout.tsx</code></td><td>Limits the compact theme switcher to explicit light and dark choices.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>When is the weekly manager report scheduled?</p>
+        <ol data-quiz-options>
+          <li>Immediately before the final daily report</li>
+          <li data-quiz-correct>8 AM on the next store-local day</li>
+          <li>At midnight UTC</li>
+        </ol>
+        <p data-quiz-explanation>The final daily report retains its existing path; weekly synthesis follows at 8 AM in the store timezone.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the authority for weekly totals?</p>
+        <ol data-quiz-options>
+          <li>Current reportSkuDay rows</li>
+          <li data-quiz-correct>The immutable accepted-week baseline</li>
+          <li>Email preview data</li>
+        </ol>
+        <p data-quiz-explanation>Weekly totals are accepted evidence captured at the cutoff.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where are weekly top SKU counts sourced?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>The same cutoff facts used during acceptance</li>
+          <li>A mutable query at send time</li>
+          <li>The product catalog</li>
+        </ol>
+        <p data-quiz-explanation>Leaders are frozen with the baseline to prevent late-data drift.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens for a legacy accepted week without frozen leaders?</p>
+        <ol data-quiz-options>
+          <li>Show zero units</li>
+          <li>Recompute current leaders</li>
+          <li data-quiz-correct>Omit the top-items section</li>
+        </ol>
+        <p data-quiz-explanation>Omission is more honest than presenting mutable or invented evidence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What deduplicates weekly notifications?</p>
+        <ol data-quiz-options>
+          <li>Store name</li>
+          <li data-quiz-correct>acceptedWeekId</li>
+          <li>Email subject</li>
+        </ol>
+        <p data-quiz-explanation>The accepted baseline identity is the structural dedupe key.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens if timezone resolution fails during acceptance?</p>
+        <ol data-quiz-options>
+          <li>Acceptance commits without delivery</li>
+          <li data-quiz-correct>The transaction aborts</li>
+          <li>Delivery defaults to UTC</li>
+        </ol>
+        <p data-quiz-explanation>Atomic failure avoids an accepted baseline with no scheduled report.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which weekly top-item fields remain frozen?</p>
+        <ol data-quiz-options>
+          <li>Only product names</li>
+          <li data-quiz-correct>SKU IDs and unit counts</li>
+          <li>Catalog price and image</li>
+        </ol>
+        <p data-quiz-explanation>Display identity is hydrated later, but accepted IDs and counts do not drift.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Did this change replace the final daily report?</p>
+        <ol data-quiz-options>
+          <li>Yes</li>
+          <li data-quiz-correct>No</li>
+          <li>Only for Saturday</li>
+        </ol>
+        <p data-quiz-explanation>The daily trigger remains unchanged and the weekly report follows the next morning.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where should future delayed report notifications be scheduled?</p>
+        <ol data-quiz-options>
+          <li>Directly from any domain module</li>
+          <li data-quiz-correct>Through the notification-owned boundary</li>
+          <li>From the React email component</li>
+        </ol>
+        <p data-quiz-explanation>The notification boundary centralizes lifecycle and transport policy.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How does the rail distinguish an unsendable weekly payload from a retryable payload failure?</p>
+        <ol data-quiz-options>
+          <li>Both return null</li>
+          <li data-quiz-correct>Missing accepted/store data returns null; read or render faults throw</li>
+          <li>Missing data throws; render faults return null</li>
+        </ol>
+        <p data-quiz-explanation>Null means genuinely unsendable; thrown read or render failures remain eligible for bounded retry.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>Diff context</dt><dd>Mapped the full branch by layer, reconstructed the before/after delivery flow, and identified transaction, retry, evidence, and rollout boundaries.</dd>
+      <dt>Session history</dt><dd>Recovered prior decisions on daily metrics, frozen report truth, weekly report interaction patterns, notification posture, and merge/deploy finish-line hazards.</dd>
+      <dt>Code review</dt><dd>Independent reviewers challenged mutable weekly leaders and notification ownership; the implementation now freezes leaders at acceptance and delegates scheduling through the rail.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

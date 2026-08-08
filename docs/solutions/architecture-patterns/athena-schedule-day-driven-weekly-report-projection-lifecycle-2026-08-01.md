@@ -1,6 +1,7 @@
 ---
 title: "Athena Weekly Reports Use a Schedule-Day-Driven Projection Lifecycle"
 date: 2026-08-01
+last_updated: 2026-08-08
 category: architecture-patterns
 module: Athena Reports
 problem_type: architecture_pattern
@@ -27,7 +28,7 @@ tags:
   - "amendments"
   - "dirty-marker"
   - "legacy-evidence"
-delivery_diff_fingerprint: fe76fccea7917f55e2d5fa687cef14fd82034e7c9e03d4782d8cca7a9c80ffb3
+delivery_diff_fingerprint: 1dfc54d056e7421bc03126e7bf20fe70ab8b76aa427ef789b9e008ea50dbbc55
 ---
 
 # Athena Weekly Reports Use a Schedule-Day-Driven Projection Lifecycle
@@ -65,6 +66,22 @@ completeness states prevent a partial or legacy result from appearing exact.
 Repair may rebuild current projections, but it cannot manufacture accepted
 history.
 
+Treat derived email rankings as accepted evidence too. Compute the top SKU
+leaders from the same cutoff-bounded `reportFact` rows used for the accepted
+totals, and persist the three ranked SKU IDs and unit counts on
+`reportWeekAccepted`. At email-render time, hydrate only their current display
+identity. Do not rebuild the ranking from mutable `reportSkuDay` rows: a late
+fact could otherwise make the emailed leaders disagree with the frozen totals.
+Legacy accepted rows without the frozen leaders omit that section instead of
+substituting current truth.
+
+The final scheduled close still sends its daily report immediately. Weekly
+delivery is a separate notification intent scheduled for 8 AM on the next
+store-local day. The Reports domain hands that delayed operation to
+`scheduleNotificationWithCtx`; it does not schedule the notification rail's
+internal mutation directly. The rail continues to own dedupe, recipients,
+rendering, retries, transport, and the shared `eod` subscription category.
+
 Persist unavailable, lifecycle, and amendment posture in the same current
 singleton instead of deriving it inside the public query. If a transient rebuild
 cannot complete, retain the last verified values and identity while updating the
@@ -91,6 +108,8 @@ machinery that Athena's deterministic report-day model removed.
 - Keep current/prior values, comparability, variance, inventory posture, and owner routes in server-shaped projections.
 - Require store-prefixed indexes, documented read formulas, and cap-plus-one probes on materialization and public reads.
 - Insert an accepted baseline only after the complete cutoff fold succeeds; never patch its financial values or lineage.
+- Freeze derived rankings from the same accepted fact cutoff; hydration may be fresh, but metric membership and values must not be.
+- Keep delayed communication scheduling inside the notifications boundary, even when the business event originates in Reports.
 - Treat later truth as one replaceable amendment and close posture, not a rewritten baseline or amendment ledger.
 - Preserve incomplete or unavailable evidence explicitly; do not convert unknown coverage, legacy observation time, mixed currency, or capacity overflow into zero.
 - Normalize store currency through the shared Reports helper both when facts are emitted and when incremental or authoritative folds compare legacy facts. Letter-case drift such as `ghs` versus `GHS` is not mixed currency; a genuinely different code still is.
