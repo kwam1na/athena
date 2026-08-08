@@ -11675,7 +11675,7 @@
       "relation": "calls",
       "source": "dailymanagerreport_compactcomparison",
       "source_file": "packages/athena-webapp/convex/emails/DailyManagerReport.tsx",
-      "source_location": "L859",
+      "source_location": "L865",
       "target": "dailymanagerreport_capitalize",
       "weight": 1
     },
@@ -35939,7 +35939,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_emails_dailymanagerreport_tsx",
       "source_file": "packages/athena-webapp/convex/emails/DailyManagerReport.tsx",
-      "source_location": "L877",
+      "source_location": "L883",
       "target": "dailymanagerreport_capitalize",
       "weight": 1
     },
@@ -35951,7 +35951,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_emails_dailymanagerreport_tsx",
       "source_file": "packages/athena-webapp/convex/emails/DailyManagerReport.tsx",
-      "source_location": "L852",
+      "source_location": "L858",
       "target": "dailymanagerreport_compactcomparison",
       "weight": 1
     },
@@ -35963,7 +35963,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_emails_dailymanagerreport_tsx",
       "source_file": "packages/athena-webapp/convex/emails/DailyManagerReport.tsx",
-      "source_location": "L873",
+      "source_location": "L879",
       "target": "dailymanagerreport_comparisondetaillabel",
       "weight": 1
     },
@@ -35975,7 +35975,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_emails_dailymanagerreport_tsx",
       "source_file": "packages/athena-webapp/convex/emails/DailyManagerReport.tsx",
-      "source_location": "L911",
+      "source_location": "L917",
       "target": "dailymanagerreport_statuspanelstylefor",
       "weight": 1
     },
@@ -35987,7 +35987,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_emails_dailymanagerreport_tsx",
       "source_file": "packages/athena-webapp/convex/emails/DailyManagerReport.tsx",
-      "source_location": "L725",
+      "source_location": "L731",
       "target": "dailymanagerreport_summaryvaluestylefor",
       "weight": 1
     },
@@ -243391,7 +243391,7 @@
       "label": "capitalize()",
       "norm_label": "capitalize()",
       "source_file": "packages/athena-webapp/convex/emails/DailyManagerReport.tsx",
-      "source_location": "L877"
+      "source_location": "L883"
     },
     {
       "community": 421,
@@ -243400,7 +243400,7 @@
       "label": "compactComparison()",
       "norm_label": "compactcomparison()",
       "source_file": "packages/athena-webapp/convex/emails/DailyManagerReport.tsx",
-      "source_location": "L852"
+      "source_location": "L858"
     },
     {
       "community": 421,
@@ -243409,7 +243409,7 @@
       "label": "comparisonDetailLabel()",
       "norm_label": "comparisondetaillabel()",
       "source_file": "packages/athena-webapp/convex/emails/DailyManagerReport.tsx",
-      "source_location": "L873"
+      "source_location": "L879"
     },
     {
       "community": 421,
@@ -243418,7 +243418,7 @@
       "label": "statusPanelStyleFor()",
       "norm_label": "statuspanelstylefor()",
       "source_file": "packages/athena-webapp/convex/emails/DailyManagerReport.tsx",
-      "source_location": "L911"
+      "source_location": "L917"
     },
     {
       "community": 421,
@@ -243427,7 +243427,7 @@
       "label": "summaryValueStyleFor()",
       "norm_label": "summaryvaluestylefor()",
       "source_file": "packages/athena-webapp/convex/emails/DailyManagerReport.tsx",
-      "source_location": "L725"
+      "source_location": "L731"
     },
     {
       "community": 421,

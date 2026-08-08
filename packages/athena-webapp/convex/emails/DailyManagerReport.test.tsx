@@ -34,8 +34,8 @@ const baseProps: DailyManagerReportProps = {
     { method: "Cash", amount: ghs.format(1201.82), transactionCount: 18 },
   ],
   topItems: [
-    { name: "Silk Press 18\"", detail: "SP18-NAT", unitsSold: 8 },
-    { name: "Body Wave 20\"", detail: "BW20-1B", unitsSold: 6 },
+    { name: '  silk   press 18" ', detail: "SP18-NAT", unitsSold: 8 },
+    { name: 'body wave 20"', detail: "BW20-1B", unitsSold: 6 },
     { name: "HD Lace Closure", detail: "HDLC-14", unitsSold: 4 },
   ],
   topItemsUrl:
@@ -76,6 +76,8 @@ describe("DailyManagerReport", () => {
     expect(html).not.toContain("Athena keeps the full close record");
     expect(html).toContain("Top items by units sold");
     expect(html).toContain("Silk Press 18");
+    expect(html).toContain("Body Wave 20");
+    expect(html).not.toContain("  silk   press 18");
     expect(html).toContain("8 units");
     expect(html).toContain("View all top movers");
     expect(html).toContain(baseProps.topItemsUrl?.replaceAll("&", "&amp;"));
