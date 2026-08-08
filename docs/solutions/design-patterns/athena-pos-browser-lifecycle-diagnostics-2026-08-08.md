@@ -12,7 +12,7 @@ applies_when:
   - "Lifecycle ordering must be correlated with an existing unhandled rejection"
   - "Temporary diagnostics must reuse Athena's bounded offline telemetry rail"
 tags: [pos, browser-lifecycle, telemetry, printing, correlation, diagnostics]
-delivery_diff_fingerprint: 837de4189718832b45b4d63ee082e131723b6247d401c6f0c8746044c9569ff9
+delivery_diff_fingerprint: ba282280aa9bde795390030a9b56ac05644071ce61ff596155ef2e6fc6738a30
 ---
 
 # Non-Perturbing POS Browser Lifecycle Diagnostics

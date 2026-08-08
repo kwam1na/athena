@@ -5,7 +5,7 @@
   <title>POS Print Lifecycle Instrumentation</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="837de4189718832b45b4d63ee082e131723b6247d401c6f0c8746044c9569ff9">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="ba282280aa9bde795390030a9b56ac05644071ce61ff596155ef2e6fc6738a30">
   <header data-report-section="header">
     <h1>POS Print Lifecycle Instrumentation</h1>
     <p>A delivery-candidate guide to the temporary evidence canary</p>
@@ -73,7 +73,7 @@
   <section data-report-section="validation">
     <h2>Validation and delivery status</h2>
       <p>Local evidence: 41 focused Vitest cases passed across the helper, telemetry drain, and usePrint suites. TypeScript, changed-frontend lint, and Graphify rebuild passed. Three independent implementation reviewers reached unanimous no-finding sign-off after the unload race, thenable probe, popup fallback coverage, metadata bounds, non-target behavior, and offline buffer pressure were corrected.</p>
-      <p>Current delivery status: candidate commit 83f33899 exists locally. The latest full pre-push delivery run was blocked at Athena&#x27;s required documentation check because this report and the reusable solution note were not yet committed; no reusable merge-ready proof exists yet. There is no PR. Merge, Linear completion, clean-root fast-forward, production local build deployment, and terminal adoption confirmation are pending and must not be inferred from this report.</p>
+      <p>Current delivery status: candidate commits exist locally. The documentation-dependent full gate advanced through its documentation, report, links, workflow, audit, lint, and architecture checks, then exposed a test-mock TypeScript inference mismatch; that test-only annotation is fixed and focused tests plus TypeScript pass, but the full gate still requires a clean rerun. There is no PR. Merge, Linear completion, clean-root fast-forward, production local build deployment, and terminal adoption confirmation are pending and must not be inferred from this report.</p>
   </section>
   <section data-report-section="guidance">
     <h2>Collection and next decision</h2>
@@ -197,7 +197,7 @@
           <li data-quiz-correct>The candidate is local with focused validation complete; the documentation-dependent full delivery gate, PR, merge, root alignment, deployment, and adoption confirmation remain pending</li>
           <li>No local commit exists</li>
         </ol>
-        <p data-quiz-explanation>The latest full delivery run was blocked at the required documentation check. The report must not predict a successful rerun or any downstream delivery event.</p>
+        <p data-quiz-explanation>The full delivery run found a test-only TypeScript inference mismatch after earlier checks passed. That issue is fixed locally, but the report must not predict a successful clean rerun or any downstream delivery event.</p>
       </li>
     </ol>
   </section>

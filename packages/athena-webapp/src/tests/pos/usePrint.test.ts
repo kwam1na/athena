@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 
 const printTelemetryMocks = vi.hoisted(() => ({
-  begin: vi.fn(() => "attempt-1"),
+  begin: vi.fn((): string | undefined => "attempt-1"),
   event: vi.fn(),
   finalize: vi.fn(),
   invocation: vi.fn(),
