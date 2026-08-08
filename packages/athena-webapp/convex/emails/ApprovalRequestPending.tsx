@@ -11,6 +11,7 @@ import {
   Section,
   Text,
 } from "@react-email/components";
+import { operationalEmailOutlineButton } from "./emailOperationalCtaStyles";
 
 /**
  * The seven approval request types this template has a dedicated
@@ -179,22 +180,22 @@ export function buildApprovalRequestPendingSubject({
 }
 
 export const approvalRequestPendingPreviewProps = {
-  createdAt: "8:42 PM",
+  createdAt: "8:47 PM",
   data: {
-    amount: "GH₵-42.18",
-    transactionNumber: "#532044",
+    amount: "GH₵42.00",
+    transactionNumber: "#532108",
   },
-  identifier: "#532044",
+  identifier: "#532108",
   queueUrl:
     "https://athena.wigclub.store/wigclub/store/wigclub/operations/approvals",
-  reason: "Cash refund exceeded the register's approval threshold.",
+  reason: "This transaction void requires manager approval.",
   requestType: "pos_transaction_void",
   requesterName: "Ama Mensah",
-  requesterNote: "Customer paid with card, I rang it as cash by mistake.",
+  requesterNote: "Payment was recorded against the wrong sale.",
   storeName: "Wigclub",
 } satisfies ApprovalRequestPendingProps;
 
-export default function ApprovalRequestPending({
+export function ApprovalRequestPending({
   storeName,
   requestType,
   identifier,
@@ -237,10 +238,12 @@ export default function ApprovalRequestPending({
           >
             <Row>
               <Column style={styles.statusColumn}>
-                <Text style={styles.statusLabel}>Approval needed</Text>
-                <Text style={styles.statusTitle}>{descriptor.label}</Text>
+                <Text style={styles.statusTitleStandalone}>
+                  Approval needed
+                </Text>
                 <Text style={styles.statusSummary}>
-                  Requested by {requesterName} at {createdAt}.
+                  {requesterName} requested {descriptor.label.toLowerCase()} at{" "}
+                  {createdAt}.
                 </Text>
               </Column>
             </Row>
@@ -290,6 +293,10 @@ export default function ApprovalRequestPending({
       </Body>
     </Html>
   );
+}
+
+export default function ApprovalRequestPendingPreview() {
+  return <ApprovalRequestPending {...approvalRequestPendingPreviewProps} />;
 }
 
 function SectionHeading({ title }: { title: string }) {
@@ -362,17 +369,7 @@ const styles: Record<string, CSSProperties> = {
     padding: "36px 0",
   },
   buttonPrimary: {
-    backgroundColor: colors.foreground,
-    border: `1px solid ${colors.foreground}`,
-    borderRadius: "6px",
-    color: colors.raised,
-    display: "inline-block",
-    fontFamily: fontSans,
-    fontSize: "13px",
-    fontWeight: 600,
-    lineHeight: "20px",
-    padding: "10px 14px",
-    textDecoration: "none",
+    ...operationalEmailOutlineButton,
   },
   buttonIcon: {
     display: "inline-block",
@@ -437,15 +434,6 @@ const styles: Record<string, CSSProperties> = {
   statusColumn: {
     verticalAlign: "top",
   },
-  statusLabel: {
-    color: colors.muted,
-    fontSize: "10px",
-    fontWeight: 700,
-    letterSpacing: "0.06em",
-    lineHeight: "15px",
-    margin: 0,
-    textTransform: "uppercase",
-  },
   statusPanel: {
     backgroundColor: colors.surface,
     borderBottom: `1px solid ${colors.border}`,
@@ -458,13 +446,13 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: "19px",
     margin: "6px 0 0",
   },
-  statusTitle: {
+  statusTitleStandalone: {
     color: colors.foreground,
     fontSize: "20px",
     fontWeight: 600,
     letterSpacing: "-0.01em",
     lineHeight: "26px",
-    margin: "5px 0 0",
+    margin: 0,
   },
   subtitle: {
     color: colors.muted,

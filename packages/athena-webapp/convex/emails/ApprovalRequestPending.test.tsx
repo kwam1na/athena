@@ -1,7 +1,8 @@
 import { render } from "@react-email/components";
 import { describe, expect, it } from "vitest";
 
-import ApprovalRequestPending, {
+import {
+  ApprovalRequestPending,
   approvalRequestPendingPreviewProps,
   buildApprovalRequestPendingSubject,
   type ApprovalRequestPendingProps,
@@ -46,6 +47,8 @@ describe("ApprovalRequestPending", () => {
       "Cash refund exceeded the register&#x27;s approval threshold.",
     );
     expect(html).toContain("Open approvals queue");
+    expect(html).toContain("background-color:transparent");
+    expect(html).toContain("border:1px solid #e2e3e6");
     expect(html).toContain(baseProps.queueUrl);
     expect(html).toContain(
       "This request may already be resolved by the time you read this",

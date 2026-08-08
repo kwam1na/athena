@@ -1,7 +1,8 @@
 import { render } from "@react-email/components";
 import { describe, expect, it } from "vitest";
 
-import RegisterCloseoutVarianceAlert, {
+import {
+  RegisterCloseoutVarianceAlert,
   registerCloseoutVarianceAlertPreviewProps,
   type RegisterCloseoutVarianceAlertProps,
 } from "./RegisterCloseoutVarianceAlert";
@@ -33,14 +34,15 @@ describe("RegisterCloseoutVarianceAlert", () => {
     expect(html).toContain("Wigclub East Legon");
     expect(html).toContain("Front counter / Register 2");
     expect(html).toContain("Friday, July 3");
-    expect(html).toContain("Submitted with cash variance");
+    expect(html).toContain("Cash count needs review");
     expect(html).toContain("Expected cash");
     expect(html).toContain("Counted cash");
     expect(html).toContain("Cash short");
     expect(html).toContain("GH₵-42.18");
     expect(html).toContain("color:#dc4438");
     expect(html).toContain("Review register closeout");
-    expect(html).toContain("background-color:#1b1c1f");
+    expect(html).toContain("background-color:transparent");
+    expect(html).toContain("border:1px solid #e2e3e6");
     expect(html).toContain("↗");
     expect(html).not.toContain("lucide-");
     expect(html).not.toContain("<svg");
@@ -78,12 +80,13 @@ describe("RegisterCloseoutVarianceAlert", () => {
       />,
     );
 
-    expect(html).toContain("Closed with an exact cash match");
+    expect(html).toContain("Register closed");
     expect(html).toContain("Cash matched");
-    expect(html).toContain("No review is required");
+    expect(html).toContain("Expected and counted cash match");
+    expect(html).not.toContain("GH₵0.00");
     expect(html).toContain("border-left:3px solid #2d7d4f");
     expect(html).toContain("View register closeout");
-    expect(html).not.toContain("Submitted with cash variance");
+    expect(html).not.toContain("Cash count needs review");
     expect(html).not.toContain("Review register closeout");
     expect(html).not.toContain("Review reason");
   });
@@ -114,7 +117,7 @@ describe("RegisterCloseoutVarianceAlert", () => {
       <RegisterCloseoutVarianceAlert {...requiredProps} />,
     );
 
-    expect(html).toContain("Submitted with cash variance");
+    expect(html).toContain("Cash count needs review");
     expect(html).not.toContain("Review reason");
     expect(html).not.toContain("Closeout notes");
     expect(html).not.toContain(

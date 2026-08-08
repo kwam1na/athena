@@ -15,7 +15,10 @@ import type {
   DailyManagerReportMetric,
   DailyManagerReportPaymentTotal,
   DailyManagerReportProps,
+  DailyManagerReportTopItem,
 } from "../emails/DailyManagerReport";
+import { readRangeSkuMixWithCtx } from "../reports/queries";
+import { managerReportTopItemsFromMix } from "./managerReportTopItems";
 
 type DailyCloseReportItem = {
   category: string;
@@ -127,6 +130,10 @@ export const getMostRecentDailyManagerReportPayload = internalQuery({
       operatingDate: snapshot.closeMetadata.operatingDate,
       storeId: store._id,
     });
+    const topItems = await buildTopItemsForDay(ctx, {
+      operatingDate: snapshot.closeMetadata.operatingDate,
+      storeId: store._id,
+    });
 
     return buildDailyManagerReportPayload({
       cashPositionSummary,
@@ -134,6 +141,7 @@ export const getMostRecentDailyManagerReportPayload = internalQuery({
       completedBy: completedBy ?? "Athena",
       completedTimezone,
       store,
+      topItems,
       unitsSoldSummary,
     });
   },
@@ -205,6 +213,16 @@ export const getDailyManagerReportPayloadsForDateRange = internalQuery({
         });
       }),
     );
+    const topItemsByDay = await Promise.all(
+      dailyClosesWithSnapshots.map((dailyClose) => {
+        const snapshot = dailyClose.reportSnapshot as DailyCloseReportSnapshot;
+
+        return buildTopItemsForDay(ctx, {
+          operatingDate: snapshot.closeMetadata.operatingDate,
+          storeId: store._id,
+        });
+      }),
+    );
 
     return dailyClosesWithSnapshots.map((dailyClose, index) =>
       buildDailyManagerReportPayload({
@@ -213,6 +231,7 @@ export const getDailyManagerReportPayloadsForDateRange = internalQuery({
         completedBy: completedByNames[index] ?? "Athena",
         completedTimezone: completedTimezones[index],
         store,
+        topItems: topItemsByDay[index],
         unitsSoldSummary: unitsSoldSummaries[index],
       }),
     );
@@ -481,12 +500,40 @@ async function buildUnitsSoldSummary(
   return { unitsSold, priorUnitsSold };
 }
 
+async function buildTopItemsForDay(
+  ctx: QueryCtx,
+  args: { operatingDate: string; storeId: Id<"store"> },
+): Promise<DailyManagerReportTopItem[]> {
+  const mix = await readRangeSkuMixWithCtx(ctx, {
+    storeId: args.storeId,
+    startDate: args.operatingDate,
+    endDate: args.operatingDate,
+  });
+  return managerReportTopItemsFromMix(mix);
+}
+
+export function buildDailyTopMoversUrl(args: {
+  operatingDate: string;
+  storeSlug: string;
+}): string {
+  const params = new URLSearchParams({
+    daysStart: args.operatingDate,
+    daysEnd: args.operatingDate,
+    daysTableStart: args.operatingDate,
+    daysTableEnd: args.operatingDate,
+    selectedDay: args.operatingDate,
+    units: "true",
+  });
+  return `${resolveAppUrl()}/${args.storeSlug}/store/${args.storeSlug}/reports?${params}`;
+}
+
 function buildDailyManagerReportPayload(args: {
   cashPositionSummary?: RegisterCashPositionSummary;
   completedBy: string;
   completedTimezone: string;
   dailyClose: Doc<"dailyClose">;
   store: Doc<"store">;
+  topItems?: DailyManagerReportTopItem[];
   unitsSoldSummary?: UnitsSoldSummary;
 }): DailyManagerReportPayload {
   const snapshot = args.dailyClose.reportSnapshot as DailyCloseReportSnapshot;
@@ -514,12 +561,17 @@ function buildDailyManagerReportPayload(args: {
     statusLabel:
       snapshot.closeMetadata.actorType === "automation"
         ? undefined
-        : "Reviewed items",
+        : "Day closed",
     statusSummary:
       snapshot.closeMetadata.actorType === "automation"
         ? undefined
-        : "The day closed after required items were reviewed.",
+        : "Required items were reviewed before the day closed.",
     reportUrl,
+    topItems: args.topItems,
+    topItemsUrl: buildDailyTopMoversUrl({
+      operatingDate,
+      storeSlug: args.store.slug,
+    }),
     reviewedItems: buildReviewedItems(snapshot, money, priorDaySummary),
     carryForwardItems: buildCarryForwardItems(snapshot),
     blockers: buildBlockers(snapshot),

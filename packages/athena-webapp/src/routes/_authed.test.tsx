@@ -1301,7 +1301,7 @@ describe("Authed layout", () => {
     });
     const demoControls = screen.getByLabelText("Demo controls");
     const themeToggleButton = screen.getByRole("button", {
-      name: "Switch to system theme",
+      name: "Switch to dark theme",
     });
 
     expect(
@@ -1336,12 +1336,13 @@ describe("Authed layout", () => {
     expect(themeToggleButton.querySelector(".lucide-sun")).not.toBeNull();
 
     await user.click(themeToggleButton);
-    expect(window.localStorage.removeItem).toHaveBeenCalledWith(
+    expect(window.localStorage.setItem).toHaveBeenCalledWith(
       ATHENA_THEME_STORAGE_KEY,
+      "dark",
     );
   });
 
-  it("cycles theme modes through system, light, and dark based on the device theme", async () => {
+  it("switches directly between light and dark while resolving an initial system theme", async () => {
     const user = userEvent.setup();
 
     installMatchMedia(true);
@@ -1353,11 +1354,11 @@ describe("Authed layout", () => {
     render(<Layout />);
 
     const themeToggleButton = screen.getByRole("button", {
-      name: "Using system dark theme, switch to light theme",
+      name: "Switch to light theme",
     });
 
     await waitFor(() =>
-      expect(themeToggleButton.querySelector(".lucide-monitor")).not.toBeNull(),
+      expect(themeToggleButton.querySelector(".lucide-moon")).not.toBeNull(),
     );
 
     await user.click(themeToggleButton);
@@ -1394,18 +1395,19 @@ describe("Authed layout", () => {
     });
 
     const darkToggleButton = await screen.findByRole("button", {
-      name: "Switch to system theme",
+      name: "Switch to light theme",
     });
     expect(darkToggleButton.querySelector(".lucide-moon")).not.toBeNull();
 
     await user.click(darkToggleButton);
 
-    expect(window.localStorage.removeItem).toHaveBeenCalledWith(
+    expect(window.localStorage.setItem).toHaveBeenCalledWith(
       ATHENA_THEME_STORAGE_KEY,
+      "light",
     );
   });
 
-  it("shows the phone icon for system theme on mobile viewports", async () => {
+  it("shows the resolved light appearance when the mobile device theme is light", async () => {
     setViewportWidth(390);
     installMatchMedia(false);
     mocked.useAuth.mockReturnValue({
@@ -1416,11 +1418,11 @@ describe("Authed layout", () => {
     render(<Layout />);
 
     const themeToggleButton = screen.getByRole("button", {
-      name: "Using system light theme, switch to dark theme",
+      name: "Switch to dark theme",
     });
 
     await waitFor(() =>
-      expect(themeToggleButton.querySelector(".lucide-smartphone")).not.toBeNull(),
+      expect(themeToggleButton.querySelector(".lucide-sun")).not.toBeNull(),
     );
   });
 

@@ -68,6 +68,8 @@ import type * as emails_RegisterCloseoutVarianceAlert from "../emails/RegisterCl
 import type * as emails_RegisterCloseoutVarianceAlertPreview from "../emails/RegisterCloseoutVarianceAlertPreview.js";
 import type * as emails_VerificationCode from "../emails/VerificationCode.js";
 import type * as emails_WalkthroughRequestNotification from "../emails/WalkthroughRequestNotification.js";
+import type * as emails_WeeklyManagerReport from "../emails/WeeklyManagerReport.js";
+import type * as emails_emailOperationalCtaStyles from "../emails/emailOperationalCtaStyles.js";
 import type * as env from "../env.js";
 import type * as http from "../http.js";
 import type * as http_domains_core_routes_analytics from "../http/domains/core/routes/analytics.js";
@@ -246,6 +248,7 @@ import type * as operations_helpers_linking from "../operations/helpers/linking.
 import type * as operations_inventoryMovements from "../operations/inventoryMovements.js";
 import type * as operations_logicalOperationalWork from "../operations/logicalOperationalWork.js";
 import type * as operations_managerElevations from "../operations/managerElevations.js";
+import type * as operations_managerReportTopItems from "../operations/managerReportTopItems.js";
 import type * as operations_openWorkInventoryReviews from "../operations/openWorkInventoryReviews.js";
 import type * as operations_operationalEvents from "../operations/operationalEvents.js";
 import type * as operations_operationalWorkItems from "../operations/operationalWorkItems.js";
@@ -265,6 +268,7 @@ import type * as operations_staffCredentials from "../operations/staffCredential
 import type * as operations_staffMessages from "../operations/staffMessages.js";
 import type * as operations_staffProfiles from "../operations/staffProfiles.js";
 import type * as operations_staffRoles from "../operations/staffRoles.js";
+import type * as operations_weeklyManagerReportEmail from "../operations/weeklyManagerReportEmail.js";
 import type * as otp_EmailOTP from "../otp/EmailOTP.js";
 import type * as otp_appLoginEmailAllowlist from "../otp/appLoginEmailAllowlist.js";
 import type * as paystack_index from "../paystack/index.js";
@@ -667,6 +671,8 @@ declare const fullApi: ApiFromModules<{
   "emails/RegisterCloseoutVarianceAlertPreview": typeof emails_RegisterCloseoutVarianceAlertPreview;
   "emails/VerificationCode": typeof emails_VerificationCode;
   "emails/WalkthroughRequestNotification": typeof emails_WalkthroughRequestNotification;
+  "emails/WeeklyManagerReport": typeof emails_WeeklyManagerReport;
+  "emails/emailOperationalCtaStyles": typeof emails_emailOperationalCtaStyles;
   env: typeof env;
   http: typeof http;
   "http/domains/core/routes/analytics": typeof http_domains_core_routes_analytics;
@@ -845,6 +851,7 @@ declare const fullApi: ApiFromModules<{
   "operations/inventoryMovements": typeof operations_inventoryMovements;
   "operations/logicalOperationalWork": typeof operations_logicalOperationalWork;
   "operations/managerElevations": typeof operations_managerElevations;
+  "operations/managerReportTopItems": typeof operations_managerReportTopItems;
   "operations/openWorkInventoryReviews": typeof operations_openWorkInventoryReviews;
   "operations/operationalEvents": typeof operations_operationalEvents;
   "operations/operationalWorkItems": typeof operations_operationalWorkItems;
@@ -864,6 +871,7 @@ declare const fullApi: ApiFromModules<{
   "operations/staffMessages": typeof operations_staffMessages;
   "operations/staffProfiles": typeof operations_staffProfiles;
   "operations/staffRoles": typeof operations_staffRoles;
+  "operations/weeklyManagerReportEmail": typeof operations_weeklyManagerReportEmail;
   "otp/EmailOTP": typeof otp_EmailOTP;
   "otp/appLoginEmailAllowlist": typeof otp_appLoginEmailAllowlist;
   "paystack/index": typeof paystack_index;

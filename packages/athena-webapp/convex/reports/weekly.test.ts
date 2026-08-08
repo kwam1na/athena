@@ -32,6 +32,8 @@ import {
   foldWeekFromAcceptedFacts,
   foldWeekFromDays,
   materializeAcceptedWeek,
+  nextWeeklyReportDeliveryAt,
+  scheduleWeeklyManagerReportNotificationWithCtx,
   markWeekDirty,
   reconcileRecentAcceptedWeeksForStore,
   rebuildCurrentWeek,
@@ -46,6 +48,66 @@ afterEach(() => {
 
 const modules = import.meta.glob("../**/*.ts");
 const NOW = Date.parse("2026-07-04T12:00:00.000Z");
+
+describe("weekly report delivery schedule", () => {
+  it("schedules 8 AM on the next store-local day", () => {
+    expect(
+      nextWeeklyReportDeliveryAt({
+        acceptedAt: Date.parse("2026-08-08T20:47:00.000Z"),
+        timezone: "Africa/Accra",
+      }),
+    ).toBe(Date.parse("2026-08-09T08:00:00.000Z"));
+  });
+
+  it("uses the next local date across a timezone boundary", () => {
+    expect(
+      nextWeeklyReportDeliveryAt({
+        acceptedAt: Date.parse("2026-08-09T03:30:00.000Z"),
+        timezone: "America/New_York",
+      }),
+    ).toBe(Date.parse("2026-08-09T12:00:00.000Z"));
+  });
+
+  it("schedules one weekly intent for the accepted baseline", async () => {
+    const t = convexTest(schema, modules);
+    const storeId = await seedStore(t, "weekly-email-schedule");
+    const store = await t.run((ctx) => ctx.db.get("store", storeId));
+    if (!store) throw new Error("missing fixture store");
+    const acceptedWeekId = "accepted-week-1" as Id<"reportWeekAccepted">;
+
+    const scheduledId = await t.run((ctx) =>
+      scheduleWeeklyManagerReportNotificationWithCtx(ctx, {
+          acceptedAt: Date.now(),
+          acceptedWeekId,
+          organizationId: store.organizationId,
+          storeId,
+          timezone: "Africa/Accra",
+      }),
+    );
+    const scheduled = await t.run((ctx) =>
+      ctx.db.system.get("_scheduled_functions", scheduledId),
+    );
+
+    expect(scheduled).toMatchObject({
+      args: [
+        {
+          kind: "eod.weekly_manager_report",
+          organizationId: store.organizationId,
+          payload: { acceptedWeekId },
+          storeId,
+          subjectId: String(acceptedWeekId),
+          subjectType: "reportWeekAccepted",
+        },
+      ],
+      name: "notifications/emit:emitNotification",
+      scheduledTime: nextWeeklyReportDeliveryAt({
+        acceptedAt: Date.now(),
+        timezone: "Africa/Accra",
+      }),
+      state: { kind: "pending" },
+    });
+  });
+});
 
 function period() {
   const result = resolveWeeklyPeriod({
@@ -1456,6 +1518,33 @@ describe("weekly materialization", () => {
           observedCount: 1,
         },
       });
+    });
+  });
+
+  it("does not requeue an open final scheduled day before its close exists", async () => {
+    const t = convexTest(schema, modules);
+    const storeId = await seedStore(t, "weekly-open-final-day");
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("reportDay", {
+        ...day({ operatingDate: "2026-07-04", status: "open" }),
+        storeId,
+        foldVersion: 1,
+        factCount: 1,
+        lastFactRecordedAt: NOW,
+      });
+
+      expect(
+        await refreshAcceptedWeekForDate(ctx, storeId, "2026-07-04", NOW),
+      ).toBe(0);
+      expect(
+        await ctx.db
+          .query("reportDirtyDay")
+          .withIndex("by_storeId_operatingDate", (q) =>
+            q.eq("storeId", storeId).eq("operatingDate", "2026-07-04"),
+          )
+          .unique(),
+      ).toBeNull();
     });
   });
 

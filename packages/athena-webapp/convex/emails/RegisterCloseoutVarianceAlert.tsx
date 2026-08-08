@@ -14,6 +14,7 @@ import {
 import { toDisplayAmount } from "../lib/currency";
 import { currencyFormatter } from "../utils";
 import { formatStoredReviewReason } from "../../shared/reviewReasonFormatter";
+import { operationalEmailOutlineButton } from "./emailOperationalCtaStyles";
 
 export interface RegisterCloseoutVarianceAlertMetric {
   label: string;
@@ -39,24 +40,24 @@ export interface RegisterCloseoutVarianceAlertProps {
 }
 
 export const registerCloseoutVarianceAlertPreviewProps = {
-  countedCash: "GH₵1,201.82",
+  countedCash: "GH₵573.00",
   currency: "GHS",
-  expectedCash: "GH₵1,244.00",
+  expectedCash: "GH₵615.00",
   notes:
-    "Cash drawer was counted twice before submission. Operator noted one missing GH₵50 note from the morning float.",
-  operatingDate: "Friday, July 3",
+    "Cash drawer was counted twice before submission. Operator noted missing cash from the morning float.",
+  operatingDate: "Saturday, Aug 8",
   reason: "Variance exceeded the closeout approval threshold.",
   registerLabel: "Front counter / Register 2",
   reviewUrl:
     "https://athena.wigclub.store/wigclub/store/wigclub/cash-controls/registers/register-session-1",
   storeName: "Wigclub",
-  submittedAt: "8:42 PM",
+  submittedAt: "8:47 PM",
   submittedBy: "Ama Mensah",
-  variance: "GH₵-42.18",
+  variance: "GH₵-42.00",
   varianceDirection: "short",
 } satisfies RegisterCloseoutVarianceAlertProps;
 
-export default function RegisterCloseoutVarianceAlert({
+export function RegisterCloseoutVarianceAlert({
   storeName,
   registerLabel,
   operatingDate,
@@ -98,7 +99,7 @@ export default function RegisterCloseoutVarianceAlert({
   const metrics: RegisterCloseoutVarianceAlertMetric[] = [
     { label: "Expected cash", value: expectedCash },
     { label: "Counted cash", value: countedCash },
-    { label: varianceLabel, value: variance },
+    ...(isMatched ? [] : [{ label: varianceLabel, value: variance }]),
   ];
 
   return (
@@ -124,20 +125,19 @@ export default function RegisterCloseoutVarianceAlert({
           >
             <Row>
               <Column style={styles.statusColumn}>
-                <Text style={styles.statusLabel}>Register closeout</Text>
-                <Text style={styles.statusTitle}>
+                <Text style={styles.statusTitleStandalone}>
                   {isMatched
-                    ? "Closed with an exact cash match"
+                    ? "Register closed"
                     : isClosedReport
-                      ? "Closed with cash variance"
-                      : "Submitted with cash variance"}
+                      ? "Register closed with a cash difference"
+                      : "Cash count needs review"}
                 </Text>
                 <Text style={styles.statusSummary}>
                   {isMatched
-                    ? "Expected and counted cash match. No review is required."
+                    ? "Expected and counted cash match."
                     : isClosedReport
-                      ? "Register is closed. Review the recorded cash variance in Cash Controls."
-                      : "Review the closeout before finalizing this register session."}
+                      ? "The cash difference is recorded in Cash Controls."
+                      : "Expected and counted cash do not match. Review the count before closing this register."}
                 </Text>
               </Column>
               <Column style={styles.badgeColumn}>
@@ -180,6 +180,14 @@ export default function RegisterCloseoutVarianceAlert({
         </Container>
       </Body>
     </Html>
+  );
+}
+
+export default function RegisterCloseoutVarianceAlertEmailPreview() {
+  return (
+    <RegisterCloseoutVarianceAlert
+      {...registerCloseoutVarianceAlertPreviewProps}
+    />
   );
 }
 
@@ -281,17 +289,7 @@ const styles: Record<string, CSSProperties> = {
     padding: "36px 0",
   },
   buttonPrimary: {
-    backgroundColor: colors.foreground,
-    border: `1px solid ${colors.foreground}`,
-    borderRadius: "6px",
-    color: colors.raised,
-    display: "inline-block",
-    fontFamily: fontSans,
-    fontSize: "13px",
-    fontWeight: 600,
-    lineHeight: "20px",
-    padding: "10px 14px",
-    textDecoration: "none",
+    ...operationalEmailOutlineButton,
   },
   buttonIcon: {
     display: "inline-block",
@@ -375,15 +373,6 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     whiteSpace: "nowrap",
   },
-  statusLabel: {
-    color: colors.muted,
-    fontSize: "10px",
-    fontWeight: 700,
-    letterSpacing: "0.06em",
-    lineHeight: "15px",
-    margin: 0,
-    textTransform: "uppercase",
-  },
   statusPanel: {
     backgroundColor: colors.surface,
     borderBottom: `1px solid ${colors.border}`,
@@ -396,13 +385,13 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: "19px",
     margin: "6px 0 0",
   },
-  statusTitle: {
+  statusTitleStandalone: {
     color: colors.foreground,
     fontSize: "20px",
     fontWeight: 600,
     letterSpacing: "-0.01em",
     lineHeight: "26px",
-    margin: "5px 0 0",
+    margin: 0,
   },
   subtitle: {
     color: colors.muted,

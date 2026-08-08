@@ -22,10 +22,8 @@ import { usePermissions } from "../hooks/usePermissions";
 import { PermissionsProvider } from "../contexts/PermissionsContext";
 import {
   ArrowUpRight,
-  Monitor,
   Moon,
   ShieldCheck,
-  Smartphone,
   Sun,
   UserCircle,
 } from "lucide-react";
@@ -52,7 +50,6 @@ import {
   type PosLocalEntryContext,
   useLocalPosEntryContext,
 } from "@/lib/pos/infrastructure/local/localPosEntryContext";
-import { useIsMobile } from "@/hooks/use-mobile";
 import {
   type PosTerminalAppSessionRecoveryBlockReason,
   readStoredPosAppAccountId,
@@ -64,7 +61,6 @@ import {
 } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 import type { PosTerminalRuntimeAppSessionRecoveryInput } from "@/lib/pos/infrastructure/local/terminalRuntimeStatus";
 import {
-  type AthenaThemeMode,
   setAthenaThemeModeWithTransition,
   useAthenaTheme,
 } from "@/lib/theme";
@@ -430,8 +426,7 @@ function UserMenu({
   const { signOut } = useAuthActions();
   const isSharedDemo = Boolean(useSharedDemoContext());
   const { hasFullAdminAccess } = usePermissions();
-  const { mode, resolvedTheme, systemTheme } = useAthenaTheme();
-  const isMobile = useIsMobile();
+  const { resolvedTheme } = useAthenaTheme();
   const {
     activeElevation,
     endManagerElevation,
@@ -446,24 +441,9 @@ function UserMenu({
     navigate({ to: isSharedDemo ? PUBLIC_HOME_PATH : LOGIN_PATH });
   };
 
-  const nextTheme: AthenaThemeMode =
-    mode === "system"
-      ? systemTheme === "dark"
-        ? "light"
-        : "dark"
-      : mode === "light"
-        ? systemTheme === "dark"
-          ? "dark"
-          : "system"
-        : systemTheme === "dark"
-          ? "system"
-          : "light";
-  const ThemeIcon =
-    mode === "system" ? (isMobile ? Smartphone : Monitor) : mode === "dark" ? Moon : Sun;
-  const themeToggleLabel =
-    mode === "system"
-      ? `Using system ${resolvedTheme} theme, switch to ${nextTheme} theme`
-      : `Switch to ${nextTheme} theme`;
+  const nextTheme = resolvedTheme === "dark" ? "light" : "dark";
+  const ThemeIcon = resolvedTheme === "dark" ? Moon : Sun;
+  const themeToggleLabel = `Switch to ${nextTheme} theme`;
   const isContainedShell = shellVariant === "contained";
   const containedControlSurface =
     "border border-border/70 bg-background/90 shadow-surface backdrop-blur supports-[backdrop-filter]:bg-background/75";

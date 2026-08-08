@@ -12,9 +12,9 @@ const conditionValidator = v.union(
 
 const CONDITION_SUMMARIES: Record<PosTerminalHealthAlertCondition, string> = {
   storage_critical:
-    "Local storage on this terminal is critically degraded. Offline sales durability is at risk.",
+    "Storage is almost full. New offline sales may not be saved reliably.",
   sync_stuck:
-    "Offline sales on this terminal are held and not syncing. A review may be blocking the queue.",
+    "Offline sales are waiting to sync. A pending review may be holding the queue.",
 };
 
 type PosTerminalHealthAlertPayload = PosTerminalHealthAlertProps & {

@@ -5,6 +5,7 @@ import DailyManagerReport, {
   dailyManagerReportPreviewProps,
   type DailyManagerReportProps,
 } from "./DailyManagerReport";
+import DailyManagerReportComparisonPreview from "./DailyManagerReportComparisonPreview";
 import { currencyFormatter } from "../utils";
 
 const ghs = currencyFormatter("GHS");
@@ -32,9 +33,24 @@ const baseProps: DailyManagerReportProps = {
   paymentTotals: [
     { method: "Cash", amount: ghs.format(1201.82), transactionCount: 18 },
   ],
+  topItems: [
+    { name: "Silk Press 18\"", detail: "SP18-NAT", unitsSold: 8 },
+    { name: "Body Wave 20\"", detail: "BW20-1B", unitsSold: 6 },
+    { name: "HD Lace Closure", detail: "HDLC-14", unitsSold: 4 },
+  ],
+  topItemsUrl:
+    "https://athena.wigclub.store/wigclub/store/wigclub/reports?daysStart=2026-07-03&daysEnd=2026-07-03&daysTableStart=2026-07-03&daysTableEnd=2026-07-03&selectedDay=2026-07-03&units=true",
 };
 
 describe("DailyManagerReport", () => {
+  it("shows top items in the comparison preview", async () => {
+    const html = await render(<DailyManagerReportComparisonPreview />);
+
+    expect(html).toContain("Top items by units sold");
+    expect(html).toContain('Silk Press 18&quot;');
+    expect(html).toContain("View all top movers");
+  });
+
   it("renders the applied automation outcome as a full daily status update", async () => {
     const html = await render(<DailyManagerReport {...baseProps} />);
 
@@ -43,18 +59,26 @@ describe("DailyManagerReport", () => {
     expect(html).not.toContain(
       "max-width:640px;background-color:#ffffff;border:1px solid #e2e3e6;border-radius:8px",
     );
-    expect(html).toContain("Completed under policy");
-    expect(html).toContain("Athena completed EOD Review under store policy.");
+    expect(html).toContain("Day closed");
+    expect(html).toContain("The day is closed and the report is ready to review.");
+    expect(html).not.toContain(">Status<");
     expect(html).toContain("No follow-up needed for this operating day.");
     expect(html).toContain("GH₵12,430");
     expect(html).toContain("84 transactions");
     expect(html).toContain("1 report");
     expect(html).not.toContain("1 reports");
     expect(html).toContain("View EOD Review");
+    expect(html).toContain("background-color:transparent");
+    expect(html).toContain("border:1px solid #e2e3e6");
     expect(html).toContain("↗");
     expect(html).not.toContain("lucide-");
     expect(html).not.toContain("<svg");
     expect(html).not.toContain("Athena keeps the full close record");
+    expect(html).toContain("Top items by units sold");
+    expect(html).toContain("Silk Press 18");
+    expect(html).toContain("8 units");
+    expect(html).toContain("View all top movers");
+    expect(html).toContain(baseProps.topItemsUrl?.replaceAll("&", "&amp;"));
   });
 
   it("supports a bordered report frame", async () => {
@@ -81,7 +105,7 @@ describe("DailyManagerReport", () => {
       />,
     );
 
-    expect(html).toContain("Ready for manager review");
+    expect(html).toContain("Ready to close");
     expect(html).not.toContain("Review the close when you are ready.");
     expect(html).toContain("Manager review");
     expect(html).toContain(
@@ -109,10 +133,12 @@ describe("DailyManagerReport", () => {
       <DailyManagerReport {...dailyManagerReportPreviewProps} />,
     );
 
-    expect(html).toContain("Ready for manager review");
-    expect(html).toContain("Register session is still open");
-    expect(html).toContain("Front Counter is still open.");
-    expect(html).toContain("GH₵1,201.82");
+    expect(html).toContain("Day closed");
+    expect(html).toContain("Saturday, Aug 8");
+    expect(html).toContain("GH₵1,935");
+    expect(html).toContain("Units sold");
+    expect(html).toContain("Transactions");
+    expect(html).toContain("GH₵573");
     expect(html).toContain("Expected cash");
   });
 
@@ -130,9 +156,9 @@ describe("DailyManagerReport", () => {
       />,
     );
 
-    expect(html).toContain("Status unavailable");
-    expect(html).toContain("Open Athena to review the daily report.");
-    expect(html).not.toContain("Ready for manager review");
+    expect(html).toContain("Report needs review");
+    expect(html).toContain("Open Athena to review this report.");
+    expect(html).not.toContain("Ready to close");
     expect(html).not.toContain("Register session is still open");
     expect(html).not.toContain("GH₵1,201.82");
   });
@@ -248,7 +274,7 @@ describe("DailyManagerReport", () => {
       />,
     );
 
-    expect(html).toContain("Completed under policy");
+    expect(html).toContain("Day closed");
     expect(html).not.toContain("Cash variance");
     expect(html).toContain("Opening handoff");
     expect(html).toContain("1 item for the next opening");
@@ -281,9 +307,9 @@ describe("DailyManagerReport", () => {
       />,
     );
 
-    expect(html).toContain("Automation needs attention");
+    expect(html).toContain("Close could not be completed");
     expect(html).toContain(
-      "Athena could not complete the automated EOD check.",
+      "Athena could not complete the close.",
     );
     expect(html).toContain("Required action");
     expect(html).toContain("Open EOD Review");
