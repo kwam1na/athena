@@ -784,6 +784,39 @@ describe("Products", () => {
     expect(screen.getByText("Draft Book")).toBeInTheDocument();
   });
 
+  it("visually separates archived products returned by search", async () => {
+    const user = userEvent.setup();
+    const archivedWig = makeProduct({
+      availability: "archived",
+      id: "product-archived-wig",
+      inventoryCount: 0,
+      name: "Archived Wig",
+      sku: "ARCHIVED-18",
+    });
+    mockedProducts.skuSearchResults = [
+      makeSkuSearchResult(archivedWig, {
+        match: { kind: "text", matchedValue: "archived", rank: 1 },
+      }),
+    ];
+
+    render(<Products />);
+
+    await user.type(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+      "archived",
+    );
+
+    expect(screen.getByText("Archived")).toBeInTheDocument();
+    expect(screen.getByText("Archived Wig").closest("tr")).toHaveClass(
+      "[&>td]:opacity-45",
+    );
+    expect(screen.getByText("Archived Wig").closest("tr")).toHaveClass(
+      "border-dashed",
+    );
+  });
+
   it("searches hidden SKUs for hidden draft products", async () => {
     const user = userEvent.setup();
     mockedProducts.categories = [

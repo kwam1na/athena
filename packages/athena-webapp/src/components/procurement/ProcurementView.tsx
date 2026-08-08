@@ -1687,33 +1687,42 @@ export function ProcurementViewContent({
                     </p>
                   </div>
                   <div className="divide-y divide-border/70">
-                    {catalogOnlySearchOptions.map((option) => (
-                      <article
-                        className="bg-background px-layout-md py-layout-md"
-                        key={option.productSkuId}
-                      >
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0">
-                            <h4 className="text-sm font-semibold capitalize text-foreground">
-                              {option.productName}
-                            </h4>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {option.subtitle || option.metadata}
-                            </p>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {option.sku ? (
-                              <span className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                                {option.sku}
+                    {catalogOnlySearchOptions.map((option) => {
+                      const isArchived =
+                        option.searchResult.productAvailability === "archived";
+
+                      return (
+                        <article
+                          className={cn(
+                            "bg-background px-layout-md py-layout-md",
+                            isArchived &&
+                              "bg-muted/30 [&_h4]:opacity-45 [&_p]:opacity-45 [&_span]:opacity-45",
+                          )}
+                          key={option.productSkuId}
+                        >
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                              <h4 className="text-sm font-semibold capitalize text-foreground">
+                                {option.productName}
+                              </h4>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {option.subtitle || option.metadata}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {option.sku ? (
+                                <span className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                                  {option.sku}
+                                </span>
+                              ) : null}
+                              <span className="rounded-md border border-border bg-muted/50 px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                                No procurement action
                               </span>
-                            ) : null}
-                            <span className="rounded-md border border-border bg-muted/50 px-2 py-1 text-[11px] font-medium text-muted-foreground">
-                              No procurement action
-                            </span>
+                            </div>
                           </div>
-                        </div>
-                      </article>
-                    ))}
+                        </article>
+                      );
+                    })}
                   </div>
                 </section>
               ) : null}

@@ -1468,6 +1468,9 @@ export async function resolveSkuIdentity(
       String(productSkuId),
     ...(sku.netPrice !== undefined ? { netPriceMinor: sku.netPrice } : {}),
     ...(unitCostMinor !== undefined ? { unitCostMinor } : {}),
+    ...(product?.storeId === sku.storeId
+      ? { productAvailability: product.availability }
+      : {}),
     // Stock on hand. Required on the `productSku` document already read
     // above, so it is free — no extra read, no widened budget.
     quantityAvailable: sku.quantityAvailable,

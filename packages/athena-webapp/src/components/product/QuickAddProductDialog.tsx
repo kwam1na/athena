@@ -57,6 +57,7 @@ export type QuickAddExistingSkuOption = {
   productSkuId: string;
   name: string;
   sku: string;
+  productAvailability?: "archived" | "draft" | "live";
   priceLabel?: string;
   category?: string;
   barcode?: string;
@@ -173,6 +174,7 @@ function buildQuickAddExistingSkuOptionFromSearchResult(
     barcode: result.barcode ?? undefined,
     category: result.categoryName ?? undefined,
     name: result.productName,
+    productAvailability: result.productAvailability,
     productSkuId: String(result.productSkuId),
     sku: result.sku?.trim() || String(result.productSkuId),
     variantAttributes: [
@@ -815,6 +817,8 @@ export function QuickAddProductDialog({
                       matchingExistingSkus.map((option) => {
                         const isSelected =
                           selectedExistingSkuId === option.productSkuId;
+                        const isArchived =
+                          option.productAvailability === "archived";
                         const metadata = getExistingSkuMetadata(option);
 
                         return (
@@ -823,7 +827,9 @@ export function QuickAddProductDialog({
                             type="button"
                             className={cn(
                               "flex min-h-14 w-full items-center justify-between gap-4 rounded-md border px-4 py-3 text-left text-sm transition-colors",
-                              isSelected
+                              isArchived
+                                ? "border-border bg-muted/30 [&_span]:opacity-45"
+                                : isSelected
                                 ? "border-primary bg-primary/5"
                                 : "border-border bg-background hover:bg-muted/50",
                             )}
@@ -840,6 +846,11 @@ export function QuickAddProductDialog({
                               <span className="block truncate text-xs text-muted-foreground">
                                 {metadata.join(" - ")}
                               </span>
+                              {isArchived ? (
+                                <span className="mt-1 block text-xs text-muted-foreground">
+                                  Archived
+                                </span>
+                              ) : null}
                             </span>
                             {isSelected && (
                               <span className="shrink-0 text-xs font-medium text-primary">

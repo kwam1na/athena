@@ -162,7 +162,7 @@ export function ReportsItemsPerformance({
             >
               <SelectTrigger
                 aria-label="Period type"
-                className="h-9 w-28 rounded-lg border-0 bg-transparent px-3 shadow-none focus:ring-2 focus:ring-ring focus:ring-offset-0"
+                className="h-9 w-28 rounded-lg border-0 bg-transparent px-3 shadow-none focus:ring-2 focus:ring-transparent focus:ring-offset-0"
               >
                 <SelectValue />
               </SelectTrigger>

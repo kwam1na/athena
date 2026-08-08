@@ -1,8 +1,9 @@
 import { useQuery } from "convex/react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { ArrowDown, ArrowUpRight, Package } from "lucide-react";
+import { Archive, ArrowDown, ArrowUpRight, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
 import { formatOperationsMetricComparison } from "@/components/operations/operationsMetricFormatting";
 import { getOrigin } from "@/lib/navigationUtils";
@@ -308,14 +309,27 @@ export function ReportsSkuDetailView({
                 className="min-w-0"
                 data-testid="reports-sku-primary-identity"
               >
-                <h2
-                  className="truncate text-2xl font-semibold tracking-tight text-foreground"
-                  data-testid="reports-sku-detail-name"
-                >
-                  {detail
-                    ? formatSkuDisplayName(detail.identity, productSkuId)
-                    : "\u00A0"}
-                </h2>
+                <div className="flex min-w-0 items-center gap-layout-sm">
+                  <h2
+                    className="truncate text-2xl font-semibold tracking-tight text-foreground"
+                    data-testid="reports-sku-detail-name"
+                  >
+                    {detail
+                      ? formatSkuDisplayName(detail.identity, productSkuId)
+                      : "\u00A0"}
+                  </h2>
+                  {detail?.identity?.productAvailability === "archived" ? (
+                    <Badge
+                      aria-label="Archived product"
+                      className="h-5 shrink-0 gap-1 border-border/80 bg-muted/60 px-1.5 text-[10px] font-medium text-muted-foreground"
+                      size="sm"
+                      variant="outline"
+                    >
+                      <Archive aria-hidden="true" className="h-3 w-3" />
+                      Archived
+                    </Badge>
+                  ) : null}
+                </div>
               </div>
               {detail ? (
                 <div

@@ -798,19 +798,39 @@ function buildBlockers(
     .filter((item) => item.severity === "blocker")
     .map((item) => ({
       title: item.title,
-      message: item.message,
+      message: formatBlockerMessage(item),
       tone: "danger" as const,
     }));
 }
 
-function buildPreparedBlockers(
+export function buildPreparedBlockers(
   snapshot: PreparedDailyCloseSnapshot,
 ): DailyManagerReportItem[] {
   return snapshot.blockers.map((item) => ({
     title: item.title,
-    message: item.message,
+    message: formatBlockerMessage(item),
     tone: "danger" as const,
   }));
+}
+
+function formatBlockerMessage(item: DailyCloseReportItem) {
+  if (item.category !== "register_session") {
+    return item.message;
+  }
+
+  const terminal = optionalMetadataLabel(item.metadata, "terminal");
+  const register = optionalMetadataLabel(item.metadata, "register");
+  const location = [terminal, register].filter(Boolean).join(" · ");
+
+  return location ? `${location}. ${item.message}` : item.message;
+}
+
+function optionalMetadataLabel(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 export function buildPaymentTotals(

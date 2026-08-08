@@ -237,7 +237,7 @@ export function buildPosFeatures({
   posLinkParams: { orgUrlSlug: string; storeUrlSlug: string } | null;
   setupRequired: boolean;
 }): PosFeatureConfig[] {
-  return [
+  const features: PosFeatureConfig[] = [
     {
       title: "POS",
       description: setupRequired
@@ -319,6 +319,28 @@ export function buildPosFeatures({
       available:
         canAccessPOS && hasFinancialDetailsAccess && Boolean(liveLinkParams),
     },
+  ];
+
+  if (hasFinancialDetailsAccess) {
+    return features;
+  }
+
+  const [
+    pos,
+    expenseProducts,
+    productLookup,
+    transactions,
+    expenseReports,
+    ...remainingFeatures
+  ] = features;
+
+  return [
+    pos,
+    expenseProducts,
+    expenseReports,
+    transactions,
+    productLookup,
+    ...remainingFeatures,
   ];
 }
 

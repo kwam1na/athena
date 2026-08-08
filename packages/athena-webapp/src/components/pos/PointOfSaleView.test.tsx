@@ -471,6 +471,13 @@ describe("PointOfSaleView", () => {
     expect(
       screen.queryByRole("link", { name: /POS Settings/i }),
     ).not.toBeInTheDocument();
+    expect(
+      Array.from(
+        document.querySelectorAll(
+          '[data-remote-assist-control="pos-workspace-feature"]',
+        ),
+      ).map((link) => link.getAttribute("data-remote-assist-control-label")),
+    ).toEqual(["POS", "Expense Products", "Expense Reports", "Transactions"]);
   });
 
   it("links manager-level users to POS settings from the POS landing page", () => {

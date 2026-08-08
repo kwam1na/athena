@@ -1018,6 +1018,8 @@ export type ReportDayRow = ReportDayMetrics & {
  */
 export type ReportSkuIdentity = {
   displayName: string;
+  /** Current owning-product availability, when the product still exists. */
+  productAvailability?: "archived" | "draft" | "live";
   sku?: string;
   size?: string;
   /** Current catalog net price in the store's minor currency unit, when set. */
