@@ -39,6 +39,7 @@ import {
   reconcileRecentAcceptedWeeksForStore,
   rebuildCurrentWeek,
   availableWeekCurrent,
+  computeWeeklyCashVariancePosture,
   computeWeeklyVariancePosture,
   refreshAcceptedWeekForDate,
 } from "./weekly";
@@ -444,6 +445,7 @@ async function insertFoldedCloseDay(
       storeId: args.storeId,
       closeId: args.closeId,
       closeAcceptedAt: NOW,
+      closeVarianceMinor: 0,
       foldedAt: args.foldedAt ?? NOW + 1,
       foldVersion: 1,
       factCount: 1,
@@ -521,6 +523,30 @@ describe("computeWeeklyVariancePosture", () => {
     expect(posture.outsideScheduleCoveredDayCount).toBe(0);
     expect(posture.closeVarianceMinor).toBe(posture.scheduledVarianceMinor);
     expect(posture.closeVarianceMinor).toBe(-7);
+  });
+});
+
+describe("computeWeeklyCashVariancePosture", () => {
+  it("totals accepted Daily Close cash variance separately from sales reconciliation", () => {
+    const days = period().dates.map((entry, index) =>
+      day({
+        operatingDate: entry.localDate,
+        ...(entry.included
+          ? { closeId: `close-${index}` as Id<"dailyClose"> }
+          : {}),
+      }),
+    );
+    const closes = new Map<string, Pick<Doc<"dailyClose">, "summary">>([
+      ["close-0", { summary: { netCashVariance: 6500 } }],
+      ["close-1", { summary: { netCashVariance: -1000 } }],
+    ]);
+
+    expect(computeWeeklyCashVariancePosture(period(), days, closes)).toEqual({
+      cashVarianceMinor: 5500,
+      coverage: "partial",
+      coveredIncludedDayCount: 2,
+      includedDayCount: 6,
+    });
   });
 });
 
@@ -1334,6 +1360,7 @@ describe("weekly materialization", () => {
         storeId,
         closeId,
         closeAcceptedAt: NOW,
+        closeVarianceMinor: 0,
         foldedAt: NOW + 1,
         foldVersion: 1,
         factCount: 1,
@@ -1355,6 +1382,11 @@ describe("weekly materialization", () => {
         )
         .unique();
       expect(baseline?.included.netSalesMinor).toBe(100);
+      expect(
+        baseline?.scheduleLineage.find(
+          (entry) => entry.localDate === "2026-07-04",
+        )?.dayClosed,
+      ).toBe(true);
       expect(baseline?.amendment).toMatchObject({
         included: { netSalesMinor: 600 },
         includedNetSalesDeltaMinor: 500,

@@ -136,6 +136,7 @@ function buildAcceptedWeeklyManagerReportPayload(args: {
     .filter(Boolean)
     .join(" ");
   const variance = accepted.variancePosture;
+  const cashVariance = accepted.cashVariancePosture;
   const inventory = accepted.inventoryAttention;
 
   return {
@@ -182,6 +183,15 @@ function buildAcceptedWeeklyManagerReportPayload(args: {
               title: "Close variance",
               message: varianceMessage(variance.closeVarianceMinor, money),
               meta: `${variance.coveredIncludedDayCount} of ${variance.includedDayCount} scheduled days closed`,
+            },
+          ]
+        : []),
+      ...(cashVariance && cashVariance.coverage !== "unavailable"
+        ? [
+            {
+              title: "Cash variance",
+              message: cashVarianceMessage(cashVariance.cashVarianceMinor, money),
+              meta: `${cashVariance.coveredIncludedDayCount} of ${cashVariance.includedDayCount} scheduled days covered`,
             },
           ]
         : []),
@@ -265,6 +275,14 @@ function varianceMessage(
 ): string {
   if (varianceMinor === 0) return "Closing cash matched across the week.";
   return `Net close variance was ${money(Math.abs(varianceMinor))} ${varianceMinor < 0 ? "short" : "over"}.`;
+}
+
+function cashVarianceMessage(
+  varianceMinor: number,
+  money: (minor: number) => string,
+): string {
+  if (varianceMinor === 0) return "Cash counts matched across the week.";
+  return `Net cash variance was ${money(Math.abs(varianceMinor))} ${varianceMinor < 0 ? "short" : "over"}.`;
 }
 
 function formatDateRange(start: string, end: string): string {

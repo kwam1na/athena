@@ -233,6 +233,17 @@ const weeklyVariancePosture = v.object({
   outsideScheduleCoveredDayCount: v.optional(v.number()),
 });
 
+const weeklyCashVariancePosture = v.object({
+  cashVarianceMinor: v.number(),
+  coverage: v.union(
+    v.literal("complete"),
+    v.literal("partial"),
+    v.literal("unavailable"),
+  ),
+  coveredIncludedDayCount: v.number(),
+  includedDayCount: v.number(),
+});
+
 const weeklyLifecyclePosture = v.union(
   v.literal("live"),
   v.literal("awaiting_final_close"),
@@ -301,6 +312,7 @@ export const reportWeekCurrentSchema = v.union(
     amendment: v.optional(weeklyAmendment),
     priorPeriod: v.optional(weeklyPriorPeriod),
     variancePosture: v.optional(weeklyVariancePosture),
+    cashVariancePosture: v.optional(weeklyCashVariancePosture),
   }),
 );
 
@@ -337,6 +349,7 @@ export const reportWeekAcceptedSchema = v.object({
   amendment: v.optional(weeklyAmendment),
   priorPeriod: v.optional(weeklyPriorPeriod),
   variancePosture: v.optional(weeklyVariancePosture),
+  cashVariancePosture: v.optional(weeklyCashVariancePosture),
 });
 
 /** One declarative per-store work marker, drained by the existing sweeper. */

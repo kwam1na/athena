@@ -652,6 +652,38 @@ export function computeWeeklyVariancePosture(
   };
 }
 
+/**
+ * Daily Close cash-count variance is distinct from the reporting fold's
+ * sales-to-close reconciliation. Keep its accepted-week evidence separate.
+ */
+export function computeWeeklyCashVariancePosture(
+  period: Extract<WeeklyPeriod, { kind: "resolved" }>,
+  days: readonly Pick<Doc<"reportDay">, "closeId" | "operatingDate">[],
+  closes: ReadonlyMap<string, Pick<Doc<"dailyClose">, "summary">>,
+) {
+  const included = new Set(period.includedDates);
+  const covered = days.flatMap((day) => {
+    if (!included.has(day.operatingDate) || !day.closeId) return [];
+    const variance = closes.get(String(day.closeId))?.summary;
+    const netCashVariance =
+      variance && typeof variance.netCashVariance === "number"
+        ? variance.netCashVariance
+        : undefined;
+    return netCashVariance === undefined ? [] : [netCashVariance];
+  });
+  return {
+    cashVarianceMinor: covered.reduce((total, value) => total + value, 0),
+    coverage:
+      covered.length === 0
+        ? ("unavailable" as const)
+        : covered.length === period.includedDates.length
+          ? ("complete" as const)
+          : ("partial" as const),
+    coveredIncludedDayCount: covered.length,
+    includedDayCount: period.includedDates.length,
+  };
+}
+
 function shiftIsoDate(localDate: string, days: number) {
   return new Date(Date.parse(`${localDate}T12:00:00.000Z`) + days * 86_400_000)
     .toISOString()
@@ -1471,13 +1503,19 @@ export async function materializeAcceptedWeek(args: {
     period.finalScheduledDate,
   );
   if (!closePosture) return "incomplete";
+  const acceptedCloses = new Map<string, Pick<Doc<"dailyClose">, "summary">>();
+  for (const day of acceptedDays) {
+    if (!day.closeId || acceptedCloses.has(String(day.closeId))) continue;
+    const acceptedClose = await args.ctx.db.get("dailyClose", day.closeId);
+    if (acceptedClose) acceptedCloses.set(String(day.closeId), acceptedClose);
+  }
   const amendment = deriveWeeklyAmendment({
     accepted: {
       amendment: undefined,
       closeId: args.closeId,
       included: folded.included,
       outsideSchedule: folded.outsideSchedule,
-      scheduleLineage: folded.scheduleLineage.map((row) => ({
+      scheduleLineage: currentFolded.scheduleLineage.map((row) => ({
         ...row,
         scheduleVersionId: row.scheduleVersionId as Id<"storeSchedule"> | null,
       })),
@@ -1500,7 +1538,7 @@ export async function materializeAcceptedWeek(args: {
       cutoffObservedAt,
       included: folded.included,
       outsideSchedule: folded.outsideSchedule,
-      scheduleLineage: folded.scheduleLineage,
+      scheduleLineage: currentFolded.scheduleLineage,
       topSkuLeaders,
     }),
   );
@@ -1516,7 +1554,7 @@ export async function materializeAcceptedWeek(args: {
     baselineFingerprint: fingerprint,
     included: folded.included,
     outsideSchedule: folded.outsideSchedule,
-    scheduleLineage: folded.scheduleLineage.map((row) => ({
+    scheduleLineage: currentFolded.scheduleLineage.map((row) => ({
       ...row,
       scheduleVersionId: row.scheduleVersionId as Id<"storeSchedule"> | null,
     })),
@@ -1529,6 +1567,11 @@ export async function materializeAcceptedWeek(args: {
     amendment,
     priorPeriod,
     variancePosture: computeWeeklyVariancePosture(period, acceptedDays),
+    cashVariancePosture: computeWeeklyCashVariancePosture(
+      period,
+      acceptedDays,
+      acceptedCloses,
+    ),
   });
   const deliverySchedule = await getStoreScheduleContextForStoreAtWithCtx(
     args.ctx,
