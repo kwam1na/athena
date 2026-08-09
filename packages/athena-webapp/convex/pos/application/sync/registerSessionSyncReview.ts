@@ -21,6 +21,8 @@ export const INVENTORY_SYNC_REVIEW_SUMMARY =
   "Inventory needs manager review for a synced offline sale.";
 export const MISSING_REGISTER_SESSION_MAPPING_SYNC_REVIEW_SUMMARY =
   "Register session mapping is missing for synced POS history.";
+export const PERSISTENT_SYNC_FAILURE_SUMMARY =
+  "POS sync uploads keep failing on the server for this terminal.";
 export const DUPLICATE_POS_SESSION_SALE_SYNC_REVIEW_SUMMARY =
   "Local POS session id was reused by a different synced sale.";
 export const DUPLICATE_REGISTER_OPEN_SYNC_REVIEW_SUMMARIES = new Set([
@@ -154,6 +156,18 @@ export function classifyRegisterSessionSyncReview(
 ): RegisterSessionSyncReviewClassification {
   const summary = conflict.summary?.trim() ?? "";
   const details = conflict.details ?? {};
+
+  // Dead-letter marker for a batch the server threw on every upload attempt
+  // (see deadLetter.ts). Checked BEFORE the general server_rejected branch:
+  // there is nothing to apply or override — the server never accepted the
+  // batch — so the only manager action is to acknowledge the marker.
+  if (summary === PERSISTENT_SYNC_FAILURE_SUMMARY) {
+    return {
+      actionPolicy: "reject_only",
+      conflictType: "server_rejected",
+      reviewKind: "server_rejected",
+    };
+  }
 
   if (
     conflict.status === "rejected" ||

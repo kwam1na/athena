@@ -87,7 +87,41 @@ export interface CreatePosLocalSyncSchedulerOptions {
     heldEventIds: string[],
     context: { consecutiveCount: number },
   ): void;
+  /**
+   * Consecutive upload failures before `onPersistentFailure` fires. Counts
+   * only failures thrown by `uploadBatch` itself (a server-side throw), not
+   * local read or settlement failures. Defaults to
+   * DEFAULT_PERSISTENT_FAILURE_THRESHOLD.
+   */
+  persistentFailureThreshold?: number;
+  /**
+   * Seed for the consecutive-failure streak. The runtime creates a fresh
+   * scheduler per drain trigger, so without a seed the streak would reset
+   * with every instance and never cross the threshold. Seeding at or past
+   * the threshold means the streak already escalated in a previous instance;
+   * this one will not re-fire until a success resets the streak.
+   */
+  initialFailureCount?: number;
+  /**
+   * Invoked ONCE per failure streak, when the streak crosses the threshold:
+   * the batch in flight is being thrown away by the server on every attempt
+   * and blind retry under backoff will never resolve it. Lets the runtime
+   * dead-letter the batch — park it for review and surface a manager-visible
+   * work item — instead of retrying forever. A successful drain resets the
+   * streak and re-arms the escalation.
+   */
+  onPersistentFailure?(
+    events: PosLocalPendingEvent[],
+    context: { consecutiveCount: number; message: string | null },
+  ): void;
 }
+
+/**
+ * Mirrors SYNC_FAILING_ALERT_THRESHOLD on the cloud classifier: at the
+ * default 5s-base/120s-cap backoff, five consecutive failures is a few
+ * minutes of a wedged pipeline — past any transient blip.
+ */
+export const DEFAULT_PERSISTENT_FAILURE_THRESHOLD = 5;
 
 export function createPosLocalSyncScheduler(
   options: CreatePosLocalSyncSchedulerOptions,
@@ -110,11 +144,17 @@ export function createPosLocalSyncScheduler(
   let timer: ReturnType<typeof setTimeout> | null = null;
   let foregroundInterval: ReturnType<typeof setInterval> | null = null;
   let backoffUntil: number | null = null;
-  let failureCount = 0;
+  let failureCount = Math.max(0, options.initialFailureCount ?? 0);
   let lastFailure: string | null = null;
   let lastTrigger: PosLocalSyncTrigger | null = null;
   let heldWithoutProgress = false;
   let heldWithoutProgressCount = 0;
+  const persistentFailureThreshold =
+    options.persistentFailureThreshold ?? DEFAULT_PERSISTENT_FAILURE_THRESHOLD;
+  /** The batch whose uploadBatch call is currently awaited, else null. */
+  let batchInFlight: PosLocalPendingEvent[] | null = null;
+  /** True once the current failure streak has fired onPersistentFailure. */
+  let persistentFailureEscalated = failureCount >= persistentFailureThreshold;
 
   const status = (): PosLocalSyncStatus => ({
     running,
@@ -193,12 +233,17 @@ export function createPosLocalSyncScheduler(
         lastFailure = null;
         backoffUntil = null;
         failureCount = 0;
+        persistentFailureEscalated = false;
         notifyStatusChange();
         return;
       }
 
       for (const batch of batches) {
+        // In flight only across the server call: a throw from anywhere else
+        // (local reads, settlement writes) must not read as a poison batch.
+        batchInFlight = batch;
         const result = await options.uploadBatch(batch, { trigger });
+        batchInFlight = null;
         if (result.reviewEventIds?.length) {
           await options.markNeedsReview?.(result.reviewEventIds);
         }
@@ -239,10 +284,25 @@ export function createPosLocalSyncScheduler(
       failureCount = 0;
       heldWithoutProgress = false;
       heldWithoutProgressCount = 0;
+      persistentFailureEscalated = false;
       notifyStatusChange();
     } catch (error) {
       failureCount += 1;
       lastFailure = getErrorMessage(error);
+      if (
+        batchInFlight !== null &&
+        failureCount >= persistentFailureThreshold &&
+        !persistentFailureEscalated
+      ) {
+        // The server has thrown this batch away `failureCount` times in a
+        // row; backoff-retry will never resolve it. Escalate once per streak.
+        persistentFailureEscalated = true;
+        options.onPersistentFailure?.([...batchInFlight], {
+          consecutiveCount: failureCount,
+          message: lastFailure,
+        });
+      }
+      batchInFlight = null;
       backoffUntil =
         now() +
         Math.min(

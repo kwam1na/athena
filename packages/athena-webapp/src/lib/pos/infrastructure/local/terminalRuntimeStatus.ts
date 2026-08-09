@@ -105,6 +105,12 @@ export type PosTerminalRuntimeSyncDebugInput = {
     | "missing_locally"
     | "awaiting_review";
   lastFailure?: string | null;
+  /**
+   * The scheduler's consecutive drain-failure streak. Feeds the cloud
+   * `sync_failing` health alert; zero is omitted from the payload so an idle
+   * or healthy terminal reports nothing.
+   */
+  consecutiveFailureCount?: number;
   lastTrigger?: PosLocalSyncTrigger;
   localOnlyEventCount?: number;
   nextPendingUploadSequence?: number;
@@ -506,6 +512,14 @@ export function buildPosTerminalRuntimeStatus(
         : {}),
       ...(input.syncDebug?.heldWithoutProgress !== undefined
         ? { heldWithoutProgress: input.syncDebug.heldWithoutProgress }
+        : {}),
+      ...(typeof input.syncDebug?.consecutiveFailureCount === "number" &&
+      input.syncDebug.consecutiveFailureCount > 0
+        ? {
+            consecutiveFailureCount: Math.floor(
+              input.syncDebug.consecutiveFailureCount,
+            ),
+          }
         : {}),
       ...(input.syncDebug?.heldBehindMissingUploadSequence !== undefined
         ? {

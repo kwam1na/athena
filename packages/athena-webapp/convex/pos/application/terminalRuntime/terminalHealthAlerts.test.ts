@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   POS_TERMINAL_HEALTH_ALERT_COOLDOWN_MS,
+  SYNC_FAILING_ALERT_THRESHOLD,
   classifyTerminalHealthAlertConditions,
   resolveTerminalHealthAlertTransitions,
 } from "./terminalHealthAlerts";
@@ -62,6 +63,46 @@ describe("classifyTerminalHealthAlertConditions", () => {
       "sync_stuck",
     ]);
   });
+
+  it("flags a persistently failing sync at the threshold", () => {
+    expect(
+      classifyTerminalHealthAlertConditions({
+        ...healthy,
+        sync: {
+          heldWithoutProgress: false,
+          consecutiveFailureCount: SYNC_FAILING_ALERT_THRESHOLD,
+        },
+      }),
+    ).toEqual(["sync_failing"]);
+  });
+
+  it("does not flag failures below the threshold", () => {
+    expect(
+      classifyTerminalHealthAlertConditions({
+        ...healthy,
+        sync: {
+          heldWithoutProgress: false,
+          consecutiveFailureCount: SYNC_FAILING_ALERT_THRESHOLD - 1,
+        },
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not flag a heartbeat that omits the failure count", () => {
+    expect(classifyTerminalHealthAlertConditions(healthy)).toEqual([]);
+  });
+
+  it("reports a stuck AND failing sync as two conditions", () => {
+    expect(
+      classifyTerminalHealthAlertConditions({
+        ...healthy,
+        sync: {
+          heldWithoutProgress: true,
+          consecutiveFailureCount: SYNC_FAILING_ALERT_THRESHOLD,
+        },
+      }),
+    ).toEqual(["sync_stuck", "sync_failing"]);
+  });
 });
 
 describe("resolveTerminalHealthAlertTransitions", () => {
@@ -117,6 +158,44 @@ describe("resolveTerminalHealthAlertTransitions", () => {
 
     expect(result.conditionsToAlert).toEqual(["sync_stuck"]);
     expect(result.healthAlerts).toEqual({ sync_stuck: now });
+  });
+
+  it("alerts once when failures cross the threshold and not while they persist", () => {
+    const belowThreshold = {
+      ...healthy,
+      sync: {
+        heldWithoutProgress: false,
+        consecutiveFailureCount: SYNC_FAILING_ALERT_THRESHOLD - 1,
+      },
+    };
+    const atThreshold = {
+      ...healthy,
+      sync: {
+        heldWithoutProgress: false,
+        consecutiveFailureCount: SYNC_FAILING_ALERT_THRESHOLD,
+      },
+    };
+    const entry = resolveTerminalHealthAlertTransitions({
+      previous: belowThreshold,
+      next: atThreshold,
+      now: 10_000,
+    });
+    expect(entry.conditionsToAlert).toEqual(["sync_failing"]);
+    expect(entry.healthAlerts).toEqual({ sync_failing: 10_000 });
+
+    // Still failing on the next heartbeat: no re-alert, the condition is held.
+    const persisting = resolveTerminalHealthAlertTransitions({
+      previous: { ...atThreshold, healthAlerts: { sync_failing: 10_000 } },
+      next: {
+        ...healthy,
+        sync: {
+          heldWithoutProgress: false,
+          consecutiveFailureCount: SYNC_FAILING_ALERT_THRESHOLD + 3,
+        },
+      },
+      now: 20_000,
+    });
+    expect(persisting.conditionsToAlert).toEqual([]);
   });
 
   it("preserves other conditions' alert timestamps when stamping a new one", () => {

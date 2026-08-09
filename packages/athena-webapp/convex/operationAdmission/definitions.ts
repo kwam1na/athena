@@ -255,6 +255,14 @@ export const ingestLocalEventsOperationDefinition = storeWriteOperation({
   expectedEpochArg: "expectedDemoEpoch",
 });
 
+export const reportLocalSyncDeadLetterOperationDefinition =
+  storeWriteOperation({
+    functionName: "pos/public/sync:reportLocalSyncDeadLetter",
+    operationId: "pos/public/sync.reportLocalSyncDeadLetter",
+    capability: "pos.sync.write",
+    expectedEpochArg: "expectedDemoEpoch",
+  });
+
 export const ingestRegisterSessionActivityOperationDefinition =
   storeWriteOperation({
     functionName: "pos/public/sync:ingestRegisterSessionActivity",
@@ -666,6 +674,7 @@ export const OPERATION_ADMISSION_DEFINITIONS = [
   quickAddSkuOperationDefinition,
   repairCatalogSummaryOperationDefinition,
   ingestLocalEventsOperationDefinition,
+  reportLocalSyncDeadLetterOperationDefinition,
   ingestRegisterSessionActivityOperationDefinition,
   registerTerminalOperationDefinition,
   recordRegisterSessionDepositOperationDefinition,

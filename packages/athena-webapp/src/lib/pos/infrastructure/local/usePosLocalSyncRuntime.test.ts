@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   claimTerminalRecoveryCommand: vi.fn(),
   ingestLocalEvents: vi.fn(),
   ingestRegisterSessionActivity: vi.fn(),
+  reportLocalSyncDeadLetter: vi.fn(),
   listTerminalRecoveryCommands: vi.fn(),
   getTerminalRuntimeConfig: vi.fn(),
   reportTerminalRuntimeStatus: vi.fn(),
@@ -29,6 +30,9 @@ vi.mock("convex/react", () => ({
     if (mutation === "ingestRegisterSessionActivity") {
       return mocks.ingestRegisterSessionActivity;
     }
+    if (mutation === "reportLocalSyncDeadLetter") {
+      return mocks.reportLocalSyncDeadLetter;
+    }
     return mocks.ingestLocalEvents;
   },
   useQuery: (query: string, args: unknown) =>
@@ -46,6 +50,7 @@ vi.mock("~/convex/_generated/api", () => ({
         sync: {
           ingestLocalEvents: "ingestLocalEvents",
           ingestRegisterSessionActivity: "ingestRegisterSessionActivity",
+          reportLocalSyncDeadLetter: "reportLocalSyncDeadLetter",
         },
         terminals: {
           acknowledgeTerminalRecoveryCommand:
@@ -700,6 +705,113 @@ describe("usePosLocalSyncRuntimeStatus", () => {
 
     expect(oldStore.markEventsNeedsReview).not.toHaveBeenCalled();
     expect(onLocalEventsChanged).not.toHaveBeenCalled();
+  });
+
+  it("dead-letters a batch the server throws on every attempt: parks it for review and reports the conflict", { timeout: 20_000 }, async () => {
+    mocks.ingestLocalEvents.mockRejectedValue(
+      new Error("Server Error: Uncaught Error at recordFacts"),
+    );
+    mocks.reportLocalSyncDeadLetter.mockResolvedValue({
+      kind: "ok",
+      data: { conflictId: "conflict-1", alreadyReported: false },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            payload: {
+              openingFloat: 100,
+              status: "open",
+            },
+            sequence: 1,
+            storeId: "store-1",
+            type: "register.opened",
+          }),
+        ],
+      })),
+      markEventsNeedsReview: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {},
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    const onLocalEventsChanged = vi.fn();
+
+    const { result } = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        eventAppendToken: 0,
+        onLocalEventsChanged,
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current).toEqual(
+        expect.objectContaining({ pendingEventCount: 1 }),
+      );
+    });
+
+    // Five consecutive manual retries (bypassing backoff), all thrown away
+    // by the server: the fifth crosses the default dead-letter threshold.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      act(() => {
+        result.current?.onRetrySync?.();
+      });
+      await waitFor(
+        () =>
+          expect(mocks.ingestLocalEvents.mock.calls.length).toBeGreaterThan(
+            attempt,
+          ),
+        { timeout: 5000 },
+      );
+    }
+
+    await waitFor(
+      () =>
+        expect(store.markEventsNeedsReview).toHaveBeenCalledWith(
+          ["event-open"],
+          "Sync uploads for this batch keep failing on the server.",
+        ),
+      { timeout: 5000 },
+    );
+    await waitFor(() =>
+      expect(mocks.reportLocalSyncDeadLetter).toHaveBeenCalledWith(
+        expect.objectContaining({
+          storeId: "store-1",
+          terminalId: "terminal-cloud-1",
+          syncSecretHash: "sync-secret-1",
+          localEventId: "event-open",
+          sequence: 1,
+          eventCount: 1,
+          consecutiveFailureCount: 5,
+          failureMessage: "Server Error: Uncaught Error at recordFacts",
+        }),
+      ),
+    );
+    expect(mocks.reportLocalSyncDeadLetter).toHaveBeenCalledTimes(1);
   });
 
   it("treats an already-incremented append token as an immediate event trigger on first observation", async () => {

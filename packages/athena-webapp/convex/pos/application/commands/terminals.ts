@@ -333,6 +333,7 @@ export type TerminalRuntimeStatusInput = {
     backoffUntil?: number;
     heldEventCount?: number;
     heldWithoutProgress?: boolean;
+    consecutiveFailureCount?: number;
     heldBehindMissingUploadSequence?: number;
     heldBlockerKind?: NonNullable<
       Doc<"posTerminalRuntimeStatus">["sync"]["heldBlockerKind"]
@@ -590,6 +591,11 @@ export async function submitTerminalRuntimeStatus(
         typeof args.status.sync.heldWithoutProgress === "boolean"
           ? args.status.sync.heldWithoutProgress
           : undefined,
+      // `positiveCount`, not `nonNegativeInteger`: an absent or invalid report
+      // must stay absent, not become an asserted "zero failures".
+      consecutiveFailureCount: positiveCount(
+        args.status.sync.consecutiveFailureCount,
+      ),
       // Gap-reconciliation evidence. Dropping these here would blind the
       // cloud sweep: it could no longer tell "terminal still holds the
       // awaited event" from "no answer", and the probe timeout would skip

@@ -301,6 +301,7 @@ import type * as pos_application_queries_searchCatalog from "../pos/application/
 import type * as pos_application_queries_searchCustomers from "../pos/application/queries/searchCustomers.js";
 import type * as pos_application_queries_storePulse from "../pos/application/queries/storePulse.js";
 import type * as pos_application_queries_terminals from "../pos/application/queries/terminals.js";
+import type * as pos_application_sync_deadLetter from "../pos/application/sync/deadLetter.js";
 import type * as pos_application_sync_finalizedLineageRemediation from "../pos/application/sync/finalizedLineageRemediation.js";
 import type * as pos_application_sync_ingestLocalEvents from "../pos/application/sync/ingestLocalEvents.js";
 import type * as pos_application_sync_localSyncReportingTypes from "../pos/application/sync/localSyncReportingTypes.js";
@@ -377,6 +378,7 @@ import type * as reports_foldDay from "../reports/foldDay.js";
 import type * as reports_foldVersionRepair from "../reports/foldVersionRepair.js";
 import type * as reports_ingest from "../reports/ingest.js";
 import type * as reports_liveDay from "../reports/liveDay.js";
+import type * as reports_marks from "../reports/marks.js";
 import type * as reports_operatingDay from "../reports/operatingDay.js";
 import type * as reports_overview from "../reports/overview.js";
 import type * as reports_queries from "../reports/queries.js";
@@ -904,6 +906,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/queries/searchCustomers": typeof pos_application_queries_searchCustomers;
   "pos/application/queries/storePulse": typeof pos_application_queries_storePulse;
   "pos/application/queries/terminals": typeof pos_application_queries_terminals;
+  "pos/application/sync/deadLetter": typeof pos_application_sync_deadLetter;
   "pos/application/sync/finalizedLineageRemediation": typeof pos_application_sync_finalizedLineageRemediation;
   "pos/application/sync/ingestLocalEvents": typeof pos_application_sync_ingestLocalEvents;
   "pos/application/sync/localSyncReportingTypes": typeof pos_application_sync_localSyncReportingTypes;
@@ -980,6 +983,7 @@ declare const fullApi: ApiFromModules<{
   "reports/foldVersionRepair": typeof reports_foldVersionRepair;
   "reports/ingest": typeof reports_ingest;
   "reports/liveDay": typeof reports_liveDay;
+  "reports/marks": typeof reports_marks;
   "reports/operatingDay": typeof reports_operatingDay;
   "reports/overview": typeof reports_overview;
   "reports/queries": typeof reports_queries;
