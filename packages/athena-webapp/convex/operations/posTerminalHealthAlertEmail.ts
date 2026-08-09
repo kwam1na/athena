@@ -8,6 +8,7 @@ import type { PosTerminalHealthAlertCondition } from "../pos/application/termina
 const conditionValidator = v.union(
   v.literal("storage_critical"),
   v.literal("sync_stuck"),
+  v.literal("sync_failing"),
 );
 
 const CONDITION_SUMMARIES: Record<PosTerminalHealthAlertCondition, string> = {
@@ -15,6 +16,8 @@ const CONDITION_SUMMARIES: Record<PosTerminalHealthAlertCondition, string> = {
     "Storage is almost full. New offline sales may not be saved reliably.",
   sync_stuck:
     "Offline sales are waiting to sync. A pending review may be holding the queue.",
+  sync_failing:
+    "Offline sales keep failing to sync. Every upload attempt is being rejected.",
 };
 
 type PosTerminalHealthAlertPayload = PosTerminalHealthAlertProps & {

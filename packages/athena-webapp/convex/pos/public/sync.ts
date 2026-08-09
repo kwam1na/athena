@@ -6,7 +6,9 @@ import type { MutationCtx } from "../../_generated/server";
 import {
   ingestLocalEventsOperationDefinition,
   ingestRegisterSessionActivityOperationDefinition,
+  reportLocalSyncDeadLetterOperationDefinition,
 } from "../../operationAdmission/definitions";
+import { recordLocalSyncDeadLetter } from "../application/sync/deadLetter";
 import { withOperationMutationAdmission } from "../../operationAdmission/publicMutation";
 import type { OperationMutationCtx } from "../../operationAdmission/types";
 import { commandResultValidator } from "../../lib/commandResultValidators";
@@ -472,6 +474,93 @@ function wasVarianceNotifiedBeforeRail(approvalRequest: Doc<"approvalRequest">) 
     "number"
   );
 }
+
+/**
+ * Dead-letter a poison sync batch: the terminal's scheduler reports a batch
+ * the server has thrown on every consecutive upload attempt, and this records
+ * a `needs_review` conflict so it reaches the register-session review surface
+ * instead of retrying silently forever. Tiny write surface on purpose — it
+ * must succeed precisely when `ingestLocalEvents` cannot.
+ */
+export const reportLocalSyncDeadLetter = mutation({
+  args: {
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+    syncSecretHash: v.string(),
+    expectedDemoEpoch: v.optional(v.number()),
+    localRegisterSessionId: v.string(),
+    localEventId: v.string(),
+    sequence: v.number(),
+    eventCount: v.number(),
+    consecutiveFailureCount: v.number(),
+    failureMessage: v.optional(v.string()),
+  },
+  returns: commandResultValidator(
+    v.object({ conflictId: v.string(), alreadyReported: v.boolean() }),
+  ),
+  handler: withOperationMutationAdmission(
+    reportLocalSyncDeadLetterOperationDefinition,
+    async (ctx, args) => {
+      const store = await ctx.db.get("store", args.storeId);
+      if (!store) {
+        return userError({
+          code: "not_found",
+          message: "Store not found.",
+        });
+      }
+
+      try {
+        const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+        if (!athenaUser) throw new Error("Sign in again to continue.");
+        await requireOrganizationMemberRoleWithCtx(ctx, {
+          allowedRoles: ["full_admin", "pos_only"],
+          failureMessage: "You do not have access to sync this POS terminal.",
+          organizationId: store.organizationId,
+          userId: athenaUser._id,
+        });
+      } catch {
+        return userError({
+          code: "authorization_failed",
+          message: "You do not have access to sync this POS terminal.",
+        });
+      }
+
+      const terminal = await ctx.db.get("posTerminal", args.terminalId);
+      const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
+        args.syncSecretHash,
+      );
+      if (
+        !terminal ||
+        terminal.storeId !== args.storeId ||
+        terminal.status !== "active" ||
+        !terminal.syncSecretHash ||
+        terminal.syncSecretHash !== submittedSyncSecretHash
+      ) {
+        return userError({
+          code: "authorization_failed",
+          message: "You do not have access to sync this POS terminal.",
+          metadata: { terminalAuthorizationFailure: true },
+        });
+      }
+
+      const { conflict, created } = await recordLocalSyncDeadLetter(ctx, {
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+        localRegisterSessionId: args.localRegisterSessionId,
+        localEventId: args.localEventId,
+        sequence: args.sequence,
+        eventCount: args.eventCount,
+        consecutiveFailureCount: args.consecutiveFailureCount,
+        failureMessage: args.failureMessage ?? null,
+        reportedAt: Date.now(),
+      });
+      return ok({
+        conflictId: String(conflict._id),
+        alreadyReported: !created,
+      });
+    },
+  ),
+});
 
 export const ingestRegisterSessionActivity = mutation({
   args: {

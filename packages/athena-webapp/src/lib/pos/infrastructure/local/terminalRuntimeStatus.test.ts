@@ -238,6 +238,35 @@ describe("terminalRuntimeStatus", () => {
     });
   });
 
+  it("reports the consecutive drain-failure streak in check-ins", () => {
+    const status = buildPosTerminalRuntimeStatus({
+      clock: () => 2_000,
+      events: [],
+      source: "sync-runtime",
+      syncDebug: { consecutiveFailureCount: 6 },
+    });
+
+    expect(status.sync.consecutiveFailureCount).toBe(6);
+  });
+
+  it("omits the failure streak when it is zero or unreported", () => {
+    const zero = buildPosTerminalRuntimeStatus({
+      clock: () => 2_000,
+      events: [],
+      source: "sync-runtime",
+      syncDebug: { consecutiveFailureCount: 0 },
+    });
+    const absent = buildPosTerminalRuntimeStatus({
+      clock: () => 2_000,
+      events: [],
+      source: "sync-runtime",
+      syncDebug: {},
+    });
+
+    expect(zero.sync.consecutiveFailureCount).toBeUndefined();
+    expect(absent.sync.consecutiveFailureCount).toBeUndefined();
+  });
+
   it("omits expired backoff windows and empty runtime counters", () => {
     const status = buildPosTerminalRuntimeStatus({
       clock: () => 2_000,

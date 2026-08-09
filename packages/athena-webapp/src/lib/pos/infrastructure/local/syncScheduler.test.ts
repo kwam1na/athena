@@ -426,6 +426,147 @@ describe("syncScheduler", () => {
     expect(onHeldWithoutProgress).not.toHaveBeenCalled();
   });
 
+  it("dead-letters the failing batch once when the failure streak crosses the threshold", async () => {
+    const onPersistentFailure = vi.fn();
+    const uploadBatch = vi
+      .fn()
+      .mockRejectedValue(new Error("injected server failure"));
+    const scheduler = createPosLocalSyncScheduler({
+      loadPendingEvents: vi
+        .fn()
+        .mockResolvedValue([baseEvent({}), baseEvent({ id: "event-2", sequence: 2 })]),
+      uploadBatch,
+      markSynced: vi.fn().mockResolvedValue(undefined),
+      isOnline: () => true,
+      persistentFailureThreshold: 3,
+      onPersistentFailure,
+    });
+
+    // Failures 1 and 2: below the threshold, no dead-letter yet.
+    scheduler.trigger("route-entry");
+    await vi.runOnlyPendingTimersAsync();
+    scheduler.trigger("manual-retry");
+    await vi.runOnlyPendingTimersAsync();
+    expect(onPersistentFailure).not.toHaveBeenCalled();
+
+    // Failure 3 crosses the threshold: the batch in flight is dead-lettered.
+    scheduler.trigger("manual-retry");
+    await vi.runOnlyPendingTimersAsync();
+    expect(onPersistentFailure).toHaveBeenCalledTimes(1);
+    expect(onPersistentFailure).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({ id: "event-1" }),
+        expect.objectContaining({ id: "event-2" }),
+      ],
+      { consecutiveCount: 3, message: "injected server failure" },
+    );
+
+    // Failure 4: still failing, but the streak already escalated — no re-fire.
+    scheduler.trigger("manual-retry");
+    await vi.runOnlyPendingTimersAsync();
+    expect(uploadBatch).toHaveBeenCalledTimes(4);
+    expect(onPersistentFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-arms the dead-letter escalation after a success resets the streak", async () => {
+    const onPersistentFailure = vi.fn();
+    const uploadBatch = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("fail 1"))
+      .mockRejectedValueOnce(new Error("fail 2"))
+      .mockResolvedValueOnce({ syncedEventIds: ["event-1"] })
+      .mockRejectedValueOnce(new Error("fail 3"))
+      .mockRejectedValueOnce(new Error("fail 4"));
+    const scheduler = createPosLocalSyncScheduler({
+      loadPendingEvents: vi.fn().mockResolvedValue([baseEvent({})]),
+      uploadBatch,
+      markSynced: vi.fn().mockResolvedValue(undefined),
+      isOnline: () => true,
+      persistentFailureThreshold: 2,
+      onPersistentFailure,
+    });
+
+    scheduler.trigger("route-entry");
+    await vi.runOnlyPendingTimersAsync();
+    scheduler.trigger("manual-retry");
+    await vi.runOnlyPendingTimersAsync();
+    expect(onPersistentFailure).toHaveBeenCalledTimes(1);
+
+    // Success resets the streak…
+    scheduler.trigger("manual-retry");
+    await vi.runOnlyPendingTimersAsync();
+    // …so a fresh streak escalates again at the threshold.
+    scheduler.trigger("manual-retry");
+    await vi.runOnlyPendingTimersAsync();
+    scheduler.trigger("manual-retry");
+    await vi.runOnlyPendingTimersAsync();
+    expect(onPersistentFailure).toHaveBeenCalledTimes(2);
+    expect(onPersistentFailure).toHaveBeenLastCalledWith(
+      [expect.objectContaining({ id: "event-1" })],
+      { consecutiveCount: 2, message: "fail 4" },
+    );
+  });
+
+  it("continues a failure streak seeded from a previous scheduler instance", async () => {
+    const onPersistentFailure = vi.fn();
+    const scheduler = createPosLocalSyncScheduler({
+      loadPendingEvents: vi.fn().mockResolvedValue([baseEvent({})]),
+      uploadBatch: vi.fn().mockRejectedValue(new Error("still failing")),
+      markSynced: vi.fn().mockResolvedValue(undefined),
+      isOnline: () => true,
+      persistentFailureThreshold: 3,
+      initialFailureCount: 2,
+      onPersistentFailure,
+    });
+
+    // Third consecutive failure overall — first for THIS instance — crosses.
+    scheduler.trigger("route-entry");
+    await vi.runOnlyPendingTimersAsync();
+    expect(onPersistentFailure).toHaveBeenCalledTimes(1);
+    expect(onPersistentFailure).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: "event-1" })],
+      { consecutiveCount: 3, message: "still failing" },
+    );
+  });
+
+  it("does not re-escalate when seeded at or past the threshold", async () => {
+    const onPersistentFailure = vi.fn();
+    const scheduler = createPosLocalSyncScheduler({
+      loadPendingEvents: vi.fn().mockResolvedValue([baseEvent({})]),
+      uploadBatch: vi.fn().mockRejectedValue(new Error("still failing")),
+      markSynced: vi.fn().mockResolvedValue(undefined),
+      isOnline: () => true,
+      persistentFailureThreshold: 3,
+      initialFailureCount: 3,
+      onPersistentFailure,
+    });
+
+    scheduler.trigger("route-entry");
+    await vi.runOnlyPendingTimersAsync();
+    expect(onPersistentFailure).not.toHaveBeenCalled();
+  });
+
+  it("does not dead-letter when failures come from loading, not uploading", async () => {
+    const onPersistentFailure = vi.fn();
+    const scheduler = createPosLocalSyncScheduler({
+      loadPendingEvents: vi.fn().mockRejectedValue(new Error("local read failed")),
+      uploadBatch: vi.fn(),
+      markSynced: vi.fn().mockResolvedValue(undefined),
+      isOnline: () => true,
+      persistentFailureThreshold: 2,
+      onPersistentFailure,
+    });
+
+    scheduler.trigger("route-entry");
+    await vi.runOnlyPendingTimersAsync();
+    scheduler.trigger("manual-retry");
+    await vi.runOnlyPendingTimersAsync();
+    scheduler.trigger("manual-retry");
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(onPersistentFailure).not.toHaveBeenCalled();
+  });
+
   it("honors backoff for foreground interval retries", async () => {
     vi.setSystemTime(0);
     const uploadBatch = vi

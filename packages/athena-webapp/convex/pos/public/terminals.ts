@@ -852,6 +852,8 @@ function stripRuntimeStatusInput(
       backoffUntil: status.sync.backoffUntil,
       heldEventCount: status.sync.heldEventCount,
       heldWithoutProgress: status.sync.heldWithoutProgress,
+      // Feeds the `sync_failing` health alert; dropping it here would mute it.
+      consecutiveFailureCount: status.sync.consecutiveFailureCount,
       // Gap-reconciliation evidence — must survive both this strip and the
       // command-layer sanitizer, or the cloud sweep goes blind to "the
       // terminal still holds the awaited event".

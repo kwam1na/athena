@@ -713,6 +713,75 @@ describe("submitTerminalRuntimeStatus", () => {
     );
   });
 
+  it("persists the consecutive failure count and alerts sync_failing at the threshold", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
+      didWrite: true,
+      materialChanged: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
+    const alertCtx = createHealthAlertCtx();
+    const base = buildRuntimeStatus();
+
+    const result = await submitTerminalRuntimeStatus(alertCtx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: {
+        ...base,
+        sync: { ...base.sync, consecutiveFailureCount: 5 },
+      },
+    });
+
+    expect(result.kind).toBe("ok");
+    expect(
+      vi.mocked(upsertLatestRuntimeStatusWithOutcome),
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        sync: expect.objectContaining({ consecutiveFailureCount: 5 }),
+      }),
+    );
+    expect(alertCtx.db.patch).toHaveBeenCalledWith(
+      "posTerminalRuntimeStatus",
+      "runtime-status-1",
+      { healthAlerts: { sync_failing: 200 } },
+    );
+    expect(alertCtx.db.insert).toHaveBeenCalledWith(
+      "notificationIntent",
+      expect.objectContaining({
+        kind: "pos.terminal_health",
+        payload: expect.objectContaining({ conditions: ["sync_failing"] }),
+      }),
+    );
+  });
+
+  it("drops an invalid consecutive failure count instead of persisting it", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
+      didWrite: true,
+      materialChanged: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
+    const alertCtx = createHealthAlertCtx();
+    const base = buildRuntimeStatus();
+
+    const result = await submitTerminalRuntimeStatus(alertCtx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: {
+        ...base,
+        sync: { ...base.sync, consecutiveFailureCount: -3 },
+      },
+    });
+
+    expect(result.kind).toBe("ok");
+    const persisted = vi.mocked(upsertLatestRuntimeStatusWithOutcome).mock
+      .calls.at(-1)?.[1] as { sync: Record<string, unknown> };
+    expect(persisted.sync).not.toHaveProperty("consecutiveFailureCount");
+  });
+
   it("does not create a second notification intent when an identical transition is replayed", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({

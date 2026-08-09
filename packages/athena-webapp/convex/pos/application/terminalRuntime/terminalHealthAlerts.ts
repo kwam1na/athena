@@ -14,7 +14,19 @@ import type { Doc } from "../../../_generated/dataModel";
 export const POS_TERMINAL_HEALTH_ALERT_CONDITIONS = [
   "storage_critical",
   "sync_stuck",
+  "sync_failing",
 ] as const;
+
+/**
+ * Consecutive upload failures before a terminal's sync counts as persistently
+ * failing. Distinct from `sync_stuck` (a held batch behind an unadvanced
+ * cursor): `sync_failing` is the server throwing on every drain attempt, which
+ * retries under exponential backoff and is otherwise visible only to someone
+ * who opens the terminal detail page. At the default 5s-base/120s-cap backoff,
+ * five consecutive failures is a few minutes of a wedged pipeline — past any
+ * transient blip, early enough that the operating day is still saveable.
+ */
+export const SYNC_FAILING_ALERT_THRESHOLD = 5;
 
 export type PosTerminalHealthAlertCondition =
   (typeof POS_TERMINAL_HEALTH_ALERT_CONDITIONS)[number];
@@ -31,7 +43,10 @@ type RuntimeStatusHealthSource = {
     | "migration"
     | "pressure"
   >;
-  sync: Pick<Doc<"posTerminalRuntimeStatus">["sync"], "heldWithoutProgress">;
+  sync: Pick<
+    Doc<"posTerminalRuntimeStatus">["sync"],
+    "heldWithoutProgress" | "consecutiveFailureCount"
+  >;
 };
 
 export function classifyTerminalHealthAlertConditions(
@@ -51,6 +66,11 @@ export function classifyTerminalHealthAlertConditions(
   }
   if (status.sync.heldWithoutProgress === true) {
     conditions.push("sync_stuck");
+  }
+  if (
+    (status.sync.consecutiveFailureCount ?? 0) >= SYNC_FAILING_ALERT_THRESHOLD
+  ) {
+    conditions.push("sync_failing");
   }
   return conditions;
 }

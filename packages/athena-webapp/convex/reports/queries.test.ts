@@ -3170,6 +3170,9 @@ describe("reports module public surface", () => {
       "foldVersionRepair.countStaleFoldVersionDays",
       "foldVersionRepair.countUncertifiedDays",
       "foldVersionRepair.markStaleFoldVersionDays",
+      // Containment fallback: ingest's catch block schedules this when the
+      // inline write_failure dirty mark cannot be written (see marks.ts).
+      "marks.markWriteFailureDays",
       "reseed.reseedStoreReporting",
       "skuMixRange.recordMixWorkerFailure",
       "skuMixRange.runMixBatch",

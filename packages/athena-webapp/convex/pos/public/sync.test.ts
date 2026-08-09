@@ -40,6 +40,7 @@ vi.mock("../application/sync/resolveLocalSyncReview", () => ({
 import {
   ingestLocalEvents,
   ingestRegisterSessionActivity,
+  reportLocalSyncDeadLetter,
   resolveLocalSyncReview,
 } from "./sync";
 import schema from "../../schema";
@@ -1653,6 +1654,84 @@ describe("register closeout notification intents", () => {
   });
 });
 
+describe("reportLocalSyncDeadLetter public boundary", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "athena-user-1",
+    });
+    mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
+  });
+
+  const deadLetterArgs = {
+    storeId: "store-1",
+    terminalId: "terminal-1",
+    syncSecretHash: "sync-secret-1",
+    localRegisterSessionId: "local-register-1",
+    localEventId: "event-1",
+    sequence: 4,
+    eventCount: 3,
+    consecutiveFailureCount: 5,
+    failureMessage: "Server Error: Uncaught Error at recordFacts",
+  };
+
+  it("returns a conflict id that conforms to the exported return contract", async () => {
+    const ctx = buildCtx();
+
+    const result = await getHandler(reportLocalSyncDeadLetter)(
+      ctx as never,
+      deadLetterArgs,
+    );
+
+    assertConformsToExportedReturns(reportLocalSyncDeadLetter, result);
+    expect(result).toEqual({
+      kind: "ok",
+      data: { conflictId: "inserted-row-1", alreadyReported: false },
+    });
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "posLocalSyncConflict",
+      expect.objectContaining({
+        conflictType: "server_rejected",
+        status: "needs_review",
+        localEventId: "event-1",
+        details: expect.objectContaining({ code: "persistent_sync_failure" }),
+      }),
+    );
+  });
+
+  it("returns an authorization user error that conforms to the same contract", async () => {
+    const ctx = buildCtx({ terminalSyncSecretHash: "a-different-hash" });
+
+    const result = await getHandler(reportLocalSyncDeadLetter)(
+      ctx as never,
+      deadLetterArgs,
+    );
+
+    assertConformsToExportedReturns(reportLocalSyncDeadLetter, result);
+    expect(result).toMatchObject({
+      kind: "user_error",
+      error: { code: "authorization_failed" },
+    });
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("refuses to record a dead letter for a missing store", async () => {
+    const ctx = buildCtx({ missingStore: true });
+
+    const result = await getHandler(reportLocalSyncDeadLetter)(
+      ctx as never,
+      deadLetterArgs,
+    );
+
+    assertConformsToExportedReturns(reportLocalSyncDeadLetter, result);
+    expect(result).toMatchObject({
+      kind: "user_error",
+      error: { code: "not_found" },
+    });
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+});
+
 function buildCtx(
   options: {
     approvalRequests?: Array<{
@@ -1719,6 +1798,7 @@ function buildCtx(
         return null;
       }),
       patch: vi.fn(),
+      insert: vi.fn(async () => "inserted-row-1"),
       query: vi.fn((tableName: string) => {
         if (tableName !== "approvalRequest") {
           return {

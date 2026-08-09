@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Containment Escalation and Sync Dead-Letter</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="ff9ce790f0780d08b49e41a03119346bcc3efcff5025de449dde843e2864e527">
+  <header data-report-section="header">
+    <h1>Containment Escalation and Sync Dead-Letter</h1>
+    <p>A contained reporting failure now recovers itself, and a wedged sync batch now escalates instead of retrying in silence</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>PR pending</li>
+      <li>Production deploy pending</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Branch</dt><dd>worktree-ingest-dirty-mark-scheduler-fallback</dd>
+      <dt>Scope</dt><dd>Reports ingestion, POS local sync, terminal health alerts, operational email</dd>
+      <dt>Validation</dt><dd>Typecheck, targeted eslint, and 3,317 tests across POS, sync, reports, operations, shared-demo and operation-admission suites</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive Summary</h2>
+      <p>Reporting ingestion contains every internal failure so a reporting bug can never roll back a sale. Two gaps remained: the containment marker itself had no fallback, and a sync batch the server threw away on every attempt retried forever with no manager-visible signal.</p>
+      <p>This change adds a durable scheduled fallback beneath the containment marker, reports the sync failure streak through the terminal heartbeat as a new <code>sync_failing</code> health alert, and dead-letters a poison batch into the register-session review queue after a bounded number of consecutive upload failures.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Problem and Constraints</h2>
+      <p>When <code>recordFacts</code> failed, it degraded to a <code>write_failure</code> dirty mark and returned normally. If that mark could not be written, the throw propagated and aborted the domain transaction. An atomic abort beats a silent data hole, but it let one unhappy table reject an entire sync batch.</p>
+      <p>Because the throw escapes the whole sync mutation, nothing commits: no sync event row, no conflict, no review item. The terminal cursor never advances and the batch is resubmitted under exponential backoff. That is correct self-healing for a transient fault and an indefinite silent loop for a persistent one. The existing <code>sync_stuck</code> alert did not cover it, because that condition describes a held batch behind an unadvanced cursor rather than a batch the server rejects.</p>
+      <p>Constraints: the sale must never be lost, the abort backstop must remain reachable, and escalation must not fire on transient blips or on local read failures that merely resemble server rejection.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental Model</h2>
+      <p>Containment is layered, and each layer writes somewhere the layer above could not. The inline dirty mark is the first fallback. A durable scheduled mutation is the second, chosen because the scheduler enqueue targets a different table than the one that just refused and Convex guarantees execution once the transaction commits. The propagating throw is the third and last, reached only when two independent write paths refuse.</p>
+      <p>On the client, a failure streak is not merely backoff state; it is reported evidence. Once it crosses a threshold it means two different things at once: the terminal is unhealthy, which the heartbeat escalates as an alert, and this specific batch is poison, which the runtime dead-letters for human review.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and After</h2>
+      <ul>
+        <li>Before: a failing dirty-mark write aborted the domain transaction. After: it enqueues a durable scheduled mutation and the sale commits, with the mark landing moments later.</li>
+        <li>Before: the abort backstop triggered on one table failing. After: it requires the dirty-mark write and the scheduler enqueue to both fail.</li>
+        <li>Before: a persistently failing sync was visible only as <code>lastFailureMessage</code> on the terminal detail page. After: it raises a <code>sync_failing</code> health alert through the existing operational event, notification rail, and manager email.</li>
+        <li>Before: a poison batch retried forever with no review item. After: its events are parked <code>needs_review</code> locally and a review conflict is recorded on the register session.</li>
+        <li>Before: the scheduler failure count reset with every drain trigger. After: the streak persists across scheduler instances so a threshold can actually be reached.</li>
+      </ul>
+  </section>
+  <section data-report-section="changes">
+    <h2>Implementation Changes</h2>
+      <ul>
+        <li>Extracted <code>markDirty</code> into <code>convex/reports/marks.ts</code> and added the <code>markWriteFailureDays</code> internal mutation as the containment fallback target.</li>
+        <li>Wrapped the containment marker loop in <code>recordFacts</code> so a marker failure enqueues the scheduled fallback rather than throwing immediately.</li>
+        <li>Added <code>SYNC_FAILING_ALERT_THRESHOLD</code> and the <code>sync_failing</code> condition to the terminal health classifier, plus its summary in the alert email.</li>
+        <li>Carried <code>consecutiveFailureCount</code> from the sync scheduler through the runtime status builder, the public terminal mutation, and the runtime status schema.</li>
+        <li>Added <code>onPersistentFailure</code> and <code>initialFailureCount</code> to the sync scheduler, counting only <code>uploadBatch</code> rejections via a batch-in-flight guard.</li>
+        <li>Added <code>recordLocalSyncDeadLetter</code> and the <code>reportLocalSyncDeadLetter</code> public mutation, registered in the operation-admission inventory.</li>
+        <li>Classified the dead-letter conflict as <code>reject_only</code> ahead of the general <code>server_rejected</code> branch.</li>
+      </ul>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure Boundaries</h2>
+      <ul>
+        <li>If the scheduler enqueue also fails, the throw propagates and the domain transaction aborts atomically. This is deliberate and still covered by a test.</li>
+        <li>Only <code>uploadBatch</code> rejections advance the dead-letter streak. Local read and settlement failures are excluded, so a failing IndexedDB read cannot be mistaken for a poison batch.</li>
+        <li>Local parking happens before the cloud report, so leaving the retry loop never depends on a network call that is failing by definition. The cloud report is best-effort.</li>
+        <li>The dead-letter conflict is idempotent while it remains open. A resolved marker does not suppress a new one, because a wedge that returns after resolution is new information.</li>
+        <li><code>consecutiveFailureCount</code> is sanitized so an absent or invalid report stays absent rather than asserting zero failures.</li>
+        <li>Review-only escalation drains do not dead-letter, since they already operate on parked events.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation</h2>
+      <ul>
+        <li>Written test-first: the classifier, scheduler, dead-letter, runtime status, and hook tests were each red before implementation.</li>
+        <li>3,317 tests passed across POS, local sync infrastructure, reports, operations, shared-demo, and operation-admission suites.</li>
+        <li>Athena webapp TypeScript typecheck passed and targeted eslint is clean on every changed file.</li>
+        <li>Convex code generation was rerun so the new module resolves through the generated API rather than a path-built function reference.</li>
+        <li>Two full-run failures were reproduced in isolation and confirmed green, matching the repository's known load-related <code>waitFor</code> flakiness.</li>
+      </ul>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Operator and Maintainer Guidance</h2>
+      <p>A terminal whose uploads keep failing now produces a <code>sync_failing</code> alert and a register-session review item naming the wedged batch head. Treat the review item as a pointer to a server-side defect rather than an operator mistake; the local sale record is intact, and once the defect is fixed the review flow re-drains the batch. Replay is safe because report fact identity is structural and an equal-fingerprint replay is a no-op.</p>
+      <p>When extending containment, keep each fallback on a different write path from the layer above it, or the fallback shares the fault it exists to survive. When adding escalation to a client loop, check whether the state that drives it survives the object lifetime; the failure streak here had to move into a ref before any threshold could be reached.</p>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/convex/reports/ingest.ts</code></td><td>Holds the layered containment catch block and its documented invariants.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/reports/marks.ts</code></td><td>Owns markDirty and the durable scheduled fallback mutation.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/application/terminalRuntime/terminalHealthAlerts.ts</code></td><td>Classifies sync_failing alongside storage_critical and sync_stuck.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/application/sync/deadLetter.ts</code></td><td>Records the idempotent needs_review conflict for a poison batch.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/application/sync/registerSessionSyncReview.ts</code></td><td>Classifies the dead-letter marker as reject_only.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/public/sync.ts</code></td><td>Exposes reportLocalSyncDeadLetter with the same terminal authorization as other sync mutations.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/lib/pos/infrastructure/local/syncScheduler.ts</code></td><td>Detects a persistent upload-failure streak without counting local faults.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts</code></td><td>Persists the streak across scheduler instances and performs the dead-letter.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/schemas/pos/posTerminalRuntimeStatus.ts</code></td><td>Carries consecutiveFailureCount as reported terminal evidence.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens when the inline write_failure dirty mark cannot be written?</p>
+        <ol data-quiz-options>
+          <li>The throw propagates immediately</li>
+          <li data-quiz-correct>A durable scheduled mutation is enqueued to write the marks after commit</li>
+          <li>The failure is swallowed and nothing is recorded</li>
+        </ol>
+        <p data-quiz-explanation>The scheduler enqueue targets a different table than the one that just refused, and runs once the transaction commits.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Is the propagating throw still reachable?</p>
+        <ol data-quiz-options>
+          <li>No, containment is now total</li>
+          <li data-quiz-correct>Yes, when the scheduler enqueue also fails</li>
+          <li>Only during reseed</li>
+        </ol>
+        <p data-quiz-explanation>An atomic abort still beats committing a sale whose reporting evidence vanished; it now requires two independent write paths to refuse.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why did sync_stuck not cover a persistently throwing upload?</p>
+        <ol data-quiz-options>
+          <li>Because it only fires for storage faults</li>
+          <li data-quiz-correct>Because it means a held batch behind an unadvanced cursor, not a rejected one</li>
+          <li>Because heartbeats stop during failures</li>
+        </ol>
+        <p data-quiz-explanation>A thrown upload produces no result object at all, so the held-batch path is never taken.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which failures advance the dead-letter streak?</p>
+        <ol data-quiz-options>
+          <li>Any failure inside the drain</li>
+          <li data-quiz-correct>Only rejections thrown by uploadBatch itself</li>
+          <li>Only failures reported by the server as conflicts</li>
+        </ol>
+        <p data-quiz-explanation>A batch-in-flight guard excludes local read and settlement faults so they cannot look like a poison batch.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the failure streak live in a ref on the hook?</p>
+        <ol data-quiz-options>
+          <li>To avoid a React re-render</li>
+          <li data-quiz-correct>Because a fresh scheduler is created per trigger, so a per-instance counter would never reach the threshold</li>
+          <li>Because the scheduler cannot count failures</li>
+        </ol>
+        <p data-quiz-explanation>The streak seeds each new instance through initialFailureCount so escalation is reachable.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is parked first when a batch is dead-lettered?</p>
+        <ol data-quiz-options>
+          <li>The cloud review conflict</li>
+          <li data-quiz-correct>The local events, marked needs_review</li>
+          <li>The terminal heartbeat</li>
+        </ol>
+        <p data-quiz-explanation>Leaving the retry loop must not depend on a network call that is failing by definition.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How is the dead-letter conflict classified for manager action?</p>
+        <ol data-quiz-options>
+          <li>apply_or_reject</li>
+          <li>override_or_reject</li>
+          <li data-quiz-correct>reject_only</li>
+        </ol>
+        <p data-quiz-explanation>The server never accepted the batch, so there is nothing to apply or override.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is consecutiveFailureCount sanitized with positiveCount rather than nonNegativeInteger?</p>
+        <ol data-quiz-options>
+          <li>To keep the value under a maximum</li>
+          <li data-quiz-correct>So an absent or invalid report stays absent instead of asserting zero failures</li>
+          <li>Because the schema requires a positive number</li>
+        </ol>
+        <p data-quiz-explanation>Coercing to zero would publish a measurement the terminal never made.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Does a resolved dead-letter marker suppress a later one for the same batch head?</p>
+        <ol data-quiz-options>
+          <li>Yes, the marker is permanent</li>
+          <li data-quiz-correct>No, a wedge that returns after resolution is new information</li>
+          <li>Only within the same register session</li>
+        </ol>
+        <p data-quiz-explanation>Idempotency applies while a marker is open, not after a manager has resolved it.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is replaying a previously dead-lettered batch safe after a fix?</p>
+        <ol data-quiz-options>
+          <li>Because the events were deleted locally</li>
+          <li data-quiz-correct>Because report fact identity is structural and an equal-fingerprint replay is a no-op</li>
+          <li>Because the cursor skips already-attempted sequences</li>
+        </ol>
+        <p data-quiz-explanation>Partially applied facts re-resolve to the same rows rather than double-counting.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>Diff context</dt><dd>Traced the containment path from recordFacts through all twelve production call sites, then followed a propagating throw out through projectLocalEvents and ingestLocalEvents to establish that nothing downstream re-contains it.</dd>
+      <dt>Claim verification</dt><dd>Checked the stated behaviour of the escalation path against the terminal health classifier and the sync scheduler rather than accepting it; this falsified an initial assumption that an aborted ingestion already produced a review item.</dd>
+      <dt>Code review</dt><dd>Review of the first implementation surfaced that a per-instance failure counter could never reach the threshold, which moved the streak into a hook ref seeded through initialFailureCount.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

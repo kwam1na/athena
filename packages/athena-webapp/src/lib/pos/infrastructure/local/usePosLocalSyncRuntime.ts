@@ -275,6 +275,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const resolveLocalSyncReview = useMutation(
     api.pos.public.sync.resolveLocalSyncReview,
   );
+  const reportLocalSyncDeadLetter = useMutation(
+    api.pos.public.sync.reportLocalSyncDeadLetter,
+  );
   const reportTerminalRuntimeStatus = useMutation(
     api.pos.public.terminals.reportTerminalRuntimeStatus,
   );
@@ -314,6 +317,13 @@ export function usePosLocalSyncRuntimeStatus(input: {
   // scheduler's held-without-progress callback fires within the same drain,
   // before a `setDebug` from that drain has been applied.
   const lastHeldBlockerRef = useRef<HeldSyncBlocker>({ kind: "none" });
+  /**
+   * Consecutive upload-failure streak across scheduler instances. The runtime
+   * creates a fresh drain scheduler per trigger, so the streak must live here
+   * and seed each instance — otherwise it resets every drain and the
+   * dead-letter threshold is never reached.
+   */
+  const failureStreakRef = useRef(0);
   const lastExpectedDemoEpochRef = useRef<number | undefined>(undefined);
   const lastManualRetryTokenRef = useRef(0);
   const { storeFactory, storeId, terminalId } = input;
@@ -691,6 +701,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
             if (shouldStop()) {
               return;
             }
+            failureStreakRef.current = status.failureCount;
             setDebug((current) => ({
               ...current,
               failureCount: status.failureCount,
@@ -738,6 +749,53 @@ export function usePosLocalSyncRuntimeStatus(input: {
                 escalationScheduler.trigger("manual-retry", {
                   priority: "high",
                 });
+              },
+          initialFailureCount: failureStreakRef.current,
+          // Review-only escalation drains operate on already-parked events —
+          // dead-lettering there would loop. Every other drain participates.
+          onPersistentFailure: options.onlyReviewEvents
+            ? undefined
+            : (persistentEvents, { consecutiveCount, message }) => {
+                if (shouldStop()) {
+                  return;
+                }
+                const head = persistentEvents[0];
+                if (!head) {
+                  return;
+                }
+                void (async () => {
+                  // Park the batch FIRST: leaving the retry loop must not
+                  // depend on the cloud report landing.
+                  const marked = await store.markEventsNeedsReview(
+                    persistentEvents.map((event) => event.id),
+                    "Sync uploads for this batch keep failing on the server.",
+                  );
+                  if (shouldStop()) {
+                    return;
+                  }
+                  assertPosLocalStoreOk(marked);
+                  if (!(await refreshEvents())) {
+                    return;
+                  }
+                  onLocalEventsChanged?.();
+                  // Best-effort: the register-session review item. If this
+                  // throws too (same outage), the parked events and the
+                  // sync_failing health alert still carry the signal.
+                  await reportLocalSyncDeadLetter({
+                    storeId: syncSeed.storeId,
+                    terminalId: syncSeed.cloudTerminalId,
+                    syncSecretHash: syncSeed.syncSecretHash,
+                    ...(input.expectedDemoEpoch === undefined
+                      ? {}
+                      : { expectedDemoEpoch: input.expectedDemoEpoch }),
+                    localRegisterSessionId: head.localRegisterSessionId,
+                    localEventId: head.id,
+                    sequence: head.sequence,
+                    eventCount: persistentEvents.length,
+                    consecutiveFailureCount: consecutiveCount,
+                    ...(message ? { failureMessage: message } : {}),
+                  }).catch(() => undefined);
+                })().catch(() => undefined);
               },
           markSynced: async (eventIds) => {
             if (eventIds.length === 0) return;
@@ -1132,6 +1190,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     drainOnAppend,
     ingestLocalEvents,
     ingestRegisterSessionActivity,
+    reportLocalSyncDeadLetter,
     eventAppendToken,
     manualRetryToken,
     mode,
@@ -1148,6 +1207,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const runtimeStatusSyncDebug = useMemo<PosTerminalRuntimeSyncDebugInput>(
     () => ({
       backoffUntil: debug.schedulerBackoffUntil,
+      consecutiveFailureCount: debug.failureCount,
       failedEventCount: debug.failedEventCount,
       heldEventCount: debug.lastHeldEventCount,
       heldWithoutProgress: debug.heldWithoutProgress,
@@ -1164,6 +1224,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       schedulerRunning: debug.schedulerRunning,
     }),
     [
+      debug.failureCount,
       debug.failedEventCount,
       debug.heldBehindMissingUploadSequence,
       debug.heldBlockerKind,

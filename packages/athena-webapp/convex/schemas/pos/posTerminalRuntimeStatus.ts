@@ -206,6 +206,13 @@ export const posTerminalRuntimeSyncValidator = v.object({
   backoffUntil: v.optional(v.number()),
   heldEventCount: v.optional(v.number()),
   heldWithoutProgress: v.optional(v.boolean()),
+  /**
+   * The sync scheduler's consecutive drain-failure streak, reported by the
+   * terminal. Feeds the `sync_failing` health alert: a batch the server
+   * throws on retries under backoff forever and is otherwise visible only on
+   * the terminal detail page.
+   */
+  consecutiveFailureCount: v.optional(v.number()),
   // Set when the terminal has diagnosed *why* its uploads are held: the cloud
   // cursor is waiting on this upload sequence and the local ledger does not
   // contain it. This is the terminal asserting the event is gone, which lets

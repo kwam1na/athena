@@ -14,8 +14,21 @@ import {
 import { factFingerprint, LEGACY_REPORTS_FINGERPRINT_VERSION } from "./fingerprint";
 import { foldDay } from "./foldDay";
 import { recordFacts } from "./ingest";
+import { internal } from "../_generated/api";
 
-const modules = import.meta.glob("../**/*.ts");
+/**
+ * Module map rooted at `convex/`, so function references resolve by their
+ * deployed path (`reports/marks:markWriteFailureDays`) — same shape as the
+ * reseed suite's map, for the same reason.
+ */
+const modules = Object.fromEntries(
+  Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
+    path.startsWith("../")
+      ? path.replace(/^\.\.\//, "./")
+      : path.replace(/^\.\//, "./reports/"),
+    loader,
+  ]),
+);
 
 /** All tests pin "now" so the current operating day is deterministic. */
 const NOW = Date.parse("2026-03-10T12:00:00Z");
@@ -858,7 +871,7 @@ describe("recordFacts — containment", () => {
     });
   });
 
-  it("lets the domain transaction abort when even the dirty mark cannot be written", async () => {
+  it("falls back to a scheduled dirty mark when the inline mark cannot be written", async () => {
     vi.spyOn(Date, "now").mockReturnValue(NOW);
     const t = convexTest(schema, modules);
     await t.run(async (ctx) => {
@@ -869,7 +882,61 @@ describe("recordFacts — containment", () => {
       );
       await expect(
         recordFacts(doubleBroken, storeId, [saleFact()]),
-      ).rejects.toThrow(/injected reportDirtyDay write failure/);
+      ).resolves.toEqual({ outcome: "contained_failure" });
+
+      // No inline mark could land; the containment enqueued the durable
+      // scheduled mutation instead of throwing.
+      expect(await readDirty(ctx, storeId)).toEqual([]);
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      const scheduled = await ctx.db.system
+        .query("_scheduled_functions")
+        .collect();
+      expect(scheduled).toHaveLength(1);
+      expect(scheduled[0].args).toEqual([
+        { storeId, dates: [TODAY] },
+      ]);
+    });
+  });
+
+  it("scheduled fallback mutation writes the write_failure marks", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    const storeId = await t.run(async (ctx) => (await seed(ctx)).storeId);
+    await t.mutation(internal.reports.marks.markWriteFailureDays, {
+      storeId,
+      dates: [TODAY, YESTERDAY],
+    });
+    await t.run(async (ctx) => {
+      expect(await readDirty(ctx, storeId)).toEqual(
+        expect.arrayContaining([
+          { operatingDate: TODAY, reason: "write_failure" },
+          { operatingDate: YESTERDAY, reason: "write_failure" },
+        ]),
+      );
+    });
+  });
+
+  it("lets the domain transaction abort when the fallback cannot even be enqueued", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { storeId } = await seed(ctx);
+      const doubleBroken = brokenCtx(
+        brokenCtx(ctx, "reportFact"),
+        "reportDirtyDay",
+      );
+      const tripleBroken = {
+        ...doubleBroken,
+        scheduler: {
+          ...doubleBroken.scheduler,
+          runAfter: () => {
+            throw new Error("injected scheduler enqueue failure");
+          },
+        },
+      } as unknown as MutationCtx;
+      await expect(
+        recordFacts(tripleBroken, storeId, [saleFact()]),
+      ).rejects.toThrow(/injected scheduler enqueue failure/);
     });
   });
 });

@@ -14,6 +14,8 @@ import {
   REPORTS_FINGERPRINT_VERSION,
 } from "./fingerprint";
 import { resolveOperatingDate } from "./operatingDay";
+import { markDirty } from "./marks";
+import { internal } from "../_generated/api";
 
 /**
  * Ingestion core for the rebuilt reports layer.
@@ -36,7 +38,9 @@ import { resolveOperatingDate } from "./operatingDay";
  *  3. **Ingestion never breaks the business.** The whole body is contained: any
  *     internal failure degrades to a `write_failure` dirty mark and a normal
  *     return, so a reporting bug can never roll back a sale. If the dirty mark
- *     itself cannot be written, the throw is allowed to propagate — the domain
+ *     itself cannot be written, it is enqueued as a durable scheduled mutation
+ *     (`marks.markWriteFailureDays`) that lands right after commit. Only if
+ *     that enqueue ALSO fails is the throw allowed to propagate — the domain
  *     transaction then aborts atomically, which is the correct outcome.
  */
 
@@ -361,32 +365,6 @@ function batchTransactionDelta(
   return delta;
 }
 
-/** Upsert the (store, day) dirty mark. One row per day; last reason wins. */
-async function markDirty(
-  ctx: MutationCtx,
-  storeId: Id<"store">,
-  operatingDate: string,
-  reason: Doc<"reportDirtyDay">["reason"],
-): Promise<void> {
-  const existing = await ctx.db
-    .query("reportDirtyDay")
-    .withIndex("by_storeId_operatingDate", (q) =>
-      q.eq("storeId", storeId).eq("operatingDate", operatingDate),
-    )
-    .first();
-  const markedAt = Date.now();
-  if (existing) {
-    await ctx.db.patch("reportDirtyDay", existing._id, { reason, markedAt });
-    return;
-  }
-  await ctx.db.insert("reportDirtyDay", {
-    storeId,
-    operatingDate,
-    reason,
-    markedAt,
-  });
-}
-
 function addMetric(
   current: number | null,
   delta: number | null | undefined,
@@ -661,7 +639,11 @@ async function applyToOpenDay(
 
 /**
  * Record domain facts. FROZEN public API — emitters and the reseed walker call
- * this and nothing else in the module. Never throws into the caller.
+ * this and nothing else in the module. Never throws into the caller EXCEPT
+ * when containment is fully exhausted: the dirty mark cannot be written inline
+ * AND cannot be enqueued as a scheduled mutation. That throw is deliberate —
+ * it aborts the domain transaction atomically rather than committing a sale
+ * whose reporting evidence silently vanished (invariant 3 above).
  */
 export async function recordFacts(
   ctx: MutationCtx,
@@ -760,14 +742,26 @@ export async function recordFacts(
     return { outcome: "recorded" };
   } catch {
     // Containment. A reporting failure must never abort the domain mutation;
-    // it degrades to "this day needs a rebuild". If THIS write also fails the
-    // throw propagates on purpose — an atomic abort beats a silent data hole.
+    // it degrades to "this day needs a rebuild".
     const dates =
       touchedDates.size > 0
         ? [...touchedDates]
         : [currentOperatingDate ?? new Date(Date.now()).toISOString().slice(0, 10)];
-    for (const date of dates) {
-      await markDirty(ctx, storeId, date, "write_failure");
+    try {
+      for (const date of dates) {
+        await markDirty(ctx, storeId, date, "write_failure");
+      }
+    } catch {
+      // Even the dirty mark failed. Enqueue it as a scheduled mutation — a
+      // write to a different table than the one that just refused, and
+      // durable once the domain transaction commits, so the marks still land
+      // moments later instead of inside it. Only if the enqueue itself also
+      // fails does the throw propagate — an atomic abort beats a silent data
+      // hole, and by then two independent write paths have refused.
+      await ctx.scheduler.runAfter(0, internal.reports.marks.markWriteFailureDays, {
+        storeId,
+        dates,
+      });
     }
     return { outcome: "contained_failure" };
   }
