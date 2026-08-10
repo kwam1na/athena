@@ -12,7 +12,8 @@ import {
   Section,
   Text,
 } from "@react-email/components";
-import { capitalizeWords, currencyFormatter } from "../utils";
+import { currencyFormatter } from "../utils";
+import { formatProductDisplayName } from "../../shared/productDisplayName";
 import { operationalEmailOutlineButton } from "./emailOperationalCtaStyles";
 
 type DailyReportStatus =
@@ -702,7 +703,7 @@ function TopItemsSection({
           <Row key={`${item.name}-${index}`} style={styles.topItemRow}>
             <Column>
               <Text style={styles.topItemName}>
-                {formatTopItemName(item.name)}
+                {formatProductDisplayName(item.name)}
               </Text>
               {item.detail ? (
                 <Text style={styles.topItemDetail}>{item.detail}</Text>
@@ -721,10 +722,6 @@ function TopItemsSection({
       </Link>
     </Section>
   );
-}
-
-function formatTopItemName(name: string) {
-  return capitalizeWords(name.trim().replace(/\s+/g, " "));
 }
 
 function OperatingMetric({ metric }: { metric: DailyManagerReportMetric }) {

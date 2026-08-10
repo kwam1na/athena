@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
 import type { DailyManagerReportProps } from "../emails/DailyManagerReport";
+import type { ReportWeekCloseEvidence } from "../../shared/reportsContract";
 import {
   buildAcceptedWeeklyManagerReportPayload,
   buildAcceptedWeeklyTopItems,
@@ -85,8 +86,8 @@ function makeCloseEvidence(overrides?: {
       coverage: evidenceCoverage("complete", 6),
     },
     expenses: {
-      byQuantity: [],
-      bySpend: [],
+      byQuantity: [] as ReportWeekCloseEvidence["expenses"]["bySpend"],
+      bySpend: [] as ReportWeekCloseEvidence["expenses"]["bySpend"],
       coverage: overrides?.expenses?.coverage ?? evidenceCoverage("complete", 6),
       coveredQuantity: 0,
       coveredSpendMinor: 0,
@@ -254,6 +255,36 @@ describe("accepted weekly manager report payload", () => {
     const titles = payload.reportSections?.map((section) => section.title);
     expect(titles).toContain("Close variance");
     expect(titles).toContain("Counted cash variance");
+  });
+
+  it("normalizes frozen expense product names and pluralizes a single unit", () => {
+    const product = {
+      productName: "EBIN TINT SPRAY BIG",
+      productSku: "KK38-HH5-J6D",
+      productSkuId: "sku-1",
+      quantity: 1,
+      spendMinor: 18_500,
+    };
+    const evidence = makeCloseEvidence();
+    const payload = buildPayload({
+      closeEvidence: {
+        ...evidence,
+        expenses: {
+          ...evidence.expenses,
+          byQuantity: [product],
+          bySpend: [{ ...product, productName: "Packaging net 20pcs " }],
+          coveredQuantity: 1,
+          coveredSpendMinor: 18_500,
+        },
+      },
+    });
+
+    const [bySpend, byQuantity] = payload.rankedSections ?? [];
+    // Frozen evidence keeps the source spelling; only the display is tidied.
+    expect(bySpend?.rows[0]?.label).toBe("Packaging Net 20pcs");
+    expect(byQuantity?.rows[0]?.label).toBe("Ebin Tint Spray Big");
+    expect(byQuantity?.rows[0]?.primary).toBe("1 unit");
+    expect(bySpend?.rows[0]?.secondary).toBe("1 unit");
   });
 
   it("never lets the sales-fold card claim cash matched while counted cash differs", () => {

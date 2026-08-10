@@ -362,6 +362,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`shared/inventoryImportSource.test.ts`](../../shared/inventoryImportSource.test.ts)
 - [`shared/pos/terminalRuntimeMaterial.test.ts`](../../shared/pos/terminalRuntimeMaterial.test.ts)
 - [`shared/posRegisterSessionActivityContract.test.ts`](../../shared/posRegisterSessionActivityContract.test.ts)
+- [`shared/productDisplayName.test.ts`](../../shared/productDisplayName.test.ts)
 - [`shared/registerSessionLifecyclePolicy.test.ts`](../../shared/registerSessionLifecyclePolicy.test.ts)
 - [`shared/registerSessionStatus.test.ts`](../../shared/registerSessionStatus.test.ts)
 - [`shared/sharedDemoRegisterError.test.ts`](../../shared/sharedDemoRegisterError.test.ts)

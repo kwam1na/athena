@@ -9,6 +9,7 @@ import type {
 import { resolveAppUrl } from "./dailyManagerReportEmail";
 import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
 import { addWeekMetrics } from "../../shared/reportsContract";
+import { formatProductDisplayName } from "../../shared/productDisplayName";
 import type {
   ReportWeekCloseEvidence,
   ReportWeekCloseEvidenceCoverage,
@@ -487,6 +488,11 @@ function scheduledCoverageLabel(
   return `Based on ${coveredDayCount} of ${scheduledDayCount} scheduled days`;
 }
 
+/** Reports says "1 unit"; the ranked rows must not say "1 units" beside it. */
+function formatUnits(quantity: number): string {
+  return `${quantity.toLocaleString("en-US")} ${quantity === 1 ? "unit" : "units"}`;
+}
+
 function expenseRankedSections(
   expenses: ReportWeekCloseEvidence["expenses"],
   money: (minor: number) => string,
@@ -496,15 +502,15 @@ function expenseRankedSections(
     product: ReportWeekCloseEvidence["expenses"]["bySpend"][number],
     rankBy: "spend" | "quantity",
   ): DailyManagerReportRankedRow => ({
-    label: product.productName,
+    label: formatProductDisplayName(product.productName),
     detail: product.productSku,
     primary:
       rankBy === "spend"
         ? money(product.spendMinor)
-        : `${product.quantity.toLocaleString("en-US")} units`,
+        : formatUnits(product.quantity),
     secondary:
       rankBy === "spend"
-        ? `${product.quantity.toLocaleString("en-US")} units`
+        ? formatUnits(product.quantity)
         : money(product.spendMinor),
   });
   const remainder = (
@@ -517,10 +523,10 @@ function expenseRankedSections(
           primary:
             rankBy === "spend"
               ? money(value.spendMinor)
-              : `${value.quantity.toLocaleString("en-US")} units`,
+              : formatUnits(value.quantity),
           secondary:
             rankBy === "spend"
-              ? `${value.quantity.toLocaleString("en-US")} units`
+              ? formatUnits(value.quantity)
               : money(value.spendMinor),
         }
       : undefined;
