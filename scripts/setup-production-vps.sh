@@ -6,9 +6,19 @@ PROD_CONVEX_SITE="${PROD_CONVEX_SITE:-https://colorless-cardinal-870.convex.site
 DEV_CONVEX_SITE="${DEV_CONVEX_SITE:-https://jovial-wildebeest-179.convex.site}"
 STOREFRONT_HOST="${STOREFRONT_HOST:-wigclub.store}"
 STOREFRONT_WWW_HOST="${STOREFRONT_WWW_HOST:-www.wigclub.store}"
-ATHENA_HOST="${ATHENA_HOST:-athena.wigclub.store}"
+ATHENA_HOST="${ATHENA_HOST:-athena-os.app}"
+# Served alongside ATHENA_HOST from the same document root, not redirected to it.
+# The production POS terminal is bookmarked here and its offline state
+# (IndexedDB, app-shell service worker cache, auth session) is origin-scoped, so
+# a redirect would strand unsynced sales. Retire only after that terminal has
+# drained and been re-onboarded on ATHENA_HOST.
+ATHENA_LEGACY_HOST="${ATHENA_LEGACY_HOST:-athena.wigclub.store}"
 STOREFRONT_QA_HOST="${STOREFRONT_QA_HOST:-qa.wigclub.store}"
 ATHENA_QA_HOST="${ATHENA_QA_HOST:-athena-qa.wigclub.store}"
+ATHENA_QA_ALT_HOST="${ATHENA_QA_ALT_HOST:-qa.athena-os.app}"
+# Redirected to ATHENA_HOST rather than serving the app a second time, so the
+# admin app has exactly one origin and one session store.
+ATHENA_WWW_HOST="${ATHENA_WWW_HOST:-www.athena-os.app}"
 ATHENA_QA_PORT="${ATHENA_QA_PORT:-${QA_PORT:-5175}}"
 STOREFRONT_QA_PORT="${STOREFRONT_QA_PORT:-5176}"
 API_HOST="${API_HOST:-api.wigclub.store}"
@@ -62,7 +72,7 @@ server {
 
 server {
     listen 80;
-    server_name $ATHENA_HOST;
+    server_name $ATHENA_HOST $ATHENA_LEGACY_HOST;
     root $ATHENA_ROOT/athena-webapp/current;
     index index.html;
 
@@ -101,7 +111,7 @@ server {
 
 server {
     listen 80;
-    server_name $ATHENA_QA_HOST;
+    server_name $ATHENA_QA_HOST $ATHENA_QA_ALT_HOST;
 
     # Keep QA walkthrough responses out of search results under the same path
     # boundary as production, including query strings and nested SPA URLs.
@@ -209,6 +219,15 @@ server {
 }
 NGINX
 
+# Separate file so the redirect survives a rewrite of wigclub.conf.
+cat >/etc/nginx/conf.d/athena-os-www.conf <<NGINX
+server {
+    listen 80;
+    server_name $ATHENA_WWW_HOST;
+    return 301 https://$ATHENA_HOST\$request_uri;
+}
+NGINX
+
 nginx -t
 systemctl enable --now nginx
 systemctl enable --now valkey-server
@@ -217,3 +236,4 @@ systemctl enable pm2-root
 
 echo "Base VPS setup complete."
 echo "Next: install cloudflared credentials, add the VPS GitHub deploy key, run scripts/deploy-vps.sh, then configure the Cloudflare Tunnel hostnames."
+echo "The Athena admin app is served on both $ATHENA_HOST and $ATHENA_LEGACY_HOST; both need a tunnel hostname and DNS route."

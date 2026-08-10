@@ -25,7 +25,7 @@ export const posTerminalHealthAlertPreviewProps = {
     "Storage is almost full. New offline sales may not be saved reliably.",
   ],
   healthUrl:
-    "https://athena.wigclub.store/wigclub/store/wigclub/pos/terminals/terminal-1",
+    "https://athena-os.app/wigclub/store/wigclub/pos/terminals/terminal-1",
   observedAtLabel: "Saturday, Aug 8 · Reported at 8:47 PM",
   storeName: "Wigclub",
   terminalLabel: "Front counter / Register 2",

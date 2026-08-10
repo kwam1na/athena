@@ -16,7 +16,7 @@ const baseProps: ApprovalRequestPendingProps = {
   },
   identifier: "TXN-1048",
   queueUrl:
-    "https://athena.wigclub.store/wigclub/store/wigclub/operations/approvals",
+    "https://athena-os.app/wigclub/store/wigclub/operations/approvals",
   reason: "Cash refund exceeded the register's approval threshold.",
   requestType: "pos_transaction_void",
   requesterName: "Ama Mensah",

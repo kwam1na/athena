@@ -1181,7 +1181,7 @@ export function resolveAppUrl() {
     return trimTrailingSlash(explicitAthenaUrl);
   }
 
-  if (process.env.STAGE === "prod") return "https://athena.wigclub.store";
+  if (process.env.STAGE === "prod") return "https://athena-os.app";
 
   return "http://localhost:5173";
 }

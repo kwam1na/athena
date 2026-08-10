@@ -49,7 +49,7 @@ export const registerCloseoutVarianceAlertPreviewProps = {
   reason: "Variance exceeded the closeout approval threshold.",
   registerLabel: "Front counter / Register 2",
   reviewUrl:
-    "https://athena.wigclub.store/wigclub/store/wigclub/cash-controls/registers/register-session-1",
+    "https://athena-os.app/wigclub/store/wigclub/cash-controls/registers/register-session-1",
   storeName: "Wigclub",
   submittedAt: "8:47 PM",
   submittedBy: "Ama Mensah",

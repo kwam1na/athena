@@ -187,7 +187,7 @@ export const approvalRequestPendingPreviewProps = {
   },
   identifier: "#532108",
   queueUrl:
-    "https://athena.wigclub.store/wigclub/store/wigclub/operations/approvals",
+    "https://athena-os.app/wigclub/store/wigclub/operations/approvals",
   reason: "This transaction void requires manager approval.",
   requestType: "pos_transaction_void",
   requesterName: "Ama Mensah",

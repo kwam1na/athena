@@ -124,7 +124,7 @@ export const sendNewOrderEmail = async (params: {
 }) => {
   const appUrl =
     process.env.STAGE == "prod"
-      ? "https://athena.wigclub.store"
+      ? "https://athena-os.app"
       : "http://localhost:5173";
 
   const message = {

@@ -21,6 +21,33 @@ function isLocalHost(hostname: string) {
   return hostname === "localhost" || hostname === "127.0.0.1";
 }
 
+// Hosts whose storefront hostname is a mechanical transform of the admin
+// hostname. `athena-os.app` is deliberately absent: the admin app is no longer
+// named after the storefront it administers, so there is nothing to derive.
+// Builds served from it rely on VITE_STOREFRONT_URL, which every deploy path
+// sets.
+function deriveStoreFrontFromAdminHost(adminUrl: URL) {
+  const { hostname, protocol } = adminUrl;
+
+  if (hostname === "athena-qa.wigclub.store") {
+    return `${protocol}//qa.wigclub.store`;
+  }
+
+  if (hostname === "athena.wigclub.store") {
+    return `${protocol}//wigclub.store`;
+  }
+
+  if (hostname.startsWith("athena-qa.")) {
+    return `${protocol}//${hostname.replace(/^athena-qa\./, "qa.")}`;
+  }
+
+  if (hostname.startsWith("athena.")) {
+    return `${protocol}//${hostname.replace(/^athena\./, "")}`;
+  }
+
+  return undefined;
+}
+
 export function resolveStoreFrontUrl({
   configuredUrl,
   origin,
@@ -46,24 +73,18 @@ export function resolveStoreFrontUrl({
     return `${adminUrl.protocol}//${adminUrl.hostname}:5174`;
   }
 
-  if (adminUrl.hostname === "athena-qa.wigclub.store") {
-    return `${adminUrl.protocol}//qa.wigclub.store`;
+  const derived = deriveStoreFrontFromAdminHost(adminUrl);
+  if (derived) {
+    return derived;
   }
 
-  if (adminUrl.hostname === "athena.wigclub.store") {
-    return `${adminUrl.protocol}//wigclub.store`;
-  }
-
-  if (adminUrl.hostname.startsWith("athena-qa.")) {
-    return `${adminUrl.protocol}//${adminUrl.hostname.replace(
-      /^athena-qa\./,
-      "qa.",
-    )}`;
-  }
-
-  if (adminUrl.hostname.startsWith("athena.")) {
-    return `${adminUrl.protocol}//${adminUrl.hostname.replace(/^athena\./, "")}`;
-  }
+  // Reaching here on a deployed host means the build is missing
+  // VITE_STOREFRONT_URL. Say so, rather than silently pointing every storefront
+  // link in the admin app at a dev server nobody is running.
+  console.warn(
+    `[config] No storefront URL configured for ${adminUrl.hostname}. ` +
+      `Set VITE_STOREFRONT_URL at build time. Falling back to ${LOCAL_STOREFRONT_URL}.`,
+  );
 
   return LOCAL_STOREFRONT_URL;
 }

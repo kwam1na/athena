@@ -13,7 +13,7 @@ Chrome extension for recording the admin app. It does two things, independently:
 
 1. Chrome → `chrome://extensions` → enable **Developer mode**.
 2. **Load unpacked** → select this folder (`tools/screen-redact-extension`).
-3. Open https://athena.wigclub.store, click the extension icon, tick **Mask amounts**.
+3. Open https://athena-os.app (or the legacy https://athena.wigclub.store — both are supported), click the extension icon, tick **Mask amounts**.
 4. Confirm the small `REDACTED` badge is showing bottom-right before you hit record.
 
 Toggle at any time with **Alt+Shift+M** (works mid-recording).
