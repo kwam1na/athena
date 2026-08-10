@@ -238,6 +238,63 @@ describe("reports contract ↔ schema parity", () => {
     }
   });
 
+  it("shares one optional close-evidence contract and bounds accepted correction", () => {
+    const current = (reportWeekCurrentSchema as AnyValidator).members!.find(
+      (member) => member.fields?.included,
+    )!;
+    for (const schema of [current, reportWeekAcceptedSchema]) {
+      const closeEvidence = fieldsOf(schema).closeEvidence;
+      expect(closeEvidence.isOptional).toBe("optional");
+      const evidence = fieldsOf(closeEvidence);
+      expect(Object.keys(evidence).sort()).toEqual([
+        "cash",
+        "expenses",
+        "payments",
+        "transactions",
+      ]);
+      expect(evidence.transactions.isOptional).toBe("optional");
+      expect(Object.keys(fieldsOf(evidence.transactions)).sort()).toEqual([
+        "coverage",
+        "transactionCount",
+      ]);
+      expect(Object.keys(fieldsOf(fieldsOf(evidence.cash).coverage)).sort()).toEqual(
+        ["scheduledDayCount", "status", "usableDayCount"],
+      );
+    }
+
+    const correction = fieldsOf(reportWeekAcceptedSchema).correction;
+    expect(correction.isOptional).toBe("optional");
+    expect(Object.keys(fieldsOf(correction)).sort()).toEqual([
+      "appliedAt",
+      "candidateFingerprint",
+      "closeEvidence",
+      "contractVersion",
+      "scheduleLineage",
+      "sourceManifestFingerprint",
+      "topSkuLeaders",
+    ]);
+    // Optional so corrections applied before the field landed — and sealed
+    // weeks whose baseline retained no leaders — stay contract-safe.
+    const correctedLeaders = fieldsOf(correction).topSkuLeaders;
+    expect(correctedLeaders.isOptional).toBe("optional");
+    // A correction only ever seals fully resolved identity; unlike the
+    // acceptance-time shape, its labels are never optional.
+    expect(Object.keys(fieldsOf(correctedLeaders.element!)).sort()).toEqual([
+      "productName",
+      "productSku",
+      "productSkuId",
+      "unitsSold",
+    ]);
+    for (const key of ["productName", "productSku"]) {
+      expect(fieldsOf(correctedLeaders.element!)[key].isOptional).toBe(
+        "required",
+      );
+    }
+    const leader = fieldsOf(reportWeekAcceptedSchema).topSkuLeaders.element!;
+    expect(fieldsOf(leader).productName.isOptional).toBe("optional");
+    expect(fieldsOf(leader).productSku.isOptional).toBe("optional");
+  });
+
   it("persists the prior period's outside-schedule lane, optional during rollout", () => {
     for (const schema of [
       reportWeekAcceptedSchema,

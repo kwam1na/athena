@@ -39,7 +39,6 @@ import {
   reconcileRecentAcceptedWeeksForStore,
   rebuildCurrentWeek,
   availableWeekCurrent,
-  computeWeeklyCashVariancePosture,
   computeWeeklyVariancePosture,
   refreshAcceptedWeekForDate,
 } from "./weekly";
@@ -355,6 +354,7 @@ async function insertCompletedClose(
   t: ReturnType<typeof convexTest>,
   args: {
     completedAt: number;
+    expenseProductEvidence?: Record<string, unknown>;
     frozenGroups?: Array<{
       key: string;
       members: Array<{
@@ -366,6 +366,7 @@ async function insertCompletedClose(
       productSkuId: Id<"productSku"> | null;
     }>;
     operatingDate: string;
+    summary?: Record<string, unknown>;
     storeId: Id<"store">;
   },
 ) {
@@ -386,7 +387,7 @@ async function insertCompletedClose(
         carryForwardCount: 0,
         readyCount: 0,
       },
-      summary: {},
+      summary: args.summary ?? {},
       sourceSubjects: [],
       carryForwardWorkItemIds: [],
       reportSnapshot: {
@@ -407,7 +408,10 @@ async function insertCompletedClose(
           carryForwardCount: 0,
           readyCount: 0,
         },
-        summary: {},
+        summary: args.summary ?? {},
+        ...(args.expenseProductEvidence
+          ? { expenseProductEvidence: args.expenseProductEvidence }
+          : {}),
         reviewedItems: [],
         carryForwardItems: [],
         carryForwardGroups: [],
@@ -526,31 +530,234 @@ describe("computeWeeklyVariancePosture", () => {
   });
 });
 
-describe("computeWeeklyCashVariancePosture", () => {
-  it("totals accepted Daily Close cash variance separately from sales reconciliation", () => {
-    const days = period().dates.map((entry, index) =>
-      day({
-        operatingDate: entry.localDate,
-        ...(entry.included
-          ? { closeId: `close-${index}` as Id<"dailyClose"> }
-          : {}),
-      }),
-    );
-    const closes = new Map<string, Pick<Doc<"dailyClose">, "summary">>([
-      ["close-0", { summary: { netCashVariance: 6500 } }],
-      ["close-1", { summary: { netCashVariance: -1000 } }],
-    ]);
+describe("weekly materialization", () => {
+  it("persists the same partial close evidence on current and the first accepted baseline", async () => {
+    const t = convexTest(schema, modules);
+    const storeId = await seedStore(t, "weekly-close-evidence");
+    const productSkuId = await t.run(async (ctx) => {
+      const store = await ctx.db.get("store", storeId);
+      if (!store) throw new Error("missing fixture store");
+      const categoryId = await ctx.db.insert("category", {
+        name: "Expense",
+        slug: "expense",
+        storeId,
+      });
+      const subcategoryId = await ctx.db.insert("subcategory", {
+        categoryId,
+        name: "Expense",
+        slug: "expense",
+        storeId,
+      });
+      const userId = await ctx.db.insert("athenaUser", {
+        email: "weekly-close-evidence@example.test",
+      });
+      const productId = await ctx.db.insert("product", {
+        availability: "live",
+        categoryId,
+        createdByUserId: userId,
+        currency: "GHS",
+        inventoryCount: 0,
+        name: "Bag",
+        organizationId: store.organizationId,
+        slug: "bag",
+        storeId,
+        subcategoryId,
+      });
+      return ctx.db.insert("productSku", {
+        images: [],
+        inventoryCount: 0,
+        price: 25,
+        productId,
+        productName: "Bag fallback",
+        quantityAvailable: 0,
+        sku: "BAG-01",
+        storeId,
+      });
+    });
+    await insertFact(t, storeId, {
+      observedAt: NOW + 5,
+      productSkuId,
+      quantity: 2,
+    });
+    const closeIds = new Map<string, Id<"dailyClose">>();
+    for (const [index, operatingDate] of period().includedDates.entries()) {
+      const closeId = await insertCompletedClose(t, {
+        completedAt: NOW + index,
+        expenseProductEvidence:
+          index < 2
+            ? {
+                contractVersion: 1,
+                expenseTotal: 25,
+                products: [
+                  {
+                    productName: "Bag",
+                    productSku: "BAG",
+                    productSkuId,
+                    quantity: 1,
+                    spend: 25,
+                  },
+                ],
+                sourceItemCount: 1,
+                sourceTransactionCount: 1,
+                status: "complete",
+              }
+            : undefined,
+        operatingDate,
+        storeId,
+        summary: {
+          ...(index < 4 ? { netCashVariance: 10 } : {}),
+          ...(index < 3
+            ? {
+                paymentTotals: [
+                  { amount: 100, method: "cash", transactionCount: 1 },
+                ],
+              }
+            : {}),
+        },
+      });
+      closeIds.set(operatingDate, closeId);
+      await insertFoldedCloseDay(t, {
+        closeId,
+        foldedAt: NOW + 10,
+        operatingDate,
+        storeId,
+      });
+    }
 
-    expect(computeWeeklyCashVariancePosture(period(), days, closes)).toEqual({
-      cashVarianceMinor: 5500,
-      coverage: "partial",
-      coveredIncludedDayCount: 2,
-      includedDayCount: 6,
+    await t.run(async (ctx) => {
+      expect(await rebuildCurrentWeek(ctx, storeId, NOW + 10)).toBe("rebuilt");
+      const current = availableWeekCurrent(
+        await ctx.db
+          .query("reportWeekCurrent")
+          .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+          .unique(),
+      );
+      expect(current?.closeEvidence).toMatchObject({
+        cash: {
+          cashVarianceMinor: 40,
+          coverage: { status: "partial", usableDayCount: 4 },
+        },
+        payments: {
+          coveredTenderValueMinor: 300,
+          coverage: { status: "partial", usableDayCount: 3 },
+        },
+        expenses: {
+          coveredSpendMinor: 50,
+          coverage: { status: "partial", usableDayCount: 2 },
+        },
+      });
+
+      const finalCloseId = closeIds.get("2026-07-04");
+      if (!finalCloseId) throw new Error("missing final close fixture");
+      expect(
+        await materializeAcceptedWeek({
+          acceptedAt: NOW + 5,
+          closeId: finalCloseId,
+          ctx,
+          cutoffObservedAt: NOW + 5,
+          storeId,
+        }),
+      ).toBe("created");
+      const accepted = await ctx.db
+        .query("reportWeekAccepted")
+        .withIndex("by_storeId_cycleStartDate", (q) =>
+          q.eq("storeId", storeId).eq("cycleStartDate", "2026-06-29"),
+        )
+        .unique();
+      expect(accepted?.closeEvidence).toEqual(current?.closeEvidence);
+      expect(accepted?.baselineFingerprint).not.toBeUndefined();
+      expect(accepted?.topSkuLeaders).toEqual([
+        {
+          productName: "Bag",
+          productSku: "BAG-01",
+          productSkuId,
+          unitsSold: 2,
+        },
+      ]);
+      const sku = await ctx.db.get("productSku", productSkuId);
+      if (!sku) throw new Error("missing fixture SKU");
+      await ctx.db.patch("productSku", productSkuId, {
+        productName: "Renamed fallback",
+        sku: "CHANGED",
+      });
+      await ctx.db.patch("product", sku.productId, { name: "Renamed product" });
+      expect((await ctx.db.get("reportWeekAccepted", accepted!._id))?.topSkuLeaders)
+        .toEqual(accepted?.topSkuLeaders);
     });
   });
-});
 
-describe("weekly materialization", () => {
+  it("freezes complete 6-of-6 cash evidence and fully closed lineage on first acceptance", async () => {
+    const t = convexTest(schema, modules);
+    const storeId = await seedStore(t, "weekly-fully-closed-week");
+    const closeIds = new Map<string, Id<"dailyClose">>();
+    for (const [index, operatingDate] of period().includedDates.entries()) {
+      const closeId = await insertCompletedClose(t, {
+        completedAt: NOW + index,
+        operatingDate,
+        storeId,
+        // Mixed signs: the frozen weekly figure is a NET, not a magnitude.
+        summary: { netCashVariance: index % 2 === 0 ? 250 : -100 },
+      });
+      closeIds.set(operatingDate, closeId);
+      await insertFoldedCloseDay(t, {
+        closeId,
+        foldedAt: NOW + 10,
+        operatingDate,
+        storeId,
+      });
+    }
+
+    await t.run(async (ctx) => {
+      const finalCloseId = closeIds.get("2026-07-04");
+      if (!finalCloseId) throw new Error("missing final close fixture");
+      expect(
+        await materializeAcceptedWeek({
+          acceptedAt: NOW + 10,
+          closeId: finalCloseId,
+          ctx,
+          cutoffObservedAt: NOW + 10,
+          storeId,
+        }),
+      ).toBe("created");
+
+      const baseline = await ctx.db
+        .query("reportWeekAccepted")
+        .withIndex("by_storeId_cycleStartDate", (q) =>
+          q.eq("storeId", storeId).eq("cycleStartDate", "2026-06-29"),
+        )
+        .unique();
+      // Every included day — not just the final one — persists as closed.
+      const includedLineage = baseline?.scheduleLineage.filter(
+        (row) => row.included,
+      );
+      expect(includedLineage?.map((row) => row.localDate)).toEqual(
+        period().includedDates,
+      );
+      expect(includedLineage?.map((row) => row.dayClosed)).toEqual([
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+      ]);
+      expect(baseline?.closeEvidence?.cash).toEqual({
+        cashVarianceMinor: 450,
+        coverage: {
+          scheduledDayCount: 6,
+          status: "complete",
+          usableDayCount: 6,
+        },
+      });
+      expect(baseline?.cashVariancePosture).toEqual({
+        cashVarianceMinor: 450,
+        coverage: "complete",
+        coveredIncludedDayCount: 6,
+        includedDayCount: 6,
+      });
+    });
+  });
+
   it("does not publish zero activity while a scheduled day fold is still pending", async () => {
     const t = convexTest(schema, modules);
     const storeId = await seedStore(t, "weekly-pending-day");
@@ -1752,6 +1959,7 @@ describe("weekly materialization", () => {
       completedAt: NOW,
       operatingDate: "2026-07-04",
       storeId,
+      summary: { netCashVariance: 75, paymentTotals: [] },
     });
     const finalDayId = await insertFoldedCloseDay(t, {
       closeId: acceptedCloseId,
@@ -1780,6 +1988,17 @@ describe("weekly materialization", () => {
       expect(
         await reconcileRecentAcceptedWeeksForStore(ctx, storeId, NOW),
       ).toBe(1);
+      const originalBaseline = await ctx.db
+        .query("reportWeekAccepted")
+        .withIndex("by_storeId_cycleStartDate", (q) =>
+          q.eq("storeId", storeId).eq("cycleStartDate", "2026-06-29"),
+        )
+        .unique();
+      expect(originalBaseline?.closeEvidence?.cash).toMatchObject({
+        cashVarianceMinor: 75,
+        coverage: { status: "partial", usableDayCount: 1 },
+      });
+      expect(await rebuildCurrentWeek(ctx, storeId, NOW + 1)).toBe("rebuilt");
       await ctx.db.patch("dailyClose", acceptedCloseId, {
         lifecycleStatus: "reopened",
         isCurrent: false,
@@ -1794,6 +2013,7 @@ describe("weekly materialization", () => {
         lifecycleStatus: "active",
         isCurrent: true,
         readiness: accepted.readiness,
+        reportSnapshot: accepted.reportSnapshot,
         summary: accepted.summary,
         sourceSubjects: [],
         carryForwardWorkItemIds: [],
@@ -1824,6 +2044,17 @@ describe("weekly materialization", () => {
           includedNetSalesDeltaMinor: 50,
           outsideScheduleNetSalesDeltaMinor: 0,
         },
+      });
+      expect(week?.closeEvidence).toEqual(originalBaseline?.closeEvidence);
+      const reopenedCurrent = availableWeekCurrent(
+        await ctx.db
+          .query("reportWeekCurrent")
+          .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+          .unique(),
+      );
+      expect(reopenedCurrent?.closeEvidence?.cash).toMatchObject({
+        cashVarianceMinor: 0,
+        coverage: { status: "unavailable", usableDayCount: 0 },
       });
 
       await ctx.db.patch("dailyClose", acceptedCloseId, {
@@ -1871,6 +2102,17 @@ describe("weekly materialization", () => {
           outsideScheduleNetSalesDeltaMinor: 25,
           sourceCloseId: reopenedCloseId,
         },
+      });
+      expect(amended?.closeEvidence).toEqual(originalBaseline?.closeEvidence);
+      const successorCurrent = availableWeekCurrent(
+        await ctx.db
+          .query("reportWeekCurrent")
+          .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+          .unique(),
+      );
+      expect(successorCurrent?.closeEvidence?.cash).toMatchObject({
+        cashVarianceMinor: 75,
+        coverage: { status: "partial", usableDayCount: 1 },
       });
     });
   });

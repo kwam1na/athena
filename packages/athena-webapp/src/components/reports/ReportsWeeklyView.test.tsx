@@ -385,7 +385,258 @@ const report: WeeklyReportProjection = {
   },
 };
 
+const closeEvidence = {
+  cash: {
+    cashVarianceMinor: 32_000,
+    coverage: {
+      scheduledDayCount: 6,
+      status: "complete" as const,
+      usableDayCount: 6,
+    },
+  },
+  payments: {
+    coveredTenderValueMinor: 2_502_500,
+    coverage: {
+      scheduledDayCount: 6,
+      status: "complete" as const,
+      usableDayCount: 6,
+    },
+    rows: [
+      {
+        amountMinor: 1_658_000,
+        method: "Mobile money",
+        shareBasisPoints: 6_625,
+        tenderUseCount: 63,
+      },
+      {
+        amountMinor: 502_000,
+        method: "Cash",
+        shareBasisPoints: 2_006,
+        tenderUseCount: 26,
+      },
+      {
+        amountMinor: 342_500,
+        method: "Card",
+        shareBasisPoints: 1_369,
+        tenderUseCount: 10,
+      },
+    ],
+  },
+  expenses: {
+    byQuantity: [
+      {
+        productName: "Styling gel",
+        productSku: "GEL-01",
+        productSkuId: "sku-gel",
+        quantity: 5,
+        spendMinor: 12_000,
+      },
+    ],
+    bySpend: [
+      {
+        productName: "Lace remover",
+        productSku: "LR-02",
+        productSkuId: "sku-remover",
+        quantity: 2,
+        spendMinor: 20_000,
+      },
+    ],
+    coveredQuantity: 16,
+    coveredSpendMinor: 70_500,
+    coverage: {
+      scheduledDayCount: 6,
+      status: "complete" as const,
+      usableDayCount: 6,
+    },
+    quantityRemainder: { productCount: 1, quantity: 11, spendMinor: 58_500 },
+    spendRemainder: { productCount: 2, quantity: 14, spendMinor: 50_500 },
+  },
+};
+
 describe("ReportsWeeklyView", () => {
+  it("labels corrected accepted evidence without hiding the original acceptance", () => {
+    render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          acceptedAt: Date.parse("2026-08-08T20:47:00.000Z"),
+          correction: { appliedAt: Date.parse("2026-08-09T12:00:00.000Z") },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Report corrected")).toBeInTheDocument();
+    expect(screen.getByText(/Accepted Aug 8, 2026.*Corrected Aug 9, 2026/)).toBeInTheDocument();
+  });
+
+  it("renders close-backed cash, payment, and expense evidence value-first", () => {
+    render(
+      <ReportsWeeklyView
+        report={{ ...report, closeEvidence } as WeeklyReportProjection}
+      />,
+    );
+
+    expect(screen.getByText("Counted cash variance")).toBeInTheDocument();
+    expect(screen.getByText("$320 over")).toBeInTheDocument();
+    expect(screen.getByText("Payment mix")).toBeInTheDocument();
+    const paymentMethods = screen.getByRole("region", {
+      name: "Payment methods",
+    });
+    expect(paymentMethods).toBeInTheDocument();
+    expect(paymentMethods.parentElement).toHaveClass("lg:w-1/2");
+    const sectionHeadings = screen
+      .getAllByRole("heading", { level: 2 })
+      .map((heading) => heading.textContent);
+    expect(sectionHeadings.indexOf("Payment mix")).toBe(
+      sectionHeadings.indexOf("Payments") + 1,
+    );
+    expect(sectionHeadings.indexOf("Payment mix")).toBeLessThan(
+      sectionHeadings.indexOf("Variance"),
+    );
+    // Persisted value shares, never recomputed from tender-use counts
+    // (63 / 99 uses would misstate Mobile money as 63.6%).
+    expect(screen.getByText("66.25%")).toBeInTheDocument();
+    expect(screen.getByText("20.06%")).toBeInTheDocument();
+    expect(screen.getByText("13.69%")).toBeInTheDocument();
+    expect(screen.queryByText("70.8%")).not.toBeInTheDocument();
+    // Weekly counts are tender uses, not transactions or sales.
+    expect(screen.getByText("63 tender uses")).toBeInTheDocument();
+    expect(screen.getByText("26 tender uses")).toBeInTheDocument();
+    expect(screen.queryByText("63 transactions")).not.toBeInTheDocument();
+    expect(screen.getByText("$16,580")).toBeInTheDocument();
+    // The covered subtotals sit beside their coverage sentences.
+    expect(screen.getByText(/Covered tender value:/)).toBeInTheDocument();
+    expect(screen.getByText("$25,025")).toBeInTheDocument();
+    expect(screen.getByText(/Covered expense spend:/)).toBeInTheDocument();
+    expect(screen.getByText("$705")).toBeInTheDocument();
+    // Shares total exactly 100.00%, so no rounding disclosure appears.
+    expect(
+      screen.queryByText("Shares may not total 100% due to rounding."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Highest expense spend")).toBeInTheDocument();
+    expect(screen.getByText("Most consumed expense products")).toBeInTheDocument();
+    expect(screen.getAllByText("6 of 6 scheduled days")).toHaveLength(3);
+    expect(screen.getByText("2 other products")).toBeInTheDocument();
+    expect(screen.getByText("1 other product")).toBeInTheDocument();
+  });
+
+  it("discloses rounding only when persisted shares do not total 100%", () => {
+    render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          closeEvidence: {
+            ...closeEvidence,
+            payments: {
+              ...closeEvidence.payments,
+              coveredTenderValueMinor: 300_000,
+              rows: [
+                {
+                  amountMinor: 100_000,
+                  method: "Mobile money",
+                  shareBasisPoints: 3_333,
+                  tenderUseCount: 4,
+                },
+                {
+                  amountMinor: 100_000,
+                  method: "Cash",
+                  shareBasisPoints: 3_333,
+                  tenderUseCount: 3,
+                },
+                {
+                  amountMinor: 100_000,
+                  method: "Card",
+                  shareBasisPoints: 3_333,
+                  tenderUseCount: 3,
+                },
+              ],
+            },
+          },
+        } as WeeklyReportProjection}
+      />,
+    );
+
+    expect(screen.getAllByText("33.33%")).toHaveLength(3);
+    expect(
+      screen.getByText("Shares may not total 100% due to rounding."),
+    ).toBeInTheDocument();
+  });
+
+  it("renders a certified-zero payment week as covered zero, not a sync promise", () => {
+    render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          closeEvidence: {
+            ...closeEvidence,
+            payments: {
+              coveredTenderValueMinor: 0,
+              coverage: {
+                scheduledDayCount: 6,
+                status: "partial" as const,
+                usableDayCount: 3,
+              },
+              rows: [],
+            },
+          },
+        } as WeeklyReportProjection}
+      />,
+    );
+
+    const paymentMixHeading = screen.getByText("Payment mix");
+    const section = paymentMixHeading.closest("section")!;
+    expect(section).toHaveTextContent("$0 · Based on 3 of 6 scheduled days");
+    expect(
+      screen.queryByText(
+        "Payment method shares will appear after completed sales sync.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("No payment mix yet")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Covered tender value:/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("qualifies partial evidence and never turns unavailable evidence into zero", () => {
+    render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          closeEvidence: {
+            ...closeEvidence,
+            cash: {
+              cashVarianceMinor: 0,
+              coverage: {
+                scheduledDayCount: 6,
+                status: "partial",
+                usableDayCount: 3,
+              },
+            },
+            expenses: {
+              ...closeEvidence.expenses,
+              byQuantity: [],
+              bySpend: [],
+              coverage: {
+                scheduledDayCount: 6,
+                status: "unavailable",
+                usableDayCount: 0,
+              },
+              quantityRemainder: null,
+              spendRemainder: null,
+            },
+          },
+        } as WeeklyReportProjection}
+      />,
+    );
+
+    expect(screen.getByText("$0 · Based on 3 of 6 scheduled days")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Not available — no completed Daily Closes contain this information.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("$0 total expense spend")).not.toBeInTheDocument();
+  });
   it("uses the newest projection, acceptance, close, or amendment timestamp", () => {
     expect(weeklyUpdatedAt({ ...report, materializedAt: 100 })).toBe(100);
     expect(

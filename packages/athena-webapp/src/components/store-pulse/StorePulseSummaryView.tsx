@@ -62,13 +62,7 @@ export type StorePulseOperatorSnapshot = {
   };
   historyDays: number;
   isLimited: boolean;
-  paymentMix: Array<{
-    count: number;
-    label: string;
-    method: string;
-    share: number;
-    total: number;
-  }>;
+  paymentMix: StorePulsePaymentMixEntry[];
   topItems: Array<{
     name: string;
     productSku: string | null;
@@ -77,6 +71,14 @@ export type StorePulseOperatorSnapshot = {
   }>;
   trend: StorePulseTrendDay[];
   usableHistoryDays: number;
+};
+
+export type StorePulsePaymentMixEntry = {
+  count: number;
+  label: string;
+  method: string;
+  share: number;
+  total: number;
 };
 
 export type StorePulseSummary = {
@@ -704,19 +706,37 @@ export function TopItemsPanel({
 }
 
 export function PaymentMethodsPanel({
+  countNoun = "transaction",
   emptyStateTimeContext = "current",
+  paymentMix: paymentMixProp,
+  shareSource = "count",
+  showHeader = true,
   snapshot,
   totalTransactions,
+  valueFormatter,
   variant = "card",
 }: {
+  /** Singular noun for the per-row count line, e.g. "tender use". */
+  countNoun?: string;
   emptyStateTimeContext?: StorePulseEmptyStateTimeContext;
-  snapshot: StorePulseOperatorSnapshot;
+  paymentMix?: StorePulsePaymentMixEntry[];
+  /**
+   * "provided" renders each entry's own persisted `share` (two decimals);
+   * "count" keeps the legacy Store Pulse math over transaction counts.
+   */
+  shareSource?: "count" | "provided";
+  showHeader?: boolean;
+  snapshot?: StorePulseOperatorSnapshot;
   totalTransactions?: number;
+  valueFormatter?: (payment: StorePulsePaymentMixEntry) => ReactNode;
   variant?: StorePulseDetailVariant;
 }) {
+  const availablePaymentMix = paymentMixProp ?? snapshot?.paymentMix ?? [];
   const selectedWindowTransactions =
-    totalTransactions ?? snapshot.comparison.currentTransactions;
-  const paymentMix = selectedWindowTransactions > 0 ? snapshot.paymentMix : [];
+    totalTransactions ??
+    snapshot?.comparison.currentTransactions ??
+    availablePaymentMix.reduce((total, payment) => total + payment.count, 0);
+  const paymentMix = selectedWindowTransactions > 0 ? availablePaymentMix : [];
   const totalPaymentTransactions = paymentMix.reduce(
     (total, payment) => total + payment.count,
     0,
@@ -726,23 +746,27 @@ export function PaymentMethodsPanel({
 
   return (
     <section aria-label="Payment methods" className="space-y-layout-md">
-      <div>
-        <h3 className="text-base font-medium text-foreground">
-          How customers paid
-        </h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Share of synced POS sales by payment method.
-        </p>
-      </div>
+      {showHeader ? (
+        <div>
+          <h3 className="text-base font-medium text-foreground">
+            How customers paid
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Share of synced POS sales by payment method.
+          </p>
+        </div>
+      ) : null}
       <div className={variant === "canvas" ? "" : detailCardClassName}>
         <div className="divide-y divide-border/70">
           {paymentMix.length ? (
             paymentMix.map((payment) => {
               const PaymentIcon = getPaymentMethodIcon(payment);
               const paymentShare =
-                totalPaymentTransactions > 0
-                  ? (payment.count / totalPaymentTransactions) * 100
-                  : 0;
+                shareSource === "provided"
+                  ? payment.share
+                  : totalPaymentTransactions > 0
+                    ? (payment.count / totalPaymentTransactions) * 100
+                    : 0;
 
               return (
                 <div
@@ -757,8 +781,17 @@ export function PaymentMethodsPanel({
                       />
                       <span className="truncate">{payment.label}</span>
                     </span>
-                    <span className="font-numeric tabular-nums text-muted-foreground">
-                      {formatPaymentSharePercent(paymentShare)}
+                    <span className="inline-flex items-baseline gap-layout-sm font-numeric tabular-nums">
+                      {valueFormatter ? (
+                        <span className="font-medium text-foreground">
+                          {valueFormatter(payment)}
+                        </span>
+                      ) : null}
+                      <span className="text-muted-foreground">
+                        {shareSource === "provided"
+                          ? `${paymentShare.toFixed(2)}%`
+                          : formatPaymentSharePercent(paymentShare)}
+                      </span>
                     </span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-primary-soft">
@@ -768,7 +801,7 @@ export function PaymentMethodsPanel({
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {formatEntityCount(payment.count, "transaction")}
+                    {formatEntityCount(payment.count, countNoun)}
                   </p>
                 </div>
               );

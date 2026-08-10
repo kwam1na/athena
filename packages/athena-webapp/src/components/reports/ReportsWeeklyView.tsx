@@ -37,6 +37,10 @@ import {
 } from "./weeklyReportPresentation";
 import { FadeIn } from "../common/FadeIn";
 import {
+  PaymentMethodsPanel,
+  type StorePulsePaymentMixEntry,
+} from "../store-pulse/StorePulseSummaryView";
+import {
   ReportUnitsMovedChartSheet,
   type ReportUnitsMovedFocusSurface,
   type ReportUnitsMovedTab,
@@ -53,6 +57,8 @@ export type WeeklyReportProjection = {
   materializedAt?: number;
   /** Acceptance time for a closed week; absent on the active projection. */
   acceptedAt?: number;
+  /** Set-once accepted-report correction metadata. */
+  correction?: { appliedAt: number };
   cycleStartDate: string;
   cycleEndDate: string;
   currency: string;
@@ -141,6 +147,7 @@ export type WeeklyReportProjection = {
     outsideScheduleVarianceMinor: number | null;
     outsideScheduleCoveredDayCount: number | null;
   };
+  closeEvidence?: WeeklyCloseEvidence;
   ownerRoutes?: {
     transactions: {
       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions";
@@ -163,6 +170,52 @@ export type WeeklyReportProjection = {
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work";
       search: { workType: "synced_sale_inventory_review" };
     };
+  };
+};
+
+type WeeklyEvidenceCoverage = {
+  status: "complete" | "partial" | "unavailable";
+  usableDayCount: number;
+  scheduledDayCount: number;
+};
+
+type WeeklyExpenseProduct = {
+  productSkuId: string;
+  productName: string;
+  productSku: string;
+  quantity: number;
+  spendMinor: number;
+};
+
+type WeeklyExpenseRemainder = {
+  productCount: number;
+  quantity: number;
+  spendMinor: number;
+} | null;
+
+type WeeklyCloseEvidence = {
+  cash: {
+    cashVarianceMinor: number;
+    coverage: WeeklyEvidenceCoverage;
+  };
+  payments: {
+    coveredTenderValueMinor: number;
+    coverage: WeeklyEvidenceCoverage;
+    rows: Array<{
+      method: string;
+      amountMinor: number;
+      tenderUseCount: number;
+      shareBasisPoints: number;
+    }>;
+  };
+  expenses: {
+    coveredSpendMinor: number;
+    coveredQuantity: number;
+    coverage: WeeklyEvidenceCoverage;
+    bySpend: WeeklyExpenseProduct[];
+    byQuantity: WeeklyExpenseProduct[];
+    spendRemainder: WeeklyExpenseRemainder;
+    quantityRemainder: WeeklyExpenseRemainder;
   };
 };
 
@@ -221,6 +274,30 @@ function varianceCoverageLabel(
   }
 
   return `${variancePosture.coverage === "complete" ? "Complete" : "Partial"} coverage: ${variancePosture.coveredIncludedDayCount.toLocaleString()} of ${variancePosture.includedDayCount.toLocaleString()} scheduled ${variancePosture.includedDayCount === 1 ? "day" : "days"}.`;
+}
+
+function closeEvidenceCoverageLabel(coverage: WeeklyEvidenceCoverage) {
+  if (coverage.status === "unavailable") {
+    return "Not available — no completed Daily Closes contain this information.";
+  }
+  if (coverage.status === "partial") {
+    return `Based on ${coverage.usableDayCount.toLocaleString()} of ${coverage.scheduledDayCount.toLocaleString()} scheduled days`;
+  }
+  return `${coverage.usableDayCount.toLocaleString()} of ${coverage.scheduledDayCount.toLocaleString()} scheduled days`;
+}
+
+function weeklyPaymentMix(
+  rows: WeeklyCloseEvidence["payments"]["rows"],
+): StorePulsePaymentMixEntry[] {
+  return rows.map((row) => ({
+    count: row.tenderUseCount,
+    label: row.method
+      .replace(/[_-]+/g, " ")
+      .replace(/\b\w/g, (character) => character.toUpperCase()),
+    method: row.method,
+    share: row.shareBasisPoints / 100,
+    total: row.amountMinor,
+  }));
 }
 
 function Section({
@@ -496,7 +573,7 @@ export function ReportsWeeklyView({
             <div>
               <dt className="inline text-muted-foreground">Week status: </dt>
               <dd className="inline font-medium text-foreground">
-                {weeklyLifecycleLabel(report)}
+                {report.correction ? "Report corrected" : weeklyLifecycleLabel(report)}
               </dd>
             </div>
             <div>
@@ -506,6 +583,12 @@ export function ReportsWeeklyView({
               </dd>
             </div>
           </dl>
+          {report.correction && report.acceptedAt ? (
+            <p className="mt-layout-sm text-sm text-muted-foreground" role="status">
+              Accepted {formatReportTimestamp(report.acceptedAt)} · Corrected{" "}
+              {formatReportTimestamp(report.correction.appliedAt)}
+            </p>
+          ) : null}
           {!hasScheduledActivity && report.completeness.complete ? (
             <p className="mt-layout-sm text-sm text-muted-foreground">
               No scheduled activity has been recorded for this reporting week.
@@ -762,6 +845,68 @@ export function ReportsWeeklyView({
         ) : null}
       </Section>
 
+      {report.closeEvidence ? (
+        <Section title="Payment mix">
+          {report.closeEvidence.payments.coverage.status === "unavailable" ? (
+            <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
+              {closeEvidenceCoverageLabel(
+                report.closeEvidence.payments.coverage,
+              )}
+            </p>
+          ) : report.closeEvidence.payments.rows.length === 0 ? (
+            /*
+             * Certified zero: covered days exist but recorded no tender at
+             * all. Mirrors the cash lane's covered-zero pattern rather than
+             * the live-sync empty state, which promises data that will never
+             * arrive for a closed week.
+             */
+            <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
+              <span className="font-medium text-foreground">{money(0)}</span> ·{" "}
+              {closeEvidenceCoverageLabel(report.closeEvidence.payments.coverage)}
+            </p>
+          ) : (
+            <>
+              <p className="mt-layout-sm text-sm text-muted-foreground">
+                {closeEvidenceCoverageLabel(
+                  report.closeEvidence.payments.coverage,
+                )}
+              </p>
+              {/* The qualified subtotal: only the covered days' tender value. */}
+              <p className="mt-layout-xs text-sm text-muted-foreground">
+                Covered tender value:{" "}
+                <span className="font-medium text-foreground">
+                  {money(report.closeEvidence.payments.coveredTenderValueMinor)}
+                </span>
+              </p>
+              <div className="mt-layout-md lg:w-1/2">
+                <PaymentMethodsPanel
+                  countNoun="tender use"
+                  paymentMix={weeklyPaymentMix(
+                    report.closeEvidence.payments.rows,
+                  )}
+                  shareSource="provided"
+                  showHeader={false}
+                  totalTransactions={report.closeEvidence.payments.rows.reduce(
+                    (total, row) => total + row.tenderUseCount,
+                    0,
+                  )}
+                  valueFormatter={(payment) => money(payment.total)}
+                  variant="canvas"
+                />
+              </div>
+              {report.closeEvidence.payments.rows.reduce(
+                (total, row) => total + row.shareBasisPoints,
+                0,
+              ) !== 10_000 ? (
+                <p className="mt-layout-sm text-xs text-muted-foreground">
+                  Shares may not total 100% due to rounding.
+                </p>
+              ) : null}
+            </>
+          )}
+        </Section>
+      ) : null}
+
       <Section title="Variance">
         {report.variancePosture ? (
           <>
@@ -816,6 +961,40 @@ export function ReportsWeeklyView({
             Daily Close variance is unavailable for this reporting record.
           </p>
         )}
+        {report.closeEvidence ? (
+          <div className="mt-layout-lg border-t border-border pt-layout-md">
+            <p className="text-sm font-medium text-foreground">
+              Counted cash variance
+            </p>
+            {report.closeEvidence.cash.coverage.status === "unavailable" ? (
+              <p className="mt-layout-xs text-sm leading-6 text-muted-foreground">
+                {closeEvidenceCoverageLabel(
+                  report.closeEvidence.cash.coverage,
+                )}
+              </p>
+            ) : (
+              <p className="mt-layout-xs text-sm leading-6 text-muted-foreground">
+                {report.closeEvidence.cash.coverage.status === "partial" ? (
+                  `${formatCashVariance(report.closeEvidence.cash.cashVarianceMinor, money)} · ${closeEvidenceCoverageLabel(report.closeEvidence.cash.coverage)}`
+                ) : (
+                  <span className="font-medium text-foreground">
+                    {formatCashVariance(
+                      report.closeEvidence.cash.cashVarianceMinor,
+                      money,
+                    )}
+                  </span>
+                )}
+                {report.closeEvidence.cash.coverage.status === "complete" ? (
+                  <span className="block">
+                    {closeEvidenceCoverageLabel(
+                      report.closeEvidence.cash.coverage,
+                    )}
+                  </span>
+                ) : null}
+              </p>
+            )}
+          </div>
+        ) : null}
         {report.ownerRoutes?.dailyClose ? (
           <div className="mt-layout-md flex flex-wrap gap-x-layout-md gap-y-layout-xs">
             <OwnerRouteLink
@@ -840,6 +1019,54 @@ export function ReportsWeeklyView({
           </div>
         ) : null}
       </Section>
+
+      {report.closeEvidence ? (
+        <Section title="Expense products">
+          {report.closeEvidence.expenses.coverage.status === "unavailable" ? (
+            <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
+              {closeEvidenceCoverageLabel(
+                report.closeEvidence.expenses.coverage,
+              )}
+            </p>
+          ) : (
+            <>
+              <p className="mt-layout-sm text-sm text-muted-foreground">
+                {closeEvidenceCoverageLabel(
+                  report.closeEvidence.expenses.coverage,
+                )}
+              </p>
+              {/* The qualified subtotal: only the covered days' expense spend. */}
+              <p className="mt-layout-xs text-sm text-muted-foreground">
+                Covered expense spend:{" "}
+                <span className="font-medium text-foreground">
+                  {money(report.closeEvidence.expenses.coveredSpendMinor)}
+                </span>{" "}
+                ·{" "}
+                {formatUnits(report.closeEvidence.expenses.coveredQuantity)}{" "}
+                {report.closeEvidence.expenses.coveredQuantity === 1
+                  ? "unit"
+                  : "units"}
+              </p>
+              <div className="mt-layout-md grid gap-layout-xl lg:grid-cols-2">
+                <ExpenseRanking
+                  currency={currency}
+                  emphasis="spend"
+                  remainder={report.closeEvidence.expenses.spendRemainder}
+                  rows={report.closeEvidence.expenses.bySpend}
+                  title="Highest expense spend"
+                />
+                <ExpenseRanking
+                  currency={currency}
+                  emphasis="quantity"
+                  remainder={report.closeEvidence.expenses.quantityRemainder}
+                  rows={report.closeEvidence.expenses.byQuantity}
+                  title="Most consumed expense products"
+                />
+              </div>
+            </>
+          )}
+        </Section>
+      ) : null}
 
       <Section title="Inventory attention">
         {report.inventoryAttention &&
@@ -979,5 +1206,96 @@ export function ReportsWeeklyView({
         </div>
       </Section>
     </FadeIn>
+  );
+}
+
+function formatCashVariance(
+  amountMinor: number,
+  money: (amountMinor: number) => string,
+) {
+  if (amountMinor === 0) return money(0);
+  return `${money(Math.abs(amountMinor))} ${amountMinor < 0 ? "short" : "over"}`;
+}
+
+function formatReportTimestamp(at: number): string {
+  return new Date(at).toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function ExpenseRanking({
+  currency,
+  emphasis,
+  remainder,
+  rows,
+  title,
+}: {
+  currency: string;
+  emphasis: "spend" | "quantity";
+  remainder: WeeklyExpenseRemainder;
+  rows: WeeklyExpenseProduct[];
+  title: string;
+}) {
+  const productCountLabel = (count: number) =>
+    count === 1 ? "1 other product" : `${count.toLocaleString()} other products`;
+  const quantityLabel = (quantity: number) =>
+    `${quantity.toLocaleString()} ${quantity === 1 ? "unit" : "units"}`;
+  const valuesFor = (row: Pick<WeeklyExpenseProduct, "quantity" | "spendMinor">) =>
+    emphasis === "spend"
+      ? [formatReportMoney(row.spendMinor, currency), quantityLabel(row.quantity)]
+      : [quantityLabel(row.quantity), formatReportMoney(row.spendMinor, currency)];
+
+  return (
+    <section aria-labelledby={`weekly-${emphasis}-expense-ranking`}>
+      <h3
+        className="text-sm font-semibold text-foreground"
+        id={`weekly-${emphasis}-expense-ranking`}
+      >
+        {title}
+      </h3>
+      <ol className="mt-layout-sm divide-y divide-border" role="list">
+        {rows.map((row) => {
+          const [primary, secondary] = valuesFor(row);
+          return (
+            <li
+              className="grid gap-x-layout-lg gap-y-1 py-layout-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-baseline"
+              key={row.productSkuId}
+            >
+              <span>
+                <span className="block font-medium text-foreground">
+                  {row.productName}
+                </span>
+                <span className="block text-sm text-muted-foreground">
+                  {row.productSku}
+                </span>
+              </span>
+              <span className="sm:text-right">
+                <span className="block font-numeric font-semibold text-foreground">
+                  {primary}
+                </span>
+                <span className="block text-sm text-muted-foreground">
+                  {secondary}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      {remainder ? (
+        <div
+          aria-label={`${productCountLabel(remainder.productCount)}, ${quantityLabel(remainder.quantity)}, ${formatReportMoney(remainder.spendMinor, currency)}`}
+          className="grid gap-x-layout-lg gap-y-1 border-t border-border py-layout-sm text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-baseline"
+          role="note"
+        >
+          <span className="font-medium text-muted-foreground">
+            {productCountLabel(remainder.productCount)}
+          </span>
+          <span className="sm:text-right">
+            {valuesFor(remainder).join(" · ")}
+          </span>
+        </div>
+      ) : null}
+    </section>
   );
 }

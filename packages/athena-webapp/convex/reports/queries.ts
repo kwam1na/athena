@@ -380,6 +380,7 @@ function toWeeklyCurrentProjection(
     amendmentPosture: doc.amendmentPosture,
     inventoryAttention: inventoryAttentionProjection(doc.inventoryAttention),
     closePosture: doc.closePosture,
+    closeEvidence: doc.closeEvidence,
     amendment: doc.amendment
       ? weeklyAmendmentProjection(doc.amendment)
       : undefined,
@@ -430,6 +431,29 @@ async function liveWeeklyInventoryAttention(
 function toAcceptedWeeklyProjection(
   doc: Doc<"reportWeekAccepted">,
 ): ReportWeekAcceptedProjection {
+  const scheduleLineage = doc.correction?.scheduleLineage ?? doc.scheduleLineage;
+  const closeEvidence = doc.correction?.closeEvidence ?? doc.closeEvidence;
+  // Correction-first, like the lineage and evidence above: a legacy baseline's
+  // leaders carry no frozen identity, so only the correction can supply it.
+  const acceptedLeaders:
+    | Array<{
+        productName?: string;
+        productSku?: string;
+        productSkuId: string;
+        unitsSold: number;
+      }>
+    | undefined = doc.correction?.topSkuLeaders ?? doc.topSkuLeaders;
+  const topSkuLeaders =
+    acceptedLeaders?.every(
+      (leader) => leader.productName !== undefined && leader.productSku !== undefined,
+    )
+      ? acceptedLeaders.map((leader) => ({
+          productName: leader.productName!,
+          productSku: leader.productSku!,
+          productSkuId: String(leader.productSkuId),
+          unitsSold: leader.unitsSold,
+        }))
+      : undefined;
   const lifecyclePosture =
     doc.lifecyclePosture ?? doc.closePosture?.status ?? "accepted";
   const amendmentPosture =
@@ -467,12 +491,20 @@ function toAcceptedWeeklyProjection(
     outsideScheduleSummary: weeklySummary(doc.outsideSchedule),
     total: weeklySummary(total),
     totalCompleteness: combineWeekCompleteness(doc.completeness),
-    scheduleLineage: doc.scheduleLineage,
+    scheduleLineage,
     completeness: doc.completeness,
     lifecyclePosture,
     amendmentPosture,
     inventoryAttention: inventoryAttentionProjection(doc.inventoryAttention),
     closePosture: doc.closePosture,
+    closeEvidence,
+    // Clients only need to know THAT a correction applied and when. The
+    // fingerprints and repair internals stay server-side; the corrected
+    // evidence itself already rides `closeEvidence`/`scheduleLineage` above.
+    correction: doc.correction
+      ? { appliedAt: doc.correction.appliedAt }
+      : undefined,
+    topSkuLeaders,
     current,
     amendment: doc.amendment
       ? weeklyAmendmentProjection(doc.amendment)
@@ -483,7 +515,7 @@ function toAcceptedWeeklyProjection(
       cycleStartDate: doc.cycleStartDate,
       cycleEndDate: doc.cycleEndDate,
       historical: true,
-      scheduleLineage: doc.scheduleLineage,
+      scheduleLineage,
     }),
   };
 }

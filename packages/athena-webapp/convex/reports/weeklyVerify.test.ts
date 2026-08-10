@@ -1106,6 +1106,258 @@ describe("weekly source verification — provable non-vacuity", () => {
   });
 });
 
+describe("weekly source verification — persisted close evidence", () => {
+  /** A frame with one evidence-bearing close, accepted and republished. */
+  async function seedEvidenceWeek(t: ReturnType<typeof convexTest>) {
+    const seeded = await t.run(async (ctx: MutationCtx) => {
+      const store = await seedScheduledStore(ctx);
+      const summary = {
+        netCashVariance: 750,
+        paymentTotals: [{ amount: 5_000, method: "cash", transactionCount: 2 }],
+      };
+      const closeId = await ctx.db.insert(
+        "dailyClose",
+        closeRow(store, FINAL_DATE, {
+          summary,
+          reportSnapshot: {
+            snapshotContractVersion: 2,
+            closeMetadata: {
+              operatingDate: FINAL_DATE,
+              storeId: store.storeId,
+              organizationId: store.organizationId,
+              startAt: NOW - 1,
+              endAt: NOW,
+              completedAt: NOW,
+              carryForwardWorkItemIds: [],
+            },
+            readiness: {
+              status: "ready" as const,
+              blockerCount: 0,
+              reviewCount: 0,
+              carryForwardCount: 0,
+              readyCount: 0,
+            },
+            summary,
+            reviewedItems: [],
+            carryForwardItems: [],
+            readyItems: [],
+            sourceSubjects: [],
+          },
+        }),
+      );
+      await ctx.db.insert(
+        "reportDay",
+        dayRow(store, FINAL_DATE, {
+          status: "reconciled",
+          closeId,
+          closeAcceptedAt: NOW,
+          closeVarianceMinor: 0,
+          foldedAt: NOW + 1,
+        }),
+      );
+      return { ...store, closeId };
+    });
+    await t.run(async (ctx: MutationCtx) => {
+      expect(await rebuildCurrentWeek(ctx, seeded.storeId, NOW)).toBe("rebuilt");
+      expect(
+        await materializeAcceptedWeek({
+          acceptedAt: NOW,
+          closeId: seeded.closeId,
+          ctx,
+          cutoffObservedAt: NOW,
+          storeId: seeded.storeId,
+        }),
+      ).toBe("created");
+      expect(await rebuildCurrentWeek(ctx, seeded.storeId, NOW)).toBe("rebuilt");
+    });
+    return seeded;
+  }
+
+  async function currentRow(ctx: MutationCtx, storeId: SeededStore["storeId"]) {
+    const current = availableWeekCurrent(
+      await ctx.db
+        .query("reportWeekCurrent")
+        .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+        .unique(),
+    );
+    if (!current?.closeEvidence || !current.cashVariancePosture) {
+      throw new Error("missing fixture close evidence");
+    }
+    return current;
+  }
+
+  it("verifies the honestly persisted evidence and tolerates its pre-rollout absence", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedEvidenceWeek(t);
+
+    await t.run(async (ctx: MutationCtx) => {
+      const current = await currentRow(ctx, seeded.storeId);
+      expect(current.closeEvidence?.cash.cashVarianceMinor).toBe(750);
+      expect(await verifyCurrentWeekWithCtx(ctx, seeded.storeId)).toMatchObject({
+        closeEvidenceMatches: true,
+        matches: true,
+        outcome: "verified",
+      });
+
+      // A row written before the evidence rollout carries neither field.
+      // Absence is legacy, never a mismatch.
+      await ctx.db.patch("reportWeekCurrent", current._id, {
+        cashVariancePosture: undefined,
+        closeEvidence: undefined,
+      });
+      expect(await verifyCurrentWeekWithCtx(ctx, seeded.storeId)).toMatchObject({
+        closeEvidenceMatches: true,
+        matches: true,
+      });
+    });
+  });
+
+  it("flags malformed evidence shapes: drifted coverage and unavailable-but-covered lanes", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedEvidenceWeek(t);
+
+    const corruptions: ((
+      evidence: NonNullable<
+        Awaited<ReturnType<typeof currentRow>>["closeEvidence"]
+      >,
+    ) => typeof evidence)[] = [
+      // Coverage counted more days than the frame schedules.
+      (evidence) => ({
+        ...evidence,
+        cash: {
+          ...evidence.cash,
+          coverage: { ...evidence.cash.coverage, usableDayCount: 7 },
+        },
+      }),
+      // Status contradicts its own counts.
+      (evidence) => ({
+        ...evidence,
+        cash: {
+          ...evidence.cash,
+          coverage: { ...evidence.cash.coverage, status: "complete" as const },
+        },
+      }),
+      // Payment rows no longer sum to the covered tender total.
+      (evidence) => ({
+        ...evidence,
+        payments: {
+          ...evidence.payments,
+          coveredTenderValueMinor: evidence.payments.coveredTenderValueMinor + 1,
+        },
+      }),
+      // An unavailable lane presented as covered money.
+      (evidence) => ({
+        ...evidence,
+        cash: {
+          cashVarianceMinor: 750,
+          coverage: {
+            scheduledDayCount: evidence.cash.coverage.scheduledDayCount,
+            status: "unavailable" as const,
+            usableDayCount: 0,
+          },
+        },
+      }),
+      // An expense remainder that fails to reconcile to the covered total.
+      (evidence) => ({
+        ...evidence,
+        expenses: {
+          ...evidence.expenses,
+          coveredSpendMinor: evidence.expenses.coveredSpendMinor + 100,
+          coverage: {
+            scheduledDayCount: evidence.expenses.coverage.scheduledDayCount,
+            status: "partial" as const,
+            usableDayCount: 1,
+          },
+        },
+      }),
+    ];
+
+    for (const corrupt of corruptions) {
+      await t.run(async (ctx: MutationCtx) => {
+        const current = await currentRow(ctx, seeded.storeId);
+        const original = current.closeEvidence!;
+        const corrupted = corrupt(original);
+        await ctx.db.patch("reportWeekCurrent", current._id, {
+          closeEvidence: corrupted,
+          // Keep the posture agreeing with the corrupted cash lane so only
+          // the internal-consistency check can be what fails.
+          cashVariancePosture: {
+            cashVarianceMinor: corrupted.cash.cashVarianceMinor,
+            coverage: corrupted.cash.coverage.status,
+            coveredIncludedDayCount: corrupted.cash.coverage.usableDayCount,
+            includedDayCount: corrupted.cash.coverage.scheduledDayCount,
+          },
+        });
+        expect(
+          await verifyCurrentWeekWithCtx(ctx, seeded.storeId),
+        ).toMatchObject({
+          closeEvidenceMatches: false,
+          matches: false,
+          outcome: "verified",
+        });
+        await ctx.db.patch("reportWeekCurrent", current._id, {
+          closeEvidence: original,
+          cashVariancePosture: current.cashVariancePosture,
+        });
+      });
+    }
+  });
+
+  it("flags a cash posture that disagrees with the evidence it restates", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedEvidenceWeek(t);
+
+    await t.run(async (ctx: MutationCtx) => {
+      const current = await currentRow(ctx, seeded.storeId);
+      await ctx.db.patch("reportWeekCurrent", current._id, {
+        cashVariancePosture: {
+          ...current.cashVariancePosture!,
+          cashVarianceMinor: current.cashVariancePosture!.cashVarianceMinor + 1,
+        },
+      });
+      expect(await verifyCurrentWeekWithCtx(ctx, seeded.storeId)).toMatchObject({
+        closeEvidenceMatches: false,
+        matches: false,
+        outcome: "verified",
+      });
+    });
+  });
+
+  it("audits the accepted baseline's frozen evidence, not only the live row", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedEvidenceWeek(t);
+
+    await t.run(async (ctx: MutationCtx) => {
+      const accepted = await ctx.db
+        .query("reportWeekAccepted")
+        .withIndex("by_storeId_cycleStartDate", (q) =>
+          q.eq("storeId", seeded.storeId).eq("cycleStartDate", CYCLE_START),
+        )
+        .unique();
+      if (!accepted?.closeEvidence) {
+        throw new Error("missing accepted fixture evidence");
+      }
+      await ctx.db.patch("reportWeekAccepted", accepted._id, {
+        closeEvidence: {
+          ...accepted.closeEvidence,
+          cash: {
+            ...accepted.closeEvidence.cash,
+            coverage: {
+              ...accepted.closeEvidence.cash.coverage,
+              usableDayCount: 7,
+            },
+          },
+        },
+      });
+      expect(await verifyCurrentWeekWithCtx(ctx, seeded.storeId)).toMatchObject({
+        closeEvidenceMatches: false,
+        matches: false,
+        outcome: "verified",
+      });
+    });
+  });
+});
+
 describe("weekly source verification — accepted lifecycle", () => {
   it("confirms a late fact plus a successor close as a consistent amendment", async () => {
     const t = convexTest(schema, modules);

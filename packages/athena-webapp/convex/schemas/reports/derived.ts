@@ -244,6 +244,65 @@ const weeklyCashVariancePosture = v.object({
   includedDayCount: v.number(),
 });
 
+const weeklyCloseEvidenceCoverage = v.object({
+  scheduledDayCount: v.number(),
+  status: v.union(
+    v.literal("complete"),
+    v.literal("partial"),
+    v.literal("unavailable"),
+  ),
+  usableDayCount: v.number(),
+});
+
+const weeklyExpenseProduct = v.object({
+  productName: v.string(),
+  productSku: v.string(),
+  productSkuId: v.id("productSku"),
+  quantity: v.number(),
+  spendMinor: v.number(),
+});
+
+const weeklyExpenseRemainder = v.object({
+  productCount: v.number(),
+  quantity: v.number(),
+  spendMinor: v.number(),
+});
+
+const weeklyCloseEvidence = v.object({
+  cash: v.object({
+    cashVarianceMinor: v.number(),
+    coverage: weeklyCloseEvidenceCoverage,
+  }),
+  // Optional for accepted/current rows written before transaction evidence.
+  transactions: v.optional(
+    v.object({
+      coverage: weeklyCloseEvidenceCoverage,
+      transactionCount: v.number(),
+    }),
+  ),
+  payments: v.object({
+    coveredTenderValueMinor: v.number(),
+    coverage: weeklyCloseEvidenceCoverage,
+    rows: v.array(
+      v.object({
+        amountMinor: v.number(),
+        method: v.string(),
+        shareBasisPoints: v.number(),
+        tenderUseCount: v.number(),
+      }),
+    ),
+  }),
+  expenses: v.object({
+    byQuantity: v.array(weeklyExpenseProduct),
+    bySpend: v.array(weeklyExpenseProduct),
+    coveredQuantity: v.number(),
+    coveredSpendMinor: v.number(),
+    coverage: weeklyCloseEvidenceCoverage,
+    quantityRemainder: v.union(weeklyExpenseRemainder, v.null()),
+    spendRemainder: v.union(weeklyExpenseRemainder, v.null()),
+  }),
+});
+
 const weeklyLifecyclePosture = v.union(
   v.literal("live"),
   v.literal("awaiting_final_close"),
@@ -313,6 +372,8 @@ export const reportWeekCurrentSchema = v.union(
     priorPeriod: v.optional(weeklyPriorPeriod),
     variancePosture: v.optional(weeklyVariancePosture),
     cashVariancePosture: v.optional(weeklyCashVariancePosture),
+    // Optional for legacy rows; every new available materialization writes it.
+    closeEvidence: v.optional(weeklyCloseEvidence),
   }),
 );
 
@@ -338,6 +399,9 @@ export const reportWeekAcceptedSchema = v.object({
     v.array(
       v.object({
         productSkuId: v.id("productSku"),
+        // Optional only for accepted rows created before identity freezing.
+        productName: v.optional(v.string()),
+        productSku: v.optional(v.string()),
         unitsSold: v.number(),
       }),
     ),
@@ -350,6 +414,34 @@ export const reportWeekAcceptedSchema = v.object({
   priorPeriod: v.optional(weeklyPriorPeriod),
   variancePosture: v.optional(weeklyVariancePosture),
   cashVariancePosture: v.optional(weeklyCashVariancePosture),
+  // Optional for accepted rows created before the close-evidence rollout.
+  closeEvidence: v.optional(weeklyCloseEvidence),
+  /**
+   * One set-once repair projection. It is orthogonal to the immutable accepted
+   * baseline and deliberately excludes financial/amendment/notification state.
+   */
+  correction: v.optional(
+    v.object({
+      contractVersion: v.literal(1),
+      appliedAt: v.number(),
+      candidateFingerprint: v.string(),
+      sourceManifestFingerprint: v.string(),
+      scheduleLineage: v.array(weeklyLineage),
+      closeEvidence: weeklyCloseEvidence,
+      // Reconstructed frozen top-sales identity. Absent when the corrected
+      // baseline carried no leaders, so the section stays legitimately empty.
+      topSkuLeaders: v.optional(
+        v.array(
+          v.object({
+            productSkuId: v.id("productSku"),
+            productName: v.string(),
+            productSku: v.string(),
+            unitsSold: v.number(),
+          }),
+        ),
+      ),
+    }),
+  ),
 });
 
 /** One declarative per-store work marker, drained by the existing sweeper. */

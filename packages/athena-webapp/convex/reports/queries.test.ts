@@ -2823,6 +2823,159 @@ describe("weekly total lane", () => {
 // ---------------------------------------------------------------------------
 
 describe("weekly read contract parity", () => {
+  it("uses corrected close evidence and schedule lineage only for accepted reads", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const acceptedBaselineId = await seedAcceptedWeek(t, storeId);
+    const evidence = (cashVarianceMinor: number) => ({
+      cash: {
+        cashVarianceMinor,
+        coverage: { scheduledDayCount: 1, status: "complete" as const, usableDayCount: 1 },
+      },
+      expenses: {
+        byQuantity: [], bySpend: [], coveredQuantity: 0, coveredSpendMinor: 0,
+        coverage: { scheduledDayCount: 1, status: "complete" as const, usableDayCount: 1 },
+        quantityRemainder: null, spendRemainder: null,
+      },
+      payments: {
+        coveredTenderValueMinor: 0,
+        coverage: { scheduledDayCount: 1, status: "complete" as const, usableDayCount: 1 },
+        rows: [],
+      },
+    });
+    const correctedLineage = [{ ...weeklyLineage[0]!, localDate: "2026-07-28" }];
+    await t.run((ctx) =>
+      ctx.db.patch("reportWeekAccepted", acceptedBaselineId, {
+        closeEvidence: evidence(320),
+        correction: {
+          appliedAt: 2_000,
+          candidateFingerprint: "candidate-v1",
+          closeEvidence: evidence(-120),
+          contractVersion: 1,
+          scheduleLineage: correctedLineage,
+          sourceManifestFingerprint: "source-v1",
+        },
+      }),
+    );
+
+    const [history, detail] = await Promise.all([
+      t.run((ctx) =>
+        handlerOf(listAcceptedWeeklyHistory)(ctx, {
+          storeId,
+          paginationOpts: { cursor: null, numItems: 5 },
+        }),
+      ),
+      t.run((ctx) =>
+        handlerOf(getAcceptedWeeklyDetail)(ctx, {
+          storeId,
+          reportId: "week:2026-07-27",
+        }),
+      ),
+    ]);
+
+    for (const accepted of [history.page[0], detail]) {
+      expect(accepted?.closeEvidence?.cash.cashVarianceMinor).toBe(-120);
+      expect(accepted?.scheduleLineage).toEqual(correctedLineage);
+      // Clients see THAT a correction applied and when — nothing else. The
+      // fingerprints and repair internals never leave the server.
+      expect(accepted?.correction).toEqual({ appliedAt: 2_000 });
+      // Legacy corrections carry no reconstructed leaders, so the section
+      // stays absent exactly as the baseline left it.
+      expect(accepted?.topSkuLeaders).toBeUndefined();
+    }
+  });
+
+  it("resolves accepted top-sales leaders correction-first", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const acceptedBaselineId = await seedAcceptedWeek(t, storeId);
+    const productSkuId = await seedSku(t, storeId);
+    // The legacy baseline froze units only, so its own leaders never project.
+    await t.run((ctx) =>
+      ctx.db.patch("reportWeekAccepted", acceptedBaselineId, {
+        topSkuLeaders: [{ productSkuId, unitsSold: 7 }],
+      }),
+    );
+    const readLeaders = async () =>
+      (
+        await t.run((ctx) =>
+          handlerOf(getAcceptedWeeklyDetail)(ctx, {
+            storeId,
+            reportId: "week:2026-07-27",
+          }),
+        )
+      )?.topSkuLeaders;
+
+    expect(await readLeaders()).toBeUndefined();
+
+    await t.run((ctx) =>
+      ctx.db.patch("reportWeekAccepted", acceptedBaselineId, {
+        correction: {
+          appliedAt: 2_000,
+          candidateFingerprint: "candidate-v1",
+          closeEvidence: {
+            cash: {
+              cashVarianceMinor: 0,
+              coverage: {
+                scheduledDayCount: 1,
+                status: "complete",
+                usableDayCount: 1,
+              },
+            },
+            expenses: {
+              byQuantity: [],
+              bySpend: [],
+              coveredQuantity: 0,
+              coveredSpendMinor: 0,
+              coverage: {
+                scheduledDayCount: 1,
+                status: "complete",
+                usableDayCount: 1,
+              },
+              quantityRemainder: null,
+              spendRemainder: null,
+            },
+            payments: {
+              coveredTenderValueMinor: 0,
+              coverage: {
+                scheduledDayCount: 1,
+                status: "complete",
+                usableDayCount: 1,
+              },
+              rows: [],
+            },
+          },
+          contractVersion: 1,
+          scheduleLineage: weeklyLineage,
+          sourceManifestFingerprint: "source-v1",
+          topSkuLeaders: [
+            {
+              productName: "Wig",
+              productSku: "SKU-CORRECTED",
+              productSkuId,
+              unitsSold: 7,
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(await readLeaders()).toEqual([
+      {
+        productName: "Wig",
+        productSku: "SKU-CORRECTED",
+        productSkuId: String(productSkuId),
+        unitsSold: 7,
+      },
+    ]);
+    // The live current-week projection has no correction lane at all.
+    const briefing = await t.run((ctx) =>
+      handlerOf(getActiveWeeklyBriefing)(ctx, { storeId }),
+    );
+    expect(briefing).not.toHaveProperty("correction");
+    expect(briefing).not.toHaveProperty("topSkuLeaders");
+  });
+
   it("projects exactly the shared briefing, history, and detail contracts", async () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
@@ -3184,6 +3337,8 @@ describe("reports module public surface", () => {
       "verify.verifyCurrentWeekAgainstSources",
       "verify.verifyDayAgainstSources",
       "verify.verifyStoreSummary",
+      "weeklyAcceptedRepair.applyWigclubAug3WeeklyCorrection",
+      "weeklyAcceptedRepair.previewWigclubAug3WeeklyCorrection",
       "weeklyRepair.repairCurrentWeeklyProjection",
     ]);
   });

@@ -51,9 +51,25 @@ export interface DailyManagerReportItem {
 export interface DailyManagerReportPaymentTotal {
   method: string;
   amount: string;
+  share?: string;
+  tenderUseCount?: number;
   amountComparison?: string;
   transactionCount?: number;
   transactionCountComparison?: string;
+}
+
+export interface DailyManagerReportRankedRow {
+  label: string;
+  detail?: string;
+  primary: string;
+  secondary: string;
+}
+
+export interface DailyManagerReportRankedSection {
+  title: string;
+  coverage?: string;
+  rows: DailyManagerReportRankedRow[];
+  remainder?: DailyManagerReportRankedRow;
 }
 
 export interface DailyManagerReportSection {
@@ -85,6 +101,7 @@ export interface DailyManagerReportProps {
   summaryMetrics?: DailyManagerReportMetric[];
   cashMetrics?: DailyManagerReportMetric[];
   paymentTotals?: DailyManagerReportPaymentTotal[];
+  rankedSections?: DailyManagerReportRankedSection[];
   notes?: string;
   presentation?: DailyManagerReportPresentation;
   attentionItems?: DailyManagerReportItem[];
@@ -106,6 +123,7 @@ export interface DailyManagerReportPresentation {
   notesLabel?: string;
   actionLabel?: string;
   summaryMetricLayout?: "stacked" | "lead";
+  paymentSectionPlacement?: "after-summary" | "after-cash";
   topItemsPlacement?: "after-summary" | "after-cash";
 }
 
@@ -207,6 +225,7 @@ export default function DailyManagerReport({
   summaryMetrics = [],
   cashMetrics = [],
   paymentTotals = [],
+  rankedSections = [],
   notes,
   presentation,
   attentionItems: suppliedAttentionItems,
@@ -341,6 +360,17 @@ export default function DailyManagerReport({
             />
           </Section>
 
+          {presentation?.paymentSectionPlacement === "after-summary" &&
+            paymentTotals.length > 0 && (
+              <Section style={styles.separatedSection}>
+                <SectionHeading
+                  title={presentation?.paymentSectionTitle ?? "Payment mix"}
+                  quietTitle
+                />
+                <PaymentTotalsGrid payments={paymentTotals} />
+              </Section>
+            )}
+
           {presentation?.topItemsPlacement !== "after-cash" ? (
             <TopItemsSection items={topItems} url={topItemsUrl} />
           ) : null}
@@ -369,7 +399,8 @@ export default function DailyManagerReport({
             <TopItemsSection items={topItems} url={topItemsUrl} />
           ) : null}
 
-          {paymentTotals.length > 0 && (
+          {presentation?.paymentSectionPlacement !== "after-summary" &&
+            paymentTotals.length > 0 && (
             <Section style={styles.separatedSection}>
               <SectionHeading
                 title={presentation?.paymentSectionTitle ?? "Payment mix"}
@@ -377,7 +408,11 @@ export default function DailyManagerReport({
               />
               <PaymentTotalsGrid payments={paymentTotals} />
             </Section>
-          )}
+            )}
+
+          {rankedSections.map((section) => (
+            <RankedSection key={section.title} section={section} />
+          ))}
 
           {reportSections.map((section) => (
             <Section key={section.title} style={styles.separatedSection}>
@@ -813,6 +848,14 @@ function PaymentTotalsGrid({
 }
 
 function PaymentMeta({ payment }: { payment: DailyManagerReportPaymentTotal }) {
+  if (typeof payment.tenderUseCount === "number") {
+    const uses = `${payment.tenderUseCount} tender use${payment.tenderUseCount === 1 ? "" : "s"}`;
+    return (
+      <Text style={styles.paymentDetail}>
+        {payment.share ? `${payment.share} · ${uses}` : uses}
+      </Text>
+    );
+  }
   const count =
     typeof payment.transactionCount === "number"
       ? `${payment.transactionCount} transaction${
@@ -821,6 +864,61 @@ function PaymentMeta({ payment }: { payment: DailyManagerReportPaymentTotal }) {
       : "Transactions";
 
   return <Text style={styles.paymentDetail}>{count}</Text>;
+}
+
+function RankedSection({
+  section,
+}: {
+  section: DailyManagerReportRankedSection;
+}) {
+  return (
+    <Section style={styles.separatedSection}>
+      <SectionHeading
+        detail={section.coverage}
+        title={section.title}
+        quietTitle
+      />
+      <Section style={styles.topItemsList}>
+        {section.rows.map((row, index) => (
+          <RankedRow
+            key={`${section.title}-${row.label}`}
+            last={!section.remainder && index === section.rows.length - 1}
+            row={row}
+          />
+        ))}
+        {section.remainder ? (
+          <RankedRow last remainder row={section.remainder} />
+        ) : null}
+      </Section>
+    </Section>
+  );
+}
+
+function RankedRow({
+  last = false,
+  remainder = false,
+  row,
+}: {
+  last?: boolean;
+  remainder?: boolean;
+  row: DailyManagerReportRankedRow;
+}) {
+  return (
+    <Row style={last ? styles.topItemLastRow : styles.topItemRow}>
+      <Column>
+        <Text style={remainder ? styles.topItemDetail : styles.topItemName}>
+          {row.label}
+        </Text>
+        {row.detail ? (
+          <Text style={styles.topItemDetail}>{row.detail}</Text>
+        ) : null}
+      </Column>
+      <Column style={styles.topItemUnitsColumn}>
+        <Text style={styles.topItemUnits}>{row.primary}</Text>
+        <Text style={styles.topItemDetail}>{row.secondary}</Text>
+      </Column>
+    </Row>
+  );
 }
 
 function MetricComparison({
@@ -1256,6 +1354,9 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 600,
     lineHeight: "19px",
     margin: 0,
+  },
+  topItemLastRow: {
+    padding: "12px 0",
   },
   topItemRow: {
     borderBottom: `1px solid ${colors.border}`,

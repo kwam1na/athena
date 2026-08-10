@@ -3,12 +3,16 @@ import { internalQuery, type QueryCtx } from "../_generated/server";
 import type { Doc } from "../_generated/dataModel";
 import type {
   DailyManagerReportProps,
+  DailyManagerReportRankedRow,
   DailyManagerReportTopItem,
 } from "../emails/DailyManagerReport";
-import { resolveSkuIdentity } from "../reports/queries";
 import { resolveAppUrl } from "./dailyManagerReportEmail";
 import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
 import { addWeekMetrics } from "../../shared/reportsContract";
+import type {
+  ReportWeekCloseEvidence,
+  ReportWeekCloseEvidenceCoverage,
+} from "../../shared/reportsContract";
 import { currencyFormatter } from "../utils";
 import { toDisplayAmount } from "../lib/currency";
 
@@ -32,9 +36,52 @@ export const getAcceptedWeeklyManagerReportPayload = internalQuery({
       storeId: accepted.storeId,
     });
     const timezone = context.kind === "resolved" ? context.timezone : "UTC";
-    const topItems = await buildAcceptedWeeklyTopItems(ctx, accepted, store);
+    const topItems = await buildAcceptedWeeklyTopItems(
+      ctx,
+      accepted,
+      store,
+      accepted.topSkuLeaders,
+    );
     return buildAcceptedWeeklyManagerReportPayload({
       accepted,
+      closeEvidence: accepted.closeEvidence,
+      scheduleLineage: accepted.scheduleLineage,
+      store,
+      timezone,
+      ...topItems,
+    });
+  },
+});
+
+export const getCorrectedWeeklyManagerReportPayload = internalQuery({
+  args: {
+    acceptedWeekId: v.id("reportWeekAccepted"),
+    candidateFingerprint: v.string(),
+  },
+  handler: async (ctx, args): Promise<DailyManagerReportProps | null> => {
+    const accepted = await ctx.db.get("reportWeekAccepted", args.acceptedWeekId);
+    const correction = accepted?.correction;
+    if (!accepted || correction?.candidateFingerprint !== args.candidateFingerprint) {
+      return null;
+    }
+    const store = await ctx.db.get("store", accepted.storeId);
+    if (!store) return null;
+    const { context } = await getStoreScheduleContextForStoreAtWithCtx(ctx, {
+      at: correction.appliedAt,
+      storeId: accepted.storeId,
+    });
+    const timezone = context.kind === "resolved" ? context.timezone : "UTC";
+    const topItems = await buildAcceptedWeeklyTopItems(
+      ctx,
+      accepted,
+      store,
+      correction.topSkuLeaders ?? accepted.topSkuLeaders,
+    );
+    return buildAcceptedWeeklyManagerReportPayload({
+      accepted,
+      closeEvidence: correction.closeEvidence,
+      correctedAt: correction.appliedAt,
+      scheduleLineage: correction.scheduleLineage,
       store,
       timezone,
       ...topItems,
@@ -47,29 +94,38 @@ export const getAcceptedWeeklyManagerReportPayload = internalQuery({
  * The accepted row owns the range; callers cannot substitute mutable dates.
  */
 export async function buildAcceptedWeeklyTopItems(
-  ctx: QueryCtx,
+  _ctx: QueryCtx,
   accepted: Pick<
     Doc<"reportWeekAccepted">,
-    "cycleEndDate" | "cycleStartDate" | "storeId" | "topSkuLeaders"
+    "cycleEndDate" | "cycleStartDate" | "storeId"
   >,
   store: Pick<Doc<"store">, "slug">,
+  /**
+   * Explicit so each caller states its own authority: the automatic accepted
+   * path passes the baseline leaders and must never read the correction.
+   */
+  leaders:
+    | readonly {
+        productName?: string;
+        productSku?: string;
+        productSkuId: string;
+        unitsSold: number;
+      }[]
+    | undefined,
 ): Promise<WeeklyManagerReportTopItems> {
-  const topItems = accepted.topSkuLeaders
-    ? await Promise.all(
-        accepted.topSkuLeaders.map(async (leader) => {
-          const identity = await resolveSkuIdentity(ctx, leader.productSkuId);
-          const name =
-            identity?.displayName ?? identity?.sku ?? String(leader.productSkuId);
-          const detail = [identity?.sku, identity?.size]
-            .filter((value) => value && value !== name)
-            .join(" · ");
-          return {
-            name,
+  const topItems = leaders
+    ? leaders.flatMap((leader) => {
+        // Legacy leaders predate frozen display identity. Omit them instead
+        // of hydrating mutable catalog state into an accepted report retry.
+        if (!leader.productName || !leader.productSku) return [];
+        return [
+          {
+            detail: leader.productSku,
+            name: leader.productName,
             unitsSold: leader.unitsSold,
-            ...(detail ? { detail } : {}),
-          };
-        }),
-      )
+          },
+        ];
+      })
     : [];
 
   return {
@@ -92,8 +148,11 @@ export function buildWeeklyTopMoversUrl(args: {
   return `${resolveAppUrl()}/${args.storeSlug}/store/${args.storeSlug}/reports/weekly?${params}`;
 }
 
-function buildAcceptedWeeklyManagerReportPayload(args: {
+export function buildAcceptedWeeklyManagerReportPayload(args: {
   accepted: Doc<"reportWeekAccepted">;
+  closeEvidence: Doc<"reportWeekAccepted">["closeEvidence"];
+  correctedAt?: number;
+  scheduleLineage: Doc<"reportWeekAccepted">["scheduleLineage"];
   store: Doc<"store">;
   timezone: string;
   topItems: DailyManagerReportTopItem[];
@@ -115,20 +174,24 @@ function buildAcceptedWeeklyManagerReportPayload(args: {
   const priorNetUnits = prior
     ? prior.unitsSold - prior.unitsReturned
     : undefined;
-  const closedDayCount = accepted.scheduleLineage.filter(
+  const closedDayCount = args.scheduleLineage.filter(
     (day) => day.included && day.dayClosed,
   ).length;
-  const scheduledDayCount = accepted.scheduleLineage.filter(
+  const scheduledDayCount = args.scheduleLineage.filter(
     (day) => day.included,
   ).length;
   const netSalesComparison = prior
     ? amountComparison(total.netSalesMinor, prior.netSalesMinor, money)
     : undefined;
+  const allScheduledDaysClosed =
+    scheduledDayCount > 0 && closedDayCount === scheduledDayCount;
   const executiveSummary = [
     netSalesComparison
       ? `Net sales finished ${netSalesComparison.replace("vs prior week", "than the prior week")}.`
       : undefined,
-    `${closedDayCount} of ${scheduledDayCount} scheduled days closed.`,
+    allScheduledDaysClosed
+      ? "All scheduled days closed."
+      : `${closedDayCount} of ${scheduledDayCount} scheduled days closed.`,
     total.paymentAllocationCoverage === "complete"
       ? "Payments were fully accounted for."
       : undefined,
@@ -138,6 +201,37 @@ function buildAcceptedWeeklyManagerReportPayload(args: {
   const variance = accepted.variancePosture;
   const cashVariance = accepted.cashVariancePosture;
   const inventory = accepted.inventoryAttention;
+  const evidence = args.closeEvidence;
+  const evidenceCoverage =
+    evidence && evidence.cash.coverage.status !== "unavailable"
+      ? scheduledCoverageLabel(
+          evidence.cash.coverage.usableDayCount,
+          evidence.cash.coverage.scheduledDayCount,
+        )
+      : undefined;
+  const paymentRows =
+    evidence && evidence.payments.coverage.status !== "unavailable"
+      ? evidence.payments.rows
+      : [];
+  const paymentShareBasisPointsTotal = paymentRows.reduce(
+    (total, row) => total + row.shareBasisPoints,
+    0,
+  );
+  const paymentCoverageNote =
+    evidence && evidence.payments.coverage.status === "partial"
+      ? `Payment mix reflects ${evidence.payments.coverage.usableDayCount} of ${evidence.payments.coverage.scheduledDayCount} scheduled days covered.`
+      : undefined;
+  const paymentRoundingNote =
+    paymentRows.length > 0 && paymentShareBasisPointsTotal !== 10_000
+      ? "Shares may not total 100% due to rounding."
+      : undefined;
+  const reportingNotes = [
+    paymentCoverageNote,
+    paymentRoundingNote,
+    total.grossProfitMinor === null
+      ? "Merchandise margin is unavailable because some sold items do not have a recorded cost."
+      : undefined,
+  ].filter((note): note is string => Boolean(note));
 
   return {
     attentionItems: [],
@@ -156,7 +250,7 @@ function buildAcceptedWeeklyManagerReportPayload(args: {
             : percentageComparison(netUnits, priorNetUnits),
       },
     ],
-    completedAt: formatTime(accepted.acceptedAt, args.timezone),
+    completedAt: formatTime(args.correctedAt ?? accepted.acceptedAt, args.timezone),
     completedBy: "Athena",
     operatingDate: formatDateRange(
       accepted.cycleStartDate,
@@ -169,11 +263,15 @@ function buildAcceptedWeeklyManagerReportPayload(args: {
       eyebrow: "Athena weekly report",
       handoffSectionTitle: "Executive summary",
       notesLabel: "Reporting note",
-      previewText: `${store.name} weekly report · ${money(total.netSalesMinor)} net sales · ${formatDateRange(accepted.cycleStartDate, accepted.cycleEndDate)}`,
+      paymentSectionPlacement: "after-summary",
+      paymentSectionTitle: "Payment mix",
+      previewText: args.correctedAt
+        ? `${store.name} corrected weekly report preview · Not sent · ${formatDateRange(accepted.cycleStartDate, accepted.cycleEndDate)}`
+        : `${store.name} weekly report · ${money(total.netSalesMinor)} net sales · ${formatDateRange(accepted.cycleStartDate, accepted.cycleEndDate)}`,
       summaryMetricLayout: "lead",
       summarySectionTitle: "Weekly performance",
-      timestampDate: formatShortDate(accepted.acceptedAt, args.timezone),
-      timestampLabel: "Accepted",
+      timestampDate: formatShortDate(args.correctedAt ?? accepted.acceptedAt, args.timezone),
+      timestampLabel: args.correctedAt ? "Corrected" : "Accepted",
       topItemsPlacement: "after-cash",
     },
     reportSections: [
@@ -182,18 +280,52 @@ function buildAcceptedWeeklyManagerReportPayload(args: {
             {
               title: "Close variance",
               message: varianceMessage(variance.closeVarianceMinor, money),
-              meta: `${variance.coveredIncludedDayCount} of ${variance.includedDayCount} scheduled days closed`,
+              meta: scheduledCoverageLabel(
+                variance.coveredIncludedDayCount,
+                variance.includedDayCount,
+              ),
             },
           ]
         : []),
-      ...(cashVariance && cashVariance.coverage !== "unavailable"
+      ...(evidence
         ? [
-            {
-              title: "Cash variance",
-              message: cashVarianceMessage(cashVariance.cashVarianceMinor, money),
-              meta: `${cashVariance.coveredIncludedDayCount} of ${cashVariance.includedDayCount} scheduled days covered`,
-            },
+            evidence.cash.coverage.status === "unavailable"
+              ? {
+                  title: "Counted cash variance",
+                  message: UNAVAILABLE_CLOSE_EVIDENCE_COPY,
+                }
+              : {
+                  title: "Counted cash variance",
+                  message: countedCashVarianceMessage(
+                    evidence.cash.cashVarianceMinor,
+                    money,
+                    evidence.cash.coverage.status === "complete",
+                  ),
+                  meta: evidenceCoverage,
+                },
           ]
+        : cashVariance
+          ? cashVariance.coverage === "unavailable"
+            ? [
+                {
+                  title: "Counted cash variance",
+                  message: UNAVAILABLE_CLOSE_EVIDENCE_COPY,
+                },
+              ]
+            : [
+                {
+                  title: "Counted cash variance",
+                  message: countedCashVarianceMessage(
+                    cashVariance.cashVarianceMinor,
+                    money,
+                    cashVariance.coverage === "complete",
+                  ),
+                  meta: scheduledCoverageLabel(
+                    cashVariance.coveredIncludedDayCount,
+                    cashVariance.includedDayCount,
+                  ),
+                },
+              ]
         : []),
       ...(inventory
         ? [
@@ -210,8 +342,12 @@ function buildAcceptedWeeklyManagerReportPayload(args: {
       storeSlug: store.slug,
     }),
     status: "applied",
-    statusLabel: "Week complete",
-    statusSummary: `${closedDayCount} of ${scheduledDayCount} scheduled days are closed. This weekly report is ready to review.`,
+    statusLabel: args.correctedAt ? "Report corrected" : "Week complete",
+    statusSummary: `${
+      allScheduledDaysClosed
+        ? "All scheduled days are closed"
+        : `${closedDayCount} of ${scheduledDayCount} scheduled days are closed`
+    }. This weekly report is ready to review.`,
     storeCurrency: accepted.currency,
     storeName: store.name,
     summaryMetrics: [
@@ -225,15 +361,48 @@ function buildAcceptedWeeklyManagerReportPayload(args: {
         label: "Refunds",
         value: money(total.refundsMinor),
       },
+      ...(evidence?.transactions &&
+      evidence.transactions.coverage.status !== "unavailable"
+        ? [
+            {
+              detail: [
+                "Completed POS transactions",
+                coverageLabel(evidence.transactions.coverage),
+              ]
+                .filter(Boolean)
+                .join(" · "),
+              label: "Transactions",
+              value: evidence.transactions.transactionCount.toLocaleString(
+                "en-US",
+              ),
+            },
+          ]
+        : []),
     ],
+    paymentTotals: paymentRows.map((row) => ({
+      amount: money(row.amountMinor),
+      method: titleCase(row.method),
+      share: `${(row.shareBasisPoints / 100).toFixed(2)}%`,
+      tenderUseCount: row.tenderUseCount,
+    })),
+    rankedSections:
+      evidence?.expenses.coverage.status === "unavailable"
+        ? []
+        : evidence
+          ? expenseRankedSections(evidence.expenses, money)
+          : [],
     topItems: args.topItems,
     topItemsUrl: args.topItemsUrl,
-    notes:
-      total.grossProfitMinor === null
-        ? "Merchandise margin is unavailable because some sold items do not have a recorded cost."
-        : undefined,
+    notes: reportingNotes.length > 0 ? reportingNotes.join(" ") : undefined,
   };
 }
+
+/**
+ * Shared unavailable-lane copy. Must stay byte-identical to the Reports
+ * workspace string so email and Reports disclose the same way.
+ */
+const UNAVAILABLE_CLOSE_EVIDENCE_COPY =
+  "Not available — no completed Daily Closes contain this information.";
 
 function buildWeeklyReportUrl(args: {
   cycleStartDate: string;
@@ -273,16 +442,111 @@ function varianceMessage(
   varianceMinor: number,
   money: (minor: number) => string,
 ): string {
-  if (varianceMinor === 0) return "Closing cash matched across the week.";
+  // This lane reconciles folded sales against the close's net sales. Saying
+  // "cash" here is what made the counted-cash card look redundant, and worse,
+  // let the two cards contradict each other on a week with real cash variance.
+  if (varianceMinor === 0)
+    return "Recorded sales matched the closes across the week.";
   return `Net close variance was ${money(Math.abs(varianceMinor))} ${varianceMinor < 0 ? "short" : "over"}.`;
 }
 
-function cashVarianceMessage(
+function countedCashVarianceMessage(
   varianceMinor: number,
   money: (minor: number) => string,
+  coverageComplete: boolean,
 ): string {
-  if (varianceMinor === 0) return "Cash counts matched across the week.";
-  return `Net cash variance was ${money(Math.abs(varianceMinor))} ${varianceMinor < 0 ? "short" : "over"}.`;
+  if (varianceMinor === 0) {
+    // Partial coverage must not overstate: only a fully covered week can
+    // claim the whole week matched. The card meta discloses the N-of-M count.
+    return coverageComplete
+      ? "Counted cash matched across the week."
+      : "Counted cash matched across covered days.";
+  }
+  return `Counted cash was ${money(Math.abs(varianceMinor))} ${varianceMinor < 0 ? "short" : "over"}.`;
+}
+
+function coverageLabel(
+  coverage: ReportWeekCloseEvidenceCoverage,
+): string | undefined {
+  if (coverage.status === "unavailable") {
+    return "Not available";
+  }
+  return scheduledCoverageLabel(
+    coverage.usableDayCount,
+    coverage.scheduledDayCount,
+  );
+}
+
+function scheduledCoverageLabel(
+  coveredDayCount: number,
+  scheduledDayCount: number,
+): string | undefined {
+  if (scheduledDayCount > 0 && coveredDayCount === scheduledDayCount) {
+    return undefined;
+  }
+  return `Based on ${coveredDayCount} of ${scheduledDayCount} scheduled days`;
+}
+
+function expenseRankedSections(
+  expenses: ReportWeekCloseEvidence["expenses"],
+  money: (minor: number) => string,
+): NonNullable<DailyManagerReportProps["rankedSections"]> {
+  const coverage = coverageLabel(expenses.coverage);
+  const row = (
+    product: ReportWeekCloseEvidence["expenses"]["bySpend"][number],
+    rankBy: "spend" | "quantity",
+  ): DailyManagerReportRankedRow => ({
+    label: product.productName,
+    detail: product.productSku,
+    primary:
+      rankBy === "spend"
+        ? money(product.spendMinor)
+        : `${product.quantity.toLocaleString("en-US")} units`,
+    secondary:
+      rankBy === "spend"
+        ? `${product.quantity.toLocaleString("en-US")} units`
+        : money(product.spendMinor),
+  });
+  const remainder = (
+    value: ReportWeekCloseEvidence["expenses"]["spendRemainder"],
+    rankBy: "spend" | "quantity",
+  ): DailyManagerReportRankedRow | undefined =>
+    value
+      ? {
+          label: `${value.productCount.toLocaleString("en-US")} other ${value.productCount === 1 ? "product" : "products"}`,
+          primary:
+            rankBy === "spend"
+              ? money(value.spendMinor)
+              : `${value.quantity.toLocaleString("en-US")} units`,
+          secondary:
+            rankBy === "spend"
+              ? `${value.quantity.toLocaleString("en-US")} units`
+              : money(value.spendMinor),
+        }
+      : undefined;
+
+  return [
+    {
+      coverage,
+      remainder: remainder(expenses.spendRemainder, "spend"),
+      rows: expenses.bySpend.map((product) => row(product, "spend")),
+      title: "Top expense products by spend",
+    },
+    {
+      coverage,
+      remainder: remainder(expenses.quantityRemainder, "quantity"),
+      rows: expenses.byQuantity.map((product) => row(product, "quantity")),
+      title: "Top expense products by quantity",
+    },
+  ];
+}
+
+function titleCase(value: string): string {
+  return value
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1).toLowerCase()}`)
+    .join(" ");
 }
 
 function formatDateRange(start: string, end: string): string {

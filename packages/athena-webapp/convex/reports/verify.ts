@@ -396,6 +396,14 @@ export type VerifyCurrentWeekResult =
       closeMatches: boolean;
       amendmentMatches: boolean;
       inventoryMatches: boolean;
+      /**
+       * Persisted weekly close evidence is internally consistent on the
+       * current row and its accepted baseline, and `cashVariancePosture`
+       * agrees with `closeEvidence.cash` wherever both exist. Rows written
+       * before the evidence rollout carry neither and pass vacuously — an
+       * absent optional field is legacy, not a mismatch.
+       */
+      closeEvidenceMatches: boolean;
     };
 
 function zeroMetrics(): VerifiedMetrics {
@@ -1455,6 +1463,185 @@ async function recomputeVerifiedVariance(args: {
   };
 }
 
+type StoredWeekCloseEvidence = NonNullable<
+  Doc<"reportWeekAccepted">["closeEvidence"]
+>;
+type StoredWeekEvidenceCoverage = StoredWeekCloseEvidence["cash"]["coverage"];
+type StoredWeekEvidenceRow = Pick<
+  Doc<"reportWeekAccepted">,
+  "cashVariancePosture" | "closeEvidence"
+>;
+
+function isCountWithin(value: number, limit: number): boolean {
+  return Number.isSafeInteger(value) && value >= 0 && value <= limit;
+}
+
+/**
+ * A coverage claim is sane when its counts sit inside the frame the verifier
+ * re-derived and its status restates those counts. Every lane freezes the same
+ * scheduled expectation, so a drifted `scheduledDayCount` is a real defect,
+ * not presentation.
+ */
+function evidenceCoverageConsistent(
+  coverage: StoredWeekEvidenceCoverage,
+  includedDayCount: number,
+): boolean {
+  if (
+    coverage.scheduledDayCount !== includedDayCount ||
+    !isCountWithin(coverage.usableDayCount, coverage.scheduledDayCount)
+  ) {
+    return false;
+  }
+  return (
+    coverage.status ===
+    (coverage.usableDayCount === 0
+      ? "unavailable"
+      : coverage.usableDayCount === coverage.scheduledDayCount
+        ? "complete"
+        : "partial")
+  );
+}
+
+/**
+ * Persisted weekly close evidence, checked against ITSELF: coverage counts
+ * within the frame, per-lane arithmetic reconciling, and no unavailable lane
+ * presented as covered. Deliberately no source re-derivation — the dailyClose
+ * rows are the aggregator's input, and re-reading them here would add seven
+ * close reads per run to restate the aggregation instead of auditing the
+ * stored claim.
+ */
+function closeEvidenceInternallyConsistent(
+  evidence: StoredWeekCloseEvidence,
+  includedDayCount: number,
+): boolean {
+  const cash = evidence.cash;
+  if (
+    !evidenceCoverageConsistent(cash.coverage, includedDayCount) ||
+    !Number.isSafeInteger(cash.cashVarianceMinor) ||
+    (cash.coverage.status === "unavailable" && cash.cashVarianceMinor !== 0)
+  ) {
+    return false;
+  }
+
+  // Optional pre-rollout lane: absent is legacy, present must hold.
+  const transactions = evidence.transactions;
+  if (
+    transactions &&
+    (!evidenceCoverageConsistent(transactions.coverage, includedDayCount) ||
+      !isCountWithin(transactions.transactionCount, Number.MAX_SAFE_INTEGER) ||
+      (transactions.coverage.status === "unavailable" &&
+        transactions.transactionCount !== 0))
+  ) {
+    return false;
+  }
+
+  const payments = evidence.payments;
+  if (!evidenceCoverageConsistent(payments.coverage, includedDayCount)) {
+    return false;
+  }
+  let tenderTotal = 0;
+  for (const row of payments.rows) {
+    if (
+      !row.method.trim() ||
+      !isCountWithin(row.amountMinor, Number.MAX_SAFE_INTEGER) ||
+      !isCountWithin(row.tenderUseCount, Number.MAX_SAFE_INTEGER) ||
+      !Number.isSafeInteger(tenderTotal + row.amountMinor)
+    ) {
+      return false;
+    }
+    tenderTotal += row.amountMinor;
+  }
+  if (
+    tenderTotal !== payments.coveredTenderValueMinor ||
+    (payments.coverage.status === "unavailable" && payments.rows.length > 0)
+  ) {
+    return false;
+  }
+
+  const expenses = evidence.expenses;
+  if (
+    !evidenceCoverageConsistent(expenses.coverage, includedDayCount) ||
+    !isCountWithin(expenses.coveredQuantity, Number.MAX_SAFE_INTEGER) ||
+    !isCountWithin(expenses.coveredSpendMinor, Number.MAX_SAFE_INTEGER)
+  ) {
+    return false;
+  }
+  const rankedRowsValid = (rows: StoredWeekCloseEvidence["expenses"]["bySpend"]) =>
+    rows.every(
+      (row) =>
+        isCountWithin(row.quantity, Number.MAX_SAFE_INTEGER) &&
+        isCountWithin(row.spendMinor, Number.MAX_SAFE_INTEGER),
+    );
+  if (!rankedRowsValid(expenses.bySpend) || !rankedRowsValid(expenses.byQuantity)) {
+    return false;
+  }
+  // Each ranking plus its remainder restates the full covered totals; a
+  // remainder that fails to reconcile means rows were dropped silently.
+  const sum = (values: readonly number[]) =>
+    values.reduce((total, value) => total + value, 0);
+  if (
+    sum(expenses.bySpend.map((row) => row.spendMinor)) +
+      (expenses.spendRemainder?.spendMinor ?? 0) !==
+      expenses.coveredSpendMinor ||
+    sum(expenses.byQuantity.map((row) => row.quantity)) +
+      (expenses.quantityRemainder?.quantity ?? 0) !==
+      expenses.coveredQuantity
+  ) {
+    return false;
+  }
+  if (
+    expenses.coverage.status === "unavailable" &&
+    (expenses.bySpend.length > 0 ||
+      expenses.byQuantity.length > 0 ||
+      expenses.coveredQuantity !== 0 ||
+      expenses.coveredSpendMinor !== 0 ||
+      expenses.quantityRemainder !== null ||
+      expenses.spendRemainder !== null)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * `cashVariancePosture` is the flattened restatement of `closeEvidence.cash`;
+ * wherever both were persisted they must tell one story.
+ */
+function storedCloseEvidenceConsistent(
+  row: StoredWeekEvidenceRow,
+  includedDayCount: number,
+): boolean {
+  if (
+    row.closeEvidence &&
+    !closeEvidenceInternallyConsistent(row.closeEvidence, includedDayCount)
+  ) {
+    return false;
+  }
+  const posture = row.cashVariancePosture;
+  if (!posture) return true;
+  if (
+    !Number.isSafeInteger(posture.cashVarianceMinor) ||
+    posture.includedDayCount !== includedDayCount ||
+    !isCountWithin(posture.coveredIncludedDayCount, posture.includedDayCount) ||
+    posture.coverage !==
+      (posture.coveredIncludedDayCount === 0
+        ? "unavailable"
+        : posture.coveredIncludedDayCount === posture.includedDayCount
+          ? "complete"
+          : "partial")
+  ) {
+    return false;
+  }
+  const cash = row.closeEvidence?.cash;
+  if (!cash) return true;
+  return (
+    posture.cashVarianceMinor === cash.cashVarianceMinor &&
+    posture.coverage === cash.coverage.status &&
+    posture.coveredIncludedDayCount === cash.coverage.usableDayCount &&
+    posture.includedDayCount === cash.coverage.scheduledDayCount
+  );
+}
+
 /** The four persisted payment facts, accumulated across a frame's days. */
 function accumulatePayment(
   total: VerifyPaymentComparable,
@@ -1741,6 +1928,13 @@ export async function verifyCurrentWeekWithCtx(
       reason: "source_cap_exceeded",
     };
   }
+  // Internal-consistency audit of the persisted evidence contract on the
+  // current row and, when one exists, its accepted baseline. No extra reads:
+  // both documents are already in hand.
+  const closeEvidenceMatches =
+    storedCloseEvidenceConsistent(current, period.includedDates.length) &&
+    (!accepted ||
+      storedCloseEvidenceConsistent(accepted, period.includedDates.length));
   const closeMatches = accepted
     ? current.closePosture?.acceptedCloseId ===
         expectedClosePosture?.acceptedCloseId &&
@@ -1797,6 +1991,7 @@ export async function verifyCurrentWeekWithCtx(
 
   return {
     amendmentMatches,
+    closeEvidenceMatches,
     closeMatches,
     cycleEndDate: current.cycleEndDate,
     cycleStartDate: current.cycleStartDate,
@@ -1808,6 +2003,7 @@ export async function verifyCurrentWeekWithCtx(
       scheduleMatches &&
       varianceMatches &&
       closeMatches &&
+      closeEvidenceMatches &&
       amendmentMatches &&
       inventoryMatches &&
       includedDifferences.length === 0 &&

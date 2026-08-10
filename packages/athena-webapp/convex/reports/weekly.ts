@@ -30,6 +30,7 @@ import {
 import { addDaysToDate } from "./rollups";
 import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
 import { scheduleNotificationWithCtx } from "../notifications/emit";
+import { aggregateWeeklyCloseEvidence } from "./weeklyCloseEvidence";
 
 /**
  * Active/candidate schedule versions read to resolve one seven-date reporting
@@ -73,6 +74,39 @@ export function acceptedTopSkuLeaders(args: {
         String(left.productSkuId).localeCompare(String(right.productSkuId)),
     )
     .slice(0, 3);
+}
+
+export function frozenCatalogLabel(value?: string | null) {
+  const label = value?.trim();
+  return label && label.toLowerCase() !== "null" ? label : undefined;
+}
+
+async function freezeAcceptedTopSkuLeaderIdentity(
+  ctx: QueryCtx,
+  storeId: Id<"store">,
+  leaders: readonly {
+    productSkuId: Id<"productSku">;
+    unitsSold: number;
+  }[],
+) {
+  return Promise.all(
+    leaders.map(async (leader) => {
+      const fallback = String(leader.productSkuId);
+      const sku = await ctx.db.get("productSku", leader.productSkuId);
+      if (!sku || sku.storeId !== storeId) {
+        return { ...leader, productName: fallback, productSku: fallback };
+      }
+      const product = await ctx.db.get("product", sku.productId);
+      const productSku = frozenCatalogLabel(sku.sku) ?? fallback;
+      const productName =
+        (product?.storeId === storeId
+          ? frozenCatalogLabel(product.name)
+          : undefined) ??
+        frozenCatalogLabel(sku.productName) ??
+        productSku;
+      return { ...leader, productName, productSku };
+    }),
+  );
 }
 
 export function nextWeeklyReportDeliveryAt(args: {
@@ -138,6 +172,7 @@ const ZERO_WEEK_METRICS: ReportWeekMetrics = {
 type WeekDay = Pick<
   Doc<"reportDay">,
   | "currency"
+  | "closeId"
   | "closeVarianceMinor"
   | "flags"
   | "factCount"
@@ -652,36 +687,31 @@ export function computeWeeklyVariancePosture(
   };
 }
 
-/**
- * Daily Close cash-count variance is distinct from the reporting fold's
- * sales-to-close reconciliation. Keep its accepted-week evidence separate.
- */
-export function computeWeeklyCashVariancePosture(
+async function weeklyCloseEvidence(
+  ctx: QueryCtx,
   period: Extract<WeeklyPeriod, { kind: "resolved" }>,
   days: readonly Pick<Doc<"reportDay">, "closeId" | "operatingDate">[],
-  closes: ReadonlyMap<string, Pick<Doc<"dailyClose">, "summary">>,
 ) {
-  const included = new Set(period.includedDates);
-  const covered = days.flatMap((day) => {
-    if (!included.has(day.operatingDate) || !day.closeId) return [];
-    const variance = closes.get(String(day.closeId))?.summary;
-    const netCashVariance =
-      variance && typeof variance.netCashVariance === "number"
-        ? variance.netCashVariance
-        : undefined;
-    return netCashVariance === undefined ? [] : [netCashVariance];
+  // The aggregator discards outside-schedule dates, so their close documents
+  // are never fetched: at most one read per scheduled close.
+  const scheduled = new Set(period.includedDates);
+  const closes = new Map<string, Doc<"dailyClose">>();
+  for (const day of days) {
+    if (
+      !day.closeId ||
+      !scheduled.has(day.operatingDate) ||
+      closes.has(String(day.closeId))
+    ) {
+      continue;
+    }
+    const close = await ctx.db.get("dailyClose", day.closeId);
+    if (close) closes.set(String(day.closeId), close);
+  }
+  return aggregateWeeklyCloseEvidence({
+    closes,
+    days,
+    scheduledDates: period.includedDates,
   });
-  return {
-    cashVarianceMinor: covered.reduce((total, value) => total + value, 0),
-    coverage:
-      covered.length === 0
-        ? ("unavailable" as const)
-        : covered.length === period.includedDates.length
-          ? ("complete" as const)
-          : ("partial" as const),
-    coveredIncludedDayCount: covered.length,
-    includedDayCount: period.includedDates.length,
-  };
 }
 
 function shiftIsoDate(localDate: string, days: number) {
@@ -1074,6 +1104,7 @@ export async function rebuildCurrentWeek(
   const amendmentPosture: ReportWeekAmendmentPosture = accepted?.amendment
     ? "amended"
     : "none";
+  const closeEvidence = await weeklyCloseEvidence(ctx, period, days);
   if (
     accepted &&
     (accepted.lifecyclePosture !== lifecyclePosture ||
@@ -1104,6 +1135,13 @@ export async function rebuildCurrentWeek(
     inventoryAttention,
     priorPeriod,
     variancePosture: computeWeeklyVariancePosture(period, days),
+    cashVariancePosture: {
+      cashVarianceMinor: closeEvidence.cash.cashVarianceMinor,
+      coverage: closeEvidence.cash.coverage.status,
+      coveredIncludedDayCount: closeEvidence.cash.coverage.usableDayCount,
+      includedDayCount: closeEvidence.cash.coverage.scheduledDayCount,
+    },
+    closeEvidence,
     ...(accepted
       ? {
           acceptedBaselineId: accepted._id,
@@ -1477,10 +1515,14 @@ export async function materializeAcceptedWeek(args: {
     );
     return "incomplete";
   }
-  const topSkuLeaders = acceptedTopSkuLeaders({
-    currency: normalizeCurrencyCode(store.currency),
-    factsByDate,
-  });
+  const topSkuLeaders = await freezeAcceptedTopSkuLeaderIdentity(
+    args.ctx,
+    args.storeId,
+    acceptedTopSkuLeaders({
+      currency: normalizeCurrencyCode(store.currency),
+      factsByDate,
+    }),
+  );
   const frameStartAt = await periodStartAt(args.ctx, period);
   if (frameStartAt === null) return "unavailable";
   const acceptedRead = await readWeekDays(
@@ -1503,12 +1545,11 @@ export async function materializeAcceptedWeek(args: {
     period.finalScheduledDate,
   );
   if (!closePosture) return "incomplete";
-  const acceptedCloses = new Map<string, Pick<Doc<"dailyClose">, "summary">>();
-  for (const day of acceptedDays) {
-    if (!day.closeId || acceptedCloses.has(String(day.closeId))) continue;
-    const acceptedClose = await args.ctx.db.get("dailyClose", day.closeId);
-    if (acceptedClose) acceptedCloses.set(String(day.closeId), acceptedClose);
-  }
+  const closeEvidence = await weeklyCloseEvidence(
+    args.ctx,
+    period,
+    acceptedDays,
+  );
   const amendment = deriveWeeklyAmendment({
     accepted: {
       amendment: undefined,
@@ -1540,6 +1581,7 @@ export async function materializeAcceptedWeek(args: {
       outsideSchedule: folded.outsideSchedule,
       scheduleLineage: currentFolded.scheduleLineage,
       topSkuLeaders,
+      closeEvidence,
     }),
   );
   const baselineId = await args.ctx.db.insert("reportWeekAccepted", {
@@ -1567,11 +1609,13 @@ export async function materializeAcceptedWeek(args: {
     amendment,
     priorPeriod,
     variancePosture: computeWeeklyVariancePosture(period, acceptedDays),
-    cashVariancePosture: computeWeeklyCashVariancePosture(
-      period,
-      acceptedDays,
-      acceptedCloses,
-    ),
+    cashVariancePosture: {
+      cashVarianceMinor: closeEvidence.cash.cashVarianceMinor,
+      coverage: closeEvidence.cash.coverage.status,
+      coveredIncludedDayCount: closeEvidence.cash.coverage.usableDayCount,
+      includedDayCount: closeEvidence.cash.coverage.scheduledDayCount,
+    },
+    closeEvidence,
   });
   const deliverySchedule = await getStoreScheduleContextForStoreAtWithCtx(
     args.ctx,
@@ -1740,6 +1784,10 @@ async function refreshAcceptedWeek(
     current?.availability !== "unavailable" &&
     current?.cycleStartDate === accepted.cycleStartDate
   ) {
+    // Only the matching current row republishes evidence, so the bounded
+    // accepted-history sweep never pays close reads for cycle-mismatched
+    // weeks it refreshes.
+    const closeEvidence = await weeklyCloseEvidence(ctx, period, days);
     await ctx.db.patch("reportWeekCurrent", current._id, {
       acceptedBaselineId: accepted._id,
       amendment,
@@ -1747,6 +1795,13 @@ async function refreshAcceptedWeek(
       lifecyclePosture: closePosture.status,
       amendmentPosture: amendment ? "amended" : "none",
       variancePosture: computeWeeklyVariancePosture(period, days),
+      cashVariancePosture: {
+        cashVarianceMinor: closeEvidence.cash.cashVarianceMinor,
+        coverage: closeEvidence.cash.coverage.status,
+        coveredIncludedDayCount: closeEvidence.cash.coverage.usableDayCount,
+        includedDayCount: closeEvidence.cash.coverage.scheduledDayCount,
+      },
+      closeEvidence,
     });
   }
   return true;
