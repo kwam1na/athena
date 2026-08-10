@@ -6,7 +6,7 @@ const baseURL =
   process.env.ATHENA_POS_E2E_BASE_URL ||
   (runLocalCandidateBuild
     ? `http://127.0.0.1:${port}`
-    : process.env.ATHENA_PROD_URL || "https://athena.wigclub.store");
+    : process.env.ATHENA_PROD_URL || "https://athena-os.app");
 const convexUrl =
   process.env.ATHENA_PROD_CONVEX_URL ||
   process.env.VITE_CONVEX_URL ||

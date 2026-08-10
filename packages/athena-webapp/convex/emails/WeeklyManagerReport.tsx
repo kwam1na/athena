@@ -57,7 +57,7 @@ export const weeklyManagerReportPreviewProps = {
     timestampDate: "Aug 8",
   },
   reportUrl:
-    "https://athena.wigclub.store/wigclub/store/wigclub/reports/weekly?reportId=week%3A2026-08-03",
+    "https://athena-os.app/wigclub/store/wigclub/reports/weekly?reportId=week%3A2026-08-03",
   reportSections: [
     {
       title: "Close variance",
@@ -133,7 +133,7 @@ export const weeklyManagerReportPreviewProps = {
     { name: "HD Lace Closure", detail: "HDLC-14", unitsSold: 24 },
   ],
   topItemsUrl:
-    "https://athena.wigclub.store/wigclub/store/wigclub/reports/weekly?reportId=week%3A2026-08-03&units=true",
+    "https://athena-os.app/wigclub/store/wigclub/reports/weekly?reportId=week%3A2026-08-03&units=true",
 } satisfies DailyManagerReportProps;
 
 export function WeeklyManagerReport(props: DailyManagerReportProps) {

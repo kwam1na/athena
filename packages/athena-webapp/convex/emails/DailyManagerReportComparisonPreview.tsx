@@ -55,7 +55,7 @@ export default function DailyManagerReportComparisonPreview() {
           transactionCountComparison: "67% lower vs prior day",
         },
       ]}
-      reportUrl="https://athena.wigclub.store/wigclub/store/wigclub/operations/daily-close?operatingDate=2026-08-08"
+      reportUrl="https://athena-os.app/wigclub/store/wigclub/operations/daily-close?operatingDate=2026-08-08"
       reviewedItems={[]}
       status="applied"
       storeCurrency="GHS"

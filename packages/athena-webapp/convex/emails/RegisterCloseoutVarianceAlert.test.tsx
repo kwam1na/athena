@@ -16,7 +16,7 @@ const baseProps: RegisterCloseoutVarianceAlertProps = {
   reason: "Variance exceeded the closeout approval threshold.",
   registerLabel: "Front counter / Register 2",
   reviewUrl:
-    "https://athena.wigclub.store/wigclub/store/wigclub/cash-controls/registers/register-session-1",
+    "https://athena-os.app/wigclub/store/wigclub/cash-controls/registers/register-session-1",
   storeName: "Wigclub East Legon",
   submittedAt: "8:42 PM",
   submittedBy: "Ama Mensah",
@@ -146,7 +146,7 @@ describe("RegisterCloseoutVarianceAlert", () => {
           operatingDate: "Friday, July 3",
           registerLabel: "Front counter / Register 2",
           reviewUrl:
-            "https://athena.wigclub.store/wigclub/store/wigclub/cash-controls/registers/register-session-1",
+            "https://athena-os.app/wigclub/store/wigclub/cash-controls/registers/register-session-1",
           storeName: "Wigclub East Legon",
           submittedAt: "8:42 PM",
           submittedBy: "Ama Mensah",

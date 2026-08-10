@@ -139,7 +139,7 @@ export const dailyManagerReportPreviewProps = {
   operatingDate: "Saturday, Aug 8",
   paymentTotals: samplePaymentTotalsFor(previewMoney),
   reportUrl:
-    "https://athena.wigclub.store/wigclub/store/wigclub/operations/daily-close?operatingDate=2026-08-08",
+    "https://athena-os.app/wigclub/store/wigclub/operations/daily-close?operatingDate=2026-08-08",
   reviewedItems: sampleReviewedItemsFor(previewMoney),
   status: "applied",
   storeCurrency: "GHS",
@@ -151,7 +151,7 @@ export const dailyManagerReportPreviewProps = {
     { name: "HD Lace Closure", detail: "HDLC-14", unitsSold: 4 },
   ],
   topItemsUrl:
-    "https://athena.wigclub.store/wigclub/store/wigclub/reports?daysStart=2026-08-08&daysEnd=2026-08-08&daysTableStart=2026-08-08&daysTableEnd=2026-08-08&selectedDay=2026-08-08&units=true",
+    "https://athena-os.app/wigclub/store/wigclub/reports?daysStart=2026-08-08&daysEnd=2026-08-08&daysTableStart=2026-08-08&daysTableEnd=2026-08-08&selectedDay=2026-08-08&units=true",
 } satisfies DailyManagerReportProps;
 
 const statusCopy: Record<DailyReportStatus, DailyReportStatusCopy> = {

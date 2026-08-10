@@ -70,7 +70,7 @@ describe("daily manager report email URLs", () => {
     process.env.SITE_URL = "https://storefront.example.com";
     process.env.STAGE = "prod";
 
-    expect(resolveAppUrl()).toBe("https://athena.wigclub.store");
+    expect(resolveAppUrl()).toBe("https://athena-os.app");
   });
 
   it("omits voids from operating summary when there are no voids", () => {

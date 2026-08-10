@@ -8,7 +8,7 @@ import { athenaDocsContentPlugin } from "./vite-docs-content-plugin";
 export default defineConfig(({ mode }) => ({
   base: "/",
   server: {
-    allowedHosts: ["athena-qa.wigclub.store"],
+    allowedHosts: ["athena-qa.wigclub.store", "qa.athena-os.app"],
   },
   optimizeDeps: {
     // Generated Storybook output can coexist with the app in local worktrees.

@@ -17,7 +17,10 @@ This runbook captures the production VPS shape for `wigclub.store` and the steps
 | ------------------------- | --------------------------------------------------------------------- |
 | `wigclub.store`           | nginx static storefront                                               |
 | `www.wigclub.store`       | nginx static storefront                                               |
-| `athena.wigclub.store`    | nginx static Athena admin app                                         |
+| `athena-os.app`           | nginx static Athena admin app (primary)                               |
+| `athena.wigclub.store`    | nginx static Athena admin app (legacy alias, same document root)      |
+| `www.athena-os.app`       | nginx 301 redirect to `athena-os.app`                                 |
+| `qa.athena-os.app`        | nginx reverse proxy to the Athena QA Vite dev server (with `athena-qa.wigclub.store`) |
 | `qa.wigclub.store`        | nginx reverse proxy to storefront Vite dev server on `127.0.0.1:5176` |
 | `athena-qa.wigclub.store` | nginx reverse proxy to Athena Vite dev server on `127.0.0.1:5175`     |
 | `api.wigclub.store`       | nginx reverse proxy to prod Convex HTTP                               |
@@ -95,7 +98,7 @@ The generated server blocks are:
 | nginx server_name                 | Behavior                                                                                              |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `wigclub.store www.wigclub.store` | Serves `/root/athena/storefront/current` with SPA fallback                                            |
-| `athena.wigclub.store`            | Serves `/root/athena/athena-webapp/current` with SPA fallback                                         |
+| `athena-os.app athena.wigclub.store` | Serves `/root/athena/athena-webapp/current` with SPA fallback. One server block, two names — see "Dual admin hostnames" below |
 | `qa.wigclub.store`                | Proxies to the storefront QA Vite dev server at `127.0.0.1:5176`, including websocket upgrade headers |
 | `athena-qa.wigclub.store`         | Proxies to the QA Vite dev server at `127.0.0.1:5175`, including websocket upgrade headers            |
 | `api.wigclub.store`               | Proxies to the production Convex HTTP site with CORS handling                                         |
@@ -121,10 +124,25 @@ Verify each local nginx route before checking Cloudflare:
 
 ```bash
 curl -sS -I -H 'Host: wigclub.store' http://127.0.0.1/
+curl -sS -I -H 'Host: athena-os.app' http://127.0.0.1/
 curl -sS -I -H 'Host: athena.wigclub.store' http://127.0.0.1/
 curl -sS -I -H 'Host: qa.wigclub.store' http://127.0.0.1/
 curl -sS -I -H 'Host: athena-qa.wigclub.store' http://127.0.0.1/
 ```
+
+### Dual admin hostnames
+
+The Athena admin app is served on `athena-os.app` (primary) and `athena.wigclub.store` (legacy) from a single nginx server block sharing one document root. This is deliberately **not** a redirect.
+
+The production POS terminal is bookmarked to the legacy host, and its offline state — the `athena-pos-local` IndexedDB, the app-shell service worker cache, and the Convex auth session — is origin-scoped. Redirecting the legacy host to the primary one would strand any unsynced sales on an origin the terminal could no longer reach.
+
+Both hostnames need a Cloudflare Tunnel ingress entry and a DNS route. Both are smoke-checked by `.github/workflows/athena-production-rollback.yml`; a rollback that leaves either one broken is a failed rollback.
+
+`www.athena-os.app` redirects to the apex rather than serving the app a second time, so the admin app keeps exactly one origin and one session store. `qa.athena-os.app` joins the existing QA server block. Note that the QA host requires two application-side settings, not just nginx: `qa.athena-os.app` must be in `server.allowedHosts` in `packages/athena-webapp/vite.config.ts` (Vite returns 403 for unknown `Host` headers), and the QA dev server must receive `VITE_STOREFRONT_URL` — its storefront URL cannot be derived from an `athena-os.app` hostname.
+
+Every DNS record for these hostnames is a **proxied** CNAME to `<tunnel-id>.cfargotunnel.com`. A `cfargotunnel.com` target left as DNS-only will not resolve publicly.
+
+Retire the legacy host only after that terminal has drained to zero unsynced events and been re-onboarded on `athena-os.app`. Until then, treat `ATHENA_LEGACY_HOST` in `scripts/setup-production-vps.sh` as permanent.
 
 If the config changes manually during incident response, copy the working change back into `scripts/setup-production-vps.sh` so a new VPS can reproduce it.
 
@@ -148,6 +166,8 @@ ingress:
   - hostname: wigclub.store
     service: http://localhost:80
   - hostname: www.wigclub.store
+    service: http://localhost:80
+  - hostname: athena-os.app
     service: http://localhost:80
   - hostname: athena.wigclub.store
     service: http://localhost:80
@@ -299,6 +319,7 @@ scripts/deploy-vps.sh rollback-storefront previous
 After rollback, verify the local nginx route before checking Cloudflare:
 
 ```bash
+curl -sS -I -H 'Host: athena-os.app' http://127.0.0.1/
 curl -sS -I -H 'Host: athena.wigclub.store' http://127.0.0.1/
 curl -sS -I -H 'Host: wigclub.store' http://127.0.0.1/
 ```

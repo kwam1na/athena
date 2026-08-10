@@ -18,6 +18,10 @@ DEV_CONVEX_CLOUD="${DEV_CONVEX_CLOUD:-https://jovial-wildebeest-179.convex.cloud
 DEV_CONVEX_SITE="${DEV_CONVEX_SITE:-https://jovial-wildebeest-179.convex.site}"
 DEV_API_URL="${DEV_API_URL:-https://dev.wigclub.store}"
 STOREFRONT_URL="${STOREFRONT_URL:-https://wigclub.store}"
+# The QA admin app is reachable on hosts the storefront URL cannot be derived
+# from (qa.athena-os.app), so pass it explicitly rather than relying on the
+# hostname fallback in src/config.ts.
+QA_STOREFRONT_URL="${QA_STOREFRONT_URL:-https://$STOREFRONT_QA_HOST}"
 VITE_WALKTHROUGH_PRIVACY_CONTACT="${VITE_WALKTHROUGH_PRIVACY_CONTACT:-Kwamina.0x00@gmail.com}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -396,7 +400,7 @@ REMOTE_SCRIPT
 }
 
 deploy_athena_qa() {
-  remote_script "$REMOTE_SOURCE_DIR" "$ATHENA_QA_PORT" "$DEV_CONVEX_CLOUD" "$DEV_CONVEX_SITE" "$ATHENA_QA_HOST" "$VITE_WALKTHROUGH_PRIVACY_CONTACT" <<'REMOTE_SCRIPT'
+  remote_script "$REMOTE_SOURCE_DIR" "$ATHENA_QA_PORT" "$DEV_CONVEX_CLOUD" "$DEV_CONVEX_SITE" "$ATHENA_QA_HOST" "$VITE_WALKTHROUGH_PRIVACY_CONTACT" "$QA_STOREFRONT_URL" <<'REMOTE_SCRIPT'
 set -euo pipefail
 
 REMOTE_SOURCE_DIR="$1"
@@ -405,6 +409,7 @@ DEV_CONVEX_CLOUD="$3"
 DEV_CONVEX_SITE="$4"
 ATHENA_QA_HOST="$5"
 VITE_WALKTHROUGH_PRIVACY_CONTACT="${6:-}"
+QA_STOREFRONT_URL="${7:-}"
 
 export BUN_INSTALL="${BUN_INSTALL:-/root/.bun}"
 export PATH="$BUN_INSTALL/bin:$PATH"
@@ -417,6 +422,7 @@ fi
 
 VITE_CONVEX_URL="$DEV_CONVEX_CLOUD" \
 VITE_API_GATEWAY_URL="$DEV_CONVEX_SITE" \
+VITE_STOREFRONT_URL="$QA_STOREFRONT_URL" \
 VITE_WALKTHROUGH_PRIVACY_CONTACT="$VITE_WALKTHROUGH_PRIVACY_CONTACT" \
   pm2 start bun --name athena-qa -- run dev -- --host 127.0.0.1 --port "$ATHENA_QA_PORT" --strictPort
 

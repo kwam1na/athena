@@ -93,10 +93,12 @@ jobs:
 
           case "$APP" in
             athena)
-              host="athena.wigclub.store"
+              # Both hosts serve the same document root; a rollback that leaves
+              # either one broken is a failed rollback.
+              hosts="athena-os.app athena.wigclub.store"
               ;;
             storefront)
-              host="wigclub.store"
+              hosts="wigclub.store"
               ;;
             *)
               echo "Unsupported app: $APP" >&2
@@ -104,4 +106,7 @@ jobs:
               ;;
           esac
 
-          ssh athena-vps "curl -fsS -I -H \"Host: $host\" http://127.0.0.1/ | head -n 1"
+          for host in $hosts; do
+            echo "Smoke checking $host"
+            ssh athena-vps "curl -fsS -I -H \"Host: $host\" http://127.0.0.1/ | head -n 1"
+          done

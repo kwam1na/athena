@@ -26,7 +26,7 @@ describe("static product-page metadata", () => {
     expect(document.querySelectorAll('link[rel="canonical"]')).toHaveLength(1);
     expect(
       document.querySelector('link[rel="canonical"]')?.getAttribute("href"),
-    ).toBe("https://athena.wigclub.store/");
+    ).toBe("https://athena-os.app/");
   });
 
   it("keeps Open Graph metadata aligned with the canonical public page", () => {
@@ -44,6 +44,6 @@ describe("static product-page metadata", () => {
         .querySelector('meta[name="description"]')
         ?.getAttribute("content"),
     );
-    expect(content("og:url")).toBe("https://athena.wigclub.store/");
+    expect(content("og:url")).toBe("https://athena-os.app/");
   });
 });

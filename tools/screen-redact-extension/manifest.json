@@ -5,6 +5,7 @@
   "description": "Masks currency amounts and hides demo-only chrome so the admin app can be screen-recorded safely.",
   "permissions": ["storage", "scripting", "activeTab"],
   "host_permissions": [
+    "https://athena-os.app/*",
     "https://athena.wigclub.store/*",
     "http://localhost/*"
   ],
@@ -21,7 +22,11 @@
   "background": { "service_worker": "background.js" },
   "content_scripts": [
     {
-      "matches": ["https://athena.wigclub.store/*", "http://localhost/*"],
+      "matches": [
+        "https://athena-os.app/*",
+        "https://athena.wigclub.store/*",
+        "http://localhost/*"
+      ],
       "js": ["content.js"],
       "css": ["content.css"],
       "run_at": "document_start",

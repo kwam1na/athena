@@ -17,7 +17,7 @@ const baseProps: DailyManagerReportProps = {
   completedBy: "Athena",
   storeCurrency: "GHS",
   status: "applied",
-  reportUrl: "https://athena.wigclub.store/wigclub/store/wigclub/operations",
+  reportUrl: "https://athena-os.app/wigclub/store/wigclub/operations",
   reviewedItems: [],
   carryForwardItems: [],
   blockers: [],
@@ -39,7 +39,7 @@ const baseProps: DailyManagerReportProps = {
     { name: "HD Lace Closure", detail: "HDLC-14", unitsSold: 4 },
   ],
   topItemsUrl:
-    "https://athena.wigclub.store/wigclub/store/wigclub/reports?daysStart=2026-07-03&daysEnd=2026-07-03&daysTableStart=2026-07-03&daysTableEnd=2026-07-03&selectedDay=2026-07-03&units=true",
+    "https://athena-os.app/wigclub/store/wigclub/reports?daysStart=2026-07-03&daysEnd=2026-07-03&daysTableStart=2026-07-03&daysTableEnd=2026-07-03&selectedDay=2026-07-03&units=true",
 };
 
 describe("DailyManagerReport", () => {
@@ -103,7 +103,7 @@ describe("DailyManagerReport", () => {
         completedBy="Athena"
         storeCurrency="GHS"
         status="prepared"
-        reportUrl="https://athena.wigclub.store/wigclub/store/wigclub/operations"
+        reportUrl="https://athena-os.app/wigclub/store/wigclub/operations"
       />,
     );
 
@@ -152,7 +152,7 @@ describe("DailyManagerReport", () => {
           completedBy: "Athena",
           operatingDate: "Friday, July 3",
           reportUrl:
-            "https://athena.wigclub.store/wigclub/store/wigclub/operations",
+            "https://athena-os.app/wigclub/store/wigclub/operations",
           storeName: "Wigclub East Legon",
         } as DailyManagerReportProps)}
       />,

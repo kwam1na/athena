@@ -59,7 +59,12 @@ describe("VPS QA deploy contract", () => {
     expect(setupScript).toContain(
       "proxy_pass http://127.0.0.1:$STOREFRONT_QA_PORT;",
     );
-    expect(setupScript).toContain("server_name $ATHENA_QA_HOST;");
+    expect(setupScript).toContain(
+      'ATHENA_QA_ALT_HOST="${ATHENA_QA_ALT_HOST:-qa.athena-os.app}"',
+    );
+    expect(setupScript).toContain(
+      "server_name $ATHENA_QA_HOST $ATHENA_QA_ALT_HOST;",
+    );
     expect(setupScript).toContain(
       "proxy_pass http://127.0.0.1:$ATHENA_QA_PORT;",
     );
