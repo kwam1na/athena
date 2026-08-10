@@ -18,6 +18,7 @@ import type {
   ReportWeekMetrics,
   ReportWeekSummary,
 } from "~/shared/reportsContract";
+import { formatProductDisplayName } from "~/shared/productDisplayName";
 import {
   formatOperatingDate,
   formatOperatingDateList,
@@ -1264,7 +1265,7 @@ function ExpenseRanking({
             >
               <span>
                 <span className="block font-medium text-foreground">
-                  {row.productName}
+                  {formatProductDisplayName(row.productName)}
                 </span>
                 <span className="block text-sm text-muted-foreground">
                   {row.productSku}

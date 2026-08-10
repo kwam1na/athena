@@ -425,7 +425,7 @@ const closeEvidence = {
   expenses: {
     byQuantity: [
       {
-        productName: "Styling gel",
+        productName: "STYLING GEL",
         productSku: "GEL-01",
         productSkuId: "sku-gel",
         quantity: 5,
@@ -434,7 +434,7 @@ const closeEvidence = {
     ],
     bySpend: [
       {
-        productName: "Lace remover",
+        productName: "Lace remover ",
         productSku: "LR-02",
         productSkuId: "sku-remover",
         quantity: 2,
@@ -518,6 +518,10 @@ describe("ReportsWeeklyView", () => {
     expect(screen.getAllByText("6 of 6 scheduled days")).toHaveLength(3);
     expect(screen.getByText("2 other products")).toBeInTheDocument();
     expect(screen.getByText("1 other product")).toBeInTheDocument();
+    // Frozen evidence keeps the source spelling; the view normalizes on read.
+    expect(screen.getByText("Styling Gel")).toBeInTheDocument();
+    expect(screen.getByText("Lace Remover")).toBeInTheDocument();
+    expect(screen.queryByText("STYLING GEL")).not.toBeInTheDocument();
   });
 
   it("discloses rounding only when persisted shares do not total 100%", () => {

@@ -2,6 +2,7 @@ import { Address, OnlineOrder } from "../types";
 import { ALL_COUNTRIES } from "./constants/countries";
 import { accraNeighborhoods, ghanaRegions } from "./constants/ghana";
 import { currencyFormatter as sharedCurrencyFormatter } from "../shared/currencyFormatter";
+import { capitalizeWords } from "../shared/textCase";
 
 export function toSlug(str: string) {
   return str
@@ -56,14 +57,7 @@ export function getAddressString(address: Address) {
   return joinAddressParts(address?.address, address?.city, country);
 }
 
-export function capitalizeWords(str: string): string {
-  if (!str) return str;
-  return str
-    .toLowerCase()
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-}
+export { capitalizeWords };
 
 export function currencyFormatter(currency: string) {
   return sharedCurrencyFormatter(currency);

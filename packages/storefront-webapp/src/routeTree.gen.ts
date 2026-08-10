@@ -9,42 +9,46 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SignupRouteImport } from './routes/signup'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthVerifyRouteImport } from './routes/auth.verify'
-import { Route as LayoutContactUsRouteImport } from './routes/_layout/contact-us'
-import { Route as LayoutAccountRouteImport } from './routes/_layout/account'
-import { Route as LayoutShopLayoutRouteImport } from './routes/_layout/_shopLayout'
+import { Route as LayoutRouteImport } from './routes/_layout'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LayoutOrdersLayoutRouteImport } from './routes/_layout/_ordersLayout'
-import { Route as ShopCheckoutIndexRouteImport } from './routes/shop/checkout/index'
-import { Route as ShopBagIndexRouteImport } from './routes/shop/bag.index'
+import { Route as LayoutShopLayoutRouteImport } from './routes/_layout/_shopLayout'
+import { Route as LayoutAccountRouteImport } from './routes/_layout/account'
+import { Route as LayoutContactUsRouteImport } from './routes/_layout/contact-us'
+import { Route as AuthVerifyRouteImport } from './routes/auth.verify'
 import { Route as LayoutRewardsIndexRouteImport } from './routes/_layout/rewards.index'
-import { Route as ShopCheckoutPodConfirmationRouteImport } from './routes/shop/checkout/pod-confirmation'
+import { Route as ShopBagIndexRouteImport } from './routes/shop/bag.index'
+import { Route as ShopCheckoutIndexRouteImport } from './routes/shop/checkout/index'
 import { Route as ShopCheckoutPendingRouteImport } from './routes/shop/checkout/pending'
-import { Route as ShopCheckoutVerifyIndexRouteImport } from './routes/shop/checkout/verify.index'
-import { Route as ShopCheckoutCompleteIndexRouteImport } from './routes/shop/checkout/complete.index'
-import { Route as ShopCheckoutSessionIdSlugIndexRouteImport } from './routes/shop/checkout/$sessionIdSlug/index'
-import { Route as LayoutShopSavedIndexRouteImport } from './routes/_layout/shop.saved.index'
-import { Route as LayoutPoliciesTosIndexRouteImport } from './routes/_layout/policies/tos.index'
-import { Route as LayoutPoliciesPrivacyIndexRouteImport } from './routes/_layout/policies/privacy.index'
+import { Route as ShopCheckoutPodConfirmationRouteImport } from './routes/shop/checkout/pod-confirmation'
 import { Route as LayoutPoliciesDeliveryReturnsExchangesIndexRouteImport } from './routes/_layout/policies/delivery-returns-exchanges.index'
-import { Route as ShopCheckoutSessionIdSlugIncompleteRouteImport } from './routes/shop/checkout/$sessionIdSlug/incomplete'
-import { Route as ShopCheckoutSessionIdSlugCompleteRouteImport } from './routes/shop/checkout/$sessionIdSlug/complete'
-import { Route as ShopCheckoutSessionIdSlugCanceledRouteImport } from './routes/shop/checkout/$sessionIdSlug/canceled'
+import { Route as LayoutPoliciesPrivacyIndexRouteImport } from './routes/_layout/policies/privacy.index'
+import { Route as LayoutPoliciesTosIndexRouteImport } from './routes/_layout/policies/tos.index'
 import { Route as LayoutShopProductProductSlugRouteImport } from './routes/_layout/shop.product.$productSlug'
-import { Route as ShopReceiptSTokenIndexRouteImport } from './routes/shop/receipt/s/$token/index'
-import { Route as LayoutShopLayoutShopCategorySlugIndexRouteImport } from './routes/_layout/_shopLayout/shop/$categorySlug/index'
+import { Route as LayoutShopSavedIndexRouteImport } from './routes/_layout/shop.saved.index'
+import { Route as ShopCheckoutSessionIdSlugIndexRouteImport } from './routes/shop/checkout/$sessionIdSlug/index'
+import { Route as ShopCheckoutSessionIdSlugCanceledRouteImport } from './routes/shop/checkout/$sessionIdSlug/canceled'
+import { Route as ShopCheckoutSessionIdSlugCompleteRouteImport } from './routes/shop/checkout/$sessionIdSlug/complete'
+import { Route as ShopCheckoutSessionIdSlugIncompleteRouteImport } from './routes/shop/checkout/$sessionIdSlug/incomplete'
+import { Route as ShopCheckoutCompleteIndexRouteImport } from './routes/shop/checkout/complete.index'
+import { Route as ShopCheckoutVerifyIndexRouteImport } from './routes/shop/checkout/verify.index'
 import { Route as LayoutOrdersLayoutShopOrdersIndexRouteImport } from './routes/_layout/_ordersLayout/shop/orders/index'
+import { Route as LayoutShopLayoutShopCategorySlugIndexRouteImport } from './routes/_layout/_shopLayout/shop/$categorySlug/index'
 import { Route as LayoutShopLayoutShopCategorySlugSubcategorySlugRouteImport } from './routes/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug'
+import { Route as ShopReceiptSTokenIndexRouteImport } from './routes/shop/receipt/s/$token/index'
 import { Route as LayoutOrdersLayoutShopOrdersOrderIdIndexRouteImport } from './routes/_layout/_ordersLayout/shop/orders/$orderId/index'
 import { Route as LayoutOrdersLayoutShopOrdersOrderIdReviewRouteImport } from './routes/_layout/_ordersLayout/shop/orders/$orderId/review'
 import { Route as LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRouteImport } from './routes/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId.review'
 
-const SignupRoute = SignupRouteImport.update({
-  id: '/signup',
-  path: '/signup',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LayoutRoute = LayoutRouteImport.update({
+  id: '/_layout',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -52,23 +56,17 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LayoutRoute = LayoutRouteImport.update({
-  id: '/_layout',
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
+const LayoutOrdersLayoutRoute = LayoutOrdersLayoutRouteImport.update({
+  id: '/_ordersLayout',
+  getParentRoute: () => LayoutRoute,
 } as any)
-const AuthVerifyRoute = AuthVerifyRouteImport.update({
-  id: '/auth/verify',
-  path: '/auth/verify',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LayoutContactUsRoute = LayoutContactUsRouteImport.update({
-  id: '/contact-us',
-  path: '/contact-us',
+const LayoutShopLayoutRoute = LayoutShopLayoutRouteImport.update({
+  id: '/_shopLayout',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutAccountRoute = LayoutAccountRouteImport.update({
@@ -76,22 +74,14 @@ const LayoutAccountRoute = LayoutAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutShopLayoutRoute = LayoutShopLayoutRouteImport.update({
-  id: '/_shopLayout',
+const LayoutContactUsRoute = LayoutContactUsRouteImport.update({
+  id: '/contact-us',
+  path: '/contact-us',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutOrdersLayoutRoute = LayoutOrdersLayoutRouteImport.update({
-  id: '/_ordersLayout',
-  getParentRoute: () => LayoutRoute,
-} as any)
-const ShopCheckoutIndexRoute = ShopCheckoutIndexRouteImport.update({
-  id: '/shop/checkout/',
-  path: '/shop/checkout/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ShopBagIndexRoute = ShopBagIndexRouteImport.update({
-  id: '/shop/bag/',
-  path: '/shop/bag/',
+const AuthVerifyRoute = AuthVerifyRouteImport.update({
+  id: '/auth/verify',
+  path: '/auth/verify',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LayoutRewardsIndexRoute = LayoutRewardsIndexRouteImport.update({
@@ -99,49 +89,26 @@ const LayoutRewardsIndexRoute = LayoutRewardsIndexRouteImport.update({
   path: '/rewards/',
   getParentRoute: () => LayoutRoute,
 } as any)
-const ShopCheckoutPodConfirmationRoute =
-  ShopCheckoutPodConfirmationRouteImport.update({
-    id: '/shop/checkout/pod-confirmation',
-    path: '/shop/checkout/pod-confirmation',
-    getParentRoute: () => rootRouteImport,
-  } as any)
+const ShopBagIndexRoute = ShopBagIndexRouteImport.update({
+  id: '/shop/bag/',
+  path: '/shop/bag/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShopCheckoutIndexRoute = ShopCheckoutIndexRouteImport.update({
+  id: '/shop/checkout/',
+  path: '/shop/checkout/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ShopCheckoutPendingRoute = ShopCheckoutPendingRouteImport.update({
   id: '/shop/checkout/pending',
   path: '/shop/checkout/pending',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ShopCheckoutVerifyIndexRoute = ShopCheckoutVerifyIndexRouteImport.update({
-  id: '/shop/checkout/verify/',
-  path: '/shop/checkout/verify/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ShopCheckoutCompleteIndexRoute =
-  ShopCheckoutCompleteIndexRouteImport.update({
-    id: '/shop/checkout/complete/',
-    path: '/shop/checkout/complete/',
+const ShopCheckoutPodConfirmationRoute =
+  ShopCheckoutPodConfirmationRouteImport.update({
+    id: '/shop/checkout/pod-confirmation',
+    path: '/shop/checkout/pod-confirmation',
     getParentRoute: () => rootRouteImport,
-  } as any)
-const ShopCheckoutSessionIdSlugIndexRoute =
-  ShopCheckoutSessionIdSlugIndexRouteImport.update({
-    id: '/shop/checkout/$sessionIdSlug/',
-    path: '/shop/checkout/$sessionIdSlug/',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const LayoutShopSavedIndexRoute = LayoutShopSavedIndexRouteImport.update({
-  id: '/shop/saved/',
-  path: '/shop/saved/',
-  getParentRoute: () => LayoutRoute,
-} as any)
-const LayoutPoliciesTosIndexRoute = LayoutPoliciesTosIndexRouteImport.update({
-  id: '/policies/tos/',
-  path: '/policies/tos/',
-  getParentRoute: () => LayoutRoute,
-} as any)
-const LayoutPoliciesPrivacyIndexRoute =
-  LayoutPoliciesPrivacyIndexRouteImport.update({
-    id: '/policies/privacy/',
-    path: '/policies/privacy/',
-    getParentRoute: () => LayoutRoute,
   } as any)
 const LayoutPoliciesDeliveryReturnsExchangesIndexRoute =
   LayoutPoliciesDeliveryReturnsExchangesIndexRouteImport.update({
@@ -149,16 +116,32 @@ const LayoutPoliciesDeliveryReturnsExchangesIndexRoute =
     path: '/policies/delivery-returns-exchanges/',
     getParentRoute: () => LayoutRoute,
   } as any)
-const ShopCheckoutSessionIdSlugIncompleteRoute =
-  ShopCheckoutSessionIdSlugIncompleteRouteImport.update({
-    id: '/shop/checkout/$sessionIdSlug/incomplete',
-    path: '/shop/checkout/$sessionIdSlug/incomplete',
-    getParentRoute: () => rootRouteImport,
+const LayoutPoliciesPrivacyIndexRoute =
+  LayoutPoliciesPrivacyIndexRouteImport.update({
+    id: '/policies/privacy/',
+    path: '/policies/privacy/',
+    getParentRoute: () => LayoutRoute,
   } as any)
-const ShopCheckoutSessionIdSlugCompleteRoute =
-  ShopCheckoutSessionIdSlugCompleteRouteImport.update({
-    id: '/shop/checkout/$sessionIdSlug/complete',
-    path: '/shop/checkout/$sessionIdSlug/complete',
+const LayoutPoliciesTosIndexRoute = LayoutPoliciesTosIndexRouteImport.update({
+  id: '/policies/tos/',
+  path: '/policies/tos/',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutShopProductProductSlugRoute =
+  LayoutShopProductProductSlugRouteImport.update({
+    id: '/shop/product/$productSlug',
+    path: '/shop/product/$productSlug',
+    getParentRoute: () => LayoutRoute,
+  } as any)
+const LayoutShopSavedIndexRoute = LayoutShopSavedIndexRouteImport.update({
+  id: '/shop/saved/',
+  path: '/shop/saved/',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const ShopCheckoutSessionIdSlugIndexRoute =
+  ShopCheckoutSessionIdSlugIndexRouteImport.update({
+    id: '/shop/checkout/$sessionIdSlug/',
+    path: '/shop/checkout/$sessionIdSlug/',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ShopCheckoutSessionIdSlugCanceledRoute =
@@ -167,28 +150,40 @@ const ShopCheckoutSessionIdSlugCanceledRoute =
     path: '/shop/checkout/$sessionIdSlug/canceled',
     getParentRoute: () => rootRouteImport,
   } as any)
-const LayoutShopProductProductSlugRoute =
-  LayoutShopProductProductSlugRouteImport.update({
-    id: '/shop/product/$productSlug',
-    path: '/shop/product/$productSlug',
-    getParentRoute: () => LayoutRoute,
+const ShopCheckoutSessionIdSlugCompleteRoute =
+  ShopCheckoutSessionIdSlugCompleteRouteImport.update({
+    id: '/shop/checkout/$sessionIdSlug/complete',
+    path: '/shop/checkout/$sessionIdSlug/complete',
+    getParentRoute: () => rootRouteImport,
   } as any)
-const ShopReceiptSTokenIndexRoute = ShopReceiptSTokenIndexRouteImport.update({
-  id: '/shop/receipt/s/$token/',
-  path: '/shop/receipt/s/$token/',
+const ShopCheckoutSessionIdSlugIncompleteRoute =
+  ShopCheckoutSessionIdSlugIncompleteRouteImport.update({
+    id: '/shop/checkout/$sessionIdSlug/incomplete',
+    path: '/shop/checkout/$sessionIdSlug/incomplete',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ShopCheckoutCompleteIndexRoute =
+  ShopCheckoutCompleteIndexRouteImport.update({
+    id: '/shop/checkout/complete/',
+    path: '/shop/checkout/complete/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ShopCheckoutVerifyIndexRoute = ShopCheckoutVerifyIndexRouteImport.update({
+  id: '/shop/checkout/verify/',
+  path: '/shop/checkout/verify/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LayoutShopLayoutShopCategorySlugIndexRoute =
-  LayoutShopLayoutShopCategorySlugIndexRouteImport.update({
-    id: '/shop/$categorySlug/',
-    path: '/shop/$categorySlug/',
-    getParentRoute: () => LayoutShopLayoutRoute,
-  } as any)
 const LayoutOrdersLayoutShopOrdersIndexRoute =
   LayoutOrdersLayoutShopOrdersIndexRouteImport.update({
     id: '/shop/orders/',
     path: '/shop/orders/',
     getParentRoute: () => LayoutOrdersLayoutRoute,
+  } as any)
+const LayoutShopLayoutShopCategorySlugIndexRoute =
+  LayoutShopLayoutShopCategorySlugIndexRouteImport.update({
+    id: '/shop/$categorySlug/',
+    path: '/shop/$categorySlug/',
+    getParentRoute: () => LayoutShopLayoutRoute,
   } as any)
 const LayoutShopLayoutShopCategorySlugSubcategorySlugRoute =
   LayoutShopLayoutShopCategorySlugSubcategorySlugRouteImport.update({
@@ -196,6 +191,11 @@ const LayoutShopLayoutShopCategorySlugSubcategorySlugRoute =
     path: '/shop/$categorySlug/$subcategorySlug',
     getParentRoute: () => LayoutShopLayoutRoute,
   } as any)
+const ShopReceiptSTokenIndexRoute = ShopReceiptSTokenIndexRouteImport.update({
+  id: '/shop/receipt/s/$token/',
+  path: '/shop/receipt/s/$token/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LayoutOrdersLayoutShopOrdersOrderIdIndexRoute =
   LayoutOrdersLayoutShopOrdersOrderIdIndexRouteImport.update({
     id: '/shop/orders/$orderId/',
@@ -432,18 +432,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/signup': {
-      id: '/signup'
-      path: '/signup'
-      fullPath: '/signup'
-      preLoaderRoute: typeof SignupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_layout': {
@@ -453,32 +446,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_layout/_ordersLayout': {
+      id: '/_layout/_ordersLayout'
+      path: ''
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth/verify': {
-      id: '/auth/verify'
-      path: '/auth/verify'
-      fullPath: '/auth/verify'
-      preLoaderRoute: typeof AuthVerifyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_layout/contact-us': {
-      id: '/_layout/contact-us'
-      path: '/contact-us'
-      fullPath: '/contact-us'
-      preLoaderRoute: typeof LayoutContactUsRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/account': {
-      id: '/_layout/account'
-      path: '/account'
-      fullPath: '/account'
-      preLoaderRoute: typeof LayoutAccountRouteImport
+      preLoaderRoute: typeof LayoutOrdersLayoutRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/_shopLayout': {
@@ -488,25 +474,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutShopLayoutRouteImport
       parentRoute: typeof LayoutRoute
     }
-    '/_layout/_ordersLayout': {
-      id: '/_layout/_ordersLayout'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof LayoutOrdersLayoutRouteImport
+    '/_layout/account': {
+      id: '/_layout/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof LayoutAccountRouteImport
       parentRoute: typeof LayoutRoute
     }
-    '/shop/checkout/': {
-      id: '/shop/checkout/'
-      path: '/shop/checkout'
-      fullPath: '/shop/checkout/'
-      preLoaderRoute: typeof ShopCheckoutIndexRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_layout/contact-us': {
+      id: '/_layout/contact-us'
+      path: '/contact-us'
+      fullPath: '/contact-us'
+      preLoaderRoute: typeof LayoutContactUsRouteImport
+      parentRoute: typeof LayoutRoute
     }
-    '/shop/bag/': {
-      id: '/shop/bag/'
-      path: '/shop/bag'
-      fullPath: '/shop/bag/'
-      preLoaderRoute: typeof ShopBagIndexRouteImport
+    '/auth/verify': {
+      id: '/auth/verify'
+      path: '/auth/verify'
+      fullPath: '/auth/verify'
+      preLoaderRoute: typeof AuthVerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_layout/rewards/': {
@@ -516,11 +502,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutRewardsIndexRouteImport
       parentRoute: typeof LayoutRoute
     }
-    '/shop/checkout/pod-confirmation': {
-      id: '/shop/checkout/pod-confirmation'
-      path: '/shop/checkout/pod-confirmation'
-      fullPath: '/shop/checkout/pod-confirmation'
-      preLoaderRoute: typeof ShopCheckoutPodConfirmationRouteImport
+    '/shop/bag/': {
+      id: '/shop/bag/'
+      path: '/shop/bag'
+      fullPath: '/shop/bag/'
+      preLoaderRoute: typeof ShopBagIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shop/checkout/': {
+      id: '/shop/checkout/'
+      path: '/shop/checkout'
+      fullPath: '/shop/checkout/'
+      preLoaderRoute: typeof ShopCheckoutIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/shop/checkout/pending': {
@@ -530,39 +523,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShopCheckoutPendingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/shop/checkout/verify/': {
-      id: '/shop/checkout/verify/'
-      path: '/shop/checkout/verify'
-      fullPath: '/shop/checkout/verify/'
-      preLoaderRoute: typeof ShopCheckoutVerifyIndexRouteImport
+    '/shop/checkout/pod-confirmation': {
+      id: '/shop/checkout/pod-confirmation'
+      path: '/shop/checkout/pod-confirmation'
+      fullPath: '/shop/checkout/pod-confirmation'
+      preLoaderRoute: typeof ShopCheckoutPodConfirmationRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/shop/checkout/complete/': {
-      id: '/shop/checkout/complete/'
-      path: '/shop/checkout/complete'
-      fullPath: '/shop/checkout/complete/'
-      preLoaderRoute: typeof ShopCheckoutCompleteIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/shop/checkout/$sessionIdSlug/': {
-      id: '/shop/checkout/$sessionIdSlug/'
-      path: '/shop/checkout/$sessionIdSlug'
-      fullPath: '/shop/checkout/$sessionIdSlug/'
-      preLoaderRoute: typeof ShopCheckoutSessionIdSlugIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_layout/shop/saved/': {
-      id: '/_layout/shop/saved/'
-      path: '/shop/saved'
-      fullPath: '/shop/saved/'
-      preLoaderRoute: typeof LayoutShopSavedIndexRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/policies/tos/': {
-      id: '/_layout/policies/tos/'
-      path: '/policies/tos'
-      fullPath: '/policies/tos/'
-      preLoaderRoute: typeof LayoutPoliciesTosIndexRouteImport
+    '/_layout/policies/delivery-returns-exchanges/': {
+      id: '/_layout/policies/delivery-returns-exchanges/'
+      path: '/policies/delivery-returns-exchanges'
+      fullPath: '/policies/delivery-returns-exchanges/'
+      preLoaderRoute: typeof LayoutPoliciesDeliveryReturnsExchangesIndexRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/policies/privacy/': {
@@ -572,25 +544,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutPoliciesPrivacyIndexRouteImport
       parentRoute: typeof LayoutRoute
     }
-    '/_layout/policies/delivery-returns-exchanges/': {
-      id: '/_layout/policies/delivery-returns-exchanges/'
-      path: '/policies/delivery-returns-exchanges'
-      fullPath: '/policies/delivery-returns-exchanges/'
-      preLoaderRoute: typeof LayoutPoliciesDeliveryReturnsExchangesIndexRouteImport
+    '/_layout/policies/tos/': {
+      id: '/_layout/policies/tos/'
+      path: '/policies/tos'
+      fullPath: '/policies/tos/'
+      preLoaderRoute: typeof LayoutPoliciesTosIndexRouteImport
       parentRoute: typeof LayoutRoute
     }
-    '/shop/checkout/$sessionIdSlug/incomplete': {
-      id: '/shop/checkout/$sessionIdSlug/incomplete'
-      path: '/shop/checkout/$sessionIdSlug/incomplete'
-      fullPath: '/shop/checkout/$sessionIdSlug/incomplete'
-      preLoaderRoute: typeof ShopCheckoutSessionIdSlugIncompleteRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_layout/shop/product/$productSlug': {
+      id: '/_layout/shop/product/$productSlug'
+      path: '/shop/product/$productSlug'
+      fullPath: '/shop/product/$productSlug'
+      preLoaderRoute: typeof LayoutShopProductProductSlugRouteImport
+      parentRoute: typeof LayoutRoute
     }
-    '/shop/checkout/$sessionIdSlug/complete': {
-      id: '/shop/checkout/$sessionIdSlug/complete'
-      path: '/shop/checkout/$sessionIdSlug/complete'
-      fullPath: '/shop/checkout/$sessionIdSlug/complete'
-      preLoaderRoute: typeof ShopCheckoutSessionIdSlugCompleteRouteImport
+    '/_layout/shop/saved/': {
+      id: '/_layout/shop/saved/'
+      path: '/shop/saved'
+      fullPath: '/shop/saved/'
+      preLoaderRoute: typeof LayoutShopSavedIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/shop/checkout/$sessionIdSlug/': {
+      id: '/shop/checkout/$sessionIdSlug/'
+      path: '/shop/checkout/$sessionIdSlug'
+      fullPath: '/shop/checkout/$sessionIdSlug/'
+      preLoaderRoute: typeof ShopCheckoutSessionIdSlugIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/shop/checkout/$sessionIdSlug/canceled': {
@@ -600,26 +579,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShopCheckoutSessionIdSlugCanceledRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_layout/shop/product/$productSlug': {
-      id: '/_layout/shop/product/$productSlug'
-      path: '/shop/product/$productSlug'
-      fullPath: '/shop/product/$productSlug'
-      preLoaderRoute: typeof LayoutShopProductProductSlugRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/shop/receipt/s/$token/': {
-      id: '/shop/receipt/s/$token/'
-      path: '/shop/receipt/s/$token'
-      fullPath: '/shop/receipt/s/$token/'
-      preLoaderRoute: typeof ShopReceiptSTokenIndexRouteImport
+    '/shop/checkout/$sessionIdSlug/complete': {
+      id: '/shop/checkout/$sessionIdSlug/complete'
+      path: '/shop/checkout/$sessionIdSlug/complete'
+      fullPath: '/shop/checkout/$sessionIdSlug/complete'
+      preLoaderRoute: typeof ShopCheckoutSessionIdSlugCompleteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_layout/_shopLayout/shop/$categorySlug/': {
-      id: '/_layout/_shopLayout/shop/$categorySlug/'
-      path: '/shop/$categorySlug'
-      fullPath: '/shop/$categorySlug/'
-      preLoaderRoute: typeof LayoutShopLayoutShopCategorySlugIndexRouteImport
-      parentRoute: typeof LayoutShopLayoutRoute
+    '/shop/checkout/$sessionIdSlug/incomplete': {
+      id: '/shop/checkout/$sessionIdSlug/incomplete'
+      path: '/shop/checkout/$sessionIdSlug/incomplete'
+      fullPath: '/shop/checkout/$sessionIdSlug/incomplete'
+      preLoaderRoute: typeof ShopCheckoutSessionIdSlugIncompleteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shop/checkout/complete/': {
+      id: '/shop/checkout/complete/'
+      path: '/shop/checkout/complete'
+      fullPath: '/shop/checkout/complete/'
+      preLoaderRoute: typeof ShopCheckoutCompleteIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shop/checkout/verify/': {
+      id: '/shop/checkout/verify/'
+      path: '/shop/checkout/verify'
+      fullPath: '/shop/checkout/verify/'
+      preLoaderRoute: typeof ShopCheckoutVerifyIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_layout/_ordersLayout/shop/orders/': {
       id: '/_layout/_ordersLayout/shop/orders/'
@@ -628,12 +614,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutOrdersLayoutShopOrdersIndexRouteImport
       parentRoute: typeof LayoutOrdersLayoutRoute
     }
+    '/_layout/_shopLayout/shop/$categorySlug/': {
+      id: '/_layout/_shopLayout/shop/$categorySlug/'
+      path: '/shop/$categorySlug'
+      fullPath: '/shop/$categorySlug/'
+      preLoaderRoute: typeof LayoutShopLayoutShopCategorySlugIndexRouteImport
+      parentRoute: typeof LayoutShopLayoutRoute
+    }
     '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug': {
       id: '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug'
       path: '/shop/$categorySlug/$subcategorySlug'
       fullPath: '/shop/$categorySlug/$subcategorySlug'
       preLoaderRoute: typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRouteImport
       parentRoute: typeof LayoutShopLayoutRoute
+    }
+    '/shop/receipt/s/$token/': {
+      id: '/shop/receipt/s/$token/'
+      path: '/shop/receipt/s/$token'
+      fullPath: '/shop/receipt/s/$token/'
+      preLoaderRoute: typeof ShopReceiptSTokenIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_layout/_ordersLayout/shop/orders/$orderId/': {
       id: '/_layout/_ordersLayout/shop/orders/$orderId/'
