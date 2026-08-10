@@ -1,6 +1,7 @@
 import { render } from "@react-email/components";
+import { v } from "convex/values";
 import { internal } from "../_generated/api";
-import type { ActionCtx } from "../_generated/server";
+import { internalAction, type ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { joinKeyComponents } from "./deliveryPolicy";
 import {
@@ -298,3 +299,37 @@ export function getNotificationKind(kind: string): NotificationKindDefinition {
 export function listNotificationKinds(): string[] {
   return Object.keys(NOTIFICATION_KINDS);
 }
+
+/**
+ * Explicit, side-effect-free preview for an accepted weekly correction.
+ * This intentionally bypasses notification intents and delivery state.
+ */
+export const weeklyReportCorrectionPreview = internalAction({
+  args: {
+    acceptedWeekId: v.id("reportWeekAccepted"),
+    candidateFingerprint: v.string(),
+  },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<(PreparedNotificationEmail & { contentDigest: string }) | null> => {
+    const report = await ctx.runQuery(
+      internal.operations.weeklyManagerReportEmail
+        .getCorrectedWeeklyManagerReportPayload,
+      args,
+    );
+    if (!report) return null;
+
+    const subject = `${report.storeName} corrected weekly report preview - ${report.operatingDate}`;
+    const html = await render(WeeklyManagerReport(report));
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(`${subject}\n${html}`),
+    );
+    const contentDigest = Array.from(new Uint8Array(digest))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+
+    return { subject, html, contentDigest };
+  },
+});

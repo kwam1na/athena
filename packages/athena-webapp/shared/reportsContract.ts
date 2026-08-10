@@ -455,6 +455,91 @@ export type ReportWeekVariancePosture = {
   outsideScheduleCoveredDayCount: number | null;
 };
 
+export type ReportWeekCloseEvidenceCoverage = {
+  scheduledDayCount: number;
+  status: "complete" | "partial" | "unavailable";
+  usableDayCount: number;
+};
+
+export type ReportWeekExpenseProduct = {
+  productName: string;
+  productSku: string;
+  productSkuId: string;
+  quantity: number;
+  spendMinor: number;
+};
+
+export type ReportWeekExpenseRemainder = {
+  productCount: number;
+  quantity: number;
+  spendMinor: number;
+};
+
+/** Frozen close-backed evidence shared by Reports and manager email. */
+export type ReportWeekCloseEvidence = {
+  cash: {
+    cashVarianceMinor: number;
+    coverage: ReportWeekCloseEvidenceCoverage;
+  };
+  /** Completed POS transactions frozen from Daily Close snapshots. */
+  transactions?: {
+    coverage: ReportWeekCloseEvidenceCoverage;
+    transactionCount: number;
+  };
+  payments: {
+    coveredTenderValueMinor: number;
+    coverage: ReportWeekCloseEvidenceCoverage;
+    rows: Array<{
+      amountMinor: number;
+      method: string;
+      shareBasisPoints: number;
+      tenderUseCount: number;
+    }>;
+  };
+  expenses: {
+    byQuantity: ReportWeekExpenseProduct[];
+    bySpend: ReportWeekExpenseProduct[];
+    coveredQuantity: number;
+    coveredSpendMinor: number;
+    coverage: ReportWeekCloseEvidenceCoverage;
+    quantityRemainder: ReportWeekExpenseRemainder | null;
+    spendRemainder: ReportWeekExpenseRemainder | null;
+  };
+};
+
+/** One set-once correction beside, never over, an accepted baseline. */
+export type ReportWeekAcceptedCorrection = {
+  contractVersion: 1;
+  appliedAt: number;
+  candidateFingerprint: string;
+  sourceManifestFingerprint: string;
+  scheduleLineage: ReportWeekLineage[];
+  closeEvidence: ReportWeekCloseEvidence;
+  /**
+   * Frozen top-sales identity reconstructed for a legacy baseline whose
+   * leaders predate acceptance-time freezing. Absent when the baseline had no
+   * leaders at all — the corrected report then legitimately has no section.
+   */
+  topSkuLeaders?: ReportWeekTopSkuLeader[];
+};
+
+/**
+ * The correction as clients read it: applied metadata only. Fingerprints and
+ * repair internals are server-side; the corrected evidence itself is already
+ * resolved into the projection's `closeEvidence`/`scheduleLineage`.
+ */
+export type ReportWeekAcceptedCorrectionProjection = {
+  appliedAt: number;
+};
+
+/** A sales leader whose display identity was frozen at acceptance. */
+export type ReportWeekTopSkuLeader = {
+  productName: string;
+  productSku: string;
+  productSkuId: string;
+  unitsSold: number;
+};
+
 export type ReportWeekComparabilityReason =
   | "comparable"
   | "missing_schedule"
@@ -539,6 +624,8 @@ type ReportWeekProjectionBase = {
   amendment?: ReportWeekAmendment;
   priorPeriod?: ReportWeekPriorPeriod;
   variancePosture?: ReportWeekVariancePosture;
+  /** Optional only for projections materialized before this evidence landed. */
+  closeEvidence?: ReportWeekCloseEvidence;
   ownerRoutes: ReportWeekOwnerRoutes;
 };
 
@@ -556,6 +643,9 @@ export type ReportWeekAcceptedProjection = ReportWeekProjectionBase & {
   acceptedAt: number;
   cutoffObservedAt: number;
   closeId: string;
+  correction?: ReportWeekAcceptedCorrectionProjection;
+  /** Omitted when a legacy baseline lacks frozen display identity. */
+  topSkuLeaders?: ReportWeekTopSkuLeader[];
   current?: {
     included: ReportWeekMetrics;
     summary: ReportWeekSummary;

@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Weekly close evidence and counted-cash variance</title>
+  </head>
+  <body>
+    <article
+      data-athena-landed-change-report="v2"
+      data-athena-report-diff-fingerprint="585867effd2927ae79e68b6d316fa1389c87d911378f21ed3773bbff0048b215"
+    >
+      <header data-report-section="header">
+        <h1>Weekly close evidence and counted-cash variance</h1>
+        <ul data-report-pills>
+          <li>Delivery candidate</li>
+          <li>Branch codex/V26-1183-weekly-close-cash-variance</li>
+          <li>456 tests green</li>
+          <li>Typecheck clean</li>
+        </ul>
+        <dl data-report-meta>
+          <dt>Issue</dt>
+          <dd>V26-1183</dd>
+          <dt>Plan</dt>
+          <dd>docs/plans/2026-08-09-001-feat-weekly-payment-expense-evidence-plan.md</dd>
+          <dt>Status</dt>
+          <dd>Delivery candidate — merge, deploy, and sealed repair pending</dd>
+          <dt>Surfaces</dt>
+          <dd>Convex reports pipeline, Reports weekly view, weekly manager email</dd>
+        </dl>
+      </header>
+
+      <section data-report-section="summary">
+        <h2>Executive summary</h2>
+        <p>
+          The first weekly manager report Athena ever produced for a real store
+          asserted two things it had no evidence for: that none of the week's
+          scheduled days were closed, when in fact every one of them was, and
+          that closing cash matched, when several days carried real counted-cash
+          differences. Both statements were confidently rendered, and the report
+          had already been accepted and emailed.
+        </p>
+        <p>
+          This delivery fixes the cause rather than the symptom. Weekly reports
+          now take each fact from the evidence lane that can actually observe it,
+          carry an explicit vocabulary for "we do not know" so absence can never
+          print as zero, and expose counted-cash variance as its own named signal
+          beside the pre-existing sales reconciliation rather than in place of it.
+          It also adds payment-mix and expense-product evidence to the weekly
+          projection, and a sealed, fail-closed repair that can correct the one
+          already-accepted week without rewriting its immutable baseline.
+        </p>
+      </section>
+
+      <section data-report-section="problem">
+        <h2>What went wrong</h2>
+        <p>
+          A weekly report is assembled from a seven-date schedule frame. When a
+          week is accepted, the system freezes a baseline — a permanent record of
+          what was true at acceptance time. That baseline included a field saying,
+          for each scheduled date, whether the day had been closed.
+        </p>
+        <p>
+          The problem was where that field came from. The accepted baseline was
+          built by folding <em>report facts</em> — the stream that carries sales
+          totals. Report facts know nothing about Daily Close records, so the fold
+          had no way to observe close state. It did not report "unknown"; it
+          reported <code>false</code> for every day. A fully closed week therefore
+          froze as a week in which nothing had been closed.
+        </p>
+        <p>
+          The second defect was a naming collision with real consequences. The
+          weekly report already had a metric called variance, but it measured
+          something specific: the reconciliation between folded sales and the net
+          sales figure on the close. A manager reading "variance" in a report
+          about closing a store reasonably understands it as counted cash — the
+          money in the drawer against the money expected. Those are different
+          numbers from different lanes, and the report only had the first one
+          while implying it was the second.
+        </p>
+        <p>
+          Both failures share a shape worth remembering: the arithmetic was
+          correct throughout. Every number was computed accurately from the inputs
+          it was handed. What was wrong was <strong>authority</strong> — a
+          projection built from one evidence lane was allowed to speak for a fact
+          that lives in a different lane.
+        </p>
+      </section>
+
+      <section data-report-section="mental-model">
+        <h2>How to think about it</h2>
+        <h3>Four words used throughout</h3>
+        <dl>
+          <dt>Frame</dt>
+          <dd>
+            The seven dates a weekly report covers, resolved from the store's
+            schedule. Some are scheduled operating days ("included"); the rest are
+            not.
+          </dd>
+          <dt>Fold</dt>
+          <dd>
+            The act of collapsing many source rows into one weekly shape. Which
+            rows you fold determines what the result can honestly claim.
+          </dd>
+          <dt>Lane</dt>
+          <dd>
+            One independent stream of evidence — counted cash, payment mix,
+            expense products, transaction counts. Each is sourced, validated, and
+            covered separately, so one lane going dark leaves the others intact.
+          </dd>
+          <dt>Coverage</dt>
+          <dd>
+            How many of the frame's scheduled days a lane actually has evidence
+            for, expressed as <code>complete</code>, <code>partial</code>, or
+            <code>unavailable</code> plus the counts behind it.
+          </dd>
+        </dl>
+        <p>
+          Picture the week's report as a page assembled by several reporters, each
+          allowed to file only on their own beat.
+        </p>
+        <ul>
+          <li>
+            The <strong>sales reporter</strong> reads the fact stream. It can tell
+            you what was sold and for how much. It cannot tell you whether anyone
+            closed the till, because it never visits the till.
+          </li>
+          <li>
+            The <strong>close reporter</strong> reads Daily Close snapshots. It
+            can tell you which days were certified, what the counted cash came to,
+            how customers paid, and what was consumed as expenses.
+          </li>
+        </ul>
+        <p>
+          The old system let the sales reporter file the close reporter's story.
+          Worse, the newsroom had no way to print "not reported yet" — a blank
+          filed as a zero, and a zero reads to a manager as "nothing happened",
+          which is a claim, not an absence.
+        </p>
+        <p>
+          The fix gives each beat its own byline and gives the newsroom a way to
+          say it does not know. Every close-backed section now carries its own
+          coverage, along with how many of the scheduled days it actually covers.
+          A certified zero — a day that genuinely counted zero variance — is
+          covered. A legacy day that never recorded the field at all is not. Those
+          two situations produce the same number and must never produce the same
+          statement.
+        </p>
+        <p>
+          One detail worth holding precisely, because the metaphor smooths it
+          over: the lineage fix does not make acceptance go and read Daily Close
+          records. Each report day row already carries a close-variance field that
+          is set only when a close exists, and <code>dayClosed</code> is derived
+          from whether that field is present. The old fold synthesised its day
+          rows from sales facts, so the field was never set and the derivation
+          always produced <code>false</code>. Acceptance now folds the real stored
+          day rows instead, where the field is genuinely present or genuinely
+          absent. The evidence lanes are the part that reads Daily Close snapshots
+          directly.
+        </p>
+      </section>
+
+      <section data-report-section="before-after">
+        <h2>Before and after</h2>
+        <h3>Before</h3>
+        <ul>
+          <li>
+            Accepted baseline froze <code>scheduleLineage</code> from a fact-only
+            fold, so <code>dayClosed</code> was <code>false</code> for every day
+            regardless of reality.
+          </li>
+          <li>
+            One variance metric — the sales-to-close reconciliation — carried a
+            name managers read as counted cash. Counted-cash evidence was not
+            surfaced at all.
+          </li>
+          <li>
+            Payment composition and expense-product detail existed on Daily Close
+            records but never reached the weekly projection.
+          </li>
+          <li>
+            Accepted top-sellers stored only SKU identifiers, with product names
+            hydrated from the live catalog at render time — so a later rename
+            silently rewrote history.
+          </li>
+          <li>
+            Nothing could correct an accepted week. The row was immutable and the
+            only alternatives were to rewrite history or leave it wrong.
+          </li>
+        </ul>
+        <h3>After</h3>
+        <ul>
+          <li>
+            Acceptance freezes lineage from the resolved report-day fold, which
+            carries real close lineage. The fact fold still owns financial totals —
+            what it can legitimately know.
+          </li>
+          <li>
+            A shared aggregator reads frozen Daily Close snapshots and produces
+            counted-cash, payment-mix, and expense-product evidence. The
+            sales-fold variance keeps its name, its semantics, and its independent
+            place in the report.
+          </li>
+          <li>
+            Every lane carries independent coverage counts, and renderers gate on
+            coverage so partial weeks disclose their denominator instead of
+            reading as full-week totals.
+          </li>
+          <li>
+            Display identity for products is frozen into the snapshot at
+            acceptance; accepted rendering performs no catalog reads.
+          </li>
+          <li>
+            A set-once <code>correction</code> projection can carry corrected
+            lineage, evidence, and frozen top-seller identity beside an untouched
+            baseline. Reads resolve correction-over-baseline; the automatic email
+            path is structurally baseline-only.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="key-files">
+        <h2>Key files</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Why it matters</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>packages/athena-webapp/convex/reports/weeklyCloseEvidence.ts</code></td>
+              <td>
+                New shared aggregator. Pure function over the schedule frame and
+                at most one Daily Close per date; produces four independently
+                covered lanes — counted cash, transaction counts, payment mix, and
+                expense products — with deterministic ordering and integer
+                basis-point shares. Both expense rankings are capped at five rows
+                with a remainder row reconciling everything below the cut. The
+                single source every surface formats from.
+              </td>
+            </tr>
+            <tr>
+              <td><code>packages/athena-webapp/convex/reports/weekly.ts</code></td>
+              <td>
+                Weekly lifecycle. Acceptance now freezes lineage from the day-doc
+                fold instead of the fact-only fold — the core defect fix — and
+                persists the evidence contract on both live and accepted rows.
+              </td>
+            </tr>
+            <tr>
+              <td><code>packages/athena-webapp/convex/reports/weeklyAcceptedRepair.ts</code></td>
+              <td>
+                Sealed, internal-only correction for the one already-accepted
+                week. Fixed target, census and fingerprint verified, dry-run and
+                apply share one reader, set-once, and fail-closed on any drift.
+              </td>
+            </tr>
+            <tr>
+              <td><code>packages/athena-webapp/convex/operations/dailyClose.ts</code></td>
+              <td>
+                Certifies expense-product evidence into the close snapshot with
+                bounded reads, checked arithmetic, and exact reconciliation to the
+                frozen expense total. Evidence failure marks the lane unavailable
+                without blocking the close.
+              </td>
+            </tr>
+            <tr>
+              <td><code>packages/athena-webapp/convex/reports/queries.ts</code></td>
+              <td>
+                Projection-only public reads. Resolves correction-over-baseline
+                for accepted history, never for live truth, and exposes only
+                applied metadata rather than repair internals.
+              </td>
+            </tr>
+            <tr>
+              <td><code>packages/athena-webapp/convex/operations/weeklyManagerReportEmail.ts</code></td>
+              <td>
+                Two builders, with a wall that runs one way: the automatic path
+                reads only baseline fields and has no route to a correction, while
+                the preview path overlays a fingerprint-matched correction on top
+                of the baseline it corrects. One-directional is the property that
+                matters — a correction can never leak into an automatic send.
+              </td>
+            </tr>
+            <tr>
+              <td><code>packages/athena-webapp/src/components/reports/ReportsWeeklyView.tsx</code></td>
+              <td>
+                Renders both variance facts under distinct labels, value-first
+                payment mix with covered subtotals, and expense rankings with
+                reconciling remainder rows. It formats server-computed basis
+                points rather than deriving its own shares or variances.
+              </td>
+            </tr>
+            <tr>
+              <td><code>packages/athena-webapp/convex/reports/verify.ts</code></td>
+              <td>
+                New verifier lane that audits persisted evidence without adding
+                reads: coverage counts must agree with the status restating them,
+                payment rows must sum to the covered tender value, unavailable
+                lanes must not carry values, and the flattened
+                <code>cashVariancePosture</code> must agree with the nested
+                <code>closeEvidence.cash</code> it restates. Rows predating the
+                fields pass vacuously.
+              </td>
+            </tr>
+            <tr>
+              <td><code>packages/athena-webapp/convex/schemas/reports/derived.ts</code></td>
+              <td>
+                All new projection fields are optional, keeping rows written
+                before this change contract-safe for existing clients.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="changes">
+        <h2>What changed, and what deliberately did not</h2>
+        <h3>Changed</h3>
+        <ul>
+          <li>
+            Accepted lineage is taken from close-bearing day documents, so a fully
+            closed week now states that it was fully closed.
+          </li>
+          <li>
+            Counted-cash variance is surfaced as its own named signal with covered
+            day counts, on both the report and the email.
+          </li>
+          <li>
+            Payment mix reaches the weekly projection as value share in integer
+            basis points with tender-use counts, and expense products reach it as
+            two independently ordered rankings with reconciling remainders.
+          </li>
+          <li>
+            Coverage is modelled per lane, and partial sections disclose their
+            denominator wherever a subtotal is shown.
+          </li>
+          <li>
+            Product display identity is frozen at acceptance and reconstructed by
+            the sealed repair for the legacy week.
+          </li>
+        </ul>
+        <h3>Deliberately unchanged</h3>
+        <ul>
+          <li>
+            <strong>The accepted baseline is never rewritten.</strong> Refresh
+            paths touch only lifecycle and amendment projections. A correction is
+            a sibling field, not an overwrite, and the original fingerprint,
+            timestamps, and metrics survive intact.
+          </li>
+          <li>
+            <strong>Sales-to-close reconciliation keeps its meaning.</strong> It
+            was not renamed into cash variance; it now sits beside it.
+          </li>
+          <li>
+            <strong>No corrected email is sent.</strong> The automatic path cannot
+            read a correction even on a delayed retry. Correcting what a manager
+            already received is a separate, explicit decision.
+          </li>
+          <li>
+            Daily email behaviour, schedule membership, payment allocation
+            semantics, and public read boundaries are untouched.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="mechanics">
+        <h2>How evidence travels</h2>
+        <p>
+          The chain has three hops, and each one is allowed to refuse
+          independently.
+        </p>
+        <ol>
+          <li>
+            <strong>Certification.</strong> When a day's Daily Close completes, it
+            freezes an expense-product snapshot into the close record: per-SKU
+            quantity and spend, with product name and SKU label frozen alongside.
+            The reads are bounded and the totals must reconcile exactly to the
+            close's own expense total, or the snapshot records the lane as
+            unavailable instead.
+          </li>
+          <li>
+            <strong>Aggregation.</strong> The weekly aggregator loads at most one
+            close per scheduled date and <em>re-validates</em> what it finds
+            rather than trusting it. A day whose evidence fails validation is
+            dropped from that lane entirely — it is not partially consumed — which
+            is why coverage counts can differ between lanes in the same week.
+          </li>
+          <li>
+            <strong>Presentation.</strong> Reports and the email format the
+            aggregated result and nothing else. Where they must say the same
+            thing, they share the exact string: the "not available" sentence is a
+            single constant deliberately kept byte-identical across both surfaces,
+            because two hand-written variants is precisely how the surfaces drift.
+          </li>
+        </ol>
+        <p>
+          This chain also explains why the one already-accepted week needs a
+          <em>reconstruction</em> rather than a re-read. Its closes were certified
+          before step one existed, so they carry no frozen product evidence at
+          all. Cash variance, payment totals, and expense totals were always
+          frozen and are simply read back — but the product composition has to be
+          rebuilt from the retained expense rows inside each close's own window,
+          then reconciled against that day's frozen expense total. The repair says
+          so explicitly in its own output rather than presenting reconstructed
+          history as if it had been recorded at the time.
+        </p>
+      </section>
+
+      <section data-report-section="failure-boundaries">
+        <h2>Failure boundaries</h2>
+        <p>
+          Every new lane fails closed and fails narrowly. The design rule is that
+          a lane may go dark without taking anything else with it.
+        </p>
+        <ul>
+          <li>
+            Expense-item reads exceeding their budget mark the product lane
+            unavailable and never freeze truncated product rows — the record keeps
+            how many items were seen, but no partial per-product totals — and the
+            Daily Close itself still certifies.
+          </li>
+          <li>
+            Invalid evidence — negative, fractional, non-finite, or unsafe values,
+            or a spend total that does not reconcile exactly to the frozen expense
+            total — refuses the lane rather than normalizing the numbers.
+          </li>
+          <li>
+            The sealed repair refuses on a wrong target, a non-unique lookup, a
+            census mismatch, a per-day expense total that disagrees with its
+            close, a probe overflow, an unresolvable product identity, or any
+            fingerprint drift between preview and apply.
+          </li>
+          <li>
+            A reopened day drops out of current coverage until a successor close
+            supplies fresh evidence; the accepted baseline stays byte-stable
+            throughout.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="validation">
+        <h2>Validation and review evidence</h2>
+        <p>
+          The change was reviewed before it was extended. Four parallel review
+          passes covered the weekly backend, the email and notification boundary,
+          Daily Close plus the Reports UI, and an independent test and typecheck
+          run. That review produced a defect list which was then closed by five
+          parallel fix agents with disjoint file ownership, followed by a sixth
+          pass for the top-seller identity gap found while tracing the production
+          backfill.
+        </p>
+        <p>Findings that mattered, and their resolution:</p>
+        <ul>
+          <li>
+            A circular action type and an incorrect context type cascaded into a
+            few hundred typecheck errors across otherwise untouched files. Both
+            root causes were fixed; the package now typechecks clean.
+          </li>
+          <li>
+            The Reports payment mix was computing share from tender-use counts in
+            the browser while the email used persisted value share, so the two
+            surfaces disagreed. The view now renders the persisted value share,
+            and the component tests that had pinned the wrong values were
+            rewritten.
+          </li>
+          <li>
+            The sealed repair reconciled only weekly totals, so a change that
+            moved spend between days while preserving the week could have passed.
+            A per-day seam against each frozen close total was added.
+          </li>
+          <li>
+            The correction did not carry top-seller identity, which would have
+            silently dropped a section the original email displayed. It now
+            reconstructs that identity and fails closed if any product cannot be
+            resolved.
+          </li>
+          <li>
+            A review pass over the draft of this report caught the sharpest one
+            last: the sales-fold card's zero-case copy still read "Closing cash
+            matched across the week." That is the original conflation this work
+            exists to remove, and with the new lane in place it could have printed
+            directly beside a counted-cash card reporting a real difference —
+            worse than the state we started from. The copy now describes recorded
+            sales reconciling to the closes, with a regression test asserting the
+            sales lane never mentions cash.
+          </li>
+        </ul>
+        <h3>Current evidence</h3>
+        <ul>
+          <li>
+            456 tests passing across the fourteen changed-area suites:
+            <code>convex/emails/DailyManagerReport</code>,
+            <code>convex/emails/WeeklyManagerReport</code>,
+            <code>convex/notifications/registry</code>,
+            <code>convex/operations/dailyClose</code>,
+            <code>convex/operations/weeklyManagerReportEmail</code>, and
+            <code>convex/reports/</code>
+            <code>contract</code>, <code>queries</code>, <code>verify</code>,
+            <code>weekly</code>, <code>weeklyAcceptedRepair</code>,
+            <code>weeklyCloseEvidence</code>, <code>weeklyScale</code>,
+            <code>weeklyVerify</code>, plus
+            <code>src/components/reports/ReportsWeeklyView</code>.
+          </li>
+          <li>
+            The two new suites contribute 27 of those: ten aggregator cases and
+            seventeen sealed-repair cases.
+          </li>
+          <li>Package typecheck clean.</li>
+          <li>Changed-file lint gates passing, including the pagination and return-validator contract checks.</li>
+          <li>Harness audit and contract preflight passing under the delivery gate.</li>
+        </ul>
+        <h3>Deployment and root alignment</h3>
+        <p>
+          Pending at the time of writing. Merge, root fast-forward, Convex and web
+          deployment, and the sealed repair dry run and apply all follow this
+          report. The repair is deliberately the last step, and it stops at a
+          corrected report and email preview — no corrected email is sent.
+        </p>
+      </section>
+
+      <section data-report-section="guidance">
+        <h2>Operational guidance</h2>
+        <h3>Running the correction</h3>
+        <p>
+          Deploy first, then run the dry run, inspect it, then apply with the two
+          fingerprints it returns. The dry run writes nothing and is the real
+          verification step: it proves the day census, the per-day reconciliations,
+          and the notification state before anything is patched. Expect it to
+          refuse rather than proceed if source rows have drifted — that is the
+          feature, not a fault. The most likely first refusal is an unresolvable
+          product identity if a SKU has since been deleted or blanked.
+        </p>
+        <h3>Rules worth carrying forward</h3>
+        <ul>
+          <li>
+            If a field's name mentions a domain, confirm the fold populating it
+            actually reads that domain. If it cannot, it must not write the field.
+          </li>
+          <li>
+            Never let a formatter turn missing cross-lane evidence into zero.
+            Model coverage explicitly, and keep "certified zero" and "no evidence"
+            distinguishable all the way to the rendered sentence.
+          </li>
+          <li>
+            New projection fields need an explicit writer, a persisted-row test,
+            and a rollout path for rows written before the field existed.
+          </li>
+          <li>
+            Correcting immutable history means a sibling field plus a fail-closed,
+            dry-run-first, fingerprint-verified command — never an in-place
+            recompute.
+          </li>
+          <li>
+            When two surfaces must agree, give them one server-owned source and
+            let both merely format it. The drift here appeared the moment a
+            component was allowed to compute its own percentage.
+          </li>
+        </ul>
+        <h3>Delivery-gate notes</h3>
+        <ul>
+          <li>
+            The gate refuses to start while intended new files are untracked;
+            stage them first.
+          </li>
+          <li>
+            The gate regenerates harness index docs, and those participate in the
+            delivery fingerprint. Let it run, then compute the fingerprint, then
+            embed it in the report and solution note.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="quiz" data-quiz-pass-threshold="8">
+        <h2>Comprehension quiz</h2>
+        <p>Eight of ten to pass.</p>
+        <ol data-quiz>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why did the accepted weekly report claim that none of the week's
+              scheduled days were closed?
+            </p>
+            <ol data-quiz-options>
+              <li>The Daily Close records for that week had been deleted.</li>
+              <li data-quiz-correct>
+                The baseline froze schedule lineage from a fold over report facts,
+                which cannot observe close state, and it recorded that absence as
+                <code>false</code> rather than as unknown.
+              </li>
+              <li>The store's schedule listed the wrong operating days.</li>
+              <li>A timezone error shifted every close into the following week.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The fold was reading the sales-fact lane, which has no visibility
+              into Daily Close records. Lacking any way to express "unknown", it
+              emitted a definite negative.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              A week's counted-cash variance totals zero, but only four of six
+              scheduled days have cash evidence. What should the email say?
+            </p>
+            <ol data-quiz-options>
+              <li data-quiz-correct>
+                That counted cash matched across covered days, with the four-of-six
+                coverage disclosed alongside it.
+              </li>
+              <li>
+                That counted cash matched across the week, since the total is
+                genuinely zero.
+              </li>
+              <li>
+                Nothing — a partially covered lane is withheld until every day
+                reports.
+              </li>
+              <li>
+                That cash variance is unavailable, because coverage is incomplete.
+              </li>
+            </ol>
+            <p data-quiz-explanation>
+              The evidence supports a claim about the days it covers and no more.
+              Saying "across the week" would extend a real measurement over two
+              days it never saw, while withholding it entirely would discard
+              evidence that four days genuinely produced.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Under the coverage model, how is a day that certified exactly zero
+              cash variance treated compared with a legacy day that never recorded
+              the field?
+            </p>
+            <ol data-quiz-options>
+              <li>
+                Both count as covered, since either way the day contributes zero
+                to the weekly total.
+              </li>
+              <li>
+                Neither counts as covered, because neither day shows an actual
+                difference to report.
+              </li>
+              <li data-quiz-correct>
+                The certified zero is covered; the legacy absence is not.
+              </li>
+              <li>
+                The legacy day counts as covered as long as the rest of the week
+                is complete.
+              </li>
+            </ol>
+            <p data-quiz-explanation>
+              A measured zero is evidence. A missing field is not, and collapsing
+              the two is exactly how absence gets rendered as a confident claim.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              How does the design let an already-accepted week be corrected while
+              keeping accepted history immutable?
+            </p>
+            <ol data-quiz-options>
+              <li>
+                The accepted row is rewritten and the previous version is copied
+                into an archive table.
+              </li>
+              <li data-quiz-correct>
+                A set-once correction projection is stored beside the untouched
+                baseline, and reads resolve correction-over-baseline for accepted
+                history only.
+              </li>
+              <li>
+                The week is un-accepted, recomputed from current data, and
+                re-accepted.
+              </li>
+              <li>
+                A migration framework replays acceptance against a historical
+                snapshot.
+              </li>
+            </ol>
+            <p data-quiz-explanation>
+              The original values, timestamps, and fingerprint survive untouched.
+              The correction is an orthogonal sibling field following the existing
+              amendment pattern.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why can a pending or retried automatic weekly email never send
+              corrected content?
+            </p>
+            <ol data-quiz-options>
+              <li>Corrections are applied only after all pending intents drain.</li>
+              <li>The email payload is fully rendered and stored when the intent is created.</li>
+              <li data-quiz-correct>
+                Its preparation runs through a builder that reads only baseline
+                fields and never consults the correction, so the correction is
+                unreachable from that path.
+              </li>
+              <li>A feature flag disables corrected content in production.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The separation is structural rather than procedural: the automatic
+              builder has no path to the correction field at all.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What happens to a Daily Close when its expense-product evidence
+              overflows its read budget?
+            </p>
+            <ol data-quiz-options>
+              <li data-quiz-correct>
+                Only the product lane is marked unavailable, no truncated product
+                rows are frozen, and the close still certifies.
+              </li>
+              <li>The close is blocked until the expense reports are reduced.</li>
+              <li>The evidence is truncated to the budget and marked complete.</li>
+              <li>The close certifies and the missing items are backfilled later.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Lane-level failure is deliberately narrow. An evidence problem must
+              not block store operations, and a partial read must never be frozen
+              as if it were whole.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why does the sealed repair reconcile each day against its own close's
+              frozen expense total rather than only checking the weekly total?
+            </p>
+            <ol data-quiz-options>
+              <li>Weekly totals are stored as floating point and drift.</li>
+              <li data-quiz-correct>
+                A change that moved spend between days while preserving the weekly
+                sum would otherwise pass, producing per-day evidence that
+                contradicts each day's certified close.
+              </li>
+              <li>The weekly total is not available until after the repair runs.</li>
+              <li>Per-day checks are needed to keep the reads bounded.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Only the per-day seam catches a void-and-recreate that shifts spend
+              across dates. It was added after review found the weekly-only check
+              insufficient.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why did accepted top-seller identity have to be frozen into the
+              snapshot?
+            </p>
+            <ol data-quiz-options>
+              <li data-quiz-correct>
+                Because names hydrated from the live catalog at render time mean a
+                later product rename silently rewrites what a historical report
+                says.
+              </li>
+              <li>Because SKU identifiers are not stable across deployments.</li>
+              <li>Because product names are too long to resolve at send time.</li>
+              <li>To reduce the number of database reads in the weekly query.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Accepted reports are evidence. Anything they render from mutable
+              tables can change after the fact, which defeats the point of an
+              immutable baseline.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What caused the Reports page and the email to disagree about payment
+              shares before review caught it?
+            </p>
+            <ol data-quiz-options>
+              <li>The email rounded to whole percentages while the page used decimals.</li>
+              <li data-quiz-correct>
+                The page computed share from tender-use counts; the email used the
+                persisted value share.
+              </li>
+              <li>They read from different weekly rows.</li>
+              <li>The page cached a stale projection.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Once a renderer is allowed to do its own business arithmetic, the
+              single-source guarantee is gone. The fix has the component format the
+              persisted basis points instead.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why is the repair's dry run the real verification step rather than a
+              formality before applying?
+            </p>
+            <ol data-quiz-options>
+              <li>
+                It applies the correction to a shadow copy of the accepted row so
+                the result can be inspected before the real write.
+              </li>
+              <li>
+                It runs the merge gate's test suites against production data to
+                confirm the deployed code matches the branch.
+              </li>
+              <li>
+                It sends the corrected email to an internal address so the wording
+                can be reviewed before the manager sees it.
+              </li>
+              <li data-quiz-correct>
+                It writes nothing while proving the target and reconciliations, and
+                returns the fingerprints apply must match.
+              </li>
+            </ol>
+            <p data-quiz-explanation>
+              Apply re-derives the same candidate and refuses if either fingerprint
+              has moved, so anything the dry run did not prove cannot be silently
+              written afterwards.
+            </p>
+          </li>
+        </ol>
+      </section>
+
+      <section data-report-section="subagent-evidence">
+        <h2>Subagent evidence</h2>
+        <p>
+          This report was assembled from parallel read-only subagent work rather
+          than from the delivery conversation alone.
+        </p>
+        <dl>
+          <dt>Delivery-context researcher</dt>
+          <dd>
+            Read the origin brainstorm, the implementation plan, and the five
+            institutional learnings the plan cites. Contributed the problem
+            framing, the decision rationale behind orthogonal corrections and
+            per-lane coverage, the evidence-precedence rules, and the explicit
+            note that exact store financials stay out of public artifacts — which
+            is why this report is qualitative about the week's figures.
+          </dd>
+          <dt>Delivered-diff analyst</dt>
+          <dd>
+            Mapped the full working-tree diff against main: changed files,
+            architectural before and after, behaviour boundaries, coverage
+            semantics, the sealed repair's refusal paths, and the test surface.
+            Contributed the key-file table and the failure-boundary section.
+          </dd>
+          <dt>Four review subagents</dt>
+          <dd>
+            Independently reviewed the weekly backend, the email and notification
+            boundary, Daily Close with the Reports UI, and an isolated test and
+            typecheck run. They produced the defect list summarised under
+            validation, including the typecheck cascade, the payment-share drift,
+            and the missing per-day reconciliation seam.
+          </dd>
+          <dt>Six fix subagents</dt>
+          <dd>
+            Closed those findings under disjoint file ownership, five in parallel
+            and one follow-up for the top-seller identity gap discovered while
+            tracing the production backfill path.
+          </dd>
+        </dl>
+      </section>
+    </article>
+  </body>
+</html>

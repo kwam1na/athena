@@ -12,6 +12,7 @@ import {
   getNotificationKind,
   listNotificationKinds,
   type NotificationPayload,
+  weeklyReportCorrectionPreview,
 } from "./registry";
 
 const STORE_ID = "store-1" as Id<"store">;
@@ -139,6 +140,48 @@ describe("weekly manager report preparation", () => {
       "Wigclub weekly report - Aug 3–8, 2026",
     );
     expect(prepared?.html).toContain("Top items by units sold");
+  });
+});
+
+describe("weekly corrected report preview", () => {
+  it("renders the explicit correction without creating notification rail state", async () => {
+    const acceptedWeekId = "accepted-week-1" as Id<"reportWeekAccepted">;
+    const calls: string[] = [];
+    const ctx = {
+      runQuery: async (reference: unknown) => {
+        calls.push(getFunctionName(reference as never));
+        return {
+          ...weeklyManagerReportPreviewProps,
+          presentation: {
+            ...weeklyManagerReportPreviewProps.presentation,
+            previewText: "Wigclub corrected weekly report preview · Not sent",
+            timestampLabel: "Corrected",
+          },
+          statusLabel: "Report corrected",
+        };
+      },
+    } as never;
+
+    const result = await (
+      weeklyReportCorrectionPreview as unknown as {
+        _handler: (
+          ctx: unknown,
+          args: { acceptedWeekId: Id<"reportWeekAccepted">; candidateFingerprint: string },
+        ) => Promise<{ subject: string; html: string; contentDigest: string } | null>;
+      }
+    )._handler(ctx, {
+      acceptedWeekId,
+      candidateFingerprint: "candidate-v1",
+    });
+
+    expect(calls).toEqual([
+      "operations/weeklyManagerReportEmail:getCorrectedWeeklyManagerReportPayload",
+    ]);
+    expect(result?.subject).toContain("corrected weekly report preview");
+    expect(result?.html).toContain("Report corrected");
+    expect(result?.html).toContain("Not sent");
+    expect(result?.contentDigest).toMatch(/^[a-f0-9]{64}$/);
+    expect(ctx).not.toHaveProperty("scheduler");
   });
 });
 

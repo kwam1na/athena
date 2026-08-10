@@ -197,6 +197,54 @@ describe("DailyManagerReport", () => {
     );
   });
 
+  it("renders weekly tender uses and ranked expense summaries without changing daily wording", async () => {
+    const html = await render(
+      <DailyManagerReport
+        {...baseProps}
+        paymentTotals={[
+          {
+            amount: "GH₵16,580",
+            method: "Mobile money",
+            share: "66.25%",
+            tenderUseCount: 63,
+          },
+        ]}
+        rankedSections={[
+          {
+            coverage: "6 of 6 scheduled days",
+            remainder: {
+              label: "2 other products",
+              primary: "GH₵505",
+              secondary: "14 units",
+            },
+            rows: [
+              {
+                detail: "LR-02",
+                label: "Lace remover",
+                primary: "GH₵200",
+                secondary: "2 units",
+              },
+            ],
+            title: "Highest expense spend",
+          },
+        ]}
+      />,
+    );
+
+    expect(html).toContain("66.25% · 63 tender uses");
+    expect(html).not.toContain("63 transactions");
+    expect(html).toContain("Highest expense spend");
+    expect(html).toContain("6 of 6 scheduled days");
+    expect(html).toContain("Lace remover");
+    expect(html).toContain("2 other products");
+    expect(html.indexOf("Highest expense spend")).toBeLessThan(
+      html.indexOf("Lace remover"),
+    );
+    expect(html.indexOf("Lace remover")).toBeLessThan(
+      html.indexOf("2 other products"),
+    );
+  });
+
   it("renders prior-day comparisons for every reported amount and count", async () => {
     const html = await render(
       <DailyManagerReport

@@ -20,12 +20,12 @@ This key-folder index highlights the main directories agents are likely to need 
 ## Backend and test surfaces
 
 - [`convex/stockOps`](../../convex/stockOps) — Stock-adjustment, procurement, replenishment, receiving, and vendor flows layered over inventory state. Currently 16 file(s); key children: access.test.ts, access.ts, adjustments.test.ts, adjustments.ts, cycleCountDrafts.test.ts.
-- [`convex/reports`](../../convex/reports) — Canonical fact ledger, the deterministic day fold, sweeper-maintained day/SKU/rollup read models, source-truth verification, and store-scoped reporting reads. Currently 48 file(s); key children: access.test.ts, access.ts, contract.test.ts, customRange.test.ts, customRange.ts.
+- [`convex/reports`](../../convex/reports) — Canonical fact ledger, the deterministic day fold, sweeper-maintained day/SKU/rollup read models, source-truth verification, and store-scoped reporting reads. Currently 52 file(s); key children: access.test.ts, access.ts, contract.test.ts, customRange.test.ts, customRange.ts.
 - [`convex/inventoryLedger`](../../convex/inventoryLedger) — Inventory valuation and costing: weighted-average cost pools, deficit lots, position revisions, and SKU valuation corrections. Currently 13 file(s); key children: commerceEffects.test.ts, commerceEffects.ts, corrections.ts, deficitLedger.ts, deficitResolutionWork.test.ts.
 - [`convex/storeTime`](../../convex/storeTime) — Store timezone authority and operating-day resolution shared by reporting and operational surfaces. Currently 6 file(s); key children: ensureTimezoneAuthority.test.ts, ensureTimezoneAuthority.ts, operatingPeriods.test.ts, operatingPeriods.ts, storeTimeAuthority.test.ts.
 - [`convex/serviceOps`](../../convex/serviceOps) — Service catalog, appointment, and service-case workflows layered on operational work items. Currently 8 file(s); key children: appointments.ts, catalog.ts, catalogAppointments.test.ts, moduleWiring.test.ts, serviceCaseTracing.test.ts.
 - [`convex/workflowTraces`](../../convex/workflowTraces) — Shared workflow trace creation, lookup, presentation, and adapter helpers. Currently 19 file(s); key children: adapters, core.ts, presentation.test.ts, presentation.ts, public.ts.
-- [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 943 file(s); key children: README.md, _generated, app.ts, auth, auth.config.js.
+- [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 947 file(s); key children: README.md, _generated, app.ts, auth, auth.config.js.
 - [`src/tests`](../../src/tests) — Focused browser-facing regression tests. Currently 9 file(s); key children: README.md, SUMMARY.md, pos, prod.
 - [`src/test`](../../src/test) — Package test harness helpers and setup. Currently 1 file(s); key children: setup.ts.
 

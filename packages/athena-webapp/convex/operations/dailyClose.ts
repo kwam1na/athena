@@ -219,6 +219,33 @@ type DailyCloseSummary = {
   }>;
 };
 
+export type DailyCloseExpenseProductEvidence =
+  | {
+      contractVersion: 1;
+      expenseTotal: number;
+      products: Array<{
+        productSkuId: Id<"productSku">;
+        productName: string;
+        productSku: string;
+        quantity: number;
+        spend: number;
+      }>;
+      sourceItemCount: number;
+      sourceTransactionCount: number;
+      status: "complete";
+    }
+  | {
+      contractVersion: 1;
+      expenseTotal: number;
+      reason:
+        | "source_cap_reached"
+        | "invalid_evidence"
+        | "expense_total_mismatch";
+      sourceItemCount: number;
+      sourceTransactionCount: number;
+      status: "unavailable";
+    };
+
 type DailyCloseSourceCompletenessEntry = {
   source: string;
   complete: boolean;
@@ -280,6 +307,7 @@ type DailyCloseSnapshot = {
   readyItems: DailyCloseItem[];
   readiness: DailyCloseReadiness;
   summary: DailyCloseSummary;
+  expenseProductEvidence?: DailyCloseExpenseProductEvidence;
   frozenSyncedSaleInventoryReviewGroups?: DailyCloseFrozenSyncedSaleInventoryReviewGroup[];
   openWorkMembership: DailyCloseOpenWorkMembership;
   sourceCompleteness: DailyCloseSourceCompleteness;
@@ -333,6 +361,7 @@ type DailyCloseReportSnapshot = {
   readiness: DailyCloseReadiness;
   priorDaySummary?: Record<string, unknown>;
   summary: Record<string, unknown>;
+  expenseProductEvidence?: DailyCloseExpenseProductEvidence;
   reviewedItems: DailyCloseItem[];
   carryForwardItems: DailyCloseItem[];
   carryForwardGroups?: DailyCloseFrozenCarryForwardGroup[];
@@ -407,6 +436,7 @@ function normalizeCompletedDailyCloseSnapshot(args: {
     readyItems: reportSnapshot.readyItems,
     readiness: reportSnapshot.readiness,
     summary: normalizeDailyCloseSummary(reportSnapshot.summary),
+    expenseProductEvidence: reportSnapshot.expenseProductEvidence,
     openWorkMembership: reportSnapshot.openWorkMembership ?? {
       completeness: "complete",
       observedLogicalCount: normalizeDailyCloseSummary(reportSnapshot.summary)
@@ -1718,24 +1748,31 @@ async function listExpensesForDay(
   },
 ): Promise<DailyCloseSourceRead<Doc<"expenseTransaction">>> {
   const range = { startAt: args.startAt, endAt: args.endAt };
+  const probe = await ctx.db
+    .query("expenseTransaction")
+    .withIndex("by_storeId_status_completedAt", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("status", "completed")
+        .gte("completedAt", args.startAt)
+        .lt("completedAt", args.endAt),
+    )
+    .take(DAILY_CLOSE_QUERY_LIMIT + 1);
+  const rows = probe.slice(0, DAILY_CLOSE_QUERY_LIMIT);
 
-  return readCappedSource({
-    source: "expense_transaction",
-    readMode: "by_storeId_status_completedAt",
-    limit: DAILY_CLOSE_QUERY_LIMIT,
-    range,
-    statuses: ["completed"],
-    query: ctx.db
-      .query("expenseTransaction")
-      .withIndex("by_storeId_status_completedAt", (q) =>
-        q
-          .eq("storeId", args.storeId)
-          .eq("status", "completed")
-          .gte("completedAt", args.startAt)
-          .lt("completedAt", args.endAt),
-      )
-      .take(DAILY_CLOSE_QUERY_LIMIT),
-  });
+  return {
+    rows,
+    completeness: sourceCompletenessEntry({
+      source: "expense_transaction",
+      complete: probe.length <= DAILY_CLOSE_QUERY_LIMIT,
+      readMode: "by_storeId_status_completedAt",
+      recordCount: rows.length,
+      limit: DAILY_CLOSE_QUERY_LIMIT,
+      range,
+      reason: "expense_transaction_source_cap_reached",
+      statuses: ["completed"],
+    }),
+  };
 }
 
 async function buildTransactionItemCountsByTransactionId(
@@ -1769,15 +1806,30 @@ async function buildTransactionItemCountsByTransactionId(
 async function buildExpenseTransactionItemCountsByTransactionId(
   ctx: Pick<QueryCtx, "db">,
   transactions: Array<Doc<"expenseTransaction">>,
+  transactionSourceComplete: boolean,
 ) {
-  const entries = await Promise.all(
-    transactions.map(async (transaction) => {
-      const items = await ctx.db
+  const itemCountsByTransactionId = new Map<string, number>();
+  const itemsWithTransactions: Array<{
+    item: Doc<"expenseTransactionItem">;
+    transaction: Doc<"expenseTransaction">;
+  }> = [];
+  let sourceCapReached = false;
+
+  for (const transaction of transactions) {
+    const remainingBudget = Math.max(
+      0,
+      DAILY_CLOSE_QUERY_LIMIT - itemsWithTransactions.length,
+    );
+    const itemProbe = await ctx.db
         .query("expenseTransactionItem")
         .withIndex("by_transactionId", (q) =>
           q.eq("transactionId", transaction._id),
         )
-        .take(DAILY_CLOSE_QUERY_LIMIT);
+        .take(remainingBudget + 1);
+    const items = itemProbe.slice(0, remainingBudget);
+    const transactionTruncated = itemProbe.length > remainingBudget;
+    sourceCapReached ||= transactionTruncated;
+    if (!transactionTruncated) {
       const itemCount = items.reduce(
         (sum, item) =>
           sum +
@@ -1786,12 +1838,134 @@ async function buildExpenseTransactionItemCountsByTransactionId(
             : 0),
         0,
       );
+      itemCountsByTransactionId.set(String(transaction._id), itemCount);
+    }
+    itemsWithTransactions.push(
+      ...items.map((item) => ({ item, transaction })),
+    );
+    if (sourceCapReached) break;
+  }
 
-      return [String(transaction._id), itemCount] as const;
+  return {
+    evidence: buildDailyCloseExpenseProductEvidence({
+      itemsWithTransactions,
+      sourceCapReached,
+      transactionSourceComplete,
+      transactions,
     }),
-  );
+    itemCountsByTransactionId,
+  };
+}
 
-  return new Map(entries);
+export function buildDailyCloseExpenseProductEvidence(args: {
+  itemsWithTransactions: Array<{
+    item: Doc<"expenseTransactionItem">;
+    transaction: Doc<"expenseTransaction">;
+  }>;
+  sourceCapReached: boolean;
+  transactionSourceComplete: boolean;
+  transactions: Array<Doc<"expenseTransaction">>;
+}): DailyCloseExpenseProductEvidence {
+  const expenseTotal = args.transactions.reduce(
+    (sum, transaction) => sum + transaction.totalValue,
+    0,
+  );
+  const base = {
+    contractVersion: 1 as const,
+    expenseTotal,
+    sourceItemCount: args.itemsWithTransactions.length,
+    sourceTransactionCount: args.transactions.length,
+  };
+
+  if (
+    !Number.isSafeInteger(expenseTotal) ||
+    expenseTotal < 0 ||
+    args.transactions.some(
+      (transaction) =>
+        !Number.isSafeInteger(transaction.totalValue) ||
+        transaction.totalValue < 0,
+    )
+  ) {
+    return { ...base, status: "unavailable", reason: "invalid_evidence" };
+  }
+
+  if (args.sourceCapReached || !args.transactionSourceComplete) {
+    return { ...base, status: "unavailable", reason: "source_cap_reached" };
+  }
+
+  const products = new Map<
+    Id<"productSku">,
+    {
+      identityOrder: string;
+      productSkuId: Id<"productSku">;
+      productName: string;
+      productSku: string;
+      quantity: number;
+      spend: number;
+    }
+  >();
+  let aggregateSpend = 0;
+
+  for (const { item, transaction } of args.itemsWithTransactions) {
+    if (
+      !Number.isSafeInteger(item.quantity) ||
+      item.quantity < 0 ||
+      !Number.isSafeInteger(item.costPrice) ||
+      item.costPrice < 0
+    ) {
+      return { ...base, status: "unavailable", reason: "invalid_evidence" };
+    }
+
+    const itemSpend = item.quantity * item.costPrice;
+    if (!Number.isSafeInteger(itemSpend)) {
+      return { ...base, status: "unavailable", reason: "invalid_evidence" };
+    }
+
+    const existing = products.get(item.productSkuId);
+    const quantity = (existing?.quantity ?? 0) + item.quantity;
+    const spend = (existing?.spend ?? 0) + itemSpend;
+    aggregateSpend += itemSpend;
+    if (
+      !Number.isSafeInteger(quantity) ||
+      !Number.isSafeInteger(spend) ||
+      !Number.isSafeInteger(aggregateSpend)
+    ) {
+      return { ...base, status: "unavailable", reason: "invalid_evidence" };
+    }
+
+    const identityOrder = [
+      String(transaction.completedAt).padStart(16, "0"),
+      String(transaction._id),
+      String(item._id),
+    ].join(":");
+    const useItemIdentity = !existing || identityOrder > existing.identityOrder;
+    products.set(item.productSkuId, {
+      identityOrder: useItemIdentity ? identityOrder : existing.identityOrder,
+      productSkuId: item.productSkuId,
+      productName: useItemIdentity ? item.productName : existing.productName,
+      productSku: useItemIdentity ? item.productSku : existing.productSku,
+      quantity,
+      spend,
+    });
+  }
+
+  if (aggregateSpend !== expenseTotal) {
+    return {
+      ...base,
+      status: "unavailable",
+      reason: "expense_total_mismatch",
+    };
+  }
+
+  return {
+    ...base,
+    status: "complete",
+    products: [...products.values()]
+      .sort((left, right) =>
+        String(left.productSkuId).localeCompare(String(right.productSkuId)),
+      )
+      .map(({ identityOrder: _identityOrder, ...product }) => product),
+  };
 }
 
 async function listDepositsForDay(
@@ -2062,6 +2236,7 @@ function buildDailyCloseReportSnapshot(args: {
       ? { priorDaySummary: args.snapshot.priorDaySummary }
       : {}),
     summary: args.summary,
+    expenseProductEvidence: args.snapshot.expenseProductEvidence,
     reviewedItems: snapshotReviewedItems(args.snapshot, args.reviewedItemKeys),
     carryForwardItems: carryForwardItems.map(
       ({ carryForwardWorkItemIds: _memberIds, ...item }) => item,
@@ -2543,11 +2718,14 @@ export async function buildDailyCloseSnapshotWithCtx(
       ...completedTransactions,
       ...voidedTransactions,
     ]);
-  const expenseTransactionItemCountsById =
+  const expenseTransactionItemRead =
     await buildExpenseTransactionItemCountsByTransactionId(
       ctx,
       expenseTransactions,
+      expenseTransactionRead.completeness.complete,
     );
+  const expenseTransactionItemCountsById =
+    expenseTransactionItemRead.itemCountsByTransactionId;
   const cashDeposits = cashDepositRead.rows;
   const pendingApprovals = pendingApprovalRead.rows;
   const openPosSessions = openPosSessionRead.rows;
@@ -3437,6 +3615,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       readyItems,
       readiness,
       summary,
+      expenseProductEvidence: expenseTransactionItemRead.evidence,
       frozenSyncedSaleInventoryReviewGroups:
         frozenSyncedSaleInventoryReviewGroups(logicalOpenWork),
       openWorkMembership: {

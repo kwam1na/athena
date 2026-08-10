@@ -392,6 +392,8 @@ import type * as reports_sweeper from "../reports/sweeper.js";
 import type * as reports_transactionCounts from "../reports/transactionCounts.js";
 import type * as reports_verify from "../reports/verify.js";
 import type * as reports_weekly from "../reports/weekly.js";
+import type * as reports_weeklyAcceptedRepair from "../reports/weeklyAcceptedRepair.js";
+import type * as reports_weeklyCloseEvidence from "../reports/weeklyCloseEvidence.js";
 import type * as reports_weeklyInventory from "../reports/weeklyInventory.js";
 import type * as reports_weeklyPeriods from "../reports/weeklyPeriods.js";
 import type * as reports_weeklyRepair from "../reports/weeklyRepair.js";
@@ -997,6 +999,8 @@ declare const fullApi: ApiFromModules<{
   "reports/transactionCounts": typeof reports_transactionCounts;
   "reports/verify": typeof reports_verify;
   "reports/weekly": typeof reports_weekly;
+  "reports/weeklyAcceptedRepair": typeof reports_weeklyAcceptedRepair;
+  "reports/weeklyCloseEvidence": typeof reports_weeklyCloseEvidence;
   "reports/weeklyInventory": typeof reports_weeklyInventory;
   "reports/weeklyPeriods": typeof reports_weeklyPeriods;
   "reports/weeklyRepair": typeof reports_weeklyRepair;

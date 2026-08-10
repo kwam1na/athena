@@ -3529,6 +3529,555 @@ describe("end-of-day review backend foundation", () => {
     });
   });
 
+  it("freezes reconciled expense-product evidence in the completed report snapshot", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
+    const { db } = createDb({
+      approvalProof: [dailyCloseApprovalProof()],
+      expenseTransaction: [
+        {
+          _id: "expense-1",
+          completedAt: Date.UTC(2026, 4, 7, 17),
+          sessionId: "expense-session-1",
+          staffProfileId: "staff-1",
+          status: "completed",
+          storeId: "store-1",
+          totalValue: 4000,
+          transactionNumber: "EXP-1",
+        },
+        {
+          _id: "expense-2",
+          completedAt: Date.UTC(2026, 4, 7, 18),
+          sessionId: "expense-session-2",
+          staffProfileId: "staff-1",
+          status: "completed",
+          storeId: "store-1",
+          totalValue: 3000,
+          transactionNumber: "EXP-2",
+        },
+      ],
+      expenseTransactionItem: [
+        {
+          _id: "expense-item-1",
+          costPrice: 1000,
+          productId: "product-1",
+          productName: "Packing Paper",
+          productSku: "PP-OLD",
+          productSkuId: "sku-1",
+          quantity: 4,
+          transactionId: "expense-1",
+        },
+        {
+          _id: "expense-item-2",
+          costPrice: 1000,
+          productId: "product-1",
+          productName: "Packing Paper Roll",
+          productSku: "PP-1",
+          productSkuId: "sku-1",
+          quantity: 2,
+          transactionId: "expense-2",
+        },
+        {
+          _id: "expense-item-3",
+          costPrice: 500,
+          productId: "product-2",
+          productName: "Carrier Bag",
+          productSku: "CB-1",
+          productSkuId: "sku-2",
+          quantity: 2,
+          transactionId: "expense-2",
+        },
+      ],
+      store: [store],
+    });
+
+    const result = await completeDailyCloseWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId: "approval-proof-1" as Id<"approvalProof">,
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.kind).toBe("ok");
+    const reportSnapshot =
+      result.kind === "ok" ? result.data.dailyClose.reportSnapshot : null;
+    expect(reportSnapshot?.expenseProductEvidence).toEqual({
+      contractVersion: 1,
+      expenseTotal: 7000,
+      products: [
+        {
+          productName: "Packing Paper Roll",
+          productSku: "PP-1",
+          productSkuId: "sku-1",
+          quantity: 6,
+          spend: 6000,
+        },
+        {
+          productName: "Carrier Bag",
+          productSku: "CB-1",
+          productSkuId: "sku-2",
+          quantity: 2,
+          spend: 1000,
+        },
+      ],
+      sourceItemCount: 3,
+      sourceTransactionCount: 2,
+      status: "complete",
+    });
+
+    await db.patch("expenseTransactionItem", "expense-item-2", {
+      productName: "Renamed later",
+      productSku: "CHANGED",
+    });
+    expect(
+      result.kind === "ok"
+        ? result.data.dailyClose.reportSnapshot?.expenseProductEvidence
+        : null,
+    ).toEqual(reportSnapshot?.expenseProductEvidence);
+  });
+
+  it("keeps expense-item overflow lane-specific and still completes the close", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
+    const expenseItems = Array.from({ length: 201 }, (_, index) => ({
+      _id: `expense-item-${index + 1}`,
+      costPrice: 1,
+      productId: `product-${index + 1}`,
+      productName: `Supply ${index + 1}`,
+      productSku: `SKU-${index + 1}`,
+      productSkuId: `sku-${index + 1}`,
+      quantity: 1,
+      transactionId: "expense-1",
+    }));
+    const { db } = createDb({
+      approvalProof: [dailyCloseApprovalProof()],
+      expenseTransaction: [
+        {
+          _id: "expense-1",
+          completedAt: Date.UTC(2026, 4, 7, 17),
+          sessionId: "expense-session-1",
+          staffProfileId: "staff-1",
+          status: "completed",
+          storeId: "store-1",
+          totalValue: 201,
+          transactionNumber: "EXP-1",
+        },
+      ],
+      expenseTransactionItem: expenseItems,
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+    expect(snapshot.sourceCompleteness.complete).toBe(true);
+    expect(snapshot.expenseProductEvidence).toEqual({
+      contractVersion: 1,
+      expenseTotal: 201,
+      reason: "source_cap_reached",
+      sourceItemCount: 200,
+      sourceTransactionCount: 1,
+      status: "unavailable",
+    });
+
+    const result = await completeDailyCloseWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId: "approval-proof-1" as Id<"approvalProof">,
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    expect(result.kind).toBe("ok");
+    expect(
+      result.kind === "ok"
+        ? result.data.dailyClose.reportSnapshot?.expenseProductEvidence
+        : null,
+    ).toMatchObject({ reason: "source_cap_reached", status: "unavailable" });
+  });
+
+  it("probes the expense-transaction parent cap before certifying product evidence", async () => {
+    const expenseTransactions = Array.from({ length: 201 }, (_, index) => ({
+      _id: `expense-${index + 1}`,
+      completedAt: Date.UTC(2026, 4, 7, 17, index % 60),
+      sessionId: `expense-session-${index + 1}`,
+      staffProfileId: "staff-1",
+      status: "completed",
+      storeId: "store-1",
+      totalValue: 0,
+      transactionNumber: `EXP-${index + 1}`,
+    }));
+    const exactDb = createDb({
+      expenseTransaction: expenseTransactions.slice(0, 200),
+      store: [store],
+    }).db;
+    const overflowDb = createDb({
+      expenseTransaction: expenseTransactions,
+      store: [store],
+    }).db;
+
+    const exactSnapshot = await buildDailyCloseSnapshotWithCtx(
+      { db: exactDb } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+    const overflowSnapshot = await buildDailyCloseSnapshotWithCtx(
+      { db: overflowDb } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(exactSnapshot.sourceCompleteness.entries).toContainEqual(
+      expect.objectContaining({
+        complete: true,
+        recordCount: 200,
+        source: "expense_transaction",
+      }),
+    );
+    expect(exactSnapshot.expenseProductEvidence).toMatchObject({
+      sourceTransactionCount: 200,
+      status: "complete",
+    });
+    expect(overflowSnapshot.sourceCompleteness.entries).toContainEqual(
+      expect.objectContaining({
+        complete: false,
+        recordCount: 200,
+        source: "expense_transaction",
+      }),
+    );
+    expect(overflowSnapshot.expenseProductEvidence).toMatchObject({
+      reason: "source_cap_reached",
+      status: "unavailable",
+    });
+  });
+
+  it.each([
+    {
+      caseName: "fractional quantity",
+      costPrice: 100,
+      expectedReason: "invalid_evidence",
+      quantity: 0.5,
+      totalValue: 50,
+    },
+    {
+      caseName: "expense-total mismatch",
+      costPrice: 100,
+      expectedReason: "expense_total_mismatch",
+      quantity: 1,
+      totalValue: 101,
+    },
+  ])("refuses $caseName product evidence", async (testCase) => {
+    const { db } = createDb({
+      expenseTransaction: [
+        {
+          _id: "expense-1",
+          completedAt: Date.UTC(2026, 4, 7, 17),
+          sessionId: "expense-session-1",
+          staffProfileId: "staff-1",
+          status: "completed",
+          storeId: "store-1",
+          totalValue: testCase.totalValue,
+          transactionNumber: "EXP-1",
+        },
+      ],
+      expenseTransactionItem: [
+        {
+          _id: "expense-item-1",
+          costPrice: testCase.costPrice,
+          productId: "product-1",
+          productName: "Packing Paper",
+          productSku: "PP-1",
+          productSkuId: "sku-1",
+          quantity: testCase.quantity,
+          transactionId: "expense-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.expenseProductEvidence).toMatchObject({
+      reason: testCase.expectedReason,
+      status: "unavailable",
+    });
+  });
+
+  it("stores complete empty expense-product evidence for a completed day without expense transactions", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
+    const { db } = createDb({
+      approvalProof: [dailyCloseApprovalProof()],
+      store: [store],
+    });
+
+    const result = await completeDailyCloseWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId: "approval-proof-1" as Id<"approvalProof">,
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.kind).toBe("ok");
+    expect(
+      result.kind === "ok"
+        ? result.data.dailyClose.reportSnapshot?.expenseProductEvidence
+        : null,
+    ).toEqual({
+      contractVersion: 1,
+      expenseTotal: 0,
+      products: [],
+      sourceItemCount: 0,
+      sourceTransactionCount: 0,
+      status: "complete",
+    });
+  });
+
+  it("certifies complete expense-product evidence when item reads land exactly on the bound", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
+    const expenseItems = Array.from({ length: 200 }, (_, index) => ({
+      _id: `expense-item-${index + 1}`,
+      costPrice: 1,
+      productId: `product-${index + 1}`,
+      productName: `Supply ${index + 1}`,
+      productSku: `SKU-${index + 1}`,
+      productSkuId: `sku-${index + 1}`,
+      quantity: 1,
+      transactionId: "expense-1",
+    }));
+    const { db } = createDb({
+      approvalProof: [dailyCloseApprovalProof()],
+      expenseTransaction: [
+        {
+          _id: "expense-1",
+          completedAt: Date.UTC(2026, 4, 7, 17),
+          sessionId: "expense-session-1",
+          staffProfileId: "staff-1",
+          status: "completed",
+          storeId: "store-1",
+          totalValue: 200,
+          transactionNumber: "EXP-1",
+        },
+      ],
+      expenseTransactionItem: expenseItems,
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+    expect(snapshot.expenseProductEvidence).toMatchObject({
+      expenseTotal: 200,
+      sourceItemCount: 200,
+      sourceTransactionCount: 1,
+      status: "complete",
+    });
+
+    const result = await completeDailyCloseWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId: "approval-proof-1" as Id<"approvalProof">,
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    expect(result.kind).toBe("ok");
+    expect(
+      result.kind === "ok"
+        ? result.data.dailyClose.reportSnapshot?.expenseProductEvidence
+        : null,
+    ).toMatchObject({ sourceItemCount: 200, status: "complete" });
+  });
+
+  it.each([
+    {
+      caseName: "negative quantity",
+      costPrice: 100,
+      quantity: -1,
+      totalValue: 100,
+    },
+    {
+      caseName: "NaN cost",
+      costPrice: Number.NaN,
+      quantity: 1,
+      totalValue: 0,
+    },
+    {
+      caseName: "Infinity cost",
+      costPrice: Number.POSITIVE_INFINITY,
+      quantity: 1,
+      totalValue: 0,
+    },
+    {
+      caseName: "unsafe-integer quantity",
+      costPrice: 1,
+      quantity: Number.MAX_SAFE_INTEGER + 1,
+      totalValue: 0,
+    },
+    {
+      caseName: "unsafe-integer spend",
+      costPrice: Number.MAX_SAFE_INTEGER,
+      quantity: 2,
+      totalValue: 0,
+    },
+  ])(
+    "keeps the product lane unavailable for $caseName without blocking the close",
+    async (testCase) => {
+      vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
+      const { db } = createDb({
+        approvalProof: [dailyCloseApprovalProof()],
+        expenseTransaction: [
+          {
+            _id: "expense-1",
+            completedAt: Date.UTC(2026, 4, 7, 17),
+            sessionId: "expense-session-1",
+            staffProfileId: "staff-1",
+            status: "completed",
+            storeId: "store-1",
+            totalValue: testCase.totalValue,
+            transactionNumber: "EXP-1",
+          },
+        ],
+        expenseTransactionItem: [
+          {
+            _id: "expense-item-1",
+            costPrice: testCase.costPrice,
+            productId: "product-1",
+            productName: "Packing Paper",
+            productSku: "PP-1",
+            productSkuId: "sku-1",
+            quantity: testCase.quantity,
+            transactionId: "expense-1",
+          },
+        ],
+        store: [store],
+      });
+
+      const snapshot = await buildDailyCloseSnapshotWithCtx(
+        { db } as unknown as QueryCtx,
+        { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+      );
+      expect(snapshot.expenseProductEvidence).toMatchObject({
+        reason: "invalid_evidence",
+        status: "unavailable",
+      });
+
+      const result = await completeDailyCloseWithCtx(
+        { db } as unknown as MutationCtx,
+        {
+          actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+          actorUserId: "user-1" as Id<"athenaUser">,
+          approvalProofId: "approval-proof-1" as Id<"approvalProof">,
+          operatingDate: "2026-05-07",
+          storeId: "store-1" as Id<"store">,
+        },
+      );
+      expect(result.kind).toBe("ok");
+      expect(
+        result.kind === "ok"
+          ? result.data.dailyClose.reportSnapshot?.expenseProductEvidence
+          : null,
+      ).toMatchObject({ reason: "invalid_evidence", status: "unavailable" });
+    },
+  );
+
+  it("never freezes a truncated itemCount when the item budget exhausts mid-transaction", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
+    const firstTransactionItems = Array.from({ length: 150 }, (_, index) => ({
+      _id: `expense-item-a-${index + 1}`,
+      costPrice: 1,
+      productId: "product-1",
+      productName: "Packing Paper",
+      productSku: "PP-1",
+      productSkuId: "sku-1",
+      quantity: 1,
+      transactionId: "expense-1",
+    }));
+    const secondTransactionItems = Array.from({ length: 100 }, (_, index) => ({
+      _id: `expense-item-b-${index + 1}`,
+      costPrice: 1,
+      productId: "product-2",
+      productName: "Carrier Bag",
+      productSku: "CB-1",
+      productSkuId: "sku-2",
+      quantity: 1,
+      transactionId: "expense-2",
+    }));
+    const { db } = createDb({
+      approvalProof: [dailyCloseApprovalProof()],
+      expenseTransaction: [
+        {
+          _id: "expense-1",
+          completedAt: Date.UTC(2026, 4, 7, 17),
+          sessionId: "expense-session-1",
+          staffProfileId: "staff-1",
+          status: "completed",
+          storeId: "store-1",
+          totalValue: 150,
+          transactionNumber: "EXP-1",
+        },
+        {
+          _id: "expense-2",
+          completedAt: Date.UTC(2026, 4, 7, 18),
+          sessionId: "expense-session-2",
+          staffProfileId: "staff-1",
+          status: "completed",
+          storeId: "store-1",
+          totalValue: 100,
+          transactionNumber: "EXP-2",
+        },
+      ],
+      expenseTransactionItem: [
+        ...firstTransactionItems,
+        ...secondTransactionItems,
+      ],
+      store: [store],
+    });
+
+    const result = await completeDailyCloseWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId: "approval-proof-1" as Id<"approvalProof">,
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.kind).toBe("ok");
+    const reportSnapshot =
+      result.kind === "ok" ? result.data.dailyClose.reportSnapshot : null;
+    expect(reportSnapshot?.expenseProductEvidence).toMatchObject({
+      reason: "source_cap_reached",
+      status: "unavailable",
+    });
+
+    const expenseRows = (reportSnapshot?.readyItems ?? []).filter((item) =>
+      String(item.key).startsWith("expense_transaction:"),
+    );
+    const fullyCountedRow = expenseRows.find(
+      (item) => item.key === "expense_transaction:expense-1:completed",
+    );
+    const truncatedRow = expenseRows.find(
+      (item) => item.key === "expense_transaction:expense-2:completed",
+    );
+    expect(fullyCountedRow?.metadata).toMatchObject({ itemCount: 150 });
+    expect(truncatedRow?.metadata).not.toHaveProperty("itemCount");
+  });
+
   it("completes review-only days and records command-time review evidence", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
     const { db } = createDb({

@@ -84,6 +84,38 @@ const dailyCloseFrozenSyncedSaleInventoryReviewGroupValidator = v.object({
   productSkuId: v.union(v.id("productSku"), v.null()),
 });
 
+const dailyCloseExpenseProductEvidenceBaseValidator = {
+  contractVersion: v.literal(1),
+  expenseTotal: v.number(),
+  sourceItemCount: v.number(),
+  sourceTransactionCount: v.number(),
+};
+
+const dailyCloseExpenseProductEvidenceValidator = v.union(
+  v.object({
+    ...dailyCloseExpenseProductEvidenceBaseValidator,
+    status: v.literal("complete"),
+    products: v.array(
+      v.object({
+        productSkuId: v.id("productSku"),
+        productName: v.string(),
+        productSku: v.string(),
+        quantity: v.number(),
+        spend: v.number(),
+      }),
+    ),
+  }),
+  v.object({
+    ...dailyCloseExpenseProductEvidenceBaseValidator,
+    status: v.literal("unavailable"),
+    reason: v.union(
+      v.literal("source_cap_reached"),
+      v.literal("invalid_evidence"),
+      v.literal("expense_total_mismatch"),
+    ),
+  }),
+);
+
 const dailyCloseReportSnapshotValidator = v.object({
   snapshotContractVersion: v.optional(v.literal(2)),
   closeMetadata: v.object({
@@ -120,6 +152,9 @@ const dailyCloseReportSnapshotValidator = v.object({
   }),
   priorDaySummary: v.optional(v.record(v.string(), v.any())),
   summary: v.record(v.string(), v.any()),
+  expenseProductEvidence: v.optional(
+    dailyCloseExpenseProductEvidenceValidator,
+  ),
   reviewedItems: v.array(dailyCloseReportItemValidator),
   carryForwardItems: v.array(dailyCloseReportItemValidator),
   carryForwardGroups: v.optional(

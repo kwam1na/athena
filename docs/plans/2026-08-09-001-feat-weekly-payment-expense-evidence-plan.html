@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Weekly payment and expense evidence</title>
+  <style>
+    :root { color-scheme: light; --ink:#1c2227; --muted:#606970; --line:#dce1e4; --paper:#fff; --wash:#f5f7f6; --green:#246b4a; --amber:#8a5a0a; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--wash); color:var(--ink); font:16px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1100px,calc(100% - 32px)); margin:32px auto 72px; background:var(--paper); border:1px solid var(--line); border-radius:18px; overflow:hidden; }
+    header { padding:48px clamp(24px,6vw,72px) 36px; border-bottom:1px solid var(--line); background:linear-gradient(135deg,#fbfcfb,#eef5f1); }
+    header p { max-width:760px; }
+    nav, section { padding:30px clamp(24px,6vw,72px); }
+    nav { border-bottom:1px solid var(--line); }
+    section + section { border-top:1px solid var(--line); }
+    h1 { margin:6px 0 14px; font-size:clamp(2rem,5vw,3.6rem); line-height:1.05; letter-spacing:-.04em; }
+    h2 { margin:0 0 18px; font-size:1.45rem; }
+    h3 { margin:0 0 8px; font-size:1.05rem; }
+    p { margin:0 0 14px; }
+    a { color:var(--green); text-underline-offset:3px; }
+    ul, ol { margin:10px 0 0; padding-left:22px; }
+    li + li { margin-top:7px; }
+    .eyebrow { color:var(--green); font-size:.76rem; font-weight:750; letter-spacing:.14em; text-transform:uppercase; }
+    .meta { display:flex; flex-wrap:wrap; gap:8px 18px; color:var(--muted); font-size:.9rem; }
+    .lede { font-size:1.12rem; color:#384148; }
+    .toc { display:flex; flex-wrap:wrap; gap:8px 18px; padding:0; list-style:none; }
+    .callout { padding:18px 20px; border-left:4px solid var(--green); background:#f2f7f4; border-radius:4px; }
+    .warning { border-left-color:var(--amber); background:#fbf7ee; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px; }
+    .card { padding:18px; border:1px solid var(--line); border-radius:12px; background:#fff; }
+    .card p { color:var(--muted); }
+    .unit { display:grid; grid-template-columns:52px 1fr; gap:16px; padding:20px 0; }
+    .unit + .unit { border-top:1px solid var(--line); }
+    .badge { display:grid; place-items:center; width:44px; height:44px; border-radius:50%; color:#fff; background:var(--green); font-weight:750; }
+    .unit p { margin-bottom:8px; }
+    .unit .files { color:var(--muted); font-size:.9rem; overflow-wrap:anywhere; }
+    table { width:100%; border-collapse:collapse; font-size:.94rem; }
+    th, td { padding:12px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+    th { color:var(--muted); font-size:.75rem; letter-spacing:.08em; text-transform:uppercase; }
+    code { padding:.1em .35em; background:#eef1ef; border-radius:4px; font-size:.9em; }
+    footer { padding:24px clamp(24px,6vw,72px); color:var(--muted); background:var(--wash); font-size:.88rem; }
+    @media (max-width:640px) { main { width:100%; margin:0; border:0; border-radius:0; } header { padding-top:34px; } .unit { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Implementation plan</div>
+    <h1>Weekly payment and expense evidence</h1>
+    <p class="lede">Correct weekly close evidence, add value-first payment mix and product-consumption rankings, repair Wigclub’s Aug 3–9 accepted report, and stop at a reviewable corrected preview without sending it.</p>
+    <div class="meta">
+      <span>Created Aug 9, 2026</span><span>Type: feature</span><span>Status: active</span>
+      <a href="2026-08-09-001-feat-weekly-payment-expense-evidence-plan.md">Canonical Markdown</a>
+    </div>
+  </header>
+
+  <nav aria-label="Plan contents">
+    <strong>Contents</strong>
+    <ul class="toc">
+      <li><a href="#problem">Problem</a></li><li><a href="#scope">Scope</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#units">Implementation</a></li><li><a href="#risks">Risks</a></li><li><a href="#verification">Verification</a></li>
+    </ul>
+  </nav>
+
+  <section id="problem">
+    <h2>Problem and outcome</h2>
+    <p>The first production weekly report used the wrong lifecycle evidence for scheduled-day closure and presented a sales-fold reconciliation as counted-cash variance. It also omitted tender composition and the product-level expense evidence managers need to understand operating consumption.</p>
+    <div class="callout">
+      <strong>Outcome:</strong> Daily Close freezes complete evidence once; one weekly aggregator produces live, accepted, and corrected projections; Reports and email render the appropriate state without re-reading mutable source data.
+    </div>
+  </section>
+
+  <section id="scope">
+    <h2>Scope and boundaries</h2>
+    <div class="grid">
+      <article class="card">
+        <h3>Included</h3>
+        <ul>
+          <li>Correct scheduled-close status and counted-cash variance.</li>
+          <li>Payment value/share first, tender-use count second.</li>
+          <li>Top five expense products by spend and by quantity, each with a remainder.</li>
+          <li>Live week-to-date, accepted history, Reports, and email.</li>
+          <li>Exact Aug 3–9 correction, production apply, Reports and HTML preview.</li>
+        </ul>
+      </article>
+      <article class="card">
+        <h3>Explicitly excluded</h3>
+        <ul>
+          <li>No prior-week comparisons, categories, vendors, staff, or report-level detail.</li>
+          <li>No redesign of payment capture, expenses, or inventory consumption.</li>
+          <li>No approval tokens, repair-run tables, generalized migration framework, or correction history.</li>
+          <li>No corrected-send path and no corrected email until a later explicit decision.</li>
+          <li>No unrelated accepted-week repairs.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section id="decisions">
+    <h2>Key decisions</h2>
+    <table>
+      <thead><tr><th>Area</th><th>Decision</th></tr></thead>
+      <tbody>
+        <tr><td>Existing rails</td><td>Daily Close remains the certification boundary; accepted projections remain immutable; correction uses one set-once amendment-style field; notification preparation remains on the existing registry rail.</td></tr>
+        <tr><td>Expense evidence</td><td>Freeze an independently versioned product sub-contract. Cap-plus-one reads, safe numeric checks, and exact spend reconciliation determine lane completeness without blocking the rest of Daily Close.</td></tr>
+        <tr><td>Weekly computation</td><td>One pure server-owned aggregator handles cash, payment, and expense evidence for live materialization, acceptance, repair, and verification. UI and email only format.</td></tr>
+        <tr><td>Coverage</td><td>Each lane is complete, partial, or unavailable with its own usable/scheduled day count. Certified zero is covered; missing legacy evidence is not zero.</td></tr>
+        <tr><td>Ranking</td><td>Spend and quantity are independent deterministic top-five lists. Their unnumbered remainder is “1 other product” or “N other products.”</td></tr>
+        <tr><td>Accepted correction</td><td>Preserve the original baseline and fingerprint. Store one set-once correction projection with provenance; identical reruns no-op and a different correction rejects.</td></tr>
+        <tr><td>Email state</td><td>Original automatic intents always render the baseline. Explicit corrected preview matches corrected Reports and creates no notification or provider state.</td></tr>
+        <tr><td>Repair safety</td><td>A private internal command resolves the fixed store/week through indexed identifiers, verifies baseline and source fingerprints, re-derives on apply, and exposes no caller-selected target or committed production IDs.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section aria-labelledby="precedence-heading">
+    <h2 id="precedence-heading">Evidence precedence</h2>
+    <table>
+      <thead><tr><th>Consumer</th><th>Selected evidence</th></tr></thead>
+      <tbody>
+        <tr><td>Original automatic email, including retry</td><td>Original accepted baseline only.</td></tr>
+        <tr><td>Accepted Reports history</td><td>Applied correction when present; otherwise baseline.</td></tr>
+        <tr><td>Live current and amendment</td><td>Latest resolved completed-close lineage; never accepted correction.</td></tr>
+        <tr><td>Corrected preview</td><td>The exact applied correction revision.</td></tr>
+        <tr><td>Future corrected send</td><td>Not implemented in this delivery.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="units">
+    <h2>Implementation units</h2>
+    <p>Every feature-bearing unit begins with failing tests. Dependencies remain linear through evidence materialization, then split only where Reports and email can proceed independently.</p>
+    <article class="unit"><div class="badge">U1</div><div><h3>Certify expense-product evidence in Daily Close</h3><p>Freeze bounded product identity, quantity, and spend. Empty is complete; overflow, invalid numbers, or reconciliation mismatch makes only this lane unavailable.</p><p class="files"><code>convex/operations/dailyClose.ts</code> · schema · focused tests</p></div></article>
+    <article class="unit"><div class="badge">U2</div><div><h3>Aggregate shared weekly close evidence</h3><p>Build the pure deterministic cash/payment/expense contract, per-lane coverage, value-first mix, both rankings, and stable remainders.</p><p class="files"><code>convex/reports/weeklyCloseEvidence.ts</code> · focused tests</p></div></article>
+    <article class="unit"><div class="badge">U3</div><div><h3>Materialize live and accepted lifecycle states</h3><p>Use resolved scheduled close lineage, preserve accepted baseline fields, and keep reopened current truth separate from historical truth.</p><p class="files"><code>convex/reports/weekly.ts</code> · derived schema · lifecycle tests</p></div></article>
+    <article class="unit"><div class="badge">U4</div><div><h3>Project and render Reports</h3><p>Keep reads source-free and bounded. Present variance facts distinctly, then payment mix and the two expense rankings with lane-specific coverage and “Report corrected” metadata.</p><p class="files"><code>convex/reports/queries.ts</code> · <code>ReportsWeeklyView.tsx</code> · route/component tests</p></div></article>
+    <article class="unit"><div class="badge">U5</div><div><h3>Render email and side-effect-free preview</h3><p>Share contract and wording rules, make baseline retry selection explicit, and render exact corrected subject/HTML without intent, schedule, delivery, or provider effects.</p><p class="files"><code>weeklyManagerReportEmail.ts</code> · React Email components · notification registry · tests</p></div></article>
+    <article class="unit"><div class="badge">U6</div><div><h3>Seal and apply Aug 3–9 correction</h3><p>Dry-run exact retained evidence, compare canonical fingerprints, apply one idempotent correction field, and expose corrected Reports and HTML for review.</p><p class="files"><code>convex/reports/weeklyAcceptedRepair.ts</code> · derived schema · repair/query/notification tests</p></div></article>
+    <article class="unit"><div class="badge">U7</div><div><h3>Merge, deploy, and verify</h3><p>Rebuild generated artifacts, clear the authoritative merge gate and reviewer loop, merge, deploy Convex and web, apply the exact repair, hand back the preview, and stop before send.</p><p class="files">Generated API/route/graph artifacts · landed-change report</p></div></article>
+  </section>
+
+  <section id="risks">
+    <h2>Primary risks and controls</h2>
+    <div class="grid">
+      <article class="card"><h3>Silent truncation</h3><p>Cap-plus-one reads and explicit completeness; never publish a truncated ranking.</p></article>
+      <article class="card"><h3>False zero</h3><p>Absent legacy evidence renders unavailable or partial, while certified zero remains covered.</p></article>
+      <article class="card"><h3>Historical mutation</h3><p>Original accepted fields remain byte-stable; correction is orthogonal and set once.</p></article>
+      <article class="card"><h3>Wrong email content</h3><p>Pending original intents stay baseline-only; correction preview is explicit and side-effect free.</p></article>
+      <article class="card"><h3>Repair drift</h3><p>Exact bounded source manifest, baseline/candidate fingerprints, per-day reconciliation, and re-derivation on apply.</p></article>
+      <article class="card"><h3>Surface drift</h3><p>One contract shape and shared wording rules; state-specific Reports/email parity tests.</p></article>
+    </div>
+  </section>
+
+  <section id="verification">
+    <h2>Verification and finish line</h2>
+    <ol>
+      <li>Write failing focused tests before each behavioral change, then make them pass.</li>
+      <li>Verify persisted Daily Close, weekly lifecycle, projection, UI, email, repair, and notification boundaries.</li>
+      <li>Rebuild deterministic Graphify and generated artifacts; run <code>bun run pr:athena</code> on the final staged tree.</li>
+      <li>Resolve every gate and reviewer finding; require unanimous correctness, integrity, security/reliability, testing, product, and design review.</li>
+      <li>Merge the PR, align root, deploy Convex and Athena web, and verify the merged revision in production.</li>
+      <li>Dry-run and apply only Wigclub Aug 3–9; confirm six-of-six closure, cash variance, payment mix, product rankings, and exact reconciliation.</li>
+      <li>Return corrected Reports and exact email HTML to the user, with proof that no corrected email was sent.</li>
+    </ol>
+    <div class="callout warning"><strong>Hard stop:</strong> corrected delivery remains outside this plan. The user reviews and tweaks the rendered report before any later send decision.</div>
+  </section>
+
+  <footer>Canonical source: <a href="2026-08-09-001-feat-weekly-payment-expense-evidence-plan.md">2026-08-09-001-feat-weekly-payment-expense-evidence-plan.md</a> · Origin: <a href="../brainstorms/2026-08-09-weekly-report-payment-expense-requirements.md">requirements document</a></footer>
+</main>
+</body>
+</html>
