@@ -24,6 +24,8 @@ jobs:
   harness-validation:
     name: Harness and Architecture Validation
     runs-on: ubuntu-latest
+    env:
+      ATHENA_HARNESS_CI_POLICY: athena-pr-tests
 
     steps:
       - name: Checkout

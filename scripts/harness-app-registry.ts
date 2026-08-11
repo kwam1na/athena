@@ -54,8 +54,7 @@ export const SERVICE_REQUIRED_CODE_MAP_LINKS = [
 ] as const;
 
 export type ValidationCommand =
-  | { kind: "script"; script: string }
-  | { kind: "raw"; command: string };
+  { kind: "script"; script: string } | { kind: "raw"; command: string };
 
 export type HarnessKeyFolderGroup = {
   title: string;
@@ -63,6 +62,8 @@ export type HarnessKeyFolderGroup = {
 };
 
 export type HarnessValidationScenario = {
+  id: string;
+  reviewSensitive: boolean;
   title: string;
   touchedPaths: string[];
   commands: ValidationCommand[];
@@ -71,9 +72,7 @@ export type HarnessValidationScenario = {
 };
 
 export type HarnessAppName =
-  | "athena-webapp"
-  | "storefront-webapp"
-  | "valkey-proxy-server";
+  "athena-webapp" | "storefront-webapp" | "valkey-proxy-server";
 
 export type HarnessAppArchetype = "webapp" | "service-package";
 export type HarnessOnboardingStatus = "active" | "planned";
@@ -123,8 +122,7 @@ type NonHarnessPackageRegistration = {
 };
 
 export type HarnessPackageRegistration =
-  | HarnessAppPackageRegistration
-  | NonHarnessPackageRegistration;
+  HarnessAppPackageRegistration | NonHarnessPackageRegistration;
 
 function buildHarnessDocPaths(packageDir: string): HarnessDocPaths {
   return buildHarnessDocPathsForArchetype(packageDir, "webapp");
@@ -306,6 +304,8 @@ export const HARNESS_APP_REGISTRY = [
     ],
     validationScenarios: [
       {
+        id: "athena.shared-demo-admission",
+        reviewSensitive: true,
         title: "Shared demo admission, restore, and orientation edits",
         touchedPaths: [
           "assets/shared-demo-products",
@@ -342,6 +342,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when the configured shared demo changes admission, shared-store authority, restore semantics, effect restrictions, visitor-activity tracking on the context event rail, or the owner-oriented application shell. It validates the server boundary, credentialless entry, orientation layer, demo telemetry capture, and generated application contracts together. Demo activity events are support-visible and non-compilable on purpose: demo visitors are store admins of the one shared store, so store-visible telemetry would expose one visitor's behavior to another.",
       },
       {
+        id: "athena.route-ui",
+        reviewSensitive: false,
         title: "Route or UI-only edits",
         touchedPaths: [
           "src/assets",
@@ -360,12 +362,16 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this for authenticated dashboard flows, service-management screens, route trees, and UI behavior changes that stay inside the frontend shell.",
       },
       {
+        id: "athena.changed-frontend-source-lint",
+        reviewSensitive: false,
         title: "Changed frontend source lint",
         touchedPaths: ["src", "shared", "types.ts"],
         commands: [{ kind: "script", script: "lint:frontend:changed" }],
         note: "Run this for changed browser-facing TypeScript or TSX files so introduced ESLint failures are caught before PR handoff.",
       },
       {
+        id: "athena.reporting-fact-ledger",
+        reviewSensitive: false,
         title: "Reporting fact ledger, day fold, and read-model edits",
         touchedPaths: [
           "convex/reports",
@@ -391,6 +397,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this for the reporting contract, fact ingestion, the day fold, the sweeper and its read models, custom ranges, reseed, or source-truth verification. Pair it with the owning source-domain scenario when a POS, storefront, service, payment, inventory, or Daily Close command emits new facts. Source state and inventory effects remain atomic with the command; the fold is replayable asynchronous work and must never decide operational success. The fold is the correctness authority — the open-day incremental path is only a preview of it.",
       },
       {
+        id: "athena.daily-store-operations",
+        reviewSensitive: false,
         title: "Daily store operations lifecycle edits",
         touchedPaths: [
           "convex/operations/dailyClose.ts",
@@ -428,6 +436,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when Daily Opening, Daily Close, or the store-day operations route wiring changes. It validates the backend readiness gates, operator-facing acknowledgement views, generated Convex API surface, and route tree before broader package validation.",
       },
       {
+        id: "athena.stock-ops-procurement",
+        reviewSensitive: false,
         title: "Stock-ops procurement and receiving edits",
         touchedPaths: [
           "convex/stockOps",
@@ -458,6 +468,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when stock adjustments, procurement recommendations, purchase-order lifecycle changes, or receiving route wiring move. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new stockOps function exports changed.",
       },
       {
+        id: "athena.cash-controls",
+        reviewSensitive: true,
         title: "Cash-controls workflow edits",
         touchedPaths: [
           "convex/cashControls",
@@ -484,6 +496,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. This is the confirmation slice for drawers opened from POS showing up in the dashboard and register-session detail views. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.",
       },
       {
+        id: "athena.pos-item-adjustment",
+        reviewSensitive: true,
         title: "POS transaction item-adjustment reporting edits",
         touchedPaths: [
           "convex/pos/application/commands",
@@ -516,6 +530,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when completed-transaction item adjustments, adjustment approval/application, transaction detail adjustment history, daily close/operations adjusted totals, or cash-control settlement display changes. It keeps original sale totals and explicit adjusted/net settlement fields covered together.",
       },
       {
+        id: "athena.pos-mixed-checkout",
+        reviewSensitive: true,
         title: "POS service mixed-checkout edits",
         touchedPaths: [
           "convex/pos/application/commands/completeTransaction.ts",
@@ -556,6 +572,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when POS service mixed checkout changes receipts, transaction read models, service-case payment context, service catalog local readiness, payment allocation splits, daily close/cash-control reporting, or mixed-sale void guardrails. It preserves the split between retail add-ons and service material usage while confirming drawer tender is counted once.",
       },
       {
+        id: "athena.service-operations",
+        reviewSensitive: false,
         title: "Service operations intake, catalog, appointments, and cases",
         touchedPaths: [
           "convex/serviceOps",
@@ -582,6 +600,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when service intake, catalog management, appointment scheduling, service-case execution, or manager-queue service handoffs change. It validates the command-result service flows plus the operator-facing intake, appointments, active-cases, catalog, and queue surfaces together before broader package validation.",
       },
       {
+        id: "athena.auth-staff-store-configuration",
+        reviewSensitive: true,
         title: "Auth, staff, and store-configuration edits",
         touchedPaths: [
           "convex/inventory/auth.ts",
@@ -615,6 +635,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when login auth sync, store staff identity, admin store-configuration mutations, or cashier-auth command handling changes. It validates the retryable auth-sync path, the staff credential rules, the staff-management surface, the shared store-configuration hook plus fulfillment/maintenance/MTN MoMo regressions, and the register and cashier-auth flows that now share `staffProfileId` instead of the deleted cashier model.",
       },
       {
+        id: "athena.expense-session-cart",
+        reviewSensitive: false,
         title: "Expense-session and cart flow edits",
         touchedPaths: [
           "convex/inventory/expenseSessions.ts",
@@ -644,6 +666,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when expense-session lifecycle, expense cart items, expense transaction finalization, or expense session hooks change. It validates the command-result expense session mutations plus the browser-facing session and cart hooks that now collapse expected failures to safe user-facing copy.",
       },
       {
+        id: "athena.omnichannel-order-refund",
+        reviewSensitive: true,
         title: "Omnichannel order, refund, review, and customer-history edits",
         touchedPaths: [
           "convex/storeFront/onlineOrder.ts",
@@ -683,6 +707,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when order updates, refunds, return-exchange execution, review moderation, feedback-request messaging, or customer-history presentation changes. It validates the migrated storefront command-result surfaces plus the operator-facing order, review, and customer-history views before broader package validation. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new storefront function exports changed.",
       },
       {
+        id: "athena.workflow-trace-foundation",
+        reviewSensitive: false,
         title:
           "Workflow trace foundation, POS local sync/register, and trace-link edits",
         touchedPaths: [
@@ -745,6 +771,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when the shared workflow-trace or POS local sync contract, POS local sync repository, POS local-first sync/storage/read-model/command-gateway files, terminal seed lookup, POS local entry/readiness files, the POS register bootstrap or drawer gate, the `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, local sync ingestion/projection/repository/read-model adjacency, POS entry/readiness gating, the drawer-open bootstrap handoff, the shared trace route, terminal fallback behavior, and the operator-facing POS and cash-controls surfaces before broader package validation.",
       },
       {
+        id: "athena.pos-app-session-continuity",
+        reviewSensitive: true,
         title: "POS hub app-session continuity edits",
         touchedPaths: [
           "convex/pos/public/terminalAppSessions.ts",
@@ -778,6 +806,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when POS hub app-session recovery, route-shell continuity, terminal recovery validation, or app-session diagnostics change. It proves the recovery assertion stays POS-hub scoped, non-POS routes still require normal app auth, server validation rejects unsafe scopes, recovery retries stay bounded, terminal diagnostics redact raw recovery data, and sale authority still depends on terminal integrity, drawer authority, local command invariants, and staff proof.",
       },
       {
+        id: "athena.pos-offline-route-access",
+        reviewSensitive: true,
         title: "POS offline route access and app-shell edits",
         touchedPaths: [
           "public/pos-app-shell-sw.js",
@@ -810,8 +840,7 @@ export const HARNESS_APP_REGISTRY = [
           },
           {
             kind: "raw",
-            command:
-              "bun run --filter '@athena/webapp' test:e2e:prod:pos",
+            command: "bun run --filter '@athena/webapp' test:e2e:prod:pos",
           },
           {
             kind: "raw",
@@ -823,6 +852,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when POS service-worker app-shell caching, POS-only offline route entry, offline readiness diagnostics, or hard-reload register continuity changes. Cache Storage must stay limited to static shell assets; POS business state, staff authority, cart events, payments, and catalog snapshots remain in IndexedDB/local POS stores.",
       },
       {
+        id: "athena.app-update-readiness",
+        reviewSensitive: false,
         title: "App update readiness and apply-safety edits",
         touchedPaths: [
           "public/pos-app-shell-sw.js",
@@ -856,6 +887,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when app update detection, Update Ready UI, cross-tab apply blockers, service-worker static update staging, POS update blockers, or Inventory Import update blockers change. Version detection must not reload automatically; surfaces should opt in only while active work, commands, or resumability risk make refresh unsafe.",
       },
       {
+        id: "athena.pos-terminal-health",
+        reviewSensitive: false,
         title: "POS terminal health visibility and diagnostics edits",
         touchedPaths: [
           "convex/schemas/pos/posTerminal.ts",
@@ -902,6 +935,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when POS terminal registration, terminal runtime status, browser-side health publisher/readout, terminal recovery commands, terminal setup/detail UI, POS support diagnostics, or cash-controls terminal evidence changes. Stale or pending terminal check-ins are telemetry and should stay out of manager-review queues; unresolved local sync conflicts remain the source of needs-review copy. Browser-local terminal recovery must be verified by a fresh runtime check-in before support treats a terminal as healthy.",
       },
       {
+        id: "athena.shared-lib-utility",
+        reviewSensitive: false,
         title: "Shared-lib or utility edits",
         touchedPaths: [
           "src/lib",
@@ -922,6 +957,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Reach for the package suite first, then typecheck when helpers or shared state can affect many call sites.",
       },
       {
+        id: "athena.client-server-error-foundation",
+        reviewSensitive: false,
         title: "Client/server error foundation edits",
         touchedPaths: [
           "shared/commandResult.ts",
@@ -948,6 +985,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when the shared command-result contract, client command normalizers, generic catch boundary, or browser import boundary changes. Expected failures must stay in browser-safe `user_error` results, thrown faults must collapse to generic fallback copy, and shared modules must not import raw Convex server files into the browser tree.",
       },
       {
+        id: "athena.admin-quick-action-toast",
+        reviewSensitive: false,
         title: "Admin quick-action unexpected-toast fallback edits",
         touchedPaths: [
           "src/components/add-product",
@@ -976,12 +1015,16 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when admin quick actions still resolve through toast-only UX. Preserve any explicit business-validation copy returned by the surface, but route unexpected failures through the shared generic unexpected-error fallback so raw backend text never reaches the browser.",
       },
       {
+        id: "athena.frontend-test-harness",
+        reviewSensitive: false,
         title: "Frontend test harness edits",
         touchedPaths: ["src/test", "src/tests", "vitest.setup.ts", ".env.test"],
         commands: [{ kind: "script", script: "test" }],
         note: "Run the package suite when package-local frontend test helpers, focused regression tests, or the test-mode env file change.",
       },
       {
+        id: "athena.convex-backend-adjacent",
+        reviewSensitive: false,
         title: "Convex or backend-adjacent edits",
         touchedPaths: [
           "convex",
@@ -1005,6 +1048,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows, shared operational rails, reporting maintenance scripts, or route-to-backend composition should include the Convex audit pair. When a public Convex function with an explicit `returns` validator changes, add executable return-contract proof with `assertConformsToExportedReturns`; loose `exportReturns()` string checks do not prove the production return contract. Convex query handlers must not reach mutation-only DB APIs directly or through write-capable repositories/services; split read factories from `MutationCtx`-only write factories when shared code crosses query and mutation boundaries.",
       },
       {
+        id: "athena.route-runtime-build",
+        reviewSensitive: false,
         title: "Route runtime or build-pipeline edits",
         touchedPaths: [
           "src/main.tsx",
@@ -1032,6 +1077,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Run these when bootstrap, generated router state, or package build configuration changes so browser-entry regressions fail before the route tree reaches Arc.",
       },
       {
+        id: "athena.storybook-frontend-tooling",
+        reviewSensitive: false,
         title: "Storybook and frontend tooling edits",
         touchedPaths: [
           ".storybook",
@@ -1132,6 +1179,8 @@ export const HARNESS_APP_REGISTRY = [
     ],
     validationScenarios: [
       {
+        id: "storefront.route-ui",
+        reviewSensitive: false,
         title: "Route or UI-only edits",
         touchedPaths: [
           "src/assets",
@@ -1146,6 +1195,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Start here for most layout, component, and route behavior changes that do not alter the checkout or browser-journey contract.",
       },
       {
+        id: "storefront.route-runtime-build",
+        reviewSensitive: false,
         title: "Route runtime or build-pipeline edits",
         touchedPaths: [
           "index.html",
@@ -1169,6 +1220,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when the Vite browser bootstrap, package manifest, generated router state, or TypeScript/build wiring changes.",
       },
       {
+        id: "storefront.shared-lib-api-wrapper",
+        reviewSensitive: false,
         title: "Shared-lib, utility, or API-wrapper edits",
         touchedPaths: ["src/lib", "src/utils", "src/api"],
         commands: [
@@ -1183,6 +1236,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "These surfaces fan out widely across the app, so pair the default suite with a typecheck when shared helpers change.",
       },
       {
+        id: "storefront.checkout-auth-boundary",
+        reviewSensitive: true,
         title: "Checkout or auth route-boundary edits",
         touchedPaths: [
           "src/routes/shop/checkout",
@@ -1197,6 +1252,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use the scoped architecture lint when lower-level helpers could accidentally depend on checkout or auth route entrypoints.",
       },
       {
+        id: "storefront.payment-redirect-journeys",
+        reviewSensitive: true,
         title: "Full browser journeys and payment redirects",
         touchedPaths: [
           "playwright.config.ts",
@@ -1251,6 +1308,8 @@ export const HARNESS_APP_REGISTRY = [
     ],
     validationScenarios: [
       {
+        id: "valkey.service-logic-entrypoint",
+        reviewSensitive: false,
         title: "Service logic, docs, or entrypoint edits",
         touchedPaths: [
           "package.json",
@@ -1274,6 +1333,8 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use the local test suite and syntax checks when handler logic, operator docs, or runtime bootstrap changes.",
       },
       {
+        id: "valkey.live-connection-probe",
+        reviewSensitive: false,
         title: "Live connection probe edits",
         touchedPaths: ["test-connection.js"],
         commands: [

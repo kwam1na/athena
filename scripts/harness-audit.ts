@@ -6,6 +6,10 @@ import {
   type HarnessAppName,
   type ValidationCommand,
 } from "./harness-app-registry";
+import {
+  HARNESS_GATE_REGISTRY,
+  validateHarnessGateRegistry,
+} from "./harness-gate-registry";
 import { validateHarnessDocs } from "./harness-check";
 
 const AUDIT_TARGETS = HARNESS_APP_REGISTRY.map((app) => ({
@@ -16,11 +20,124 @@ const AUDIT_TARGETS = HARNESS_APP_REGISTRY.map((app) => ({
 }));
 
 type ValidationSurface = {
+  id: string;
+  reviewSensitive: boolean;
   name: string;
   pathPrefixes: string[];
   commands: ValidationCommand[];
   behaviorScenarios?: string[];
 };
+
+export async function auditHarnessGateObligationContract(rootDir: string) {
+  const validationScenarios = HARNESS_APP_REGISTRY.flatMap((app) =>
+    app.validationScenarios.map((scenario) => scenario),
+  );
+  const findings = validateHarnessGateRegistry(
+    HARNESS_GATE_REGISTRY,
+    validationScenarios.map((scenario) => scenario.id),
+  );
+  const reviewActivation =
+    HARNESS_GATE_REGISTRY.obligations["review.green"].activation;
+  const registeredSensitiveScenarioIds = new Set(
+    reviewActivation.kind === "review_projection"
+      ? reviewActivation.sensitiveScenarioIds
+      : [],
+  );
+  const declaredSensitiveScenarioIds = new Set(
+    validationScenarios
+      .filter((scenario) => scenario.reviewSensitive)
+      .map((scenario) => scenario.id),
+  );
+  for (const scenarioId of declaredSensitiveScenarioIds) {
+    if (!registeredSensitiveScenarioIds.has(scenarioId)) {
+      findings.push(
+        `Review-sensitive scenario ${scenarioId} is missing from the gate sensitiveScenarioIds registry.`,
+      );
+    }
+  }
+  for (const scenarioId of registeredSensitiveScenarioIds) {
+    if (!declaredSensitiveScenarioIds.has(scenarioId)) {
+      findings.push(
+        `Gate sensitiveScenarioIds includes ${scenarioId}, but that app scenario is not reviewSensitive.`,
+      );
+    }
+  }
+  const requiredFiles = [
+    "scripts/harness-candidate.ts",
+    "scripts/pr-athena-prepare.ts",
+    "scripts/harness-gate-registry.ts",
+    "scripts/harness-gate-obligations.ts",
+    "scripts/harness-execution-context.ts",
+    "scripts/harness-obligation-records.ts",
+    "scripts/harness-review-evidence.ts",
+    "scripts/harness-gate-admission.ts",
+  ];
+  const packagePath = path.join(rootDir, "package.json");
+  if (!(await fileExists(packagePath))) return findings;
+  const packageJson = await readJsonFile<{ scripts?: Record<string, string> }>(
+    packagePath,
+  );
+  const scripts = packageJson.scripts ?? {};
+  const exactScripts: Record<string, string> = {
+    "pr:athena:prepare": "bun scripts/pr-athena-prepare.ts",
+    "pr:athena:validate-provider": "bun scripts/harness-gate-admission.ts",
+    "harness:review-context": "bun scripts/harness-review-evidence.ts context",
+    "harness:review-evidence": "bun scripts/harness-review-evidence.ts record",
+  };
+  for (const [script, expected] of Object.entries(exactScripts)) {
+    if (scripts[script] !== expected) {
+      findings.push(
+        `Public gate script ${script} must be exactly: ${expected}`,
+      );
+    }
+  }
+  if (scripts["pr:athena"] !== "bun run pr:athena:delivery-run") {
+    findings.push(
+      "Public gate pr:athena must delegate immediately and exactly to pr:athena:delivery-run before guarded work",
+    );
+  }
+  for (const gate of Object.values(HARNESS_GATE_REGISTRY.gates)) {
+    for (const publicEntrypoint of gate.publicEntrypoints) {
+      if (
+        publicEntrypoint === gate.admissionEntrypoint ||
+        publicEntrypoint === "pr:athena"
+      ) {
+        continue;
+      }
+      const expectedPrefix = `bun run ${gate.admissionEntrypoint}`;
+      const publicScript = scripts[publicEntrypoint] ?? "";
+      if (
+        publicScript !== expectedPrefix &&
+        !publicScript.startsWith(`${expectedPrefix} && `)
+      ) {
+        findings.push(
+          `Public gate ${publicEntrypoint} must delegate immediately to ${gate.admissionEntrypoint} before guarded work`,
+        );
+      }
+    }
+  }
+  for (const repoPath of requiredFiles) {
+    if (!(await fileExists(path.join(rootDir, repoPath)))) {
+      findings.push(`Harness gate contract is missing ${repoPath}`);
+    }
+  }
+  const workflowPath = path.join(
+    rootDir,
+    ".github/workflows/athena-pr-tests.yml",
+  );
+  if (await fileExists(workflowPath)) {
+    const workflow = await readFile(workflowPath, "utf8");
+    for (const token of [
+      "name: Athena PR Tests",
+      "harness-validation:",
+      "ATHENA_HARNESS_CI_POLICY: athena-pr-tests",
+    ]) {
+      if (!workflow.includes(token))
+        findings.push(`Athena CI delegation is missing ${token}`);
+    }
+  }
+  return findings.sort((left, right) => left.localeCompare(right));
+}
 
 type ValidationMap = {
   workspace: string;
@@ -65,7 +182,7 @@ async function fileExists(filePath: string) {
 
 async function hasAnyHarnessDocs(
   rootDir: string,
-  target: { testingDocPath: string; validationMapPath: string }
+  target: { testingDocPath: string; validationMapPath: string },
 ) {
   const packageDocsRoot = path.dirname(target.testingDocPath);
 
@@ -88,7 +205,7 @@ async function readJsonFile<T>(filePath: string) {
 }
 
 function normalizeValidationCommand(
-  command: ValidationCommand
+  command: ValidationCommand,
 ): ValidationCommand {
   return command.kind === "raw"
     ? { kind: "raw", command: command.command.trim() }
@@ -102,7 +219,7 @@ function normalizeBehaviorScenarioName(scenario: string) {
 function addGroupedError(
   groupedErrors: Map<string, string[]>,
   group: string,
-  error: string
+  error: string,
 ) {
   const existingErrors = groupedErrors.get(group);
   if (existingErrors) {
@@ -115,7 +232,7 @@ function addGroupedError(
 
 function formatMissingValidationPathError(
   validationMapPath: string,
-  pathPrefix: string
+  pathPrefix: string,
 ) {
   return [
     `Stale validation surface: ${validationMapPath} references missing path "${pathPrefix}".`,
@@ -145,7 +262,7 @@ function shouldSkipSurfaceEntry(entryName: string) {
 async function collectLiveSurfaceEntries(
   rootDir: string,
   packageDir: string,
-  auditedRoots: readonly string[]
+  auditedRoots: readonly string[],
 ) {
   const liveEntries = new Set<string>();
 
@@ -162,7 +279,7 @@ async function collectLiveSurfaceEntries(
       }
 
       const repoPath = normalizeRepoPath(
-        path.posix.join(packageDir, auditedRoot, entry.name)
+        path.posix.join(packageDir, auditedRoot, entry.name),
       );
       liveEntries.add(entry.isDirectory() ? `${repoPath}/` : repoPath);
     }
@@ -173,16 +290,19 @@ async function collectLiveSurfaceEntries(
 
 async function loadAuditTarget(
   rootDir: string,
-  target: (typeof AUDIT_TARGETS)[number]
+  target: (typeof AUDIT_TARGETS)[number],
 ) {
   const groupedErrors = new Map<string, string[]>();
-  const absoluteValidationMapPath = path.join(rootDir, target.validationMapPath);
+  const absoluteValidationMapPath = path.join(
+    rootDir,
+    target.validationMapPath,
+  );
   const absoluteTestingDocPath = path.join(rootDir, target.testingDocPath);
   if (!(await fileExists(absoluteValidationMapPath))) {
     addGroupedError(
       groupedErrors,
       target.appName,
-      `Missing validation map: ${target.validationMapPath}`
+      `Missing validation map: ${target.validationMapPath}`,
     );
     return {
       groupedErrors,
@@ -194,7 +314,7 @@ async function loadAuditTarget(
     addGroupedError(
       groupedErrors,
       target.appName,
-      `Missing testing guide: ${target.testingDocPath}`
+      `Missing testing guide: ${target.testingDocPath}`,
     );
     return {
       groupedErrors,
@@ -213,19 +333,25 @@ async function loadAuditTarget(
       addGroupedError(
         groupedErrors,
         target.appName,
-        `Stale harness audit docs: ${target.testingDocPath} must mention ${requiredSnippet}.`
+        `Stale harness audit docs: ${target.testingDocPath} must mention ${requiredSnippet}.`,
       );
     }
   }
 
-  const validationMap = await readJsonFile<ValidationMap>(absoluteValidationMapPath);
-  const packageJsonPath = path.join(rootDir, validationMap.packageDir, "package.json");
+  const validationMap = await readJsonFile<ValidationMap>(
+    absoluteValidationMapPath,
+  );
+  const packageJsonPath = path.join(
+    rootDir,
+    validationMap.packageDir,
+    "package.json",
+  );
 
   if (!(await fileExists(packageJsonPath))) {
     addGroupedError(
       groupedErrors,
       target.appName,
-      `Stale validation map: ${target.validationMapPath} references missing package surface "${validationMap.packageDir}".`
+      `Stale validation map: ${target.validationMapPath} references missing package surface "${validationMap.packageDir}".`,
     );
     return {
       groupedErrors,
@@ -242,7 +368,7 @@ async function loadAuditTarget(
     addGroupedError(
       groupedErrors,
       target.appName,
-      `Stale validation map: ${target.validationMapPath} expected workspace "${validationMap.workspace}" at ${validationMap.packageDir}.`
+      `Stale validation map: ${target.validationMapPath} expected workspace "${validationMap.workspace}" at ${validationMap.packageDir}.`,
     );
   }
 
@@ -254,16 +380,26 @@ async function loadAuditTarget(
     addGroupedError(
       groupedErrors,
       target.appName,
-      `Missing validation surfaces in ${target.validationMapPath}.`
+      `Missing validation surfaces in ${target.validationMapPath}.`,
     );
   }
 
   for (const surface of surfaces) {
-    if (!Array.isArray(surface.pathPrefixes) || surface.pathPrefixes.length === 0) {
+    if (!surface.id || typeof surface.reviewSensitive !== "boolean") {
       addGroupedError(
         groupedErrors,
         target.appName,
-        `Empty validation surface "${surface.name}" in ${target.validationMapPath}.`
+        `Validation surface ${surface.name ?? "<unknown>"} is missing a stable id or explicit reviewSensitive boolean.`,
+      );
+    }
+    if (
+      !Array.isArray(surface.pathPrefixes) ||
+      surface.pathPrefixes.length === 0
+    ) {
+      addGroupedError(
+        groupedErrors,
+        target.appName,
+        `Empty validation surface "${surface.name}" in ${target.validationMapPath}.`,
       );
     }
 
@@ -271,7 +407,7 @@ async function loadAuditTarget(
       addGroupedError(
         groupedErrors,
         target.appName,
-        `Missing commands for validation surface "${surface.name}" in ${target.validationMapPath}.`
+        `Missing commands for validation surface "${surface.name}" in ${target.validationMapPath}.`,
       );
       continue;
     }
@@ -281,7 +417,10 @@ async function loadAuditTarget(
         addGroupedError(
           groupedErrors,
           target.appName,
-          formatMissingValidationPathError(target.validationMapPath, pathPrefix)
+          formatMissingValidationPathError(
+            target.validationMapPath,
+            pathPrefix,
+          ),
         );
       }
     }
@@ -292,7 +431,7 @@ async function loadAuditTarget(
           addGroupedError(
             groupedErrors,
             target.appName,
-            `Stale validation surface: ${target.validationMapPath} references missing script "${validationMap.workspace}:${command.script}".`
+            `Stale validation surface: ${target.validationMapPath} references missing script "${validationMap.workspace}:${command.script}".`,
           );
         }
         continue;
@@ -302,7 +441,7 @@ async function loadAuditTarget(
         addGroupedError(
           groupedErrors,
           target.appName,
-          `Stale validation surface: ${target.validationMapPath} includes an empty raw command in "${surface.name}".`
+          `Stale validation surface: ${target.validationMapPath} includes an empty raw command in "${surface.name}".`,
         );
       }
     }
@@ -314,16 +453,19 @@ async function loadAuditTarget(
       addGroupedError(
         groupedErrors,
         target.appName,
-        `Stale validation surface: ${target.validationMapPath} includes invalid behavior scenarios in "${surface.name}".`
+        `Stale validation surface: ${target.validationMapPath} includes invalid behavior scenarios in "${surface.name}".`,
       );
     }
 
     for (const scenario of surface.behaviorScenarios ?? []) {
-      if (typeof scenario !== "string" || !normalizeBehaviorScenarioName(scenario)) {
+      if (
+        typeof scenario !== "string" ||
+        !normalizeBehaviorScenarioName(scenario)
+      ) {
         addGroupedError(
           groupedErrors,
           target.appName,
-          `Stale validation surface: ${target.validationMapPath} includes an empty behavior scenario in "${surface.name}".`
+          `Stale validation surface: ${target.validationMapPath} includes an empty behavior scenario in "${surface.name}".`,
         );
       }
     }
@@ -336,11 +478,13 @@ async function loadAuditTarget(
       auditedRoots: target.auditedRoots,
       packageDir: normalizeRepoPath(validationMap.packageDir),
       surfaces: surfaces.map((surface) => ({
+        id: surface.id,
+        reviewSensitive: surface.reviewSensitive,
         name: surface.name,
         pathPrefixes: surface.pathPrefixes.map(normalizeRepoPath),
         commands: surface.commands.map(normalizeValidationCommand),
         behaviorScenarios: (surface.behaviorScenarios ?? []).map(
-          normalizeBehaviorScenarioName
+          normalizeBehaviorScenarioName,
         ),
       })),
       testingDocContents,
@@ -351,8 +495,8 @@ async function loadAuditTarget(
 function formatGroupedErrors(groupedErrors: Map<string, string[]>) {
   const lines = ["Harness audit failed."];
 
-  for (const [group, errors] of [...groupedErrors.entries()].sort(([left], [right]) =>
-    left.localeCompare(right)
+  for (const [group, errors] of [...groupedErrors.entries()].sort(
+    ([left], [right]) => left.localeCompare(right),
   )) {
     lines.push(`[${group}]`);
     for (const error of [...errors].sort()) {
@@ -365,6 +509,10 @@ function formatGroupedErrors(groupedErrors: Map<string, string[]>) {
 
 export async function runHarnessAudit(rootDir: string) {
   const groupedErrors = new Map<string, string[]>();
+
+  for (const error of await auditHarnessGateObligationContract(rootDir)) {
+    addGroupedError(groupedErrors, "gate-obligations", error);
+  }
 
   for (const error of await validateHarnessDocs(rootDir)) {
     addGroupedError(groupedErrors, inferGroupFromError(error), error);
@@ -391,7 +539,7 @@ export async function runHarnessAudit(rootDir: string) {
   for (const target of auditTargets) {
     const { groupedErrors: targetErrors, loadedTarget } = await loadAuditTarget(
       rootDir,
-      target
+      target,
     );
 
     for (const [group, errors] of targetErrors) {
@@ -409,20 +557,22 @@ export async function runHarnessAudit(rootDir: string) {
     const liveSurfaceEntries = await collectLiveSurfaceEntries(
       rootDir,
       target.packageDir,
-      target.auditedRoots
+      target.auditedRoots,
     );
-    const coveredPrefixes = target.surfaces.flatMap((surface) => surface.pathPrefixes);
+    const coveredPrefixes = target.surfaces.flatMap(
+      (surface) => surface.pathPrefixes,
+    );
 
     for (const liveSurfaceEntry of liveSurfaceEntries) {
       if (
         !coveredPrefixes.some((pathPrefix) =>
-          matchesPathPrefix(liveSurfaceEntry, pathPrefix)
+          matchesPathPrefix(liveSurfaceEntry, pathPrefix),
         )
       ) {
         addGroupedError(
           groupedErrors,
           target.appName,
-          `Uncovered live surface: ${liveSurfaceEntry}`
+          `Uncovered live surface: ${liveSurfaceEntry}`,
         );
       }
     }
@@ -437,7 +587,7 @@ export async function runHarnessAudit(rootDir: string) {
   }
 
   console.log(
-    `Harness audit passed for ${AUDIT_TARGETS.map((target) => target.appName).join(", ")}.`
+    `Harness audit passed for ${AUDIT_TARGETS.map((target) => target.appName).join(", ")}.`,
   );
 }
 

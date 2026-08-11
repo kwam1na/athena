@@ -6,10 +6,116 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  consumeHarnessGateDecisionEvents,
   parseProviderSkippedEvents,
   runPrAthenaDeliveryRun,
   writePrAthenaProviderEvidence,
 } from "./pr-athena-delivery-run";
+
+const candidate = {
+  treeSha: "tree-a",
+  baseRef: "origin/main",
+  baseTipSha: "base-a",
+  diffBaseSha: "merge-base-a",
+  worktreeId: "worktree-a",
+};
+
+function ledgerEvent(
+  expected: {
+    invocationId: string;
+    parentStartToken: string;
+    gateId: string;
+    candidate: typeof candidate;
+  },
+  sequence: "evaluated" | "candidate_changed" | "provider_failed" | "completed",
+  admitted: boolean,
+) {
+  return {
+    invocationId: expected.invocationId,
+    invocationMode: "outer" as const,
+    parentIdentity: "pr:athena:delivery-run" as const,
+    parentStartToken: expected.parentStartToken,
+    sequence,
+    gateId: expected.gateId,
+    ...expected.candidate,
+    context: "agent",
+    admitted,
+    preventedCostClass: "merge_grade_validation",
+    resolutionKinds: admitted ? ["satisfied_evidence"] : ["blocked"],
+    findingCodes: admitted ? [] : ["review_evidence_missing"],
+    timestamp:
+      sequence === "evaluated"
+        ? "2026-08-11T00:00:00.000Z"
+        : "2026-08-11T00:00:01.000Z",
+  };
+}
+
+function gateEventHarness() {
+  return {
+    resolveGateDecisionExpectation: async (
+      _rootDir: string,
+      invocationId: string,
+      parentStartToken: string,
+    ) => ({
+      invocationId,
+      parentStartToken,
+      gateId: "athena.pr-validation",
+      candidate,
+    }),
+    consumeGateDecisionEvents: async (
+      _rootDir: string,
+      expected: Parameters<typeof ledgerEvent>[0],
+      providerExitCode: number,
+    ) =>
+      providerExitCode === 0
+        ? [
+            ledgerEvent(expected, "evaluated", true),
+            ledgerEvent(expected, "completed", true),
+          ]
+        : [ledgerEvent(expected, "evaluated", false)],
+  };
+}
+
+function persistedEvent(
+  expected: Parameters<typeof ledgerEvent>[0],
+  sequence: "evaluated" | "candidate_changed" | "provider_failed" | "completed",
+  admitted: boolean,
+) {
+  return {
+    schemaVersion: 1,
+    kind: "gate_decision",
+    invocationId: expected.invocationId,
+    invocationMode: "outer",
+    parentIdentity: "pr:athena:delivery-run",
+    parentStartToken: expected.parentStartToken,
+    sequence,
+    gateId: expected.gateId,
+    candidate: expected.candidate,
+    context: "agent",
+    admitted,
+    preventedCostClass: "merge_grade_validation",
+    timestamp:
+      sequence === "evaluated"
+        ? "2026-08-11T00:00:00.000Z"
+        : "2026-08-11T00:00:01.000Z",
+    decision: {
+      gateId: expected.gateId,
+      candidate: expected.candidate,
+      preventedCostClass: "merge_grade_validation",
+      admitted,
+      resolutions: [
+        {
+          kind: admitted ? "satisfied_evidence" : "blocked",
+          gateId: expected.gateId,
+          obligationId: "review.green",
+        },
+      ],
+      findings: admitted ? [] : [{ code: "review_evidence_missing" }],
+      diagnostics: [],
+      remediation: { machine: [], human: [] },
+    },
+  };
+}
 
 function runGit(rootDir: string, args: string[]) {
   const result = spawnSync("git", args, {
@@ -31,12 +137,42 @@ function gitFixtureEnv() {
   );
 }
 
+async function createDecisionEventFixture() {
+  const rootDir = await mkdtemp(path.join(tmpdir(), "athena-gate-events-"));
+  runGit(rootDir, ["init"]);
+  const eventsDir = path.resolve(
+    rootDir,
+    runGit(rootDir, [
+      "rev-parse",
+      "--git-path",
+      "codex/harness-obligations/v1/events",
+    ]),
+  );
+  await mkdir(eventsDir, { recursive: true });
+  const expected = {
+    invocationId: "invocation-a",
+    parentStartToken: "start-a",
+    gateId: "athena.pr-validation",
+    candidate,
+  };
+  return { rootDir, eventsDir, expected };
+}
+
+async function writeDecisionEvent(
+  eventsDir: string,
+  event: ReturnType<typeof persistedEvent> | Record<string, unknown>,
+  fileName = `${String(event.invocationId)}--${String(event.sequence)}.json`,
+) {
+  await Bun.write(path.join(eventsDir, fileName), `${JSON.stringify(event)}\n`);
+}
+
 describe("pr-athena delivery run wrapper", () => {
   it("runs prepare, static preflight, validate, and record-proof phases while recording spans", async () => {
     const commands: string[][] = [];
     let tick = 0;
 
     const result = await runPrAthenaDeliveryRun("/repo", {
+      ...gateEventHarness(),
       nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
       monotonicMs: () => tick++ * 1000,
       writeLedger: false,
@@ -76,6 +212,7 @@ describe("pr-athena delivery run wrapper", () => {
     let tick = 0;
 
     const result = await runPrAthenaDeliveryRun("/repo", {
+      ...gateEventHarness(),
       nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
       monotonicMs: () => tick++ * 1000,
       writeLedger: false,
@@ -106,6 +243,7 @@ describe("pr-athena delivery run wrapper", () => {
     let tick = 0;
 
     const result = await runPrAthenaDeliveryRun("/repo", {
+      ...gateEventHarness(),
       nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
       monotonicMs: () => tick++ * 1000,
       writeLedger: false,
@@ -147,8 +285,8 @@ describe("pr-athena delivery run wrapper", () => {
             providedBy: "pr:athena:delivery-run",
           }),
           "{not-json",
-        ].join("\n")
-      )
+        ].join("\n"),
+      ),
     ).toEqual([
       {
         providerName: "pr:athena:delivery-run",
@@ -158,11 +296,163 @@ describe("pr-athena delivery run wrapper", () => {
     ]);
   });
 
+  it("passes one invocation id and parent token to the Git-private event consumer", async () => {
+    let tick = 0;
+    let observedExpectation: Parameters<typeof ledgerEvent>[0] | undefined;
+    const result = await runPrAthenaDeliveryRun("/repo", {
+      ...gateEventHarness(),
+      nowIso: () => `2026-08-11T00:00:0${tick}.000Z`,
+      monotonicMs: () => tick++ * 1000,
+      writeLedger: false,
+      runCommand: async (command, options) => {
+        if (!command.includes("pr:athena:validate")) return { exitCode: 0 };
+        expect(options.env?.ATHENA_HARNESS_INVOCATION_ID).toBeTruthy();
+        expect(options.env?.ATHENA_HARNESS_PARENT_START_TOKEN).toBeTruthy();
+        return { exitCode: 0 };
+      },
+      consumeGateDecisionEvents: async (_rootDir, expected) => {
+        observedExpectation = expected;
+        return [ledgerEvent(expected, "evaluated", true)];
+      },
+    });
+    expect(observedExpectation).toMatchObject({
+      invocationId: expect.any(String),
+      parentStartToken: expect.any(String),
+      candidate,
+    });
+    expect(result.ledger.gateDecisionEvents).toHaveLength(1);
+    expect(result.ledger.summary.gateDecisionCount).toBe(1);
+  });
+
+  it("ingests the exact successful Git-private event sequence once", async () => {
+    const { rootDir, eventsDir, expected } = await createDecisionEventFixture();
+    try {
+      await writeDecisionEvent(
+        eventsDir,
+        persistedEvent(expected, "evaluated", true),
+      );
+      await writeDecisionEvent(
+        eventsDir,
+        persistedEvent(expected, "completed", true),
+      );
+      await writeDecisionEvent(
+        eventsDir,
+        persistedEvent(
+          { ...expected, invocationId: "stale-invocation" },
+          "evaluated",
+          false,
+        ),
+      );
+
+      await expect(
+        consumeHarnessGateDecisionEvents(rootDir, expected, 0),
+      ).resolves.toMatchObject([
+        { sequence: "evaluated", worktreeId: "worktree-a" },
+        { sequence: "completed", worktreeId: "worktree-a" },
+      ]);
+      await expect(
+        consumeHarnessGateDecisionEvents(rootDir, expected, 0),
+      ).rejects.toThrow(/already consumed/i);
+      await expect(
+        readFile(
+          path.join(eventsDir, "consumed/invocation-a--evaluated.json"),
+          "utf8",
+        ),
+      ).resolves.toContain('"invocationId":"invocation-a"');
+    } finally {
+      await rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects missing, partial, duplicate, and forged event sequences", async () => {
+    const missing = await createDecisionEventFixture();
+    const partial = await createDecisionEventFixture();
+    const duplicate = await createDecisionEventFixture();
+    try {
+      await expect(
+        consumeHarnessGateDecisionEvents(missing.rootDir, missing.expected, 0),
+      ).rejects.toThrow(/missing/i);
+
+      await writeDecisionEvent(
+        partial.eventsDir,
+        persistedEvent(partial.expected, "evaluated", true),
+      );
+      await expect(
+        consumeHarnessGateDecisionEvents(partial.rootDir, partial.expected, 0),
+      ).rejects.toThrow(/provider outcome/i);
+
+      const evaluated = persistedEvent(duplicate.expected, "evaluated", true);
+      await writeDecisionEvent(duplicate.eventsDir, evaluated);
+      await writeDecisionEvent(
+        duplicate.eventsDir,
+        evaluated,
+        "invocation-a--evaluated-copy.json",
+      );
+      await writeDecisionEvent(
+        duplicate.eventsDir,
+        persistedEvent(duplicate.expected, "completed", true),
+      );
+      await expect(
+        consumeHarnessGateDecisionEvents(
+          duplicate.rootDir,
+          duplicate.expected,
+          0,
+        ),
+      ).rejects.toThrow(/filename|cardinality/i);
+    } finally {
+      await Promise.all(
+        [missing.rootDir, partial.rootDir, duplicate.rootDir].map((rootDir) =>
+          rm(rootDir, { recursive: true, force: true }),
+        ),
+      );
+    }
+  });
+
+  it.each([
+    ["invocation mode", { invocationMode: "standalone" }],
+    ["parent identity", { parentIdentity: "direct" }],
+    ["parent start token", { parentStartToken: "forged-start" }],
+    ["gate", { gateId: "other.gate" }],
+  ])("rejects a correlated event with forged %s", async (_label, overrides) => {
+    const { rootDir, eventsDir, expected } = await createDecisionEventFixture();
+    try {
+      await writeDecisionEvent(eventsDir, {
+        ...persistedEvent(expected, "evaluated", false),
+        ...overrides,
+      });
+      await expect(
+        consumeHarnessGateDecisionEvents(rootDir, expected, 1),
+      ).rejects.toThrow(/correlation/i);
+    } finally {
+      await rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ["candidate", { treeSha: "wrong-tree" }],
+    ["base", { baseTipSha: "wrong-base" }],
+    ["worktree", { worktreeId: "wrong-worktree" }],
+  ])("rejects an event for the wrong %s", async (_label, candidateOverride) => {
+    const { rootDir, eventsDir, expected } = await createDecisionEventFixture();
+    try {
+      await writeDecisionEvent(eventsDir, {
+        ...persistedEvent(expected, "evaluated", false),
+        candidate: { ...candidate, ...candidateOverride },
+      });
+      await expect(
+        consumeHarnessGateDecisionEvents(rootDir, expected, 1),
+      ).rejects.toThrow(/correlation/i);
+    } finally {
+      await rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
   it("preserves the failing phase exit code and does not record proof after validation failure", async () => {
     const commands: string[][] = [];
     let tick = 0;
 
     const result = await runPrAthenaDeliveryRun("/repo", {
+      ...gateEventHarness(),
       nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
       monotonicMs: () => tick++ * 1000,
       writeLedger: false,
@@ -195,6 +485,7 @@ describe("pr-athena delivery run wrapper", () => {
     let tick = 0;
 
     const result = await runPrAthenaDeliveryRun("/repo", {
+      ...gateEventHarness(),
       nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
       monotonicMs: () => tick++ * 1000,
       writeLedger: false,
@@ -228,6 +519,7 @@ describe("pr-athena delivery run wrapper", () => {
     let tick = 0;
 
     const result = await runPrAthenaDeliveryRun("/repo", {
+      ...gateEventHarness(),
       nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
       monotonicMs: () => tick++ * 1000,
       writeLedger: false,
@@ -257,6 +549,7 @@ describe("pr-athena delivery run wrapper", () => {
 
     try {
       await runPrAthenaDeliveryRun(rootDir, {
+        ...gateEventHarness(),
         nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
         monotonicMs: () => tick++ * 1000,
         runCommand: async () => ({ exitCode: 0 }),
@@ -265,8 +558,8 @@ describe("pr-athena delivery run wrapper", () => {
       const latest = JSON.parse(
         await readFile(
           path.join(rootDir, "artifacts/harness-delivery-runs/latest.json"),
-          "utf8"
-        )
+          "utf8",
+        ),
       );
 
       expect(latest).toMatchObject({
@@ -294,10 +587,10 @@ describe("pr-athena delivery run wrapper", () => {
         await readFile(
           path.join(
             rootDir,
-            "artifacts/harness-delivery-runs/provider-evidence.json"
+            "artifacts/harness-delivery-runs/provider-evidence.json",
           ),
-          "utf8"
-        )
+          "utf8",
+        ),
       );
 
       expect(evidence).toMatchObject({
@@ -316,7 +609,8 @@ describe("pr-athena delivery run wrapper", () => {
           },
           {
             capability: "athena-webapp-typecheck",
-            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
           },
         ],
       });
@@ -337,12 +631,13 @@ describe("pr-athena delivery run wrapper", () => {
           "rev-parse",
           "--git-path",
           "codex/pre-push-pr-athena-proof.json",
-        ])
+        ]),
       );
       await mkdir(path.dirname(proofPath), { recursive: true });
       await Bun.write(proofPath, "{}\n");
 
       const result = await runPrAthenaDeliveryRun(rootDir, {
+        ...gateEventHarness(),
         nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
         monotonicMs: () => tick++ * 1000,
         runCommand: async (command) => ({
@@ -367,8 +662,8 @@ describe("pr-athena delivery run wrapper", () => {
       const latest = JSON.parse(
         await readFile(
           path.join(rootDir, "artifacts/harness-delivery-runs/latest.json"),
-          "utf8"
-        )
+          "utf8",
+        ),
       );
       expect(latest).toMatchObject({
         status: "blocked",

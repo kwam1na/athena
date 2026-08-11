@@ -3,26 +3,191 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
+import { projectReviewActivation } from "./harness-candidate";
+import { HARNESS_GATE_REGISTRY } from "./harness-gate-registry";
+
+const reviewSensitiveActivationCases = [
+  {
+    name: "checks the new side of an Athena shared-demo rename",
+    entry: {
+      oldPath: "packages/athena-webapp/src/routes/legacy-demo.tsx",
+      path: "packages/athena-webapp/src/routes/demo.tsx",
+      additions: 0,
+      deletions: 0,
+    },
+    scenarioId: "athena.shared-demo-admission",
+    expectedScenarioIds: ["athena.shared-demo-admission"],
+  },
+  {
+    name: "activates overlapping cash-control and mixed-checkout prefixes",
+    entry: {
+      path: "packages/athena-webapp/convex/cashControls/deposits.ts",
+      additions: 1,
+      deletions: 0,
+    },
+    scenarioId: "athena.cash-controls",
+    expectedScenarioIds: ["athena.cash-controls", "athena.pos-mixed-checkout"],
+  },
+  {
+    name: "activates a deleted POS adjustment path",
+    entry: {
+      path: "packages/athena-webapp/convex/pos/application/corrections/voidItem.ts",
+      additions: 0,
+      deletions: 1,
+    },
+    scenarioId: "athena.pos-item-adjustment",
+    expectedScenarioIds: ["athena.pos-item-adjustment"],
+  },
+  {
+    name: "activates the mixed-checkout local sync contract",
+    entry: {
+      path: "packages/athena-webapp/shared/posLocalSyncContract.ts",
+      additions: 1,
+      deletions: 0,
+    },
+    scenarioId: "athena.pos-mixed-checkout",
+    expectedScenarioIds: ["athena.pos-mixed-checkout"],
+  },
+  {
+    name: "activates staff and store configuration",
+    entry: {
+      path: "packages/athena-webapp/src/components/store-configuration/StoreDetails.tsx",
+      additions: 1,
+      deletions: 0,
+    },
+    scenarioId: "athena.auth-staff-store-configuration",
+    expectedScenarioIds: ["athena.auth-staff-store-configuration"],
+  },
+  {
+    name: "activates omnichannel refund handling",
+    entry: {
+      path: "packages/athena-webapp/convex/storeFront/helpers/returnExchangeOperations.ts",
+      additions: 1,
+      deletions: 0,
+    },
+    scenarioId: "athena.omnichannel-order-refund",
+    expectedScenarioIds: ["athena.omnichannel-order-refund"],
+  },
+  {
+    name: "activates POS app-session continuity",
+    entry: {
+      path: "packages/athena-webapp/convex/pos/public/terminalAppSessions.ts",
+      additions: 1,
+      deletions: 0,
+    },
+    scenarioId: "athena.pos-app-session-continuity",
+    expectedScenarioIds: ["athena.pos-app-session-continuity"],
+  },
+  {
+    name: "activates POS offline route access",
+    entry: {
+      path: "packages/athena-webapp/public/pos-app-shell-sw.js",
+      additions: 1,
+      deletions: 0,
+    },
+    scenarioId: "athena.pos-offline-route-access",
+    expectedScenarioIds: ["athena.pos-offline-route-access"],
+  },
+  {
+    name: "checks the old side of a storefront auth-boundary rename",
+    entry: {
+      oldPath: "packages/storefront-webapp/src/routes/auth.verify.tsx",
+      path: "packages/storefront-webapp/src/routes/auth-renamed.tsx",
+      additions: 0,
+      deletions: 0,
+    },
+    scenarioId: "storefront.checkout-auth-boundary",
+    expectedScenarioIds: ["storefront.checkout-auth-boundary"],
+  },
+  {
+    name: "activates storefront payment redirect journeys",
+    entry: {
+      path: "packages/storefront-webapp/tests/e2e/payment-redirect.spec.ts",
+      additions: 1,
+      deletions: 0,
+    },
+    scenarioId: "storefront.payment-redirect-journeys",
+    expectedScenarioIds: ["storefront.payment-redirect-journeys"],
+  },
+] as const;
 
 describe("HARNESS_APP_REGISTRY", () => {
+  it("gives every validation scenario an immutable unique id and explicit sensitivity", () => {
+    const scenarios = HARNESS_APP_REGISTRY.flatMap((app) =>
+      app.validationScenarios.map((scenario) => ({
+        app: app.appName,
+        ...scenario,
+      })),
+    );
+    expect(
+      scenarios.every((scenario) => /^[a-z0-9.-]+$/.test(scenario.id)),
+    ).toBe(true);
+    expect(new Set(scenarios.map((scenario) => scenario.id)).size).toBe(
+      scenarios.length,
+    );
+    expect(
+      scenarios.every(
+        (scenario) => typeof scenario.reviewSensitive === "boolean",
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps reviewSensitive scenario IDs in exact parity with the review gate", () => {
+    const declared = HARNESS_APP_REGISTRY.flatMap((app) =>
+      app.validationScenarios
+        .filter((scenario) => scenario.reviewSensitive)
+        .map((scenario) => scenario.id),
+    ).sort();
+    const activation =
+      HARNESS_GATE_REGISTRY.obligations["review.green"].activation;
+
+    expect(activation.kind).toBe("review_projection");
+    if (activation.kind !== "review_projection") return;
+    expect([...activation.sensitiveScenarioIds].sort()).toEqual(declared);
+    expect(
+      reviewSensitiveActivationCases.map(({ scenarioId }) => scenarioId).sort(),
+    ).toEqual(declared);
+  });
+
+  it.each(reviewSensitiveActivationCases)(
+    "$name",
+    ({ entry, expectedScenarioIds }) => {
+      const scenarios = HARNESS_APP_REGISTRY.flatMap((app) =>
+        app.validationScenarios.map((scenario) => ({
+          ...scenario,
+          packageDir: app.packageDir,
+        })),
+      );
+
+      expect(projectReviewActivation([entry], scenarios)).toMatchObject({
+        sensitiveScenarioIds: expectedScenarioIds,
+      });
+    },
+  );
   it("keeps Convex changed-file lint aware of worktree edits", async () => {
     const script = await readFile(
       path.join(
         process.cwd(),
-        "packages/athena-webapp/scripts/convex-lint-changed.sh"
+        "packages/athena-webapp/scripts/convex-lint-changed.sh",
       ),
-      "utf8"
+      "utf8",
     );
 
     expect(script).toContain('"$MERGE_BASE"...HEAD');
-    expect(script).toContain("git -C \"$REPO_ROOT\" diff --name-only --diff-filter=ACMR --");
-    expect(script).toContain("git -C \"$REPO_ROOT\" diff --cached --name-only --diff-filter=ACMR --");
-    expect(script).toContain("git -C \"$REPO_ROOT\" ls-files --others --exclude-standard --");
+    expect(script).toContain(
+      'git -C "$REPO_ROOT" diff --name-only --diff-filter=ACMR --',
+    );
+    expect(script).toContain(
+      'git -C "$REPO_ROOT" diff --cached --name-only --diff-filter=ACMR --',
+    );
+    expect(script).toContain(
+      'git -C "$REPO_ROOT" ls-files --others --exclude-standard --',
+    );
   });
 
   it("keeps the valkey proxy service registered as a service-package archetype", () => {
     const valkeyProxy = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "valkey-proxy-server"
+      (entry) => entry.appName === "valkey-proxy-server",
     );
 
     expect(valkeyProxy?.appName).toBe("valkey-proxy-server");
@@ -31,25 +196,26 @@ describe("HARNESS_APP_REGISTRY", () => {
     expect(valkeyProxy?.packageDir).toBe("packages/valkey-proxy-server");
     expect(valkeyProxy?.auditedRoots).toEqual(["."]);
     expect(valkeyProxy?.harnessDocs.entryIndexPath).toBe(
-      "packages/valkey-proxy-server/docs/agent/entry-index.md"
+      "packages/valkey-proxy-server/docs/agent/entry-index.md",
     );
     expect(valkeyProxy?.harnessDocs.requiredIndexLinks).toContain(
-      "./entry-index.md"
+      "./entry-index.md",
     );
     expect(valkeyProxy?.harnessDocs.requiredCodeMapLinks).toContain(
-      "./entry-index.md"
+      "./entry-index.md",
     );
   });
 
   it("maps package metadata and service entry files into the valkey validation surface", () => {
     const valkeyProxy = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "valkey-proxy-server"
+      (entry) => entry.appName === "valkey-proxy-server",
     );
     const serviceScenario = valkeyProxy?.validationScenarios.find(
-      (scenario) => scenario.title === "Service logic, docs, or entrypoint edits"
+      (scenario) =>
+        scenario.title === "Service logic, docs, or entrypoint edits",
     );
     const liveProbeScenario = valkeyProxy?.validationScenarios.find(
-      (scenario) => scenario.title === "Live connection probe edits"
+      (scenario) => scenario.title === "Live connection probe edits",
     );
 
     expect(serviceScenario).toMatchObject({
@@ -81,7 +247,8 @@ describe("HARNESS_APP_REGISTRY", () => {
         { kind: "script", script: "test" },
         {
           kind: "raw",
-          command: "node --check packages/valkey-proxy-server/test-connection.js",
+          command:
+            "node --check packages/valkey-proxy-server/test-connection.js",
         },
       ],
     });
@@ -89,10 +256,11 @@ describe("HARNESS_APP_REGISTRY", () => {
 
   it("keeps storefront full-browser validation scoped to routes and playwright specs", () => {
     const storefront = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "storefront-webapp"
+      (entry) => entry.appName === "storefront-webapp",
     );
     const fullBrowserScenario = storefront?.validationScenarios.find(
-      (scenario) => scenario.title === "Full browser journeys and payment redirects"
+      (scenario) =>
+        scenario.title === "Full browser journeys and payment redirects",
     );
 
     expect(fullBrowserScenario).toMatchObject({
@@ -115,10 +283,10 @@ describe("HARNESS_APP_REGISTRY", () => {
 
   it("covers storefront runtime and build-pipeline edits with a typecheck scenario", () => {
     const storefront = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "storefront-webapp"
+      (entry) => entry.appName === "storefront-webapp",
     );
     const runtimeScenario = storefront?.validationScenarios.find(
-      (scenario) => scenario.title === "Route runtime or build-pipeline edits"
+      (scenario) => scenario.title === "Route runtime or build-pipeline edits",
     );
 
     expect(runtimeScenario).toMatchObject({
@@ -146,10 +314,11 @@ describe("HARNESS_APP_REGISTRY", () => {
 
   it("selects storefront backend first-load validation for API and deploy-surface edits", () => {
     const storefront = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "storefront-webapp"
+      (entry) => entry.appName === "storefront-webapp",
     );
     const apiScenario = storefront?.validationScenarios.find(
-      (scenario) => scenario.title === "Shared-lib, utility, or API-wrapper edits"
+      (scenario) =>
+        scenario.title === "Shared-lib, utility, or API-wrapper edits",
     );
 
     expect(apiScenario).toMatchObject({
@@ -160,10 +329,10 @@ describe("HARNESS_APP_REGISTRY", () => {
 
   it("covers Athena convex validation scripts in the backend-adjacent scenario", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const backendScenario = athena?.validationScenarios.find(
-      (scenario) => scenario.title === "Convex or backend-adjacent edits"
+      (scenario) => scenario.title === "Convex or backend-adjacent edits",
     );
 
     expect(backendScenario).toMatchObject({
@@ -190,39 +359,39 @@ describe("HARNESS_APP_REGISTRY", () => {
     expect(backendScenario?.note).toContain("Convex audit pair");
     expect(backendScenario?.note).toContain("assertConformsToExportedReturns");
     expect(backendScenario?.note).toContain(
-      "loose `exportReturns()` string checks do not prove the production return contract"
+      "loose `exportReturns()` string checks do not prove the production return contract",
     );
     expect(backendScenario?.note).toContain(
-      "Convex query handlers must not reach mutation-only DB APIs directly or through write-capable repositories/services"
+      "Convex query handlers must not reach mutation-only DB APIs directly or through write-capable repositories/services",
     );
     expect(backendScenario?.note).toContain(
-      "split read factories from `MutationCtx`-only write factories"
+      "split read factories from `MutationCtx`-only write factories",
     );
   });
 
   it("covers changed Athena frontend source files with changed-file lint", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const frontendLintScenario = athena?.validationScenarios.find(
-      (scenario) => scenario.title === "Changed frontend source lint"
+      (scenario) => scenario.title === "Changed frontend source lint",
     );
 
     expect(frontendLintScenario).toMatchObject({
       touchedPaths: ["src", "shared", "types.ts"],
       commands: [{ kind: "script", script: "lint:frontend:changed" }],
-      note:
-        "Run this for changed browser-facing TypeScript or TSX files so introduced ESLint failures are caught before PR handoff.",
+      note: "Run this for changed browser-facing TypeScript or TSX files so introduced ESLint failures are caught before PR handoff.",
     });
   });
 
   it("maps shared demo admission and restore edits to the bounded demo validation slice", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const sharedDemoScenario = athena?.validationScenarios.find(
       (scenario) =>
-        scenario.title === "Shared demo admission, restore, and orientation edits"
+        scenario.title ===
+        "Shared demo admission, restore, and orientation edits",
     );
 
     expect(sharedDemoScenario).toMatchObject({
@@ -262,12 +431,12 @@ describe("HARNESS_APP_REGISTRY", () => {
 
   it("maps reporting foundation edits to focused and merge-grade validation", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const reportingScenario = athena?.validationScenarios.find(
       (scenario) =>
         scenario.title ===
-        "Reporting fact ledger, day fold, and read-model edits"
+        "Reporting fact ledger, day fold, and read-model edits",
     );
 
     expect(reportingScenario).toMatchObject({
@@ -295,19 +464,19 @@ describe("HARNESS_APP_REGISTRY", () => {
     // The fold, not the incremental open-day path, is the correctness
     // authority — the note must keep saying so.
     expect(reportingScenario?.note).toContain(
-      "The fold is the correctness authority"
+      "The fold is the correctness authority",
     );
     expect(reportingScenario?.note).toContain(
-      "must never decide operational success"
+      "must never decide operational success",
     );
   });
 
   it("runs the Athena browser-boundary regression for route runtime changes", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const runtimeScenario = athena?.validationScenarios.find(
-      (scenario) => scenario.title === "Route runtime or build-pipeline edits"
+      (scenario) => scenario.title === "Route runtime or build-pipeline edits",
     );
 
     expect(runtimeScenario).toMatchObject({
@@ -337,10 +506,10 @@ describe("HARNESS_APP_REGISTRY", () => {
 
   it("documents Daily store operations lifecycle validation coverage in Athena harness docs", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const dailyOperationsScenario = athena?.validationScenarios.find(
-      (scenario) => scenario.title === "Daily store operations lifecycle edits"
+      (scenario) => scenario.title === "Daily store operations lifecycle edits",
     );
 
     expect(dailyOperationsScenario).toMatchObject({
@@ -376,36 +545,34 @@ describe("HARNESS_APP_REGISTRY", () => {
         { kind: "script", script: "build" },
       ],
       behaviorScenarios: ["athena-admin-shell-boot"],
-      note:
-        "Use this when Daily Opening, Daily Close, or the store-day operations route wiring changes. It validates the backend readiness gates, operator-facing acknowledgement views, generated Convex API surface, and route tree before broader package validation.",
+      note: "Use this when Daily Opening, Daily Close, or the store-day operations route wiring changes. It validates the backend readiness gates, operator-facing acknowledgement views, generated Convex API surface, and route tree before broader package validation.",
     });
   });
 
   it("covers Athena frontend test harness surfaces including vitest setup", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const frontendHarnessScenario = athena?.validationScenarios.find(
-      (scenario) => scenario.title === "Frontend test harness edits"
+      (scenario) => scenario.title === "Frontend test harness edits",
     );
 
     expect(frontendHarnessScenario).toMatchObject({
       touchedPaths: ["src/test", "src/tests", "vitest.setup.ts", ".env.test"],
       commands: [{ kind: "script", script: "test" }],
-      note:
-        "Run the package suite when package-local frontend test helpers, focused regression tests, or the test-mode env file change.",
+      note: "Run the package suite when package-local frontend test helpers, focused regression tests, or the test-mode env file change.",
     });
   });
 
   it("documents Athena service management as a first-class harness discovery surface", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const backendFolders = athena?.keyFolderGroups.find(
-      (group) => group.title === "Backend and test surfaces"
+      (group) => group.title === "Backend and test surfaces",
     )?.folders;
     const routeScenario = athena?.validationScenarios.find(
-      (scenario) => scenario.title === "Route or UI-only edits"
+      (scenario) => scenario.title === "Route or UI-only edits",
     );
 
     expect(backendFolders).toContainEqual({
@@ -414,17 +581,17 @@ describe("HARNESS_APP_REGISTRY", () => {
         "Service catalog, appointment, and service-case workflows layered on operational work items.",
     });
     expect(routeScenario?.note).toBe(
-      "Use this for authenticated dashboard flows, service-management screens, route trees, and UI behavior changes that stay inside the frontend shell."
+      "Use this for authenticated dashboard flows, service-management screens, route trees, and UI behavior changes that stay inside the frontend shell.",
     );
     expect(routeScenario?.touchedPaths).toContain("src/config.test.ts");
   });
 
   it("documents cash-controls workflow validation coverage in Athena harness docs", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const cashControlsScenario = athena?.validationScenarios.find(
-      (scenario) => scenario.title === "Cash-controls workflow edits"
+      (scenario) => scenario.title === "Cash-controls workflow edits",
     );
 
     expect(cashControlsScenario).toMatchObject({
@@ -448,19 +615,18 @@ describe("HARNESS_APP_REGISTRY", () => {
         },
         { kind: "script", script: "build" },
       ],
-      note:
-        "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. This is the confirmation slice for drawers opened from POS showing up in the dashboard and register-session detail views. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.",
+      note: "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. This is the confirmation slice for drawers opened from POS showing up in the dashboard and register-session detail views. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.",
       behaviorScenarios: ["athena-admin-shell-boot"],
     });
   });
 
   it("documents POS item-adjustment reporting validation coverage in Athena harness docs", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const adjustmentScenario = athena?.validationScenarios.find(
       (scenario) =>
-        scenario.title === "POS transaction item-adjustment reporting edits"
+        scenario.title === "POS transaction item-adjustment reporting edits",
     );
 
     expect(adjustmentScenario).toMatchObject({
@@ -490,18 +656,17 @@ describe("HARNESS_APP_REGISTRY", () => {
         },
         { kind: "script", script: "build" },
       ],
-      note:
-        "Use this when completed-transaction item adjustments, adjustment approval/application, transaction detail adjustment history, daily close/operations adjusted totals, or cash-control settlement display changes. It keeps original sale totals and explicit adjusted/net settlement fields covered together.",
+      note: "Use this when completed-transaction item adjustments, adjustment approval/application, transaction detail adjustment history, daily close/operations adjusted totals, or cash-control settlement display changes. It keeps original sale totals and explicit adjusted/net settlement fields covered together.",
       behaviorScenarios: ["athena-admin-shell-boot"],
     });
   });
 
   it("documents POS service mixed-checkout validation coverage in Athena harness docs", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const mixedCheckoutScenario = athena?.validationScenarios.find(
-      (scenario) => scenario.title === "POS service mixed-checkout edits"
+      (scenario) => scenario.title === "POS service mixed-checkout edits",
     );
 
     expect(mixedCheckoutScenario).toMatchObject({
@@ -540,19 +705,18 @@ describe("HARNESS_APP_REGISTRY", () => {
         { kind: "script", script: "build" },
       ],
       behaviorScenarios: ["athena-admin-shell-boot"],
-      note:
-        "Use this when POS service mixed checkout changes receipts, transaction read models, service-case payment context, service catalog local readiness, payment allocation splits, daily close/cash-control reporting, or mixed-sale void guardrails. It preserves the split between retail add-ons and service material usage while confirming drawer tender is counted once.",
+      note: "Use this when POS service mixed checkout changes receipts, transaction read models, service-case payment context, service catalog local readiness, payment allocation splits, daily close/cash-control reporting, or mixed-sale void guardrails. It preserves the split between retail add-ons and service material usage while confirming drawer tender is counted once.",
     });
   });
 
   it("documents service-operations validation coverage in Athena harness docs", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const serviceOpsScenario = athena?.validationScenarios.find(
       (scenario) =>
         scenario.title ===
-        "Service operations intake, catalog, appointments, and cases"
+        "Service operations intake, catalog, appointments, and cases",
     );
 
     expect(serviceOpsScenario).toMatchObject({
@@ -577,17 +741,17 @@ describe("HARNESS_APP_REGISTRY", () => {
         },
         { kind: "script", script: "build" },
       ],
-      note:
-        "Use this when service intake, catalog management, appointment scheduling, service-case execution, or manager-queue service handoffs change. It validates the command-result service flows plus the operator-facing intake, appointments, active-cases, catalog, and queue surfaces together before broader package validation.",
+      note: "Use this when service intake, catalog management, appointment scheduling, service-case execution, or manager-queue service handoffs change. It validates the command-result service flows plus the operator-facing intake, appointments, active-cases, catalog, and queue surfaces together before broader package validation.",
     });
   });
 
   it("documents auth, staff, and store-configuration validation coverage in Athena harness docs", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const staffFoundationScenario = athena?.validationScenarios.find(
-      (scenario) => scenario.title === "Auth, staff, and store-configuration edits"
+      (scenario) =>
+        scenario.title === "Auth, staff, and store-configuration edits",
     );
 
     expect(staffFoundationScenario).toMatchObject({
@@ -619,17 +783,16 @@ describe("HARNESS_APP_REGISTRY", () => {
         },
         { kind: "script", script: "build" },
       ],
-      note:
-        "Use this when login auth sync, store staff identity, admin store-configuration mutations, or cashier-auth command handling changes. It validates the retryable auth-sync path, the staff credential rules, the staff-management surface, the shared store-configuration hook plus fulfillment/maintenance/MTN MoMo regressions, and the register and cashier-auth flows that now share `staffProfileId` instead of the deleted cashier model.",
+      note: "Use this when login auth sync, store staff identity, admin store-configuration mutations, or cashier-auth command handling changes. It validates the retryable auth-sync path, the staff credential rules, the staff-management surface, the shared store-configuration hook plus fulfillment/maintenance/MTN MoMo regressions, and the register and cashier-auth flows that now share `staffProfileId` instead of the deleted cashier model.",
     });
   });
 
   it("documents expense-session validation coverage in Athena harness docs", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const expenseScenario = athena?.validationScenarios.find(
-      (scenario) => scenario.title === "Expense-session and cart flow edits"
+      (scenario) => scenario.title === "Expense-session and cart flow edits",
     );
 
     expect(expenseScenario).toMatchObject({
@@ -657,17 +820,16 @@ describe("HARNESS_APP_REGISTRY", () => {
         },
         { kind: "script", script: "build" },
       ],
-      note:
-        "Use this when expense-session lifecycle, expense cart items, expense transaction finalization, or expense session hooks change. It validates the command-result expense session mutations plus the browser-facing session and cart hooks that now collapse expected failures to safe user-facing copy.",
+      note: "Use this when expense-session lifecycle, expense cart items, expense transaction finalization, or expense session hooks change. It validates the command-result expense session mutations plus the browser-facing session and cart hooks that now collapse expected failures to safe user-facing copy.",
     });
   });
 
   it("documents the shared client/server error foundation validation coverage in Athena harness docs", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const errorFoundationScenario = athena?.validationScenarios.find(
-      (scenario) => scenario.title === "Client/server error foundation edits"
+      (scenario) => scenario.title === "Client/server error foundation edits",
     );
 
     expect(errorFoundationScenario).toMatchObject({
@@ -692,19 +854,18 @@ describe("HARNESS_APP_REGISTRY", () => {
         },
         { kind: "script", script: "build" },
       ],
-      note:
-        "Use this when the shared command-result contract, client command normalizers, generic catch boundary, or browser import boundary changes. Expected failures must stay in browser-safe `user_error` results, thrown faults must collapse to generic fallback copy, and shared modules must not import raw Convex server files into the browser tree.",
+      note: "Use this when the shared command-result contract, client command normalizers, generic catch boundary, or browser import boundary changes. Expected failures must stay in browser-safe `user_error` results, thrown faults must collapse to generic fallback copy, and shared modules must not import raw Convex server files into the browser tree.",
     });
   });
 
   it("documents omnichannel order and review validation coverage in Athena harness docs", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const omnichannelScenario = athena?.validationScenarios.find(
       (scenario) =>
         scenario.title ===
-        "Omnichannel order, refund, review, and customer-history edits"
+        "Omnichannel order, refund, review, and customer-history edits",
     );
 
     expect(omnichannelScenario).toMatchObject({
@@ -747,11 +908,11 @@ describe("HARNESS_APP_REGISTRY", () => {
 
   it("documents admin quick-action unexpected-toast fallback coverage in Athena harness docs", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const adminQuickActionScenario = athena?.validationScenarios.find(
       (scenario) =>
-        scenario.title === "Admin quick-action unexpected-toast fallback edits"
+        scenario.title === "Admin quick-action unexpected-toast fallback edits",
     );
 
     expect(adminQuickActionScenario).toMatchObject({
@@ -783,16 +944,17 @@ describe("HARNESS_APP_REGISTRY", () => {
 
   it("documents stock-ops procurement validation coverage in Athena harness docs", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const coreFolders = athena?.keyFolderGroups.find(
-      (group) => group.title === "Core app surfaces"
+      (group) => group.title === "Core app surfaces",
     )?.folders;
     const backendFolders = athena?.keyFolderGroups.find(
-      (group) => group.title === "Backend and test surfaces"
+      (group) => group.title === "Backend and test surfaces",
     )?.folders;
     const stockOpsScenario = athena?.validationScenarios.find(
-      (scenario) => scenario.title === "Stock-ops procurement and receiving edits"
+      (scenario) =>
+        scenario.title === "Stock-ops procurement and receiving edits",
     );
 
     expect(coreFolders).toContainEqual({
@@ -830,26 +992,25 @@ describe("HARNESS_APP_REGISTRY", () => {
         },
         { kind: "script", script: "build" },
       ],
-      note:
-        "Use this when stock adjustments, procurement recommendations, purchase-order lifecycle changes, or receiving route wiring move. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new stockOps function exports changed.",
+      note: "Use this when stock adjustments, procurement recommendations, purchase-order lifecycle changes, or receiving route wiring move. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new stockOps function exports changed.",
       behaviorScenarios: ["athena-admin-shell-boot"],
     });
   });
 
   it("documents workflow trace foundation validation coverage in Athena harness docs", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const coreFolders = athena?.keyFolderGroups.find(
-      (group) => group.title === "Core app surfaces"
+      (group) => group.title === "Core app surfaces",
     )?.folders;
     const backendFolders = athena?.keyFolderGroups.find(
-      (group) => group.title === "Backend and test surfaces"
+      (group) => group.title === "Backend and test surfaces",
     )?.folders;
     const workflowTraceScenario = athena?.validationScenarios.find(
       (scenario) =>
         scenario.title ===
-        "Workflow trace foundation, POS local sync/register, and trace-link edits"
+        "Workflow trace foundation, POS local sync/register, and trace-link edits",
     );
 
     expect(coreFolders).toContainEqual({
@@ -914,7 +1075,7 @@ describe("HARNESS_APP_REGISTRY", () => {
       { kind: "script", script: "build" },
     ]);
     expect(workflowTraceScenario?.note).toBe(
-      "Use this when the shared workflow-trace or POS local sync contract, POS local sync repository, POS local-first sync/storage/read-model/command-gateway files, terminal seed lookup, POS local entry/readiness files, the POS register bootstrap or drawer gate, the `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, local sync ingestion/projection/repository/read-model adjacency, POS entry/readiness gating, the drawer-open bootstrap handoff, the shared trace route, terminal fallback behavior, and the operator-facing POS and cash-controls surfaces before broader package validation."
+      "Use this when the shared workflow-trace or POS local sync contract, POS local sync repository, POS local-first sync/storage/read-model/command-gateway files, terminal seed lookup, POS local entry/readiness files, the POS register bootstrap or drawer gate, the `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, local sync ingestion/projection/repository/read-model adjacency, POS entry/readiness gating, the drawer-open bootstrap handoff, the shared trace route, terminal fallback behavior, and the operator-facing POS and cash-controls surfaces before broader package validation.",
     );
     expect(workflowTraceScenario?.behaviorScenarios).toEqual([
       "athena-admin-shell-boot",
@@ -925,10 +1086,10 @@ describe("HARNESS_APP_REGISTRY", () => {
 
   it("documents POS hub app-session continuity validation coverage in Athena harness docs", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const appSessionScenario = athena?.validationScenarios.find(
-      (scenario) => scenario.title === "POS hub app-session continuity edits"
+      (scenario) => scenario.title === "POS hub app-session continuity edits",
     );
 
     expect(appSessionScenario?.touchedPaths).toEqual([
@@ -959,7 +1120,7 @@ describe("HARNESS_APP_REGISTRY", () => {
       { kind: "script", script: "build" },
     ]);
     expect(appSessionScenario?.note).toBe(
-      "Use this when POS hub app-session recovery, route-shell continuity, terminal recovery validation, or app-session diagnostics change. It proves the recovery assertion stays POS-hub scoped, non-POS routes still require normal app auth, server validation rejects unsafe scopes, recovery retries stay bounded, terminal diagnostics redact raw recovery data, and sale authority still depends on terminal integrity, drawer authority, local command invariants, and staff proof."
+      "Use this when POS hub app-session recovery, route-shell continuity, terminal recovery validation, or app-session diagnostics change. It proves the recovery assertion stays POS-hub scoped, non-POS routes still require normal app auth, server validation rejects unsafe scopes, recovery retries stay bounded, terminal diagnostics redact raw recovery data, and sale authority still depends on terminal integrity, drawer authority, local command invariants, and staff proof.",
     );
     expect(appSessionScenario?.behaviorScenarios).toEqual([
       "athena-admin-shell-boot",
@@ -1006,8 +1167,7 @@ describe("HARNESS_APP_REGISTRY", () => {
       },
       {
         kind: "raw",
-        command:
-          "bun run --filter '@athena/webapp' test:e2e:prod:pos",
+        command: "bun run --filter '@athena/webapp' test:e2e:prod:pos",
       },
       {
         kind: "raw",
@@ -1065,11 +1225,12 @@ describe("HARNESS_APP_REGISTRY", () => {
 
   it("documents POS terminal health visibility validation coverage in Athena harness docs", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const terminalHealthScenario = athena?.validationScenarios.find(
       (scenario) =>
-        scenario.title === "POS terminal health visibility and diagnostics edits"
+        scenario.title ===
+        "POS terminal health visibility and diagnostics edits",
     );
 
     expect(terminalHealthScenario?.touchedPaths).toEqual([
@@ -1113,7 +1274,7 @@ describe("HARNESS_APP_REGISTRY", () => {
       { kind: "script", script: "build" },
     ]);
     expect(terminalHealthScenario?.note).toBe(
-      "Use this when POS terminal registration, terminal runtime status, browser-side health publisher/readout, terminal recovery commands, terminal setup/detail UI, POS support diagnostics, or cash-controls terminal evidence changes. Stale or pending terminal check-ins are telemetry and should stay out of manager-review queues; unresolved local sync conflicts remain the source of needs-review copy. Browser-local terminal recovery must be verified by a fresh runtime check-in before support treats a terminal as healthy."
+      "Use this when POS terminal registration, terminal runtime status, browser-side health publisher/readout, terminal recovery commands, terminal setup/detail UI, POS support diagnostics, or cash-controls terminal evidence changes. Stale or pending terminal check-ins are telemetry and should stay out of manager-review queues; unresolved local sync conflicts remain the source of needs-review copy. Browser-local terminal recovery must be verified by a fresh runtime check-in before support treats a terminal as healthy.",
     );
     expect(terminalHealthScenario?.behaviorScenarios).toEqual([
       "athena-admin-shell-boot",
@@ -1122,13 +1283,13 @@ describe("HARNESS_APP_REGISTRY", () => {
 
   it("covers Athena shared type exports in the shared-lib validation scenario", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const sharedLibScenario = athena?.validationScenarios.find(
-      (scenario) => scenario.title === "Shared-lib or utility edits"
+      (scenario) => scenario.title === "Shared-lib or utility edits",
     );
     const coreFolders = athena?.keyFolderGroups.find(
-      (group) => group.title === "Core app surfaces"
+      (group) => group.title === "Core app surfaces",
     )?.folders;
 
     expect(athena?.auditedRoots).toEqual(["src", "shared", "convex"]);
@@ -1157,10 +1318,10 @@ describe("HARNESS_APP_REGISTRY", () => {
 
   it("covers Athena Storybook and frontend tooling edits with isolated validation", () => {
     const athena = HARNESS_APP_REGISTRY.find(
-      (entry) => entry.appName === "athena-webapp"
+      (entry) => entry.appName === "athena-webapp",
     );
     const storybookScenario = athena?.validationScenarios.find(
-      (scenario) => scenario.title === "Storybook and frontend tooling edits"
+      (scenario) => scenario.title === "Storybook and frontend tooling edits",
     );
 
     expect(storybookScenario).toMatchObject({
@@ -1193,13 +1354,14 @@ describe("HARNESS_APP_REGISTRY", () => {
         { kind: "script", script: "build" },
         { kind: "script", script: "storybook:build" },
       ],
-      note:
-        "Use this when the document shell, favicon and web-manifest assets, Storybook config, story files, package-level frontend tooling, or the operations/landing screenshot capture scripts change need isolated validation.",
+      note: "Use this when the document shell, favicon and web-manifest assets, Storybook config, story files, package-level frontend tooling, or the operations/landing screenshot capture scripts change need isolated validation.",
     });
   });
 
   it("keeps every registered app active once onboarding is complete", () => {
-    const statuses = HARNESS_APP_REGISTRY.map((entry) => entry.onboardingStatus);
+    const statuses = HARNESS_APP_REGISTRY.map(
+      (entry) => entry.onboardingStatus,
+    );
 
     expect(statuses).toEqual(["active", "active", "active"]);
   });

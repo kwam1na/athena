@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Candidate-Bound Harness Gate Obligations</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="c67b8608dc1228479537bc9cf719b5865cf9817960253a7676ce14b04ebf3d23">
+  <header data-report-section="header">
+    <h1>Candidate-Bound Harness Gate Obligations</h1>
+    <p>How Athena enforces review before expensive validation without burdening interactive humans</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch codex/harness-gate-obligations</li>
+      <li>Linear V26-1194–V26-1200</li>
+      <li>152 focused tests green</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Source</dt><dd>2026-08-11 harness gate obligations plan</dd>
+      <dt>Status</dt><dd>Delivery candidate; PR and merge pending</dd>
+      <dt>Deploy</dt><dd>Not applicable</dd>
+      <dt>Root alignment</dt><dd>Pending merge</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>Athena now has a reusable obligation layer in front of expensive harness gates. The first adoption guards the heavy pr:athena validation provider: qualifying agent work needs final-green review evidence for the exact prepared candidate, while documentation currentness remains an always-on live fact.</p>
+      <p>The guard distinguishes evidence, human waiver, CI delegation, non-applicability, live facts, and blocks. It owns the heavy command list, so admission is an enforced boundary rather than advice followed by a discoverable shell tail.</p>
+      <p>Merge-gate verification also exposed two shared-demo fixture assertions whose hard-coded historical date aged outside the fixture's three-week window. Their clocks are now pinned in the tests, preserving production behavior while keeping the coverage deterministic.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why instructions were not enough</h2>
+      <p>The workflow already told agents to review before running pr:athena, but nothing prevented an agent from starting merge-grade validation first. A committed marker would only move the weakness: it could be stale after an edit or rebase, copied between worktrees, and could not honestly say whether review passed, a human waived it, or CI owned it.</p>
+      <p>The failure was therefore an admission-model gap, not a missing reminder. The harness needed to know which exact candidate was crossing which gate, which obligations applied, and which provenance was allowed to resolve each one.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model: a passport checked at the machine room</h2>
+      <p>Think of preparation as issuing a passport for one exact Git tree and base. Review providers can stamp that passport only after their final complete green pass. The gate registry says which stamps or live inspections are required. The admission wrapper is the guard standing beside the expensive machinery, not a sign in the hallway.</p>
+      <p>A human waiver and repository CI delegation are different travel documents. They can authorize a narrow route, but neither is relabeled as a review stamp. Any candidate change produces a different passport.</p>
+      <pre><code>prepare candidate -&gt; evaluate obligations -&gt; persist decision -&gt; final stable capture -&gt; spawn heavy provider</code></pre>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>Before: skill prose owned ordering; pr:athena:validate-provider exposed the heavy shell chain; proof identity existed only for later pre-push reuse; caller posture and review provenance were not part of admission.</p>
+      <p>After: one preparation wrapper publishes a candidate receipt; a typed registry and pure evaluator resolve obligations; approved review workflows issue candidate-bound evidence; one effectful wrapper evaluates documentation once, records the decision, rechecks the candidate, and directly owns every heavy command.</p>
+      <ul>
+        <li>Agents: qualifying work requires fresh approved review evidence and never receives a human prompt.</li>
+        <li>Interactive humans: may deliberately acknowledge only the review obligation after deterministic facts are green.</li>
+        <li>CI: delegates review only for the exact Athena PR Tests workflow, harness-validation job, pull_request event, and athena-pr-tests policy.</li>
+        <li>Small non-sensitive work: records review.green as not_applicable rather than pretending review passed.</li>
+      </ul>
+  </section>
+  <section data-report-section="mechanics">
+    <h2>How a candidate reaches validation</h2>
+      <p>Stable capture keeps the complete tree identity separate from activation filtering. <code>baseTipSha</code> identifies the current base-ref tip used for freshness, while <code>diffBaseSha</code> identifies the merge base used for activation and review scope. Tests, generated artifacts, and lockfiles may be excluded from the 50-line projection, yet changing any of them still invalidates historical evidence because <code>treeSha</code> changes.</p>
+      <p>Review sensitivity is registry metadata, not a second path list. Every validation scenario has an immutable ID and explicit reviewSensitive boolean, and generated validation maps expose the same fields for agents and audits.</p>
+      <p>Records live under a Git-private worktree path. Their IDs derive from semantic identity and publication uses atomic create-if-absent, so repeated providers converge. Malformed neighboring records block when no separately valid existential-provider record satisfies the obligation; contradictory fresh records always block.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <ul>
+        <li>Unstaged, untracked, missing-base, or racing Git state is unprepared or ambiguous; it never becomes a zero-risk projection.</li>
+        <li>Missing, stale, corrupt, wrong-provider, non-green, or unresolved-actionable evidence cannot authorize an agent.</li>
+        <li>A valid existential provider record can satisfy review without a malformed neighbor hiding it; contradictory fresh records block.</li>
+        <li>Documentation findings aggregate with review findings and prevent a human prompt until universal facts are repaired.</li>
+        <li>Prompt decline, EOF, candidate drift, provider failure, or post-provider drift leaves no reusable human waiver.</li>
+        <li>Telemetry persistence failure cannot turn a block into admission, and an admitted run fails closed before heavy work when its decision cannot be recorded.</li>
+        <li>The final candidate capture is adjacent to the first heavy spawn; a race starts zero heavy commands.</li>
+      </ul>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what did not</h2>
+      <p>Changed: preparation became receipt-bearing; gate policy became typed and reusable; review providers gained final-manifest evidence; actor context and worktree-local records became first-class; the heavy provider moved behind one admission wrapper; gate decisions entered the delivery ledger; registry generation and audit now cover stable scenario IDs and sensitivity.</p>
+      <p>Intentionally unchanged: the standalone delivery:documentation-check policy and human-readable failure contract; the later post-validation harness review and merge-ready review loop; clean and staged-index proof support; the pr:athena phase order; tests/generated/lockfiles being excluded only from the line-count activation branch; raw internal commands remaining private implementation details rather than new public gates.</p>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and finish-line status</h2>
+      <p>Focused validation passed 152 tests across candidate capture, preparation, proof compatibility, registry generation, pure decisions, execution context, immutable records, review manifests, documentation evaluation, admission, telemetry, audit, and skill guidance. Root TypeScript noEmit passed, git diff --check passed, compound documentation passed, and Graphify was rebuilt.</p>
+      <p>The approved plan received unanimous coherence, feasibility, security, product, scope, and adversarial review. Implementation multi-lens review, the evidence-bearing final review manifest, full pr:athena, PR creation, remote checks, merge, and root alignment remain pending at report time. No production deploy applies to this harness-only change.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>How to extend this posture</h2>
+      <ul>
+        <li>Add a stable gate and obligation definition instead of inserting gate-specific branches into admission.</li>
+        <li>Choose activation and allowed resolution kinds explicitly; do not normalize missing metadata into policy.</li>
+        <li>Use live facts for deterministic current checks and candidate-bound records for historical judgment.</li>
+        <li>Keep the pure evaluator effect-free and make the consuming wrapper own the guarded commands.</li>
+        <li>After any review fix, run pr:athena:prepare and repeat the complete evidence-bearing review before recording evidence.</li>
+        <li>Update package routing, CI authorization, registry audits, generated maps, validation fingerprints, focused tests, and docs as one contract.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>scripts/harness-candidate.ts</code></td><td>Captures the exact stable candidate and computes review activation.</td></tr>
+        <tr><td><code>scripts/pr-athena-prepare.ts</code></td><td>Owns preparation and publishes the worktree-local candidate receipt.</td></tr>
+        <tr><td><code>scripts/harness-gate-registry.ts</code></td><td>Declares reusable gates, obligations, providers, CI policy, and prevented cost.</td></tr>
+        <tr><td><code>scripts/harness-gate-obligations.ts</code></td><td>Purely resolves all obligation outcomes and aggregates remediation.</td></tr>
+        <tr><td><code>scripts/harness-execution-context.ts</code></td><td>Classifies repository CI, agents, interactive humans, and unknown callers.</td></tr>
+        <tr><td><code>scripts/harness-obligation-records.ts</code></td><td>Publishes and discovers immutable worktree-local evidence and waivers.</td></tr>
+        <tr><td><code>scripts/harness-review-evidence.ts</code></td><td>Validates approved provider final manifests against the current candidate.</td></tr>
+        <tr><td><code>scripts/harness-gate-admission.ts</code></td><td>Owns prompting, decision events, final recheck, and every heavy provider command.</td></tr>
+        <tr><td><code>scripts/delivery-documentation-check.ts</code></td><td>Supplies documentation currentness once as a structured live fact.</td></tr>
+        <tr><td><code>scripts/harness-audit.ts</code></td><td>Detects registry, generated metadata, CI, and public-entrypoint bypass drift.</td></tr>
+        <tr><td><code>scripts/pr-athena-delivery-run.ts</code></td><td>Correlates child gate events to the current delivery invocation.</td></tr>
+        <tr><td><code>scripts/harness-delivery-run-ledger.ts</code></td><td>Persists decision posture and prevented-cost telemetry with command spans.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is a tracked review marker insufficient?</p>
+        <ol data-quiz-options>
+          <li>It makes Git too slow</li>
+          <li data-quiz-correct>It cannot bind review provenance to the exact tree, base, and worktree</li>
+          <li>It cannot be read from Bun</li>
+          <li>It prevents human review</li>
+        </ol>
+        <p data-quiz-explanation>Admission needs exact candidate and provenance semantics; a marker can become stale or be copied while still looking present.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which identity is used for activation and review scope?</p>
+        <ol data-quiz-options>
+          <li>baseTipSha</li>
+          <li>worktreeId</li>
+          <li data-quiz-correct>diffBaseSha</li>
+          <li>the latest filesystem mtime</li>
+        </ol>
+        <p data-quiz-explanation>The merge base scopes branch changes, while baseTipSha separately invalidates evidence when the configured base advances.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does an accepted human waiver mean in telemetry?</p>
+        <ol data-quiz-options>
+          <li>The review provider passed</li>
+          <li>Review was not applicable</li>
+          <li data-quiz-correct>A human deliberately authorized this candidate without claiming provider evidence</li>
+          <li>CI delegated review</li>
+        </ol>
+        <p data-quiz-explanation>Waived is its own resolution kind and is never relabeled as satisfied evidence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>When may an agent receive the human waiver prompt?</p>
+        <ol data-quiz-options>
+          <li>Whenever it has a PTY</li>
+          <li>Only for diffs under 50 lines</li>
+          <li data-quiz-correct>Never; a recognized agent remains an agent even with a PTY</li>
+          <li>Only in Codex Desktop</li>
+        </ol>
+        <p data-quiz-explanation>Positive agent signals outrank terminal presentation, preventing automation from borrowing the lower-friction human posture.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What must happen after a review provider changes the candidate?</p>
+        <ol data-quiz-options>
+          <li>Reuse the earlier pass if the fix was small</li>
+          <li data-quiz-correct>Prepare the resulting candidate and run the complete evidence-bearing review again</li>
+          <li>Write a waiver</li>
+          <li>Run coverage immediately</li>
+        </ol>
+        <p data-quiz-explanation>Evidence can authorize only the tree reviewed in the final complete green pass.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the admission wrapper own the heavy command list?</p>
+        <ol data-quiz-options>
+          <li>To make package.json shorter only</li>
+          <li data-quiz-correct>So the check and guarded effect cannot be separated by calling a post-admission command</li>
+          <li>To avoid using Bun scripts</li>
+          <li>So humans cannot see commands</li>
+        </ol>
+        <p data-quiz-explanation>Owning the effect makes admission enforceable; a shell check followed by a public heavy alias would remain bypassable.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Can repository CI delegation bypass stale documentation?</p>
+        <ol data-quiz-options>
+          <li>Yes, CI owns every obligation</li>
+          <li>Only on scheduled runs</li>
+          <li data-quiz-correct>No, delegation resolves review.green only and deterministic documentation remains binding</li>
+          <li>Only when coverage is cached</li>
+        </ol>
+        <p data-quiz-explanation>The allowlisted policy delegates one declared obligation, not the entire gate.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens to a 200-line generated-only change outside sensitive scenarios?</p>
+        <ol data-quiz-options>
+          <li>It activates the 50-line rule</li>
+          <li data-quiz-correct>It is excluded from line-count activation but still changes tree freshness</li>
+          <li>It reuses every prior review record</li>
+          <li>It is ignored by preparation</li>
+        </ol>
+        <p data-quiz-explanation>Activation filtering and freshness identity are separate: generated lines may not activate review, but any tree change stales historical evidence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What should a new expensive gate reuse?</p>
+        <ol data-quiz-options>
+          <li>A copied sensitive-path list and custom prompt</li>
+          <li data-quiz-correct>The typed registry, pure evaluator, worktree records, and a wrapper that owns its effects</li>
+          <li>The review skill prose only</li>
+          <li>The pre-push proof as a waiver</li>
+        </ol>
+        <p data-quiz-explanation>The reusable primitive is the obligation kernel plus an effectful admission adapter, not gate-specific policy duplication.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the report&#x27;s current finish-line state?</p>
+        <ol data-quiz-options>
+          <li>Merged and deployed</li>
+          <li data-quiz-correct>Delivery candidate with implementation review, full gate, PR, merge, and root alignment still pending</li>
+          <li>Linear Done with CI skipped</li>
+          <li>Production rollout in progress</li>
+        </ol>
+        <p data-quiz-explanation>The report records completed focused validation without predicting the pending review, PR, merge, or local-root events.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>Session historian</dt><dd>Recovered the candidate-first, wrapper-owned, invocation-scoped waiver, and repository-authorized CI decisions from prior planning and adversarial loops.</dd>
+      <dt>Delivered diff explorer</dt><dd>Mapped the candidate, policy, record, provider, admission, telemetry, generated, and documentation layers and identified the intentionally unchanged contracts.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

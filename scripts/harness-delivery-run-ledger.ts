@@ -9,14 +9,9 @@ export const DEFAULT_DELIVERY_RUN_BASELINE_PATH =
 
 export type DeliveryRunStatus = "pass" | "fail" | "blocked" | "interrupted";
 export type DeliveryRunCommandStatus =
-  | "pass"
-  | "fail"
-  | "blocked"
-  | "interrupted";
+  "pass" | "fail" | "blocked" | "interrupted";
 export type DeliveryRunProofState =
-  | "proof_recorded"
-  | "proof_not_recorded"
-  | "prepush_reused";
+  "proof_recorded" | "proof_not_recorded" | "prepush_reused";
 
 export type DeliveryRunCommandSpan = {
   phase: string;
@@ -37,6 +32,26 @@ export type DeliveryRunProviderSkippedEvent = {
   reason: string;
 };
 
+export type DeliveryRunGateDecisionEvent = {
+  invocationId: string;
+  invocationMode: "outer" | "standalone";
+  parentIdentity: "pr:athena:delivery-run" | "direct";
+  parentStartToken: string;
+  sequence: "evaluated" | "candidate_changed" | "provider_failed" | "completed";
+  gateId: string;
+  treeSha: string;
+  baseRef: string;
+  baseTipSha: string;
+  diffBaseSha: string;
+  worktreeId: string;
+  context: string;
+  admitted: boolean;
+  preventedCostClass: string;
+  resolutionKinds: string[];
+  findingCodes: string[];
+  timestamp: string;
+};
+
 export type DeliveryRunLedger = {
   version: typeof DELIVERY_RUN_LEDGER_VERSION;
   generatedAt: string;
@@ -55,12 +70,14 @@ export type DeliveryRunLedger = {
     count: number;
   }>;
   providerSkippedEvents: DeliveryRunProviderSkippedEvent[];
+  gateDecisionEvents: DeliveryRunGateDecisionEvent[];
   summary: {
     commandCount: number;
     failedCommandCount: number;
     duplicateCommandCount: number;
     duplicatePackageSuiteCount: number;
     providerSkippedCount: number;
+    gateDecisionCount: number;
     totalDurationMs: number;
   };
 };
@@ -76,6 +93,7 @@ export type CreateDeliveryRunLedgerInput = {
   proofState: DeliveryRunProofState;
   commandSpans: DeliveryRunCommandSpan[];
   providerSkippedEvents?: DeliveryRunProviderSkippedInput[];
+  gateDecisionEvents?: DeliveryRunGateDecisionEvent[];
   blockedReason?: string;
   interruptedReason?: string;
 };
@@ -107,14 +125,16 @@ function countBy<T>(items: T[], keyFor: (item: T) => string | null) {
 }
 
 export function createDeliveryRunLedger(
-  input: CreateDeliveryRunLedgerInput
+  input: CreateDeliveryRunLedgerInput,
 ): DeliveryRunLedger {
   const commandSpans = [...input.commandSpans];
   const duplicateCommands = countBy(commandSpans, (span) => span.command).map(
-    ([command, count]) => ({ command, count })
+    ([command, count]) => ({ command, count }),
   );
   const duplicatePackageSuites = countBy(commandSpans, (span) =>
-    span.packageName && span.suite ? `${span.packageName}\u0000${span.suite}` : null
+    span.packageName && span.suite
+      ? `${span.packageName}\u0000${span.suite}`
+      : null,
   ).map(([key, count]) => {
     const [packageName, suite] = key.split("\u0000");
     return { packageName, suite, count };
@@ -123,7 +143,7 @@ export function createDeliveryRunLedger(
     (event) => ({
       ...event,
       status: "covered_by_provider" as const,
-    })
+    }),
   );
 
   return {
@@ -139,23 +159,28 @@ export function createDeliveryRunLedger(
     duplicateCommands,
     duplicatePackageSuites,
     providerSkippedEvents,
+    gateDecisionEvents: [...(input.gateDecisionEvents ?? [])],
     summary: {
       commandCount: commandSpans.length,
-      failedCommandCount: commandSpans.filter(
-        (span) => span.status !== "pass"
-      ).length,
+      failedCommandCount: commandSpans.filter((span) => span.status !== "pass")
+        .length,
       duplicateCommandCount: duplicateCommands.length,
       duplicatePackageSuiteCount: duplicatePackageSuites.length,
       providerSkippedCount: providerSkippedEvents.length,
+      gateDecisionCount: input.gateDecisionEvents?.length ?? 0,
       totalDurationMs: commandSpans.reduce(
         (total, span) => total + span.durationMs,
-        0
+        0,
       ),
     },
   };
 }
 
-async function writeJson(rootDir: string, relativePath: string, value: unknown) {
+async function writeJson(
+  rootDir: string,
+  relativePath: string,
+  value: unknown,
+) {
   const absolutePath = path.join(rootDir, relativePath);
   await mkdir(path.dirname(absolutePath), { recursive: true });
   await writeFile(absolutePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -168,7 +193,7 @@ export async function writeDeliveryRunLedger(
     latestPath?: string;
     historyPath?: string;
     baselinePath?: string;
-  } = {}
+  } = {},
 ) {
   const latestPath = options.latestPath ?? DEFAULT_DELIVERY_RUN_LATEST_PATH;
   await writeJson(rootDir, latestPath, ledger);
@@ -190,7 +215,9 @@ export async function writeDeliveryRunLedger(
 
 async function readJsonOrNull<T>(rootDir: string, relativePath: string) {
   try {
-    return JSON.parse(await readFile(path.join(rootDir, relativePath), "utf8")) as T;
+    return JSON.parse(
+      await readFile(path.join(rootDir, relativePath), "utf8"),
+    ) as T;
   } catch (error) {
     if (
       error &&
@@ -205,7 +232,7 @@ async function readJsonOrNull<T>(rootDir: string, relativePath: string) {
 }
 
 export function summarizeDeliveryRunBaseline(
-  ledger: DeliveryRunLedger | null
+  ledger: DeliveryRunLedger | null,
 ): DeliveryRunBaselineSummary {
   if (!ledger) {
     return {
@@ -236,23 +263,23 @@ export function summarizeDeliveryRunBaseline(
 
 export async function readDeliveryRunLedger(
   rootDir: string,
-  relativePath = DEFAULT_DELIVERY_RUN_LATEST_PATH
+  relativePath = DEFAULT_DELIVERY_RUN_LATEST_PATH,
 ) {
   return readJsonOrNull<DeliveryRunLedger>(rootDir, relativePath);
 }
 
 export async function readDeliveryRunBaseline(
   rootDir: string,
-  relativePath = DEFAULT_DELIVERY_RUN_BASELINE_PATH
+  relativePath = DEFAULT_DELIVERY_RUN_BASELINE_PATH,
 ) {
   return readJsonOrNull<DeliveryRunLedger>(rootDir, relativePath);
 }
 
 export async function buildPartialDeliveryRunBaseline(
   rootDir: string,
-  relativePath = DEFAULT_DELIVERY_RUN_BASELINE_PATH
+  relativePath = DEFAULT_DELIVERY_RUN_BASELINE_PATH,
 ) {
   return summarizeDeliveryRunBaseline(
-    await readDeliveryRunBaseline(rootDir, relativePath)
+    await readDeliveryRunBaseline(rootDir, relativePath),
   );
 }

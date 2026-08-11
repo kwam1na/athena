@@ -3,6 +3,8 @@
   "packageDir": "packages/storefront-webapp",
   "surfaces": [
     {
+      "id": "storefront.route-ui",
+      "reviewSensitive": false,
       "name": "route-or-ui-only-edits",
       "pathPrefixes": [
         "packages/storefront-webapp/src/assets",
@@ -22,6 +24,8 @@
       "behaviorScenarios": []
     },
     {
+      "id": "storefront.route-runtime-build",
+      "reviewSensitive": false,
       "name": "route-runtime-or-build-pipeline-edits",
       "pathPrefixes": [
         "packages/storefront-webapp/index.html",
@@ -51,6 +55,8 @@
       ]
     },
     {
+      "id": "storefront.shared-lib-api-wrapper",
+      "reviewSensitive": false,
       "name": "shared-lib-utility-or-api-wrapper-edits",
       "pathPrefixes": [
         "packages/storefront-webapp/src/lib",
@@ -72,6 +78,8 @@
       ]
     },
     {
+      "id": "storefront.checkout-auth-boundary",
+      "reviewSensitive": true,
       "name": "checkout-or-auth-route-boundary-edits",
       "pathPrefixes": [
         "packages/storefront-webapp/src/routes/shop/checkout",
@@ -93,6 +101,8 @@
       ]
     },
     {
+      "id": "storefront.payment-redirect-journeys",
+      "reviewSensitive": true,
       "name": "full-browser-journeys-and-payment-redirects",
       "pathPrefixes": [
         "packages/storefront-webapp/playwright.config.ts",
@@ -116,6 +126,8 @@
       ]
     },
     {
+      "id": "storefront-webapp.harness-docs",
+      "reviewSensitive": false,
       "name": "harness-docs",
       "pathPrefixes": [
         "packages/storefront-webapp/AGENTS.md",

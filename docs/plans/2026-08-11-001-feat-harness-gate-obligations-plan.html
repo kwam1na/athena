@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Reusable harness gate obligations</title>
+  <style>
+    :root { color-scheme: light; --ink:#182026; --muted:#5d6870; --line:#d9e0e4; --paper:#fff; --wash:#f4f7f8; --accent:#1f5e66; --warn:#8a4b08; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--wash); color:var(--ink); font:15px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { max-width:1080px; margin:32px auto; padding:44px 52px; background:var(--paper); border:1px solid var(--line); border-radius:12px; box-shadow:0 8px 24px rgba(24,32,38,.06); }
+    h1,h2,h3 { line-height:1.2; color:#102d31; }
+    h1 { margin:0 0 8px; font-size:2.15rem; }
+    h2 { margin-top:42px; padding-top:18px; border-top:1px solid var(--line); font-size:1.4rem; }
+    h3 { margin-top:25px; font-size:1.05rem; }
+    p,li { max-width:84ch; }
+    a { color:var(--accent); }
+    code { padding:.12rem .3rem; background:#edf2f3; border-radius:4px; font-size:.92em; }
+    .meta { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 26px; color:var(--muted); }
+    .tag { padding:3px 9px; border:1px solid var(--line); border-radius:999px; background:var(--wash); }
+    .lead { font-size:1.08rem; color:#34464c; }
+    .callout { margin:22px 0; padding:16px 18px; border-left:4px solid var(--accent); background:#eef6f6; }
+    .warning { border-left-color:var(--warn); background:#fff6e9; }
+    nav { padding:16px 20px; background:var(--wash); border-radius:8px; }
+    nav ul { columns:2; padding-left:20px; }
+    table { width:100%; border-collapse:collapse; margin:16px 0; font-size:.94rem; }
+    th,td { padding:10px 12px; border:1px solid var(--line); text-align:left; vertical-align:top; }
+    th { background:#eef2f3; }
+    .flow { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:18px 0; }
+    .flow div { min-height:76px; display:flex; align-items:center; justify-content:center; padding:12px; text-align:center; border:1px solid var(--line); border-radius:8px; background:var(--wash); }
+    .units { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    article { padding:16px 18px; border:1px solid var(--line); border-radius:9px; }
+    article h3 { margin-top:0; }
+    .small { color:var(--muted); font-size:.9rem; }
+    @media (max-width:760px) { main{margin:0;padding:26px 20px;border:0;border-radius:0}.flow,.units{grid-template-columns:1fr}nav ul{columns:1} }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Reusable harness gate obligations</h1>
+    <p class="lead">A first-class admission layer that stops qualifying agent work before Athena's expensive validation unless the exact prepared candidate has current green review evidence.</p>
+    <div class="meta"><span class="tag">feat</span><span class="tag">active</span><span class="tag">2026-08-11</span><span class="tag">Deep plan</span></div>
+    <p class="small">Canonical source: <a href="2026-08-11-001-feat-harness-gate-obligations-plan.md">Markdown plan</a> · Origin: <a href="../brainstorms/2026-08-11-harness-gate-obligations-requirements.md">requirements</a></p>
+  </header>
+
+  <nav aria-label="Plan contents">
+    <strong>Contents</strong>
+    <ul>
+      <li><a href="#outcome">Outcome</a></li>
+      <li><a href="#model">Admission model</a></li>
+      <li><a href="#decisions">Key decisions</a></li>
+      <li><a href="#units">Implementation units</a></li>
+      <li><a href="#verification">Verification</a></li>
+      <li><a href="#risks">Risks</a></li>
+    </ul>
+  </nav>
+
+  <section id="outcome">
+    <h2>Outcome and boundary</h2>
+    <p>The consuming gate evaluates typed obligations after a wrapper-owned preparation sequence and immediately before expensive work. Review is historical, provider-issued, and exact-candidate-bound; documentation currentness is computed live. Humans may deliberately waive review for one invocation, agents may not, CI must match repository-authorized policy, and unknown contexts block.</p>
+    <div class="callout"><strong>One cost boundary.</strong> <code>pr:athena</code> and <code>pr:athena:validate</code> delegate immediately to a guarded <code>pr:athena:validate-provider</code>. The long-lived wrapper requires a current preparation receipt and directly spawns wrapper-owned command metadata, preventing direct-child and post-admission shell bypasses.</div>
+    <p>V1 does not migrate all gates, guard raw internal commands, create a workflow scheduler, use tracked markers, add cryptographic identity, or change documentation policy.</p>
+  </section>
+
+  <section id="model">
+    <h2>Admission model</h2>
+    <div class="flow" aria-label="Admission sequence">
+      <div>1. Verify preparation receipt; capture tree, base tip, merge base, context</div>
+      <div>2. Activate obligations and evaluate all facts</div>
+      <div>3. Resolve evidence, delegation, or human waiver</div>
+      <div>4. Recheck identity, record decision, directly spawn provider</div>
+    </div>
+    <table>
+      <thead><tr><th>Context</th><th>Review resolution</th><th>Missing evidence</th></tr></thead>
+      <tbody>
+        <tr><td>Repository-authorized CI</td><td>Explicit delegation for exact gate/obligation</td><td>Block if runner/workflow/job/event/policy do not all match</td></tr>
+        <tr><td>Recognized agent</td><td>Fresh approved green evidence</td><td>Block; never prompt</td></tr>
+        <tr><td>Interactive human</td><td>Evidence or exact-candidate waiver</td><td>Offer deliberate acknowledgement after universal facts pass</td></tr>
+        <tr><td>Unknown</td><td>Fresh acceptable evidence</td><td>Fail closed with context remediation</td></tr>
+      </tbody>
+    </table>
+    <p>Review activates at 50 relevant added-plus-deleted lines, inclusive, or when an existing validation scenario with an explicit required <code>reviewSensitive: true</code> is touched. Freshness binds the complete prepared tree and current base tip; activation and reviewer scope use the merge base so upstream-only changes are not attributed to the candidate.</p>
+    <p><strong>Evidence-bearing lifecycle:</strong> prepare → independent review → if fixed, prepare again → complete re-review → finalize provider manifest → exact-match and store evidence → admission → heavy validation → later merge-ready review.</p>
+  </section>
+
+  <section id="decisions">
+    <h2>Key decisions</h2>
+    <table>
+      <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Pure evaluator, effectful adapter</td><td>Prompting, persistence, telemetry, and process spawning remain outside deterministic policy.</td></tr>
+        <tr><td>Git-private immutable records</td><td>Deterministic IDs and atomic create-if-absent publication make evidence and waivers worktree-local, idempotent, and semantically distinct.</td></tr>
+        <tr><td>Stable scenario IDs in the existing registry</td><td>Sensitivity stays with the validation surface and cannot drift into a second path catalog.</td></tr>
+        <tr><td>Provider-owned final-green manifests</td><td>Only complete reviewer artifacts for the final prepared candidate can receive evidence; textual verdicts, fixes, and base changes cannot.</td></tr>
+        <tr><td>Universal blockers before waiver prompt</td><td>Documentation repair may change the candidate, so asking earlier would create an immediately stale waiver.</td></tr>
+        <tr><td>Invocation-correlated telemetry</td><td>Auditability is required before an admitted spawn, while stale events can neither authorize work nor enter another delivery run.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="units">
+    <h2>Implementation units</h2>
+    <div class="units">
+      <article><h3>U1 · Preparation, candidate, and surfaces</h3><p>Create a wrapper-owned preparation receipt, stable tree/base-tip/merge-base capture, activation classification, and explicit scenario IDs/sensitivity.</p><p class="small">Characterization-first: preserve existing pre-push proof and generated-map behavior.</p></article>
+      <article><h3>U2 · Registry and evaluator</h3><p>Define gate/obligation/provider policy and a pure aggregate evaluator with disjoint tagged outcomes.</p><p class="small">Test-first: decision table before adapters.</p></article>
+      <article><h3>U3 · Context and records</h3><p>Centralize CI/agent/human/unknown precedence and atomic Git-private evidence/waiver persistence.</p></article>
+      <article><h3>U4 · Review adapters</h3><p>Let <code>ce-code-review</code> and the new pre-validation <code>execute</code> checkpoint finalize provider-owned manifests only after green review of the final prepared candidate.</p></article>
+      <article><h3>U5 · Documentation provider</h3><p>Expose structured live documentation facts while preserving the public CLI and evaluating policy once.</p></article>
+      <article><h3>U6 · Athena admission</h3><p>Guard and directly spawn the heavy provider, aggregate blockers, use invocation-scoped human waivers, recheck identity, and emit correlated telemetry once.</p></article>
+      <article><h3>U7 · Audit and guidance</h3><p>Detect dangling IDs and bypass wiring, extend proof fingerprints, update canonical docs, regenerate maps, and rebuild Graphify.</p></article>
+    </div>
+  </section>
+
+  <section id="verification">
+    <h2>Verification strategy</h2>
+    <ul>
+      <li>Qualifying agent calls through every public Athena path start zero heavy commands without fresh evidence.</li>
+      <li>Exactly 49 relevant lines do not activate; exactly 50 do; relevant binary changes and sensitive one-line edits activate.</li>
+      <li>Any full-tree or base-tip change stales evidence and reusable waivers; merge-base scope excludes upstream-only changes.</li>
+      <li>Agent plus TTY never receives a human prompt; undeclared CI and unknown noninteractive contexts fail closed.</li>
+      <li>Both approved providers produce interchangeable evidence only from complete final manifests; every review mutation triggers preparation and a full re-review.</li>
+      <li>Documentation failures aggregate, block every actor, keep standalone CLI compatibility, and run once per admission.</li>
+      <li>Prompt-time drift leaves no reusable waiver; final capture closes the admission race; direct and outer telemetry are correlated to one invocation.</li>
+      <li>Self-audit rejects missing wrappers, aliases that work before admission, dangling IDs, and incomplete proof fingerprints.</li>
+    </ul>
+  </section>
+
+  <section id="risks">
+    <h2>Principal risks</h2>
+    <table>
+      <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td>Context misclassification</td><td>Fixture-backed agent signals, runner/workflow/job/event-bound CI policy, precedence tests, unknown fail-closed.</td></tr>
+        <tr><td>Evidence for the wrong candidate</td><td>Preparation receipt, stable tree/base identities, provider-owned manifest, and independent equality checks.</td></tr>
+        <tr><td>Duplicate guard behavior</td><td>One provider-bound guard with declarative parent delegation and audit.</td></tr>
+        <tr><td>Generic-kernel scope expansion</td><td>Only review, documentation, and one Athena cost boundary in v1.</td></tr>
+        <tr><td>Record collision or corruption</td><td>Deterministic IDs, atomic create-if-absent publication, existential-provider recovery rules, and concurrency fixtures.</td></tr>
+        <tr><td>Existing proof regression</td><td>Characterize staged-index behavior before extracting shared candidate primitives.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout warning"><strong>Planning boundary:</strong> this artifact describes implementation decisions and verification outcomes. It does not implement the gate or authorize running the heavy merge suite.</div>
+  </section>
+</main>
+</body>
+</html>

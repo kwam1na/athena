@@ -18,6 +18,7 @@ Apply `$compound-delivery-kernel` throughout execution. Linear owns the work rec
 - The work includes implementation plus ticket hygiene such as status updates, comments, PR links, or follow-up issues.
 
 Do not use this skill when:
+
 - the work needs planning or ticket creation first
 - the work is not tracked in Linear yet
 - the task is unrelated to a Linear workflow
@@ -56,6 +57,7 @@ Do not use this skill when:
 Apply `references/linear-project-resolution.md` before mutating Linear or choosing the next ticket from a backlog.
 
 Use this resolution order before asking the user for context:
+
 - If a Linear issue ID is present, call `get_issue` first and derive the team/project from the issue.
 - If no issue id is present, look for explicit project/team names and validate them with `get_team` and `get_project`.
 - If neither source resolves context, inspect the current working directory the skill was invoked from.
@@ -148,6 +150,16 @@ Use this resolution order before asking the user for context:
 
 ### 6. Validate Before Claiming Success
 
+For Athena changes that activate the registered `review.green` obligation, run one independent evidence-bearing review checkpoint before `bun run pr:athena`:
+
+1. Run `bun run pr:athena:prepare`, then capture the exact prepared identity with `bun run harness:review-context`.
+2. Dispatch the complete relevant reviewer set against that exact tree and merge their machine-readable results under `/tmp/compound-engineering/execute/<run-id>/`. Do not count implementation subagents as independent reviewers.
+3. If a review fix changes the candidate, run `bun run pr:athena:prepare` again and repeat the complete review on the resulting context. A partial follow-up cannot authorize the changed tree.
+4. Only after every required reviewer completes with unanimous approval and zero blocking or unresolved actionable findings, finalize `/tmp/compound-engineering/execute/<run-id>/final-manifest.json` with provider `execute`, the context's worktree/candidate fields, reviewer artifacts, findings and mutation sequence, final pass ID, `verdict: "green"`, zero counts, `editedAfterFinalPass: false`, and `finalized: true`.
+5. Run `bun run harness:review-evidence -- /tmp/compound-engineering/execute/<run-id>/final-manifest.json`. If review is degraded, times out, exhausts a fix loop, or leaves actionable work, do not finalize or record evidence.
+
+This checkpoint authorizes only the exact pre-validation candidate. Keep the later merge-ready review loop below as a separate post-validation stage.
+
 - Run the smallest targeted test first, then the relevant suite, typecheck, build, lint, repo preflight, and `git diff --check`.
 - After reviewer-requested fixes, rerun the focused tests that prove the fixed surface before spending the full merge gate.
 - For Athena, run the full `bun run pr:athena` gate when the branch is merge-ready, after syncing or rebasing on a changed base, when `pre-push:review` reports a stale or missing proof, or when the change touches validation wiring such as Git hooks, repo harness scripts, generated-artifact repair, Graphify checks, or PR validation commands.
@@ -169,6 +181,7 @@ Use this resolution order before asking the user for context:
 - if multiple tickets were intentionally batched because of shared generated artifacts, open a single integration PR from a branch that contains the combined work plus one fresh regeneration of the shared artifacts
 
 PR conventions:
+
 - title format: `[<TICKET-ID>]: Title`
 - body must contain:
   - `## Summary`
@@ -177,11 +190,13 @@ PR conventions:
 - include the Linear ticket link at the end of the PR body
 
 For coordinated integration PRs:
+
 - use a combined title that includes all ticket ids or a clear batch label
 - list every included ticket in the PR body
 - make clear that the shared PR exists to avoid repeated merge conflicts in generated artifacts while preserving ticket-level scope in Linear
 
 After opening the PR:
+
 - push the branch
 - add the PR link to the Linear ticket
 - if it is a coordinated integration PR, add the same PR link to every included ticket
