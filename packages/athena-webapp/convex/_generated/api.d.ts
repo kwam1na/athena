@@ -390,6 +390,7 @@ import type * as reports_skuMixRange from "../reports/skuMixRange.js";
 import type * as reports_skuMovementRange from "../reports/skuMovementRange.js";
 import type * as reports_sweeper from "../reports/sweeper.js";
 import type * as reports_transactionCounts from "../reports/transactionCounts.js";
+import type * as reports_verificationClassify from "../reports/verificationClassify.js";
 import type * as reports_verify from "../reports/verify.js";
 import type * as reports_weekly from "../reports/weekly.js";
 import type * as reports_weeklyAcceptedRepair from "../reports/weeklyAcceptedRepair.js";
@@ -998,6 +999,7 @@ declare const fullApi: ApiFromModules<{
   "reports/skuMovementRange": typeof reports_skuMovementRange;
   "reports/sweeper": typeof reports_sweeper;
   "reports/transactionCounts": typeof reports_transactionCounts;
+  "reports/verificationClassify": typeof reports_verificationClassify;
   "reports/verify": typeof reports_verify;
   "reports/weekly": typeof reports_weekly;
   "reports/weeklyAcceptedRepair": typeof reports_weeklyAcceptedRepair;
