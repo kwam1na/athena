@@ -13,16 +13,18 @@ import {
 const tempRoots: string[] = [];
 
 async function createTempRoot() {
-  const rootDir = await mkdtemp(path.join(tmpdir(), "athena-delivery-run-ledger-"));
+  const rootDir = await mkdtemp(
+    path.join(tmpdir(), "athena-delivery-run-ledger-"),
+  );
   tempRoots.push(rootDir);
   return rootDir;
 }
 
 afterEach(async () => {
   await Promise.all(
-    tempRoots.splice(0).map((rootDir) =>
-      rm(rootDir, { recursive: true, force: true })
-    )
+    tempRoots
+      .splice(0)
+      .map((rootDir) => rm(rootDir, { recursive: true, force: true })),
   );
 });
 
@@ -81,6 +83,27 @@ describe("delivery run ledger", () => {
           reason: "pr:athena already supplied repo validation",
         },
       ],
+      gateDecisionEvents: [
+        {
+          invocationId: "invocation-a",
+          invocationMode: "outer",
+          parentIdentity: "pr:athena:delivery-run",
+          parentStartToken: "start-a",
+          sequence: "evaluated",
+          gateId: "athena.pr-validation",
+          treeSha: "tree-a",
+          baseRef: "origin/main",
+          baseTipSha: "base-a",
+          diffBaseSha: "merge-base-a",
+          worktreeId: "worktree-a",
+          context: "agent",
+          admitted: false,
+          preventedCostClass: "merge_grade_validation",
+          resolutionKinds: ["blocked", "satisfied_live_fact"],
+          findingCodes: ["review_evidence_missing"],
+          timestamp: "2026-08-11T00:00:00.000Z",
+        },
+      ],
     });
 
     expect(ledger).toMatchObject({
@@ -93,6 +116,7 @@ describe("delivery run ledger", () => {
         duplicateCommandCount: 1,
         duplicatePackageSuiteCount: 1,
         providerSkippedCount: 1,
+        gateDecisionCount: 1,
       },
       duplicateCommands: [
         {
@@ -132,12 +156,20 @@ describe("delivery run ledger", () => {
       baselinePath: "artifacts/harness-delivery-runs/baseline.json",
     });
 
-    expect(result.latestPath).toBe("artifacts/harness-delivery-runs/latest.json");
-    expect(JSON.parse(await readFile(path.join(rootDir, result.latestPath), "utf8"))).toMatchObject({
+    expect(result.latestPath).toBe(
+      "artifacts/harness-delivery-runs/latest.json",
+    );
+    expect(
+      JSON.parse(await readFile(path.join(rootDir, result.latestPath), "utf8")),
+    ).toMatchObject({
       status: "blocked",
       blockedReason: "prepare failed before validation",
     });
-    expect(JSON.parse(await readFile(path.join(rootDir, result.historyPath!), "utf8"))).toMatchObject({
+    expect(
+      JSON.parse(
+        await readFile(path.join(rootDir, result.historyPath!), "utf8"),
+      ),
+    ).toMatchObject({
       status: "blocked",
     });
     expect(await readDeliveryRunBaseline(rootDir)).toMatchObject({
@@ -150,7 +182,9 @@ describe("delivery run ledger", () => {
     const rootDir = await createTempRoot();
 
     await expect(readDeliveryRunBaseline(rootDir)).resolves.toBeNull();
-    await expect(buildPartialDeliveryRunBaseline(rootDir)).resolves.toMatchObject({
+    await expect(
+      buildPartialDeliveryRunBaseline(rootDir),
+    ).resolves.toMatchObject({
       present: false,
       status: "missing",
       commandCount: 0,

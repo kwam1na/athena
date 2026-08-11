@@ -3,6 +3,8 @@
   "packageDir": "packages/valkey-proxy-server",
   "surfaces": [
     {
+      "id": "valkey.service-logic-entrypoint",
+      "reviewSensitive": false,
       "name": "service-logic-docs-or-entrypoint-edits",
       "pathPrefixes": [
         "packages/valkey-proxy-server/package.json",
@@ -30,6 +32,8 @@
       ]
     },
     {
+      "id": "valkey.live-connection-probe",
+      "reviewSensitive": false,
       "name": "live-connection-probe-edits",
       "pathPrefixes": [
         "packages/valkey-proxy-server/test-connection.js"
@@ -47,6 +51,8 @@
       "behaviorScenarios": []
     },
     {
+      "id": "valkey-proxy-server.harness-docs",
+      "reviewSensitive": false,
       "name": "harness-docs",
       "pathPrefixes": [
         "packages/valkey-proxy-server/AGENTS.md",

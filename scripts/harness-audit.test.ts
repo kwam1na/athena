@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { runHarnessAudit } from "./harness-audit";
+import {
+  auditHarnessGateObligationContract,
+  runHarnessAudit,
+} from "./harness-audit";
 import { writeGeneratedHarnessDocs } from "./harness-generate";
 
 const tempRoots: string[] = [];
@@ -29,13 +32,13 @@ async function createFixtureRepo() {
       "Read [the graphify doc](./docs/graphify.md) for the knowledge graph.",
       "",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
 
   await write(
     "docs/graphify.md",
     ["# Graphify Knowledge Graph", "", "Graph docs.", ""].join("\n"),
-    rootDir
+    rootDir,
   );
 
   // The canonical runtime scenario list lives in the harness doc; the README
@@ -60,7 +63,7 @@ async function createFixtureRepo() {
       "- `storefront-checkout-verification-recovery`",
       "",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
 
   await write(
@@ -76,24 +79,24 @@ async function createFixtureRepo() {
       "- [Storefront webapp](./storefront-webapp/AGENTS.md)",
       "- [Valkey proxy server](./valkey-proxy-server/AGENTS.md)",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
 
   await write("graphify-out/wiki/index.md", "# Graphify Wiki\n", rootDir);
   await write(
     "graphify-out/wiki/packages/athena-webapp.md",
     "# Athena Webapp\n",
-    rootDir
+    rootDir,
   );
   await write(
     "graphify-out/wiki/packages/storefront-webapp.md",
     "# Storefront Webapp\n",
-    rootDir
+    rootDir,
   );
   await write(
     "graphify-out/wiki/packages/valkey-proxy-server.md",
     "# Valkey Proxy Server\n",
-    rootDir
+    rootDir,
   );
 
   await write(
@@ -113,11 +116,15 @@ async function createFixtureRepo() {
         },
       },
       null,
-      2
+      2,
     ),
-    rootDir
+    rootDir,
   );
-  await write("packages/athena-webapp/types.ts", "export type Placeholder = {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/types.ts",
+    "export type Placeholder = {};\n",
+    rootDir,
+  );
   await write(
     "packages/storefront-webapp/package.json",
     JSON.stringify(
@@ -131,9 +138,9 @@ async function createFixtureRepo() {
         },
       },
       null,
-      2
+      2,
     ),
-    rootDir
+    rootDir,
   );
   await write(
     "packages/valkey-proxy-server/package.json",
@@ -148,14 +155,14 @@ async function createFixtureRepo() {
         },
       },
       null,
-      2
+      2,
     ),
-    rootDir
+    rootDir,
   );
   await write(
     "packages/valkey-proxy-server/README.md",
     "# Valkey Proxy Server\n",
-    rootDir
+    rootDir,
   );
 
   await write(
@@ -169,31 +176,63 @@ async function createFixtureRepo() {
       "- [Testing](./docs/agent/testing.md)",
       "- [Code map](./docs/agent/code-map.md)",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
-  await write("packages/athena-webapp/.storybook/main.ts", "export default {};\n", rootDir);
-  await write("packages/athena-webapp/index.html", "<div id=\"app\"></div>\n", rootDir);
+  await write(
+    "packages/athena-webapp/.storybook/main.ts",
+    "export default {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/athena-webapp/index.html",
+    '<div id="app"></div>\n',
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/public/pos-app-shell-sw.js",
     "self.addEventListener('fetch', () => {});\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/stories/Guidance/Introduction.stories.tsx",
     "export default {};\n",
-    rootDir
+    rootDir,
   );
-  await write("packages/athena-webapp/.gitignore", "storybook-static\n", rootDir);
+  await write(
+    "packages/athena-webapp/.gitignore",
+    "storybook-static\n",
+    rootDir,
+  );
   await write("packages/athena-webapp/README.md", "# Athena Webapp\n", rootDir);
-  await write("packages/athena-webapp/eslint.config.js", "export default [];\n", rootDir);
-  await write("packages/athena-webapp/tailwind.config.js", "export default {};\n", rootDir);
-  await write("packages/athena-webapp/postcss.config.js", "export default {};\n", rootDir);
-  await write("packages/athena-webapp/playwright.config.ts", "export default {};\n", rootDir);
-  await write("packages/athena-webapp/playwright.prod.config.ts", "export default {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/eslint.config.js",
+    "export default [];\n",
+    rootDir,
+  );
+  await write(
+    "packages/athena-webapp/tailwind.config.js",
+    "export default {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/athena-webapp/postcss.config.js",
+    "export default {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/athena-webapp/playwright.config.ts",
+    "export default {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/athena-webapp/playwright.prod.config.ts",
+    "export default {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/src/design-system-build-config.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/storefront-webapp/AGENTS.md",
@@ -206,7 +245,7 @@ async function createFixtureRepo() {
       "- [Testing](./docs/agent/testing.md)",
       "- [Code map](./docs/agent/code-map.md)",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
   await write(
     "packages/valkey-proxy-server/AGENTS.md",
@@ -219,7 +258,7 @@ async function createFixtureRepo() {
       "- [Testing](./docs/agent/testing.md)",
       "- [Code map](./docs/agent/code-map.md)",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
 
   for (const appName of ["athena-webapp", "storefront-webapp"] as const) {
@@ -236,13 +275,13 @@ async function createFixtureRepo() {
         "- [Key folder index](./key-folder-index.md)",
         "- [Validation guide](./validation-guide.md)",
       ].join("\n"),
-      rootDir
+      rootDir,
     );
 
     await write(
       `packages/${appName}/docs/agent/architecture.md`,
       "# Architecture\n",
-      rootDir
+      rootDir,
     );
     await write(
       `packages/${appName}/docs/agent/code-map.md`,
@@ -265,7 +304,7 @@ async function createFixtureRepo() {
             "- [Routes](../../src/routes/__root.tsx)",
             "- [API](../../src/api/storefront.ts)",
           ].join("\n"),
-      rootDir
+      rootDir,
     );
   }
 
@@ -282,12 +321,12 @@ async function createFixtureRepo() {
       "- [Key folder index](./key-folder-index.md)",
       "- [Validation guide](./validation-guide.md)",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
   await write(
     "packages/valkey-proxy-server/docs/agent/architecture.md",
     "# Architecture\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/valkey-proxy-server/docs/agent/code-map.md",
@@ -300,7 +339,7 @@ async function createFixtureRepo() {
       "- [Entrypoint](../../index.js)",
       "- [Connection probe](../../test-connection.js)",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
 
   await write(
@@ -331,7 +370,7 @@ async function createFixtureRepo() {
       "Convex validation: `bun run --filter '@athena/webapp' audit:convex` and `bun run --filter '@athena/webapp' lint:convex:changed`.",
       "Covered test surfaces include `src/tests` and `convex`.",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
   await write(
     "packages/storefront-webapp/docs/agent/testing.md",
@@ -360,7 +399,7 @@ async function createFixtureRepo() {
       "Browser journeys: `bun run --filter '@athena/storefront-webapp' test:e2e`.",
       "Covered test surfaces include `tests/e2e`.",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
   await write(
     "packages/valkey-proxy-server/docs/agent/testing.md",
@@ -392,7 +431,7 @@ async function createFixtureRepo() {
       "Run `bun run --filter 'valkey-proxy-server' test:connection` for the connection probe.",
       "Covered test surfaces include `app.test.js`, `app.js`, `index.js`, and `test-connection.js`.",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
   await write(
     "packages/valkey-proxy-server/docs/agent/entry-index.md",
@@ -409,7 +448,7 @@ async function createFixtureRepo() {
       "- [`test-connection.js`](../../test-connection.js)",
       "",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
   await write(
     "packages/valkey-proxy-server/docs/agent/test-index.md",
@@ -430,7 +469,7 @@ async function createFixtureRepo() {
       "- `test-connection.js`",
       "",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
   await write(
     "packages/valkey-proxy-server/docs/agent/key-folder-index.md",
@@ -446,7 +485,7 @@ async function createFixtureRepo() {
       "- `.` — Service entry files and local test helpers. Currently 4 file(s); key children: AGENTS.md, README.md, docs, index.js, package.json.",
       "",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
   await write(
     "packages/valkey-proxy-server/docs/agent/validation-guide.md",
@@ -468,7 +507,7 @@ async function createFixtureRepo() {
       "Use the connection probe when the service entrypoint or connection harness changes.",
       "",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
   await write(
     "packages/valkey-proxy-server/docs/agent/validation-map.json",
@@ -490,9 +529,9 @@ async function createFixtureRepo() {
         ],
       },
       null,
-      2
+      2,
     ),
-    rootDir
+    rootDir,
   );
 
   await write(
@@ -549,9 +588,9 @@ async function createFixtureRepo() {
         ],
       },
       null,
-      2
+      2,
     ),
-    rootDir
+    rootDir,
   );
   await write(
     "packages/storefront-webapp/docs/agent/validation-map.json",
@@ -562,17 +601,17 @@ async function createFixtureRepo() {
         surfaces: [
           {
             name: "runtime-routes",
-	            pathPrefixes: [
-	              "packages/storefront-webapp/index.html",
-	              "packages/storefront-webapp/package.json",
-	              "packages/storefront-webapp/tsconfig.json",
-	              "packages/storefront-webapp/src/main.tsx",
-	              "packages/storefront-webapp/src/router.tsx",
-	              "packages/storefront-webapp/src/routeTree.gen.ts",
-	              "packages/storefront-webapp/src/routes/",
-	              "packages/storefront-webapp/vite.config.ts",
-	              "packages/storefront-webapp/playwright.config.ts",
-	            ],
+            pathPrefixes: [
+              "packages/storefront-webapp/index.html",
+              "packages/storefront-webapp/package.json",
+              "packages/storefront-webapp/tsconfig.json",
+              "packages/storefront-webapp/src/main.tsx",
+              "packages/storefront-webapp/src/router.tsx",
+              "packages/storefront-webapp/src/routeTree.gen.ts",
+              "packages/storefront-webapp/src/routes/",
+              "packages/storefront-webapp/vite.config.ts",
+              "packages/storefront-webapp/playwright.config.ts",
+            ],
             commands: [{ kind: "script", script: "test" }],
           },
           {
@@ -587,12 +626,12 @@ async function createFixtureRepo() {
             ],
             commands: [{ kind: "script", script: "test" }],
           },
-	          {
-	            name: "tests",
-	            pathPrefixes: [
-	              "packages/storefront-webapp/playwright.config.ts",
-	              "packages/storefront-webapp/tests/e2e/",
-	            ],
+          {
+            name: "tests",
+            pathPrefixes: [
+              "packages/storefront-webapp/playwright.config.ts",
+              "packages/storefront-webapp/tests/e2e/",
+            ],
             commands: [
               { kind: "script", script: "test" },
               { kind: "script", script: "test:e2e" },
@@ -601,17 +640,21 @@ async function createFixtureRepo() {
         ],
       },
       null,
-      2
+      2,
     ),
-    rootDir
+    rootDir,
   );
 
   await write("packages/athena-webapp/src/main.tsx", "export {};\n", rootDir);
-  await write("packages/athena-webapp/src/utils/versionChecker.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/utils/versionChecker.ts",
+    "export {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/src/utils/versionChecker.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   for (const appUpdatePath of [
     "packages/athena-webapp/src/lib/app-update/UpdateCoordinatorProvider.tsx",
@@ -629,448 +672,496 @@ async function createFixtureRepo() {
   await write(
     "packages/athena-webapp/src/offline/posAppShellRoutes.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/offline/posAppShellRoutes.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/offline/posAppShellServiceWorkerStaging.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/offline/posOfflineReadiness.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/offline/posOfflineReadiness.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/offline/registerPosAppShellServiceWorker.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/offline/registerPosAppShellServiceWorker.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write("packages/athena-webapp/src/assets/placeholder.png", "", rootDir);
   await write("packages/athena-webapp/src/config.ts", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/src/config.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write("packages/athena-webapp/src/index.css", "body {}\n", rootDir);
-  await write("packages/athena-webapp/src/routeTree.gen.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/routeTree.gen.ts",
+    "export {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/src/routeTree.browser-boundary.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
-  await write("packages/athena-webapp/vitest.setup.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/vitest.setup.ts",
+    "export {};\n",
+    rootDir,
+  );
   await write("packages/athena-webapp/.env.test", "\n", rootDir);
-  await write("packages/athena-webapp/src/routes/_authed.tsx", "export {};\n", rootDir);
-  await write("packages/athena-webapp/src/routes/demo.tsx", "export {};\n", rootDir);
-  await write("packages/athena-webapp/src/routes/__root.tsx", "export {};\n", rootDir);
-  await write("packages/athena-webapp/src/routes/_authed/index.tsx", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/routes/_authed.tsx",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/athena-webapp/src/routes/demo.tsx",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/athena-webapp/src/routes/__root.tsx",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/athena-webapp/src/routes/_authed/index.tsx",
+    "export {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/index.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/index.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement.index.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/index.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/index.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
-  await write("packages/athena-webapp/src/routes/index.tsx", "export {};\n", rootDir);
-  await write("packages/athena-webapp/src/components/AppShell.tsx", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/routes/index.tsx",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/athena-webapp/src/components/AppShell.tsx",
+    "export {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/src/components/shared-demo/SharedDemoRuntime.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/app-update/UpdateReadyBanner.test.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/app-update/UpdateReadyBanner.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/app-sidebar.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/pos/PointOfSaleView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/operations/InventoryImportView.test.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/operations/InventoryImportView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/pos/OrderSummary.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/pos/transactions/TransactionsView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/pos/transactions/TransactionView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/pos/SessionManager.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/pos/register/POSRegisterView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/pos/register/POSRegisterView.test.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/pos/register/RegisterCheckoutPanel.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/pos/register/RegisterDrawerGate.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/pos/receipt/PosReceiptShareControl.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/pos/settings/POSSettingsView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/pos/settings/POSSettingsView.test.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/pos/session/HeldSessionsList.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.test.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.test.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/services/ServiceCasesView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/add-product/ProductView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/assets/index.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/join-team/index.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/organization-members/index.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/orders/OrderView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/promo-codes/PromoCodeHeader.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/reviews/ReviewsView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/store-configuration/hooks/useStoreConfigUpdate.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/traces/WorkflowTraceView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/operations/OperationsQueueView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/operations/CommandApprovalDialog.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/operations/DailyCloseHistoryView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/operations/DailyOpeningView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/operations/StockAdjustmentWorkspace.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/procurement/ReceivingView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/expense/ExpenseCompletion.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/expense/ExpenseView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/pos/CashierAuthDialog.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/routes/login/_layout.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/auth/DefaultCatchBoundary.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/auth/DefaultCatchBoundary.test.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/routeTree.browser-boundary.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
-  await write("packages/athena-webapp/src/hooks/useAuth.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/hooks/useAuth.ts",
+    "export {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/src/hooks/useExpenseSessions.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/hooks/useExpenseOperations.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/hooks/useSessionManagementExpense.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/users/CustomerBehaviorTimeline.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/components/users/TimelineEventCard.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
-  await write("packages/athena-webapp/src/contexts/AuthContext.tsx", "export {};\n", rootDir);
-  await write("packages/athena-webapp/src/hooks/useGetTerminal.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/contexts/AuthContext.tsx",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/athena-webapp/src/hooks/useGetTerminal.ts",
+    "export {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/src/hooks/useGetTerminal.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
-  await write("packages/athena-webapp/src/lib/session.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/lib/session.ts",
+    "export {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/src/lib/errors/runCommand.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/lib/errors/presentCommandToast.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/lib/errors/presentUnexpectedErrorToast.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/lib/errors/presentUnexpectedErrorToast.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/lib/errors/sharedDemoDenialObserver.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/lib/pos/application/results.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/lib/pos/presentation/register/registerUiState.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/lib/pos/presentation/register/registerUiState.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   for (const localSyncPath of [
     "packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts",
@@ -1102,32 +1193,32 @@ async function createFixtureRepo() {
   await write(
     "packages/athena-webapp/src/lib/pos/presentation/syncStatusPresentation.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/lib/pos/presentation/syncStatusPresentation.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/lib/pos/application/registerAndProvisionPosTerminal.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/lib/pos/infrastructure/terminal/fingerprint.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/lib/pos/infrastructure/terminal/usePosTerminalAppSessionRecovery.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   for (const terminalHealthPath of [
     "packages/athena-webapp/src/components/pos/terminals/POSTerminalDetailView.tsx",
@@ -1143,173 +1234,217 @@ async function createFixtureRepo() {
   ]) {
     await write(terminalHealthPath, "export {};\n", rootDir);
   }
-  await write("packages/athena-webapp/src/stores/expenseStore.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/stores/expenseStore.ts",
+    "export {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/shared/commandResult.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/shared/posLocalSyncContract.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/shared/serviceIntake.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/shared/stockAdjustment.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/shared/workflowTrace.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
-  await write("packages/athena-webapp/src/settings/store.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/settings/store.ts",
+    "export {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/src/settings/store/StoreSettingsView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/settings/organization/components/OrganizationSettingsView.tsx",
     "export {};\n",
-    rootDir
+    rootDir,
   );
-  await write("packages/athena-webapp/src/stores/appStore.ts", "export {};\n", rootDir);
-  await write("packages/athena-webapp/src/utils/format.ts", "export {};\n", rootDir);
-  await write("packages/athena-webapp/vitest.config.ts", "export default {};\n", rootDir);
-  await write("packages/athena-webapp/src/tests/app.test.tsx", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/stores/appStore.ts",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/athena-webapp/src/utils/format.ts",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/athena-webapp/vitest.config.ts",
+    "export default {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/athena-webapp/src/tests/app.test.tsx",
+    "export {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/src/tests/pos/offlineRouteAccess.spec.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/tests/pos/offlineSalesContinuity.spec.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/src/tests/prod/posFlow.prod.spec.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
-  await write("packages/athena-webapp/src/test/setup.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/test/setup.ts",
+    "export {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/docs/shared-demo-backend-coverage.md",
     "# Shared demo backend coverage\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/assets/shared-demo-products/demo-product.webp",
     "fixture\n",
-    rootDir
+    rootDir,
   );
   await write("packages/athena-webapp/convex/auth.ts", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/convex/auth/SharedDemoTicket.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
-  await write("packages/athena-webapp/convex/crons.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/convex/crons.ts",
+    "export {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/convex/sharedDemo/public.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/contextTracking/contextEvents.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/operationAdmission/publicMutation.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write("packages/athena-webapp/convex/http.ts", "export {};\n", rootDir);
-  await write("packages/athena-webapp/convex/http/router.ts", "export {};\n", rootDir);
-  await write("packages/athena-webapp/convex/schema.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/convex/http/router.ts",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/athena-webapp/convex/schema.ts",
+    "export {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/convex/schemas/pos/posTerminal.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/schemas/pos/posTerminal.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/schemas/pos/posTerminalRuntimeStatus.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/schemas/pos/posTerminalRecovery.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/cashControls/closeouts.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
-  await write("packages/athena-webapp/convex/inventory/item.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/convex/inventory/item.ts",
+    "export {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/convex/inventory/posTerminal.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/application/commands/correctTransaction.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/application/commands/terminals.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/application/terminals.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/application/corrections/correctionPolicy.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/application/queries/getTransactions.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/application/queries/getRegisterState.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/application/queries/terminals.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   for (const terminalRecoveryPath of [
     "packages/athena-webapp/convex/pos/application/terminalRecovery/cloudRepairPolicy.ts",
@@ -1325,401 +1460,477 @@ async function createFixtureRepo() {
   await write(
     "packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/public/sync.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/public/sync.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/public/terminals.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/public/terminals.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/public/terminalAppSessions.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/public/transactions.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/infrastructure/repositories/localSyncRepository.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRepository.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.test.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/infrastructure/repositories/transactionRepository.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/operations/approvalRequests.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/operations/dailyClose.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/operations/dailyOpening.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/operations/dailyOperations.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/operations/registerSessions.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/operations/staffCredentials.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/operations/staffProfiles.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/cashControls/deposits.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/inventory/auth.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/inventory/stores.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/inventory/expenseSessions.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/inventory/expenseSessionItems.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/inventory/expenseTransactions.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/inventory/posSessions.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/operations/serviceIntake.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/pos/infrastructure/repositories/cashierRepository.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
-  await write("packages/athena-webapp/convex/stockOps/access.ts", "export {};\n", rootDir);
-  await write("packages/athena-webapp/convex/storeFront/cart.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/convex/stockOps/access.ts",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/athena-webapp/convex/storeFront/cart.ts",
+    "export {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/convex/storeFront/onlineOrder.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/storeFront/onlineOrderUtilFns.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/storeFront/payment.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/storeFront/reviews.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/storeFront/customerBehaviorTimeline.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/storeFront/customerObservabilityTimelineData.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/storeFront/helpers/returnExchangeOperations.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/storeFront/helpers/customerEngagementEvents.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/scripts/convex-audit.sh",
     "#!/usr/bin/env bash\nexit 0\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/scripts/convex-lint-changed.sh",
     "#!/usr/bin/env bash\nexit 0\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/scripts/frontend-lint-changed.sh",
     "#!/usr/bin/env bash\nexit 0\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/scripts/capture-operations-shot.mjs",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/scripts/capture-hero-shot.mjs",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/scripts/capture-register-shot.mjs",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/public/favicon.svg",
-    "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>\n",
-    rootDir
+    '<svg xmlns="http://www.w3.org/2000/svg"></svg>\n',
+    rootDir,
   );
-  await write(
-    "packages/athena-webapp/public/favicon-16x16.png",
-    "",
-    rootDir
-  );
-  await write(
-    "packages/athena-webapp/public/favicon-32x32.png",
-    "",
-    rootDir
-  );
+  await write("packages/athena-webapp/public/favicon-16x16.png", "", rootDir);
+  await write("packages/athena-webapp/public/favicon-32x32.png", "", rootDir);
   await write(
     "packages/athena-webapp/public/apple-touch-icon.png",
     "",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/public/android-chrome-192x192.png",
     "",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/public/android-chrome-512x512.png",
     "",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/public/site.webmanifest",
     "{}\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/scripts/purge-reporting-dev.sh",
     "#!/usr/bin/env bash\nexit 0\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/scripts/empty-table.json",
     "[]\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/scripts/convexPaginationAntiPatternCheck.py",
     "print('ok')\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/schemas/observability/workflowTrace.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/schemas/operations/dailyClose.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/schemas/operations/dailyOpening.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/schemas/pos/posTransaction.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/schemas/pos/posLocalSyncConflict.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/schemas/pos/posLocalSyncEvent.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/schemas/pos/posLocalSyncMapping.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/reports/queries.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/schemas/reports/facts.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/inventoryLedger/valuation.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/storeTime/storeTimeAuthority.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/convex/workflowTraces/core.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write(
     "packages/athena-webapp/shared/reportsContract.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
-  await write("packages/athena-webapp/vite.config.ts", "export default {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/vite.config.ts",
+    "export default {};\n",
+    rootDir,
+  );
   await write(
     "packages/athena-webapp/vite-docs-content-plugin.ts",
     "export {};\n",
-    rootDir
+    rootDir,
   );
   await write("packages/athena-webapp/tsconfig.json", "{}\n", rootDir);
 
   await write(
     "packages/storefront-webapp/index.html",
-    "<!doctype html><html><body><div id=\"root\"></div></body></html>\n",
-    rootDir
+    '<!doctype html><html><body><div id="root"></div></body></html>\n',
+    rootDir,
   );
-  await write("packages/storefront-webapp/src/assets/placeholder.png", "", rootDir);
+  await write(
+    "packages/storefront-webapp/src/assets/placeholder.png",
+    "",
+    rootDir,
+  );
   await write(
     "packages/storefront-webapp/tsconfig.json",
     JSON.stringify({ compilerOptions: {} }, null, 2),
-    rootDir
+    rootDir,
   );
-	  await write("packages/storefront-webapp/vite.config.ts", "export default {};\n", rootDir);
-	  await write(
-	    "packages/storefront-webapp/playwright.config.ts",
-	    "export default {};\n",
-	    rootDir
-	  );
-  await write("packages/storefront-webapp/src/config.ts", "export {};\n", rootDir);
+  await write(
+    "packages/storefront-webapp/vite.config.ts",
+    "export default {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/storefront-webapp/playwright.config.ts",
+    "export default {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/storefront-webapp/src/config.ts",
+    "export {};\n",
+    rootDir,
+  );
   await write("packages/storefront-webapp/src/index.css", "body {}\n", rootDir);
-  await write("packages/storefront-webapp/src/main.tsx", "export {};\n", rootDir);
-  await write("packages/storefront-webapp/src/router.tsx", "export {};\n", rootDir);
-  await write("packages/storefront-webapp/src/routeTree.gen.ts", "export {};\n", rootDir);
-  await write("packages/storefront-webapp/src/routes/auth.verify.tsx", "export {};\n", rootDir);
-  await write("packages/storefront-webapp/src/routes/__root.tsx", "export {};\n", rootDir);
-  await write("packages/storefront-webapp/src/routes/shop/checkout/index.tsx", "export {};\n", rootDir);
-  await write("packages/storefront-webapp/src/api/storefront.ts", "export {};\n", rootDir);
-  await write("packages/storefront-webapp/src/components/checkout/Bag.tsx", "export {};\n", rootDir);
-  await write("packages/storefront-webapp/src/contexts/StoreContext.tsx", "export {};\n", rootDir);
-  await write("packages/storefront-webapp/src/hooks/useBag.ts", "export {};\n", rootDir);
-  await write("packages/storefront-webapp/src/lib/storefrontObservability.ts", "export {};\n", rootDir);
-  await write("packages/storefront-webapp/src/utils/price.ts", "export {};\n", rootDir);
-  await write("packages/storefront-webapp/tests/e2e/checkout.spec.ts", "export {};\n", rootDir);
-  await write("packages/valkey-proxy-server/app.js", "export const app = true;\n", rootDir);
+  await write(
+    "packages/storefront-webapp/src/main.tsx",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/storefront-webapp/src/router.tsx",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/storefront-webapp/src/routeTree.gen.ts",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/storefront-webapp/src/routes/auth.verify.tsx",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/storefront-webapp/src/routes/__root.tsx",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/storefront-webapp/src/routes/shop/checkout/index.tsx",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/storefront-webapp/src/api/storefront.ts",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/storefront-webapp/src/components/checkout/Bag.tsx",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/storefront-webapp/src/contexts/StoreContext.tsx",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/storefront-webapp/src/hooks/useBag.ts",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/storefront-webapp/src/lib/storefrontObservability.ts",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/storefront-webapp/src/utils/price.ts",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/storefront-webapp/tests/e2e/checkout.spec.ts",
+    "export {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/valkey-proxy-server/app.js",
+    "export const app = true;\n",
+    rootDir,
+  );
   await write(
     "packages/valkey-proxy-server/app.test.js",
     "export const appTest = true;\n",
-    rootDir
+    rootDir,
   );
-  await write("packages/valkey-proxy-server/index.js", "export const proxy = true;\n", rootDir);
+  await write(
+    "packages/valkey-proxy-server/index.js",
+    "export const proxy = true;\n",
+    rootDir,
+  );
   await write(
     "packages/valkey-proxy-server/test-connection.js",
     "export const probe = true;\n",
-    rootDir
+    rootDir,
   );
 
   await writeGeneratedHarnessDocs(rootDir);
@@ -1729,13 +1940,74 @@ async function createFixtureRepo() {
 
 afterEach(async () => {
   await Promise.all(
-    tempRoots.splice(0).map((rootDir) =>
-      rm(rootDir, { recursive: true, force: true })
-    )
+    tempRoots
+      .splice(0)
+      .map((rootDir) => rm(rootDir, { recursive: true, force: true })),
   );
 });
 
 describe("runHarnessAudit", () => {
+  it("fails closed when a public guarded gate bypasses the admission wrapper", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "package.json",
+      JSON.stringify({
+        scripts: {
+          "pr:athena": "bun run pr:athena:delivery-run",
+          "pr:athena:validate": "bun run pr:athena:validate-provider",
+          "pr:athena:prepare": "bun scripts/pr-athena-prepare.ts",
+          "pr:athena:validate-provider": "bun run test:coverage",
+          "harness:review-context":
+            "bun scripts/harness-review-evidence.ts context",
+          "harness:review-evidence":
+            "bun scripts/harness-review-evidence.ts record",
+        },
+      }),
+      rootDir,
+    );
+    expect(await auditHarnessGateObligationContract(rootDir)).toContain(
+      "Public gate script pr:athena:validate-provider must be exactly: bun scripts/harness-gate-admission.ts",
+    );
+  });
+
+  it.each([
+    {
+      publicGate: "pr:athena",
+      script: "bun run test:coverage && bun run pr:athena:delivery-run",
+      finding:
+        "Public gate pr:athena must delegate immediately and exactly to pr:athena:delivery-run before guarded work",
+    },
+    {
+      publicGate: "pr:athena:validate",
+      script: "bun run test:coverage && bun run pr:athena:validate-provider",
+      finding:
+        "Public gate pr:athena:validate must delegate immediately to pr:athena:validate-provider before guarded work",
+    },
+  ])(
+    "rejects a guarded-work sentinel before $publicGate reaches the shared wrapper",
+    async ({ publicGate, script, finding }) => {
+      const rootDir = await createFixtureRepo();
+      const packageJson = {
+        scripts: {
+          "pr:athena": "bun run pr:athena:delivery-run",
+          "pr:athena:validate": "bun run pr:athena:validate-provider",
+          "pr:athena:prepare": "bun scripts/pr-athena-prepare.ts",
+          "pr:athena:validate-provider":
+            "bun scripts/harness-gate-admission.ts",
+          "harness:review-context":
+            "bun scripts/harness-review-evidence.ts context",
+          "harness:review-evidence":
+            "bun scripts/harness-review-evidence.ts record",
+        } as Record<string, string>,
+      };
+      packageJson.scripts[publicGate] = script;
+      await write("package.json", JSON.stringify(packageJson), rootDir);
+
+      expect(await auditHarnessGateObligationContract(rootDir)).toContain(
+        finding,
+      );
+    },
+  );
   it("passes when current app surfaces are fully mapped", async () => {
     const rootDir = await createFixtureRepo();
 
@@ -1754,11 +2026,14 @@ describe("runHarnessAudit", () => {
   it("reports missing generated service entry docs for in-scope service packages", async () => {
     const rootDir = await createFixtureRepo();
     await rm(
-      path.join(rootDir, "packages/valkey-proxy-server/docs/agent/entry-index.md")
+      path.join(
+        rootDir,
+        "packages/valkey-proxy-server/docs/agent/entry-index.md",
+      ),
     );
 
     await expect(runHarnessAudit(rootDir)).rejects.toThrow(
-      /valkey-proxy-server[\s\S]*Missing required harness file: packages\/valkey-proxy-server\/docs\/agent\/entry-index\.md/
+      /valkey-proxy-server[\s\S]*Missing required harness file: packages\/valkey-proxy-server\/docs\/agent\/entry-index\.md/,
     );
   });
 
@@ -1767,7 +2042,7 @@ describe("runHarnessAudit", () => {
     await write(
       "packages/storefront-webapp/src/hooks/useCheckoutState.ts",
       "export {};\n",
-      rootDir
+      rootDir,
     );
     await write(
       "packages/storefront-webapp/docs/agent/validation-map.json",
@@ -1779,24 +2054,24 @@ describe("runHarnessAudit", () => {
             {
               name: "runtime-routes",
               pathPrefixes: [
-	                "packages/storefront-webapp/index.html",
-	                "packages/storefront-webapp/package.json",
-	                "packages/storefront-webapp/tsconfig.json",
-	                "packages/storefront-webapp/src/main.tsx",
-	                "packages/storefront-webapp/playwright.config.ts",
-	                "packages/storefront-webapp/vite.config.ts",
+                "packages/storefront-webapp/index.html",
+                "packages/storefront-webapp/package.json",
+                "packages/storefront-webapp/tsconfig.json",
+                "packages/storefront-webapp/src/main.tsx",
+                "packages/storefront-webapp/playwright.config.ts",
+                "packages/storefront-webapp/vite.config.ts",
                 "packages/storefront-webapp/src/router.tsx",
                 "packages/storefront-webapp/src/routeTree.gen.ts",
                 "packages/storefront-webapp/src/routes/",
               ],
               commands: [{ kind: "script", script: "test" }],
             },
-	            {
-	              name: "tests",
-	              pathPrefixes: [
-	                "packages/storefront-webapp/playwright.config.ts",
-	                "packages/storefront-webapp/tests/e2e/",
-	              ],
+            {
+              name: "tests",
+              pathPrefixes: [
+                "packages/storefront-webapp/playwright.config.ts",
+                "packages/storefront-webapp/tests/e2e/",
+              ],
               commands: [
                 { kind: "script", script: "test" },
                 { kind: "script", script: "test:e2e" },
@@ -1805,13 +2080,13 @@ describe("runHarnessAudit", () => {
           ],
         },
         null,
-        2
+        2,
       ),
-      rootDir
+      rootDir,
     );
 
     await expect(runHarnessAudit(rootDir)).rejects.toThrow(
-      /storefront-webapp[\s\S]*Uncovered live surface: packages\/storefront-webapp\/src\/hooks\//
+      /storefront-webapp[\s\S]*Uncovered live surface: packages\/storefront-webapp\/src\/hooks\//,
     );
   });
 
@@ -1837,13 +2112,13 @@ describe("runHarnessAudit", () => {
           ],
         },
         null,
-        2
+        2,
       ),
-      rootDir
+      rootDir,
     );
 
     await expect(runHarnessAudit(rootDir)).rejects.toThrow(
-      /athena-webapp[\s\S]*Stale validation surface: packages\/athena-webapp\/docs\/agent\/validation-map\.json references missing path "packages\/athena-webapp\/src\/missing-runtime\//
+      /athena-webapp[\s\S]*Stale validation surface: packages\/athena-webapp\/docs\/agent\/validation-map\.json references missing path "packages\/athena-webapp\/src\/missing-runtime\//,
     );
   });
 
@@ -1858,19 +2133,21 @@ describe("runHarnessAudit", () => {
           surfaces: [
             {
               name: "config-runtime",
-              pathPrefixes: ["packages/athena-webapp/src/missing-validation-map-path.test.ts"],
+              pathPrefixes: [
+                "packages/athena-webapp/src/missing-validation-map-path.test.ts",
+              ],
               commands: [{ kind: "script", script: "test" }],
             },
           ],
         },
         null,
-        2
+        2,
       ),
-      rootDir
+      rootDir,
     );
 
     await expect(runHarnessAudit(rootDir)).rejects.toThrow(
-      /athena-webapp[\s\S]*Stale validation surface: packages\/athena-webapp\/docs\/agent\/validation-map\.json references missing path "packages\/athena-webapp\/src\/missing-validation-map-path\.test\.ts"[\s\S]*Fixture drift: add "packages\/athena-webapp\/src\/missing-validation-map-path\.test\.ts" to the harness audit fixture, or repo drift: remove or update the stale validation-map path/
+      /athena-webapp[\s\S]*Stale validation surface: packages\/athena-webapp\/docs\/agent\/validation-map\.json references missing path "packages\/athena-webapp\/src\/missing-validation-map-path\.test\.ts"[\s\S]*Fixture drift: add "packages\/athena-webapp\/src\/missing-validation-map-path\.test\.ts" to the harness audit fixture, or repo drift: remove or update the stale validation-map path/,
     );
   });
 
@@ -1888,13 +2165,13 @@ describe("runHarnessAudit", () => {
           },
         },
         null,
-        2
+        2,
       ),
-      rootDir
+      rootDir,
     );
 
     await expect(runHarnessAudit(rootDir)).rejects.toThrow(
-      /Missing required script "@athena\/storefront-webapp:test:e2e" while generating harness docs\./
+      /Missing required script "@athena\/storefront-webapp:test:e2e" while generating harness docs\./,
     );
   });
 
@@ -1902,18 +2179,21 @@ describe("runHarnessAudit", () => {
     const rootDir = await createFixtureRepo();
     await expect(
       readFile(
-        path.join(rootDir, "packages/athena-webapp/docs/agent/validation-map.json"),
-        "utf8"
-      )
+        path.join(
+          rootDir,
+          "packages/athena-webapp/docs/agent/validation-map.json",
+        ),
+        "utf8",
+      ),
     ).resolves.toContain('"kind": "raw"');
     await expect(
       readFile(
         path.join(
           rootDir,
-          "packages/storefront-webapp/docs/agent/validation-map.json"
+          "packages/storefront-webapp/docs/agent/validation-map.json",
         ),
-        "utf8"
-      )
+        "utf8",
+      ),
     ).resolves.toContain('"kind": "raw"');
 
     await expect(runHarnessAudit(rootDir)).resolves.toBeUndefined();

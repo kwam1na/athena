@@ -48,13 +48,13 @@ async function walkFiles(dirPath: string): Promise<string[]> {
     entries
       .filter((entry) => !shouldSkipGeneratedEntry(entry.name))
       .map(async (entry) => {
-      const entryPath = path.join(dirPath, entry.name);
-      if (entry.isDirectory()) {
-        return walkFiles(entryPath);
-      }
+        const entryPath = path.join(dirPath, entry.name);
+        if (entry.isDirectory()) {
+          return walkFiles(entryPath);
+        }
 
-      return [entryPath];
-      })
+        return [entryPath];
+      }),
   );
 
   return files.flat();
@@ -62,7 +62,7 @@ async function walkFiles(dirPath: string): Promise<string[]> {
 
 async function readPackageConfig(rootDir: string, packageDir: string) {
   const packageJson = JSON.parse(
-    await readFile(path.join(rootDir, packageDir, "package.json"), "utf8")
+    await readFile(path.join(rootDir, packageDir, "package.json"), "utf8"),
   ) as {
     name?: string;
     scripts?: Record<string, string>;
@@ -108,30 +108,27 @@ function isWithinFolder(relativePath: string, folderPath: string) {
   }
 
   return (
-    relativePath === folderPath ||
-    relativePath.startsWith(`${folderPath}/`)
+    relativePath === folderPath || relativePath.startsWith(`${folderPath}/`)
   );
 }
 
-function toPackageRelativeGeneratedDocPaths(
-  config: HarnessAppRegistryEntry
-) {
+function toPackageRelativeGeneratedDocPaths(config: HarnessAppRegistryEntry) {
   return config.harnessDocs.generatedDocs.map((generatedDocPath) =>
-    normalizeRepoPath(
-      path.posix.relative(config.packageDir, generatedDocPath)
-    )
+    normalizeRepoPath(path.posix.relative(config.packageDir, generatedDocPath)),
   );
 }
 
 async function collectRouteGroups(
   rootDir: string,
-  config: HarnessAppRegistryEntry
+  config: HarnessAppRegistryEntry,
 ) {
   const routeRoot = path.join(rootDir, config.packageDir, config.routeRoot);
   const files = (await walkFiles(routeRoot))
     .filter((filePath) => /\.(?:[cm]?[jt]sx?)$/.test(filePath))
     .map((filePath) =>
-      normalizeRepoPath(path.relative(path.join(rootDir, config.packageDir), filePath))
+      normalizeRepoPath(
+        path.relative(path.join(rootDir, config.packageDir), filePath),
+      ),
     )
     .sort();
   const groups = new Map<string, string[]>();
@@ -151,17 +148,17 @@ async function collectRouteGroups(
 
 async function collectServiceDocumentedEntries(
   rootDir: string,
-  config: HarnessAppRegistryEntry
+  config: HarnessAppRegistryEntry,
 ) {
   const packageRoot = path.join(rootDir, config.packageDir);
   const documentedEntries = new Set(
     config.validationScenarios.flatMap((scenario) =>
       scenario.touchedPaths
         .map((repoRelativePath) =>
-          normalizeRepoPath(repoRelativePath).replace(/\/+$/, "")
+          normalizeRepoPath(repoRelativePath).replace(/\/+$/, ""),
         )
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   );
   const existingEntries: string[] = [];
 
@@ -176,7 +173,7 @@ async function collectServiceDocumentedEntries(
 
 async function collectServiceEntryGroups(
   rootDir: string,
-  config: HarnessAppRegistryEntry
+  config: HarnessAppRegistryEntry,
 ) {
   const files = await collectServiceDocumentedEntries(rootDir, config);
   const groups = new Map<string, string[]>();
@@ -195,20 +192,18 @@ async function collectServiceEntryGroups(
 
 async function collectTestFiles(
   rootDir: string,
-  config: HarnessAppRegistryEntry
+  config: HarnessAppRegistryEntry,
 ) {
   const packageRoot = path.join(rootDir, config.packageDir);
   const files = await walkFiles(packageRoot);
   const testFiles = files
-    .map((filePath) =>
-      normalizeRepoPath(path.relative(packageRoot, filePath))
-    )
+    .map((filePath) => normalizeRepoPath(path.relative(packageRoot, filePath)))
     .filter(
       (repoRelativePath) =>
         !repoRelativePath.startsWith("node_modules/") &&
         !repoRelativePath.startsWith("dist/") &&
         !repoRelativePath.startsWith("coverage/") &&
-        TEST_FILE_PATTERN.test(repoRelativePath)
+        TEST_FILE_PATTERN.test(repoRelativePath),
     )
     .sort();
   const groups = new Map<string, string[]>();
@@ -226,7 +221,7 @@ async function collectTestFiles(
 async function collectTestSurfaceRoots(
   rootDir: string,
   config: HarnessAppRegistryEntry,
-  packageConfig: PackageConfig
+  packageConfig: PackageConfig,
 ) {
   if (config.archetype === "service-package") {
     return collectServiceDocumentedEntries(rootDir, config);
@@ -237,7 +232,9 @@ async function collectTestSurfaceRoots(
   const surfaces = new Set<string>();
 
   for (const filePath of allFiles) {
-    const repoRelativePath = normalizeRepoPath(path.relative(packageRoot, filePath));
+    const repoRelativePath = normalizeRepoPath(
+      path.relative(packageRoot, filePath),
+    );
     if (
       repoRelativePath.startsWith("node_modules/") ||
       repoRelativePath.startsWith("dist/") ||
@@ -272,7 +269,7 @@ async function collectTestSurfaceRoots(
 async function collectFolderFacts(
   rootDir: string,
   config: HarnessAppRegistryEntry,
-  folderPath: string
+  folderPath: string,
 ) {
   const absoluteFolderPath = path.join(rootDir, config.packageDir, folderPath);
   if (!(await fileExists(absoluteFolderPath))) {
@@ -281,14 +278,16 @@ async function collectFolderFacts(
 
   const packageRoot = path.join(rootDir, config.packageDir);
   const existingFiles = (await walkFiles(absoluteFolderPath)).map((filePath) =>
-    normalizeRepoPath(path.relative(packageRoot, filePath))
+    normalizeRepoPath(path.relative(packageRoot, filePath)),
   );
   const virtualFiles = toPackageRelativeGeneratedDocPaths(config).filter(
     (generatedDocPath) =>
-      isWithinFolder(generatedDocPath, normalizeRepoPath(folderPath))
+      isWithinFolder(generatedDocPath, normalizeRepoPath(folderPath)),
   );
   const allFiles = [...new Set([...existingFiles, ...virtualFiles])].sort();
-  const directChildren = await readdir(absoluteFolderPath, { withFileTypes: true });
+  const directChildren = await readdir(absoluteFolderPath, {
+    withFileTypes: true,
+  });
   const childNames = directChildren
     .filter((entry) => !shouldSkipGeneratedEntry(entry.name))
     .map((entry) => entry.name)
@@ -298,13 +297,17 @@ async function collectFolderFacts(
           return generatedDocPath.split("/", 1)[0] ?? generatedDocPath;
         }
 
-        const relativeToFolder = generatedDocPath.slice(`${folderPath}/`.length);
+        const relativeToFolder = generatedDocPath.slice(
+          `${folderPath}/`.length,
+        );
         return relativeToFolder.split("/", 1)[0] ?? relativeToFolder;
-      })
+      }),
     )
     .filter(Boolean)
     .filter((childName) => !shouldSkipGeneratedEntry(childName))
-    .filter((childName, index, children) => children.indexOf(childName) === index)
+    .filter(
+      (childName, index, children) => children.indexOf(childName) === index,
+    )
     .sort();
 
   return {
@@ -316,7 +319,7 @@ async function collectFolderFacts(
 function formatScriptCommand(packageConfig: PackageConfig, script: string) {
   if (!packageConfig.scripts[script]) {
     throw new Error(
-      `Missing required script "${packageConfig.packageName}:${script}" while generating harness docs.`
+      `Missing required script "${packageConfig.packageName}:${script}" while generating harness docs.`,
     );
   }
 
@@ -337,7 +340,7 @@ function slugifyTitle(title: string) {
 
 function formatValidationCommandForDoc(
   packageConfig: PackageConfig,
-  command: ValidationCommand
+  command: ValidationCommand,
 ) {
   return command.kind === "raw"
     ? command.command
@@ -346,21 +349,25 @@ function formatValidationCommandForDoc(
 
 function toGeneratedValidationMap(
   config: HarnessAppRegistryEntry,
-  packageConfig: PackageConfig
+  packageConfig: PackageConfig,
 ) {
   return {
     workspace: packageConfig.packageName,
     packageDir: config.packageDir,
     surfaces: [
       ...config.validationScenarios.map((scenario) => ({
+        id: scenario.id,
+        reviewSensitive: scenario.reviewSensitive,
         name: slugifyTitle(scenario.title),
         pathPrefixes: scenario.touchedPaths.map((touchedPath) =>
-          toRepoValidationPath(config.packageDir, touchedPath)
+          toRepoValidationPath(config.packageDir, touchedPath),
         ),
         commands: scenario.commands,
         behaviorScenarios: scenario.behaviorScenarios ?? [],
       })),
       {
+        id: `${config.appName}.harness-docs`,
+        reviewSensitive: false,
         name: "harness-docs",
         pathPrefixes: [
           config.harnessDocs.agentsPath,
@@ -376,16 +383,24 @@ function toGeneratedValidationMap(
 function buildGeneratedDoc(
   title: string,
   introLines: string[],
-  bodyLines: string[]
+  bodyLines: string[],
 ) {
-  return `${[title, "", GENERATED_DOC_NOTICE, "", ...introLines, "", ...bodyLines]
+  return `${[
+    title,
+    "",
+    GENERATED_DOC_NOTICE,
+    "",
+    ...introLines,
+    "",
+    ...bodyLines,
+  ]
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")}\n`;
 }
 
 async function buildDiscoveryIndex(
   rootDir: string,
-  config: HarnessAppRegistryEntry
+  config: HarnessAppRegistryEntry,
 ) {
   const discoveryGroups =
     config.archetype === "service-package"
@@ -393,8 +408,8 @@ async function buildDiscoveryIndex(
       : await collectRouteGroups(rootDir, config);
   const bodyLines: string[] = [];
 
-  for (const [groupKey, routes] of [...discoveryGroups.entries()].sort(([a], [b]) =>
-    a.localeCompare(b)
+  for (const [groupKey, routes] of [...discoveryGroups.entries()].sort(
+    ([a], [b]) => a.localeCompare(b),
   )) {
     bodyLines.push(`## ${headingFromSegment(groupKey)}`);
     bodyLines.push("");
@@ -414,23 +429,29 @@ async function buildDiscoveryIndex(
   return buildGeneratedDoc(
     `# ${config.label} ${discoveryIndexLabel} Index`,
     [discoveryIntro],
-    bodyLines
+    bodyLines,
   );
 }
 
 async function buildTestIndex(
   rootDir: string,
   config: HarnessAppRegistryEntry,
-  packageConfig: PackageConfig
+  packageConfig: PackageConfig,
 ) {
   const testGroups =
     config.archetype === "service-package"
       ? await collectServiceEntryGroups(rootDir, config)
       : await collectTestFiles(rootDir, config);
-  const surfaces = await collectTestSurfaceRoots(rootDir, config, packageConfig);
+  const surfaces = await collectTestSurfaceRoots(
+    rootDir,
+    config,
+    packageConfig,
+  );
   const documentedCommands =
     config.archetype === "service-package"
-      ? ["test", "test:connection"].filter((script) => packageConfig.scripts[script])
+      ? ["test", "test:connection"].filter(
+          (script) => packageConfig.scripts[script],
+        )
       : ["test"];
   if (config.archetype === "webapp" && packageConfig.scripts["test:e2e"]) {
     documentedCommands.push("test:e2e");
@@ -449,8 +470,8 @@ async function buildTestIndex(
   }
   bodyLines.push("");
 
-  for (const [groupKey, testFiles] of [...testGroups.entries()].sort(([a], [b]) =>
-    a.localeCompare(b)
+  for (const [groupKey, testFiles] of [...testGroups.entries()].sort(
+    ([a], [b]) => a.localeCompare(b),
   )) {
     bodyLines.push(`## ${headingFromSegment(groupKey)}`);
     bodyLines.push("");
@@ -471,13 +492,13 @@ async function buildTestIndex(
         ? "This index enumerates the current harness-mapped service files and ties them back to the package-level commands agents should start from."
         : "This index enumerates the current automated test files and ties them back to the package-level commands agents should start from.",
     ],
-    bodyLines
+    bodyLines,
   );
 }
 
 async function buildKeyFolderIndex(
   rootDir: string,
-  config: HarnessAppRegistryEntry
+  config: HarnessAppRegistryEntry,
 ) {
   const bodyLines: string[] = [];
 
@@ -492,7 +513,7 @@ async function buildKeyFolderIndex(
       }
 
       bodyLines.push(
-        `- ${formatMarkdownLink(folder.path)} — ${folder.description} Currently ${facts.fileCount} file(s); key children: ${facts.childSummary}.`
+        `- ${formatMarkdownLink(folder.path)} — ${folder.description} Currently ${facts.fileCount} file(s); key children: ${facts.childSummary}.`,
       );
     }
 
@@ -504,13 +525,13 @@ async function buildKeyFolderIndex(
     [
       "This key-folder index highlights the main directories agents are likely to need for fast package orientation.",
     ],
-    bodyLines
+    bodyLines,
   );
 }
 
 async function buildValidationGuide(
   config: HarnessAppRegistryEntry,
-  packageConfig: PackageConfig
+  packageConfig: PackageConfig,
 ) {
   const bodyLines = [
     "Use this decision guide to answer “what should I run for this change?” based on the surface you touched.",
@@ -520,13 +541,17 @@ async function buildValidationGuide(
   for (const scenario of config.validationScenarios) {
     bodyLines.push(`## ${scenario.title}`);
     bodyLines.push("");
-    bodyLines.push(`Touched surfaces: ${scenario.touchedPaths.map((entry) => `\`${entry}\``).join(", ")}`);
+    bodyLines.push(
+      `Touched surfaces: ${scenario.touchedPaths.map((entry) => `\`${entry}\``).join(", ")}`,
+    );
     bodyLines.push("");
     bodyLines.push("Run:");
     bodyLines.push("");
 
     for (const command of scenario.commands) {
-      bodyLines.push(`- \`${formatValidationCommandForDoc(packageConfig, command)}\``);
+      bodyLines.push(
+        `- \`${formatValidationCommandForDoc(packageConfig, command)}\``,
+      );
     }
 
     if ((scenario.behaviorScenarios?.length ?? 0) > 0) {
@@ -543,16 +568,12 @@ async function buildValidationGuide(
     bodyLines.push("");
   }
 
-  return buildGeneratedDoc(
-    `# ${config.label} Validation Guide`,
-    [],
-    bodyLines
-  );
+  return buildGeneratedDoc(`# ${config.label} Validation Guide`, [], bodyLines);
 }
 
 async function buildValidationMap(
   config: HarnessAppRegistryEntry,
-  packageConfig: PackageConfig
+  packageConfig: PackageConfig,
 ) {
   return `${JSON.stringify(toGeneratedValidationMap(config, packageConfig), null, 2)}\n`;
 }
@@ -564,23 +585,23 @@ export async function generateHarnessDocs(rootDir: string) {
     const packageConfig = await readPackageConfig(rootDir, config.packageDir);
     docs.set(
       config.harnessDocs.routeIndexPath ?? config.harnessDocs.entryIndexPath!,
-      await buildDiscoveryIndex(rootDir, config)
+      await buildDiscoveryIndex(rootDir, config),
     );
     docs.set(
       config.harnessDocs.testIndexPath,
-      await buildTestIndex(rootDir, config, packageConfig)
+      await buildTestIndex(rootDir, config, packageConfig),
     );
     docs.set(
       config.harnessDocs.keyFolderIndexPath,
-      await buildKeyFolderIndex(rootDir, config)
+      await buildKeyFolderIndex(rootDir, config),
     );
     docs.set(
       config.harnessDocs.validationGuidePath,
-      await buildValidationGuide(config, packageConfig)
+      await buildValidationGuide(config, packageConfig),
     );
     docs.set(
       config.harnessDocs.validationMapPath,
-      await buildValidationMap(config, packageConfig)
+      await buildValidationMap(config, packageConfig),
     );
   }
 

@@ -99,6 +99,8 @@ function createSpawn(outputs: {
       output = next.indexTreeSha;
     } else if (command.join(" ") === "git rev-parse --verify origin/main") {
       output = next.baseSha;
+    } else if (command.join(" ") === "git merge-base origin/main HEAD") {
+      output = next.baseSha;
     } else if (
       command.join(" ") === "git status --porcelain --untracked-files=all"
     ) {
@@ -416,7 +418,11 @@ describe("pre-push validation proof", () => {
 
   it("reruns pre-push when delivery documentation wiring changes", async () => {
     const rootDir = await createFixtureRoot();
-    await write(rootDir, "scripts/delivery-documentation-check.ts", "export {};\n");
+    await write(
+      rootDir,
+      "scripts/delivery-documentation-check.ts",
+      "export {};\n",
+    );
     await recordPrePushValidationProof(rootDir, {
       spawn: createSpawn({}),
       logger: { log() {}, warn() {} },
@@ -436,6 +442,24 @@ describe("pre-push validation proof", () => {
       reusable: false,
       status: "validation_wiring_changed",
       reason: "validation wiring changed since proof recording",
+    });
+  });
+
+  it("reruns pre-push when an approved review adapter changes", async () => {
+    const rootDir = await createFixtureRoot();
+    await write(rootDir, ".agents/skills/execute/SKILL.md", "review adapter v1\n");
+    await recordPrePushValidationProof(rootDir, {
+      spawn: createSpawn({}),
+      logger: { log() {}, warn() {} },
+    });
+
+    await write(rootDir, ".agents/skills/execute/SKILL.md", "review adapter v2\n");
+
+    await expect(
+      evaluatePrePushValidationProof(rootDir, { spawn: createSpawn({}) }),
+    ).resolves.toMatchObject({
+      reusable: false,
+      status: "validation_wiring_changed",
     });
   });
 });

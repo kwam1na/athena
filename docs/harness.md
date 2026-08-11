@@ -280,10 +280,12 @@ bun run pr:athena:record-proof
 bun run pr:athena:scorecard
 ```
 
-`pr:athena:prepare` repairs generated artifacts and stages tracked changes, then
-stops before the heavy ladder if unstaged or untracked files remain. It does not
-stage new files automatically; stage intended new files explicitly and rerun the
-prepare step before spending the full validation cycle.
+`pr:athena:prepare` is one wrapper-owned preparation boundary. It checks Bun and
+dependency parity, repairs generated artifacts, stages tracked changes, rejects
+unstaged or untracked ambiguity, captures the complete candidate tree plus base
+tip and merge base, and only then publishes a worktree-local preparation
+receipt. It does not stage new files automatically; stage intended new files
+explicitly and rerun preparation.
 
 `pr:athena:preflight` then aggregates validation-map coverage, live harness
 audit, audit-fixture consistency, and harness-script sibling-test policy before
@@ -292,11 +294,30 @@ generated-doc repair, fixture and sibling-test files, and the focused
 verification command, so a preflight failure is actionable without reading the
 sensor source.
 
-`pr:athena:validate` runs the main repo ladder in two halves. The provider half
-runs Convex audits, architecture checks, and coverage; if those commands pass,
-the gate writes same-tree provider evidence. The review half then runs harness
-review, inferential review, audit, and graphify freshness. `pr:athena:scorecard`
-runs after proof recording so it reads the current delivery-run ledger.
+`pr:athena:validate` delegates to one guarded provider boundary. The gate
+registry declares reusable obligations, and a pure evaluator resolves each as a
+live fact, exact-candidate evidence, human waiver, repository-authorized CI
+delegation, non-applicability, or a block. These are distinct outcomes: a waiver
+or delegation is never reported as provider-green evidence.
+
+The initial `review.green` obligation activates at 50 relevant changed lines, a
+relevant binary change, or an explicitly review-sensitive validation scenario.
+Recognized agents must present final-green evidence from `ce-code-review` or
+`execute`; a PTY does not make an agent human. Interactive humans may deliberately
+waive review for the exact worktree/candidate/base, while CI delegation requires
+the allowlisted `athena-pr-tests` workflow/job/event policy. Documentation
+currentness is an always-on live fact and cannot be waived.
+
+Approved review workflows run `pr:athena:prepare`, capture
+`harness:review-context`, complete an independent review of that exact candidate,
+and submit a provider-owned `final-manifest.json` through
+`harness:review-evidence`. Any review fix requires preparation and a complete
+re-review of the resulting candidate. The admission wrapper evaluates
+documentation once, reports all blockers together, records a correlated gate
+decision, rechecks the candidate immediately before spawning, and owns the
+heavy command list. `pr:athena:scorecard` runs after proof recording so it reads
+the current delivery-run ledger, including gate-decision outcomes and prevented
+cost class.
 
 After the final `graphify:check`, `pr:athena:record-proof` records a
 worktree-local proof for the current clean tree or staged index and
@@ -447,7 +468,7 @@ so CI and local harness runs read the same declared version.
 | --- | --- | --- |
 | Prepare | `pr:athena:prepare` | Dependency check, generated-artifact repair, then blocks if unstaged or untracked files would prevent reusable proof. |
 | Preflight | `pr:athena:preflight` | Validation-map coverage, live harness audit, audit-fixture consistency, and harness-script sibling-test policy. |
-| Validate | `pr:athena:validate` | Provider half (docs checks — policy, report presentation, docs cross-references — workflow check, Convex audit and lint, frontend lint, architecture, `tsc --noEmit`, coverage), then writes provider evidence, then the review half (harness review, inferential review, audit, graphify check). |
+| Validate | `pr:athena:validate` | The guarded provider evaluates registered obligations before docs, workflow, Convex, frontend, architecture, typecheck, and coverage work; then writes same-tree provider evidence and runs harness review, inferential review, audit, and graphify check. |
 | Record proof | `pr:athena:record-proof` | Records the git-private proof for the validated tree. |
 | Scorecard | `pr:athena:scorecard` | Runs against the current delivery-run ledger. |
 

@@ -595,6 +595,9 @@ describe("createSharedDemoDailyOperationsFixture", () => {
   });
 
   it("attributes each selected historical close to Athena", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 21, 12));
+
     const fixture = createSharedDemoDailyOperationsFixture({
       operatingDate: "2026-07-20",
       orgUrlSlug: "demo",
@@ -613,6 +616,8 @@ describe("createSharedDemoDailyOperationsFixture", () => {
         }),
       ]),
     );
+
+    vi.useRealTimers();
   });
 
   it("renders a legitimate, unlinked store-day timeline for historic trading days", () => {
@@ -669,6 +674,9 @@ describe("createSharedDemoDailyOperationsFixture", () => {
   });
 
   it("uses catalog-price granularity for every demo payment split", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 21, 12));
+
     const fixture = createSharedDemoDailyOperationsFixture({
       operatingDate: "2026-07-20",
       orgUrlSlug: "demo",
@@ -687,6 +695,8 @@ describe("createSharedDemoDailyOperationsFixture", () => {
 
     expect(paymentAmounts).not.toHaveLength(0);
     expect(paymentAmounts.every((amount) => amount % 500 === 0)).toBe(true);
+
+    vi.useRealTimers();
   });
 
   it("ties shared-demo daily operations pulse detail to the selected operating date", () => {

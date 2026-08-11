@@ -6,7 +6,7 @@ import {
 } from "./landed-change-report-check";
 import { collectDeliverableDiffFingerprint } from "./delivery-diff-fingerprint";
 
-type DocumentationPolicyCheckOptions = {
+export type DocumentationPolicyCheckOptions = {
   assertCompoundSolutionCheck?: (
     rootDir: string,
     options: { baseRef?: string; threshold?: number },
@@ -19,6 +19,17 @@ type DocumentationPolicyCheckOptions = {
   threshold?: number;
 };
 
+export type DeliveryDocumentationFinding = {
+  policy: "compound-solution" | "landed-change-report";
+  label: "Solution notes" | "Landed-change reports";
+  message: string;
+};
+
+export type DeliveryDocumentationCheckResult = {
+  status: "pass" | "fail";
+  findings: DeliveryDocumentationFinding[];
+};
+
 function findingsFrom(error: unknown, heading: string) {
   const message = error instanceof Error ? error.message : String(error);
   const prefix = `${heading} failed:`;
@@ -26,21 +37,22 @@ function findingsFrom(error: unknown, heading: string) {
   return message.startsWith(prefix) ? message.slice(prefix.length).trim() : message;
 }
 
-export function assertDeliveryDocumentationCheck(
+export function evaluateDeliveryDocumentationCheck(
   rootDir: string,
   options: DocumentationPolicyCheckOptions = {},
-) {
+): DeliveryDocumentationCheckResult {
   const assertSolution =
     options.assertCompoundSolutionCheck ?? assertCompoundSolutionCheck;
   const assertReport =
     options.assertLandedChangeReportCheck ?? assertLandedChangeReportCheck;
-  const findings: Array<{ label: string; message: string }> = [];
+  const findings: DeliveryDocumentationFinding[] = [];
 
   try {
     assertSolution(rootDir, options);
   } catch (error) {
     if (!isPolicyFailure(error, "Compound solution check failed:")) throw error;
     findings.push({
+      policy: "compound-solution",
       label: "Solution notes",
       message: findingsFrom(error, "Compound solution check"),
     });
@@ -51,17 +63,27 @@ export function assertDeliveryDocumentationCheck(
   } catch (error) {
     if (!isPolicyFailure(error, "Landed-change report check failed:")) throw error;
     findings.push({
+      policy: "landed-change-report",
       label: "Landed-change reports",
       message: findingsFrom(error, "Landed-change report check"),
     });
   }
 
-  if (findings.length === 0) {
-    return;
-  }
+  return {
+    status: findings.length === 0 ? "pass" : "fail",
+    findings,
+  };
+}
+
+export function assertDeliveryDocumentationCheck(
+  rootDir: string,
+  options: DocumentationPolicyCheckOptions = {},
+) {
+  const result = evaluateDeliveryDocumentationCheck(rootDir, options);
+  if (result.status === "pass") return;
 
   throw new Error(
-    `Delivery documentation check failed:\n\n${findings
+    `Delivery documentation check failed:\n\n${result.findings
       .map(({ label, message }) => `${label}:\n${message}`)
       .join("\n\n")}`,
   );

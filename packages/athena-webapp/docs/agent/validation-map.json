@@ -3,6 +3,8 @@
   "packageDir": "packages/athena-webapp",
   "surfaces": [
     {
+      "id": "athena.shared-demo-admission",
+      "reviewSensitive": true,
       "name": "shared-demo-admission-restore-and-orientation-edits",
       "pathPrefixes": [
         "packages/athena-webapp/assets/shared-demo-products",
@@ -50,6 +52,8 @@
       ]
     },
     {
+      "id": "athena.route-ui",
+      "reviewSensitive": false,
       "name": "route-or-ui-only-edits",
       "pathPrefixes": [
         "packages/athena-webapp/src/assets",
@@ -74,6 +78,8 @@
       "behaviorScenarios": []
     },
     {
+      "id": "athena.changed-frontend-source-lint",
+      "reviewSensitive": false,
       "name": "changed-frontend-source-lint",
       "pathPrefixes": [
         "packages/athena-webapp/src",
@@ -89,6 +95,8 @@
       "behaviorScenarios": []
     },
     {
+      "id": "athena.reporting-fact-ledger",
+      "reviewSensitive": false,
       "name": "reporting-fact-ledger-day-fold-and-read-model-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/reports",
@@ -122,6 +130,8 @@
       "behaviorScenarios": []
     },
     {
+      "id": "athena.daily-store-operations",
+      "reviewSensitive": false,
       "name": "daily-store-operations-lifecycle-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/operations/dailyClose.ts",
@@ -170,6 +180,8 @@
       ]
     },
     {
+      "id": "athena.stock-ops-procurement",
+      "reviewSensitive": false,
       "name": "stock-ops-procurement-and-receiving-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/stockOps",
@@ -208,6 +220,8 @@
       ]
     },
     {
+      "id": "athena.cash-controls",
+      "reviewSensitive": true,
       "name": "cash-controls-workflow-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/cashControls",
@@ -236,6 +250,8 @@
       ]
     },
     {
+      "id": "athena.pos-item-adjustment",
+      "reviewSensitive": true,
       "name": "pos-transaction-item-adjustment-reporting-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/pos/application/commands",
@@ -279,6 +295,8 @@
       ]
     },
     {
+      "id": "athena.pos-mixed-checkout",
+      "reviewSensitive": true,
       "name": "pos-service-mixed-checkout-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
@@ -330,6 +348,8 @@
       ]
     },
     {
+      "id": "athena.service-operations",
+      "reviewSensitive": false,
       "name": "service-operations-intake-catalog-appointments-and-cases",
       "pathPrefixes": [
         "packages/athena-webapp/convex/serviceOps",
@@ -363,6 +383,8 @@
       "behaviorScenarios": []
     },
     {
+      "id": "athena.auth-staff-store-configuration",
+      "reviewSensitive": true,
       "name": "auth-staff-and-store-configuration-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/inventory/auth.ts",
@@ -397,6 +419,8 @@
       "behaviorScenarios": []
     },
     {
+      "id": "athena.expense-session-cart",
+      "reviewSensitive": false,
       "name": "expense-session-and-cart-flow-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/inventory/expenseSessions.ts",
@@ -427,6 +451,8 @@
       "behaviorScenarios": []
     },
     {
+      "id": "athena.omnichannel-order-refund",
+      "reviewSensitive": true,
       "name": "omnichannel-order-refund-review-and-customer-history-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/storeFront/onlineOrder.ts",
@@ -472,6 +498,8 @@
       ]
     },
     {
+      "id": "athena.workflow-trace-foundation",
+      "reviewSensitive": false,
       "name": "workflow-trace-foundation-pos-local-sync-register-and-trace-link-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/workflowTraces",
@@ -539,6 +567,8 @@
       ]
     },
     {
+      "id": "athena.pos-app-session-continuity",
+      "reviewSensitive": true,
       "name": "pos-hub-app-session-continuity-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/pos/public/terminalAppSessions.ts",
@@ -583,6 +613,8 @@
       ]
     },
     {
+      "id": "athena.pos-offline-route-access",
+      "reviewSensitive": true,
       "name": "pos-offline-route-access-and-app-shell-edits",
       "pathPrefixes": [
         "packages/athena-webapp/public/pos-app-shell-sw.js",
@@ -627,6 +659,8 @@
       "behaviorScenarios": []
     },
     {
+      "id": "athena.app-update-readiness",
+      "reviewSensitive": false,
       "name": "app-update-readiness-and-apply-safety-edits",
       "pathPrefixes": [
         "packages/athena-webapp/public/pos-app-shell-sw.js",
@@ -661,6 +695,8 @@
       "behaviorScenarios": []
     },
     {
+      "id": "athena.pos-terminal-health",
+      "reviewSensitive": false,
       "name": "pos-terminal-health-visibility-and-diagnostics-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/schemas/pos/posTerminal.ts",
@@ -718,6 +754,8 @@
       ]
     },
     {
+      "id": "athena.shared-lib-utility",
+      "reviewSensitive": false,
       "name": "shared-lib-or-utility-edits",
       "pathPrefixes": [
         "packages/athena-webapp/src/lib",
@@ -740,6 +778,8 @@
       "behaviorScenarios": []
     },
     {
+      "id": "athena.client-server-error-foundation",
+      "reviewSensitive": false,
       "name": "client-server-error-foundation-edits",
       "pathPrefixes": [
         "packages/athena-webapp/shared/commandResult.ts",
@@ -767,6 +807,8 @@
       "behaviorScenarios": []
     },
     {
+      "id": "athena.admin-quick-action-toast",
+      "reviewSensitive": false,
       "name": "admin-quick-action-unexpected-toast-fallback-edits",
       "pathPrefixes": [
         "packages/athena-webapp/src/components/add-product",
@@ -796,6 +838,8 @@
       "behaviorScenarios": []
     },
     {
+      "id": "athena.frontend-test-harness",
+      "reviewSensitive": false,
       "name": "frontend-test-harness-edits",
       "pathPrefixes": [
         "packages/athena-webapp/src/test",
@@ -812,6 +856,8 @@
       "behaviorScenarios": []
     },
     {
+      "id": "athena.convex-backend-adjacent",
+      "reviewSensitive": false,
       "name": "convex-or-backend-adjacent-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex",
@@ -843,6 +889,8 @@
       ]
     },
     {
+      "id": "athena.route-runtime-build",
+      "reviewSensitive": false,
       "name": "route-runtime-or-build-pipeline-edits",
       "pathPrefixes": [
         "packages/athena-webapp/src/main.tsx",
@@ -872,6 +920,8 @@
       ]
     },
     {
+      "id": "athena.storybook-frontend-tooling",
+      "reviewSensitive": false,
       "name": "storybook-and-frontend-tooling-edits",
       "pathPrefixes": [
         "packages/athena-webapp/.storybook",
@@ -914,6 +964,8 @@
       "behaviorScenarios": []
     },
     {
+      "id": "athena-webapp.harness-docs",
+      "reviewSensitive": false,
       "name": "harness-docs",
       "pathPrefixes": [
         "packages/athena-webapp/AGENTS.md",

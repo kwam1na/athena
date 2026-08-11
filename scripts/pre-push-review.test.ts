@@ -11,6 +11,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import {
+  ATHENA_PR_VALIDATION_GATE_ID,
+  HARNESS_GATE_REGISTRY,
+} from "./harness-gate-registry";
 import * as prePushReview from "./pre-push-review";
 
 const ROOT_DIR = path.resolve(import.meta.dirname, "..");
@@ -27,6 +31,62 @@ const EXPIRED_PROOF_OPTIONS = {
   }),
   runDocumentationCheck: async () => {},
 };
+
+async function createBlockedPublicGateFixture() {
+  const fixtureRoot = await mkdtemp(
+    path.join(tmpdir(), "athena-public-gate-routing-"),
+  );
+  const rootPackageJson = JSON.parse(
+    await readFile(path.join(ROOT_DIR, "package.json"), "utf8"),
+  ) as { scripts?: Record<string, string> };
+  const scripts = rootPackageJson.scripts ?? {};
+
+  await mkdir(path.join(fixtureRoot, "scripts"), { recursive: true });
+  await writeFile(
+    path.join(fixtureRoot, "package.json"),
+    JSON.stringify({
+      scripts: {
+        "pr:athena": scripts["pr:athena"],
+        "pr:athena:delivery-run": scripts["pr:athena:delivery-run"],
+        "pr:athena:prepare": "bun scripts/noop.ts",
+        "pr:athena:preflight": "bun scripts/noop.ts",
+        "pr:athena:validate": scripts["pr:athena:validate"],
+        "pr:athena:validate-provider":
+          scripts["pr:athena:validate-provider"],
+        "pr:athena:validate-review": "bun scripts/sentinel-heavy.ts",
+        "sentinel:heavy": "bun scripts/sentinel-heavy.ts",
+      },
+    }),
+  );
+  await writeFile(path.join(fixtureRoot, "scripts/noop.ts"), "");
+  await writeFile(
+    path.join(fixtureRoot, "scripts/pr-athena-delivery-run.ts"),
+    [
+      'if (process.argv[2] === "write-provider-evidence") process.exit(0);',
+      'for (const script of ["pr:athena:prepare", "pr:athena:preflight", "pr:athena:validate"]) {',
+      '  const result = Bun.spawnSync(["bun", "run", script], { cwd: process.cwd(), stdout: "inherit", stderr: "inherit" });',
+      "  if (result.exitCode !== 0) process.exit(result.exitCode);",
+      "}",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(fixtureRoot, "scripts/harness-gate-admission.ts"),
+    [
+      'if (process.env.FORCE_ADMISSION_BLOCK === "1") {',
+      '  await Bun.write("admission-reached", "blocked\\n");',
+      '  console.error("Harness gate admission blocked: current candidate requires approved independent review evidence.");',
+      "  process.exit(1);",
+      "}",
+      'Bun.spawnSync(["bun", "run", "sentinel:heavy"], { cwd: process.cwd() });',
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(fixtureRoot, "scripts/sentinel-heavy.ts"),
+    'await Bun.write("sentinel-heavy-reached", "unexpected\\n");\n',
+  );
+
+  return fixtureRoot;
+}
 
 describe("pre-push review wiring", () => {
   it("exports testable helpers for pre-push orchestration", () => {
@@ -888,10 +948,7 @@ describe("pre-push review wiring", () => {
       await mkdir(path.join(fixtureRoot, ".husky"), { recursive: true });
       await mkdir(fixtureBin, { recursive: true });
       await mkdir(fixtureTmp, { recursive: true });
-      await writeFile(
-        path.join(fixtureRoot, ".husky/pre-push"),
-        hookContents,
-      );
+      await writeFile(path.join(fixtureRoot, ".husky/pre-push"), hookContents);
       await writeFile(
         path.join(fixtureBin, "bun"),
         [
@@ -950,6 +1007,41 @@ describe("pre-push review wiring", () => {
 });
 
 describe("repo harness ergonomics", () => {
+  it.each([
+    "pr:athena",
+    "pr:athena:validate",
+    "pr:athena:validate-provider",
+  ])(
+    "blocks %s at admission before sentinel heavy work starts",
+    async (publicGate) => {
+      const fixtureRoot = await createBlockedPublicGateFixture();
+
+      try {
+        const result = Bun.spawnSync(["bun", "run", publicGate], {
+          cwd: fixtureRoot,
+          env: { ...process.env, FORCE_ADMISSION_BLOCK: "1" },
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        const output = [result.stdout, result.stderr]
+          .map((stream) => new TextDecoder().decode(stream))
+          .join("\n");
+
+        expect(result.exitCode).not.toBe(0);
+        expect(output).toContain("Harness gate admission blocked");
+        expect(output).toContain("approved independent review evidence");
+        await expect(
+          readFile(path.join(fixtureRoot, "admission-reached"), "utf8"),
+        ).resolves.toBe("blocked\n");
+        await expect(
+          readFile(path.join(fixtureRoot, "sentinel-heavy-reached"), "utf8"),
+        ).rejects.toMatchObject({ code: "ENOENT" });
+      } finally {
+        await rm(fixtureRoot, { recursive: true, force: true });
+      }
+    },
+  );
+
   it("schedules a recurring harness drift check in GitHub Actions", async () => {
     const workflow = await readFile(
       path.join(ROOT_DIR, ".github/workflows/athena-pr-tests.yml"),
@@ -1022,45 +1114,40 @@ describe("repo harness ergonomics", () => {
     expect(packageJson.scripts?.["pr:athena:delivery-run"]).toBe(
       "bun scripts/pr-athena-delivery-run.ts",
     );
-    expect(packageJson.scripts?.["pr:athena:prepare"]).toContain(
-      "bun run pre-commit:generated-artifacts",
-    );
-    expect(packageJson.scripts?.["pr:athena:prepare"]).toContain(
-      "bun scripts/pre-push-validation-proof.ts prepare-pr-athena",
+    expect(packageJson.scripts?.["pr:athena:prepare"]).toBe(
+      "bun scripts/pr-athena-prepare.ts",
     );
     expect(packageJson.scripts?.["pr:athena:preflight"]).toBe(
       "bun scripts/harness-contract-preflight.ts",
     );
-    expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+    expect(packageJson.scripts?.["pr:athena:validate"]).toBe(
       "bun run pr:athena:validate-provider && bun scripts/pr-athena-delivery-run.ts write-provider-evidence && bun run pr:athena:validate-review",
     );
     expect(packageJson.scripts?.["delivery:documentation-check"]).toBe(
       "bun scripts/delivery-documentation-check.ts",
     );
-    expect(packageJson.scripts?.["pr:athena:validate-provider"]).toContain(
-      "bun run delivery:documentation-check",
-    );
-    expect(packageJson.scripts?.["pr:athena:validate-provider"]).toContain(
-      "bun run workflow:check",
+    expect(packageJson.scripts?.["pr:athena:validate-provider"]).toBe(
+      "bun scripts/harness-gate-admission.ts",
     );
     expect(packageJson.scripts?.["harness:test"]).toBe(
       "bun scripts/harness-test.ts",
     );
-    expect(packageJson.scripts?.["pr:athena:validate-provider"]).toContain(
-      "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
-    );
-    expect(packageJson.scripts?.["pr:athena:validate-provider"]).toContain(
-      "bun run test:coverage",
-    );
-    expect(
-      packageJson.scripts?.["pr:athena:validate-provider"]?.indexOf(
-        "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
-      ),
-    ).toBeLessThan(
-      packageJson.scripts?.["pr:athena:validate-provider"]?.indexOf(
-        "bun run test:coverage",
-      ) ?? 0,
-    );
+    const providerCommands =
+      HARNESS_GATE_REGISTRY.gates[ATHENA_PR_VALIDATION_GATE_ID]
+        .privateProviderCommands;
+    expect(providerCommands).toContainEqual(["bun", "run", "workflow:check"]);
+    expect(providerCommands).toContainEqual([
+      "bunx",
+      "tsc",
+      "--noEmit",
+      "-p",
+      "packages/athena-webapp/tsconfig.json",
+    ]);
+    expect(providerCommands).toContainEqual([
+      "bun",
+      "run",
+      "test:coverage",
+    ]);
     expect(packageJson.scripts?.["pr:athena:validate-provider"]).not.toContain(
       "bun run harness:test",
     );
@@ -1079,9 +1166,13 @@ describe("repo harness ergonomics", () => {
     expect(packageJson.scripts?.["pr:athena:scorecard"]).toBe(
       "bun run harness:scorecard",
     );
-    expect(packageJson.scripts?.["pr:athena:validate-provider"]).toContain(
-      "bun run --filter '@athena/webapp' lint:frontend:changed",
-    );
+    expect(providerCommands).toContainEqual([
+      "bun",
+      "run",
+      "--filter",
+      "@athena/webapp",
+      "lint:frontend:changed",
+    ]);
     expect(packageJson.scripts?.["pr:athena:validate-review"]).toContain(
       "bun run harness:audit",
     );
@@ -1142,7 +1233,9 @@ describe("repo harness ergonomics", () => {
     expect(harnessDoc).toContain("delivery:documentation-check");
 
     // Evidence artifact paths that agents need in order to find run output.
-    expect(harnessDoc).toContain("artifacts/harness-inferential-review/history/");
+    expect(harnessDoc).toContain(
+      "artifacts/harness-inferential-review/history/",
+    );
     expect(harnessDoc).toContain("artifacts/harness-behavior/trends/history/");
 
     // Token presence alone would pass on a doc that described the opposite
