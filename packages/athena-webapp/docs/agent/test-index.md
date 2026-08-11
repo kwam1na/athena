@@ -277,6 +277,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/reports/skuMovementRange.test.ts`](../../convex/reports/skuMovementRange.test.ts)
 - [`convex/reports/sweeper.test.ts`](../../convex/reports/sweeper.test.ts)
 - [`convex/reports/verificationClassify.test.ts`](../../convex/reports/verificationClassify.test.ts)
+- [`convex/reports/verificationSweep.test.ts`](../../convex/reports/verificationSweep.test.ts)
 - [`convex/reports/verify.test.ts`](../../convex/reports/verify.test.ts)
 - [`convex/reports/weekly.test.ts`](../../convex/reports/weekly.test.ts)
 - [`convex/reports/weeklyAcceptedRepair.test.ts`](../../convex/reports/weeklyAcceptedRepair.test.ts)
