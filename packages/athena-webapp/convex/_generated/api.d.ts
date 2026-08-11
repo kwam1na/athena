@@ -497,6 +497,7 @@ import type * as schemas_remoteAssist_remoteAssistSession from "../schemas/remot
 import type * as schemas_reports_derived from "../schemas/reports/derived.js";
 import type * as schemas_reports_facts from "../schemas/reports/facts.js";
 import type * as schemas_reports_index from "../schemas/reports/index.js";
+import type * as schemas_reports_verificationRuns from "../schemas/reports/verificationRuns.js";
 import type * as schemas_serviceOps_index from "../schemas/serviceOps/index.js";
 import type * as schemas_serviceOps_serviceAppointment from "../schemas/serviceOps/serviceAppointment.js";
 import type * as schemas_serviceOps_serviceCase from "../schemas/serviceOps/serviceCase.js";
@@ -1104,6 +1105,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/reports/derived": typeof schemas_reports_derived;
   "schemas/reports/facts": typeof schemas_reports_facts;
   "schemas/reports/index": typeof schemas_reports_index;
+  "schemas/reports/verificationRuns": typeof schemas_reports_verificationRuns;
   "schemas/serviceOps/index": typeof schemas_serviceOps_index;
   "schemas/serviceOps/serviceAppointment": typeof schemas_serviceOps_serviceAppointment;
   "schemas/serviceOps/serviceCase": typeof schemas_serviceOps_serviceCase;
