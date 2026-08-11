@@ -158,4 +158,35 @@ crons.interval(
   {},
 );
 
+// The ONE cron of the report verification family. It OBSERVES rather than
+// produces: it re-derives its work set every tick from the run table plus each
+// day's `certifiedFoldRevision`, so there is no queue to drain and a crashed
+// tick simply leaves the same subjects selected for the next one — same
+// declarative-liveness contract as the reports and notifications sweeps above.
+//
+// Hourly class in prod, at :47. Every other minute in this hour is spoken for:
+// daily-operations-automation runs at :00, owed-daily-close-sweep at :30, and
+// the reports/notifications sweeps tick on the 5-minute grid (:00, :05, …).
+// :47 is off that grid entirely and sits well clear of both hourly jobs, so
+// verification reads state the fold and close paths have already settled
+// instead of racing them mid-write.
+//
+// Non-prod runs every 6 hours at the same minute: verification is read-heavy
+// and dev data is static, so a slow rhythm is enough to keep the path warm.
+if (process.env.STAGE == "prod") {
+  crons.hourly(
+    "report-verification-sweep",
+    { minuteUTC: 47 },
+    internal.reports.verificationSweep.runVerificationSweep,
+    {},
+  );
+} else {
+  crons.cron(
+    "report-verification-sweep",
+    "47 */6 * * *",
+    internal.reports.verificationSweep.runVerificationSweep,
+    {},
+  );
+}
+
 export default crons;

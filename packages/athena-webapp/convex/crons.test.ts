@@ -50,4 +50,28 @@ describe("Convex cron registration", () => {
       "internal.operations.dailyOperationsAutomation.runScheduledDailyOperationsAutomation",
     );
   });
+
+  it("registers the report verification sweep on an offset hourly cadence", () => {
+    const source = readFileSync("convex/crons.ts", "utf8");
+
+    expect(source).toContain('"report-verification-sweep"');
+    expect(source).toContain(
+      "internal.reports.verificationSweep.runVerificationSweep",
+    );
+    // Prod: hourly at :47 — off the 5-minute grid the reports and
+    // notifications sweeps occupy, and clear of :00 / :30.
+    expect(source).toContain("{ minuteUTC: 47 }");
+    // Non-prod: much slower, same offset minute.
+    expect(source).toContain('"47 */6 * * *"');
+  });
+
+  it("keeps the verification sweep interval constant in step with its cron", () => {
+    const source = readFileSync(
+      "convex/automation/scheduledRunLedger.ts",
+      "utf8",
+    );
+    // resolveScheduledWindow derives idempotency windows from this number, so
+    // it must equal the registered PROD cadence (hourly = 60 minutes).
+    expect(source).toContain('"report-verification-sweep": 60');
+  });
 });
