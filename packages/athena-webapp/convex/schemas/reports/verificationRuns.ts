@@ -55,6 +55,15 @@ export const reportVerificationRunSchema = v.object({
   unexplainedDifferences: v.array(verificationDifferenceSummary),
   /** Stable digest of unexplainedDifferences; absent when the set is empty. */
   unexplainedFingerprint: v.optional(v.string()),
+  /**
+   * Fields this run actually compared. Its COMPLEMENT within the subject's
+   * field inventory is verify.ts's `unverifiedFields` — what the run declined
+   * to make a claim about — which the U5 alert email renders as its own "not
+   * checked" section (R4: unverified is not mismatched). Optional because
+   * rows written before this capture landed have no honest value: absent
+   * means "unknown", never "nothing was checked".
+   */
+  checkedFields: v.optional(v.array(v.string())),
   /** Consecutive runs producing this same non-clean outcome; 0 after clean. */
   streakCount: v.number(),
   /** The unexplained fingerprint most recently escalated; absent if never. */

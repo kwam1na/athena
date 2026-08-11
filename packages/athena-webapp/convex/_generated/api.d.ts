@@ -66,6 +66,7 @@ import type * as emails_PosTerminalHealthAlert from "../emails/PosTerminalHealth
 import type * as emails_RegisterCloseoutMatchReportPreview from "../emails/RegisterCloseoutMatchReportPreview.js";
 import type * as emails_RegisterCloseoutVarianceAlert from "../emails/RegisterCloseoutVarianceAlert.js";
 import type * as emails_RegisterCloseoutVarianceAlertPreview from "../emails/RegisterCloseoutVarianceAlertPreview.js";
+import type * as emails_ReportVerificationAlert from "../emails/ReportVerificationAlert.js";
 import type * as emails_VerificationCode from "../emails/VerificationCode.js";
 import type * as emails_WalkthroughRequestNotification from "../emails/WalkthroughRequestNotification.js";
 import type * as emails_WeeklyManagerReport from "../emails/WeeklyManagerReport.js";
@@ -262,6 +263,7 @@ import type * as operations_registerSessionAuthorityRevision from "../operations
 import type * as operations_registerSessionCloseoutGate from "../operations/registerSessionCloseoutGate.js";
 import type * as operations_registerSessionTracing from "../operations/registerSessionTracing.js";
 import type * as operations_registerSessions from "../operations/registerSessions.js";
+import type * as operations_reportVerificationAlertEmail from "../operations/reportVerificationAlertEmail.js";
 import type * as operations_serviceIntake from "../operations/serviceIntake.js";
 import type * as operations_skuActivity from "../operations/skuActivity.js";
 import type * as operations_staffCredentials from "../operations/staffCredentials.js";
@@ -676,6 +678,7 @@ declare const fullApi: ApiFromModules<{
   "emails/RegisterCloseoutMatchReportPreview": typeof emails_RegisterCloseoutMatchReportPreview;
   "emails/RegisterCloseoutVarianceAlert": typeof emails_RegisterCloseoutVarianceAlert;
   "emails/RegisterCloseoutVarianceAlertPreview": typeof emails_RegisterCloseoutVarianceAlertPreview;
+  "emails/ReportVerificationAlert": typeof emails_ReportVerificationAlert;
   "emails/VerificationCode": typeof emails_VerificationCode;
   "emails/WalkthroughRequestNotification": typeof emails_WalkthroughRequestNotification;
   "emails/WeeklyManagerReport": typeof emails_WeeklyManagerReport;
@@ -872,6 +875,7 @@ declare const fullApi: ApiFromModules<{
   "operations/registerSessionCloseoutGate": typeof operations_registerSessionCloseoutGate;
   "operations/registerSessionTracing": typeof operations_registerSessionTracing;
   "operations/registerSessions": typeof operations_registerSessions;
+  "operations/reportVerificationAlertEmail": typeof operations_reportVerificationAlertEmail;
   "operations/serviceIntake": typeof operations_serviceIntake;
   "operations/skuActivity": typeof operations_skuActivity;
   "operations/staffCredentials": typeof operations_staffCredentials;

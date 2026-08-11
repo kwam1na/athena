@@ -6,6 +6,7 @@ import { approvalRequestPendingPreviewProps } from "../emails/ApprovalRequestPen
 import { dailyManagerReportPreviewProps } from "../emails/DailyManagerReport";
 import { posTerminalHealthAlertPreviewProps } from "../emails/PosTerminalHealthAlert";
 import { registerCloseoutVarianceAlertPreviewProps } from "../emails/RegisterCloseoutVarianceAlert";
+import { reportVerificationAlertPreviewProps } from "../emails/ReportVerificationAlert";
 import { weeklyManagerReportPreviewProps } from "../emails/WeeklyManagerReport";
 import {
   findNotificationKind,
@@ -71,7 +72,7 @@ const dailyReport = {
 };
 
 describe("registry catalog", () => {
-  it("registers exactly the six shipped kinds with their categories and channels", () => {
+  it("registers exactly the seven shipped kinds with their categories and channels", () => {
     expect(listNotificationKinds().sort()).toEqual([
       "approvals.request_created",
       "eod.daily_manager_report",
@@ -79,7 +80,13 @@ describe("registry catalog", () => {
       "pos.terminal_health",
       "register.closeout_match",
       "register.closeout_variance",
+      "reports.verification_discrepancy",
     ]);
+    // Reuses system_health rather than minting a category: no TS union,
+    // schema validator, or subscription-seeding change ships with this kind.
+    expect(
+      getNotificationKind("reports.verification_discrepancy").category,
+    ).toBe("system_health");
     expect(getNotificationKind("approvals.request_created").category).toBe(
       "approvals",
     );
@@ -449,6 +456,66 @@ describe("eod.daily_manager_report payload branching", () => {
   });
 });
 
+describe("report verification discrepancy preparation", () => {
+  const payload = {
+    storeId: STORE_ID,
+    subjectKind: "day" as const,
+    subjectKey: "2026-08-08",
+    fingerprint: "a1b2c3d4e5f60718",
+    reArmEpoch: 2,
+  };
+
+  it("renders checked-and-wrong and not-checked from a fresh run-row read", async () => {
+    const { prepared, calls } = await prepare(
+      "reports.verification_discrepancy",
+      payload,
+      [reportVerificationAlertPreviewProps],
+    );
+
+    expect(calls).toEqual([
+      "operations/reportVerificationAlertEmail:getReportVerificationAlertPayload",
+    ]);
+    expect(prepared?.subject).toBe(
+      "Wigclub report verification - day Saturday, August 8",
+    );
+    expect(prepared?.html).toContain("Checked and wrong");
+    expect(prepared?.html).toContain("Net sales");
+    // R4: the withheld fields are rendered, and rendered separately.
+    expect(prepared?.html).toContain("Not checked");
+    expect(prepared?.html).toContain("Payments refunded");
+  });
+
+  it("suppresses when the subject resolved between emit and send", async () => {
+    // The run row was re-verified clean (or moved to a different unexplained
+    // set), so this alert is no longer true: null suppresses, and dispatch
+    // records the operational event for the dropped alert.
+    const { prepared } = await prepare(
+      "reports.verification_discrepancy",
+      payload,
+      [null],
+    );
+
+    expect(prepared).toBeNull();
+  });
+
+  it("propagates a transient payload read fault instead of suppressing", async () => {
+    // Collapsing a read fault into null would permanently silence a real
+    // discrepancy — the rail must retry instead.
+    const ctx = {
+      runQuery: async () => {
+        throw new Error("Report verification alert store was not found.");
+      },
+    } as never;
+
+    await expect(
+      getNotificationKind("reports.verification_discrepancy").prepareEmail(
+        ctx,
+        payload,
+      ),
+    ).rejects.toThrow("Report verification alert store was not found.");
+  });
+});
+
 describe("registry dedupe key recipes", () => {
   function dedupeKey(kind: string, payload: NotificationPayload) {
     return getNotificationKind(kind).dedupeKey(payload);
@@ -524,6 +591,75 @@ describe("registry dedupe key recipes", () => {
     expect(
       dedupeKey("eod.weekly_manager_report", { acceptedWeekId }),
     ).toBe(`eod.weekly_manager_report:${acceptedWeekId}`);
+  });
+
+  it("keys a verification discrepancy by store, subject, fingerprint, and re-arm epoch", () => {
+    expect(
+      dedupeKey("reports.verification_discrepancy", {
+        storeId: STORE_ID,
+        subjectKind: "day",
+        subjectKey: "2026-08-08",
+        fingerprint: "a1b2c3d4e5f60718",
+        reArmEpoch: 0,
+      }),
+    ).toBe(
+      `reports.verification_discrepancy:${STORE_ID}:day:2026-08-08:a1b2c3d4e5f60718:0`,
+    );
+  });
+
+  it("re-alerts the same fingerprint after a clean run re-armed the subject", () => {
+    // The rail's dedupe is a permanent unique lookup: without the epoch this
+    // second, genuinely new discrepancy would be swallowed forever.
+    const base = {
+      storeId: STORE_ID,
+      subjectKind: "day" as const,
+      subjectKey: "2026-08-08",
+      fingerprint: "a1b2c3d4e5f60718",
+    };
+    expect(
+      dedupeKey("reports.verification_discrepancy", {
+        ...base,
+        reArmEpoch: 0,
+      }),
+    ).not.toBe(
+      dedupeKey("reports.verification_discrepancy", {
+        ...base,
+        reArmEpoch: 1,
+      }),
+    );
+
+    // ...while the same fingerprint within one streak stays a single alert.
+    expect(
+      dedupeKey("reports.verification_discrepancy", {
+        ...base,
+        reArmEpoch: 1,
+      }),
+    ).toBe(
+      dedupeKey("reports.verification_discrepancy", {
+        ...base,
+        reArmEpoch: 1,
+      }),
+    );
+  });
+
+  it("keeps day and week subjects with the same key distinct", () => {
+    const base = {
+      storeId: STORE_ID,
+      subjectKey: "2026-08-03",
+      fingerprint: "a1b2c3d4e5f60718",
+      reArmEpoch: 0,
+    };
+    expect(
+      dedupeKey("reports.verification_discrepancy", {
+        ...base,
+        subjectKind: "day",
+      }),
+    ).not.toBe(
+      dedupeKey("reports.verification_discrepancy", {
+        ...base,
+        subjectKind: "week",
+      }),
+    );
   });
 
   it("collapses skipped and failed to one key per store-day but keeps applied and prepared distinct", () => {

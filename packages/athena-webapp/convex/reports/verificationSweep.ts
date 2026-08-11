@@ -10,6 +10,7 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "../_generated/server";
+import { emitNotificationWithCtx } from "../notifications/emit";
 import { addDaysToOperatingDate } from "../operations/dailyOperationsAutomation";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { parseStoreAllowlist, readStoreAllowlist } from "./sweeper";
@@ -549,16 +550,19 @@ export const verifyWeekSubject = internalQuery({
  * U5 SEAM — verification alert emission.
  *
  * When a subject transitions to alertable (`shouldAlert` from
- * `nextStreakState`) this is the single place an email intent will be
- * emitted from, inside the same transaction as the run-row upsert. U5 wires
- * the actual `emitNotificationWithCtx` call for the
- * `reports.verification_discrepancy` kind here; until then the transition is
- * already durably recorded on the run row (`lastAlertedFingerprint` /
- * `reArmEpoch`) and this seam only answers whether an emit WOULD have fired
- * under the fail-closed email gate (R8 record-only rollout).
+ * `nextStreakState`) this is the single place an email intent is emitted
+ * from, inside the same transaction as the run-row upsert: an intent can
+ * never exist for a transition the row did not record, and a rolled-back
+ * upsert takes its intent with it.
+ *
+ * The gate is FAIL-CLOSED (R8 record-only rollout): with the env unset
+ * nothing is emitted and the transition is still durably recorded on the run
+ * row (`lastAlertedFingerprint` / `reArmEpoch`), so enabling email later is a
+ * config change that starts alerting from the next transition — not a replay
+ * of the backlog.
  */
 export async function maybeEmitVerificationAlert(
-  _ctx: MutationCtx,
+  ctx: MutationCtx,
   args: {
     storeId: Id<"store">;
     subjectKind: "day" | "week";
@@ -568,9 +572,26 @@ export async function maybeEmitVerificationAlert(
   },
 ): Promise<{ wouldEmit: boolean }> {
   const gateEnabled = isVerificationAlertEmailEnabled(String(args.storeId));
-  // U5: if (gateEnabled) emitNotificationWithCtx(ctx, { kind, dedupeKey over
-  // (kind, store, subjectKind, subjectKey, fingerprint, reArmEpoch), ... }).
-  return { wouldEmit: gateEnabled };
+  if (!gateEnabled) return { wouldEmit: false };
+
+  await emitNotificationWithCtx(ctx, {
+    kind: "reports.verification_discrepancy",
+    storeId: args.storeId,
+    subjectType: `report_verification_${args.subjectKind}`,
+    subjectId: args.subjectKey,
+    // Refs only — the email is rebuilt from a fresh read of the run row at
+    // send time. The fingerprint and epoch are dedupe components AND the
+    // send-time alertability check.
+    payload: {
+      storeId: args.storeId,
+      subjectKind: args.subjectKind,
+      subjectKey: args.subjectKey,
+      fingerprint: args.fingerprint,
+      reArmEpoch: args.reArmEpoch,
+    },
+  });
+
+  return { wouldEmit: true };
 }
 
 function streakStateFromRow(
@@ -643,6 +664,9 @@ export const recordVerificationOutcome = internalMutation({
       outcome: args.outcome,
       explainedDifferences: args.explained,
       unexplainedDifferences: args.unexplained,
+      // Persisted for the U5 alert email: its complement within the subject's
+      // field inventory is what verification declined to check.
+      checkedFields: args.checkedFields,
       // `undefined` on patch is an explicit erase — a cleared streak must not
       // keep a stale fingerprint or alert marker.
       unexplainedFingerprint: state.fingerprint ?? undefined,

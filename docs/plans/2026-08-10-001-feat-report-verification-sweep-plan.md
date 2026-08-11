@@ -56,7 +56,7 @@ Wire the existing independent reporting verifier (`packages/athena-webapp/convex
 - `packages/athena-webapp/convex/reports/verify.ts` — plain-ctx helpers `verifyDayWithCtx`, `verifyCurrentWeekWithCtx` are directly reusable; `verifyStoreSummaryWithCtx` (400-day walk) is too heavy for a per-tick sweep.
 - `packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts` — the shape to imitate: derived owed set (never stored), bounded per-tick batch, once-per-streak escalation (`recordOwedDailyCloseStaleEscalation`), offset cadence to observe rather than race the primary.
 - `packages/athena-webapp/convex/reports/sweeper.ts` — pacing constants style (`SWEEP_MARK_SCAN_LIMIT`, `SWEEP_DIRTY_BATCH`), reseed guard, fail-closed `REPORTS_SWEEP_STORE_ALLOWLIST` idiom, thin `internalMutation` delegating to a `WithCtx` function.
-- `packages/athena-webapp/convex/automation/scheduledRunLedger.ts` — window bucketing, runKey idempotency, `bestEffortRecordScheduledRunEvidence`; enrollment requires adding the `SCHEDULED_CRON_INTERVAL_MINUTES` entry (the `cronFamily` union derives from it via `keyof typeof`) kept consistent with the interval registered in `crons.ts`.
+- `packages/athena-webapp/convex/automation/scheduledRunLedger.ts` — window bucketing, runKey idempotency, `bestEffortRecordScheduledRunEvidence`; enrollment requires adding the `SCHEDULED_CRON_INTERVAL_MINUTES` entry (the `ScheduledCronFamily` type derives from it via `keyof typeof`) **and** the family literal in `scheduledRunEvidenceArgs`' separate hand-written `v.union`, both consistent with the interval registered in `crons.ts`.
 - `packages/athena-webapp/convex/notifications/registry.ts` — a kind = registry entry (category, structural dedupeKey, `prepareEmail` fresh-read with throw=retry / null=suppress) + payload internalQuery in `operations/*Email.ts` + template in `emails/` with exported preview props.
 - `packages/athena-webapp/convex/crons.ts` + `crons.test.ts` — STAGE-branched registration; source-text test assertions per cron.
 - Test seeders: `packages/athena-webapp/convex/reports/reseedTestSupport.ts` (`seedStore`, `seedPosSale`, `seedPaymentAllocation`, …) already used by `verify.test.ts`.
@@ -223,8 +223,8 @@ Wire the existing independent reporting verifier (`packages/athena-webapp/convex
 
 **Approach:**
 - STAGE-branched registration with a doc-comment on crash semantics; cadence hourly-class offset from the reports sweep and daily-operations automation (observe, don't race — owed-close precedent). Exact minute/interval decided at implementation with sizing arithmetic.
-- Enroll the new cron family: add the `SCHEDULED_CRON_INTERVAL_MINUTES` entry (the `cronFamily` union derives from it via `keyof typeof`), kept consistent with the registered interval (window math depends on agreement).
-- Sweep records one system-scope summary row + per-store rows via `bestEffortRecordScheduledRunEvidence`.
+- Enroll the new cron family in **two** places: the `SCHEDULED_CRON_INTERVAL_MINUTES` entry (the `ScheduledCronFamily` *type* derives from it via `keyof typeof`) and the separate hand-written `v.union` of literals in `scheduledRunEvidenceArgs`, which `recordScheduledRunEvidence` validates at runtime. Both must agree with the interval registered in `crons.ts` (window math depends on it).
+- Sweep records one system-scope summary row + per-store rows. Note the sweep entry is an action, so it calls `recordScheduledRunEvidence` through `ctx.runMutation` wrapped in its own try/catch — `bestEffortRecordScheduledRunEvidence` takes a `MutationCtx` and is not reachable from the action ctx.
 
 **Patterns to follow:** `crons.ts` owed-daily-close-sweep block; `storeFront/checkoutSession.ts` ledger recording (~line 220).
 
