@@ -248,6 +248,42 @@ async function insertVoidFact(
   });
 }
 
+/** Insert one fact the fold EXCLUDES — quarantined, or in a currency other
+ * than the store's — the source of the flagged-exclusion magnitude. */
+async function insertExcludedFact(
+  ctx: MutationCtx,
+  storeId: Id<"store">,
+  operatingDate: string,
+  args: {
+    index: number;
+    grossAmountMinor: number;
+    quantity: number;
+    kind: "quarantined" | "foreign";
+  },
+): Promise<void> {
+  await ctx.db.insert("reportFact", {
+    storeId,
+    sourceDomain: "pos",
+    sourceId: `excluded-${args.index}`,
+    lineId: `excluded-${args.index}`,
+    factKind: "sale",
+    fingerprint: `fp-excluded-${args.index}`,
+    fingerprintVersion: 1,
+    occurredAt: Date.parse(`${operatingDate}T10:00:00Z`),
+    recordedAt: Date.parse(`${operatingDate}T10:00:00Z`),
+    operatingDate,
+    currency: args.kind === "foreign" ? "USD" : "GHS",
+    grossAmountMinor: args.grossAmountMinor,
+    netAmountMinor: args.grossAmountMinor,
+    taxAmountMinor: 0,
+    discountAmountMinor: 0,
+    quantity: args.quantity,
+    ...(args.kind === "quarantined"
+      ? { quarantine: { reason: "fingerprint_mismatch", detectedAt: 0 } }
+      : {}),
+  });
+}
+
 async function seedStoreWithDay(
   t: Harness,
   overrides?: Partial<Doc<"reportDay">>,
@@ -694,6 +730,68 @@ describe("verification sweep — containment, wedge escalation, alert gating", (
     ).toBe(2);
   });
 
+  it("T2b — an A→B→A oscillation inside ONE streak emits 3 intents distinguished only by alertSeq", async () => {
+    // The epoch path (break → repair → re-break) is covered above and would
+    // pass without `alertSeq` in the dedupeKey, because the epoch already
+    // differs there. THIS is the case alertSeq exists for: the fingerprint
+    // returns to a previously-alerted value with NO clean run in between, so
+    // the epoch is frozen and (store, subject, fingerprint, epoch) repeats
+    // byte-for-byte. Without alertSeq the rail's permanent dedupe drops the
+    // third emission while the run row claims an alert went out.
+    const seeded = await seedStoreWithDay(t, MISMATCH);
+    process.env[REPORTS_VERIFICATION_ALERT_EMAILS_ENV] = String(seeded.storeId);
+
+    // A.
+    await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });
+    // B — different wrong numbers, never clean.
+    await patchDay(t, seeded.storeId, DAY1, {
+      grossSalesMinor: 700,
+      netSalesMinor: 700,
+      certifiedFoldRevision: 2,
+    });
+    await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW + 1 });
+    // Back to A — same numbers as the first break, still no clean run.
+    await patchDay(t, seeded.storeId, DAY1, {
+      ...MISMATCH,
+      certifiedFoldRevision: 3,
+    });
+    await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW + 2 });
+
+    const intents = (await notificationIntentsFor(t, seeded.storeId)).sort(
+      (left, right) => left._creationTime - right._creationTime,
+    );
+    expect(intents).toHaveLength(3);
+    expect(new Set(intents.map((intent) => intent.dedupeKey)).size).toBe(3);
+
+    const [first, , third] = intents;
+    // First and third are the SAME discrepancy in the SAME re-arm generation.
+    expect(third!.payload.fingerprint).toBe(first!.payload.fingerprint);
+    expect(third!.payload.reArmEpoch).toBe(first!.payload.reArmEpoch);
+    // The epoch never moved at all — no clean run ever happened.
+    expect(
+      new Set(intents.map((intent) => intent.payload.reArmEpoch)).size,
+    ).toBe(1);
+    // ...so alertSeq is the ONLY thing separating their identities.
+    expect(intents.map((intent) => intent.payload.alertSeq)).toEqual([1, 2, 3]);
+  });
+
+  it("alertSeq survives the round trip through the run row instead of restarting each tick", async () => {
+    // `payload.alertSeq === row.alertSeq` is self-consistent and would hold
+    // even if the counter reset to 0 on every tick. Assert a concrete value.
+    const seeded = await seedStoreWithDay(t, MISMATCH);
+
+    await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });
+    expect((await runRow(t, seeded.storeId, "day", DAY1))?.alertSeq).toBe(1);
+
+    await patchDay(t, seeded.storeId, DAY1, {
+      grossSalesMinor: 700,
+      netSalesMinor: 700,
+      certifiedFoldRevision: 2,
+    });
+    await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW + 1 });
+    expect((await runRow(t, seeded.storeId, "day", DAY1))?.alertSeq).toBe(2);
+  });
+
   it("a persistent identical mismatch alerts once; a changed fingerprint alerts a second time", async () => {
     const seeded = await seedStoreWithDay(t, MISMATCH);
     const first = await runVerificationSweepWithCtx(sweepCtx(t), {
@@ -923,6 +1021,123 @@ describe("verification sweep — void attribution, stalls, and honest evidence",
     expect(result.alertTransitions).toBe(1);
   });
 
+  it("T3b — a quarantined fact explains a delta WITHIN its own magnitude and nothing beyond it", async () => {
+    // The fold drops quarantined/foreign-currency facts; the verifier has no
+    // quarantine visibility and counts them. The flag alone must not license
+    // an arbitrary delta, so the sweep sources the excluded facts' own worth
+    // and the classifier bounds the explanation by it. Without the sweep
+    // supplying that magnitude the classifier explains NOTHING and this day
+    // alerts.
+    const EXCLUDED = 6_000;
+    const seeded = await t.run(async (ctx: MutationCtx) => {
+      const store = await seedStore(ctx);
+      await insertReportDay(ctx, store.storeId, DAY1, {
+        grossSalesMinor: EXCLUDED,
+        netSalesMinor: EXCLUDED,
+        flags: {
+          mixedCurrency: false,
+          hasUncostedRevenue: false,
+          quarantinedFactCount: 1,
+        },
+      });
+      await insertExcludedFact(ctx, store.storeId, DAY1, {
+        index: 0,
+        grossAmountMinor: EXCLUDED,
+        quantity: 0,
+        kind: "quarantined",
+      });
+      return store;
+    });
+    allowlist([seeded.storeId]);
+
+    const result = await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });
+    const row = await runRow(t, seeded.storeId, "day", DAY1);
+    expect(row?.outcome).toBe("mismatch");
+    expect(row?.unexplainedDifferences).toEqual([]);
+    expect(
+      row?.explainedDifferences.every(
+        (difference) => difference.classification === "flagged_exclusions",
+      ),
+    ).toBe(true);
+    expect(result.alertTransitions).toBe(0);
+
+    // Same single quarantined fact, a fold defect an order of magnitude past
+    // its worth: the flag no longer covers it and the day alerts.
+    await patchDay(t, seeded.storeId, DAY1, {
+      grossSalesMinor: EXCLUDED * 100,
+      netSalesMinor: EXCLUDED * 100,
+      certifiedFoldRevision: 2,
+    });
+    const escalated = await runVerificationSweepWithCtx(sweepCtx(t), {
+      now: NOW + 1,
+    });
+    const alerted = await runRow(t, seeded.storeId, "day", DAY1);
+    expect(alerted?.unexplainedDifferences.length).toBeGreaterThan(0);
+    expect(escalated.alertTransitions).toBe(1);
+  });
+
+  it("T3b — a foreign-currency fact is sourced the same way as a quarantined one", async () => {
+    const EXCLUDED_UNITS = 4;
+    const seeded = await t.run(async (ctx: MutationCtx) => {
+      const store = await seedStore(ctx);
+      await insertReportDay(ctx, store.storeId, DAY1, {
+        unitsSold: EXCLUDED_UNITS,
+        flags: {
+          mixedCurrency: true,
+          hasUncostedRevenue: false,
+          quarantinedFactCount: 0,
+        },
+      });
+      await insertExcludedFact(ctx, store.storeId, DAY1, {
+        index: 0,
+        grossAmountMinor: 0,
+        quantity: EXCLUDED_UNITS,
+        kind: "foreign",
+      });
+      return store;
+    });
+    allowlist([seeded.storeId]);
+
+    const result = await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });
+    const row = await runRow(t, seeded.storeId, "day", DAY1);
+    expect(row?.outcome).toBe("mismatch");
+    expect(row?.unexplainedDifferences).toEqual([]);
+    expect(result.alertTransitions).toBe(0);
+  });
+
+  it("T3b — a day over the fact scan cap supplies NO flagged attribution either", async () => {
+    // Fail-closed, exactly like the void path: a partial sum is a lower bound
+    // and a lower bound used as an explanation ceiling would bless defects.
+    const seeded = await t.run(async (ctx: MutationCtx) => {
+      const store = await seedStore(ctx);
+      await insertReportDay(ctx, store.storeId, DAY1, {
+        grossSalesMinor: VERIFICATION_VOID_FACT_SCAN + 1,
+        netSalesMinor: VERIFICATION_VOID_FACT_SCAN + 1,
+        flags: {
+          mixedCurrency: false,
+          hasUncostedRevenue: false,
+          quarantinedFactCount: VERIFICATION_VOID_FACT_SCAN + 1,
+        },
+      });
+      for (let index = 0; index <= VERIFICATION_VOID_FACT_SCAN; index += 1) {
+        await insertExcludedFact(ctx, store.storeId, DAY1, {
+          index,
+          grossAmountMinor: 1,
+          quantity: 0,
+          kind: "quarantined",
+        });
+      }
+      return store;
+    });
+    allowlist([seeded.storeId]);
+
+    const result = await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });
+    const row = await runRow(t, seeded.storeId, "day", DAY1);
+    expect(row?.outcome).toBe("mismatch");
+    expect(row?.unexplainedDifferences.length).toBeGreaterThan(0);
+    expect(result.alertTransitions).toBe(1);
+  });
+
   it("C3 — a stalled fold surfaces as a missing recent day, not silence", async () => {
     // Folding stopped on DAY1; the backwards-only probe would re-derive the
     // same anchor forever and report clean.
@@ -965,6 +1180,94 @@ describe("verification sweep — void attribution, stalls, and honest evidence",
       dates.map((date) => runRow(t, seeded.storeId, "day", date)),
     );
     expect(errored.filter((row) => row?.outcome === "error").length).toBe(4);
+  });
+
+  it("M2 — the single error slot is spent on the OLDEST-verified error row each tick", async () => {
+    // The cap is proven above; this proves the ROTATION. Four error rows all
+    // stamped at tick 0 would satisfy the cap assertion under any ordering —
+    // only watching WHICH row gets re-touched each tick can catch a
+    // newest-first (or unsorted) error pool that starves the others.
+    // Three, so tick 0 fits them all inside the per-store budget alongside
+    // the forward stall probe's slot and every row starts equally stale.
+    const dates = ["2026-03-05", "2026-03-04", "2026-03-03"];
+    const seeded = await t.run(async (ctx: MutationCtx) => {
+      const store = await seedStore(ctx);
+      for (const date of dates) await insertReportDay(ctx, store.storeId, date);
+      return store;
+    });
+    allowlist([seeded.storeId]);
+    const failing = sweepCtx(t, {
+      failQueryWhen: (args) => dates.includes(args.operatingDate as string),
+    });
+
+    // Tick 0 fills all four slots, so every row carries the SAME verifiedAt.
+    await runVerificationSweepWithCtx(failing, { now: NOW });
+
+    async function verifiedAts(): Promise<Map<string, number>> {
+      const rows = await Promise.all(
+        dates.map((date) => runRow(t, seeded.storeId, "day", date)),
+      );
+      return new Map(
+        rows.map((row, index) => [dates[index]!, row!.verifiedAt]),
+      );
+    }
+    const start = await verifiedAts();
+    expect(new Set(start.values()).size).toBe(1);
+
+    const touchedOrder: string[] = [];
+    for (let tick = 1; tick <= 3; tick += 1) {
+      const before = await verifiedAts();
+      await runVerificationSweepWithCtx(failing, { now: NOW + tick });
+      const after = await verifiedAts();
+      const touched = dates.filter(
+        (date) => after.get(date) !== before.get(date),
+      );
+      // Exactly one error subject per tick (the slot cap), and it is one of
+      // the least-recently-verified rows.
+      expect(touched).toHaveLength(1);
+      const oldest = Math.min(...before.values());
+      expect(before.get(touched[0]!)).toBe(oldest);
+      touchedOrder.push(touched[0]!);
+    }
+    // Over three ticks every failing subject gets its turn — the property the
+    // rotation exists for.
+    expect(new Set(touchedOrder).size).toBe(3);
+  });
+
+  it("C3 — a caught-up store produces no stall-probe subject at all", async () => {
+    // The probe walks back from yesterday and breaks at the first date <=
+    // anchor. This store's anchor is today's OPEN row, so the walk breaks on
+    // iteration 0 and never reaches 2026-03-07 — a date that is missing, is
+    // inside VERIFICATION_STALL_PROBE_DAYS of yesterday, and is NOT reachable
+    // as an ordinary candidate (the backwards missing-day probe only covers
+    // 03-09/03-08, both of which exist). Drop the `break` and 03-07 becomes a
+    // stall subject; keep it and a healthy store pays no extra reads.
+    const seeded = await t.run(async (ctx: MutationCtx) => {
+      const store = await seedStore(ctx);
+      await insertReportDay(ctx, store.storeId, "2026-03-10", {
+        status: "open",
+      });
+      for (const date of ["2026-03-09", "2026-03-08", "2026-03-06"]) {
+        await insertReportDay(ctx, store.storeId, date);
+      }
+      return store;
+    });
+    allowlist([seeded.storeId]);
+
+    const selection = await t.query(
+      internal.reports.verificationSweep.selectVerificationDaySubjects,
+      { storeId: seeded.storeId, reVerify: false, now: NOW },
+    );
+    expect(selection.dates).not.toContain("2026-03-07");
+    // Every selected subject is a real folded day: no probe date at all.
+    expect(selection.dates.sort()).toEqual([
+      "2026-03-06",
+      "2026-03-08",
+      "2026-03-09",
+    ]);
+
+    await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });
+    expect(await runRow(t, seeded.storeId, "day", "2026-03-07")).toBeNull();
   });
 
   it("M3 — a crashed selection records a FAILED ledger row, not a successful one", async () => {

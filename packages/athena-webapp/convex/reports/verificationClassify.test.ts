@@ -46,7 +46,9 @@ function completePosture(): VerifyPaymentPosture {
   };
 }
 
-function makeDayResult(overrides: Partial<VerifyDayResult> = {}): VerifyDayResult {
+function makeDayResult(
+  overrides: Partial<VerifyDayResult> = {},
+): VerifyDayResult {
   return {
     operatingDate: "2026-08-09",
     matches: true,
@@ -63,7 +65,9 @@ function makeDayResult(overrides: Partial<VerifyDayResult> = {}): VerifyDayResul
 }
 
 function makeVerifiedWeek(
-  overrides: Partial<Extract<VerifyCurrentWeekResult, { outcome: "verified" }>> = {},
+  overrides: Partial<
+    Extract<VerifyCurrentWeekResult, { outcome: "verified" }>
+  > = {},
 ): VerifyCurrentWeekResult {
   return {
     outcome: "verified",
@@ -396,7 +400,10 @@ describe("classifyWeekResult", () => {
   });
 
   it("classifies schedule_history_cap and no_scheduled_dates as expected record-only even when allowlisted", () => {
-    for (const reason of ["schedule_history_cap", "no_scheduled_dates"] as const) {
+    for (const reason of [
+      "schedule_history_cap",
+      "no_scheduled_dates",
+    ] as const) {
       const classification = classifyWeekResult(
         { outcome: "unavailable", reason },
         allowlisted,
@@ -531,7 +538,9 @@ describe("nextStreakState", () => {
     const second = nextStreakState(first.state, unexplainedMismatch());
     expect(second.shouldAlert).toBe(false);
     expect(second.state.streakCount).toBe(2);
-    expect(second.state.lastAlertedFingerprint).toBe(classification.fingerprint);
+    expect(second.state.lastAlertedFingerprint).toBe(
+      classification.fingerprint,
+    );
   });
 
   it("does not alert for a non-alertable mismatch (all explained)", () => {
@@ -562,7 +571,10 @@ describe("nextStreakState", () => {
 
   it("re-alerts the same discrepancy after a clean re-arm", () => {
     const { state } = mismatchState();
-    const afterClean = nextStreakState(state, classifyDayResult(makeDayResult()));
+    const afterClean = nextStreakState(
+      state,
+      classifyDayResult(makeDayResult()),
+    );
     const again = nextStreakState(afterClean.state, unexplainedMismatch());
     expect(again.shouldAlert).toBe(true);
     expect(again.state.streakCount).toBe(1);
@@ -645,9 +657,7 @@ describe("nextStreakState", () => {
     const changed = classifyDayResult(
       makeDayResult({
         matches: false,
-        differences: [
-          { field: "grossSalesMinor", expected: 100, actual: 900 },
-        ],
+        differences: [{ field: "grossSalesMinor", expected: 100, actual: 900 }],
       }),
     );
     const first = nextStreakState(state, changed);
@@ -679,7 +689,8 @@ describe("nextStreakState", () => {
     // The fingerprint alone repeats; the emission identity must not.
     expect(a2.state.fingerprint).toBe(a1.state.fingerprint);
     const identities = [a1, b, a2].map(
-      (step) => `${step.state.fingerprint}|${step.state.reArmEpoch}|${step.state.alertSeq}`,
+      (step) =>
+        `${step.state.fingerprint}|${step.state.reArmEpoch}|${step.state.alertSeq}`,
     );
     expect(new Set(identities).size).toBe(3);
     expect([a1.state.alertSeq, b.state.alertSeq, a2.state.alertSeq]).toEqual([

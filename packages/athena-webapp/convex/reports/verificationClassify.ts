@@ -60,7 +60,12 @@ import type {
  *    difference is explained only when |delta| <= that magnitude on the
  *    matching basis (revenue-minor fields vs unit fields). Exactly like the
  *    void path: no magnitude context supplied → no flagged attribution, and
- *    non-numeric posture fields are never magnitude-explainable.
+ *    non-numeric posture fields are never magnitude-explainable. The
+ *    orchestrator sources that magnitude by re-summing the day's own excluded
+ *    `reportFact` rows (`gatherDaySubject`) — `flags` records only THAT such
+ *    facts exist, never what they were worth — and supplies none at all when
+ *    its bounded scan caps out, so an oversized day alerts rather than being
+ *    blessed by a lower bound.
  *  - OUTSIDE SCHEDULE (weekly): activity outside the scheduled frame is
  *    definitionally excluded from the week's accepted totals; its differences
  *    are recorded as explained, never alerted.
@@ -101,6 +106,25 @@ import type {
  *        is gone"; treating it as clean would silently drop a live
  *        discrepancy and bump the re-arm epoch. A tracked field only clears
  *        when it was checked and produced no difference row.
+ *      * CONSEQUENCE — the permanently-unclearable streak. A streak that
+ *        started because a delta was UNEXPLAINED can never clear while that
+ *        same delta persists in EXPLAINED form. Concretely: tick 1 the void
+ *        fact scan caps out, `voidImpact` is absent, `netSalesMinor` is
+ *        unexplained → streak starts, alert fires, `lastAlertedFingerprint`
+ *        = F. Tick 2 the scan fits, the identical delta is now explained as
+ *        `void_sign_convention` → `unexplained: []` but `netSalesMinor` is
+ *        still differing, so `confirmsClean` stays false forever, the streak
+ *        never resolves and `reArmEpoch` never bumps. A later genuine
+ *        recurrence of the UNEXPLAINED form of F is then swallowed
+ *        (fingerprint F is still `lastAlertedFingerprint`, and without an
+ *        epoch bump the dedupeKey would repeat).
+ *        Deliberate, on two grounds: the delta never actually went away — the
+ *        run rows keep recording it every tick, explained — so "unresolved"
+ *        is the honest state; and the failure direction is silence on a
+ *        fingerprint an operator has ALREADY been paged about, not a new
+ *        unreported discrepancy and not repeated noise. Clearing it requires
+ *        the delta itself to disappear (a genuinely `clean` run), which is
+ *        the correct bar.
  *  - `truncated`, expected `unavailable`, and `error` neither clear nor alert.
  *
  * NOTE on state shape: deciding "withheld vs checked clean" requires the
@@ -114,12 +138,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 export type VerificationOutcome =
-  | "clean"
-  | "partial"
-  | "mismatch"
-  | "truncated"
-  | "unavailable"
-  | "error";
+  "clean" | "partial" | "mismatch" | "truncated" | "unavailable" | "error";
 
 export type ClassifiedValue = number | string | boolean | null;
 
@@ -589,7 +608,9 @@ function confirmsClean(
   // Nothing tracked → nothing this run can vouch for (F2).
   if (previous.unexplainedFields.length === 0) return false;
   const checked = new Set(classification.checkedFields);
-  // Still-differing-but-explained is NOT clean (F3).
+  // Still-differing-but-explained is NOT clean (F3) — and so a streak that
+  // began unexplained stays open for as long as the delta survives in
+  // explained form. See "the permanently-unclearable streak" in the header.
   const stillDiffering = new Set(
     classification.explained.map((difference) => difference.field),
   );

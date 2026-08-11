@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 
+import { normalizeCurrencyCode } from "../../shared/reportsContract";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import {
@@ -113,8 +114,17 @@ export const VERIFICATION_MISSING_DAY_LOOKBACK = 2;
  * which is the honest reading).
  *
  * 3 dates ≈ a long weekend of stalled folding, and costs at most 3 extra
- * (dirty-mark + run-row) point lookups per store per tick. The probe stops as
- * soon as it reaches the anchor, so a caught-up store pays nothing.
+ * (dirty-mark + run-row) point lookups per store per tick.
+ *
+ * SCOPE, precisely. The walk stops at the first date `<= anchor`, and the
+ * anchor is the newest `reportDay` row of ANY status — including today's open
+ * row. So on a store that is still folding at all, the anchor is today (or
+ * yesterday), the walk breaks on its first iteration, and the probe costs
+ * nothing and finds nothing. It engages only when a store has stopped
+ * producing `reportDay` rows ENTIRELY for at least one settled date — a full
+ * pipeline stall, not a partial one. A store that keeps writing today's open
+ * row while its settled folds go wrong is covered by the ordinary backwards
+ * candidates, not by this probe.
  */
 export const VERIFICATION_STALL_PROBE_DAYS = 3;
 
@@ -122,8 +132,14 @@ export const VERIFICATION_STALL_PROBE_DAYS = 3;
  * Verification slots the forward stall probe may claim per store per tick.
  * ONE: a stall is proven by a single missing recent date (the newest is the
  * most decisive), and the probe must never crowd the real folded days out of
- * the budget — the reason the whole probe is a reserved slot rather than an
- * ordinary newest-first candidate.
+ * the budget.
+ *
+ * "Slot" is a CAP, not a reservation: the probe date is prepended to the
+ * ordinary candidates and the concatenation is then truncated to
+ * VERIFICATION_DAYS_PER_STORE, so the probe consumes one of the four ordinary
+ * slots. The cap is what matters — with at most 1 stall date and at most
+ * VERIFICATION_ERROR_SLOTS_PER_STORE error dates ahead of them, ordinary
+ * newest-first work always keeps at least 2 of the 4 slots.
  */
 export const VERIFICATION_STALL_PROBE_SLOTS = 1;
 
@@ -138,6 +154,12 @@ export const VERIFICATION_STALL_PROBE_SLOTS = 1;
  * slot per tick guarantees the other three always advance, and the error
  * candidates are taken OLDEST-`verifiedAt`-first so they rotate through that
  * single slot instead of one row monopolising it.
+ *
+ * As with the stall probe, this is a CAP rather than reserved capacity: the
+ * error date is prepended and the list truncated to
+ * VERIFICATION_DAYS_PER_STORE, so it spends one ordinary slot. The guarantee
+ * the cap buys is the one that matters — at most 1 error + at most 1 stall
+ * date ahead of the ordinary candidates leaves ordinary work >= 2 slots.
  */
 export const VERIFICATION_ERROR_SLOTS_PER_STORE = 1;
 
@@ -600,14 +622,14 @@ export const selectVerificationDaySubjects = internalQuery({
         settledSeen <= VERIFICATION_REVERIFY_RECENT_DAYS;
 
       if (!(stale || laneSelect)) continue;
-      // Stall probes go to their own reserved slot so they can never crowd
-      // out the store's real folded days (candidateDates is newest-first, and
+      // Stall probes go to their own CAPPED pool so they can never crowd out
+      // the store's real folded days (candidateDates is newest-first, and
       // every probe date is newer than the anchor by construction).
       if (stallProbeSet.has(date)) stallSelected.push(date);
       else selected.push(date);
     }
 
-    // Error rows rotate through their reserved slots OLDEST-first, so a
+    // Error rows rotate through their capped slot OLDEST-first, so a
     // permanently failing recent day cannot starve an older failing one.
     const erroredSelected = erroredCandidates
       .sort((left, right) => left.verifiedAt - right.verifiedAt)
@@ -637,6 +659,13 @@ export type DaySubjectGathering = {
     hasQuarantinedFacts: boolean;
     hasForeignCurrencyFacts: boolean;
   } | null;
+  /**
+   * Summed positive magnitude of the facts the fold EXCLUDED (quarantined or
+   * foreign-currency), from the same bounded scan as `voidImpact`, or null
+   * when that scan capped out. Bounds the classifier's `flagged_exclusions`
+   * attribution — see the note on the scan below.
+   */
+  flaggedExclusionImpact: { revenueMinor: number; units: number } | null;
   certifiedFoldRevision: number | null;
 };
 
@@ -658,6 +687,16 @@ export const gatherDaySubject = internalQuery({
     // rows the fold added are the only defensible basis for explaining the
     // fold-vs-verifier sign disagreement. One past the cap so truncation is
     // detectable; a capped day supplies no attribution.
+    //
+    // The SAME scan sources the flagged-exclusion magnitude: the facts the
+    // fold dropped (`quarantine` present, or a currency other than the
+    // store's — foldDay.ts's two `continue`s) are exactly the rows the
+    // verifier still counts, so their own magnitude is the largest delta a
+    // flag can honestly explain. Recomputed from the fact rows rather than
+    // trusted from `flags`, because `flags` records only that such facts
+    // exist, never how much they are worth.
+    const store = await ctx.db.get("store", args.storeId);
+    const storeCurrency = normalizeCurrencyCode(store?.currency);
     const facts = await ctx.db
       .query("reportFact")
       .withIndex("by_storeId_operatingDate", (q) =>
@@ -666,17 +705,42 @@ export const gatherDaySubject = internalQuery({
       .take(VERIFICATION_VOID_FACT_SCAN + 1);
 
     let voidImpact: DaySubjectGathering["voidImpact"];
+    let flaggedExclusionImpact: DaySubjectGathering["flaggedExclusionImpact"];
     if (facts.length > VERIFICATION_VOID_FACT_SCAN) {
+      // Fail closed on BOTH attributions: a partial sum is a lower bound, and
+      // a lower bound used as an explanation ceiling would bless real defects.
       voidImpact = null;
+      flaggedExclusionImpact = null;
     } else {
       let revenueMinor = 0;
       let units = 0;
+      let excludedRevenueMinor = 0;
+      let excludedUnits = 0;
       for (const fact of facts) {
-        if (fact.factKind !== "void") continue;
-        revenueMinor += Math.abs(fact.grossAmountMinor);
-        units += Math.abs(fact.quantity);
+        if (fact.factKind === "void") {
+          revenueMinor += Math.abs(fact.grossAmountMinor);
+          units += Math.abs(fact.quantity);
+        }
+        const excluded =
+          fact.quarantine !== undefined ||
+          normalizeCurrencyCode(fact.currency) !== storeCurrency;
+        if (excluded) {
+          // Widest of the fact's own revenue faces, so the single bound covers
+          // whichever minor-unit metric the exclusion moved (gross vs net vs
+          // the payment lanes) without ever exceeding the fact's own worth.
+          excludedRevenueMinor += Math.max(
+            Math.abs(fact.grossAmountMinor),
+            Math.abs(fact.netAmountMinor),
+            Math.abs(fact.paymentAllocationMinor ?? 0),
+          );
+          excludedUnits += Math.abs(fact.quantity);
+        }
       }
       voidImpact = { revenueMinor, units };
+      flaggedExclusionImpact = {
+        revenueMinor: excludedRevenueMinor,
+        units: excludedUnits,
+      };
     }
 
     const result = await verifyDayWithCtx(
@@ -688,6 +752,7 @@ export const gatherDaySubject = internalQuery({
     return {
       result,
       voidImpact,
+      flaggedExclusionImpact,
       dayFlags: day
         ? {
             hasQuarantinedFacts: day.flags.quarantinedFactCount > 0,
@@ -1237,6 +1302,9 @@ export async function runVerificationSweepWithCtx(
               ? { voidImpact: gathering.voidImpact }
               : {}),
             ...(gathering.dayFlags ? { dayFlags: gathering.dayFlags } : {}),
+            ...(gathering.flaggedExclusionImpact
+              ? { flaggedExclusionImpact: gathering.flaggedExclusionImpact }
+              : {}),
           },
         );
         const { explained, unexplained } =
