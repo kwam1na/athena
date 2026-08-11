@@ -1,6 +1,7 @@
 ---
 title: In-app docs viewer and the landed-change report contract-v2 split
 date: 2026-08-05
+last_updated: 2026-08-11
 category: architecture-patterns
 module: athena-webapp
 problem_type: architecture_pattern
@@ -11,8 +12,16 @@ applies_when:
   - "Adding or changing a docs/solutions or docs/reports route under packages/athena-webapp/src/routes/docs*"
   - "Authoring or rendering a landed-change report via .agents/skills/ce-landed-change-report"
   - "Editing render_report.py, report-presentation-check.ts, or landed-change-report-check.ts"
-tags: [docs-viewer, landed-change-report, vite-virtual-module, report-contract, delivery-gate]
-delivery_diff_fingerprint: 557f87faf1ff8fcd143f36cd8da9452adaf23a7fcfd8790b6b6497988f8154e3
+  - "Classifying production deploy impact for changes under docs/solutions or docs/reports"
+tags:
+  [
+    docs-viewer,
+    landed-change-report,
+    vite-virtual-module,
+    report-contract,
+    delivery-gate,
+  ]
+delivery_diff_fingerprint: d6dd08c7571e5d0fa2ef5b63ddf359c0c5ea443c0692671c82f30f14e372461d
 ---
 
 # In-app docs viewer and the landed-change report contract-v2 split
@@ -43,6 +52,12 @@ This is an application access boundary, not a place to store secrets: the docs
 corpus is still compiled into browser assets and needs a server-authorized
 content endpoint before it can provide confidentiality against direct asset
 discovery.
+
+That build-time ownership also defines deployment scope: a change under
+`docs/solutions/**` or `docs/reports/**` changes the Athena webapp bundle even
+when every other changed file is harness-only. After merge, deploy the clean
+root checkout with `scripts/deploy-vps.sh athena-local`; otherwise QA will show
+the new corpus while production continues serving the previous static bundle.
 
 The public docs shell emits one `athena_webapp.workspace_viewed` context event
 per browser-tab session and authentication state. The server derives an
@@ -122,6 +137,15 @@ make that path unreachable in practice.
   or build-pipeline edits" harness validation scenario in
   `scripts/harness-app-registry.ts`, or the harness contract preflight will
   flag it as an uncovered surface.
+- Keep `.agents/skills/execute/SKILL.md` and
+  `scripts/pr-athena-guidance-contract.test.ts` explicit that
+  `docs/solutions/**` and `docs/reports/**` require the Athena static-app
+  production deploy. File location alone is not a safe deployment classifier
+  when a build imports content from outside its package directory.
+- Give the real harness-audit fixture tests enough time to run both failure and
+  repaired subprocesses. Their contract is the observed result, not Vitest's
+  five-second default; as the registry grows, that default can turn a healthy
+  audit into a merge-gate timeout.
 - Run `bun install` with the bun version pinned in `package.json`'s
   `packageManager` field, not whatever bun happens to be on `PATH`. This
   branch hit CI failure `error parsing lockfile: Outdated lockfile version`

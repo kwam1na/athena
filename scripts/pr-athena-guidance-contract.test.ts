@@ -62,4 +62,12 @@ describe("Athena merge-ready validation guidance", () => {
       "For Athena, the command is `bun run pr:athena`",
     );
   });
+
+  it("classifies the in-app docs corpus as an Athena production deploy surface", async () => {
+    const executeSkill = await readRepoFile(".agents/skills/execute/SKILL.md");
+
+    expect(executeSkill).toContain("`docs/solutions/**`");
+    expect(executeSkill).toContain("`docs/reports/**`");
+    expect(executeSkill).toContain("`scripts/deploy-vps.sh athena-local`");
+  });
 });
