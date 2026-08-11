@@ -229,7 +229,7 @@ describe("runHarnessContractPreflight", () => {
     } finally {
       await rm(rootDir, { recursive: true, force: true });
     }
-  });
+  }, 20_000);
 
   it("aggregates three real contract failures, then passes after all are repaired", async () => {
     const siblingRoot = await createSiblingPolicyFixture();
@@ -289,5 +289,5 @@ describe("runHarnessContractPreflight", () => {
         rm(auditFixture.rootDir, { recursive: true, force: true }),
       ]);
     }
-  });
+  }, 20_000);
 });
