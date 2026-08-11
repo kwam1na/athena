@@ -74015,7 +74015,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_verificationsweep_test_ts",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.test.ts",
-      "source_location": "L527",
+      "source_location": "L571",
       "target": "verificationsweep_test_seedweekcurrent",
       "weight": 1
     },
@@ -74039,7 +74039,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_verificationsweep_ts",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L300",
+      "source_location": "L309",
       "target": "verificationsweep_haspendingdirtymark",
       "weight": 1
     },
@@ -74051,7 +74051,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_verificationsweep_ts",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L153",
+      "source_location": "L162",
       "target": "verificationsweep_isreverifytick",
       "weight": 1
     },
@@ -74063,7 +74063,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_verificationsweep_ts",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L140",
+      "source_location": "L149",
       "target": "verificationsweep_isverificationalertemailenabled",
       "weight": 1
     },
@@ -74075,7 +74075,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_verificationsweep_ts",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L283",
+      "source_location": "L292",
       "target": "verificationsweep_loadrunrow",
       "weight": 1
     },
@@ -74087,7 +74087,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_verificationsweep_ts",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L564",
+      "source_location": "L573",
       "target": "verificationsweep_maybeemitverificationalert",
       "weight": 1
     },
@@ -74099,7 +74099,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_verificationsweep_ts",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L491",
+      "source_location": "L500",
       "target": "verificationsweep_normalizemissingdayresult",
       "weight": 1
     },
@@ -74111,7 +74111,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_verificationsweep_ts",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L824",
+      "source_location": "L833",
       "target": "verificationsweep_recorderroroutcome",
       "weight": 1
     },
@@ -74123,7 +74123,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_verificationsweep_ts",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L847",
+      "source_location": "L856",
       "target": "verificationsweep_runverificationsweepwithctx",
       "weight": 1
     },
@@ -74135,7 +74135,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_verificationsweep_ts",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L597",
+      "source_location": "L606",
       "target": "verificationsweep_streakstatefromrow",
       "weight": 1
     },
@@ -74147,7 +74147,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_verificationsweep_ts",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L220",
+      "source_location": "L229",
       "target": "verificationsweep_summarizeclassification",
       "weight": 1
     },
@@ -74159,7 +74159,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_verificationsweep_ts",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L204",
+      "source_location": "L213",
       "target": "verificationsweep_tosummary",
       "weight": 1
     },
@@ -173483,7 +173483,7 @@
       "relation": "calls",
       "source": "verificationsweep_isverificationalertemailenabled",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L574",
+      "source_location": "L583",
       "target": "verificationsweep_maybeemitverificationalert",
       "weight": 1
     },
@@ -173495,7 +173495,7 @@
       "relation": "calls",
       "source": "verificationsweep_isreverifytick",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L852",
+      "source_location": "L861",
       "target": "verificationsweep_runverificationsweepwithctx",
       "weight": 1
     },
@@ -173507,7 +173507,7 @@
       "relation": "calls",
       "source": "verificationsweep_normalizemissingdayresult",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L896",
+      "source_location": "L916",
       "target": "verificationsweep_runverificationsweepwithctx",
       "weight": 1
     },
@@ -173519,7 +173519,7 @@
       "relation": "calls",
       "source": "verificationsweep_recorderroroutcome",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L935",
+      "source_location": "L963",
       "target": "verificationsweep_runverificationsweepwithctx",
       "weight": 1
     },
@@ -173531,7 +173531,7 @@
       "relation": "calls",
       "source": "verificationsweep_summarizeclassification",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L905",
+      "source_location": "L925",
       "target": "verificationsweep_runverificationsweepwithctx",
       "weight": 1
     },
@@ -213718,7 +213718,7 @@
       "label": "hasPendingDirtyMark()",
       "norm_label": "haspendingdirtymark()",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L300"
+      "source_location": "L309"
     },
     {
       "community": 204,
@@ -213727,7 +213727,7 @@
       "label": "isReverifyTick()",
       "norm_label": "isreverifytick()",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L153"
+      "source_location": "L162"
     },
     {
       "community": 204,
@@ -213736,7 +213736,7 @@
       "label": "isVerificationAlertEmailEnabled()",
       "norm_label": "isverificationalertemailenabled()",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L140"
+      "source_location": "L149"
     },
     {
       "community": 204,
@@ -213745,7 +213745,7 @@
       "label": "loadRunRow()",
       "norm_label": "loadrunrow()",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L283"
+      "source_location": "L292"
     },
     {
       "community": 204,
@@ -213754,7 +213754,7 @@
       "label": "maybeEmitVerificationAlert()",
       "norm_label": "maybeemitverificationalert()",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L564"
+      "source_location": "L573"
     },
     {
       "community": 204,
@@ -213763,7 +213763,7 @@
       "label": "normalizeMissingDayResult()",
       "norm_label": "normalizemissingdayresult()",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L491"
+      "source_location": "L500"
     },
     {
       "community": 204,
@@ -213772,7 +213772,7 @@
       "label": "recordErrorOutcome()",
       "norm_label": "recorderroroutcome()",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L824"
+      "source_location": "L833"
     },
     {
       "community": 204,
@@ -213781,7 +213781,7 @@
       "label": "runVerificationSweepWithCtx()",
       "norm_label": "runverificationsweepwithctx()",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L847"
+      "source_location": "L856"
     },
     {
       "community": 204,
@@ -213790,7 +213790,7 @@
       "label": "streakStateFromRow()",
       "norm_label": "streakstatefromrow()",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L597"
+      "source_location": "L606"
     },
     {
       "community": 204,
@@ -213799,7 +213799,7 @@
       "label": "summarizeClassification()",
       "norm_label": "summarizeclassification()",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L220"
+      "source_location": "L229"
     },
     {
       "community": 204,
@@ -213808,7 +213808,7 @@
       "label": "toSummary()",
       "norm_label": "tosummary()",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L204"
+      "source_location": "L213"
     },
     {
       "community": 2040,
@@ -230836,7 +230836,7 @@
       "label": "seedWeekCurrent()",
       "norm_label": "seedweekcurrent()",
       "source_file": "packages/athena-webapp/convex/reports/verificationSweep.test.ts",
-      "source_location": "L527"
+      "source_location": "L571"
     },
     {
       "community": 286,

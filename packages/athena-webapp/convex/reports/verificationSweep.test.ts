@@ -214,6 +214,50 @@ describe("verification sweep — day selection and outcomes", () => {
     expect(result.emitsWouldFire).toBe(0);
   });
 
+  it("records store-scope and system-scope ledger evidence for the tick", async () => {
+    const seeded = await seedStoreWithDay(t, MISMATCH);
+
+    await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });
+
+    const rows = await t.run(async (ctx: MutationCtx) =>
+      ctx.db
+        .query("scheduledRunLedger")
+        .withIndex("by_runKey")
+        .take(50),
+    );
+    const family = rows.filter(
+      (row) => row.cronFamily === "report-verification-sweep",
+    );
+    const storeRow = family.find((row) => row.scope === "store");
+    const systemRow = family.find((row) => row.scope === "system");
+
+    expect(storeRow).toBeTruthy();
+    expect(storeRow?.storeId).toBe(seeded.storeId);
+    expect(storeRow?.succeededCount).toBeGreaterThanOrEqual(1);
+    expect(storeRow?.outcome).toBe("applied");
+    expect(storeRow?.sourceSubjectType).toBe("reportVerificationRun");
+
+    expect(systemRow).toBeTruthy();
+    expect(systemRow?.candidateCount).toBeGreaterThanOrEqual(1);
+    expect(systemRow?.snapshotCounts?.daysVerified).toBeGreaterThanOrEqual(1);
+  });
+
+  it("re-running the same tick window reuses the ledger run key (idempotent)", async () => {
+    await seedStoreWithDay(t, MISMATCH);
+
+    await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });
+    const afterFirst = await t.run(async (ctx: MutationCtx) =>
+      ctx.db.query("scheduledRunLedger").withIndex("by_runKey").take(50),
+    );
+    await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW + 1000 });
+    const afterSecond = await t.run(async (ctx: MutationCtx) =>
+      ctx.db.query("scheduledRunLedger").withIndex("by_runKey").take(50),
+    );
+
+    // Same 60-minute window -> upsert, not a second pair of rows.
+    expect(afterSecond.length).toBe(afterFirst.length);
+  });
+
   it("clean re-verify after a revision bump clears the streak and re-arms", async () => {
     const seeded = await seedStoreWithDay(t, MISMATCH);
     await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });

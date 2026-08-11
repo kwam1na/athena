@@ -10,6 +10,7 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "../_generated/server";
+import { deriveScheduledRunOutcome } from "../automation/scheduledRunLedger";
 import { emitNotificationWithCtx } from "../notifications/emit";
 import { addDaysToOperatingDate } from "../operations/dailyOperationsAutomation";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
@@ -120,6 +121,14 @@ export const VERIFICATION_REVERIFY_EVERY_HOURS = 24;
  * poisoned subject) surfaces the same morning it starts.
  */
 export const VERIFICATION_WEDGE_THRESHOLD = 3;
+
+/**
+ * Scheduled-run ledger family for this sweep. Must match the key registered in
+ * `SCHEDULED_CRON_INTERVAL_MINUTES` (and its evidence-args literal), whose
+ * interval must in turn match the prod cadence in `crons.ts` — the run-key
+ * window is derived from that interval.
+ */
+const VERIFICATION_CRON_FAMILY = "report-verification-sweep" as const;
 
 /**
  * Facts scanned per day when sourcing void magnitudes for the classifier's
@@ -873,6 +882,16 @@ export async function runVerificationSweepWithCtx(
     // store when selection succeeded and no subject recorded `error`.
     let storeIncomplete = false;
 
+    // Per-store ledger counters (snapshot of this store's slice of the tick).
+    const storeCounts = {
+      daysVerified: 0,
+      daysDeferred: 0,
+      weeksVerified: 0,
+      subjectsErrored: 0,
+      alertTransitions: 0,
+      emitsWouldFire: 0,
+    };
+
     // --- Day lane ----------------------------------------------------------
     let dates: string[] = [];
     try {
@@ -882,6 +901,7 @@ export async function runVerificationSweepWithCtx(
       );
       dates = selection.dates;
       result.daysDeferred += selection.deferred;
+      storeCounts.daysDeferred += selection.deferred;
     } catch {
       storeIncomplete = true;
     }
@@ -924,12 +944,20 @@ export async function runVerificationSweepWithCtx(
           },
         );
         result.daysVerified += 1;
-        if (recorded.shouldAlert) result.alertTransitions += 1;
-        if (recorded.wouldEmit) result.emitsWouldFire += 1;
+        storeCounts.daysVerified += 1;
+        if (recorded.shouldAlert) {
+          result.alertTransitions += 1;
+          storeCounts.alertTransitions += 1;
+        }
+        if (recorded.wouldEmit) {
+          result.emitsWouldFire += 1;
+          storeCounts.emitsWouldFire += 1;
+        }
       } catch {
         // Containment: one subject's failure records `error` and the tick
         // moves on. The error row keeps the subject selected next tick.
         result.subjectsErrored += 1;
+        storeCounts.subjectsErrored += 1;
         storeIncomplete = true;
         try {
           await recordErrorOutcome(
@@ -981,10 +1009,18 @@ export async function runVerificationSweepWithCtx(
             },
           );
           result.weeksVerified += 1;
-          if (recorded.shouldAlert) result.alertTransitions += 1;
-          if (recorded.wouldEmit) result.emitsWouldFire += 1;
+          storeCounts.weeksVerified += 1;
+          if (recorded.shouldAlert) {
+            result.alertTransitions += 1;
+            storeCounts.alertTransitions += 1;
+          }
+          if (recorded.wouldEmit) {
+            result.emitsWouldFire += 1;
+            storeCounts.emitsWouldFire += 1;
+          }
         } catch {
           result.subjectsErrored += 1;
+          storeCounts.subjectsErrored += 1;
           storeIncomplete = true;
           try {
             await recordErrorOutcome(
@@ -1021,6 +1057,81 @@ export async function runVerificationSweepWithCtx(
       // Health recording itself failing leaves the previous streak in place;
       // the next tick's write catches up.
     }
+
+    // --- Store-scope ledger evidence ---------------------------------------
+    // `bestEffortRecordScheduledRunEvidence` takes a MutationCtx and is not
+    // reachable from the action ctx, so the swallow lives here instead.
+    // Bookkeeping must never fail the sweep's real work.
+    const storeSubjects =
+      storeCounts.daysVerified +
+      storeCounts.weeksVerified +
+      storeCounts.subjectsErrored;
+    try {
+      await ctx.runMutation(
+        internal.automation.scheduledRunLedger.recordScheduledRunEvidence,
+        {
+          cronFamily: VERIFICATION_CRON_FAMILY,
+          now,
+          scope: "store",
+          storeId: candidate.storeId,
+          ...(candidate.organizationId
+            ? { organizationId: candidate.organizationId }
+            : {}),
+          outcome: deriveScheduledRunOutcome({
+            candidateCount: storeSubjects,
+            succeededCount:
+              storeCounts.daysVerified + storeCounts.weeksVerified,
+            failedCount: storeCounts.subjectsErrored,
+          }),
+          candidateCount: storeSubjects,
+          processedCount: storeSubjects,
+          succeededCount: storeCounts.daysVerified + storeCounts.weeksVerified,
+          failedCount: storeCounts.subjectsErrored,
+          skippedCount: storeCounts.daysDeferred,
+          sourceSubjectType: "reportVerificationRun",
+          sampleSubjectIds: [candidate.storeId],
+          snapshotCounts: { ...storeCounts },
+        },
+      );
+    } catch {
+      // Ledger bookkeeping is observational; never fail the tick on it.
+    }
+  }
+
+  // --- System-scope ledger summary -----------------------------------------
+  try {
+    await ctx.runMutation(
+      internal.automation.scheduledRunLedger.recordScheduledRunEvidence,
+      {
+        cronFamily: VERIFICATION_CRON_FAMILY,
+        now,
+        scope: "system",
+        visibility: "support",
+        outcome: deriveScheduledRunOutcome({
+          candidateCount: result.storesScanned,
+          succeededCount: result.storesScanned,
+          failedCount: 0,
+        }),
+        candidateCount: result.storesScanned,
+        processedCount: result.storesScanned,
+        succeededCount: result.storesScanned,
+        failedCount: 0,
+        skippedCount: result.storesSkippedReseeding,
+        sourceSubjectType: "reportVerificationRun",
+        sampleSubjectIds: candidates.map((c) => c.storeId).slice(0, 25),
+        snapshotCounts: {
+          daysVerified: result.daysVerified,
+          daysDeferred: result.daysDeferred,
+          weeksVerified: result.weeksVerified,
+          subjectsErrored: result.subjectsErrored,
+          alertTransitions: result.alertTransitions,
+          emitsWouldFire: result.emitsWouldFire,
+          wedgeEscalations: result.wedgeEscalations,
+        },
+      },
+    );
+  } catch {
+    // Same containment as the store rows.
   }
 
   return result;
