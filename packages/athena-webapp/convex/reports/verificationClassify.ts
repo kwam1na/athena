@@ -51,11 +51,16 @@ import type {
  *    never surface as a difference, so no field entry is needed for them.
  *  - FLAGGED EXCLUSIONS: quarantined / foreign-currency facts are excluded by
  *    the fold but invisible from the domain side, so on a day whose flags say
- *    such facts exist, every metric difference is attributable to the
- *    exclusion. This is deliberately coarse — the whole day's differences are
- *    explained, recorded, and left to human adjudication rather than paged on.
- *    The flags live on the `reportDay` doc, not on `VerifyDayResult`, so the
- *    caller passes them (`dayFlags`).
+ *    such facts exist, differences are attributable to the exclusion — but
+ *    ONLY UP TO THE MAGNITUDE OF THE EXCLUDED FACTS THEMSELVES. A bare flag is
+ *    not a licence to explain arbitrary deltas: a day with one quarantined ¢1
+ *    fact and a ₵400,000 net-sales fold defect must still alert. So the caller
+ *    supplies both the flags (`dayFlags`, read from the `reportDay` doc) and
+ *    the excluded facts' summed magnitude (`flaggedExclusionImpact`), and a
+ *    difference is explained only when |delta| <= that magnitude on the
+ *    matching basis (revenue-minor fields vs unit fields). Exactly like the
+ *    void path: no magnitude context supplied → no flagged attribution, and
+ *    non-numeric posture fields are never magnitude-explainable.
  *  - OUTSIDE SCHEDULE (weekly): activity outside the scheduled frame is
  *    definitionally excluded from the week's accepted totals; its differences
  *    are recorded as explained, never alerted.
@@ -69,10 +74,33 @@ import type {
  *    alerted fingerprint).
  *  - A clean run clears the streak and increments the re-arm epoch (the epoch
  *    participates in the notification dedupeKey downstream).
+ *  - Every actual alert increments `alertSeq`, a MONOTONIC emission counter
+ *    that never resets. It exists because the rail's dedupe is a permanent
+ *    unique lookup with no expiry, while `lastAlertedFingerprint` remembers
+ *    only the LAST fingerprint: an oscillation A → B → A inside one streak
+ *    decides to alert a third time, but (store, subject, A, epoch) is
+ *    byte-identical to the first emission and the rail drops it silently, so
+ *    the run row would claim an alert that never went out. `alertSeq` makes
+ *    each decided emission a distinct identity. It is preferred over tracking
+ *    a bounded set of already-alerted fingerprints because a set answers the
+ *    wrong question — returning to a previously-seen delta after it changed IS
+ *    news worth re-sending — and because a set is unbounded-ish state to
+ *    persist, whereas a counter is one number and is trivially monotonic.
  *  - A partial run clears ONLY when every previously-differing field was
- *    actually checked (present in `checkedFields`) and no longer carries an
- *    unexplained difference; a withheld field carries the streak forward
- *    untouched.
+ *    actually checked (present in `checkedFields`) and came back with NO
+ *    difference at all — explained or unexplained. Consequences, decided
+ *    deliberately:
+ *      * An empty tracked-field list can never confirm cleanliness. A run that
+ *        checked nothing relevant (e.g. the next tick after a weekly
+ *        config_defect escalation, which tracks no fields) must not clear the
+ *        streak or bump the epoch. Only a genuinely `clean` outcome resolves
+ *        such a streak.
+ *      * An ALL-EXPLAINED mismatch does NOT clear an active streak on a field
+ *        that is still differing. A void/blind-spot/flag explanation arriving
+ *        mid-streak means "we now have a story for this delta", not "the delta
+ *        is gone"; treating it as clean would silently drop a live
+ *        discrepancy and bump the re-arm epoch. A tracked field only clears
+ *        when it was checked and produced no difference row.
  *  - `truncated`, expected `unavailable`, and `error` neither clear nor alert.
  *
  * NOTE on state shape: deciding "withheld vs checked clean" requires the
@@ -145,6 +173,13 @@ export type DayClassificationContext = {
     hasQuarantinedFacts?: boolean;
     hasForeignCurrencyFacts?: boolean;
   };
+  /**
+   * Summed positive magnitude of the facts the flags refer to (quarantined +
+   * foreign-currency), supplied by the caller alongside `dayFlags`. Bounds the
+   * `flagged_exclusions` explanation: only differences whose |delta| is within
+   * this magnitude are explained. Omitted → no flagged attribution at all.
+   */
+  flaggedExclusionImpact?: { revenueMinor: number; units: number };
 };
 
 export type WeekClassificationContext = {
@@ -160,6 +195,13 @@ export type VerificationStreakState = {
   lastAlertedFingerprint: string | null;
   /** Incremented on every clearing run; participates in the dedupeKey (U5). */
   reArmEpoch: number;
+  /**
+   * Monotonic count of alerts actually emitted for this subject. Never resets
+   * (not on clear, not on re-arm). Participates in the dedupeKey so that an
+   * A → B → A fingerprint oscillation cannot collide with an earlier emission
+   * and be silently swallowed by the rail's permanent dedupe.
+   */
+  alertSeq: number;
   /** Unexplained difference fields of the streak being tracked. */
   unexplainedFields: readonly string[];
 };
@@ -207,6 +249,9 @@ export const BLIND_SPOT_FIELDS: readonly string[] = ["unitsReturned"];
 /** Metric fields the void sign convention can move, with their delta basis. */
 const VOID_REVENUE_FIELDS = new Set(["grossSalesMinor", "netSalesMinor"]);
 
+/** Unit-basis fields, for magnitude-bounded flagged-exclusion attribution. */
+const UNIT_FIELDS = new Set(["unitsSold", "unitsReturned"]);
+
 // ---------------------------------------------------------------------------
 // Fingerprint
 // ---------------------------------------------------------------------------
@@ -248,12 +293,27 @@ function explainMetricDifference(
 
   const dayFlags =
     context && "dayFlags" in context ? context.dayFlags : undefined;
+  const flaggedImpact =
+    context && "flaggedExclusionImpact" in context
+      ? context.flaggedExclusionImpact
+      : undefined;
   if (
     dayFlags &&
     (dayFlags.hasQuarantinedFacts === true ||
-      dayFlags.hasForeignCurrencyFacts === true)
+      dayFlags.hasForeignCurrencyFacts === true) &&
+    flaggedImpact &&
+    typeof difference.expected === "number" &&
+    typeof difference.actual === "number"
   ) {
-    return "flagged_exclusions";
+    // Bounded by the excluded facts' own magnitude: a flag explains deltas the
+    // excluded facts could actually account for, never a defect beyond them.
+    const magnitude = Math.abs(difference.actual - difference.expected);
+    const bound = UNIT_FIELDS.has(difference.field)
+      ? flaggedImpact.units
+      : difference.field.endsWith("Minor")
+        ? flaggedImpact.revenueMinor
+        : null;
+    if (bound !== null && magnitude <= bound) return "flagged_exclusions";
   }
 
   const voidImpact = context?.voidImpact;
@@ -498,6 +558,7 @@ export function initialStreakState(): VerificationStreakState {
     streakCount: 0,
     lastAlertedFingerprint: null,
     reArmEpoch: 0,
+    alertSeq: 0,
     unexplainedFields: [],
   };
 }
@@ -505,10 +566,13 @@ export function initialStreakState(): VerificationStreakState {
 /**
  * Does this run confirm the previously-differing fields are clean?
  *
- * True for a genuinely clean run, and for any non-truncated run whose
- * unexplained set is empty PROVIDED every field of the tracked streak was
- * actually checked. A field the run withheld (`unverifiedFields`) or read
- * under a cap (`truncated` → empty `checkedFields`) confirms nothing.
+ * True for a genuinely clean run. Otherwise a non-truncated run clears only
+ * when EVERY tracked field was actually checked and produced no difference row
+ * of any kind. A field the run withheld (`unverifiedFields`), read under a cap
+ * (`truncated` → empty `checkedFields`), or that still differs but now has an
+ * explanation attached confirms nothing — and a run tracking no fields at all
+ * confirms nothing either (an empty `every()` is vacuously true, which is how
+ * a checked-nothing partial used to clear a live streak).
  */
 function confirmsClean(
   previous: VerificationStreakState,
@@ -522,8 +586,16 @@ function confirmsClean(
     return false;
   }
   if (classification.unexplained.length > 0) return false;
+  // Nothing tracked → nothing this run can vouch for (F2).
+  if (previous.unexplainedFields.length === 0) return false;
   const checked = new Set(classification.checkedFields);
-  return previous.unexplainedFields.every((field) => checked.has(field));
+  // Still-differing-but-explained is NOT clean (F3).
+  const stillDiffering = new Set(
+    classification.explained.map((difference) => difference.field),
+  );
+  return previous.unexplainedFields.every(
+    (field) => checked.has(field) && !stillDiffering.has(field),
+  );
 }
 
 export function nextStreakState(
@@ -548,6 +620,7 @@ export function nextStreakState(
           ? classification.fingerprint
           : previous.lastAlertedFingerprint,
         reArmEpoch: previous.reArmEpoch,
+        alertSeq: shouldAlert ? previous.alertSeq + 1 : previous.alertSeq,
         unexplainedFields: classification.unexplained.map(
           (difference) => difference.field,
         ),
@@ -567,6 +640,8 @@ export function nextStreakState(
         streakCount: 0,
         lastAlertedFingerprint: null,
         reArmEpoch: hadStreak ? previous.reArmEpoch + 1 : previous.reArmEpoch,
+        // Monotonic: an emission counter that reset would re-collide.
+        alertSeq: previous.alertSeq,
         unexplainedFields: [],
       },
     };

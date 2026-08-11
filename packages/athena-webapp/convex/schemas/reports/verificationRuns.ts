@@ -71,8 +71,21 @@ export const reportVerificationRunSchema = v.object({
   /** Incremented on each clean-run re-arm; part of the alert dedupeKey. */
   reArmEpoch: v.number(),
   /**
-   * certifiedFoldRevision of the verified fold output. Absent for
-   * pre-stamping legacy days — absent means "revision unknown", never 0.
+   * Monotonic count of alerts raised for this subject. NEVER reset — not on a
+   * clean run, not on re-arm. `reArmEpoch` alone cannot distinguish an
+   * oscillating fingerprint (A -> B -> A with no intervening clean run), which
+   * would rebuild a byte-identical dedupeKey and be swallowed by the rail's
+   * permanent unique lookup. This counter makes every alert identity distinct.
+   * Optional because rows written before it landed have no honest value.
+   */
+  alertSeq: v.optional(v.number()),
+  /**
+   * Verified generation of the subject's projection. For DAY subjects this is
+   * `reportDay.certifiedFoldRevision` — absent for pre-stamping legacy days,
+   * where absent means "revision unknown", never 0. For WEEK subjects the sweep
+   * stores `reportWeekCurrent.materializedAt` here instead: both are monotonic
+   * staleness markers, no path cross-reads them between subject kinds, and the
+   * weekly lane compares only against its own stored value.
    */
   verifiedCertifiedFoldRevision: v.optional(v.number()),
   verifiedAt: v.number(),

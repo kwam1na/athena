@@ -14,6 +14,7 @@ import { deriveScheduledRunOutcome } from "../automation/scheduledRunLedger";
 import { emitNotificationWithCtx } from "../notifications/emit";
 import { addDaysToOperatingDate } from "../operations/dailyOperationsAutomation";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
+import { resolveOperatingDate } from "./operatingDay";
 import { parseStoreAllowlist, readStoreAllowlist } from "./sweeper";
 import {
   classifyDayResult,
@@ -98,6 +99,49 @@ export const VERIFICATION_DAYS_PER_STORE = 4;
 export const VERIFICATION_MISSING_DAY_LOOKBACK = 2;
 
 /**
+ * Forward (stall) probe depth: how many of the store's most recent SETTLED
+ * operating dates — counted back from yesterday in the store's own timezone,
+ * never today (still open) — are probed for a missing `reportDay` row.
+ *
+ * WHY THIS EXISTS (C3). The backwards probe anchors on the NEWEST folded day,
+ * so if folding stops entirely the anchor freezes with it: every tick
+ * re-derives the same anchor, re-probes already-folded earlier dates, and
+ * reports clean forever. The loudest missing-fold class — "the pipeline
+ * stopped" — is invisible to a backwards-only probe. Probing forward from the
+ * store's CURRENT operating date makes a stall surface as missing days with
+ * real recomputed activity (a quiet stalled store still normalizes to clean,
+ * which is the honest reading).
+ *
+ * 3 dates ≈ a long weekend of stalled folding, and costs at most 3 extra
+ * (dirty-mark + run-row) point lookups per store per tick. The probe stops as
+ * soon as it reaches the anchor, so a caught-up store pays nothing.
+ */
+export const VERIFICATION_STALL_PROBE_DAYS = 3;
+
+/**
+ * Verification slots the forward stall probe may claim per store per tick.
+ * ONE: a stall is proven by a single missing recent date (the newest is the
+ * most decisive), and the probe must never crowd the real folded days out of
+ * the budget — the reason the whole probe is a reserved slot rather than an
+ * ordinary newest-first candidate.
+ */
+export const VERIFICATION_STALL_PROBE_SLOTS = 1;
+
+/**
+ * Day-lane slots reserved for subjects whose last run recorded `error`.
+ *
+ * WHY (M2). `error` rows are unconditionally stale and candidates are ordered
+ * newest-first, so VERIFICATION_DAYS_PER_STORE permanently-failing recent days
+ * would pin every slot forever and the rest of the 14-day lookback would never
+ * be verified again — head-of-line blocking behind a poisoned subject, while
+ * the store still looks "verified" in aggregate. Capping error rows at ONE
+ * slot per tick guarantees the other three always advance, and the error
+ * candidates are taken OLDEST-`verifiedAt`-first so they rotate through that
+ * single slot instead of one row monopolising it.
+ */
+export const VERIFICATION_ERROR_SLOTS_PER_STORE = 1;
+
+/**
  * Age-based re-verify lane width M: the most recent M settled days re-verified
  * regardless of revision on a re-verify tick, bounding detection latency for
  * post-fold source drift (writes that land without a dirty mark) to
@@ -121,6 +165,104 @@ export const VERIFICATION_REVERIFY_EVERY_HOURS = 24;
  * poisoned subject) surfaces the same morning it starts.
  */
 export const VERIFICATION_WEDGE_THRESHOLD = 3;
+
+/**
+ * Re-escalation ladder for a store that stays wedged, in consecutive
+ * incomplete ticks (hourly): first alarm at the threshold (~3h), a second at
+ * ~1 day, a third at ~1 week, and weekly thereafter (see
+ * `shouldEscalateWedge`).
+ *
+ * WHY (M1). Escalating exactly once per streak means a permanently wedged
+ * store emits ONE operational event and then goes silent forever while still
+ * burning a near-limit read every hour — the failure mode that looks most like
+ * health. A ladder keeps the signal alive without turning it into an hourly
+ * page: at most 2 extra events in the first week, then one a week.
+ */
+export const VERIFICATION_WEDGE_REALERT_TICKS = [24, 168] as const;
+
+/** Ladder tail: keep re-alerting every this-many ticks (~weekly) after the
+ * last rung, so a store wedged for a month is not silent for a month. */
+const VERIFICATION_WEDGE_REALERT_PERIOD = 168;
+
+/**
+ * Does a wedge streak of exactly this length ring the alarm?
+ *
+ * Pure and total so the ladder is testable without a database: true on the
+ * threshold, on each ladder rung, and then once per
+ * VERIFICATION_WEDGE_REALERT_PERIOD ticks beyond the last rung.
+ */
+export function shouldEscalateWedge(streakCount: number): boolean {
+  if (streakCount === VERIFICATION_WEDGE_THRESHOLD) return true;
+  if (
+    (VERIFICATION_WEDGE_REALERT_TICKS as readonly number[]).includes(
+      streakCount,
+    )
+  )
+    return true;
+  const last =
+    VERIFICATION_WEDGE_REALERT_TICKS[
+      VERIFICATION_WEDGE_REALERT_TICKS.length - 1
+    ]!;
+  return (
+    streakCount > last &&
+    (streakCount - last) % VERIFICATION_WEDGE_REALERT_PERIOD === 0
+  );
+}
+
+/**
+ * Minimum wall-clock spacing between two weekly verifications of the SAME
+ * store, in hours.
+ *
+ * WHY (H1). The materialization-revision gate alone does not bound weekly
+ * cost: `reportWeekCurrent.materializedAt` is stamped `now` on EVERY rebuild,
+ * and `rebuildCurrentWeek` runs for every drained `reportDirtyWeek` mark in
+ * the 5-minute reports sweep. An actively-trading store therefore
+ * re-materializes its week every ~5 minutes, so the revision has ALWAYS
+ * advanced by the next hourly tick and the gate suppresses idle stores only —
+ * exactly the stores whose weekly verification is cheap. The real bound has to
+ * be time-based.
+ *
+ * 6h = at most 4 weekly verifications per store per day (down from 24), i.e.
+ * ≤ 32/day across the 8-store tick budget. Detection latency for a weekly
+ * discrepancy is correspondingly ≤ 6h, which is well inside the daily/weekly
+ * reporting cadence the week projection feeds.
+ */
+export const VERIFICATION_WEEK_MIN_INTERVAL_HOURS = 6;
+
+/**
+ * Pre-flight ceiling on the allocation rows a single weekly verification may
+ * have to read, measured over the union of the seven days' payment windows.
+ *
+ * WHY (H2). `verifyCurrentWeekWithCtx` loops `computeExpectedDay` over all
+ * seven cycle dates inside ONE query execution, and each date re-reads a
+ * 90-day `paymentAllocation` reversal-lookback window (≤3,001 docs) plus its
+ * in-period allocations (≤5,001). The seven windows overlap almost entirely,
+ * so the SAME rows are read seven times, and `computeExpectedDay`'s
+ * `truncated` flags are per-domain — they say nothing about the aggregate
+ * transaction budget. On breach Convex's per-transaction ceiling (16,384 docs)
+ * throws, and the week records `error` (retryable, alarming) rather than the
+ * honest `truncated` (could-not-check).
+ *
+ * SIZING. Let U be the number of allocation rows in the union window. The
+ * weekly execution reads ≈ 7·U allocation docs plus the five per-date domain
+ * scans (≤501 docs each, ≈2.5k worst case for the whole week in practice).
+ * Reserving ~6k docs of headroom for the domain scans, line reads and day/
+ * schedule/close probes leaves ~10,000 docs for allocations: U ≤ 10,000/7 ≈
+ * 1,428, rounded DOWN to 1,400. Production measurement (2026-08-02, Wigclub:
+ * ~12 allocations/day → ~1,080 rows over 90 days) sits ~23% under this cap.
+ *
+ * Over the cap the weekly lane records `truncated` WITHOUT running the
+ * verification — an honest never-alertable could-not-check, instead of a throw
+ * mislabelled `error`. See the report note: the real fix is splitting
+ * `verifyCurrentWeekWithCtx` into per-date executions inside verify.ts.
+ */
+export const VERIFICATION_WEEK_ALLOCATION_PROBE = 1_400;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Mirrors verify.ts's PAYMENT_VOID_LOOKBACK_MS / OPERATING_DAY_SLACK_MS: the
+ * union window the probe above measures. Declared locally because they are
+ * module-private in verify.ts. */
+const VERIFICATION_WEEK_PROBE_LOOKBACK_MS = 90 * DAY_MS + 18 * 60 * 60 * 1000;
 
 /**
  * Scheduled-run ledger family for this sweep. Must match the key registered in
@@ -156,8 +298,16 @@ export function isVerificationAlertEmailEnabled(storeId: string): boolean {
  * Deterministic re-verify lane gate: true on ticks falling in the first UTC
  * hour of the day (hour index mod VERIFICATION_REVERIFY_EVERY_HOURS === 0).
  * Chosen over a stored tick counter because it needs no state, survives
- * restarts/skipped ticks, and lands in the quietest trading hour for the
- * fleet's (GMT) timezone.
+ * restarts, and lands in the quietest trading hour for the fleet's (GMT)
+ * timezone.
+ *
+ * L3 NOTE — this keys off EXECUTION time, so a 00:47Z tick that runs late at
+ * 01:03Z returns false and the scheduled lane instant is missed. That is not
+ * a silent skip: `selectVerificationDaySubjects` ALSO admits a recent settled
+ * day into the lane whenever its run row's own `verifiedAt` is older than
+ * VERIFICATION_REVERIFY_EVERY_HOURS, so a missed lane tick is caught up by the
+ * very next hourly tick. This function is the schedule; the age check is the
+ * guarantee.
  */
 export function isReverifyTick(now: number): boolean {
   return (
@@ -324,6 +474,10 @@ export const selectVerificationDaySubjects = internalQuery({
   args: {
     storeId: v.id("store"),
     reVerify: v.boolean(),
+    /** Tick instant. Selection needs a clock for two reasons: the forward
+     * stall probe (C3) has to know the store's CURRENT operating date, and the
+     * re-verify lane's catch-up (L3) compares run-row age against it. */
+    now: v.number(),
   },
   handler: async (
     ctx,
@@ -334,7 +488,9 @@ export const selectVerificationDaySubjects = internalQuery({
     // there yet, so there is no fold output to contradict).
     const days = await ctx.db
       .query("reportDay")
-      .withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", args.storeId))
+      .withIndex("by_storeId_operatingDate", (q) =>
+        q.eq("storeId", args.storeId),
+      )
       .order("desc")
       .take(VERIFICATION_DAY_LOOKBACK);
     if (days.length === 0) return { dates: [], deferred: 0 };
@@ -354,16 +510,41 @@ export const selectVerificationDaySubjects = internalQuery({
       const date = addDaysToOperatingDate(anchor, -offset);
       if (!dayByDate.has(date)) candidateDates.push(date);
     }
+
+    // FORWARD (stall) probe — C3. Walk back from the store's newest SETTLED
+    // operating date (yesterday, store-local) toward the anchor. When folding
+    // has stalled these dates have no `reportDay` row at all and become
+    // missing-day subjects; when folding is current the loop breaks on its
+    // first iteration and costs nothing.
+    const currentOperatingDate = await resolveOperatingDate(
+      ctx,
+      args.storeId,
+      args.now,
+    );
+    const newestSettledDate = addDaysToOperatingDate(currentOperatingDate, -1);
+    const stallProbeDates: string[] = [];
+    for (let offset = 0; offset < VERIFICATION_STALL_PROBE_DAYS; offset += 1) {
+      const date = addDaysToOperatingDate(newestSettledDate, -offset);
+      if (date <= anchor) break;
+      if (!dayByDate.has(date)) stallProbeDates.push(date);
+    }
+    candidateDates.push(...stallProbeDates);
+    const stallProbeSet = new Set(stallProbeDates);
+
     candidateDates.sort().reverse();
 
+    // Selection is a two-pool decision (M2): ordinary candidates, newest
+    // first, plus a separately-capped pool of `error` rows so a poisoned
+    // subject can never occupy the whole budget.
     const selected: string[] = [];
+    const stallSelected: string[] = [];
+    const erroredCandidates: Array<{ date: string; verifiedAt: number }> = [];
     let deferred = 0;
     // Settled existing days seen so far, newest first — the re-verify lane's
     // candidate pool.
     let settledSeen = 0;
 
     for (const date of candidateDates) {
-      if (selected.length >= VERIFICATION_DAYS_PER_STORE) break;
       const day = dayByDate.get(date);
 
       // A day still in progress is not settled; skip without deferring.
@@ -381,34 +562,65 @@ export const selectVerificationDaySubjects = internalQuery({
 
       const run = await loadRunRow(ctx, args.storeId, "day", date);
 
+      // An `error` run row means the subject was never actually verified, so
+      // it is always stale — but it goes to the capped error pool, not the
+      // general one (M2).
+      if (run !== null && run.outcome === "error") {
+        erroredCandidates.push({ date, verifiedAt: run.verifiedAt });
+        continue;
+      }
+
       let stale: boolean;
       if (day?.certifiedFoldRevision !== undefined) {
         // Revision-driven selection: verify when the fold has produced output
-        // newer than the last verified generation. An `error` run row is
-        // always stale — the subject was never actually verified.
+        // newer than the last verified generation.
         stale =
           run === null ||
-          run.outcome === "error" ||
           run.verifiedCertifiedFoldRevision === undefined ||
           run.verifiedCertifiedFoldRevision < day.certifiedFoldRevision;
       } else {
         // Legacy (pre-stamping) fold or missing day: no revision to advance,
         // so verify exactly once; a later-stamped revision re-selects above.
-        stale = run === null || run.outcome === "error";
+        stale = run === null;
       }
 
-      // Age-based re-verify lane: on a re-verify tick, the most recent M
-      // settled folded days re-verify regardless of revision (post-fold
-      // source-drift detection — see the constant's doc).
+      // Age-based re-verify lane: the most recent M settled folded days
+      // re-verify regardless of revision (post-fold source-drift detection —
+      // see the constant's doc). Admitted either on a scheduled re-verify
+      // tick, OR whenever the row's own age has already exceeded the lane
+      // cadence — the catch-up that makes a missed lane tick harmless (L3).
+      const laneDue =
+        args.reVerify ||
+        (run !== null &&
+          args.now - run.verifiedAt >=
+            VERIFICATION_REVERIFY_EVERY_HOURS * 60 * 60 * 1000);
       const laneSelect =
-        args.reVerify &&
+        laneDue &&
         isSettledExisting &&
         settledSeen <= VERIFICATION_REVERIFY_RECENT_DAYS;
 
-      if (stale || laneSelect) selected.push(date);
+      if (!(stale || laneSelect)) continue;
+      // Stall probes go to their own reserved slot so they can never crowd
+      // out the store's real folded days (candidateDates is newest-first, and
+      // every probe date is newer than the anchor by construction).
+      if (stallProbeSet.has(date)) stallSelected.push(date);
+      else selected.push(date);
     }
 
-    return { dates: selected, deferred };
+    // Error rows rotate through their reserved slots OLDEST-first, so a
+    // permanently failing recent day cannot starve an older failing one.
+    const erroredSelected = erroredCandidates
+      .sort((left, right) => left.verifiedAt - right.verifiedAt)
+      .slice(0, VERIFICATION_ERROR_SLOTS_PER_STORE)
+      .map((candidate) => candidate.date);
+
+    const dates = [
+      ...erroredSelected,
+      ...stallSelected.slice(0, VERIFICATION_STALL_PROBE_SLOTS),
+      ...selected,
+    ].slice(0, VERIFICATION_DAYS_PER_STORE);
+
+    return { dates, deferred };
   },
 });
 
@@ -513,12 +725,19 @@ export function normalizeMissingDayResult(
   };
 }
 
+export type WeeklySubjectSelection = {
+  subjectKey: string;
+  materializedAt: number;
+  /** The pre-flight allocation probe exceeded
+   * VERIFICATION_WEEK_ALLOCATION_PROBE: the single-execution weekly
+   * verification is a plausible read-limit breach, so it is NOT run and the
+   * subject records an honest `truncated` (H2). */
+  overBudget: boolean;
+};
+
 export const selectWeeklySubject = internalQuery({
-  args: { storeId: v.id("store") },
-  handler: async (
-    ctx,
-    args,
-  ): Promise<{ subjectKey: string; materializedAt: number } | null> => {
+  args: { storeId: v.id("store"), now: v.number() },
+  handler: async (ctx, args): Promise<WeeklySubjectSelection | null> => {
     const current = await ctx.db
       .query("reportWeekCurrent")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
@@ -528,20 +747,51 @@ export const selectWeeklySubject = internalQuery({
     const subjectKey =
       "cycleStartDate" in current ? current.cycleStartDate : "current";
 
-    // Staleness gate: run only when materializedAt has advanced past the
-    // value recorded on the store's weekly run row. Ungated, the weekly path
-    // re-runs up to a week of day-weight source scans per store per tick.
     const run = await loadRunRow(ctx, args.storeId, "week", subjectKey);
-    if (
-      run !== null &&
-      run.outcome !== "error" &&
-      run.verifiedCertifiedFoldRevision !== undefined &&
-      run.verifiedCertifiedFoldRevision >= current.materializedAt
-    ) {
-      return null;
+    if (run !== null) {
+      // FREQUENCY BOUND (H1). `materializedAt` advances on every weekly
+      // rebuild — every ~5 minutes for an actively-trading store — so the
+      // revision gate below suppresses idle stores ONLY. The run row's own
+      // age is the signal that actually bounds weekly cost.
+      if (
+        args.now - run.verifiedAt <
+        VERIFICATION_WEEK_MIN_INTERVAL_HOURS * 60 * 60 * 1000
+      ) {
+        return null;
+      }
+      // Staleness gate: past the interval, still skip when the projection has
+      // not been re-materialized since the last verified generation. An
+      // `error` row has no verified generation and always re-runs.
+      if (
+        run.outcome !== "error" &&
+        run.verifiedCertifiedFoldRevision !== undefined &&
+        run.verifiedCertifiedFoldRevision >= current.materializedAt
+      ) {
+        return null;
+      }
     }
 
-    return { subjectKey, materializedAt: current.materializedAt };
+    // Pre-flight read-budget probe (H2). The union of the seven days' payment
+    // windows, measured once; see VERIFICATION_WEEK_ALLOCATION_PROBE.
+    const probeEndAt =
+      "cycleEndDate" in current
+        ? Date.parse(`${current.cycleEndDate}T00:00:00.000Z`) + DAY_MS
+        : current.materializedAt;
+    const allocationProbe = await ctx.db
+      .query("paymentAllocation")
+      .withIndex("by_storeId_recordedAt", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .gte("recordedAt", probeEndAt - VERIFICATION_WEEK_PROBE_LOOKBACK_MS)
+          .lte("recordedAt", probeEndAt),
+      )
+      .take(VERIFICATION_WEEK_ALLOCATION_PROBE + 1);
+
+    return {
+      subjectKey,
+      materializedAt: current.materializedAt,
+      overBudget: allocationProbe.length > VERIFICATION_WEEK_ALLOCATION_PROBE,
+    };
   },
 });
 
@@ -578,6 +828,7 @@ export async function maybeEmitVerificationAlert(
     subjectKey: string;
     fingerprint: string;
     reArmEpoch: number;
+    alertSeq: number;
   },
 ): Promise<{ wouldEmit: boolean }> {
   const gateEnabled = isVerificationAlertEmailEnabled(String(args.storeId));
@@ -597,6 +848,7 @@ export async function maybeEmitVerificationAlert(
       subjectKey: args.subjectKey,
       fingerprint: args.fingerprint,
       reArmEpoch: args.reArmEpoch,
+      alertSeq: args.alertSeq,
     },
   });
 
@@ -613,6 +865,9 @@ function streakStateFromRow(
     streakCount: row.streakCount,
     lastAlertedFingerprint: row.lastAlertedFingerprint ?? null,
     reArmEpoch: row.reArmEpoch,
+    // Monotonic across ticks: absent on rows written before the column
+    // landed, which restart the counter at 0 exactly once.
+    alertSeq: row.alertSeq ?? 0,
     unexplainedFields: row.unexplainedDifferences.map(
       (difference) => difference.field,
     ),
@@ -666,13 +921,39 @@ export const recordVerificationOutcome = internalMutation({
 
     const { state, shouldAlert } = nextStreakState(previous, classification);
 
+    // C1 — persist the STREAK's unexplained set, not this run's raw one.
+    // `nextStreakState` carries the previous fingerprint and streak forward on
+    // partial/truncated/error/unavailable runs; writing `args.unexplained`
+    // there would wipe the tracked field list while keeping the fingerprint,
+    // and the NEXT tick would read `unexplainedFields: []` and confirm
+    // cleanliness vacuously — declaring the discrepancy resolved without ever
+    // re-checking it, and permanently suppressing a not-yet-dispatched alert
+    // via the payload query. Summaries for carried-forward fields are taken
+    // from this run where present and otherwise from the stored row, so the
+    // recorded expected/actual amounts stay the ones the fingerprint hashes.
+    const summaryByField = new Map<string, DifferenceSummary>();
+    for (const difference of existing?.unexplainedDifferences ?? []) {
+      summaryByField.set(difference.field, difference);
+    }
+    for (const difference of args.unexplained) {
+      summaryByField.set(difference.field, difference);
+    }
+    const unexplainedDifferences: DifferenceSummary[] =
+      state.unexplainedFields.map(
+        (field) =>
+          summaryByField.get(field) ?? {
+            field,
+            classification: "unexplained",
+          },
+      );
+
     const rowDoc = {
       storeId: args.storeId,
       subjectKind: args.subjectKind,
       subjectKey: args.subjectKey,
       outcome: args.outcome,
       explainedDifferences: args.explained,
-      unexplainedDifferences: args.unexplained,
+      unexplainedDifferences,
       // Persisted for the U5 alert email: its complement within the subject's
       // field inventory is what verification declined to check.
       checkedFields: args.checkedFields,
@@ -682,6 +963,9 @@ export const recordVerificationOutcome = internalMutation({
       streakCount: state.streakCount,
       lastAlertedFingerprint: state.lastAlertedFingerprint ?? undefined,
       reArmEpoch: state.reArmEpoch,
+      // Monotonic; never reset, so an oscillating fingerprint (A->B->A with no
+      // intervening clean run) still mints a distinct alert identity.
+      alertSeq: state.alertSeq,
       verifiedCertifiedFoldRevision: args.verifiedRevision,
       verifiedAt: args.now,
       updatedAt: args.now,
@@ -704,6 +988,7 @@ export const recordVerificationOutcome = internalMutation({
         subjectKey: args.subjectKey,
         fingerprint: state.fingerprint,
         reArmEpoch: state.reArmEpoch,
+        alertSeq: state.alertSeq,
       }));
     }
 
@@ -732,8 +1017,7 @@ export const recordStoreTickHealth = internalMutation({
 
     const previousStreak = existing?.streakCount ?? 0;
     const previousEpoch = existing?.reArmEpoch ?? 0;
-    const alreadyEscalated =
-      existing?.lastAlertedFingerprint === WEDGE_ALERTED_MARKER;
+    const previousMarker = existing?.lastAlertedFingerprint;
 
     let streakCount: number;
     let reArmEpoch = previousEpoch;
@@ -742,12 +1026,17 @@ export const recordStoreTickHealth = internalMutation({
 
     if (args.incomplete) {
       streakCount = previousStreak + 1;
-      marker = alreadyEscalated ? WEDGE_ALERTED_MARKER : undefined;
-      if (streakCount >= VERIFICATION_WEDGE_THRESHOLD && !alreadyEscalated) {
-        // ONE operational event per streak (owed-close dedupe pattern): the
-        // event table dedupes on (store, subject, type, metadata dedupe
-        // keys); `escalationEpoch` changes only when a complete tick re-arms,
-        // so a stuck store escalates once and a NEW streak escalates again.
+      // The marker records WHICH ladder rung was last rung, so a store that
+      // stays wedged re-escalates at the next rung instead of going silent
+      // forever after the first (M1).
+      const rungMarker = `${WEDGE_ALERTED_MARKER}:${streakCount}`;
+      marker = previousMarker;
+      if (shouldEscalateWedge(streakCount) && previousMarker !== rungMarker) {
+        // The event table dedupes on (store, subject, type, metadata dedupe
+        // keys). `escalationEpoch` changes only when a complete tick re-arms,
+        // so a NEW streak escalates again; `consecutiveIncompleteTicks` is
+        // also a dedupe key so each LADDER RUNG within one streak is a
+        // distinct event rather than a swallowed duplicate.
         await recordOperationalEventWithCtx(ctx, {
           actorType: "automation",
           eventType: VERIFICATION_WEDGE_EVENT_TYPE,
@@ -758,7 +1047,7 @@ export const recordStoreTickHealth = internalMutation({
             consecutiveIncompleteTicks: streakCount,
             escalationEpoch: previousEpoch,
           },
-          metadataDedupeKeys: ["escalationEpoch"],
+          metadataDedupeKeys: ["escalationEpoch", "consecutiveIncompleteTicks"],
           reason: "verification_runner_wedged",
           storeId: args.storeId,
           subjectId: String(args.storeId),
@@ -768,7 +1057,7 @@ export const recordStoreTickHealth = internalMutation({
             ? { organizationId: args.organizationId }
             : {}),
         });
-        marker = WEDGE_ALERTED_MARKER;
+        marker = rungMarker;
         escalated = true;
       }
     } else {
@@ -828,7 +1117,28 @@ export type VerificationSweepResult = {
   /** Of those, how many the enabled email gate would have emitted for. */
   emitsWouldFire: number;
   wedgeEscalations: number;
+  /** Weekly subjects the pre-flight read-budget probe declined to run,
+   * recorded as `truncated` instead (H2). */
+  weeksOverBudget: number;
+  /** Stores whose tick did not complete (a subject or a selection failed).
+   * Drives the honest system-scope ledger row (M3). */
+  storesIncomplete: number;
 };
+
+/** Consistent with `bestEffortRecordScheduledRunEvidence`: a swallowed write
+ * still leaves a trace, so a persistently failing bookkeeping path is
+ * discoverable instead of silent (L1). */
+function logSwallowed(
+  stage: string,
+  error: unknown,
+  context?: Record<string, unknown>,
+): void {
+  console.error("[REPORT-VERIFICATION] Contained failure", {
+    stage,
+    ...context,
+    error,
+  });
+}
 
 async function recordErrorOutcome(
   ctx: VerificationSweepCtx,
@@ -875,6 +1185,8 @@ export async function runVerificationSweepWithCtx(
     alertTransitions: 0,
     emitsWouldFire: 0,
     wedgeEscalations: 0,
+    weeksOverBudget: 0,
+    storesIncomplete: 0,
   };
 
   for (const candidate of candidates) {
@@ -897,12 +1209,18 @@ export async function runVerificationSweepWithCtx(
     try {
       const selection = await ctx.runQuery(
         internal.reports.verificationSweep.selectVerificationDaySubjects,
-        { storeId: candidate.storeId, reVerify },
+        { storeId: candidate.storeId, reVerify, now },
       );
       dates = selection.dates;
       result.daysDeferred += selection.deferred;
       storeCounts.daysDeferred += selection.deferred;
-    } catch {
+    } catch (error) {
+      // M3: a crashed selection is a FAILED subject for evidence purposes —
+      // counting it only as "incomplete" made the ledger record `applied` /
+      // `no_candidates` for a tick that crashed.
+      logSwallowed("day_selection", error, { storeId: candidate.storeId });
+      result.subjectsErrored += 1;
+      storeCounts.subjectsErrored += 1;
       storeIncomplete = true;
     }
 
@@ -953,9 +1271,13 @@ export async function runVerificationSweepWithCtx(
           result.emitsWouldFire += 1;
           storeCounts.emitsWouldFire += 1;
         }
-      } catch {
+      } catch (error) {
         // Containment: one subject's failure records `error` and the tick
         // moves on. The error row keeps the subject selected next tick.
+        logSwallowed("day_subject", error, {
+          storeId: candidate.storeId,
+          operatingDate,
+        });
         result.subjectsErrored += 1;
         storeCounts.subjectsErrored += 1;
         storeIncomplete = true;
@@ -967,8 +1289,12 @@ export async function runVerificationSweepWithCtx(
             operatingDate,
             now,
           );
-        } catch {
+        } catch (recordError) {
           // Even the error record failed; the wedge counter carries it.
+          logSwallowed("day_error_record", recordError, {
+            storeId: candidate.storeId,
+            operatingDate,
+          });
         }
       }
     }
@@ -977,17 +1303,30 @@ export async function runVerificationSweepWithCtx(
     try {
       const weekly = await ctx.runQuery(
         internal.reports.verificationSweep.selectWeeklySubject,
-        { storeId: candidate.storeId },
+        { storeId: candidate.storeId, now },
       );
       if (weekly !== null) {
         try {
-          const weekResult = await ctx.runQuery(
-            internal.reports.verificationSweep.verifyWeekSubject,
-            { storeId: candidate.storeId },
-          );
-          const classification = classifyWeekResult(weekResult, {
-            storeAllowlisted: true,
-          });
+          // H2 containment: over the pre-flight read budget the weekly
+          // verification is NOT attempted. `truncated` is the honest record —
+          // could-not-check, never alertable — where actually running it would
+          // breach the per-transaction ceiling and record `error`.
+          const classification: VerificationClassification = weekly.overBudget
+            ? {
+                outcome: "truncated",
+                explained: [],
+                unexplained: [],
+                fingerprint: null,
+                alertable: false,
+                checkedFields: [],
+              }
+            : classifyWeekResult(
+                await ctx.runQuery(
+                  internal.reports.verificationSweep.verifyWeekSubject,
+                  { storeId: candidate.storeId },
+                ),
+                { storeAllowlisted: true },
+              );
           const { explained, unexplained } =
             summarizeClassification(classification);
           const recorded = await ctx.runMutation(
@@ -1008,6 +1347,7 @@ export async function runVerificationSweepWithCtx(
               now,
             },
           );
+          if (weekly.overBudget) result.weeksOverBudget += 1;
           result.weeksVerified += 1;
           storeCounts.weeksVerified += 1;
           if (recorded.shouldAlert) {
@@ -1018,7 +1358,11 @@ export async function runVerificationSweepWithCtx(
             result.emitsWouldFire += 1;
             storeCounts.emitsWouldFire += 1;
           }
-        } catch {
+        } catch (error) {
+          logSwallowed("week_subject", error, {
+            storeId: candidate.storeId,
+            subjectKey: weekly.subjectKey,
+          });
           result.subjectsErrored += 1;
           storeCounts.subjectsErrored += 1;
           storeIncomplete = true;
@@ -1030,12 +1374,21 @@ export async function runVerificationSweepWithCtx(
               weekly.subjectKey,
               now,
             );
-          } catch {
+          } catch (recordError) {
             // Carried by the wedge counter.
+            logSwallowed("week_error_record", recordError, {
+              storeId: candidate.storeId,
+              subjectKey: weekly.subjectKey,
+            });
           }
         }
       }
-    } catch {
+    } catch (error) {
+      // M3: as with the day lane, a crashed weekly SELECTION is a failure the
+      // ledger has to see, not a silent "incomplete".
+      logSwallowed("week_selection", error, { storeId: candidate.storeId });
+      result.subjectsErrored += 1;
+      storeCounts.subjectsErrored += 1;
       storeIncomplete = true;
     }
 
@@ -1053,10 +1406,12 @@ export async function runVerificationSweepWithCtx(
         },
       );
       if (health.escalated) result.wedgeEscalations += 1;
-    } catch {
+    } catch (error) {
       // Health recording itself failing leaves the previous streak in place;
       // the next tick's write catches up.
+      logSwallowed("store_tick_health", error, { storeId: candidate.storeId });
     }
+    if (storeIncomplete) result.storesIncomplete += 1;
 
     // --- Store-scope ledger evidence ---------------------------------------
     // `bestEffortRecordScheduledRunEvidence` takes a MutationCtx and is not
@@ -1090,15 +1445,25 @@ export async function runVerificationSweepWithCtx(
           skippedCount: storeCounts.daysDeferred,
           sourceSubjectType: "reportVerificationRun",
           sampleSubjectIds: [candidate.storeId],
-          snapshotCounts: { ...storeCounts },
+          snapshotCounts: {
+            ...storeCounts,
+            incomplete: storeIncomplete ? 1 : 0,
+          },
         },
       );
-    } catch {
+    } catch (error) {
       // Ledger bookkeeping is observational; never fail the tick on it.
+      logSwallowed("store_ledger_evidence", error, {
+        storeId: candidate.storeId,
+      });
     }
   }
 
   // --- System-scope ledger summary -----------------------------------------
+  // M3: a store whose tick did not complete is a FAILED store here. Hardcoding
+  // `succeededCount: storesScanned, failedCount: 0` recorded success for a
+  // tick in which every subject errored.
+  const storesSucceeded = result.storesScanned - result.storesIncomplete;
   try {
     await ctx.runMutation(
       internal.automation.scheduledRunLedger.recordScheduledRunEvidence,
@@ -1109,13 +1474,13 @@ export async function runVerificationSweepWithCtx(
         visibility: "support",
         outcome: deriveScheduledRunOutcome({
           candidateCount: result.storesScanned,
-          succeededCount: result.storesScanned,
-          failedCount: 0,
+          succeededCount: storesSucceeded,
+          failedCount: result.storesIncomplete,
         }),
         candidateCount: result.storesScanned,
         processedCount: result.storesScanned,
-        succeededCount: result.storesScanned,
-        failedCount: 0,
+        succeededCount: storesSucceeded,
+        failedCount: result.storesIncomplete,
         skippedCount: result.storesSkippedReseeding,
         sourceSubjectType: "reportVerificationRun",
         sampleSubjectIds: candidates.map((c) => c.storeId).slice(0, 25),
@@ -1127,11 +1492,14 @@ export async function runVerificationSweepWithCtx(
           alertTransitions: result.alertTransitions,
           emitsWouldFire: result.emitsWouldFire,
           wedgeEscalations: result.wedgeEscalations,
+          weeksOverBudget: result.weeksOverBudget,
+          storesIncomplete: result.storesIncomplete,
         },
       },
     );
-  } catch {
+  } catch (error) {
     // Same containment as the store rows.
+    logSwallowed("system_ledger_evidence", error);
   }
 
   return result;

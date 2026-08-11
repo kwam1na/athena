@@ -593,7 +593,7 @@ describe("registry dedupe key recipes", () => {
     ).toBe(`eod.weekly_manager_report:${acceptedWeekId}`);
   });
 
-  it("keys a verification discrepancy by store, subject, fingerprint, and re-arm epoch", () => {
+  it("keys a verification discrepancy by store, subject, fingerprint, re-arm epoch, and alert sequence", () => {
     expect(
       dedupeKey("reports.verification_discrepancy", {
         storeId: STORE_ID,
@@ -601,10 +601,34 @@ describe("registry dedupe key recipes", () => {
         subjectKey: "2026-08-08",
         fingerprint: "a1b2c3d4e5f60718",
         reArmEpoch: 0,
+        alertSeq: 1,
       }),
     ).toBe(
-      `reports.verification_discrepancy:${STORE_ID}:day:2026-08-08:a1b2c3d4e5f60718:0`,
+      `reports.verification_discrepancy:${STORE_ID}:day:2026-08-08:a1b2c3d4e5f60718:0:1`,
     );
+  });
+
+  it("mints a distinct key when a fingerprint oscillates back with no clean run", () => {
+    // A -> B -> A leaves reArmEpoch untouched, so without the monotonic
+    // alertSeq the third alert would rebuild the first one's key byte for byte
+    // and the rail's permanent unique lookup would drop it.
+    const base = {
+      storeId: STORE_ID,
+      subjectKind: "day" as const,
+      subjectKey: "2026-08-08",
+      reArmEpoch: 0,
+    };
+    const first = dedupeKey("reports.verification_discrepancy", {
+      ...base,
+      fingerprint: "aaaa1111aaaa1111",
+      alertSeq: 1,
+    });
+    const returned = dedupeKey("reports.verification_discrepancy", {
+      ...base,
+      fingerprint: "aaaa1111aaaa1111",
+      alertSeq: 3,
+    });
+    expect(returned).not.toBe(first);
   });
 
   it("re-alerts the same fingerprint after a clean run re-armed the subject", () => {
@@ -615,6 +639,7 @@ describe("registry dedupe key recipes", () => {
       subjectKind: "day" as const,
       subjectKey: "2026-08-08",
       fingerprint: "a1b2c3d4e5f60718",
+      alertSeq: 1,
     };
     expect(
       dedupeKey("reports.verification_discrepancy", {

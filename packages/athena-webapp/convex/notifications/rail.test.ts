@@ -2807,7 +2807,7 @@ describe("reports.verification_discrepancy rail", () => {
     ).toMatchObject({
       kind: "reports.verification_discrepancy",
       category: "system_health",
-      dedupeKey: `reports.verification_discrepancy:${fixture.storeId}:day:${SUBJECT_KEY}:${FINGERPRINT}:0`,
+      dedupeKey: `reports.verification_discrepancy:${fixture.storeId}:day:${SUBJECT_KEY}:${FINGERPRINT}:0:0`,
       status: "pending",
     });
 

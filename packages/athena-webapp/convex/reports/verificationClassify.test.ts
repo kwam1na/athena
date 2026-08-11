@@ -215,7 +215,57 @@ describe("classifyDayResult", () => {
     expect(classification.alertable).toBe(false);
   });
 
-  it("explains metric differences on a quarantine/foreign-currency flagged day", () => {
+  it("explains a quarantine-flagged difference within the excluded facts' magnitude", () => {
+    const classification = classifyDayResult(
+      makeDayResult({
+        matches: false,
+        differences: [{ field: "netSalesMinor", expected: 100, actual: 40 }],
+      }),
+      {
+        dayFlags: { hasQuarantinedFacts: true },
+        flaggedExclusionImpact: { revenueMinor: 60, units: 0 },
+      },
+    );
+    expect(classification.unexplained).toEqual([]);
+    expect(classification.explained[0]?.reason).toBe("flagged_exclusions");
+    expect(classification.alertable).toBe(false);
+  });
+
+  it("explains a foreign-currency-flagged difference within magnitude", () => {
+    const classification = classifyDayResult(
+      makeDayResult({
+        matches: false,
+        differences: [{ field: "unitsSold", expected: 10, actual: 7 }],
+      }),
+      {
+        dayFlags: { hasForeignCurrencyFacts: true },
+        flaggedExclusionImpact: { revenueMinor: 0, units: 3 },
+      },
+    );
+    expect(classification.unexplained).toEqual([]);
+    expect(classification.explained[0]?.reason).toBe("flagged_exclusions");
+    expect(classification.alertable).toBe(false);
+  });
+
+  it("does NOT let a tiny quarantined fact explain a large fold defect (F4)", () => {
+    const classification = classifyDayResult(
+      makeDayResult({
+        matches: false,
+        differences: [
+          { field: "netSalesMinor", expected: 40_000_000, actual: 1 },
+        ],
+      }),
+      {
+        dayFlags: { hasQuarantinedFacts: true },
+        flaggedExclusionImpact: { revenueMinor: 1, units: 0 },
+      },
+    );
+    expect(classification.explained).toEqual([]);
+    expect(classification.unexplained).toHaveLength(1);
+    expect(classification.alertable).toBe(true);
+  });
+
+  it("does not attribute to flags when no exclusion magnitude is supplied", () => {
     const classification = classifyDayResult(
       makeDayResult({
         matches: false,
@@ -223,9 +273,29 @@ describe("classifyDayResult", () => {
       }),
       { dayFlags: { hasQuarantinedFacts: true } },
     );
-    expect(classification.unexplained).toEqual([]);
-    expect(classification.explained[0]?.reason).toBe("flagged_exclusions");
-    expect(classification.alertable).toBe(false);
+    expect(classification.unexplained).toHaveLength(1);
+    expect(classification.alertable).toBe(true);
+  });
+
+  it("never magnitude-explains a non-numeric posture field via flags", () => {
+    const classification = classifyDayResult(
+      makeDayResult({
+        matches: false,
+        paymentDifferences: [
+          {
+            field: "paymentHasInvalidAllocation",
+            expected: false,
+            actual: true,
+          },
+        ],
+      }),
+      {
+        dayFlags: { hasQuarantinedFacts: true },
+        flaggedExclusionImpact: { revenueMinor: 10_000_000, units: 10_000 },
+      },
+    );
+    expect(classification.unexplained).toHaveLength(1);
+    expect(classification.alertable).toBe(true);
   });
 
   it("keeps mixed explained+unexplained alertable with fingerprint over the unexplained subset only", () => {
@@ -498,28 +568,49 @@ describe("nextStreakState", () => {
     expect(again.state.streakCount).toBe(1);
   });
 
+  /** A streak tracking a PAYMENT field, which `unverifiedFields` can withhold. */
+  function paymentMismatchState(): VerificationStreakState {
+    const classification = classifyDayResult(
+      makeDayResult({
+        matches: false,
+        differences: [
+          { field: "paymentsRefundedMinor", expected: 100, actual: 250 },
+        ],
+      }),
+    );
+    return nextStreakState(initialStreakState(), classification).state;
+  }
+
   it("a partial run does NOT clear the streak when the differing field was withheld", () => {
-    const { state } = mismatchState();
-    // netSalesMinor differed previously; this partial run withheld it.
-    const partial = classifyDayResult(
+    const state = paymentMismatchState();
+    expect(state.unexplainedFields).toEqual(["paymentsRefundedMinor"]);
+    // The real filter path: an unverified field is absent from checkedFields.
+    const withheld = classifyDayResult(
       makeDayResult({
         matches: true,
         unverifiedFields: ["paymentsRefundedMinor"],
       }),
     );
-    // Force the withheld-field scenario: pretend the whole metric set was
-    // withheld by narrowing checkedFields to exclude netSalesMinor.
-    const withheld: VerificationClassification = {
-      ...partial,
-      checkedFields: partial.checkedFields.filter(
-        (field) => field !== "netSalesMinor",
-      ),
-    };
+    expect(withheld.checkedFields).not.toContain("paymentsRefundedMinor");
     const next = nextStreakState(state, withheld);
     expect(next.shouldAlert).toBe(false);
     expect(next.state.streakCount).toBe(state.streakCount);
     expect(next.state.fingerprint).toBe(state.fingerprint);
     expect(next.state.reArmEpoch).toBe(state.reArmEpoch);
+  });
+
+  it("a partial run DOES clear a payment-field streak when that field was checked", () => {
+    const state = paymentMismatchState();
+    const checked = classifyDayResult(
+      makeDayResult({
+        matches: true,
+        unverifiedFields: ["paymentUnsettledMinor"],
+      }),
+    );
+    expect(checked.checkedFields).toContain("paymentsRefundedMinor");
+    const next = nextStreakState(state, checked);
+    expect(next.state.streakCount).toBe(0);
+    expect(next.state.reArmEpoch).toBe(state.reArmEpoch + 1);
   });
 
   it("a partial run DOES clear the streak when the differing field was checked clean", () => {
@@ -566,6 +657,111 @@ describe("nextStreakState", () => {
     const repeat = nextStreakState(first.state, changed);
     expect(repeat.shouldAlert).toBe(false);
     expect(repeat.state.streakCount).toBe(2);
+  });
+
+  it("gives an A -> B -> A fingerprint oscillation three distinct alert identities (F1)", () => {
+    const at = (actual: number) =>
+      classifyDayResult(
+        makeDayResult({
+          matches: false,
+          differences: [{ field: "netSalesMinor", expected: 100, actual }],
+        }),
+      );
+    const a1 = nextStreakState(initialStreakState(), at(600));
+    const b = nextStreakState(a1.state, at(800));
+    const a2 = nextStreakState(b.state, at(600));
+
+    expect([a1.shouldAlert, b.shouldAlert, a2.shouldAlert]).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    // The fingerprint alone repeats; the emission identity must not.
+    expect(a2.state.fingerprint).toBe(a1.state.fingerprint);
+    const identities = [a1, b, a2].map(
+      (step) => `${step.state.fingerprint}|${step.state.reArmEpoch}|${step.state.alertSeq}`,
+    );
+    expect(new Set(identities).size).toBe(3);
+    expect([a1.state.alertSeq, b.state.alertSeq, a2.state.alertSeq]).toEqual([
+      1, 2, 3,
+    ]);
+  });
+
+  it("does not increment alertSeq on a silent repeat, and never resets it on re-arm", () => {
+    const { state } = mismatchState();
+    expect(state.alertSeq).toBe(1);
+    const repeat = nextStreakState(state, unexplainedMismatch());
+    expect(repeat.state.alertSeq).toBe(1);
+    const cleared = nextStreakState(
+      repeat.state,
+      classifyDayResult(makeDayResult()),
+    );
+    expect(cleared.state.alertSeq).toBe(1);
+    const again = nextStreakState(cleared.state, unexplainedMismatch());
+    expect(again.shouldAlert).toBe(true);
+    expect(again.state.alertSeq).toBe(2);
+  });
+
+  it("a run that checked nothing relevant never confirms clean (F2)", () => {
+    // A weekly config-defect escalation tracks no fields at all.
+    const escalation = classifyWeekResult(
+      { outcome: "unavailable", reason: "missing_schedule" },
+      { storeAllowlisted: true },
+    );
+    const state = nextStreakState(initialStreakState(), escalation).state;
+    expect(state.unexplainedFields).toEqual([]);
+    expect(state.streakCount).toBe(1);
+
+    const partial = classifyWeekResult(
+      {
+        outcome: "incomplete",
+        reason: "source_cap_exceeded",
+        cycleStartDate: "2026-08-03",
+        cycleEndDate: "2026-08-09",
+        daysChecked: 2,
+      },
+      { storeAllowlisted: true },
+    );
+    expect(partial.checkedFields).toEqual([]);
+    const next = nextStreakState(state, partial);
+    expect(next.state.streakCount).toBe(1);
+    expect(next.state.fingerprint).toBe(state.fingerprint);
+    expect(next.state.reArmEpoch).toBe(state.reArmEpoch);
+    expect(next.state.lastAlertedFingerprint).toBe(
+      state.lastAlertedFingerprint,
+    );
+  });
+
+  it("an all-explained mismatch on the tracked field does NOT clear the streak (F3)", () => {
+    const { state } = mismatchState();
+    expect(state.unexplainedFields).toEqual(["netSalesMinor"]);
+    // Same field still differs; a void explanation has now arrived for it.
+    const explainedNow = classifyDayResult(
+      makeDayResult({
+        matches: false,
+        differences: [{ field: "netSalesMinor", expected: 1000, actual: 2000 }],
+      }),
+      { voidImpact: { revenueMinor: 500, units: 0 } },
+    );
+    expect(explainedNow.unexplained).toEqual([]);
+    expect(explainedNow.alertable).toBe(false);
+    const next = nextStreakState(state, explainedNow);
+    expect(next.state.streakCount).toBe(state.streakCount);
+    expect(next.state.fingerprint).toBe(state.fingerprint);
+    expect(next.state.reArmEpoch).toBe(state.reArmEpoch);
+  });
+
+  it("an all-explained mismatch on an UNRELATED field still clears a checked-clean streak", () => {
+    const { state } = mismatchState();
+    const elsewhere = classifyDayResult(
+      makeDayResult({
+        matches: false,
+        differences: [{ field: "unitsReturned", expected: 0, actual: 4 }],
+      }),
+    );
+    const next = nextStreakState(state, elsewhere);
+    expect(next.state.streakCount).toBe(0);
+    expect(next.state.reArmEpoch).toBe(state.reArmEpoch + 1);
   });
 
   it("alerts once per streak for a weekly config-defect unavailability", () => {

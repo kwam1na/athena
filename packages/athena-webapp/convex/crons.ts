@@ -164,12 +164,13 @@ crons.interval(
 // tick simply leaves the same subjects selected for the next one — same
 // declarative-liveness contract as the reports and notifications sweeps above.
 //
-// Hourly class in prod, at :47. Every other minute in this hour is spoken for:
-// daily-operations-automation runs at :00, owed-daily-close-sweep at :30, and
-// the reports/notifications sweeps tick on the 5-minute grid (:00, :05, …).
-// :47 is off that grid entirely and sits well clear of both hourly jobs, so
-// verification reads state the fold and close paths have already settled
-// instead of racing them mid-write.
+// Hourly class in prod, at :47, chosen to sit clear of the two wall-clock
+// hourly jobs: daily-operations-automation at :00 and owed-daily-close-sweep
+// at :30. Note the reports and notifications sweeps use `crons.interval`
+// (5 minutes), which Convex anchors to deploy time rather than the wall clock
+// — their minutes drift and are unpredictable across deploys, so no minute can
+// be chosen to avoid them. Racing the fold is handled structurally instead:
+// selection defers any day still carrying a pending dirty mark.
 //
 // Non-prod runs every 6 hours at the same minute: verification is read-heavy
 // and dev data is static, so a slow rhythm is enough to keep the path warm.

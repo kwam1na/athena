@@ -84,15 +84,17 @@ type WeeklyManagerReportPayload = {
   acceptedWeekId: Id<"reportWeekAccepted">;
 };
 
-// Refs only. `fingerprint` identifies the unexplained difference set and
-// `reArmEpoch` the run row's re-arm generation — both are dedupe components,
-// and both are re-checked against the run row at send time.
+// Refs only. `fingerprint` identifies the unexplained difference set,
+// `reArmEpoch` the run row's re-arm generation, and `alertSeq` the subject's
+// monotonic alert count. All three are dedupe components; the first two are
+// re-checked against the run row at send time.
 type ReportVerificationDiscrepancyPayload = {
   storeId: Id<"store">;
   subjectKind: "day" | "week";
   subjectKey: string;
   fingerprint: string;
   reArmEpoch: number;
+  alertSeq?: number;
 };
 
 const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
@@ -215,7 +217,10 @@ const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
       // Store + subject + fingerprint alone would silently swallow a
       // recurring identical discrepancy after an intervening clean run — the
       // re-arm epoch (bumped on each clean-run re-arm) is what makes that
-      // second, genuinely new alert reach anyone.
+      // second, genuinely new alert reach anyone. `alertSeq` closes the
+      // remaining hole: a fingerprint that oscillates A -> B -> A without any
+      // intervening clean run leaves the epoch untouched and would rebuild a
+      // byte-identical key, which this rail's permanent unique lookup drops.
       return joinKeyComponents([
         "reports.verification_discrepancy",
         String(p.storeId),
@@ -223,6 +228,10 @@ const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
         p.subjectKey,
         p.fingerprint,
         String(p.reArmEpoch),
+        // `?? 0` because the run row's column is optional: rows written before
+        // it landed have no honest value, and a missing component must not
+        // stringify to "undefined" inside a permanent unique key.
+        String(p.alertSeq ?? 0),
       ]);
     },
     prepareEmail: async (ctx, payload) => {
