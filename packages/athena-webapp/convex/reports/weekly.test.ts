@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import schema from "../schema";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
+import type { ReportWeekLineage } from "../../shared/reportsContract";
+import { stableStringHash } from "./fingerprint";
 import { resolveWeeklyPeriod } from "./weeklyPeriods";
 
 /**
@@ -41,6 +43,8 @@ import {
   availableWeekCurrent,
   computeWeeklyVariancePosture,
   refreshAcceptedWeekForDate,
+  weekTruthFingerprint,
+  ZERO_WEEK_METRICS,
 } from "./weekly";
 
 afterEach(() => {
@@ -1113,6 +1117,94 @@ describe("weekly materialization", () => {
         ],
       });
     });
+  });
+
+  it("preserves an existing amendment's changedAt when nothing moved", async () => {
+    const t = convexTest(schema, modules);
+    const storeId = await seedStore(t, "weekly-amendment-changed-at");
+    const CUTOFF = NOW + 10;
+    const closeIds = new Map<string, Id<"dailyClose">>();
+    for (const [index, operatingDate] of period().includedDates.entries()) {
+      const closeId = await insertCompletedClose(t, {
+        completedAt: NOW + index,
+        operatingDate,
+        storeId,
+      });
+      closeIds.set(operatingDate, closeId);
+      await insertFoldedCloseDay(t, {
+        closeId,
+        foldedAt: CUTOFF,
+        operatingDate,
+        storeId,
+      });
+    }
+
+    const baselineOf = async (ctx: MutationCtx) =>
+      ctx.db
+        .query("reportWeekAccepted")
+        .withIndex("by_storeId_cycleStartDate", (q) =>
+          q.eq("storeId", storeId).eq("cycleStartDate", "2026-06-29"),
+        )
+        .unique();
+
+    await t.run(async (ctx) => {
+      expect(
+        await materializeAcceptedWeek({
+          acceptedAt: CUTOFF,
+          closeId: closeIds.get("2026-07-04")!,
+          ctx,
+          cutoffObservedAt: CUTOFF,
+          storeId,
+        }),
+      ).toBe("created");
+
+      await refreshAcceptedWeekForDate(ctx, storeId, "2026-07-04", CUTOFF + 20);
+      const first = await baselineOf(ctx);
+      expect(first?.amendment).toBeDefined();
+      const firstChangedAt = first!.amendment!.changedAt;
+
+      // A later refresh over unchanged truth must PRESERVE the timestamp. The
+      // stored `currentFingerprint` is the dedupe key, so anything that changes
+      // how it is computed re-stamps every existing amendment and tells the
+      // reader the week just moved when it did not.
+      await refreshAcceptedWeekForDate(ctx, storeId, "2026-07-04", CUTOFF + 999);
+      expect((await baselineOf(ctx))?.amendment?.changedAt).toBe(firstChangedAt);
+    });
+  });
+
+  it("hashes a mixless week exactly as it did before payment mix existed", () => {
+    // A legacy accepted row carries no mix. Its truth fingerprint must be
+    // byte-identical to the pre-mix hash, or the first refresh after this
+    // change re-stamps its amendment's changedAt for no reason.
+    const legacyPayload = {
+      included: { ...ZERO_WEEK_METRICS },
+      outsideSchedule: { ...ZERO_WEEK_METRICS },
+      scheduleLineage: [] as ReportWeekLineage[],
+    };
+    const preMixHash = stableStringHash(
+      JSON.stringify({
+        included: legacyPayload.included,
+        outsideSchedule: legacyPayload.outsideSchedule,
+        scheduleLineage: [],
+      }),
+    );
+
+    expect(weekTruthFingerprint(legacyPayload)).toBe(preMixHash);
+    // An explicitly unavailable lane is equally unknown, so it hashes the same.
+    expect(
+      weekTruthFingerprint({
+        ...legacyPayload,
+        paymentMix: { status: "unavailable" },
+        outsideSchedulePaymentMix: { status: "unavailable" },
+      }),
+    ).toBe(preMixHash);
+    // A complete mix is knowable truth and must change the hash.
+    expect(
+      weekTruthFingerprint({
+        ...legacyPayload,
+        paymentMix: { status: "complete", totalMinor: 0, rows: [] },
+      }),
+    ).not.toBe(preMixHash);
   });
 
   it("amends on a method-only move that changes no total", async () => {

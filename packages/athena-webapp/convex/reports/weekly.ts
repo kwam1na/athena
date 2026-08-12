@@ -155,7 +155,7 @@ export const WEEKLY_ACCEPTED_REFRESH_LIMIT = 16;
 /** Close versions inspected for one accepted frame's final date. */
 export const WEEKLY_CLOSE_VERSION_LIMIT = 8;
 
-const ZERO_WEEK_METRICS: ReportWeekMetrics = {
+export const ZERO_WEEK_METRICS: ReportWeekMetrics = {
   grossSalesMinor: 0,
   netSalesMinor: 0,
   refundsMinor: 0,
@@ -628,29 +628,37 @@ async function readWeekDays(
     : { status: "ok", days };
 }
 
-function weekTruthFingerprint(args: {
+export function weekTruthFingerprint(args: {
   included: ReportWeekMetrics;
   outsideSchedule: ReportWeekMetrics;
   scheduleLineage: ReportWeekLineage[];
   /**
-   * Only a COMPLETE mix is hashed. Absent (legacy) and `unavailable` both hash
-   * as null, so an untouched legacy baseline keeps producing the fingerprint
-   * it always did, and a lane that merely stopped being knowable does not
-   * masquerade as changed truth.
+   * Only a COMPLETE mix is hashed, and an unknowable one is OMITTED from the
+   * payload entirely rather than hashed as null. That keeps an untouched
+   * legacy baseline producing byte-for-byte the fingerprint it always did, so
+   * a lane that merely stopped being knowable neither masquerades as changed
+   * truth nor re-stamps an existing amendment.
    */
   paymentMix?: ReportPaymentMix;
   outsideSchedulePaymentMix?: ReportPaymentMix;
 }) {
-  const hashableMix = (mix?: ReportPaymentMix) =>
-    mix?.status === "complete" ? mix : null;
+  // OMITTED, not nulled: a key spelled `"paymentMix":null` still changes the
+  // serialized bytes, which would re-stamp every existing amendment's
+  // `changedAt` the first time it was recomputed. An unknowable mix must
+  // hash exactly as it did before payment mix existed.
+  const knownMix = (mix: ReportPaymentMix | undefined, key: string) =>
+    mix?.status === "complete" ? { [key]: mix } : {};
   return stableStringHash(
     JSON.stringify({
       included: args.included,
       outsideSchedule: args.outsideSchedule,
       // Part of weekly truth: an approved method correction moves no total, so
       // without this the amendment path would never notice it happened.
-      paymentMix: hashableMix(args.paymentMix),
-      outsideSchedulePaymentMix: hashableMix(args.outsideSchedulePaymentMix),
+      ...knownMix(args.paymentMix, "paymentMix"),
+      ...knownMix(
+        args.outsideSchedulePaymentMix,
+        "outsideSchedulePaymentMix",
+      ),
       scheduleLineage: args.scheduleLineage.map((row) => ({
         included: row.included,
         localDate: row.localDate,
@@ -686,13 +694,6 @@ function deriveWeeklyAmendment(args: {
     scheduleLineage: args.folded.scheduleLineage,
     paymentMix: args.folded.includedPaymentMix,
     outsideSchedulePaymentMix: args.folded.outsideSchedulePaymentMix,
-  });
-  const baselineFingerprint = weekTruthFingerprint({
-    included: args.accepted.included,
-    outsideSchedule: args.accepted.outsideSchedule,
-    scheduleLineage: args.accepted.scheduleLineage,
-    paymentMix: args.accepted.paymentMix,
-    outsideSchedulePaymentMix: args.accepted.outsideSchedulePaymentMix,
   });
   /**
    * An amendment is a claim that the week MOVED, so only a knowable-to-knowable

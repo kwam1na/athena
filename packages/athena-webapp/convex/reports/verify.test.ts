@@ -1330,3 +1330,77 @@ describe("verify — payment mix agrees with the fold on reversed receipts", () 
     });
   });
 });
+
+describe("verify — a withheld mix is unchecked, not a contradiction", () => {
+  it("does not flag a day whose projection honestly withholds the mix", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      // The source ledger carries a classifiable method...
+      await seedPaymentAllocation(ctx, store, {
+        amount: 2_000,
+        method: "cash",
+        recordedAt: at("09:00"),
+        targetId: "a",
+      });
+      // ...but the day was folded from pre-v3 facts that carry none, so the
+      // projection published `unavailable`. That is the projection being
+      // honest, not wrong — the whole of history looks like this until the
+      // fold-version repair drains.
+      await ctx.db.insert("reportDay", {
+        ...dayDocFor(store.storeId, DAY1),
+        paymentsCollectedMinor: 2_000,
+        paymentAllocatedMinor: 2_000,
+        paymentMix: { status: "unavailable" },
+      });
+      return store;
+    });
+
+    const result = await t.run((ctx: QueryCtx) =>
+      verifyDayWithCtx(ctx, seeded.storeId, DAY1),
+    );
+    expect(result.expectedPaymentMix).toMatchObject({ status: "complete" });
+    expect(result.paymentMixDifferences).toEqual([]);
+  });
+
+  it("still flags a projection claiming knowledge the source cannot support", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      // Source method is unclassifiable, so the census cannot attribute it.
+      await seedPaymentAllocation(ctx, store, {
+        amount: 2_000,
+        method: "cheque",
+        recordedAt: at("09:00"),
+        targetId: "a",
+      });
+      await ctx.db.insert("reportDay", {
+        ...dayDocFor(store.storeId, DAY1),
+        paymentsCollectedMinor: 2_000,
+        paymentAllocatedMinor: 2_000,
+        paymentMix: {
+          status: "complete",
+          totalMinor: 2_000,
+          rows: [
+            {
+              method: "cash",
+              amountMinor: 2_000,
+              shareBasisPoints: 10_000,
+              tenderUseCount: 1,
+            },
+          ],
+        },
+      });
+      return store;
+    });
+
+    const result = await t.run((ctx: QueryCtx) =>
+      verifyDayWithCtx(ctx, seeded.storeId, DAY1),
+    );
+    expect(result.paymentMixDifferences).toContainEqual(
+      expect.objectContaining({ field: "status", expected: "unavailable" }),
+    );
+  });
+});

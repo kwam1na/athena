@@ -621,7 +621,14 @@ async function applyToOpenDay(
   const priorMixState =
     existing?.paymentMixState ??
     (existing &&
-    (base.paymentsCollectedMinor !== 0 || base.paymentsRefundedMinor !== 0)
+    (base.paymentsCollectedMinor !== 0 ||
+      base.paymentsRefundedMinor !== 0 ||
+      // Foreign-currency and quarantined payment facts are exactly the ones
+      // EXCLUDED from those totals, and they are what `foldDay` treats as
+      // broken evidence. Keying only off the totals would start such a day
+      // clean here while the authoritative fold starts it broken.
+      base.flags.mixedCurrency ||
+      base.flags.quarantinedFactCount > 0)
       ? { ...emptyPaymentMixState(), evidenceBroken: true }
       : emptyPaymentMixState());
   const paymentMixState = boundPaymentMixState(

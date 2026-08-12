@@ -607,9 +607,13 @@ export type ReportWeekAmendment = {
   sourceCloseAcceptedAt?: number;
   sourceCloseId?: string;
   summary: ReportWeekSummary;
-  /** Later method truth, beside the baseline's frozen mix. */
-  paymentMix?: ReportPaymentMix;
-  outsideSchedulePaymentMix?: ReportPaymentMix;
+  /**
+   * Deliberately NO mix here. The amendment's later method truth reaches the
+   * client through the projection's own combined `paymentMix`; a per-lane mix
+   * cannot reconcile against the full-range Payments figure, so publishing one
+   * beside the combined value would only invite the wrong pick. The lanes stay
+   * server-side on the stored document.
+   */
 };
 
 /** Fields shared by the live and accepted weekly projections. */
@@ -726,12 +730,20 @@ export type ReportWeekHistoryPage = {
 export const REPORT_PAYMENT_METHODS = ["cash", "card", "mobile_money"] as const;
 export type ReportPaymentMethod = (typeof REPORT_PAYMENT_METHODS)[number];
 
-const REPORT_PAYMENT_METHOD_ALIASES: Record<string, ReportPaymentMethod> = {
-  cash: "cash",
-  card: "card",
-  mobile_money: "mobile_money",
-  momo: "mobile_money",
-};
+/**
+ * Null-prototype on purpose. Source methods are free text, so a plain object
+ * literal would resolve inherited members — `"constructor"` normalizes to the
+ * `Object` constructor, a value that is neither a method nor null. It would be
+ * written onto a fact and then rejected by the closed-union schema on every
+ * replay, so the day could never converge.
+ */
+const REPORT_PAYMENT_METHOD_ALIASES: Record<string, ReportPaymentMethod> =
+  Object.assign(Object.create(null) as Record<string, ReportPaymentMethod>, {
+    cash: "cash",
+    card: "card",
+    mobile_money: "mobile_money",
+    momo: "mobile_money",
+  });
 
 /**
  * Athena's existing spelling conventions, applied once: trim, lowercase, and
@@ -939,16 +951,24 @@ export function accumulatePaymentMixFact(
 
   if (
     isMethodMove &&
-    fact.paymentMethod !== undefined &&
     fact.paymentParticipationId !== undefined &&
     fact.paymentMixMinor !== undefined
   ) {
-    applyPaymentMixContribution(state, {
-      method: fact.paymentMethod,
-      methodFrom: fact.paymentMethodFrom,
-      participationId: fact.paymentParticipationId,
-      amountMinor: fact.paymentMixMinor,
-    });
+    if (fact.paymentMethod !== undefined) {
+      applyPaymentMixContribution(state, {
+        method: fact.paymentMethod,
+        methodFrom: fact.paymentMethodFrom,
+        participationId: fact.paymentParticipationId,
+        amountMinor: fact.paymentMixMinor,
+      });
+      return;
+    }
+    // The value moved OFF a method reporting can classify and ONTO one it
+    // cannot. The receipt fact still names the old method and nothing moves it,
+    // so without this the day would publish a `complete` mix crediting a method
+    // the source no longer claims — reconciling arithmetically and still wrong.
+    // Same poison the unclassifiable receipt uses.
+    state.unattributedMinor += fact.paymentMixMinor;
   }
 }
 
@@ -957,10 +977,13 @@ export function accumulatePaymentMixFact(
  *
  * The state rides on the day document, so past the cap it collapses to a
  * broken marker instead of an ever-growing array that would eventually breach
- * the document size limit. Applied identically by the authoritative fold and
- * the incremental path, so a clamped open day and its later refold agree.
- * Collapsing loses nothing publishable: `derivePaymentMix` already refuses an
- * over-cap state, and only a full refold could un-break it anyway.
+ * the document size limit. This is the LIVE guard: both write paths bound
+ * before deriving, so the matching length check inside `derivePaymentMix` is a
+ * defensive backstop for direct callers rather than the enforcing rule.
+ * Applied identically by the authoritative fold and the incremental path, so a
+ * clamped open day and its later refold agree. Collapsing loses nothing
+ * publishable — an over-cap state cannot produce a mix either way, and only a
+ * full refold could un-break it.
  */
 export function boundPaymentMixState(
   state: ReportPaymentMixState,

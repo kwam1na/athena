@@ -238,8 +238,13 @@ function priorPeriodProjection(
 function weeklyAmendmentProjection(
   amendment: NonNullable<Doc<"reportWeekAccepted">["amendment"]>,
 ) {
+  // The per-lane mixes stay server-side: a single-lane mix cannot reconcile
+  // against the full-range Payments figure, and the combined one already rides
+  // the projection's own `paymentMix`. Shipping both invites the wrong pick.
+  const { paymentMix: _lane, outsideSchedulePaymentMix: _outsideLane, ...rest } =
+    amendment;
   return {
-    ...amendment,
+    ...rest,
     summary: weeklySummary(amendment.included),
     outsideScheduleSummary: weeklySummary(amendment.outsideSchedule),
     totalSummary: weeklySummary(

@@ -217,6 +217,11 @@ describe("accepted weekly manager report payment mix", () => {
 
     expect(payload.paymentTotals).toEqual([]);
     expect(payload.notes ?? "").not.toContain("aren't available");
+    // The email names the known-empty state in the SAME words the Reports
+    // panel uses, rather than falling silent and looking like a legacy row.
+    expect(payload.notes ?? "").toContain(
+      "No payments were received in this period.",
+    );
   });
 
   it("keeps close-backed rows for a revision with no stored mix", () => {

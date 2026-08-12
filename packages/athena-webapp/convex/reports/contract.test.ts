@@ -19,6 +19,7 @@ import {
 import {
   REPORT_DAY_METRIC_KEYS,
   REPORT_PAYMENT_METHODS,
+  normalizeReportPaymentMethod,
   unitsPerTransaction,
   REPORT_SKU_DAY_METRIC_KEYS,
   REPORT_DAY_STATUSES,
@@ -1455,5 +1456,39 @@ describe("unitsPerTransaction", () => {
         unitsSold: 0,
       }),
     ).toBeNull();
+  });
+});
+
+describe("normalizeReportPaymentMethod", () => {
+  it("maps Athena's spelling conventions onto the closed method set", () => {
+    for (const [raw, expected] of [
+      ["cash", "cash"],
+      ["  Cash  ", "cash"],
+      ["Card", "card"],
+      ["mobile money", "mobile_money"],
+      ["Mobile-Money", "mobile_money"],
+      ["MoMo", "mobile_money"],
+    ] as const) {
+      expect(normalizeReportPaymentMethod(raw)).toBe(expected);
+    }
+  });
+
+  it("returns null for anything outside the closed set, including inherited keys", () => {
+    for (const raw of ["", "   ", "cheque", "bank transfer", null, undefined]) {
+      expect(normalizeReportPaymentMethod(raw)).toBeNull();
+    }
+    // A plain object literal resolves Object.prototype members, so a lookup
+    // without an own-property guard returns the Object constructor here — a
+    // value that is neither a method nor null, which would be written onto a
+    // fact and then rejected by the closed-union schema on every replay.
+    for (const inherited of [
+      "constructor",
+      "toString",
+      "valueOf",
+      "hasOwnProperty",
+      "__proto__",
+    ]) {
+      expect(normalizeReportPaymentMethod(inherited)).toBeNull();
+    }
   });
 });

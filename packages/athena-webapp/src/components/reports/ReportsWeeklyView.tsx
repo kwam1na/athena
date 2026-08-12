@@ -940,7 +940,8 @@ export function ReportsWeeklyView({
                   variant="canvas"
                 />
               </div>
-              {factBackedPaymentMix.rows.reduce(
+              {factBackedPaymentMix.totalMinor > 0 &&
+              factBackedPaymentMix.rows.reduce(
                 (total, row) => total + row.shareBasisPoints,
                 0,
               ) !== 10_000 ? (
@@ -989,7 +990,8 @@ export function ReportsWeeklyView({
               variant="canvas"
             />
           </div>
-          {report.closeEvidence.payments.rows.reduce(
+          {report.closeEvidence.payments.coveredTenderValueMinor > 0 &&
+          report.closeEvidence.payments.rows.reduce(
             (total, row) => total + row.shareBasisPoints,
             0,
           ) !== 10_000 ? (

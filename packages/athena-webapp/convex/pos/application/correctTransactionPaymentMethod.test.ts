@@ -432,7 +432,7 @@ describe("correctTransactionPaymentMethod", () => {
     ).rejects.toThrow(/reclassification|report|fact/i);
   });
 
-  it("leaves the fact methodless when the corrected method is not reportable", async () => {
+  it("records a move to nowhere when the corrected method is not reportable", async () => {
     const ctx = createMutationCtx();
     vi.mocked(consumeCommandApprovalProofWithCtx).mockResolvedValue({
       kind: "ok",
@@ -481,8 +481,68 @@ describe("correctTransactionPaymentMethod", () => {
     const [fact] = vi.mocked(recordFacts).mock.calls.at(-1)?.[2] as Array<
       Record<string, unknown>
     >;
+    // The value leaves a method reporting CAN classify for one it cannot, so
+    // the move is still recorded — with no destination. Staying silent would
+    // leave the receipt fact crediting cash for a payment the store's own
+    // records now call a cheque, and the day would publish that as complete.
+    expect(fact.paymentMethodFrom).toBe("cash");
     expect(fact.paymentMethod).toBeUndefined();
+    expect(fact.paymentMixMinor).toBe(1000);
+    expect(fact.paymentParticipationId).toBe("txn-1");
+  });
+
+  it("emits no move at all when the ORIGINAL method was already unclassifiable", async () => {
+    const ctx = createMutationCtx();
+    vi.mocked(consumeCommandApprovalProofWithCtx).mockResolvedValue({
+      kind: "ok",
+      data: {
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        approvedByStaffProfileId: "manager-1",
+        consumedAt: 1,
+        expiresAt: 2,
+      },
+    } as never);
+    vi.mocked(getPosTransactionById).mockResolvedValue({
+      _id: "txn-1" as Id<"posTransaction">,
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-111111",
+      status: "completed",
+      total: 1000,
+      totalPaid: 1000,
+      paymentMethod: "cheque",
+      payments: [{ method: "cheque", amount: 1000, timestamp: 1 }],
+    } as never);
+    vi.mocked(
+      correctSameAmountSinglePaymentAllocationWithCtx,
+    ).mockResolvedValue({
+      _id: "allocation-1" as Id<"paymentAllocation">,
+      posTransactionId: "txn-1" as Id<"posTransaction">,
+      recordedAt: ORIGINAL_ALLOCATION_RECORDED_AT,
+    } as never);
+    vi.mocked(recordOperationalEventWithCtx)
+      .mockResolvedValueOnce({
+        _id: "approval-event-1" as Id<"operationalEvent">,
+      } as never)
+      .mockResolvedValueOnce({
+        _id: "event-1" as Id<"operationalEvent">,
+        createdAt: CORRECTION_EVENT_AT,
+      } as never);
+
+    await correctTransactionPaymentMethod(ctx as never, {
+      actorStaffProfileId: "cashier-1" as Id<"staffProfile">,
+      approvalProofId: "proof-1" as Id<"approvalProof">,
+      transactionId: "txn-1" as Id<"posTransaction">,
+      paymentMethod: "card",
+      reason: "Till entry correction",
+    });
+
+    // The receipt fact carried no mix dimensions either, so the day is already
+    // withheld and there is nothing to move off.
+    const [fact] = vi.mocked(recordFacts).mock.calls.at(-1)?.[2] as Array<
+      Record<string, unknown>
+    >;
     expect(fact.paymentMethodFrom).toBeUndefined();
+    expect(fact.paymentMethod).toBeUndefined();
     expect(fact.paymentMixMinor).toBeUndefined();
     expect(fact.paymentParticipationId).toBeUndefined();
   });

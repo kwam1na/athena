@@ -870,6 +870,31 @@ describe("foldDay — payment mix", () => {
     });
   });
 
+  it("withholds the mix when a correction moves value onto an unclassifiable method", () => {
+    // Old method classifiable, new one not: the receipt still says cash and
+    // nothing moves it off, so without an explicit poison the day would
+    // publish a `complete` mix attributing the payment to a method the
+    // store's own records no longer claim — arithmetically reconciling and
+    // still wrong.
+    const { day } = foldDay("GHS", [
+      receipt({ factId: "a", amountMinor: 5_000, method: "cash", participationId: "txn-1" }),
+      fact({
+        factId: "corr",
+        sourceDomain: "pos",
+        sourceId: "txn-1",
+        lineId: "event-1",
+        factKind: "correction",
+        occurredAt: 2_000,
+        paymentMethodFrom: "cash",
+        paymentParticipationId: "txn-1",
+        paymentMixMinor: 5_000,
+      }),
+    ]);
+
+    expect(day.paymentsCollectedMinor).toBe(5_000);
+    expect(day.paymentMix).toEqual({ status: "unavailable" });
+  });
+
   it("publishes a complete empty mix for a day with zero receipts", () => {
     const { day } = foldDay("GHS", [
       fact({ factId: "s", factKind: "sale", netAmountMinor: 0 }),

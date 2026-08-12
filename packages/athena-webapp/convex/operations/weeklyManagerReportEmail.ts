@@ -242,15 +242,23 @@ export function buildAcceptedWeeklyManagerReportPayload(args: {
     (total, row) => total + row.shareBasisPoints,
     0,
   );
+  // Same three states the Reports panel names, so the two surfaces describe
+  // one baseline identically instead of the email falling silent on a known
+  // empty period.
   const paymentCoverageNote = storedMix
     ? storedMix.status === "unavailable"
       ? "Payment method details aren't available for this period."
-      : undefined
+      : storedMix.rows.length === 0
+        ? "No payments were received in this period."
+        : undefined
     : evidence && evidence.payments.coverage.status === "partial"
       ? `Payment mix reflects ${evidence.payments.coverage.usableDayCount} of ${evidence.payments.coverage.scheduledDayCount} scheduled days covered.`
       : undefined;
+  // A zero-value mix has zero shares by construction, not by rounding.
   const paymentRoundingNote =
-    paymentRows.length > 0 && paymentShareBasisPointsTotal !== 10_000
+    paymentRows.length > 0 &&
+    paymentShareBasisPointsTotal > 0 &&
+    paymentShareBasisPointsTotal !== 10_000
       ? "Shares may not total 100% due to rounding."
       : undefined;
   const reportingNotes = [

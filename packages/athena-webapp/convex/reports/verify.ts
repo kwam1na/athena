@@ -907,6 +907,18 @@ export function diffPaymentMix(
   actual: ReportPaymentMix | undefined,
 ): VerifyPaymentMixDifference[] {
   if (actual === undefined) return [];
+  /**
+   * A projection that says `unavailable` is declining to make a claim, and a
+   * verifier cannot contradict a non-claim. This is the normal state for every
+   * day folded from pre-mix facts until the fold-version repair drains, and
+   * treating it as a mismatch would fill the scheduled sweep with discrepancies
+   * on days where no total disagrees.
+   *
+   * The opposite direction is still a real defect and still reported: a
+   * projection claiming a complete mix the source ledger cannot support is
+   * asserting knowledge it does not have.
+   */
+  if (actual.status === "unavailable") return [];
   if (expected.status !== actual.status) {
     return [
       {

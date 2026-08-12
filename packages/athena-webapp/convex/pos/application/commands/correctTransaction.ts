@@ -450,59 +450,71 @@ async function applyPaymentMethodCorrection(
     occurredAt: event.createdAt,
     origin: "cloud",
   });
-  if (store?.organizationId && event?._id) {
-    // Payment method reclassification carries no revenue delta, so every
-    // monetary field stays zero and no reported total moves. What it DOES
-    // carry is the payment-mix move: the same participation identity the
-    // receipt fact used, shifted from the old normalized method to the new.
-    //
-    // Business time is the ORIGINAL allocation's `recordedAt`, so the move
-    // lands on the operating day the payment was received rather than the day
-    // it was noticed. Knowledge time stays server-stamped inside ingestion, so
-    // an already-accepted week's cutoff still excludes this correction and the
-    // baseline is untouched.
-    const currency = store.currency?.trim().toUpperCase() || "GHS";
-    const previousMethod = normalizeReportPaymentMethod(payment.method);
-    const nextMethod = normalizeReportPaymentMethod(args.paymentMethod);
-    // Both ends must be classifiable for the move to be expressible. If either
-    // is not, the mix evidence is simply unavailable — never half a move.
-    const mix =
-      previousMethod && nextMethod
-        ? {
-            paymentMethodFrom: previousMethod,
-            paymentMethod: nextMethod,
-            paymentParticipationId: paymentAllocationParticipationId(
-              correctedAllocation,
-            ),
-            paymentMixMinor: Math.abs(payment.amount),
-          }
-        : {};
-    const fact: NewReportFact = {
-      currency,
-      discountAmountMinor: 0,
-      factKind: "correction",
-      grossAmountMinor: 0,
-      lineId: String(event._id),
-      netAmountMinor: 0,
-      occurredAt: correctedAllocation.recordedAt ?? event.createdAt,
-      quantity: 0,
-      sourceDomain: "pos",
-      sourceId: String(args.transaction._id),
-      taxAmountMinor: 0,
-      ...mix,
-    };
-    const reporting = await recordFacts(ctx, args.transaction.storeId, [fact]);
-    if (reporting.outcome !== "recorded") {
-      // Ingestion contains its own failures, which is right for a sale but
-      // wrong here: a correction whose reclassification never lands would
-      // leave the allocation, the transaction, and the register session saying
-      // one method while reporting says another. Throwing rolls the whole
-      // correction back atomically — Convex mutations are transactional.
-      throw new Error(
-        "Payment method correction could not record its reclassification fact.",
-      );
-    }
+  // The throw above already proved both the store's organization and the
+  // event id, so this block is unconditional.
+
+  // Payment method reclassification carries no revenue delta, so every
+  // monetary field stays zero and no reported total moves. What it DOES
+  // carry is the payment-mix move: the same participation identity the
+  // receipt fact used, shifted from the old normalized method to the new.
+  //
+  // Business time is the ORIGINAL allocation's `recordedAt`, so the move
+  // lands on the operating day the payment was received rather than the day
+  // it was noticed. Knowledge time stays server-stamped inside ingestion, so
+  // an already-accepted week's cutoff still excludes this correction and the
+  // baseline is untouched.
+  const currency = store.currency?.trim().toUpperCase() || "GHS";
+  const previousMethod = normalizeReportPaymentMethod(payment.method);
+  const nextMethod = normalizeReportPaymentMethod(args.paymentMethod);
+  /**
+   * The two unclassifiable directions are NOT symmetric.
+   *
+   * If the OLD method was unclassifiable, the receipt fact carried no mix
+   * dimensions either, so the day is already withheld and there is nothing
+   * to move — emit nothing.
+   *
+   * If the old method was classifiable and the NEW one is not, the receipt
+   * still names the old method and nothing else will move it. Emitting the
+   * move without a destination is what tells the fold that value left a
+   * known method for an unknown one, so the day is withheld instead of
+   * crediting a method the store's own records no longer claim.
+   */
+  const mix = previousMethod
+    ? {
+        paymentMethodFrom: previousMethod,
+        ...(nextMethod ? { paymentMethod: nextMethod } : {}),
+        paymentParticipationId: paymentAllocationParticipationId(
+          correctedAllocation,
+        ),
+        paymentMixMinor: Math.abs(payment.amount),
+      }
+    : {};
+  const fact: NewReportFact = {
+    currency,
+    discountAmountMinor: 0,
+    factKind: "correction",
+    grossAmountMinor: 0,
+    lineId: String(event._id),
+    netAmountMinor: 0,
+    occurredAt: correctedAllocation.recordedAt,
+    quantity: 0,
+    sourceDomain: "pos",
+    sourceId: String(args.transaction._id),
+    taxAmountMinor: 0,
+    ...mix,
+  };
+  const reporting = await recordFacts(ctx, args.transaction.storeId, [fact]);
+  if (reporting.outcome !== "recorded") {
+    // Ingestion contains its own failures, which is right for a sale but
+    // wrong here: a correction whose reclassification never lands would
+    // leave the allocation, the transaction, and the register session saying
+    // one method while reporting says another. Throwing rolls the whole
+    // correction back atomically — Convex mutations are transactional.
+    throw new Error(
+      "Payment method correction could not record its reclassification fact.",
+    );
   }
+
 
   return {
     transactionId: args.transaction._id,
