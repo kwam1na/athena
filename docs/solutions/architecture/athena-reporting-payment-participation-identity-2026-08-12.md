@@ -136,3 +136,8 @@ is `complete`, and the amendment gate compares both sides for known change.
   behaviour into a standing alert.
 - Never use the destructive reseed as a rollout backfill, and never replay a
   correction whose outcome the rebuilt source row already carries.
+- Run the mechanical gate BEFORE the review pass that authorizes the tree, not
+  after. Review evidence binds to an exact tree, and the harness re-captures
+  that tree when the evidence is recorded — so a lint or format failure found
+  afterwards invalidates the authorization and costs a whole extra review
+  round. Gate findings and reviewer findings belong in the same fix batch.
