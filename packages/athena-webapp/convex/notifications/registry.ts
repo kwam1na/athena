@@ -15,10 +15,7 @@ import { RegisterCloseoutVarianceAlert } from "../emails/RegisterCloseoutVarianc
 import { ReportVerificationAlert } from "../emails/ReportVerificationAlert";
 
 export type NotificationCategory =
-  | "cash_controls"
-  | "eod"
-  | "system_health"
-  | "approvals";
+  "cash_controls" | "eod" | "system_health" | "approvals";
 export type NotificationChannel = "email" | "in_app";
 export type NotificationPayload = Record<string, unknown>;
 export type PreparedNotificationEmail = { subject: string; html: string };
@@ -67,10 +64,7 @@ type CloseoutMatchPayload = {
 };
 
 export type DailyManagerReportSendStatus =
-  | "applied"
-  | "prepared"
-  | "skipped"
-  | "failed";
+  "applied" | "prepared" | "skipped" | "failed";
 
 type DailyManagerReportPayload = {
   storeId: Id<"store">;
@@ -245,6 +239,11 @@ const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
           subjectKey: p.subjectKey,
           fingerprint: p.fingerprint,
           reArmEpoch: p.reArmEpoch,
+          // Forwarded so the payload query can refuse an intent whose emission
+          // was superseded by a later alertSeq on the same fingerprint/epoch
+          // (an A -> B -> A oscillation dispatched late would double-send).
+          // Absent on legacy intents; the query treats absent as unknown.
+          ...(p.alertSeq !== undefined ? { alertSeq: p.alertSeq } : {}),
         },
       );
       // Null means the run row no longer carries this discrepancy — the
@@ -384,7 +383,9 @@ export const weeklyReportCorrectionPreview = internalAction({
   handler: async (
     ctx,
     args,
-  ): Promise<(PreparedNotificationEmail & { contentDigest: string }) | null> => {
+  ): Promise<
+    (PreparedNotificationEmail & { contentDigest: string }) | null
+  > => {
     const report = await ctx.runQuery(
       internal.operations.weeklyManagerReportEmail
         .getCorrectedWeeklyManagerReportPayload,

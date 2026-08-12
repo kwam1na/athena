@@ -7,6 +7,10 @@ import type {
 } from "../emails/ReportVerificationAlert";
 import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
 import { toDisplayAmount } from "../lib/currency";
+import {
+  DAY_FIELD_INVENTORY,
+  WEEK_FIELD_INVENTORY,
+} from "../reports/verificationClassify";
 import { currencyFormatter } from "../utils";
 import { resolveAppUrl } from "./dailyManagerReportEmail";
 
@@ -37,38 +41,11 @@ type RunRow = Doc<"reportVerificationRun">;
 
 export type ReportVerificationAlertPayload = ReportVerificationAlertProps;
 
-/**
- * Every field a verification run can make a claim about, mirroring the
- * inventories in `reports/verificationClassify.ts` (declared there locally so
- * that module can stay free of Convex imports). "Not checked" is the
- * complement of the row's recorded `checkedFields` within this set — which is
- * exactly verify.ts's `unverifiedFields`, plus everything a truncated scan
- * withheld.
- */
-const DAY_FIELD_INVENTORY = [
-  "netSalesMinor",
-  "grossSalesMinor",
-  "refundsMinor",
-  "unitsSold",
-  "unitsReturned",
-  "paymentsCollectedMinor",
-  "paymentsRefundedMinor",
-  "paymentAllocatedMinor",
-  "paymentUnsettledMinor",
-  "paymentAllocationCoverage",
-  "paymentAllocationOmittedMinor",
-  "paymentHasInvalidAllocation",
-] as const;
-
-const WEEK_FIELD_INVENTORY = [
-  ...DAY_FIELD_INVENTORY,
-  "scheduleMatches",
-  "varianceMatches",
-  "closeMatches",
-  "amendmentMatches",
-  "inventoryMatches",
-  "closeEvidenceMatches",
-] as const;
+// The field inventories are imported from `reports/verificationClassify.ts`
+// (pure, no Convex imports — safe to import here), so the "not checked"
+// complement is computed against the same list the classifier checks. A field
+// added or renamed there flows through automatically instead of making the
+// operator-facing section lie.
 
 const FIELD_LABELS: Record<string, string> = {
   amendmentMatches: "Weekly amendments",
@@ -114,8 +91,15 @@ export const getReportVerificationAlertPayload = internalQuery({
     subjectKey: v.string(),
     fingerprint: v.string(),
     reArmEpoch: v.number(),
+    /** The emission counter minted with this intent. Optional because intents
+     * written before the column landed carry none; when present it must match
+     * the row, or this intent belongs to a superseded emission. */
+    alertSeq: v.optional(v.number()),
   },
-  handler: async (ctx, args): Promise<ReportVerificationAlertPayload | null> => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<ReportVerificationAlertPayload | null> => {
     const row = await ctx.db
       .query("reportVerificationRun")
       .withIndex("by_store_subject", (q) =>
@@ -133,6 +117,18 @@ export const getReportVerificationAlertPayload = internalQuery({
     if (!row) return null;
     if (row.unexplainedFingerprint !== args.fingerprint) return null;
     if (row.reArmEpoch !== args.reArmEpoch) return null;
+    // An oscillating fingerprint (A -> B -> A with no intervening clean run)
+    // leaves the fingerprint AND epoch matching the FIRST A-intent, so a
+    // delayed dispatch of that stale intent would double-send: the newer
+    // A-intent carries its own, higher alertSeq. When both sides have the
+    // column, only the intent minted with the row's current emission renders.
+    if (
+      args.alertSeq !== undefined &&
+      row.alertSeq !== undefined &&
+      row.alertSeq !== args.alertSeq
+    ) {
+      return null;
+    }
 
     const store = await ctx.db.get("store", args.storeId);
     if (!store) {
@@ -144,10 +140,7 @@ export const getReportVerificationAlertPayload = internalQuery({
 
     const currency = store.currency || "GHS";
     const money = currencyFormatter(currency);
-    const format = (
-      field: string,
-      minor: number | undefined,
-    ): string => {
+    const format = (field: string, minor: number | undefined): string => {
       if (typeof minor !== "number") return "-";
       return field.endsWith("Minor")
         ? money.format(toDisplayAmount(minor))

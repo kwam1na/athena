@@ -64,9 +64,13 @@ import {
 
 /**
  * Stores verified per tick. Production today folds a handful of allowlisted
- * stores (single-digit); 8 covers the fleet in one tick with headroom, and a
- * larger fleet simply drains alphabetically across ticks (selection re-derives,
- * nothing is lost).
+ * stores (single-digit); 8 covers the fleet in one tick with headroom. A
+ * larger fleet rotates statelessly: the per-tick window starts at
+ * (UTC hour index mod eligible-store count) and wraps, so a fleet of N
+ * eligible stores is fully covered every ceil(N/8) hourly ticks with no
+ * stored cursor (see `listVerificationStoreCandidates`). Reseeding and
+ * malformed allowlist entries are filtered out BEFORE the window is cut, so a
+ * skipped store never burns one of the 8 slots.
  */
 export const VERIFICATION_STORES_PER_TICK = 8;
 
@@ -422,30 +426,51 @@ type StoreCandidate = {
 };
 
 export const listVerificationStoreCandidates = internalQuery({
-  args: {},
+  args: {
+    /** Tick instant — the stateless rotation cursor: the selection window
+     * starts at (UTC hour index mod eligible count), so consecutive hourly
+     * ticks walk the whole fleet with nothing stored. */
+    now: v.number(),
+  },
   handler: async (
     ctx,
+    args,
   ): Promise<{
     candidates: StoreCandidate[];
     storesSkippedReseeding: number;
+    /** Allowlist entries that are not valid store ids (malformed env text) or
+     * whose store doc no longer exists. Skipped, never fatal: one bad entry
+     * must not kill the whole tick. */
+    storesSkippedInvalid: number;
   }> => {
     // The allowlist IS the universe: a store outside it is never read at all
     // (the ticket's "distinct handling without source reads" — absence of any
     // row for it is the record). Sorted for a deterministic paging order.
     const allowed = [...readStoreAllowlist()].sort();
-    const candidates: StoreCandidate[] = [];
+    const eligible: StoreCandidate[] = [];
     let storesSkippedReseeding = 0;
+    let storesSkippedInvalid = 0;
 
-    for (const raw of allowed.slice(0, VERIFICATION_STORES_PER_TICK)) {
-      const store = await ctx.db.get("store", raw as Id<"store">);
-      if (!store) continue;
+    for (const raw of allowed) {
+      // The env value is raw operator text: normalize instead of casting, so
+      // a malformed entry is a counted skip rather than a thrown read.
+      const storeId = ctx.db.normalizeId("store", raw);
+      if (storeId === null) {
+        storesSkippedInvalid += 1;
+        continue;
+      }
+      const store = await ctx.db.get("store", storeId);
+      if (!store) {
+        storesSkippedInvalid += 1;
+        continue;
+      }
       // Reseed guard (sweeper idiom): a mid-reseed store's derived rows are
       // mid-rewrite; verifying them would report transient nonsense.
       if (store.reportingReseedStartedAt !== undefined) {
         storesSkippedReseeding += 1;
         continue;
       }
-      candidates.push({
+      eligible.push({
         storeId: store._id,
         ...(store.organizationId
           ? { organizationId: store.organizationId }
@@ -453,7 +478,23 @@ export const listVerificationStoreCandidates = internalQuery({
       });
     }
 
-    return { candidates, storesSkippedReseeding };
+    // Stateless rotation over the ELIGIBLE list (filtered first, so skips do
+    // not burn slots): the window starts at the UTC hour index mod N and
+    // wraps, taking at most VERIFICATION_STORES_PER_TICK entries. Coverage
+    // bound: every eligible store is selected at least once every ceil(N/8)
+    // hourly ticks — no store is permanently starved, and no cursor is
+    // stored (a crashed tick changes nothing; the next hour's window simply
+    // starts one step further).
+    const candidates: StoreCandidate[] = [];
+    if (eligible.length > 0) {
+      const start = Math.floor(args.now / (60 * 60 * 1000)) % eligible.length;
+      const count = Math.min(eligible.length, VERIFICATION_STORES_PER_TICK);
+      for (let index = 0; index < count; index += 1) {
+        candidates.push(eligible[(start + index) % eligible.length]!);
+      }
+    }
+
+    return { candidates, storesSkippedReseeding, storesSkippedInvalid };
   },
 });
 
@@ -800,14 +841,73 @@ export type WeeklySubjectSelection = {
   overBudget: boolean;
 };
 
+/**
+ * F1 — is the weekly projection known-stale right now?
+ *
+ * `verifyCurrentWeekWithCtx` recomputes expected totals from LIVE source rows
+ * and compares them against `reportWeekCurrent`, which is rebuilt only by the
+ * 5-minute reports sweep. A sale landing minutes before the tick is therefore
+ * visible to the verifier but not yet to the projection — a PHANTOM weekly
+ * mismatch that mints an alertable fingerprint (and fresh alert identities on
+ * recurrence). The day lane already defers on pending `reportDirtyDay` marks;
+ * this is the weekly lane's equivalent: any pending `reportDirtyWeek` mark,
+ * or any pending `reportDirtyDay` mark for a date inside the current cycle
+ * frame, means the fold has not drained yet — defer, exactly like a dirty
+ * day. Both reads are bounded `.take(1)` existence probes on indexes.
+ */
+async function hasPendingWeeklyDirtyMarks(
+  ctx: QueryCtx,
+  storeId: Id<"store">,
+  cycleFrame: { cycleStartDate: string; cycleEndDate: string } | null,
+): Promise<boolean> {
+  const weekMarks = await ctx.db
+    .query("reportDirtyWeek")
+    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+    .take(1);
+  if (weekMarks.length > 0) return true;
+  if (cycleFrame !== null) {
+    const dayMarks = await ctx.db
+      .query("reportDirtyDay")
+      .withIndex("by_storeId_operatingDate", (q) =>
+        q
+          .eq("storeId", storeId)
+          .gte("operatingDate", cycleFrame.cycleStartDate)
+          .lte("operatingDate", cycleFrame.cycleEndDate),
+      )
+      .take(1);
+    if (dayMarks.length > 0) return true;
+  }
+  return false;
+}
+
+function cycleFrameOf(
+  current: Doc<"reportWeekCurrent">,
+): { cycleStartDate: string; cycleEndDate: string } | null {
+  return "cycleStartDate" in current
+    ? {
+        cycleStartDate: current.cycleStartDate,
+        cycleEndDate: current.cycleEndDate,
+      }
+    : null;
+}
+
 export const selectWeeklySubject = internalQuery({
   args: { storeId: v.id("store"), now: v.number() },
-  handler: async (ctx, args): Promise<WeeklySubjectSelection | null> => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{
+    subject: WeeklySubjectSelection | null;
+    /** True when a weekly subject was due but the fold is still draining
+     * (pending dirty marks) — counted as weeksDeferred, mirroring the day
+     * lane's daysDeferred. */
+    deferred: boolean;
+  }> => {
     const current = await ctx.db
       .query("reportWeekCurrent")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .unique();
-    if (!current) return null;
+    if (!current) return { subject: null, deferred: false };
 
     const subjectKey =
       "cycleStartDate" in current ? current.cycleStartDate : "current";
@@ -822,7 +922,7 @@ export const selectWeeklySubject = internalQuery({
         args.now - run.verifiedAt <
         VERIFICATION_WEEK_MIN_INTERVAL_HOURS * 60 * 60 * 1000
       ) {
-        return null;
+        return { subject: null, deferred: false };
       }
       // Staleness gate: past the interval, still skip when the projection has
       // not been re-materialized since the last verified generation. An
@@ -832,8 +932,18 @@ export const selectWeeklySubject = internalQuery({
         run.verifiedCertifiedFoldRevision !== undefined &&
         run.verifiedCertifiedFoldRevision >= current.materializedAt
       ) {
-        return null;
+        return { subject: null, deferred: false };
       }
+    }
+
+    // Fold-drain guard (F1): a due subject with pending dirty marks would be
+    // verified against a projection the pipeline already knows is stale.
+    // Defer — the next tick (or the one after the 5-minute sweep drains the
+    // marks) picks it up. This is a COUNTED deferral, not a silent skip.
+    if (
+      await hasPendingWeeklyDirtyMarks(ctx, args.storeId, cycleFrameOf(current))
+    ) {
+      return { subject: null, deferred: true };
     }
 
     // Pre-flight read-budget probe (H2). The union of the seven days' payment
@@ -853,17 +963,48 @@ export const selectWeeklySubject = internalQuery({
       .take(VERIFICATION_WEEK_ALLOCATION_PROBE + 1);
 
     return {
-      subjectKey,
-      materializedAt: current.materializedAt,
-      overBudget: allocationProbe.length > VERIFICATION_WEEK_ALLOCATION_PROBE,
+      subject: {
+        subjectKey,
+        materializedAt: current.materializedAt,
+        overBudget: allocationProbe.length > VERIFICATION_WEEK_ALLOCATION_PROBE,
+      },
+      deferred: false,
     };
   },
 });
 
 export const verifyWeekSubject = internalQuery({
   args: { storeId: v.id("store") },
-  handler: async (ctx, args): Promise<VerifyCurrentWeekResult> =>
-    verifyCurrentWeekWithCtx(ctx, args.storeId),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<
+    { deferred: true } | { deferred: false; result: VerifyCurrentWeekResult }
+  > => {
+    // F1, second gate: selection ran in its OWN query execution, so a dirty
+    // mark can land between it and this one. Re-checking HERE shares a
+    // snapshot with the verification's source reads, which closes the window
+    // completely — a mark visible to this execution means the source rows it
+    // reads have moved past the projection, and verifying would compare
+    // across generations.
+    const current = await ctx.db
+      .query("reportWeekCurrent")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .unique();
+    if (
+      await hasPendingWeeklyDirtyMarks(
+        ctx,
+        args.storeId,
+        current ? cycleFrameOf(current) : null,
+      )
+    ) {
+      return { deferred: true };
+    }
+    return {
+      deferred: false,
+      result: await verifyCurrentWeekWithCtx(ctx, args.storeId),
+    };
+  },
 });
 
 // ---------------------------------------------------------------------------
@@ -1012,6 +1153,22 @@ export const recordVerificationOutcome = internalMutation({
           },
       );
 
+    // F6 — mirror the C1 carry-forward for checkedFields. On a
+    // non-confirming run that checked nothing (error/truncated/unavailable
+    // all record `checkedFields: []`) the streak's fingerprint and difference
+    // summaries survive above, so the checked list they were recorded under
+    // must survive with them: overwriting it with [] makes a delayed alert
+    // email render the same field as both "checked and wrong" (from the
+    // carried differences) and "not checked" (as the complement of an empty
+    // checked list). While the streak is live, an empty checked list from a
+    // could-not-check run keeps the last real one.
+    const checkedFields =
+      args.checkedFields.length === 0 &&
+      state.fingerprint !== null &&
+      existing !== null
+        ? (existing.checkedFields ?? args.checkedFields)
+        : args.checkedFields;
+
     const rowDoc = {
       storeId: args.storeId,
       subjectKind: args.subjectKind,
@@ -1021,7 +1178,7 @@ export const recordVerificationOutcome = internalMutation({
       unexplainedDifferences,
       // Persisted for the U5 alert email: its complement within the subject's
       // field inventory is what verification declined to check.
-      checkedFields: args.checkedFields,
+      checkedFields,
       // `undefined` on patch is an explicit erase — a cleared streak must not
       // keep a stale fingerprint or alert marker.
       unexplainedFingerprint: state.fingerprint ?? undefined,
@@ -1172,9 +1329,14 @@ export type VerificationSweepCtx = Pick<ActionCtx, "runQuery" | "runMutation">;
 export type VerificationSweepResult = {
   storesScanned: number;
   storesSkippedReseeding: number;
+  /** Allowlist entries that were not valid, existing store ids (F3). */
+  storesSkippedInvalid: number;
   daysVerified: number;
   daysDeferred: number;
   weeksVerified: number;
+  /** Weekly subjects deferred because the fold was still draining — pending
+   * reportDirtyWeek / in-frame reportDirtyDay marks (F1). */
+  weeksDeferred: number;
   subjectsErrored: number;
   /** Subjects whose run transitioned to alertable this tick (recorded even
    * while the email gate is off — the R8 record-only rollout). */
@@ -1235,17 +1397,74 @@ export async function runVerificationSweepWithCtx(
   const now = args.now ?? Date.now();
   const reVerify = isReverifyTick(now);
 
-  const { candidates, storesSkippedReseeding } = await ctx.runQuery(
-    internal.reports.verificationSweep.listVerificationStoreCandidates,
-    {},
-  );
+  // F3 — the candidates query is the tick's only uncontained stage: an
+  // unexpected throw here used to kill the whole tick with NO ledger row at
+  // all, indistinguishable from the cron never firing. Contain it, and
+  // best-effort record a FAILED system-scope row so the dead tick is visible
+  // inside its run-key window rather than absent.
+  let candidates: StoreCandidate[] = [];
+  let storesSkippedReseeding = 0;
+  let storesSkippedInvalid = 0;
+  try {
+    ({ candidates, storesSkippedReseeding, storesSkippedInvalid } =
+      await ctx.runQuery(
+        internal.reports.verificationSweep.listVerificationStoreCandidates,
+        { now },
+      ));
+  } catch (error) {
+    logSwallowed("store_candidates", error);
+    try {
+      await ctx.runMutation(
+        internal.automation.scheduledRunLedger.recordScheduledRunEvidence,
+        {
+          cronFamily: VERIFICATION_CRON_FAMILY,
+          now,
+          scope: "system",
+          visibility: "support",
+          outcome: deriveScheduledRunOutcome({
+            candidateCount: 1,
+            succeededCount: 0,
+            failedCount: 1,
+          }),
+          candidateCount: 1,
+          processedCount: 1,
+          succeededCount: 0,
+          failedCount: 1,
+          skippedCount: 0,
+          sourceSubjectType: "reportVerificationRun",
+          sampleSubjectIds: [],
+          snapshotCounts: { candidateSelectionFailed: 1 },
+        },
+      );
+    } catch (ledgerError) {
+      // Even the evidence write failed; the log line above is the trace.
+      logSwallowed("system_ledger_evidence", ledgerError);
+    }
+    return {
+      storesScanned: 0,
+      storesSkippedReseeding: 0,
+      storesSkippedInvalid: 0,
+      daysVerified: 0,
+      daysDeferred: 0,
+      weeksVerified: 0,
+      weeksDeferred: 0,
+      subjectsErrored: 1,
+      alertTransitions: 0,
+      emitsWouldFire: 0,
+      wedgeEscalations: 0,
+      weeksOverBudget: 0,
+      storesIncomplete: 0,
+    };
+  }
 
   const result: VerificationSweepResult = {
     storesScanned: candidates.length,
     storesSkippedReseeding,
+    storesSkippedInvalid,
     daysVerified: 0,
     daysDeferred: 0,
     weeksVerified: 0,
+    weeksDeferred: 0,
     subjectsErrored: 0,
     alertTransitions: 0,
     emitsWouldFire: 0,
@@ -1264,6 +1483,7 @@ export async function runVerificationSweepWithCtx(
       daysVerified: 0,
       daysDeferred: 0,
       weeksVerified: 0,
+      weeksDeferred: 0,
       subjectsErrored: 0,
       alertTransitions: 0,
       emitsWouldFire: 0,
@@ -1369,62 +1589,86 @@ export async function runVerificationSweepWithCtx(
 
     // --- Weekly lane -------------------------------------------------------
     try {
-      const weekly = await ctx.runQuery(
+      const weeklySelection = await ctx.runQuery(
         internal.reports.verificationSweep.selectWeeklySubject,
         { storeId: candidate.storeId, now },
       );
+      if (weeklySelection.deferred) {
+        // F1: the fold is still draining — verifying now would compare live
+        // source totals against a projection the pipeline already knows is
+        // stale, and mint a phantom alert. Mirrors daysDeferred.
+        result.weeksDeferred += 1;
+        storeCounts.weeksDeferred += 1;
+      }
+      const weekly = weeklySelection.subject;
       if (weekly !== null) {
         try {
           // H2 containment: over the pre-flight read budget the weekly
           // verification is NOT attempted. `truncated` is the honest record —
           // could-not-check, never alertable — where actually running it would
           // breach the per-transaction ceiling and record `error`.
-          const classification: VerificationClassification = weekly.overBudget
-            ? {
-                outcome: "truncated",
-                explained: [],
-                unexplained: [],
-                fingerprint: null,
-                alertable: false,
-                checkedFields: [],
-              }
-            : classifyWeekResult(
-                await ctx.runQuery(
-                  internal.reports.verificationSweep.verifyWeekSubject,
-                  { storeId: candidate.storeId },
-                ),
-                { storeAllowlisted: true },
-              );
-          const { explained, unexplained } =
-            summarizeClassification(classification);
-          const recorded = await ctx.runMutation(
-            internal.reports.verificationSweep.recordVerificationOutcome,
-            {
-              storeId: candidate.storeId,
-              subjectKind: "week",
-              subjectKey: weekly.subjectKey,
-              outcome: classification.outcome,
-              explained,
-              unexplained,
-              ...(classification.fingerprint !== null
-                ? { fingerprint: classification.fingerprint }
-                : {}),
-              alertable: classification.alertable,
-              checkedFields: classification.checkedFields,
-              verifiedRevision: weekly.materializedAt,
-              now,
-            },
-          );
-          if (weekly.overBudget) result.weeksOverBudget += 1;
-          result.weeksVerified += 1;
-          storeCounts.weeksVerified += 1;
-          if (recorded.shouldAlert) {
-            result.alertTransitions += 1;
-            storeCounts.alertTransitions += 1;
+          // `null` classification = the verify execution deferred (F1).
+          let classification: VerificationClassification | null;
+          if (weekly.overBudget) {
+            classification = {
+              outcome: "truncated",
+              explained: [],
+              unexplained: [],
+              fingerprint: null,
+              alertable: false,
+              checkedFields: [],
+            };
+          } else {
+            const verified = await ctx.runQuery(
+              internal.reports.verificationSweep.verifyWeekSubject,
+              { storeId: candidate.storeId },
+            );
+            if (verified.deferred) {
+              // F1, closed window: a dirty mark landed between selection and
+              // verification. The verify execution saw it in the SAME
+              // snapshot as its source reads, so nothing is recorded — defer
+              // to a later tick, exactly like the selection-time guard.
+              result.weeksDeferred += 1;
+              storeCounts.weeksDeferred += 1;
+              classification = null;
+            } else {
+              classification = classifyWeekResult(verified.result, {
+                storeAllowlisted: true,
+              });
+            }
           }
-          if (recorded.wouldEmit) {
-            result.emitsWouldFire += 1;
-            storeCounts.emitsWouldFire += 1;
+          if (classification !== null) {
+            const { explained, unexplained } =
+              summarizeClassification(classification);
+            const recorded = await ctx.runMutation(
+              internal.reports.verificationSweep.recordVerificationOutcome,
+              {
+                storeId: candidate.storeId,
+                subjectKind: "week",
+                subjectKey: weekly.subjectKey,
+                outcome: classification.outcome,
+                explained,
+                unexplained,
+                ...(classification.fingerprint !== null
+                  ? { fingerprint: classification.fingerprint }
+                  : {}),
+                alertable: classification.alertable,
+                checkedFields: classification.checkedFields,
+                verifiedRevision: weekly.materializedAt,
+                now,
+              },
+            );
+            if (weekly.overBudget) result.weeksOverBudget += 1;
+            result.weeksVerified += 1;
+            storeCounts.weeksVerified += 1;
+            if (recorded.shouldAlert) {
+              result.alertTransitions += 1;
+              storeCounts.alertTransitions += 1;
+            }
+            if (recorded.wouldEmit) {
+              result.emitsWouldFire += 1;
+              storeCounts.emitsWouldFire += 1;
+            }
           }
         } catch (error) {
           logSwallowed("week_subject", error, {
@@ -1510,7 +1754,7 @@ export async function runVerificationSweepWithCtx(
           processedCount: storeSubjects,
           succeededCount: storeCounts.daysVerified + storeCounts.weeksVerified,
           failedCount: storeCounts.subjectsErrored,
-          skippedCount: storeCounts.daysDeferred,
+          skippedCount: storeCounts.daysDeferred + storeCounts.weeksDeferred,
           sourceSubjectType: "reportVerificationRun",
           sampleSubjectIds: [candidate.storeId],
           snapshotCounts: {
@@ -1556,6 +1800,8 @@ export async function runVerificationSweepWithCtx(
           daysVerified: result.daysVerified,
           daysDeferred: result.daysDeferred,
           weeksVerified: result.weeksVerified,
+          weeksDeferred: result.weeksDeferred,
+          storesSkippedInvalid: result.storesSkippedInvalid,
           subjectsErrored: result.subjectsErrored,
           alertTransitions: result.alertTransitions,
           emitsWouldFire: result.emitsWouldFire,

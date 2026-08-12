@@ -17,10 +17,16 @@ import {
   VERIFICATION_WEEK_MIN_INTERVAL_HOURS,
   isReverifyTick,
   isVerificationAlertEmailEnabled,
+  normalizeMissingDayResult,
   runVerificationSweepWithCtx,
   shouldEscalateWedge,
   type VerificationSweepCtx,
 } from "./verificationSweep";
+import type {
+  VerifiedMetrics,
+  VerifyDayResult,
+  VerifyPaymentPosture,
+} from "./verify";
 import { normalizeReseedCursor, reseedStep, type ReseedCursor } from "./reseed";
 import { foldAndReplaceDay } from "./sweeper";
 import {
@@ -951,6 +957,140 @@ describe("verification sweep — weekly lane", () => {
     expect(verified).toBe(Math.floor((12 * HOUR) / WEEK_INTERVAL_MS));
   });
 
+  it("F1 — defers the weekly subject while a reportDirtyWeek mark is draining", async () => {
+    const seeded = await t.run(async (ctx: MutationCtx) => seedStore(ctx));
+    allowlist([seeded.storeId]);
+    await seedWeekCurrent(seeded.storeId, NOW - 10);
+    // A sale landed and marked the week dirty; the 5-minute reports sweep has
+    // not rebuilt the projection yet. Verifying NOW would compare live source
+    // totals against a projection the pipeline already knows is stale.
+    const markId = await t.run(async (ctx: MutationCtx) =>
+      ctx.db.insert("reportDirtyWeek", {
+        storeId: seeded.storeId,
+        reason: "day_folded",
+        markedAt: NOW - 1,
+      }),
+    );
+
+    const deferredTick = await runVerificationSweepWithCtx(sweepCtx(t), {
+      now: NOW,
+    });
+    expect(deferredTick.weeksVerified).toBe(0);
+    expect(deferredTick.weeksDeferred).toBe(1);
+    // No run row, no fingerprint, no phantom alert.
+    expect(await runRow(t, seeded.storeId, "week", "current")).toBeNull();
+    expect(deferredTick.alertTransitions).toBe(0);
+
+    // The deferral lands in the store ledger row's skipped count.
+    const ledger = await t.run(async (ctx: MutationCtx) =>
+      ctx.db.query("scheduledRunLedger").withIndex("by_runKey").take(50),
+    );
+    const storeRow = ledger.find(
+      (row) =>
+        row.cronFamily === "report-verification-sweep" && row.scope === "store",
+    )!;
+    expect(storeRow.skippedCount).toBeGreaterThanOrEqual(1);
+    expect(storeRow.snapshotCounts?.weeksDeferred).toBe(1);
+
+    // Mark drained (the sweep rebuilt the projection): the next tick verifies.
+    await t.run(async (ctx: MutationCtx) => {
+      await ctx.db.delete("reportDirtyWeek", markId);
+    });
+    const drainedTick = await runVerificationSweepWithCtx(sweepCtx(t), {
+      now: NOW + 1,
+    });
+    expect(drainedTick.weeksDeferred).toBe(0);
+    expect(drainedTick.weeksVerified).toBe(1);
+    expect(await runRow(t, seeded.storeId, "week", "current")).not.toBeNull();
+  });
+
+  it("F1 — a dirty DAY mark defers the week only when its date falls inside the cycle frame", async () => {
+    const seeded = await t.run(async (ctx: MutationCtx) => seedStore(ctx));
+    allowlist([seeded.storeId]);
+    const metrics = {
+      grossSalesMinor: 0,
+      netSalesMinor: 0,
+      refundsMinor: 0,
+      unitsSold: 0,
+      unitsReturned: 0,
+      uncostedRevenueMinor: 0,
+      grossProfitMinor: 0,
+      paymentsCollectedMinor: 0,
+      paymentsRefundedMinor: 0,
+      paymentAllocatedMinor: 0,
+      paymentUnsettledMinor: 0,
+      paymentAllocationCoverage: "complete" as const,
+      paymentAllocationOmittedMinor: 0,
+      paymentHasInvalidAllocation: false,
+    };
+    await t.run(async (ctx: MutationCtx) => {
+      await ctx.db.insert("reportWeekCurrent", {
+        storeId: seeded.storeId,
+        availability: "available",
+        cycleStartDate: "2026-03-09",
+        cycleEndDate: "2026-03-15",
+        currency: "GHS",
+        metricVersion: 1,
+        materializedAt: NOW - 10,
+        included: metrics,
+        outsideSchedule: metrics,
+        scheduleLineage: [],
+        completeness: { reason: "complete", complete: true },
+      });
+      // OUTSIDE the frame: last week's late fact does not stale THIS week.
+      await ctx.db.insert("reportDirtyDay", {
+        storeId: seeded.storeId,
+        operatingDate: "2026-03-01",
+        reason: "late_fact",
+        markedAt: NOW - 1,
+      });
+    });
+
+    const outside = await t.query(
+      internal.reports.verificationSweep.selectWeeklySubject,
+      { storeId: seeded.storeId, now: NOW },
+    );
+    expect(outside.deferred).toBe(false);
+    expect(outside.subject?.subjectKey).toBe("2026-03-09");
+
+    // INSIDE the frame: the week's own day has not refolded yet — defer.
+    await t.run(async (ctx: MutationCtx) => {
+      await ctx.db.insert("reportDirtyDay", {
+        storeId: seeded.storeId,
+        operatingDate: "2026-03-10",
+        reason: "late_fact",
+        markedAt: NOW - 1,
+      });
+    });
+    const inside = await t.query(
+      internal.reports.verificationSweep.selectWeeklySubject,
+      { storeId: seeded.storeId, now: NOW },
+    );
+    expect(inside.deferred).toBe(true);
+    expect(inside.subject).toBeNull();
+  });
+
+  it("F1 — verifyWeekSubject re-checks inside its own snapshot and defers", async () => {
+    // Selection and verification are separate query executions, so a mark
+    // can land between them; the verify execution's own re-check shares a
+    // snapshot with its source reads and closes that window.
+    const seeded = await t.run(async (ctx: MutationCtx) => {
+      const store = await seedStore(ctx);
+      await ctx.db.insert("reportDirtyWeek", {
+        storeId: store.storeId,
+        reason: "day_folded",
+        markedAt: NOW - 1,
+      });
+      return store;
+    });
+
+    const verified = await t.query(
+      internal.reports.verificationSweep.verifyWeekSubject,
+      { storeId: seeded.storeId },
+    );
+    expect(verified).toEqual({ deferred: true });
+  });
+
   it("records `truncated` without running a weekly verification over the read budget (H2)", async () => {
     const seeded = await t.run(async (ctx: MutationCtx) => {
       const store = await seedStore(ctx);
@@ -1408,6 +1548,372 @@ describe("verification sweep — void attribution, stalls, and honest evidence",
     expect(row).not.toBeNull();
     expect(row?.unexplainedDifferences).toEqual([]);
     expect(["clean", "partial"]).toContain(row?.outcome);
+  });
+});
+
+describe("verification sweep — never-folded day with real activity (F5)", () => {
+  let t: Harness;
+  beforeEach(() => {
+    t = convexTest(schema, modules);
+  });
+
+  it("surfaces a never-folded day with real source activity as an alertable mismatch", async () => {
+    // THE headline discrepancy class this sweep exists for: the pipeline
+    // silently never folded a day on which real sales happened. The verifier
+    // recomputes non-zero expected totals from the live source rows, the
+    // missing-day probe selects the date, and normalizeMissingDayResult must
+    // leave the differences alone (only a QUIET missing day normalizes).
+    const seeded = await t.run(async (ctx: MutationCtx) => {
+      const store = await seedStore(ctx);
+      // Anchor: a folded, clean adjacent day. DAY2 (one date behind the
+      // anchor, inside VERIFICATION_MISSING_DAY_LOOKBACK) never folded.
+      await insertReportDay(ctx, store.storeId, DAY1);
+      await seedPosSale(ctx, store, {
+        completedAt: Date.parse(`${DAY2}T10:00:00Z`),
+        lines: [{ quantity: 2, unitPrice: 5_000 }],
+        tax: 500,
+        transactionNumber: "T-NEVER-FOLDED",
+      });
+      return store;
+    });
+    allowlist([seeded.storeId]);
+
+    const result = await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });
+
+    const row = await runRow(t, seeded.storeId, "day", DAY2);
+    expect(row).not.toBeNull();
+    expect(row?.outcome).toBe("mismatch");
+    expect(row?.unexplainedDifferences.length).toBeGreaterThan(0);
+    // The recomputed activity is what surfaced — the sales metrics differ.
+    expect(
+      row?.unexplainedDifferences.map((difference) => difference.field),
+    ).toContain("netSalesMinor");
+    // Full alert transition: fingerprint minted and marked alerted.
+    expect(row?.streakCount).toBe(1);
+    expect(row?.unexplainedFingerprint).toBeTruthy();
+    expect(row?.lastAlertedFingerprint).toBe(row?.unexplainedFingerprint);
+    expect(result.alertTransitions).toBe(1);
+    // The clean anchor day and quiet probe dates did not alert.
+    expect((await runRow(t, seeded.storeId, "day", DAY1))?.outcome).toBe(
+      "clean",
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // normalizeMissingDayResult unit coverage — all branches, mutation-proof:
+  // an always-clean mutant (unconditionally wiping differences / forcing
+  // matches) fails the untouched-branch assertions below and the integration
+  // test above.
+  // -------------------------------------------------------------------------
+
+  function metrics(overrides: Partial<VerifiedMetrics> = {}): VerifiedMetrics {
+    return {
+      grossSalesMinor: 0,
+      netSalesMinor: 0,
+      refundsMinor: 0,
+      unitsSold: 0,
+      unitsReturned: 0,
+      paymentsCollectedMinor: 0,
+      paymentsRefundedMinor: 0,
+      paymentAllocatedMinor: 0,
+      ...overrides,
+    };
+  }
+
+  function posture(): VerifyPaymentPosture {
+    return {
+      outcome: "complete",
+      reason: "complete",
+      eligibleMinor: 0,
+      coveredMinor: 0,
+      omittedMinor: 0,
+      unsettledMinor: null,
+      allocationCoverage: "unknown",
+      hasInvalidAllocation: false,
+      reversalLookback: { outcome: "complete", reason: "complete" },
+    };
+  }
+
+  const POSTURE_DIFFERENCE = {
+    field: "paymentAllocationCoverage" as const,
+    expected: "complete",
+    actual: "unknown",
+  };
+
+  function missingDayResult(
+    overrides: Partial<VerifyDayResult> = {},
+  ): VerifyDayResult {
+    return {
+      operatingDate: DAY2,
+      matches: false,
+      differences: [],
+      factCount: 0,
+      dayStatus: "missing",
+      expected: metrics(),
+      paymentPosture: posture(),
+      paymentDifferences: [POSTURE_DIFFERENCE],
+      unverifiedFields: [],
+      truncated: false,
+      ...overrides,
+    };
+  }
+
+  it("normalizeMissingDayResult leaves a non-missing day untouched", () => {
+    const result = missingDayResult({ dayStatus: "reconciled" });
+    expect(normalizeMissingDayResult(result)).toBe(result);
+  });
+
+  it("normalizeMissingDayResult leaves a missing day with metric differences untouched", () => {
+    const result = missingDayResult({
+      differences: [{ field: "netSalesMinor", expected: 10_500, actual: 0 }],
+    });
+    const normalized = normalizeMissingDayResult(result);
+    expect(normalized).toBe(result);
+    expect(normalized.matches).toBe(false);
+    expect(normalized.differences).toHaveLength(1);
+  });
+
+  it("normalizeMissingDayResult leaves a missing day with recomputed activity untouched", () => {
+    // No metric difference rows YET (e.g. only payment posture differs), but
+    // the recomputed expectation is non-zero: real activity with no fold is
+    // the discrepancy class, never vacuously clean.
+    const result = missingDayResult({
+      expected: metrics({ paymentsCollectedMinor: 10_500 }),
+    });
+    const normalized = normalizeMissingDayResult(result);
+    expect(normalized).toBe(result);
+    expect(normalized.matches).toBe(false);
+    expect(normalized.paymentDifferences).toEqual([POSTURE_DIFFERENCE]);
+  });
+
+  it("normalizeMissingDayResult normalizes only the genuinely quiet missing day", () => {
+    const quiet = missingDayResult();
+    const normalized = normalizeMissingDayResult(quiet);
+    // The vacuous posture comparison against no-document defaults is dropped
+    // and the day reads clean...
+    expect(normalized.paymentDifferences).toEqual([]);
+    expect(normalized.matches).toBe(true);
+    // ...unless the scan was truncated, in which case nothing is confirmed.
+    const truncated = normalizeMissingDayResult(
+      missingDayResult({ truncated: true }),
+    );
+    expect(truncated.paymentDifferences).toEqual([]);
+    expect(truncated.matches).toBe(false);
+  });
+});
+
+describe("verification sweep — store paging and allowlist hygiene (F2/F3)", () => {
+  let t: Harness;
+  beforeEach(() => {
+    t = convexTest(schema, modules);
+  });
+
+  /** N minimal stores under one org (seedStore's slugs are fixed, so the
+   * fleet is built by hand). Insertion order != id order; the query sorts. */
+  async function seedFleet(count: number): Promise<Array<Id<"store">>> {
+    return t.run(async (ctx: MutationCtx) => {
+      const userId = await ctx.db.insert("athenaUser", {
+        email: "fleet@example.test",
+      });
+      const organizationId = await ctx.db.insert("organization", {
+        createdByUserId: userId,
+        name: "Fleet",
+        slug: "fleet",
+      });
+      const ids: Array<Id<"store">> = [];
+      for (let index = 0; index < count; index += 1) {
+        ids.push(
+          await ctx.db.insert("store", {
+            createdByUserId: userId,
+            currency: "GHS",
+            name: `Fleet ${index}`,
+            organizationId,
+            slug: `fleet-${index}`,
+          }),
+        );
+      }
+      return ids;
+    });
+  }
+
+  it("F2 — the per-tick window rotates hourly and covers a 9-store fleet in 2 ticks", async () => {
+    const fleet = await seedFleet(9);
+    allowlist(fleet);
+    const HOUR = 60 * 60 * 1000;
+
+    const first = await t.query(
+      internal.reports.verificationSweep.listVerificationStoreCandidates,
+      { now: NOW },
+    );
+    const second = await t.query(
+      internal.reports.verificationSweep.listVerificationStoreCandidates,
+      { now: NOW + HOUR },
+    );
+    expect(first.candidates).toHaveLength(8);
+    expect(second.candidates).toHaveLength(8);
+    // The windows actually MOVED between ticks...
+    expect(second.candidates.map((c) => String(c.storeId))).not.toEqual(
+      first.candidates.map((c) => String(c.storeId)),
+    );
+    // ...and two consecutive ticks cover the whole fleet (ceil(9/8) = 2):
+    // under the old slice(0, 8) the 9th store was starved forever.
+    const union = new Set(
+      [...first.candidates, ...second.candidates].map((c) => String(c.storeId)),
+    );
+    expect(union.size).toBe(9);
+
+    // Deterministic within an hour window: a retry re-derives the same set.
+    const retry = await t.query(
+      internal.reports.verificationSweep.listVerificationStoreCandidates,
+      { now: NOW + 1000 },
+    );
+    expect(retry.candidates.map((c) => String(c.storeId))).toEqual(
+      first.candidates.map((c) => String(c.storeId)),
+    );
+  });
+
+  it("F2 — the window is cut AFTER filtering, so a reseeding store does not burn a slot", async () => {
+    const fleet = await seedFleet(9);
+    allowlist(fleet);
+    await t.run(async (ctx: MutationCtx) => {
+      await ctx.db.patch("store", fleet[0]!, {
+        reportingReseedStartedAt: NOW,
+      });
+    });
+
+    const selected = await t.query(
+      internal.reports.verificationSweep.listVerificationStoreCandidates,
+      { now: NOW },
+    );
+    expect(selected.storesSkippedReseeding).toBe(1);
+    // All 8 remaining eligible stores fill the tick — the skip cost nothing.
+    expect(selected.candidates).toHaveLength(8);
+    expect(selected.candidates.map((c) => String(c.storeId))).not.toContain(
+      String(fleet[0]!),
+    );
+  });
+
+  it("F3 — a malformed allowlist entry is a counted skip, never a dead tick", async () => {
+    const seeded = await seedStoreWithDay(t, MISMATCH);
+    process.env[REPORTS_SWEEP_STORE_ALLOWLIST_ENV] =
+      `not-a-store-id,${String(seeded.storeId)}`;
+
+    const result = await runVerificationSweepWithCtx(sweepCtx(t), {
+      now: NOW,
+    });
+
+    expect(result.storesSkippedInvalid).toBe(1);
+    expect(result.storesScanned).toBe(1);
+    // The real store's work still happened.
+    expect((await runRow(t, seeded.storeId, "day", DAY1))?.outcome).toBe(
+      "mismatch",
+    );
+  });
+
+  it("F3 — a dead candidates query still records a FAILED system ledger row", async () => {
+    await seedStoreWithDay(t, MISMATCH);
+
+    const result = await runVerificationSweepWithCtx(
+      // The candidates query is the only one whose args are exactly { now }.
+      sweepCtx(t, {
+        failQueryWhen: (args) =>
+          "now" in args && !("storeId" in args) && !("reVerify" in args),
+      }),
+      { now: NOW },
+    );
+
+    expect(result.storesScanned).toBe(0);
+    expect(result.subjectsErrored).toBe(1);
+
+    // The tick is VISIBLE in its run-key window as a failure — not absent.
+    const rows = await t.run(async (ctx: MutationCtx) =>
+      ctx.db.query("scheduledRunLedger").withIndex("by_runKey").take(50),
+    );
+    const family = rows.filter(
+      (row) => row.cronFamily === "report-verification-sweep",
+    );
+    expect(family).toHaveLength(1);
+    const systemRow = family[0]!;
+    expect(systemRow.scope).toBe("system");
+    expect(systemRow.outcome).toBe("failed");
+    expect(systemRow.failedCount).toBe(1);
+    expect(systemRow.snapshotCounts?.candidateSelectionFailed).toBe(1);
+  });
+});
+
+describe("verification sweep — alert payload integrity (F6/F7)", () => {
+  let t: Harness;
+  beforeEach(() => {
+    t = convexTest(schema, modules);
+  });
+
+  it("F6 — a could-not-check run carries checkedFields forward with the streak", async () => {
+    const seeded = await seedStoreWithDay(t, MISMATCH);
+    await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });
+    const broken = await runRow(t, seeded.storeId, "day", DAY1);
+    expect(broken?.checkedFields?.length).toBeGreaterThan(0);
+
+    // An `error` run records checkedFields [] from the classifier; while the
+    // streak's fingerprint is carried forward, the checked list it was
+    // recorded under must be carried too — otherwise a delayed alert email
+    // renders the same field as both "checked and wrong" and "not checked".
+    await patchDay(t, seeded.storeId, DAY1, { certifiedFoldRevision: 2 });
+    await runVerificationSweepWithCtx(
+      sweepCtx(t, { failQueryWhen: (args) => args.operatingDate === DAY1 }),
+      { now: NOW + 1 },
+    );
+
+    const carried = await runRow(t, seeded.storeId, "day", DAY1);
+    expect(carried?.outcome).toBe("error");
+    expect(carried?.unexplainedFingerprint).toBe(
+      broken?.unexplainedFingerprint,
+    );
+    expect(carried?.checkedFields).toEqual(broken?.checkedFields);
+    // The invariant the email needs: every carried difference field is in the
+    // carried checked list.
+    for (const difference of carried!.unexplainedDifferences) {
+      expect(carried!.checkedFields).toContain(difference.field);
+    }
+  });
+
+  it("F7 — a superseded alertSeq suppresses the delayed intent; the current one renders", async () => {
+    const seeded = await seedStoreWithDay(t, MISMATCH);
+    await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });
+    const row = (await runRow(t, seeded.storeId, "day", DAY1))!;
+    expect(row.alertSeq).toBe(1);
+    const base = {
+      storeId: seeded.storeId,
+      subjectKind: "day" as const,
+      subjectKey: DAY1,
+      fingerprint: row.unexplainedFingerprint!,
+      reArmEpoch: row.reArmEpoch,
+    };
+
+    // The intent minted with the row's current emission renders.
+    const current = await t.query(
+      internal.operations.reportVerificationAlertEmail
+        .getReportVerificationAlertPayload,
+      { ...base, alertSeq: row.alertSeq },
+    );
+    expect(current).not.toBeNull();
+
+    // An A -> B -> A oscillation leaves fingerprint AND epoch matching the
+    // FIRST A-intent; only alertSeq distinguishes it. A delayed dispatch of
+    // that stale intent must suppress, or the operator is double-sent.
+    const stale = await t.query(
+      internal.operations.reportVerificationAlertEmail
+        .getReportVerificationAlertPayload,
+      { ...base, alertSeq: row.alertSeq! - 1 },
+    );
+    expect(stale).toBeNull();
+
+    // Legacy intents carry no alertSeq: absent means unknown, never suppress.
+    const legacy = await t.query(
+      internal.operations.reportVerificationAlertEmail
+        .getReportVerificationAlertPayload,
+      base,
+    );
+    expect(legacy).not.toBeNull();
   });
 });
 

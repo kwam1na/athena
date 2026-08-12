@@ -259,6 +259,26 @@ const WEEK_CONSISTENCY_FIELDS = [
 ] as const;
 
 /**
+ * Every field a DAY verification run can make a claim about — the composed
+ * union of the metric and payment-posture inventories above. Exported (this
+ * module is pure and import-safe) so consumers that render the complement of
+ * `checkedFields` (the U5 alert email's "not checked" section) derive it from
+ * the same source of truth the classifier checks against, instead of
+ * hand-copying a list that silently drifts when a field is added or renamed.
+ */
+export const DAY_FIELD_INVENTORY: readonly string[] = [
+  ...DAY_METRIC_FIELDS,
+  ...PAYMENT_POSTURE_FIELDS,
+];
+
+/** Every field a WEEK verification run can make a claim about: the day
+ * inventory plus the weekly consistency lanes. */
+export const WEEK_FIELD_INVENTORY: readonly string[] = [
+  ...DAY_FIELD_INVENTORY,
+  ...WEEK_CONSISTENCY_FIELDS,
+];
+
+/**
  * Fields whose source-side expectation is a documented blind spot rather than
  * an independent recomputation. `unitsReturned` is the only one that can ever
  * SURFACE as a difference (POS line refunds are zero on both sides).

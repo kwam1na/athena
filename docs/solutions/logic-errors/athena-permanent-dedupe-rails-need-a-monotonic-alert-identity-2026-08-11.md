@@ -20,7 +20,7 @@ tags:
   - fingerprint
   - streaks
   - test-blind-spot
-delivery_diff_fingerprint: cc51d147b73bd4ba45f029dd7815015cf40a1eaf383073827af3bf4e0948a9ac
+delivery_diff_fingerprint: 755ebf4c7e5f8a576f3f4794f71cb95b17a494870494aec06a0b80b0546a0449
 ---
 
 # Permanent-dedupe rails need a monotonic alert identity

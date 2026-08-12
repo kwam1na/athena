@@ -6,6 +6,8 @@ import type {
   VerifiedMetrics,
 } from "./verify";
 import {
+  DAY_FIELD_INVENTORY,
+  WEEK_FIELD_INVENTORY,
   classifyDayResult,
   classifyWeekResult,
   fingerprintDifferences,
@@ -123,6 +125,24 @@ describe("classifyDayResult", () => {
     expect(first.unexplained).toHaveLength(1);
     expect(first.fingerprint).toBeTypeOf("string");
     expect(first.fingerprint).toBe(second.fingerprint);
+  });
+
+  it("F4 — the exported inventories are exactly what a fully-checked run checks", () => {
+    // The alert email renders "not checked" as the complement of a run's
+    // `checkedFields` within these inventories. If the inventory and the
+    // classifier's field universe ever diverge (a field added or renamed in
+    // one place only), that section lies. A fully-verified clean run checks
+    // the WHOLE universe, so equality here is the tether.
+    const day = classifyDayResult(makeDayResult());
+    expect([...day.checkedFields].sort()).toEqual(
+      [...DAY_FIELD_INVENTORY].sort(),
+    );
+    const week = classifyWeekResult(makeVerifiedWeek(), {
+      storeAllowlisted: true,
+    });
+    expect([...week.checkedFields].sort()).toEqual(
+      [...WEEK_FIELD_INVENTORY].sort(),
+    );
   });
 
   it("produces different fingerprints for different deltas on the same field", () => {
