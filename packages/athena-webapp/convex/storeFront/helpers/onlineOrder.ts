@@ -254,6 +254,10 @@ export async function createOrderFromCheckoutSession(
     externalTransactionId:
       args.externalTransactionId ?? session.externalTransactionId?.toString(),
     hasVerifiedPayment: session.hasVerifiedPayment,
+    itemCount: serverPricedItems.reduce(
+      (total, item) => total + item.quantity,
+      0,
+    ),
     orderNumber: generateOrderNumber(),
     paymentDue,
     paymentMethod: args.paymentMethod,

@@ -2,7 +2,7 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 
 import { EmptyState } from "@/components/states/empty/empty-state";
 import { FadeIn } from "@/components/common/FadeIn";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { getOrigin } from "@/lib/navigationUtils";
 import {
@@ -10,6 +10,10 @@ import {
   type ReportOverviewData,
 } from "~/shared/reportsContract";
 import { ReportPeriodMetrics } from "./ReportPeriodMetrics";
+import {
+  ReportSegmentedTabsList,
+  ReportSegmentedTabsTrigger,
+} from "./ReportSegmentedTabs";
 import { ReportFreshness } from "./ReportFreshness";
 import { ReportTrendChart } from "./ReportTrendChart";
 import { ReportTrustStrip } from "./ReportTrustStrip";
@@ -144,22 +148,16 @@ export function ReportsOverviewView({
               }
               value={selectedWindow}
             >
-              <TabsList
-                aria-label="Report period"
-                className="h-auto flex-wrap justify-start gap-1 border border-border bg-surface-raised p-1 text-muted-foreground shadow-surface"
-                size="sm"
-              >
+              <ReportSegmentedTabsList aria-label="Report period">
                 {REPORT_OVERVIEW_WINDOWS.map((window) => (
-                  <TabsTrigger
-                    className="min-h-8 px-3 data-[state=active]:bg-primary-soft data-[state=active]:text-primary data-[state=active]:shadow-none"
+                  <ReportSegmentedTabsTrigger
                     key={window}
-                    size="sm"
                     value={window}
                   >
                     {REPORT_OVERVIEW_WINDOW_LABELS[window]}
-                  </TabsTrigger>
+                  </ReportSegmentedTabsTrigger>
                 ))}
-              </TabsList>
+              </ReportSegmentedTabsList>
             </Tabs>
 
             <ReportFreshness

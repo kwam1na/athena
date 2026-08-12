@@ -30,12 +30,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import {
   findScrollableAncestor,
@@ -60,6 +55,10 @@ import {
   formatReportMoney,
   formatUnits,
 } from "./reportFormat";
+import {
+  ReportSegmentedTabsList,
+  ReportSegmentedTabsTrigger,
+} from "./ReportSegmentedTabs";
 import {
   useReportsSharedDemoMode,
   useSharedDemoLiveReportsDay,
@@ -795,27 +794,21 @@ export function ReportUnitsMovedChartSheet({
             }
             value={activeTab}
           >
-            <TabsList
-              aria-label="Item movement view"
-              className="h-auto flex-wrap justify-start gap-1 border border-border bg-surface-raised p-1 text-muted-foreground shadow-surface"
-              size="sm"
-            >
-              <TabsTrigger
-                className="h-11 min-h-8 px-3 data-[state=active]:bg-primary-soft data-[state=active]:text-primary data-[state=active]:shadow-none sm:h-8"
-                size="sm"
+            <ReportSegmentedTabsList aria-label="Item movement view">
+              <ReportSegmentedTabsTrigger
+                className="h-11 sm:h-8"
                 value="top"
               >
                 Top movers
-              </TabsTrigger>
-              <TabsTrigger
-                className="h-11 min-h-8 px-3 data-[state=active]:bg-primary-soft data-[state=active]:text-primary data-[state=active]:shadow-none sm:h-8"
+              </ReportSegmentedTabsTrigger>
+              <ReportSegmentedTabsTrigger
+                className="h-11 sm:h-8"
                 ref={granularTabRef}
-                size="sm"
                 value="granular"
               >
                 All items
-              </TabsTrigger>
-            </TabsList>
+              </ReportSegmentedTabsTrigger>
+            </ReportSegmentedTabsList>
 
             {/* Lifecycle / count message slot. */}
             {isPending ? (

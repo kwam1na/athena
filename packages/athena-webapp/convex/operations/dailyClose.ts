@@ -69,6 +69,7 @@ import {
   normalizeCurrencyCode,
   type NewReportFact,
 } from "../../shared/reportsContract";
+import { getOrderAmount } from "../inventory/utils";
 
 export { buildAdjustmentReportTotals, listAppliedTransactionAdjustmentsForDay };
 
@@ -87,6 +88,7 @@ const ACTIVE_OVERSIZED_REPAIR_STATUSES = [
 const ACTIVE_REGISTER_STATUSES = ["open", "active", "closing"] as const;
 const REVIEW_ONLY_REGISTER_CLOSEOUT_STATUSES = ["closeout_rejected"] as const;
 const OPEN_POS_SESSION_STATUSES = ["active", "held"] as const;
+const COMPLETED_ONLINE_ORDER_STATUSES = ["delivered", "picked-up"] as const;
 const DAILY_CLOSE_BLOCKER_CATEGORY_PRECEDENCE: Record<string, number> = {
   approval: 0,
   register_session: 10,
@@ -1739,6 +1741,115 @@ async function listTransactionsForDay(
   });
 }
 
+async function listCompletedOnlineOrdersForDay(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    endAt: number;
+    startAt: number;
+    storeId: Id<"store">;
+  },
+): Promise<DailyCloseSourceRead<Doc<"onlineOrder">>> {
+  const range = { startAt: args.startAt, endAt: args.endAt };
+  const pages = await Promise.all(
+    COMPLETED_ONLINE_ORDER_STATUSES.map((status) =>
+      ctx.db
+        .query("onlineOrder")
+        .withIndex("by_storeId_status_completedAt", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("status", status)
+            .gte("completedAt", args.startAt)
+            .lt("completedAt", args.endAt),
+        )
+        .take(DAILY_CLOSE_QUERY_LIMIT + 1),
+    ),
+  );
+  const matchingRows = pages
+    .flat()
+    .sort((left, right) => (left.completedAt ?? 0) - (right.completedAt ?? 0));
+  const rows = matchingRows.slice(0, DAILY_CLOSE_QUERY_LIMIT);
+
+  return {
+    rows,
+    completeness: sourceCompletenessEntry({
+      source: "online_order",
+      complete: matchingRows.length <= DAILY_CLOSE_QUERY_LIMIT,
+      readMode: "by_storeId_status_completedAt",
+      recordCount: rows.length,
+      limit: DAILY_CLOSE_QUERY_LIMIT,
+      range,
+      reason: "online_order_source_cap_reached",
+      statuses: [...COMPLETED_ONLINE_ORDER_STATUSES],
+    }),
+  };
+}
+
+async function buildCompletedOnlineOrderTotals(
+  ctx: Pick<QueryCtx, "db">,
+  orders: Array<Doc<"onlineOrder">>,
+) {
+  const totalsByOrderId = new Map<
+    string,
+    { itemCount: number; total: number }
+  >();
+  let sourceItemCount = 0;
+  let sourceCapReached = false;
+
+  for (const order of orders) {
+    if (
+      typeof order.paymentDue === "number" &&
+      typeof order.itemCount === "number"
+    ) {
+      totalsByOrderId.set(String(order._id), {
+        itemCount: order.itemCount,
+        total: order.paymentDue,
+      });
+      continue;
+    }
+
+    const remainingBudget = Math.max(
+      0,
+      DAILY_CLOSE_QUERY_LIMIT - sourceItemCount,
+    );
+    const inlineItems = order.items ?? [];
+    const itemProbe =
+      inlineItems.length > 0
+        ? inlineItems
+        : await ctx.db
+            .query("onlineOrderItem")
+            .withIndex("by_orderId", (q) => q.eq("orderId", order._id))
+            .take(remainingBudget + 1);
+    if (itemProbe.length > remainingBudget) {
+      sourceCapReached = true;
+      break;
+    }
+
+    const items = itemProbe.slice(0, remainingBudget);
+    sourceItemCount += items.length;
+    totalsByOrderId.set(String(order._id), {
+      itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
+      total: getOrderAmount({
+        items,
+        discount: order.discount,
+        deliveryFee: order.deliveryFee,
+        subtotal: order.amount,
+      }),
+    });
+  }
+
+  return {
+    totalsByOrderId,
+    completeness: sourceCompletenessEntry({
+      source: "online_order_item",
+      complete: !sourceCapReached,
+      readMode: "by_orderId",
+      recordCount: sourceItemCount,
+      limit: DAILY_CLOSE_QUERY_LIMIT,
+      reason: "online_order_item_source_cap_reached",
+    }),
+  };
+}
+
 async function listExpensesForDay(
   ctx: Pick<QueryCtx, "db">,
   args: {
@@ -2676,6 +2787,7 @@ export async function buildDailyCloseSnapshotWithCtx(
     openWorkItemRead,
     activeOversizedRepairRead,
     completedTransactionRead,
+    completedOnlineOrderRead,
     appliedTransactionAdjustmentRead,
     voidedTransactionRead,
     expenseTransactionRead,
@@ -2696,6 +2808,10 @@ export async function buildDailyCloseSnapshotWithCtx(
       status: "completed",
       storeId: args.storeId,
     }),
+    listCompletedOnlineOrdersForDay(ctx, {
+      ...range,
+      storeId: args.storeId,
+    }),
     readAppliedTransactionAdjustmentsForDay(ctx, {
       ...range,
       storeId: args.storeId,
@@ -2710,6 +2826,11 @@ export async function buildDailyCloseSnapshotWithCtx(
     getPriorCompletedDailyClose(ctx, args),
   ]);
   const completedTransactions = completedTransactionRead.rows;
+  const completedOnlineOrders = completedOnlineOrderRead.rows;
+  const completedOnlineOrderTotals = await buildCompletedOnlineOrderTotals(
+    ctx,
+    completedOnlineOrders,
+  );
   const appliedTransactionAdjustments = appliedTransactionAdjustmentRead.rows;
   const voidedTransactions = voidedTransactionRead.rows;
   const expenseTransactions = expenseTransactionRead.rows;
@@ -2751,6 +2872,8 @@ export async function buildDailyCloseSnapshotWithCtx(
     openWorkItemRead.completeness,
     activeOversizedRepairRead.completeness,
     completedTransactionRead.completeness,
+    completedOnlineOrderRead.completeness,
+    completedOnlineOrderTotals.completeness,
     appliedTransactionAdjustmentRead.completeness,
     voidedTransactionRead.completeness,
     expenseTransactionRead.completeness,
@@ -3298,6 +3421,37 @@ export async function buildDailyCloseSnapshotWithCtx(
     });
   });
 
+  completedOnlineOrders.forEach((order) => {
+    const totals = completedOnlineOrderTotals.totalsByOrderId.get(
+      String(order._id),
+    );
+    if (!totals) return;
+
+    readyItems.push({
+      key: `online_order:${order._id}:completed`,
+      severity: "ready",
+      category: "sale",
+      title: "Completed online order",
+      message: "Completed online order is included in the end of day review.",
+      subject: {
+        type: "online_order",
+        id: order._id,
+        label: order.orderNumber,
+      },
+      link: {
+        label: "View order",
+        params: { orderSlug: order._id },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug",
+      },
+      metadata: {
+        order: order.orderNumber,
+        total: totals.total,
+        completedAt: order.completedAt,
+        itemCount: totals.itemCount,
+      },
+    });
+  });
+
   appliedTransactionAdjustments.forEach((adjustment) => {
     const originalTotal =
       typeof adjustment.originalTotal === "number"
@@ -3467,10 +3621,15 @@ export async function buildDailyCloseSnapshotWithCtx(
     (sum, transaction) => sum + transactionCashDelta(transaction),
     0,
   );
-  const salesTotal = completedTransactions.reduce(
-    (sum, transaction) => sum + transaction.total,
-    0,
-  );
+  const salesTotal =
+    completedTransactions.reduce(
+      (sum, transaction) => sum + transaction.total,
+      0,
+    ) +
+    Array.from(completedOnlineOrderTotals.totalsByOrderId.values()).reduce(
+      (sum, order) => sum + order.total,
+      0,
+    );
   const adjustmentReportTotals = buildAdjustmentReportTotals({
     appliedAdjustments: appliedTransactionAdjustments,
     completedTransactions,
@@ -3530,7 +3689,8 @@ export async function buildDailyCloseSnapshotWithCtx(
       Boolean(session.variance),
     ).length,
     salesTotal,
-    transactionCount: completedTransactions.length,
+    transactionCount:
+      completedTransactions.length + completedOnlineOrders.length,
     voidedTransactionCount: voidedTransactions.length,
     paymentTotals: buildPaymentTotals(completedTransactions),
   };
