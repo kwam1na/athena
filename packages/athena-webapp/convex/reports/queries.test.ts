@@ -3334,6 +3334,16 @@ describe("reports module public surface", () => {
       "skuMovementRange.runMovementBatch",
       "skuMovementRange.runMovementWorker",
       "sweeper.sweep",
+      // The verification sweep (plan 2026-08-10-001): scheduled entry plus its
+      // bounded per-subject queries and run-row mutations, all internal.
+      "verificationSweep.gatherDaySubject",
+      "verificationSweep.listVerificationStoreCandidates",
+      "verificationSweep.recordStoreTickHealth",
+      "verificationSweep.recordVerificationOutcome",
+      "verificationSweep.runVerificationSweep",
+      "verificationSweep.selectVerificationDaySubjects",
+      "verificationSweep.selectWeeklySubject",
+      "verificationSweep.verifyWeekSubject",
       "verify.verifyCurrentWeekAgainstSources",
       "verify.verifyDayAgainstSources",
       "verify.verifyStoreSummary",
