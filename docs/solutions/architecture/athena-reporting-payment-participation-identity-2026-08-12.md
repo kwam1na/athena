@@ -19,7 +19,7 @@ tags:
   - participation-identity
   - reseed
   - projections
-delivery_diff_fingerprint: 8cfd216b9e8c98379cfdc9b38cf96b9568df21efcca5bbfb2e33d07b56d8d982
+delivery_diff_fingerprint: 532fb5dab81aa0a2f22555bd3633cd49751e721f64d4aab89fa458d31736cdb6
 ---
 
 # Athena Reporting Counts Tender Use by Participation Identity, Not by Allocation
