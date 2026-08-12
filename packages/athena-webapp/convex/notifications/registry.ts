@@ -12,6 +12,7 @@ import DailyManagerReport from "../emails/DailyManagerReport";
 import { WeeklyManagerReport } from "../emails/WeeklyManagerReport";
 import { PosTerminalHealthAlert } from "../emails/PosTerminalHealthAlert";
 import { RegisterCloseoutVarianceAlert } from "../emails/RegisterCloseoutVarianceAlert";
+import { ReportVerificationAlert } from "../emails/ReportVerificationAlert";
 
 export type NotificationCategory =
   | "cash_controls"
@@ -81,6 +82,19 @@ type DailyManagerReportPayload = {
 
 type WeeklyManagerReportPayload = {
   acceptedWeekId: Id<"reportWeekAccepted">;
+};
+
+// Refs only. `fingerprint` identifies the unexplained difference set,
+// `reArmEpoch` the run row's re-arm generation, and `alertSeq` the subject's
+// monotonic alert count. All three are dedupe components; the first two are
+// re-checked against the run row at send time.
+type ReportVerificationDiscrepancyPayload = {
+  storeId: Id<"store">;
+  subjectKind: "day" | "week";
+  subjectKey: string;
+  fingerprint: string;
+  reArmEpoch: number;
+  alertSeq?: number;
 };
 
 const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
@@ -184,6 +198,69 @@ const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
       return {
         subject: `${report.storeName} register closed - ${report.registerLabel} - ${report.operatingDate}`,
         html: await render(RegisterCloseoutVarianceAlert(report)),
+      };
+    },
+  },
+  "reports.verification_discrepancy": {
+    // The scheduled verifier disagreeing with the reporting pipeline is a
+    // platform-health signal, not a cash-controls or EOD one — same audience
+    // and same "the system may be lying to you" reading as terminal health,
+    // so it reuses `system_health` rather than minting a category (which
+    // would touch the TS union, the schema validator, and subscription
+    // seeding, and split an audience that wants both signals).
+    category: "system_health",
+    channels: ["email"],
+    dedupeKey: (payload) => {
+      const p = payload as ReportVerificationDiscrepancyPayload;
+      // The rail's dedupe is a PERMANENT unique lookup with no expiry, so the
+      // key must distinguish every emission the streak logic decides to make.
+      // Store + subject + fingerprint alone would silently swallow a
+      // recurring identical discrepancy after an intervening clean run — the
+      // re-arm epoch (bumped on each clean-run re-arm) is what makes that
+      // second, genuinely new alert reach anyone. `alertSeq` closes the
+      // remaining hole: a fingerprint that oscillates A -> B -> A without any
+      // intervening clean run leaves the epoch untouched and would rebuild a
+      // byte-identical key, which this rail's permanent unique lookup drops.
+      return joinKeyComponents([
+        "reports.verification_discrepancy",
+        String(p.storeId),
+        p.subjectKind,
+        p.subjectKey,
+        p.fingerprint,
+        String(p.reArmEpoch),
+        // `?? 0` because the run row's column is optional: rows written before
+        // it landed have no honest value, and a missing component must not
+        // stringify to "undefined" inside a permanent unique key.
+        String(p.alertSeq ?? 0),
+      ]);
+    },
+    prepareEmail: async (ctx, payload) => {
+      const p = payload as ReportVerificationDiscrepancyPayload;
+      const report = await ctx.runQuery(
+        internal.operations.reportVerificationAlertEmail
+          .getReportVerificationAlertPayload,
+        {
+          storeId: p.storeId,
+          subjectKind: p.subjectKind,
+          subjectKey: p.subjectKey,
+          fingerprint: p.fingerprint,
+          reArmEpoch: p.reArmEpoch,
+          // Forwarded so the payload query can refuse an intent whose emission
+          // was superseded by a later alertSeq on the same fingerprint/epoch
+          // (an A -> B -> A oscillation dispatched late would double-send).
+          // Absent on legacy intents; the query treats absent as unknown.
+          ...(p.alertSeq !== undefined ? { alertSeq: p.alertSeq } : {}),
+        },
+      );
+      // Null means the run row no longer carries this discrepancy — the
+      // subject was re-verified clean, or its unexplained set changed and a
+      // different intent owns it. Suppress instead of alerting on a state
+      // that has already resolved. A THROW from the query is a transient read
+      // fault and stays retryable.
+      if (!report) return null;
+      return {
+        subject: `${report.storeName} report verification - ${report.subjectKindLabel.toLowerCase()} ${report.subjectLabel}`,
+        html: await render(ReportVerificationAlert(report)),
       };
     },
   },

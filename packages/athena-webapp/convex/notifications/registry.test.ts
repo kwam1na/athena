@@ -6,6 +6,7 @@ import { approvalRequestPendingPreviewProps } from "../emails/ApprovalRequestPen
 import { dailyManagerReportPreviewProps } from "../emails/DailyManagerReport";
 import { posTerminalHealthAlertPreviewProps } from "../emails/PosTerminalHealthAlert";
 import { registerCloseoutVarianceAlertPreviewProps } from "../emails/RegisterCloseoutVarianceAlert";
+import { reportVerificationAlertPreviewProps } from "../emails/ReportVerificationAlert";
 import { weeklyManagerReportPreviewProps } from "../emails/WeeklyManagerReport";
 import {
   findNotificationKind,
@@ -27,12 +28,15 @@ const OBSERVED_AT = Date.parse("2026-07-29T12:00:00Z");
 // without standing up the whole rail.
 function stubCtx(responses: unknown[]) {
   const calls: string[] = [];
+  const callArgs: Array<Record<string, unknown>> = [];
   let index = 0;
   return {
     calls,
+    callArgs,
     ctx: {
-      runQuery: async (reference: unknown) => {
+      runQuery: async (reference: unknown, args: unknown) => {
         calls.push(getFunctionName(reference as never));
+        callArgs.push((args ?? {}) as Record<string, unknown>);
         const response = responses[index] ?? responses[responses.length - 1];
         index += 1;
         return response;
@@ -46,9 +50,9 @@ async function prepare(
   payload: NotificationPayload,
   responses: unknown[],
 ) {
-  const { ctx, calls } = stubCtx(responses);
+  const { ctx, calls, callArgs } = stubCtx(responses);
   const prepared = await getNotificationKind(kind).prepareEmail(ctx, payload);
-  return { prepared, calls };
+  return { prepared, calls, callArgs };
 }
 
 const terminalHealthReport = {
@@ -71,7 +75,7 @@ const dailyReport = {
 };
 
 describe("registry catalog", () => {
-  it("registers exactly the six shipped kinds with their categories and channels", () => {
+  it("registers exactly the seven shipped kinds with their categories and channels", () => {
     expect(listNotificationKinds().sort()).toEqual([
       "approvals.request_created",
       "eod.daily_manager_report",
@@ -79,7 +83,13 @@ describe("registry catalog", () => {
       "pos.terminal_health",
       "register.closeout_match",
       "register.closeout_variance",
+      "reports.verification_discrepancy",
     ]);
+    // Reuses system_health rather than minting a category: no TS union,
+    // schema validator, or subscription-seeding change ships with this kind.
+    expect(
+      getNotificationKind("reports.verification_discrepancy").category,
+    ).toBe("system_health");
     expect(getNotificationKind("approvals.request_created").category).toBe(
       "approvals",
     );
@@ -136,9 +146,7 @@ describe("weekly manager report preparation", () => {
     expect(calls).toEqual([
       "operations/weeklyManagerReportEmail:getAcceptedWeeklyManagerReportPayload",
     ]);
-    expect(prepared?.subject).toBe(
-      "Wigclub weekly report - Aug 3–8, 2026",
-    );
+    expect(prepared?.subject).toBe("Wigclub weekly report - Aug 3–8, 2026");
     expect(prepared?.html).toContain("Top items by units sold");
   });
 });
@@ -166,8 +174,15 @@ describe("weekly corrected report preview", () => {
       weeklyReportCorrectionPreview as unknown as {
         _handler: (
           ctx: unknown,
-          args: { acceptedWeekId: Id<"reportWeekAccepted">; candidateFingerprint: string },
-        ) => Promise<{ subject: string; html: string; contentDigest: string } | null>;
+          args: {
+            acceptedWeekId: Id<"reportWeekAccepted">;
+            candidateFingerprint: string;
+          },
+        ) => Promise<{
+          subject: string;
+          html: string;
+          contentDigest: string;
+        } | null>;
       }
     )._handler(ctx, {
       acceptedWeekId,
@@ -198,7 +213,9 @@ describe("registry subjects", () => {
       [terminalHealthReport],
     );
 
-    expect(prepared?.subject).toBe("Accra terminal needs attention - Front Desk");
+    expect(prepared?.subject).toBe(
+      "Accra terminal needs attention - Front Desk",
+    );
     expect(prepared?.html).toContain("Front Desk");
     expect(calls).toEqual([
       "operations/posTerminalHealthAlertEmail:getPosTerminalHealthAlertPayload",
@@ -212,7 +229,9 @@ describe("registry subjects", () => {
       [registerReport],
     );
 
-    expect(prepared?.subject).toBe("Accra register variance - Register 2 - 2026-07-28");
+    expect(prepared?.subject).toBe(
+      "Accra register variance - Register 2 - 2026-07-28",
+    );
     expect(calls).toEqual([
       "operations/registerCloseoutVarianceEmail:getRegisterCloseoutVarianceAlertPayload",
     ]);
@@ -228,7 +247,9 @@ describe("registry subjects", () => {
       [registerReport],
     );
 
-    expect(prepared?.subject).toBe("Accra register closed - Register 2 - 2026-07-28");
+    expect(prepared?.subject).toBe(
+      "Accra register closed - Register 2 - 2026-07-28",
+    );
     expect(calls).toEqual([
       "operations/registerCloseoutVarianceEmail:getRegisterCloseoutMatchReportPayload",
     ]);
@@ -323,7 +344,9 @@ describe("registry subjects", () => {
       [dailyReport],
     );
 
-    expect(prepared?.subject).toBe("Action required: Accra EOD Review - 2026-07-28");
+    expect(prepared?.subject).toBe(
+      "Action required: Accra EOD Review - 2026-07-28",
+    );
   });
 });
 
@@ -449,6 +472,88 @@ describe("eod.daily_manager_report payload branching", () => {
   });
 });
 
+describe("report verification discrepancy preparation", () => {
+  const payload = {
+    storeId: STORE_ID,
+    subjectKind: "day" as const,
+    subjectKey: "2026-08-08",
+    fingerprint: "a1b2c3d4e5f60718",
+    reArmEpoch: 2,
+  };
+
+  it("renders checked-and-wrong and not-checked from a fresh run-row read", async () => {
+    const { prepared, calls } = await prepare(
+      "reports.verification_discrepancy",
+      payload,
+      [reportVerificationAlertPreviewProps],
+    );
+
+    expect(calls).toEqual([
+      "operations/reportVerificationAlertEmail:getReportVerificationAlertPayload",
+    ]);
+    expect(prepared?.subject).toBe(
+      "Wigclub report verification - day Saturday, August 8",
+    );
+    expect(prepared?.html).toContain("Checked and wrong");
+    expect(prepared?.html).toContain("Net sales");
+    // R4: the withheld fields are rendered, and rendered separately.
+    expect(prepared?.html).toContain("Not checked");
+    expect(prepared?.html).toContain("Payments refunded");
+  });
+
+  it("suppresses when the subject resolved between emit and send", async () => {
+    // The run row was re-verified clean (or moved to a different unexplained
+    // set), so this alert is no longer true: null suppresses, and dispatch
+    // records the operational event for the dropped alert.
+    const { prepared } = await prepare(
+      "reports.verification_discrepancy",
+      payload,
+      [null],
+    );
+
+    expect(prepared).toBeNull();
+  });
+
+  it("forwards the intent's alertSeq to the payload query, omitting it on legacy intents", async () => {
+    // F7: the payload query re-checks alertSeq against the run row so a
+    // DELAYED dispatch of an oscillated fingerprint (A -> B -> A: fingerprint
+    // and epoch both match the first A-intent) cannot double-send. The
+    // registry has to actually hand the intent's counter over for that check
+    // to exist.
+    const withSeq = await prepare(
+      "reports.verification_discrepancy",
+      { ...payload, alertSeq: 3 },
+      [reportVerificationAlertPreviewProps],
+    );
+    expect(withSeq.callArgs[0]?.alertSeq).toBe(3);
+    expect(withSeq.callArgs[0]?.fingerprint).toBe(payload.fingerprint);
+
+    // Legacy intents minted before the column carry none: absent, not 0 —
+    // the query treats absent as unknown and never suppresses on it.
+    const legacy = await prepare("reports.verification_discrepancy", payload, [
+      reportVerificationAlertPreviewProps,
+    ]);
+    expect("alertSeq" in (legacy.callArgs[0] ?? {})).toBe(false);
+  });
+
+  it("propagates a transient payload read fault instead of suppressing", async () => {
+    // Collapsing a read fault into null would permanently silence a real
+    // discrepancy — the rail must retry instead.
+    const ctx = {
+      runQuery: async () => {
+        throw new Error("Report verification alert store was not found.");
+      },
+    } as never;
+
+    await expect(
+      getNotificationKind("reports.verification_discrepancy").prepareEmail(
+        ctx,
+        payload,
+      ),
+    ).rejects.toThrow("Report verification alert store was not found.");
+  });
+});
+
 describe("registry dedupe key recipes", () => {
   function dedupeKey(kind: string, payload: NotificationPayload) {
     return getNotificationKind(kind).dedupeKey(payload);
@@ -508,22 +613,119 @@ describe("registry dedupe key recipes", () => {
     const base = { storeId: STORE_ID, operatingDate: "2026-07-28" };
     const prefix = `eod.daily_manager_report:${STORE_ID}:2026-07-28`;
 
-    expect(dedupeKey("eod.daily_manager_report", { ...base, status: "applied" }))
-      .toBe(`${prefix}:applied`);
+    expect(
+      dedupeKey("eod.daily_manager_report", { ...base, status: "applied" }),
+    ).toBe(`${prefix}:applied`);
     expect(
       dedupeKey("eod.daily_manager_report", { ...base, status: "prepared" }),
     ).toBe(`${prefix}:prepared`);
-    expect(dedupeKey("eod.daily_manager_report", { ...base, status: "skipped" }))
-      .toBe(`${prefix}:action_required`);
-    expect(dedupeKey("eod.daily_manager_report", { ...base, status: "failed" }))
-      .toBe(`${prefix}:action_required`);
+    expect(
+      dedupeKey("eod.daily_manager_report", { ...base, status: "skipped" }),
+    ).toBe(`${prefix}:action_required`);
+    expect(
+      dedupeKey("eod.daily_manager_report", { ...base, status: "failed" }),
+    ).toBe(`${prefix}:action_required`);
   });
 
   it("keys the weekly report by its immutable accepted baseline", () => {
     const acceptedWeekId = "accepted-week-1" as Id<"reportWeekAccepted">;
+    expect(dedupeKey("eod.weekly_manager_report", { acceptedWeekId })).toBe(
+      `eod.weekly_manager_report:${acceptedWeekId}`,
+    );
+  });
+
+  it("keys a verification discrepancy by store, subject, fingerprint, re-arm epoch, and alert sequence", () => {
     expect(
-      dedupeKey("eod.weekly_manager_report", { acceptedWeekId }),
-    ).toBe(`eod.weekly_manager_report:${acceptedWeekId}`);
+      dedupeKey("reports.verification_discrepancy", {
+        storeId: STORE_ID,
+        subjectKind: "day",
+        subjectKey: "2026-08-08",
+        fingerprint: "a1b2c3d4e5f60718",
+        reArmEpoch: 0,
+        alertSeq: 1,
+      }),
+    ).toBe(
+      `reports.verification_discrepancy:${STORE_ID}:day:2026-08-08:a1b2c3d4e5f60718:0:1`,
+    );
+  });
+
+  it("mints a distinct key when a fingerprint oscillates back with no clean run", () => {
+    // A -> B -> A leaves reArmEpoch untouched, so without the monotonic
+    // alertSeq the third alert would rebuild the first one's key byte for byte
+    // and the rail's permanent unique lookup would drop it.
+    const base = {
+      storeId: STORE_ID,
+      subjectKind: "day" as const,
+      subjectKey: "2026-08-08",
+      reArmEpoch: 0,
+    };
+    const first = dedupeKey("reports.verification_discrepancy", {
+      ...base,
+      fingerprint: "aaaa1111aaaa1111",
+      alertSeq: 1,
+    });
+    const returned = dedupeKey("reports.verification_discrepancy", {
+      ...base,
+      fingerprint: "aaaa1111aaaa1111",
+      alertSeq: 3,
+    });
+    expect(returned).not.toBe(first);
+  });
+
+  it("re-alerts the same fingerprint after a clean run re-armed the subject", () => {
+    // The rail's dedupe is a permanent unique lookup: without the epoch this
+    // second, genuinely new discrepancy would be swallowed forever.
+    const base = {
+      storeId: STORE_ID,
+      subjectKind: "day" as const,
+      subjectKey: "2026-08-08",
+      fingerprint: "a1b2c3d4e5f60718",
+      alertSeq: 1,
+    };
+    expect(
+      dedupeKey("reports.verification_discrepancy", {
+        ...base,
+        reArmEpoch: 0,
+      }),
+    ).not.toBe(
+      dedupeKey("reports.verification_discrepancy", {
+        ...base,
+        reArmEpoch: 1,
+      }),
+    );
+
+    // ...while the same fingerprint within one streak stays a single alert.
+    expect(
+      dedupeKey("reports.verification_discrepancy", {
+        ...base,
+        reArmEpoch: 1,
+      }),
+    ).toBe(
+      dedupeKey("reports.verification_discrepancy", {
+        ...base,
+        reArmEpoch: 1,
+      }),
+    );
+  });
+
+  it("keeps day and week subjects with the same key distinct", () => {
+    const base = {
+      storeId: STORE_ID,
+      subjectKey: "2026-08-03",
+      fingerprint: "a1b2c3d4e5f60718",
+      reArmEpoch: 0,
+    };
+    expect(
+      dedupeKey("reports.verification_discrepancy", {
+        ...base,
+        subjectKind: "day",
+      }),
+    ).not.toBe(
+      dedupeKey("reports.verification_discrepancy", {
+        ...base,
+        subjectKind: "week",
+      }),
+    );
   });
 
   it("collapses skipped and failed to one key per store-day but keeps applied and prepared distinct", () => {

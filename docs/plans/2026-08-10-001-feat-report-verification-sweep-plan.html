@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan: Scheduled report verification sweep with discrepancy alerting</title>
+<style>
+  :root { --ink:#1f2430; --muted:#5b6472; --line:#e3e6ea; --accent:#245a8d; --bg:#ffffff; --panel:#f6f7f9; }
+  body { margin:0; font:16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color:var(--ink); background:var(--bg); }
+  main { max-width: 880px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+  header h1 { font-size:1.6rem; margin:0 0 .35rem; }
+  .meta { color:var(--muted); font-size:.9rem; }
+  .meta code { background:var(--panel); padding:.1rem .35rem; border-radius:4px; }
+  nav { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding: .9rem 1.2rem; margin:1.5rem 0; }
+  nav a { color:var(--accent); text-decoration:none; margin-right:1rem; font-size:.92rem; }
+  h2 { font-size:1.2rem; border-bottom:1px solid var(--line); padding-bottom:.3rem; margin-top:2.2rem; }
+  h3 { font-size:1.02rem; margin-top:1.5rem; }
+  code { font-size:.88em; }
+  table { border-collapse:collapse; width:100%; font-size:.92rem; margin:.8rem 0; }
+  th, td { border:1px solid var(--line); padding:.45rem .6rem; text-align:left; vertical-align:top; }
+  th { background:var(--panel); }
+  .unit { border:1px solid var(--line); border-radius:8px; padding:1rem 1.2rem; margin:1rem 0; }
+  .unit h3 { margin-top:0; }
+  .tag { display:inline-block; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:.05rem .6rem; font-size:.78rem; color:var(--muted); margin-right:.4rem; }
+  .callout { border-left:4px solid var(--accent); background:var(--panel); padding:.7rem 1rem; border-radius:0 8px 8px 0; margin:1rem 0; }
+  ul { padding-left:1.3rem; }
+  li { margin:.25rem 0; }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>feat: Scheduled report verification sweep with discrepancy alerting</h1>
+  <p class="meta">Created 2026-08-10 &middot; type <code>feat</code> &middot; status <code>active</code> &middot; source: <code>docs/plans/2026-08-10-001-feat-report-verification-sweep-plan.md</code></p>
+</header>
+
+<nav>
+  <a href="#summary">Summary</a>
+  <a href="#scope">Scope</a>
+  <a href="#decisions">Decisions</a>
+  <a href="#units">Implementation Units</a>
+  <a href="#risks">Risks</a>
+  <a href="#rollout">Rollout</a>
+</nav>
+
+<section id="summary">
+  <h2>Summary</h2>
+  <p>Wire the existing independent reporting verifier (<code>packages/athena-webapp/convex/reports/verify.ts</code>) into the automation stack: a cron-driven per-store sweep verifying settled day folds and the current week against source domains, durable run/outcome recording (new verification-run table + scheduled-run ledger), and a new email notification kind that fires only on <em>unexplained</em> discrepancies. Email is gated off at launch (record-only rollout).</p>
+  <div class="callout">The verifier is a 2,000-line second opinion that has already caught two real defects invisible to a green test suite &mdash; but nothing triggers it today, and its <code>unverifiedFields</code> output has no consumer. This plan is that consumer.</div>
+</section>
+
+<section id="scope">
+  <h2>Scope</h2>
+  <h3>Requirements (abridged)</h3>
+  <ul>
+    <li>R1 Scheduled per-store day + week verification, no operator involvement</li>
+    <li>R2 Every run recorded durably &mdash; including clean runs, errors, skips</li>
+    <li>R3 New notification kind emails on unexplained discrepancy; clean runs silent</li>
+    <li>R4 &ldquo;Checked and wrong&rdquo; vs &ldquo;could not check&rdquo; never conflated (unverified / truncated / unavailable are not discrepancies)</li>
+    <li>R5 Void-convention and blind-spot differences recorded, never emailed</li>
+    <li>R6 Alert once per streak; re-arm on clean; changed fingerprint re-alerts once</li>
+    <li>R7 A wedged verifier escalates via operational event &mdash; never silent</li>
+    <li>R8 Email gated off at deploy; enabling is config, not code</li>
+  </ul>
+  <h3>Out of scope</h3>
+  <ul>
+    <li>Auto-repair / auto-refold; verify.ts blind-spot or void-sign fixes (deferred follow-up)</li>
+    <li>Statistical anomaly detection; new channels (in-app / WhatsApp); deep-history backfill</li>
+  </ul>
+</section>
+
+<section id="decisions">
+  <h2>Key Technical Decisions</h2>
+  <table>
+    <tr><th>Decision</th><th>Rationale</th></tr>
+    <tr><td>Separate verification-run table; no fields on <code>reportDay</code></td><td>Never a second writer on a sweeper-owned projection; avoids fold-version rollout family</td></tr>
+    <tr><td>Action orchestrator with per-subject containment</td><td>One subject&rsquo;s byte-ceiling blowup records as <code>error</code> instead of wedging the tick</td></tr>
+    <tr><td>Revision-driven selection (<code>certifiedFoldRevision</code> &gt; last verified)</td><td>Clean days not re-verified every tick; refold and repair naturally re-enqueue</td></tr>
+    <tr><td>Pure classification layer between verify and alerting</td><td>Outcomes <code>clean | partial | mismatch | truncated | unavailable | error</code>; only mismatches with unexplained differences alert</td></tr>
+    <tr><td>Streak + fingerprint alert state with explicit re-arm; run row carries a re-arm epoch and a monotonic <code>alertSeq</code> (never reset), both in the dedupeKey</td><td>The rail&rsquo;s dedupe is a permanent unique lookup &mdash; the epoch lets a recurring discrepancy alert again after a clean run; <code>alertSeq</code> keeps an oscillating fingerprint (A&rarr;B&rarr;A, epoch frozen) from rebuilding a byte-identical key</td></tr>
+    <tr><td>Revision-gating accepts a scoped blindness to post-fold source drift, mitigated by a low-frequency age-based re-verify of recent settled days</td><td>Bounds detection latency for source writes that land without a dirty mark, without re-paying full verification every tick</td></tr>
+    <tr><td>Email gate is config (env), not deploy</td><td>Record-only rollout per automation observe-first convention</td></tr>
+    <tr><td><code>scheduledRunLedger</code> over <code>automationFoundation</code></td><td>Alert-only sweep needs no per-store policy modes</td></tr>
+  </table>
+</section>
+
+<section id="units">
+  <h2>Implementation Units</h2>
+
+  <div class="unit">
+    <h3>U1. Verification-run table and outcome model</h3>
+    <span class="tag">R2 R6</span><span class="tag">deps: none</span>
+    <p>New <code>schemas/reports/verificationRuns.ts</code>: one upserted row per subject (store &times; day / store &times; week) carrying outcome, explained/unexplained summary, fingerprint, streak, last-alerted fingerprint, re-arm epoch, monotonic <code>alertSeq</code>, verified revision (week subjects store <code>materializedAt</code> here, a documented reuse).</p>
+  </div>
+
+  <div class="unit">
+    <h3>U2. Result classification layer (pure)</h3>
+    <span class="tag">R4 R5 R6</span><span class="tag">deps: none</span>
+    <p><code>reports/verificationClassify.ts</code> &mdash; pure, no Convex imports (mirrors <code>foldDay.ts</code>). Maps raw verify results to outcomes (weekly <code>incomplete</code> classifies as <code>partial</code>; all six weekly <code>unavailable</code> reasons have enumerated dispositions), partitions differences into explained (void convention, blind spots) vs unexplained, computes fingerprints, owns streak transition rules. Table-driven tests cover every transition including &ldquo;partial does not clear a mismatch streak unless the differing field was checked clean.&rdquo;</p>
+  </div>
+
+  <div class="unit">
+    <h3>U3. Verification sweep orchestrator</h3>
+    <span class="tag">R1 R2 R6 R7</span><span class="tag">deps: U1, U2</span>
+    <p><code>reports/verificationSweep.ts</code> &mdash; action pages allowlisted stores; selects settled days (not open, not dirty-marked, not mid-reseed, revision newer than last verified; a legacy day with no <code>certifiedFoldRevision</code> is verified once and re-selected on first stamp); a slow age-based re-verify lane for recent settled days; weekly check bounded by a 6-hour minimum interval plus the <code>materializedAt</code> advancement gate (the time gate is load-bearing &mdash; active stores re-materialize every ~5 minutes) with a pre-flight allocation probe recording <code>truncated</code> over budget (per-date split: follow-up V26-1193); a forward stall probe surfacing fully stalled folds; a capped error slot preventing head-of-line blocking; bounded budgets with sizing arithmetic in comments; per-subject error containment; wedge escalation on a re-alert ladder (3 / 24 / 168 ticks, then weekly) via operational events; emits the U5 kind only when the email gate is on. Patterns: <code>owedDailyCloseSweep.ts</code>, <code>reports/sweeper.ts</code>.</p>
+  </div>
+
+  <div class="unit">
+    <h3>U4. Cron registration + scheduled-run ledger enrollment</h3>
+    <span class="tag">R1 R2</span><span class="tag">deps: U3</span>
+    <p>STAGE-branched cron in <code>crons.ts</code> (prod hourly at :47, clear of the :00/:30 wall-clock jobs); ledger enrollment touches <em>two</em> places &mdash; the interval-map entry (the type derives via <code>keyof typeof</code>) and the hand-written evidence-args literal union &mdash; kept in step with the registered cadence. The sweep records system + per-store rows via <code>ctx.runMutation</code> in its own try/catch (the best-effort helper takes a MutationCtx, unreachable from the action). Source-text assertions in <code>crons.test.ts</code>.</p>
+  </div>
+
+  <div class="unit">
+    <h3>U5. Notification kind, payload query, email template</h3>
+    <span class="tag">R3 R4 R8</span><span class="tag">deps: U1, U2; emitted by U3</span>
+    <p>Registry entry (structural dedupe over kind + store + subject + fingerprint + re-arm epoch + <code>alertSeq</code>), fresh-read payload query <code>operations/reportVerificationAlertEmail.ts</code> reading the run row (not live re-verification), template <code>emails/ReportVerificationAlert.tsx</code> rendering unexplained differences as &ldquo;checked and wrong&rdquo; and unverified fields separately as &ldquo;not checked.&rdquo; Null-suppress if the subject resolved before send; throw on transient failure. Gated off at deploy.</p>
+  </div>
+</section>
+
+<section id="risks">
+  <h2>Risks</h2>
+  <table>
+    <tr><th>Risk</th><th>Mitigation</th></tr>
+    <tr><td>Verify read weight breaches execution ceilings</td><td>Per-subject containment; conservative recorded budgets; <code>error</code> + wedge escalation, never silent re-breach</td></tr>
+    <tr><td>False positives burn alert credibility</td><td>Record-only rollout; voids / blind spots / truncation never email</td></tr>
+    <tr><td>Sweeps surface truncation in unsized read ceilings</td><td>Expected: <code>truncated</code> is a distinct non-alert outcome; sizing deferred follow-up</td></tr>
+    <tr><td>Alert flap under repeated refolds</td><td>Revision-driven selection; fingerprint + explicit re-arm</td></tr>
+    <tr><td>Cron window math drifts from interval</td><td>Single-source constant; ledger test asserts agreement</td></tr>
+  </table>
+</section>
+
+<section id="rollout">
+  <h2>Rollout &amp; Delivery</h2>
+  <ul>
+    <li>Deploy record-only &rarr; observe run rows/ledger &rarr; size budgets &rarr; enable email gate (config) &rarr; announce subscription category if new</li>
+    <li>Delivery gate: <code>docs/solutions/</code> note + <code>docs/reports/*.html</code> landed-change report; commit &rarr; fingerprint &rarr; amend ordering</li>
+    <li>Production dry run is a delivery step &mdash; both prior verifier defects were invisible to a green suite</li>
+  </ul>
+</section>
+
+</main>
+</body>
+</html>

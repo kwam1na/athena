@@ -6,6 +6,7 @@ import {
   deriveScheduledRunOutcome,
   recordScheduledRunEvidenceWithCtx,
   resolveScheduledWindow,
+  SCHEDULED_CRON_INTERVAL_MINUTES,
 } from "./scheduledRunLedger";
 
 function createLedgerCtx(existing?: Record<string, unknown>) {
@@ -71,6 +72,45 @@ describe("scheduled run ledger", () => {
         storeId: "store-1",
       }),
     ).toBe("scheduled-run:release-checkout-items:1200000:store:store-1");
+  });
+
+  it("derives hourly windows and partitions for the report verification sweep", () => {
+    expect(SCHEDULED_CRON_INTERVAL_MINUTES["report-verification-sweep"]).toBe(
+      60,
+    );
+
+    // 1970-01-01T02:34:56Z folds down to the 02:00 hour boundary.
+    const now = 2 * 3_600_000 + 34 * 60_000 + 56_000;
+    const window = resolveScheduledWindow({
+      cronFamily: "report-verification-sweep",
+      now,
+    });
+
+    expect(window).toEqual({
+      scheduledWindowStartAt: 7_200_000,
+      scheduledWindowEndAt: 10_800_000,
+    });
+
+    // The sweep writes one system-scope summary plus per-store rows; both must
+    // stay stable within the hour so a re-run patches instead of duplicating.
+    expect(
+      buildScheduledRunKey({
+        cronFamily: "report-verification-sweep",
+        scheduledWindowStartAt: window.scheduledWindowStartAt,
+        scope: "system",
+      }),
+    ).toBe("scheduled-run:report-verification-sweep:7200000:system");
+    expect(
+      buildScheduledRunKey({
+        cronFamily: "report-verification-sweep",
+        scheduledWindowStartAt: resolveScheduledWindow({
+          cronFamily: "report-verification-sweep",
+          now: now + 60_000,
+        }).scheduledWindowStartAt,
+        scope: "store",
+        storeId: "store-1",
+      }),
+    ).toBe("scheduled-run:report-verification-sweep:7200000:store:store-1");
   });
 
   it("derives meaningful no-candidate and partial-failure outcomes", () => {

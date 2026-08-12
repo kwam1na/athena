@@ -66,6 +66,7 @@ import type * as emails_PosTerminalHealthAlert from "../emails/PosTerminalHealth
 import type * as emails_RegisterCloseoutMatchReportPreview from "../emails/RegisterCloseoutMatchReportPreview.js";
 import type * as emails_RegisterCloseoutVarianceAlert from "../emails/RegisterCloseoutVarianceAlert.js";
 import type * as emails_RegisterCloseoutVarianceAlertPreview from "../emails/RegisterCloseoutVarianceAlertPreview.js";
+import type * as emails_ReportVerificationAlert from "../emails/ReportVerificationAlert.js";
 import type * as emails_VerificationCode from "../emails/VerificationCode.js";
 import type * as emails_WalkthroughRequestNotification from "../emails/WalkthroughRequestNotification.js";
 import type * as emails_WeeklyManagerReport from "../emails/WeeklyManagerReport.js";
@@ -262,6 +263,7 @@ import type * as operations_registerSessionAuthorityRevision from "../operations
 import type * as operations_registerSessionCloseoutGate from "../operations/registerSessionCloseoutGate.js";
 import type * as operations_registerSessionTracing from "../operations/registerSessionTracing.js";
 import type * as operations_registerSessions from "../operations/registerSessions.js";
+import type * as operations_reportVerificationAlertEmail from "../operations/reportVerificationAlertEmail.js";
 import type * as operations_serviceIntake from "../operations/serviceIntake.js";
 import type * as operations_skuActivity from "../operations/skuActivity.js";
 import type * as operations_staffCredentials from "../operations/staffCredentials.js";
@@ -390,6 +392,8 @@ import type * as reports_skuMixRange from "../reports/skuMixRange.js";
 import type * as reports_skuMovementRange from "../reports/skuMovementRange.js";
 import type * as reports_sweeper from "../reports/sweeper.js";
 import type * as reports_transactionCounts from "../reports/transactionCounts.js";
+import type * as reports_verificationClassify from "../reports/verificationClassify.js";
+import type * as reports_verificationSweep from "../reports/verificationSweep.js";
 import type * as reports_verify from "../reports/verify.js";
 import type * as reports_weekly from "../reports/weekly.js";
 import type * as reports_weeklyAcceptedRepair from "../reports/weeklyAcceptedRepair.js";
@@ -497,6 +501,7 @@ import type * as schemas_remoteAssist_remoteAssistSession from "../schemas/remot
 import type * as schemas_reports_derived from "../schemas/reports/derived.js";
 import type * as schemas_reports_facts from "../schemas/reports/facts.js";
 import type * as schemas_reports_index from "../schemas/reports/index.js";
+import type * as schemas_reports_verificationRuns from "../schemas/reports/verificationRuns.js";
 import type * as schemas_serviceOps_index from "../schemas/serviceOps/index.js";
 import type * as schemas_serviceOps_serviceAppointment from "../schemas/serviceOps/serviceAppointment.js";
 import type * as schemas_serviceOps_serviceCase from "../schemas/serviceOps/serviceCase.js";
@@ -673,6 +678,7 @@ declare const fullApi: ApiFromModules<{
   "emails/RegisterCloseoutMatchReportPreview": typeof emails_RegisterCloseoutMatchReportPreview;
   "emails/RegisterCloseoutVarianceAlert": typeof emails_RegisterCloseoutVarianceAlert;
   "emails/RegisterCloseoutVarianceAlertPreview": typeof emails_RegisterCloseoutVarianceAlertPreview;
+  "emails/ReportVerificationAlert": typeof emails_ReportVerificationAlert;
   "emails/VerificationCode": typeof emails_VerificationCode;
   "emails/WalkthroughRequestNotification": typeof emails_WalkthroughRequestNotification;
   "emails/WeeklyManagerReport": typeof emails_WeeklyManagerReport;
@@ -869,6 +875,7 @@ declare const fullApi: ApiFromModules<{
   "operations/registerSessionCloseoutGate": typeof operations_registerSessionCloseoutGate;
   "operations/registerSessionTracing": typeof operations_registerSessionTracing;
   "operations/registerSessions": typeof operations_registerSessions;
+  "operations/reportVerificationAlertEmail": typeof operations_reportVerificationAlertEmail;
   "operations/serviceIntake": typeof operations_serviceIntake;
   "operations/skuActivity": typeof operations_skuActivity;
   "operations/staffCredentials": typeof operations_staffCredentials;
@@ -997,6 +1004,8 @@ declare const fullApi: ApiFromModules<{
   "reports/skuMovementRange": typeof reports_skuMovementRange;
   "reports/sweeper": typeof reports_sweeper;
   "reports/transactionCounts": typeof reports_transactionCounts;
+  "reports/verificationClassify": typeof reports_verificationClassify;
+  "reports/verificationSweep": typeof reports_verificationSweep;
   "reports/verify": typeof reports_verify;
   "reports/weekly": typeof reports_weekly;
   "reports/weeklyAcceptedRepair": typeof reports_weeklyAcceptedRepair;
@@ -1104,6 +1113,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/reports/derived": typeof schemas_reports_derived;
   "schemas/reports/facts": typeof schemas_reports_facts;
   "schemas/reports/index": typeof schemas_reports_index;
+  "schemas/reports/verificationRuns": typeof schemas_reports_verificationRuns;
   "schemas/serviceOps/index": typeof schemas_serviceOps_index;
   "schemas/serviceOps/serviceAppointment": typeof schemas_serviceOps_serviceAppointment;
   "schemas/serviceOps/serviceCase": typeof schemas_serviceOps_serviceCase;

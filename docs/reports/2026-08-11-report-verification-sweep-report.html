@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Scheduled Report Verification Sweep</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="b952182fef83d0cda64ff5bf8a9b0f5a9af0b5c5e0ecffa8fa36ce5fb97b5509">
+  <header data-report-section="header">
+    <h1>Scheduled Report Verification Sweep</h1>
+    <p>The independent reporting verifier finally has a trigger, a memory, and a voice — wired record-only</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch codex/v26-1188-1192-verification-sweep</li>
+      <li>Linear V26-1188&#8211;V26-1192</li>
+      <li>193 tests re-run green</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Source</dt><dd>2026-08-10 report verification sweep plan</dd>
+      <dt>Candidate head</dt><dd>7986773a on base 519ae941 (origin/main)</dd>
+      <dt>PR</dt><dd>Pending (pre-push gate requires this report first)</dd>
+      <dt>Deploy</dt><dd>Pending; record-only rollout per R8</dd>
+      <dt>Root alignment</dt><dd>Pending merge</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+    <p>Athena's independent reporting verifier (<code>reports/verify.ts</code>) recomputes day and week totals straight from source domains and has already caught two production defects a fully green test suite missed — but until this delivery nothing ran it, nothing recorded its answers, and its <code>unverifiedFields</code> output had no consumer. This branch wires it into the automation stack: an hourly cron drives a per-store sweep, every outcome lands durably in a new <code>reportVerificationRun</code> table plus the scheduled-run ledger, and a new <code>reports.verification_discrepancy</code> notification kind emails subscribers when — and only when — a discrepancy is both checked-and-wrong and unexplained.</p>
+    <p>A pure classification layer separates three states the alert path must never conflate: checked and wrong (alertable), could not check (<code>partial</code>/<code>truncated</code>/<code>unavailable</code>, never alertable), and explained by documented convention (void sign convention, blind-spot fields, flagged exclusions — magnitude-bounded and fail-closed, recorded but never emailed). Alert state rides the run row as a streak count, a re-arm epoch, and a monotonic alert sequence so the rail's permanent dedupe can never silently swallow a genuinely new alert.</p>
+    <p>Email delivery ships fail-closed behind <code>REPORTS_VERIFICATION_ALERT_EMAILS</code> — a comma-separated per-store allowlist, not a boolean: unset or empty emails nobody, and a store absent from a non-empty list is equally silent. The sweep runs record-only at deploy, and enabling email later is a config change, not a code change.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>The second opinion nobody was asking for</h2>
+    <p>The verifier exists because the reporting pipeline can be wrong while every test is green: it deliberately reads different columns than the fold and recomputes totals from domain truth. Both prior defects it caught were found by a human running it by hand. As an <code>internalQuery</code>-only module it had three gaps: no cron ever invoked it, no discrepancy it found went anywhere, and its "these fields I could not check" output — added after a production incident where an unchecked field was reported as wrong — was explicitly documented as a half-landed fix with no consumer.</p>
+    <p>Naively wiring it to an alert would have been worse than nothing. The verifier's known blind spots (<code>unitsReturned</code>, POS line refunds, quarantined and foreign-currency facts), its void sign convention disagreement with the fold, and its truncation ceilings would all page operators about differences that are documented properties of the system, burning alert credibility before the first real defect surfaced.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model: a building inspector with a filing cabinet</h2>
+    <p>Think of the sweep as an independent building inspector on an hourly round. The inspector never repairs anything (no auto-refold), only re-measures settled floors whose construction revision changed since the last visit (<code>certifiedFoldRevision</code>-driven selection) plus a slow full re-check of recent floors to catch drift nobody logged. Every visit files a report in the cabinet — clean, could-not-measure, or discrepancy — and the cabinet keeps one folder per floor, rewritten in place.</p>
+    <p>Between the inspector and the alarm sits a triage clerk: the pure classifier. The clerk knows the documented quirks — voids are counted with opposite sign, some meters are known-broken, some rooms are excluded by flag — and only pulls the alarm for a discrepancy no documented quirk explains, at the start of a streak, exactly once until the picture changes or a clean visit re-arms the subject.</p>
+    <pre><code>cron :47 -&gt; sweep action -&gt; verify per subject -&gt; classify (pure) -&gt; upsert run row -&gt; ledger evidence
+                                                        |
+                                     alertable transition + email gate on -&gt; notification rail -&gt; email</code></pre>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+    <p>Before: <code>verify.ts</code> was a 2,000-line second opinion with no trigger, no durable record of any run, and no consumer of <code>unverifiedFields</code>; discrepancies between folded reports and source truth went undetected until a human thought to look.</p>
+    <p>After: the verifier is scheduled, remembered, and heard — without its semantics changing at all.</p>
+    <ul>
+      <li>Trigger: an hourly prod cron at minute :47 (6-hourly in non-prod), placed clear of the :00 daily-operations and :30 owed-close wall-clock jobs; racing the 5-minute fold sweep is handled structurally by deferring dirty-marked days.</li>
+      <li>Memory: one <code>reportVerificationRun</code> row per subject (store &#215; day, store &#215; week), upserted in place, carrying outcome, explained/unexplained differences, fingerprint, streak, re-arm epoch, and alert sequence; plus per-tick system and per-store rows in the scheduled-run ledger where crashed selections honestly count as failures, never as <code>applied</code>.</li>
+      <li>Voice: <code>reports.verification_discrepancy</code> on the notifications rail (category <code>system_health</code>), whose email renders unexplained differences as "checked and wrong" and — for the first time — renders the withheld fields as a separate "Not checked" section: the missing <code>unverifiedFields</code> consumer.</li>
+      <li>Restraint: the email gate is off at deploy; every classification decision is observable in run rows before any human is paged.</li>
+    </ul>
+  </section>
+  <section data-report-section="mechanics">
+    <h2>Mechanics, in data-flow order</h2>
+    <p><strong>Selection is revision-driven, not calendar-driven.</strong> A day is verified only when it is settled (not open, no pending dirty mark, store not mid-reseed) and its <code>certifiedFoldRevision</code> is newer than the last verified revision — so clean days are not re-paid every tick, refolds re-enqueue naturally, and repair-then-reverify falls out for free. Two lanes bound the blindness this gating accepts: an age-based re-verify lane re-checks the most recent settled days every 24 hours regardless of revision (post-fold source drift), a forward stall probe (<code>VERIFICATION_STALL_PROBE_DAYS = 3</code>) walks back from the store's current operating date toward the newest folded day, so a fold pipeline that stops producing rows surfaces as missing days rather than as silence; and a shallow lookback (<code>VERIFICATION_MISSING_DAY_LOOKBACK = 2</code>) covers never-folded holes just behind that anchor.</p>
+    <p><strong>Containment shapes the orchestrator.</strong> The sweep is an action that verifies each subject through bounded internal queries: one subject's byte-ceiling blowup is recorded as <code>error</code> and the tick continues. Error rows retry every tick but are capped at one slot per store (<code>VERIFICATION_ERROR_SLOTS_PER_STORE = 1</code>, oldest first) so they cannot head-of-line-block revision-driven work. Budgets (<code>VERIFICATION_STORES_PER_TICK = 8</code>, <code>VERIFICATION_DAYS_PER_STORE = 4</code>, lookback 14) carry their sizing arithmetic in comments, and carry-over is declarative — unverified stale subjects are simply selected again next tick, with no cursor to wedge.</p>
+    <p><strong>The weekly lane is gated twice, in order.</strong> A minimum re-verify interval (<code>VERIFICATION_WEEK_MIN_INTERVAL_HOURS = 6</code>, against the run row's own <code>verifiedAt</code>) comes first and is load-bearing: <code>materializedAt</code> advances on every rebuild and the 5-minute reports sweep rebuilds active stores' weeks continuously, so the advancement check alone would only suppress idle stores. A pre-flight allocation probe (<code>VERIFICATION_WEEK_ALLOCATION_PROBE = 1400</code>) records <code>truncated</code> without running verification when the week's read volume would risk the aggregate transaction ceiling; the per-date execution split that removes this cap is follow-up V26-1193.</p>
+    <p><strong>Classification is pure and fail-closed.</strong> <code>verificationClassify.ts</code> has no Convex or Date imports and maps raw verify results to <code>clean | partial | mismatch | truncated | unavailable | error</code>. Explanations require supplied magnitude context, never inference from delta shape: void attribution needs the day's actual void magnitudes — with R minor voided, the fold adds while the verifier subtracts, so the signal is the exact-delta identity <code>actual - expected === 2R</code>, and flagged-exclusion attribution explains a difference only up to the summed magnitude of the excluded facts themselves — a day with one quarantined cent and a huge net-sales defect still alerts. The orchestrator sources both from the day's own <code>reportFact</code> rows (<code>VERIFICATION_VOID_FACT_SCAN = 2000</code>, the fold's own cap) and supplies nothing when the scan caps out, so an oversized day alerts rather than being blessed by a lower bound.</p>
+    <p><strong>Alert identity is three numbers, not one key.</strong> The rail's dedupe is a permanent unique lookup with no expiry, so the dedupeKey composes store, subject, fingerprint, <code>reArmEpoch</code>, and <code>alertSeq</code>. The epoch (bumped on each clean-run re-arm) lets an identical discrepancy alert again after an intervening clean run; the monotonic <code>alertSeq</code> (bumped on every alert, never reset) closes the remaining hole where a fingerprint oscillating A&#8594;B&#8594;A with a frozen epoch would rebuild a byte-identical key and be dropped silently. Streak rules are deliberately conservative: a partial run clears a streak only when every previously-differing field was actually checked and came back with no difference at all, and an all-explained mismatch never clears a streak on a field that is still differing.</p>
+    <p><strong>The sweep watches itself.</strong> A per-store consecutive-incomplete counter lives in the run table under the reserved week-subject key <code>__runner_health__</code> (which can never collide with a real date). Wedge escalation is a ladder, not a one-shot: <code>reports.verification_wedged</code> operational events fire at 3 consecutive incomplete ticks, again at 24 and 168, then every 168 thereafter, re-armed by the first complete tick — a permanently wedged store cannot go silent after a single page.</p>
+    <p><strong>Send time trusts the row, not a re-run.</strong> <code>prepareEmail</code> fresh-reads the run row and returns null (suppress, with an operational event) when the subject is no longer in the alerted state — fingerprint or epoch moved on — and throws (retry) on read failure. It never re-runs live verification: a day verify is many bounded scans, too heavy for send time.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+    <ul>
+      <li>A verify throw for one subject records <code>error</code> for that subject; the remaining subjects in the tick still process, and the ledger row reflects the failure.</li>
+      <li><code>matches: true</code> with non-empty <code>unverifiedFields</code> is <code>partial</code>; <code>truncated: true</code> is <code>truncated</code> with nothing counted as checked clean (a capped expectation is a lower bound, so agreement may be accidental). Neither ever alerts.</li>
+      <li>A capped void or exclusion fact scan supplies no attribution context, so the differences stay unexplained and the day alerts — fail-closed, never a lower bound used as an explanation ceiling.</li>
+      <li>Open days, dirty-marked days, and mid-reseed stores are skipped; a never-folded quiet day treats the payment-posture comparison as vacuous and does not alert, while one with real source activity surfaces as a genuine discrepancy.</li>
+      <li>Weekly <code>unavailable</code> splits by variant: a missing projection on a non-allowlisted store is expected and record-only; a missing schedule, timezone, or day fold on an allowlisted folding store is a config defect and escalates once per streak.</li>
+      <li>With the email gate off for a store (unset or empty <code>REPORTS_VERIFICATION_ALERT_EMAILS</code>, or the store absent from the allowlist), alertable transitions are recorded on the run row but no notification intent is emitted — the rollout observes classification quality before anyone is paged.</li>
+      <li>A failing ledger write never fails the sweep (best-effort, wrapped per call from the action), and a crashed tick leaves the same subjects selected next tick — declarative liveness, no queue to drain.</li>
+    </ul>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what intentionally did not</h2>
+    <p>Changed: a new schema module and table (<code>reportVerificationRun</code>), a new pure classification module with streak/alert transition rules, a new sweep orchestrator action with its scheduled entry, cron registration, scheduled-run ledger enrollment (in both the interval map and the hand-written evidence <code>v.union</code> — the two places the family must agree), a seventh notification kind with payload query and react-email template, and roughly 3,000 lines of tests across seven suites including rail end-to-end coverage.</p>
+    <p>Intentionally unchanged: <code>verify.ts</code> read semantics, its KNOWN BLIND SPOTS, and its void sign convention (the sign reconciliation that would make raw <code>matches</code> trustworthy is deferred); <code>reportDay</code>/<code>reportSkuDay</code> remain single-writer by the fold sweeper — verification state lives only in its own table; no auto-repair or auto-refold (repair remains a human action via existing paths); no new notification channels or categories (the kind reuses <code>system_health</code>); no public API surface (everything stays internal); no backfill of deep history — the sweep verifies a bounded trailing window.</p>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/convex/schemas/reports/verificationRuns.ts</code></td><td>Durable per-subject run row: outcome, difference partition, fingerprint, streak, re-arm epoch, monotonic alertSeq, verified revision.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/reports/verificationClassify.ts</code></td><td>Pure classifier: three-state outcome mapping, magnitude-bounded fail-closed explanations, streak/re-alert transition rules.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/reports/verificationSweep.ts</code></td><td>Action orchestrator: revision-driven selection, budgets with sizing arithmetic, stall probe, error-slot cap, wedge ladder, email gate, ledger evidence.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/crons.ts</code></td><td>Registers report-verification-sweep hourly at :47 in prod (6-hourly non-prod), placed clear of the other wall-clock hourly jobs.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/automation/scheduledRunLedger.ts</code></td><td>Enrolls the new cron family in the interval map and the evidence validator union, which must agree with the registered cadence.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/notifications/registry.ts</code></td><td>The reports.verification_discrepancy kind: system_health category, dedupeKey over store, subject, fingerprint, epoch, and alertSeq.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/reportVerificationAlertEmail.ts</code></td><td>Fresh-read payload query and prepareEmail discipline: null suppresses a resolved subject, throw retries a failed read.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/emails/ReportVerificationAlert.tsx</code></td><td>Renders "checked and wrong" and a distinct "Not checked" section — the first consumer of unverifiedFields.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/notifications/rail.test.ts</code></td><td>End-to-end emit-dispatch-delivery coverage, including the A-B-A fingerprint oscillation that only alertSeq keeps alive.</td></tr>
+        <tr><td><code>docs/plans/2026-08-10-001-feat-report-verification-sweep-plan.md</code></td><td>Requirements R1-R8, key decisions, and the delivery-decisions addendum recording what the review rounds added.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and finish-line status</h2>
+    <p>Re-run at the shipping head <code>479a5f5f</code>, after all five review passes: the eight touched suites pass locally — <code>verificationSweep.test.ts</code> (63), <code>queries.test.ts</code> (77), <code>rail.test.ts</code> (58), <code>verificationClassify.test.ts</code> (44), <code>registry.test.ts</code> (37), <code>ReportVerificationAlert.test.tsx</code> (8), <code>crons.test.ts</code> (7), <code>scheduledRunLedger.test.ts</code> (4) — 298 total, up from 193 at the first delivery candidate as review added coverage. The Linear V26-1190 closeout additionally records tsc, eslint, and prettier clean at review completion.</p>
+    <p>A fourth pass re-ran the full reviewer set against the fixed candidate and blocked again — every one of its findings a defect in a <em>pass-three fix</em>, not in the original code. The weekly fold-drain guard added in pass three silenced the verifier exactly when the pipeline breaks: it deferred on the mere existence of a dirty mark, and the sweeper re-inserts marks on every failed rebuild and every capped day, so a wedged fold suppressed weekly verification indefinitely while the wedge ladder never fired. Bounding on mark age would not have helped either — the mark writers upsert <code>markedAt</code>, so every re-mark looks fresh — so the bound was re-anchored on how long a subject had gone without a verdict. <strong>That bound was subsequently reverted; see the fifth pass below.</strong> Store rotation, meanwhile, advanced one store per tick against an eight-wide window, making its documented coverage bound wrong by roughly eight, with a test at the single fleet size where the two formulas agree. Both closed in commit 404b9588.</p>
+    <p>A fifth pass ended the spiral by <em>removing</em> machinery rather than repairing it. The re-anchored bound proved wrong in the opposite direction: its fallback anchor was the runner-health row's creation instant, which is written once at a store's first tick and never updated, so on any store older than the budget every never-verified subject was &ldquo;exhausted&rdquo; on first sight — a healthy multi-hour drain (a <code>foldVersionRepair</code> backfill, say) would have paged the wedge alarm. Rather than attempt a fourth design, the delivery owner reverted the whole bound at <code>c8c8226f</code>: the weekly guard and its bound were review-originated and never specified by the plan (the plan does specify the day-lane deferral, at U3's selection rule and its unfolded-backlog edge case), and its value is realised only once alerts are enabled, which R8 defers. What ships is the simple guard — a subject with a pending fold drain is deferred and counted — which is all that is needed to keep record-only run rows free of phantom flapping. <strong>The deferral is therefore unbounded as shipped: a wedged fold suppresses verification for that store indefinitely, across both lanes, and the wedge ladder does not ring for it.</strong> That limitation is documented in-code and tracked as V26-1202, which <strong>blocks enabling <code>REPORTS_VERIFICATION_ALERT_EMAILS</code> for any store</strong>. A test pins the unbounded behaviour so a future bounded form must change it deliberately.</p>
+    <p>A third pass — the evidence-bearing eleven-reviewer code review — produced five blocking findings, all closed in commit 4021723e: the weekly lane had no dirty-mark guard and so raced the five-minute fold drain, minting phantom mismatches on any actively-trading store; store selection sliced the sorted allowlist from index zero every tick, silently starving every store past the eighth while its own comment claimed otherwise; a malformed allowlist entry threw and killed the entire tick with no ledger trace; the alert email hand-listed a third copy of the field inventory that would have made its "not checked" section lie after a rename; and the headline discrepancy class — a never-folded day with real source activity — had no test, so an always-clean normalization passed the whole suite.</p>
+    <p>Two adversarial review rounds preceded it, producing 11 findings, all closed on-branch. Round one (commit fd9041dd) caught, among others: the weekly cost gate being ineffective because <code>materializedAt</code> advances every rebuild (fixed with the 6-hour interval gate), the weekly lane throwing instead of recording <code>truncated</code> on budget breach (fixed with the allocation probe; real split deferred to V26-1193), the streak losing its tracked field list on carry-forward, and the A&#8594;B&#8594;A dedupe swallow (fixed with <code>alertSeq</code>). Round two (530bfd0c) caught that round one's flagged-exclusion bound had inverted the defect — the magnitude was required but never supplied, so every quarantined day became an unexplained mismatch — fixed by sourcing magnitudes from fact rows, fail-closed on capped scans; it also replaced a flap test that passed against the pre-fix code with an oscillation test verified to fail against it. The closing audit commit (7986773a) synced the plan with the shipped implementation and added the missing ledger error-path test.</p>
+    <p>Finish line at report time: delivery candidate on branch codex/v26-1188-1192-verification-sweep; the PR is not yet open (the pre-push gate requires this report), merge and root alignment are pending, Linear V26-1188 through V26-1192 remain In Progress, and no production deploy has occurred. The planned rollout is record-only: deploy with the email gate off, observe run rows and ledger evidence, then enable <code>REPORTS_VERIFICATION_ALERT_EMAILS</code> by config — <strong>but not before V26-1202 lands</strong>, since the fold-drain deferral ships unbounded and an alerting rollout over a wedged fold would be silently unmonitored. V26-1203 (the sweep's ledger rows are not yet readable by any query) should land alongside it, so the record-only evidence this rollout depends on is actually observable. Follow-up V26-1193 (weekly per-date execution split) is filed in Backlog.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next-time guidance</h2>
+    <ul>
+      <li>When wiring a detector to an alert, build the classification layer first and ship record-only: every alertable decision should be observable in durable rows before a human is paged.</li>
+      <li>Never let a could-not-check state share an outcome with checked-and-wrong; a capped scan or withheld field is unknown, and unknown must fail toward recording, not explaining.</li>
+      <li>An explanation needs supplied magnitude context; explaining from delta shape or from a bare flag blesses real defects. If the context scan caps out, supply nothing and let it alert.</li>
+      <li>Against a permanent-dedupe rail, design the full alert identity up front — subject and fingerprint alone are insufficient; re-arm and emission counters are what keep later genuine alerts alive.</li>
+      <li>Gates on a freshness marker must check what actually moves it: <code>materializedAt</code> advances on every rebuild, so a time interval, not advancement, bounds cost on active stores.</li>
+      <li>New scheduled-run ledger families must be enrolled in two places (interval map and evidence union) that agree with the registered cron cadence; the tests assert the agreement.</li>
+      <li>When a reviewer demands a regression test, verify it fails against the pre-fix implementation — round two exists partly because a round-one test proved the wrong path.</li>
+    </ul>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does verification state live in its own reportVerificationRun table instead of fields on reportDay?</p>
+        <ol data-quiz-options>
+          <li>reportDay rows are too large to add columns to</li>
+          <li data-quiz-correct>reportDay is a sweeper-owned single-writer projection, and a second writer would reopen the fold-version rollout family</li>
+          <li>Convex forbids optional fields on existing tables</li>
+          <li>Run rows must be append-only for audit</li>
+        </ol>
+        <p data-quiz-explanation>reportDay is written by the fold sweeper alone, and adding a second writer would break that single-writer invariant and entangle verification with fold-revision rollout concerns. The run table is a sensor that observes fold output and never feeds back into it; its rows are upserted, not append-only.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A verify result returns matches: true but lists two entries in unverifiedFields. What does the sweep record?</p>
+        <ol data-quiz-options>
+          <li>clean, since every checked field agreed</li>
+          <li>mismatch, since the run was incomplete</li>
+          <li data-quiz-correct>partial — could-not-check is never conflated with checked-and-wrong, and it never alerts</li>
+          <li>error, and the subject retries next tick</li>
+        </ol>
+        <p data-quiz-explanation>The three-state reading is the core invariant: unverified is not mismatched. Withheld fields surface in the alert email's separate "Not checked" section, never as discrepancies.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>The bounded scan that gathers a day's void and excluded-fact magnitudes caps out. How are that day's differences classified?</p>
+        <ol data-quiz-options>
+          <li>Explained up to the magnitude the scan reached before capping</li>
+          <li>The day is skipped and re-selected next tick</li>
+          <li>Explained if the day's flags say excluded facts exist</li>
+          <li data-quiz-correct>Unexplained — no attribution context is supplied at all, so the day alerts rather than being blessed by a lower bound</li>
+        </ol>
+        <p data-quiz-explanation>A capped scan yields a lower bound, and a lower bound used as an explanation ceiling would bless real defects. The classifier is fail-closed: no supplied magnitude, no explanation.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the alert dedupeKey include a monotonic alertSeq in addition to the re-arm epoch?</p>
+        <ol data-quiz-options>
+          <li>To let operators sort emails chronologically</li>
+          <li data-quiz-correct>A fingerprint oscillating A to B back to A with no intervening clean run leaves the epoch frozen, so the third alert would rebuild a byte-identical key and be dropped by the rail's permanent dedupe</li>
+          <li>Because the epoch resets on every deploy</li>
+          <li>To rate-limit alerts to one per hour</li>
+        </ol>
+        <p data-quiz-explanation>The rail's dedupe is a permanent unique lookup with no expiry. The epoch only moves on clean-run re-arm, so oscillation inside one streak needs a second distinguishing counter that increments on every emission and never resets.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is the weekly lane's 6-hour minimum interval load-bearing rather than belt-and-suspenders?</p>
+        <ol data-quiz-options>
+          <li>Weekly verification acquires a lock that expires after 6 hours</li>
+          <li>The interval keeps the cron from overlapping the fold sweep</li>
+          <li data-quiz-correct>materializedAt advances on every rebuild and the 5-minute reports sweep rebuilds active stores' weeks continuously, so the advancement check alone only suppresses idle stores</li>
+          <li>Convex crons cannot run more often than every 6 hours</li>
+        </ol>
+        <p data-quiz-explanation>This was a round-one review finding: gating on marker advancement assumed the marker moved only on meaningful change, but it moves on every rebuild — without the time gate, active stores would be re-verified roughly every tick.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A store's verification cannot complete for many consecutive ticks. What does the escalation path do?</p>
+        <ol data-quiz-options>
+          <li>Fires one operational event at the threshold and stays silent until the streak clears</li>
+          <li>Fires an event on every incomplete tick</li>
+          <li data-quiz-correct>Fires on a ladder — at 3 consecutive incomplete ticks, again at 24 and 168, then every 168 — re-armed by the first complete tick</li>
+          <li>Emails subscribers through the discrepancy notification kind</li>
+        </ol>
+        <p data-quiz-explanation>Once-per-streak would let a permanently wedged store go silent after a single page. Wedge signals are operational events, a separate channel from the discrepancy email.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What did the second adversarial review round discover about the first round's flagged-exclusion fix?</p>
+        <ol data-quiz-options>
+          <li>It double-counted excluded facts on foreign-currency days</li>
+          <li data-quiz-correct>The magnitude bound was required but never supplied, inverting the defect — every quarantined or foreign-currency day became an unexplained mismatch</li>
+          <li>It only applied to week subjects, not days</li>
+          <li>It read reportDay flags from the wrong index</li>
+        </ol>
+        <p data-quiz-explanation>Round one made explanations magnitude-bounded but no caller supplied the magnitude, so the fail-closed default fired on every flagged day. Round two sourced the magnitudes from the day's own fact rows, keeping the cap fail-closed.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>prepareEmail runs at send time for a discrepancy alert. When does it return null versus throw?</p>
+        <ol data-quiz-options>
+          <li>Null on any anomaly, so sends never crash</li>
+          <li>Throw on any anomaly, so nothing is ever suppressed</li>
+          <li data-quiz-correct>Null when the fresh-read shows the subject is no longer in the alerted state (suppress, with an operational event); throw when the read itself fails (retry)</li>
+          <li>Null while the email gate is off, throw when it is on</li>
+        </ol>
+        <p data-quiz-explanation>Throw-versus-null is the rail's retry discipline: null means the alert is genuinely obsolete, throw means we could not find out. The gate is checked earlier, at emit time in the sweep — a gated-off transition never reaches the rail.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How is alert email enabled after the record-only observation period?</p>
+        <ol data-quiz-options>
+          <li>Merging a follow-up branch that flips a boolean constant</li>
+          <li data-quiz-correct>Setting the REPORTS_VERIFICATION_ALERT_EMAILS environment allowlist — a config change, no deploy of new code</li>
+          <li>Marking V26-1193 as Done in Linear</li>
+          <li>Seeding subscription rows for the new category</li>
+        </ol>
+        <p data-quiz-explanation>R8 requires enabling email without a code change. The kind ships fully wired; the empty-allowlist gate fails closed, and the kind reuses the existing system_health category rather than needing new seeding.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A fold pipeline stops producing reportDay rows for a store entirely. How does the sweep notice?</p>
+        <ol data-quiz-options>
+          <li>Revision-driven selection flags the days as stale</li>
+          <li>The scheduled-run ledger marks the store failed</li>
+          <li data-quiz-correct>The forward stall probe walks back from the store's current operating date toward the newest folded day, surfacing the gap as missing days</li>
+          <li>The wedge counter escalates after three ticks</li>
+        </ol>
+        <p data-quiz-explanation>Revision gating only sees days that have rows; a stalled fold produces nothing to gate on. The probe walks back only until it reaches the newest folded day, so a store whose fold is current breaks the walk on the first step and pays nothing. The wedge counter tracks the sweep's own health, not the fold's.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the delivery's finish-line state at report time?</p>
+        <ol data-quiz-options>
+          <li>Merged, deployed, and emailing subscribers</li>
+          <li>Merged with the email gate on for pilot stores</li>
+          <li data-quiz-correct>Delivery candidate: PR not yet open, merge and deploy pending, Linear issues In Progress, planned rollout record-only with email gated off</li>
+          <li>Abandoned pending the V26-1193 weekly split</li>
+        </ol>
+        <p data-quiz-explanation>The pre-push gate requires this report before the PR can open. Nothing is merged, deployed, or marked Done, and the first production period runs record-only by design. V26-1193 is a follow-up, not a blocker.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>Session context subagent (general-purpose, read-only)</dt><dd>Recovered the plan's user-resolved decisions, the Linear V26-1188 through V26-1193 issue states, and the two-round review loop — 11 findings mapped to commits fd9041dd, 530bfd0c, and 7986773a — plus the durable lessons from the 2026-08-03 verifier and 2026-08-09 layered-containment solution notes.</dd>
+      <dt>Delivered diff subagent (explorer, read-only)</dt><dd>Mapped the changed files by behavior layer along the cron-to-email data flow and confirmed the mechanism inventory: outcome union, gate constants, stall probe, error-slot cap, wedge ladder, runner-health sentinel, dedupeKey composition, and the intentionally unchanged verify.ts and single-writer invariants.</dd>
+      <dt>Quiz/report reviewer subagent (read-only)</dt><dd>Reviewed the draft for comprehension quality, unsupported claims, and weak quiz questions before finalization.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

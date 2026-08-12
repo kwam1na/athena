@@ -2687,3 +2687,326 @@ describe("approvals.request_created rail", () => {
     ).toEqual(NORMALIZED_ADMIN_EMAILS);
   });
 });
+
+describe("reports.verification_discrepancy rail", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  const SUBJECT_KEY = "2026-07-28";
+  const FINGERPRINT = "a1b2c3d4e5f60718";
+
+  function stubProdTransport(status = 202) {
+    vi.stubEnv("STAGE", "prod");
+    vi.stubEnv("MAILERSEND_API_KEY", "test-key");
+    const fetchMock = vi.fn(
+      async (_input: string | URL | Request, _init?: RequestInit) =>
+        new Response(null, {
+          status,
+          headers: { "x-message-id": "msg-1" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  // A mismatch run with a real unexplained difference, a blind-spot
+  // difference the classifier explained, and a payment lane that was withheld
+  // (checkedFields omits it) — the three states the email must keep apart.
+  async function seedVerificationRun(
+    t: ReturnType<typeof convexTest>,
+    fixture: SeededFixture,
+    overrides: Partial<{
+      unexplainedFingerprint: string | undefined;
+      reArmEpoch: number;
+      streakCount: number;
+    }> = {},
+  ) {
+    return t.run((ctx) =>
+      ctx.db.insert("reportVerificationRun", {
+        storeId: fixture.storeId,
+        subjectKind: "day",
+        subjectKey: SUBJECT_KEY,
+        outcome: "mismatch",
+        explainedDifferences: [
+          {
+            field: "unitsReturned",
+            expectedMinor: 0,
+            actualMinor: 4,
+            classification: "blind_spot_field",
+          },
+        ],
+        unexplainedDifferences: [
+          {
+            field: "netSalesMinor",
+            expectedMinor: 1293000,
+            actualMinor: 1248000,
+            classification: "unexplained",
+          },
+        ],
+        checkedFields: [
+          "netSalesMinor",
+          "grossSalesMinor",
+          "refundsMinor",
+          "unitsSold",
+          "unitsReturned",
+        ],
+        unexplainedFingerprint:
+          "unexplainedFingerprint" in overrides
+            ? overrides.unexplainedFingerprint
+            : FINGERPRINT,
+        streakCount: overrides.streakCount ?? 1,
+        lastAlertedFingerprint: FINGERPRINT,
+        reArmEpoch: overrides.reArmEpoch ?? 0,
+        verifiedAt: NOW,
+        createdAt: NOW,
+        updatedAt: NOW,
+      }),
+    );
+  }
+
+  async function emitVerificationDiscrepancy(
+    t: ReturnType<typeof convexTest>,
+    fixture: SeededFixture,
+    reArmEpoch = 0,
+  ) {
+    return t.mutation(internal.notifications.emit.emitNotification, {
+      kind: "reports.verification_discrepancy",
+      storeId: fixture.storeId,
+      organizationId: fixture.organizationId,
+      subjectType: "report_verification_day",
+      subjectId: SUBJECT_KEY,
+      // Refs only — never rendered content, and never a live re-verify.
+      payload: {
+        storeId: fixture.storeId,
+        subjectKind: "day",
+        subjectKey: SUBJECT_KEY,
+        fingerprint: FINGERPRINT,
+        reArmEpoch,
+      },
+    });
+  }
+
+  it("emits, dispatches, and sends an alert that separates wrong from unchecked", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const fetchMock = stubProdTransport();
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    await seedVerificationRun(t, fixture);
+
+    const { intentId, created } = await emitVerificationDiscrepancy(t, fixture);
+    expect(created).toBe(true);
+    vi.useRealTimers();
+
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+    ).toMatchObject({
+      kind: "reports.verification_discrepancy",
+      category: "system_health",
+      dedupeKey: `reports.verification_discrepancy:${fixture.storeId}:day:${SUBJECT_KEY}:${FINGERPRINT}:0:0`,
+      status: "pending",
+    });
+
+    await t.action(internal.notifications.dispatch.dispatchIntent, {
+      intentId,
+    });
+
+    const deliveries = await listDeliveries(t);
+    expect(deliveries).toHaveLength(ADMIN_EMAILS.length);
+    for (const delivery of deliveries) {
+      expect(delivery.status).toBe("sent");
+      expect(delivery.category).toBe("system_health");
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(ADMIN_EMAILS.length);
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]![1]!.body));
+    expect(body.subject).toBe(
+      "Accra report verification - day Tuesday, July 28",
+    );
+    // Checked and wrong.
+    expect(body.html).toContain("Checked and wrong");
+    expect(body.html).toContain("Net sales");
+    // Could not check — its own section, and never in the differences list.
+    expect(body.html).toContain("Not checked");
+    expect(body.html).toContain("Payments collected");
+    expect(body.html).toContain("Payment allocation coverage");
+    expect(body.html.indexOf("Not checked")).toBeGreaterThan(
+      body.html.indexOf("Checked and wrong"),
+    );
+    // Explained, recorded, not actionable.
+    expect(body.html).toContain("Recorded, not alerted");
+    expect(body.html).toContain("Units returned");
+  });
+
+  it("suppresses and records an operational event when the subject was re-verified clean", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const fetchMock = stubProdTransport();
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    const runId = await seedVerificationRun(t, fixture);
+
+    const { intentId } = await emitVerificationDiscrepancy(t, fixture);
+
+    // Repaired and re-verified between emit and send: the fingerprint is
+    // erased and the re-arm epoch bumped, so this alert is no longer true.
+    await t.run((ctx) =>
+      ctx.db.patch("reportVerificationRun", runId, {
+        outcome: "clean",
+        unexplainedDifferences: [],
+        unexplainedFingerprint: undefined,
+        lastAlertedFingerprint: undefined,
+        streakCount: 0,
+        reArmEpoch: 1,
+      }),
+    );
+    vi.useRealTimers();
+
+    await t.action(internal.notifications.dispatch.dispatchIntent, {
+      intentId,
+    });
+
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+    ).toMatchObject({
+      status: "suppressed",
+      suppressedReason: "payload_unavailable",
+    });
+    for (const delivery of await listDeliveries(t)) {
+      expect(delivery.status).toBe("suppressed");
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // A dropped alert must leave a trace on the operational timeline, not
+    // just a suppressed row nothing queries.
+    const events = await listOperationalEvents(t);
+    expect(
+      events.some(
+        (event) =>
+          event.message.includes("reports.verification_discrepancy") &&
+          event.message.includes("payload_unavailable"),
+      ),
+    ).toBe(true);
+  });
+
+  it("suppresses when the run row moved on to a different unexplained set", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    stubProdTransport();
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    await seedVerificationRun(t, fixture, {
+      unexplainedFingerprint: "ffffffffffffffff",
+    });
+
+    const { intentId } = await emitVerificationDiscrepancy(t, fixture);
+    vi.useRealTimers();
+
+    await t.action(internal.notifications.dispatch.dispatchIntent, {
+      intentId,
+    });
+
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+    ).toMatchObject({ status: "suppressed" });
+  });
+
+  it("keeps the batch retryable when the payload read hits a transient fault", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const fetchMock = stubProdTransport();
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    await seedVerificationRun(t, fixture);
+
+    const { intentId } = await emitVerificationDiscrepancy(t, fixture);
+
+    // Store row unreadable at send time: a read fault, NOT a resolved
+    // subject. Collapsing the two would silence a real discrepancy forever.
+    await t.run((ctx) => ctx.db.delete("store", fixture.storeId));
+    vi.useRealTimers();
+
+    await t.action(internal.notifications.dispatch.dispatchIntent, {
+      intentId,
+    });
+
+    const deliveries = await listDeliveries(t);
+    expect(deliveries).toHaveLength(ADMIN_EMAILS.length);
+    for (const delivery of deliveries) {
+      expect(delivery.status).toBe("retryable_failure");
+      expect(delivery.errorCode).toBe("payload_error");
+    }
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationIntent", intentId)),
+    ).not.toMatchObject({ status: "suppressed" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("collapses a re-emit of the same fingerprint and epoch into one intent", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    await seedVerificationRun(t, fixture);
+
+    const first = await emitVerificationDiscrepancy(t, fixture);
+    const second = await emitVerificationDiscrepancy(t, fixture);
+    expect(second.created).toBe(false);
+    expect(second.intentId).toBe(first.intentId);
+
+    // The same fingerprint AFTER a clean run re-armed the subject is a new
+    // discrepancy and must reach someone.
+    const reArmed = await emitVerificationDiscrepancy(t, fixture, 1);
+    expect(reArmed.created).toBe(true);
+    expect(reArmed.intentId).not.toBe(first.intentId);
+  });
+
+  it("falls back to ADMIN_EMAILS only when the org has no system_health rows", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    await seedVerificationRun(t, fixture);
+
+    const { intentId } = await emitVerificationDiscrepancy(t, fixture);
+    const fallback = await t.mutation(
+      internal.notifications.dispatch.reserveIntentDeliveries,
+      { intentId },
+    );
+    expect(
+      fallback!.leased.map((lease) => lease.recipientEmail).sort(),
+    ).toEqual(NORMALIZED_ADMIN_EMAILS);
+
+    // With a curated audience present, the fallback must not widen it.
+    const other = await t.run(async (ctx) => {
+      await ctx.db.insert("notificationSubscription", {
+        organizationId: fixture.organizationId,
+        category: "system_health",
+        channel: "email",
+        recipientEmail: "verifier@example.com",
+        enabled: true,
+        createdAt: NOW,
+        updatedAt: NOW,
+      });
+      return null;
+    });
+    expect(other).toBeNull();
+
+    const { intentId: secondIntentId } = await emitVerificationDiscrepancy(
+      t,
+      fixture,
+      1,
+    );
+    const curated = await t.mutation(
+      internal.notifications.dispatch.reserveIntentDeliveries,
+      { intentId: secondIntentId },
+    );
+    expect(curated!.leased.map((lease) => lease.recipientEmail)).toEqual([
+      "verifier@example.com",
+    ]);
+  });
+});

@@ -192,6 +192,7 @@ import {
   reportRangeMovementSkuSchema,
   reportRangeMixSkuSchema,
   reportMovementAdmissionSchema,
+  reportVerificationRunSchema,
 } from "./schemas/reports";
 import {
   walkthroughBudgetCounterSchema,
@@ -1759,6 +1760,10 @@ const schema = defineSchema({
   reportMovementAdmission: defineTable(reportMovementAdmissionSchema).index(
     "by_scope_key",
     ["scope", "key"],
+  ),
+  reportVerificationRun: defineTable(reportVerificationRunSchema).index(
+    "by_store_subject",
+    ["storeId", "subjectKind", "subjectKey"],
   ),
 });
 

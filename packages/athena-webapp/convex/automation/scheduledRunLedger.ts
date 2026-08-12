@@ -9,6 +9,11 @@ export const SCHEDULED_CRON_INTERVAL_MINUTES = {
   "complete-checkout-sessions": 30,
   "release-pos-session-items": 10,
   "auto-verify-payments": 10,
+  // Must match the PROD cadence registered in `crons.ts` (hourly at :47).
+  // `resolveScheduledWindow` floors `now` by this interval, so a disagreement
+  // would split one tick's evidence across windows or collapse two ticks into
+  // one run key.
+  "report-verification-sweep": 60,
 } as const;
 
 export type ScheduledCronFamily = keyof typeof SCHEDULED_CRON_INTERVAL_MINUTES;
@@ -168,6 +173,7 @@ const scheduledRunEvidenceArgs = {
     v.literal("complete-checkout-sessions"),
     v.literal("release-pos-session-items"),
     v.literal("auto-verify-payments"),
+    v.literal("report-verification-sweep"),
   ),
   now: v.optional(v.number()),
   scope: v.union(v.literal("store"), v.literal("system")),

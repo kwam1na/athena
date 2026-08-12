@@ -158,4 +158,36 @@ crons.interval(
   {},
 );
 
+// The ONE cron of the report verification family. It OBSERVES rather than
+// produces: it re-derives its work set every tick from the run table plus each
+// day's `certifiedFoldRevision`, so there is no queue to drain and a crashed
+// tick simply leaves the same subjects selected for the next one — same
+// declarative-liveness contract as the reports and notifications sweeps above.
+//
+// Hourly class in prod, at :47, chosen to sit clear of the two wall-clock
+// hourly jobs: daily-operations-automation at :00 and owed-daily-close-sweep
+// at :30. Note the reports and notifications sweeps use `crons.interval`
+// (5 minutes), which Convex anchors to deploy time rather than the wall clock
+// — their minutes drift and are unpredictable across deploys, so no minute can
+// be chosen to avoid them. Racing the fold is handled structurally instead:
+// selection defers any day still carrying a pending dirty mark.
+//
+// Non-prod runs every 6 hours at the same minute: verification is read-heavy
+// and dev data is static, so a slow rhythm is enough to keep the path warm.
+if (process.env.STAGE == "prod") {
+  crons.hourly(
+    "report-verification-sweep",
+    { minuteUTC: 47 },
+    internal.reports.verificationSweep.runVerificationSweep,
+    {},
+  );
+} else {
+  crons.cron(
+    "report-verification-sweep",
+    "47 */6 * * *",
+    internal.reports.verificationSweep.runVerificationSweep,
+    {},
+  );
+}
+
 export default crons;
