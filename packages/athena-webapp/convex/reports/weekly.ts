@@ -7,6 +7,9 @@ import {
   type ReportWeekLifecyclePosture,
   type ReportWeekLineage,
   type ReportWeekMetrics,
+  type ReportPaymentMix,
+  UNAVAILABLE_PAYMENT_MIX,
+  addPaymentMix,
   normalizeCurrencyCode,
 } from "../../shared/reportsContract";
 import {
@@ -181,6 +184,7 @@ type WeekDay = Pick<
   | "netSalesMinor"
   | "operatingDate"
   | "paymentAllocatedMinor"
+  | "paymentMix"
   | "paymentPosture"
   | "paymentsCollectedMinor"
   | "paymentsRefundedMinor"
@@ -207,9 +211,35 @@ export function availableWeekCurrent(
 export type WeekFold = {
   included: ReportWeekMetrics;
   outsideSchedule: ReportWeekMetrics;
+  /**
+   * Each lane's gross payments by method. Kept beside the metrics rather than
+   * inside them because a mix is a conclusion with its own availability, not
+   * an additive number: one legacy day withholds the whole lane's breakdown
+   * while that lane's totals stay perfectly reportable.
+   */
+  includedPaymentMix: ReportPaymentMix;
+  outsideSchedulePaymentMix: ReportPaymentMix;
   scheduleLineage: ReportWeekLineage[];
   completeness: ReportWeekCompleteness;
 };
+
+/**
+ * Sum a lane's days into one mix, then hold it to the same reconciliation the
+ * day fold enforces: the rows must equal that lane's own Payments received
+ * total. A day with no `paymentMix` at all is a legacy row — absent is
+ * unknown, never an empty mix — so it withholds its lane.
+ */
+function foldLanePaymentMix(
+  days: readonly WeekDay[],
+  collectedMinor: number,
+): ReportPaymentMix {
+  let mix: ReportPaymentMix = { status: "complete", totalMinor: 0, rows: [] };
+  for (const day of days) {
+    mix = addPaymentMix(mix, day.paymentMix);
+    if (mix.status !== "complete") return UNAVAILABLE_PAYMENT_MIX;
+  }
+  return mix.totalMinor === collectedMinor ? mix : UNAVAILABLE_PAYMENT_MIX;
+}
 
 function zeroWeekMetrics(): ReportWeekMetrics {
   return { ...ZERO_WEEK_METRICS };
@@ -313,6 +343,14 @@ export function foldWeekFromDays(args: {
   return {
     included,
     outsideSchedule,
+    includedPaymentMix: foldLanePaymentMix(
+      includedDays,
+      included.paymentsCollectedMinor,
+    ),
+    outsideSchedulePaymentMix: foldLanePaymentMix(
+      outsideScheduleDays,
+      outsideSchedule.paymentsCollectedMinor,
+    ),
     scheduleLineage: args.period.dates.map((date) => {
       const day = byDate.get(date.localDate);
       return {
@@ -363,6 +401,18 @@ function toFoldFact(fact: Doc<"reportFact">): FoldFact {
     ...(fact.paymentAllocationCoverage !== undefined
       ? { paymentAllocationCoverage: fact.paymentAllocationCoverage }
       : {}),
+    ...(fact.paymentMethod !== undefined
+      ? { paymentMethod: fact.paymentMethod }
+      : {}),
+    ...(fact.paymentMethodFrom !== undefined
+      ? { paymentMethodFrom: fact.paymentMethodFrom }
+      : {}),
+    ...(fact.paymentParticipationId !== undefined
+      ? { paymentParticipationId: fact.paymentParticipationId }
+      : {}),
+    ...(fact.paymentMixMinor !== undefined
+      ? { paymentMixMinor: fact.paymentMixMinor }
+      : {}),
     quarantined: fact.quarantine !== undefined,
   };
 }
@@ -389,6 +439,10 @@ function toWeekDay(args: {
     paymentsRefundedMinor: folded.day.paymentsRefundedMinor,
     paymentAllocatedMinor: folded.day.paymentAllocatedMinor,
     paymentPosture: folded.day.paymentPosture,
+    // Acceptance folds from cutoff-bounded FACTS, never from mutable
+    // allocations — so the frozen mix is derived by the same arithmetic the
+    // live day uses, from the evidence that existed at `cutoffObservedAt`.
+    paymentMix: folded.day.paymentMix,
     flags: folded.day.flags,
   };
 }
@@ -408,6 +462,8 @@ export function foldWeekFromAcceptedFacts(args: {
     return {
       included: zeroWeekMetrics(),
       outsideSchedule: zeroWeekMetrics(),
+      includedPaymentMix: UNAVAILABLE_PAYMENT_MIX,
+      outsideSchedulePaymentMix: UNAVAILABLE_PAYMENT_MIX,
       scheduleLineage: args.period.dates.map((date) => ({
         localDate: date.localDate,
         included: date.included,
@@ -576,11 +632,25 @@ function weekTruthFingerprint(args: {
   included: ReportWeekMetrics;
   outsideSchedule: ReportWeekMetrics;
   scheduleLineage: ReportWeekLineage[];
+  /**
+   * Only a COMPLETE mix is hashed. Absent (legacy) and `unavailable` both hash
+   * as null, so an untouched legacy baseline keeps producing the fingerprint
+   * it always did, and a lane that merely stopped being knowable does not
+   * masquerade as changed truth.
+   */
+  paymentMix?: ReportPaymentMix;
+  outsideSchedulePaymentMix?: ReportPaymentMix;
 }) {
+  const hashableMix = (mix?: ReportPaymentMix) =>
+    mix?.status === "complete" ? mix : null;
   return stableStringHash(
     JSON.stringify({
       included: args.included,
       outsideSchedule: args.outsideSchedule,
+      // Part of weekly truth: an approved method correction moves no total, so
+      // without this the amendment path would never notice it happened.
+      paymentMix: hashableMix(args.paymentMix),
+      outsideSchedulePaymentMix: hashableMix(args.outsideSchedulePaymentMix),
       scheduleLineage: args.scheduleLineage.map((row) => ({
         included: row.included,
         localDate: row.localDate,
@@ -598,7 +668,13 @@ type WeeklyClosePosture = NonNullable<
 function deriveWeeklyAmendment(args: {
   accepted: Pick<
     Doc<"reportWeekAccepted">,
-    "amendment" | "closeId" | "included" | "outsideSchedule" | "scheduleLineage"
+    | "amendment"
+    | "closeId"
+    | "included"
+    | "outsideSchedule"
+    | "outsideSchedulePaymentMix"
+    | "paymentMix"
+    | "scheduleLineage"
   >;
   closePosture: WeeklyClosePosture;
   folded: WeekFold;
@@ -608,15 +684,48 @@ function deriveWeeklyAmendment(args: {
     included: args.folded.included,
     outsideSchedule: args.folded.outsideSchedule,
     scheduleLineage: args.folded.scheduleLineage,
+    paymentMix: args.folded.includedPaymentMix,
+    outsideSchedulePaymentMix: args.folded.outsideSchedulePaymentMix,
   });
   const baselineFingerprint = weekTruthFingerprint({
     included: args.accepted.included,
     outsideSchedule: args.accepted.outsideSchedule,
     scheduleLineage: args.accepted.scheduleLineage,
+    paymentMix: args.accepted.paymentMix,
+    outsideSchedulePaymentMix: args.accepted.outsideSchedulePaymentMix,
   });
+  /**
+   * An amendment is a claim that the week MOVED, so only a knowable-to-knowable
+   * difference counts. A lane that went from complete to unavailable — or a
+   * legacy baseline that never had a mix — is unknown, and nobody amends a
+   * report because a fact stopped being provable.
+   */
+  const laneMixMoved = (
+    baseline: ReportPaymentMix | undefined,
+    next: ReportPaymentMix,
+  ) =>
+    baseline?.status === "complete" &&
+    next.status === "complete" &&
+    JSON.stringify(baseline) !== JSON.stringify(next);
+  const mixMoved =
+    laneMixMoved(args.accepted.paymentMix, args.folded.includedPaymentMix) ||
+    laneMixMoved(
+      args.accepted.outsideSchedulePaymentMix,
+      args.folded.outsideSchedulePaymentMix,
+    );
   const currentCloseId = args.closePosture.currentCloseId;
   const hasAmendment =
-    currentFingerprint !== baselineFingerprint ||
+    weekTruthFingerprint({
+      included: args.folded.included,
+      outsideSchedule: args.folded.outsideSchedule,
+      scheduleLineage: args.folded.scheduleLineage,
+    }) !==
+      weekTruthFingerprint({
+        included: args.accepted.included,
+        outsideSchedule: args.accepted.outsideSchedule,
+        scheduleLineage: args.accepted.scheduleLineage,
+      }) ||
+    mixMoved ||
     (currentCloseId !== undefined && currentCloseId !== args.accepted.closeId);
   if (!hasAmendment) return undefined;
 
@@ -635,6 +744,8 @@ function deriveWeeklyAmendment(args: {
     outsideScheduleNetSalesDeltaMinor:
       args.folded.outsideSchedule.netSalesMinor -
       args.accepted.outsideSchedule.netSalesMinor,
+    paymentMix: args.folded.includedPaymentMix,
+    outsideSchedulePaymentMix: args.folded.outsideSchedulePaymentMix,
     ...(currentCloseId
       ? {
           sourceCloseId: currentCloseId,
@@ -1130,6 +1241,8 @@ export async function rebuildCurrentWeek(
       scheduleVersionId: row.scheduleVersionId as Id<"storeSchedule"> | null,
     })),
     completeness: folded.completeness,
+    paymentMix: folded.includedPaymentMix,
+    outsideSchedulePaymentMix: folded.outsideSchedulePaymentMix,
     lifecyclePosture,
     amendmentPosture,
     inventoryAttention,
@@ -1556,6 +1669,11 @@ export async function materializeAcceptedWeek(args: {
       closeId: args.closeId,
       included: folded.included,
       outsideSchedule: folded.outsideSchedule,
+      // The same lane mixes being frozen onto the baseline below. Omitting
+      // them here would hash the baseline as legacy and manufacture an
+      // amendment on every acceptance.
+      paymentMix: folded.includedPaymentMix,
+      outsideSchedulePaymentMix: folded.outsideSchedulePaymentMix,
       scheduleLineage: currentFolded.scheduleLineage.map((row) => ({
         ...row,
         scheduleVersionId: row.scheduleVersionId as Id<"storeSchedule"> | null,
@@ -1601,6 +1719,10 @@ export async function materializeAcceptedWeek(args: {
       scheduleVersionId: row.scheduleVersionId as Id<"storeSchedule"> | null,
     })),
     completeness: folded.completeness,
+    // Frozen from the same cutoff-bounded facts as the accepted Payments
+    // totals, so the baseline's rows reconcile to the baseline's own total.
+    paymentMix: folded.includedPaymentMix,
+    outsideSchedulePaymentMix: folded.outsideSchedulePaymentMix,
     topSkuLeaders,
     lifecyclePosture: closePosture.status,
     amendmentPosture: amendment ? "amended" : "none",

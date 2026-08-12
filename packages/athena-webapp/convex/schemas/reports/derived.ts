@@ -235,6 +235,10 @@ const weeklyAmendment = v.object({
   outsideScheduleNetSalesDeltaMinor: v.number(),
   sourceCloseAcceptedAt: v.optional(v.number()),
   sourceCloseId: v.optional(v.id("dailyClose")),
+  // Later method truth beside the baseline's frozen mix. Optional for
+  // amendments written before the mix landed.
+  paymentMix: v.optional(paymentMix),
+  outsideSchedulePaymentMix: v.optional(paymentMix),
 });
 
 const weeklyPriorPeriod = v.object({
@@ -424,6 +428,14 @@ export const reportWeekCurrentSchema = v.union(
     cashVariancePosture: v.optional(weeklyCashVariancePosture),
     // Optional for legacy rows; every new available materialization writes it.
     closeEvidence: v.optional(weeklyCloseEvidence),
+    /**
+     * Fact-backed gross payments by method, per lane. Optional is LEGACY
+     * AUTHORITY: an accepted report written before this landed is frozen
+     * close-backed evidence, and an absent field means read
+     * `closeEvidence.payments` — never reconstruct it.
+     */
+    paymentMix: v.optional(paymentMix),
+    outsideSchedulePaymentMix: v.optional(paymentMix),
   }),
 );
 
@@ -466,6 +478,10 @@ export const reportWeekAcceptedSchema = v.object({
   cashVariancePosture: v.optional(weeklyCashVariancePosture),
   // Optional for accepted rows created before the close-evidence rollout.
   closeEvidence: v.optional(weeklyCloseEvidence),
+  // See reportWeekCurrent: absent is legacy authority, not permission to
+  // reconstruct an immutable baseline's method evidence.
+  paymentMix: v.optional(paymentMix),
+  outsideSchedulePaymentMix: v.optional(paymentMix),
   /**
    * One set-once repair projection. It is orthogonal to the immutable accepted
    * baseline and deliberately excludes financial/amendment/notification state.

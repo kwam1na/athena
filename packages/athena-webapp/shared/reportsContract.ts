@@ -607,6 +607,9 @@ export type ReportWeekAmendment = {
   sourceCloseAcceptedAt?: number;
   sourceCloseId?: string;
   summary: ReportWeekSummary;
+  /** Later method truth, beside the baseline's frozen mix. */
+  paymentMix?: ReportPaymentMix;
+  outsideSchedulePaymentMix?: ReportPaymentMix;
 };
 
 /** Fields shared by the live and accepted weekly projections. */
@@ -639,6 +642,17 @@ type ReportWeekProjectionBase = {
   variancePosture?: ReportWeekVariancePosture;
   /** Optional only for projections materialized before this evidence landed. */
   closeEvidence?: ReportWeekCloseEvidence;
+  /**
+   * Fact-backed gross payments by method for this revision, per lane.
+   *
+   * Optional is LEGACY AUTHORITY, not a rollout convenience: an accepted or
+   * corrected report written before this landed is frozen close-backed
+   * evidence, and its absent field means "read `closeEvidence.payments`",
+   * never "reconstruct it". New writers always persist `complete` or
+   * `unavailable`.
+   */
+  paymentMix?: ReportPaymentMix;
+  outsideSchedulePaymentMix?: ReportPaymentMix;
   ownerRoutes: ReportWeekOwnerRoutes;
 };
 
