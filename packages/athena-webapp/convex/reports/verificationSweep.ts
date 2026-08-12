@@ -1084,17 +1084,34 @@ export const selectWeeklySubject = internalQuery({
     // limitation rather than an oversight. A dirty mark is not guaranteed to
     // drain: `reports/sweeper.ts` re-marks a day `fact_cap_exceeded` on every
     // pass and re-marks `reportDirtyWeek` `write_failure` after every failed
-    // `rebuildCurrentWeek`. A fold wedged that way will suppress weekly
-    // verification for that store indefinitely — weeksDeferred climbs and no
-    // weekly verdict is ever recorded — which is exactly the situation
-    // verification exists to surface. We accept it for now because alert
-    // emission is gated OFF for the record-only rollout (R8), so the guard's
-    // present value is only keeping run rows free of phantom mismatch/clean
-    // flapping, and a bound designed without production evidence has already
-    // proven easy to get wrong (an unbounded-then-bounded pair of review
-    // passes produced first a silenced detector, then false alarms). Bounding
-    // it — with a real anchor and grace period chosen from observed drain
-    // times — is tracked as a follow-up.
+    // `rebuildCurrentWeek`. A fold wedged that way will suppress verification
+    // for that store indefinitely — deferral counters climb and no verdict is
+    // ever recorded — which is exactly the situation verification exists to
+    // surface.
+    //
+    // BOTH LANES are affected, not just this one. A wedged fold writes no
+    // `reportDay` row, so those dates are reachable only through the day
+    // lane's forward stall probe — and every one of them carries the live
+    // dirty mark that defers it. The day lane is therefore not silent but
+    // worse: the older already-folded days keep re-verifying on the age lane
+    // and keep recording `clean`, so the store's run rows read healthy while
+    // its fold is stuck.
+    //
+    // We accept this for now because alert emission is gated OFF for the
+    // record-only rollout (R8), so the guard's present value is only keeping
+    // run rows free of phantom mismatch/clean flapping, and a bound designed
+    // without production evidence has already proven easy to get wrong (an
+    // unbounded-then-bounded pair of review passes produced first a silenced
+    // detector, then false alarms).
+    //
+    // BOUNDING THIS IS TRACKED AS V26-1202, WHICH BLOCKS ENABLING
+    // `REPORTS_VERIFICATION_ALERT_EMAILS` FOR ANY STORE. Do not populate that
+    // allowlist until it lands: with alerts on, a wedged fold would be
+    // silently unmonitored rather than merely unrecorded. Note also that the
+    // wedge ladder is NOT a compensating control here — a deferral does not
+    // set `storeIncomplete`, so it never rings; whatever bound lands in
+    // V26-1202 needs its own surfacing path (see V26-1203, the ledger rows
+    // this sweep writes are not yet readable by any query).
     if (
       await hasPendingWeeklyDirtyMarks(ctx, args.storeId, cycleFrameOf(current))
     ) {

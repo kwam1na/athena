@@ -20,7 +20,7 @@ tags:
   - fingerprint
   - streaks
   - test-blind-spot
-delivery_diff_fingerprint: fdecbe083f6389d006b3812aae7eeb5f0b58a7a7a9bc03faf49841bc8fda5e06
+delivery_diff_fingerprint: 3c588e471cffc75a4b08ae75fd75603a42e25b6bf48a82a270964bdfcd781ad9
 ---
 
 # Permanent-dedupe rails need a monotonic alert identity
@@ -146,8 +146,14 @@ require the decision counter itself to repeat, which it structurally cannot.
   alert email's *complement* (the "not checked" section) lie, rendering the same
   field as both "checked and wrong" and "not checked" — hence the carry-forward
   in `recordVerificationOutcome` (`verificationSweep.ts`, F6) and the
-  dual-semantics note on the `checkedFields` schema field. Whenever you persist
-  a digest, ask what must travel alongside it to stay readable.
+  dual-semantics note on the `checkedFields` schema field. Carry the value
+  through *including its absence* when absence is a distinct semantic: the same
+  fix initially defaulted a missing stored list to the incoming empty one, which
+  re-created the very lie it existed to prevent, because the schema defines
+  absent as "unknown" and the email honours that with `?? inventory` while `[]`
+  means "nothing was checked". Whenever you persist a digest, ask what must
+  travel alongside it to stay readable — and whether "not set" is one of the
+  values that must survive.
 
 ## Related Issues
 
