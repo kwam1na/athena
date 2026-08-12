@@ -227,41 +227,6 @@ export const VERIFICATION_REVERIFY_RECENT_DAYS = 3;
 export const VERIFICATION_REVERIFY_EVERY_HOURS = 24;
 
 /**
- * The longest a subject may stay SILENT behind the fold-drain guard, in hours.
- *
- * WHY (B1). Both lanes defer while the fold has not drained: verifying against
- * output the pipeline already knows is stale would mint a phantom mismatch.
- * But a dirty mark is NOT guaranteed to drain. `reports/sweeper.ts` re-marks a
- * day `fact_cap_exceeded` on every pass ("will keep refusing until the cap is
- * raised") and re-marks `reportDirtyWeek` `write_failure` after every failed
- * `rebuildCurrentWeek`; in both cases the projection is genuinely stale, which
- * is PRECISELY what verification exists to surface, and an unbounded guard
- * suppresses the detector exactly when the pipeline is broken.
- *
- * WHY NOT MARK AGE. The obvious bound — "defer only while the mark is fresh" —
- * does not hold: `markDayDirty` / `markWeekDirty` UPSERT, patching
- * `markedAt: now` on the existing row, so every re-mark refreshes the age and
- * the two failure modes above (plus a busy store's per-fact `day_open` upsert)
- * keep a mark permanently "fresh". Mark age measures write traffic, not drain
- * progress. The honest question is instead: how long has this SUBJECT gone
- * without any verdict at all? That is already persisted — `verifiedAt` on the
- * subject's run row, and `createdAt` on the store's runner-health row for a
- * subject that has never been verified — so the bound needs no new column and
- * no new counter.
- *
- * Past the bound the guard STOPS deferring: the tick is recorded incomplete
- * for the store, every tick, so the existing wedge ladder escalates within
- * VERIFICATION_WEDGE_THRESHOLD ticks and keeps re-alerting. Silence becomes an
- * alarm rather than a counter nobody reads. Nothing is written to the run row
- * on this path, deliberately: `verifiedAt` has to keep meaning "last real
- * verdict", or refreshing it would rearm the bound and mute the alarm forever.
- *
- * 24h = four missed 6-hour weekly windows (VERIFICATION_WEEK_MIN_INTERVAL_
- * HOURS), i.e. well past any legitimate drain, and one day of unverified days.
- */
-export const VERIFICATION_DEFERRAL_MAX_HOURS = 24;
-
-/**
  * Consecutive incomplete ticks before a store's runner escalates to an
  * operational event. At an hourly cadence 3 ≈ three hours wedged: transient
  * load blips clear in one tick, while a real wedge (byte-ceiling breach,
@@ -655,37 +620,6 @@ async function hasPendingDirtyMark(
   return mark !== null;
 }
 
-/** The store's runner-health row — the store-scope "when did this runner last
- * say anything" anchor, used to bound the fold-drain deferral of a subject
- * that has NEVER produced a run row of its own. */
-async function loadRunnerHealthRow(
-  ctx: QueryCtx,
-  storeId: Id<"store">,
-): Promise<Doc<"reportVerificationRun"> | null> {
-  return loadRunRow(ctx, storeId, "week", VERIFICATION_RUNNER_HEALTH_KEY);
-}
-
-/**
- * Has the fold-drain guard held this subject silent past its budget?
- *
- * `lastVerdictAt` is the most recent instant this subject (or, for a subject
- * never verified, this store's runner) actually said something. `null` means
- * the runner has never spoken at all — the store's very first tick — where
- * there is nothing to have exceeded, so deferring is still right.
- *
- * See VERIFICATION_DEFERRAL_MAX_HOURS for why the bound is measured on the
- * verdict rather than on the dirty mark's own age.
- */
-export function isDeferralExhausted(
-  now: number,
-  lastVerdictAt: number | null,
-): boolean {
-  if (lastVerdictAt === null) return false;
-  return (
-    now - lastVerdictAt >= VERIFICATION_DEFERRAL_MAX_HOURS * 60 * 60 * 1000
-  );
-}
-
 export const selectVerificationDaySubjects = internalQuery({
   args: {
     storeId: v.id("store"),
@@ -700,13 +634,9 @@ export const selectVerificationDaySubjects = internalQuery({
     args,
   ): Promise<{
     dates: string[];
-    /** Dates the fold-drain guard deferred WITHIN its budget — the fold is
-     * still draining and the next tick picks them up. */
+    /** Dates the fold-drain guard deferred — the fold has not caught up yet,
+     * and a later tick picks them up. */
     deferred: number;
-    /** Dates the guard has now been deferring past VERIFICATION_DEFERRAL_MAX_
-     * HOURS: the fold is stuck, not draining, and the store's tick is recorded
-     * incomplete so the wedge ladder escalates (B1). */
-    foldStuck: number;
   }> => {
     // Newest-first window of folded days. The newest date anchors the
     // calendar; a store with no reportDay rows has no day work (nothing folds
@@ -718,7 +648,7 @@ export const selectVerificationDaySubjects = internalQuery({
       )
       .order("desc")
       .take(VERIFICATION_DAY_LOOKBACK);
-    if (days.length === 0) return { dates: [], deferred: 0, foldStuck: 0 };
+    if (days.length === 0) return { dates: [], deferred: 0 };
 
     const dayByDate = new Map(days.map((day) => [day.operatingDate, day]));
     const anchor = days[0]!.operatingDate;
@@ -765,14 +695,9 @@ export const selectVerificationDaySubjects = internalQuery({
     const stallSelected: string[] = [];
     const erroredCandidates: Array<{ date: string; verifiedAt: number }> = [];
     let deferred = 0;
-    let foldStuck = 0;
     // Settled existing days seen so far, newest first — the re-verify lane's
     // candidate pool.
     let settledSeen = 0;
-    // Store-scope fallback anchor for the deferral bound, loaded once: a date
-    // that has never been verified has no `verifiedAt` of its own, so the
-    // runner's own first tick stands in. Absent on the very first tick ever.
-    const health = await loadRunnerHealthRow(ctx, args.storeId);
 
     for (const date of candidateDates) {
       const day = dayByDate.get(date);
@@ -781,39 +706,25 @@ export const selectVerificationDaySubjects = internalQuery({
       if (day?.status === "open") continue;
 
       const isSettledExisting = day !== undefined;
-      // Loaded BEFORE the dirty-mark gate (it was after) because the gate now
-      // needs this subject's own last verdict instant to bound its deferral.
-      // Same reads, same order of cost — only the sequence moved.
-      const run = await loadRunRow(ctx, args.storeId, "day", date);
 
-      // Pending dirty mark: the fold has not caught up — verifying now would
-      // contradict output the pipeline already knows is stale. Defer, but only
-      // WITHIN the deferral budget (B1): `fact_cap_exceeded` is re-marked by
-      // every sweeper pass and never drains, and an unbounded deferral there
-      // means the day is never verified again while `daysDeferred` quietly
-      // counts up and nothing escalates. Past the budget the date is still not
-      // verified — comparing against a fold the pipeline has explicitly
-      // REFUSED to write would attribute a pipeline fault to the data — but it
-      // is reported as stuck, which flips the store incomplete and rings the
-      // wedge ladder.
+      // Fold-drain guard (F1). A pending dirty mark means the fold has not
+      // caught up: verifying now would contradict output the pipeline already
+      // knows is stale, minting a phantom mismatch. Defer and count it.
+      //
+      // The deferral is deliberately UNBOUNDED — see the longer note at the
+      // weekly lane's guard for why that is acceptable for now and how the
+      // bounded form is tracked.
       if (await hasPendingDirtyMark(ctx, args.storeId, date)) {
-        if (
-          isDeferralExhausted(
-            args.now,
-            run?.verifiedAt ?? health?.createdAt ?? null,
-          )
-        ) {
-          foldStuck += 1;
-        } else {
-          deferred += 1;
-        }
+        deferred += 1;
         continue;
       }
 
-      // Counted only for dates that reach the selection decision, exactly as
-      // before the gate moved: the re-verify lane's window is "the most recent
-      // M settled days this tick can actually act on".
+      // Counted only for dates that reach the selection decision: the
+      // re-verify lane's window is "the most recent M settled days this tick
+      // can actually act on".
       if (isSettledExisting) settledSeen += 1;
+
+      const run = await loadRunRow(ctx, args.storeId, "day", date);
 
       // An `error` run row means the subject was never actually verified, so
       // it is always stale — but it goes to the capped error pool, not the
@@ -873,7 +784,7 @@ export const selectVerificationDaySubjects = internalQuery({
       ...selected,
     ].slice(0, VERIFICATION_DAYS_PER_STORE);
 
-    return { dates, deferred, foldStuck };
+    return { dates, deferred };
   },
 });
 
@@ -1129,49 +1040,17 @@ export const selectWeeklySubject = internalQuery({
      * (pending dirty marks) — counted as weeksDeferred, mirroring the day
      * lane's daysDeferred. */
     deferred: boolean;
-    /** True when the fold-drain guard has held the weekly lane silent past
-     * VERIFICATION_DEFERRAL_MAX_HOURS: the fold is stuck, not draining (B1).
-     * Reported on EVERY tick while it holds — not gated behind the 6-hourly
-     * due-ness interval — because it is the alarm, and an alarm that fires
-     * once every six hours cannot build the consecutive-incomplete streak the
-     * wedge ladder escalates on. */
-    foldStuck: boolean;
   }> => {
     const current = await ctx.db
       .query("reportWeekCurrent")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .unique();
-    if (!current) return { subject: null, deferred: false, foldStuck: false };
+    if (!current) return { subject: null, deferred: false };
 
     const subjectKey =
       "cycleStartDate" in current ? current.cycleStartDate : "current";
 
     const run = await loadRunRow(ctx, args.storeId, "week", subjectKey);
-
-    // Fold-drain guard (F1), evaluated BEFORE the due-ness gates so a stuck
-    // fold is visible every tick: a due subject with pending dirty marks would
-    // be verified against a projection the pipeline already knows is stale.
-    // Within budget that is a COUNTED deferral, not a silent skip; past it the
-    // fold is stuck rather than draining (B1) and the store's tick is recorded
-    // incomplete instead. Nothing is written on the stuck path — `verifiedAt`
-    // has to keep meaning "last real verdict" or the bound would rearm itself
-    // and mute the alarm.
-    const pendingMarks = await hasPendingWeeklyDirtyMarks(
-      ctx,
-      args.storeId,
-      cycleFrameOf(current),
-    );
-    if (pendingMarks) {
-      const health = await loadRunnerHealthRow(ctx, args.storeId);
-      if (
-        isDeferralExhausted(
-          args.now,
-          run?.verifiedAt ?? health?.createdAt ?? null,
-        )
-      ) {
-        return { subject: null, deferred: false, foldStuck: true };
-      }
-    }
 
     if (run !== null) {
       // FREQUENCY BOUND (H1). `materializedAt` advances on every weekly
@@ -1182,7 +1061,7 @@ export const selectWeeklySubject = internalQuery({
         args.now - run.verifiedAt <
         VERIFICATION_WEEK_MIN_INTERVAL_HOURS * 60 * 60 * 1000
       ) {
-        return { subject: null, deferred: false, foldStuck: false };
+        return { subject: null, deferred: false };
       }
       // Staleness gate: past the interval, still skip when the projection has
       // not been re-materialized since the last verified generation. An
@@ -1192,14 +1071,34 @@ export const selectWeeklySubject = internalQuery({
         run.verifiedCertifiedFoldRevision !== undefined &&
         run.verifiedCertifiedFoldRevision >= current.materializedAt
       ) {
-        return { subject: null, deferred: false, foldStuck: false };
+        return { subject: null, deferred: false };
       }
     }
 
-    // The due subject's share of the guard above: within budget, defer and
-    // count it. (The stuck case already returned.)
-    if (pendingMarks) {
-      return { subject: null, deferred: true, foldStuck: false };
+    // Fold-drain guard (F1). The subject is due, but pending dirty marks mean
+    // the fold has not caught up: verifying now would compare live source
+    // totals against a projection the pipeline already knows is stale and mint
+    // a phantom mismatch. Defer and count it (weeksDeferred).
+    //
+    // THE DEFERRAL IS DELIBERATELY UNBOUNDED, and that is a known, accepted
+    // limitation rather than an oversight. A dirty mark is not guaranteed to
+    // drain: `reports/sweeper.ts` re-marks a day `fact_cap_exceeded` on every
+    // pass and re-marks `reportDirtyWeek` `write_failure` after every failed
+    // `rebuildCurrentWeek`. A fold wedged that way will suppress weekly
+    // verification for that store indefinitely — weeksDeferred climbs and no
+    // weekly verdict is ever recorded — which is exactly the situation
+    // verification exists to surface. We accept it for now because alert
+    // emission is gated OFF for the record-only rollout (R8), so the guard's
+    // present value is only keeping run rows free of phantom mismatch/clean
+    // flapping, and a bound designed without production evidence has already
+    // proven easy to get wrong (an unbounded-then-bounded pair of review
+    // passes produced first a silenced detector, then false alarms). Bounding
+    // it — with a real anchor and grace period chosen from observed drain
+    // times — is tracked as a follow-up.
+    if (
+      await hasPendingWeeklyDirtyMarks(ctx, args.storeId, cycleFrameOf(current))
+    ) {
+      return { subject: null, deferred: true };
     }
 
     // Pre-flight read-budget probe (H2). The union of the seven days' payment
@@ -1225,7 +1124,6 @@ export const selectWeeklySubject = internalQuery({
         overBudget: allocationProbe.length > VERIFICATION_WEEK_ALLOCATION_PROBE,
       },
       deferred: false,
-      foldStuck: false,
     };
   },
 });
@@ -1601,17 +1499,12 @@ export type VerificationSweepResult = {
   /** Of those, well-formed ids whose store doc no longer exists (B6). */
   storesSkippedMissing: number;
   daysVerified: number;
+  /** Day subjects skipped because the fold had not drained (F1). */
   daysDeferred: number;
-  /** Day subjects the fold-drain guard has now been deferring past
-   * VERIFICATION_DEFERRAL_MAX_HOURS — a stuck fold, not a draining one (B1).
-   * Flips the store incomplete so the wedge ladder escalates. */
-  daysFoldStuck: number;
   weeksVerified: number;
   /** Weekly subjects deferred because the fold was still draining — pending
    * reportDirtyWeek / in-frame reportDirtyDay marks (F1). */
   weeksDeferred: number;
-  /** Weekly subjects whose fold-drain deferral is past its budget (B1). */
-  weeksFoldStuck: number;
   subjectsErrored: number;
   /** Subjects whose run transitioned to alertable this tick (recorded even
    * while the email gate is off — the R8 record-only rollout). */
@@ -1728,10 +1621,8 @@ export async function runVerificationSweepWithCtx(
       storesSkippedMissing: 0,
       daysVerified: 0,
       daysDeferred: 0,
-      daysFoldStuck: 0,
       weeksVerified: 0,
       weeksDeferred: 0,
-      weeksFoldStuck: 0,
       subjectsErrored: 1,
       alertTransitions: 0,
       emitsWouldFire: 0,
@@ -1749,10 +1640,8 @@ export async function runVerificationSweepWithCtx(
     storesSkippedMissing,
     daysVerified: 0,
     daysDeferred: 0,
-    daysFoldStuck: 0,
     weeksVerified: 0,
     weeksDeferred: 0,
-    weeksFoldStuck: 0,
     subjectsErrored: 0,
     alertTransitions: 0,
     emitsWouldFire: 0,
@@ -1774,10 +1663,8 @@ export async function runVerificationSweepWithCtx(
     const storeCounts = {
       daysVerified: 0,
       daysDeferred: 0,
-      daysFoldStuck: 0,
       weeksVerified: 0,
       weeksDeferred: 0,
-      weeksFoldStuck: 0,
       weeksOverBudget: 0,
       subjectsErrored: 0,
       alertTransitions: 0,
@@ -1795,12 +1682,6 @@ export async function runVerificationSweepWithCtx(
       dates = selection.dates;
       result.daysDeferred += selection.deferred;
       storeCounts.daysDeferred += selection.deferred;
-      result.daysFoldStuck += selection.foldStuck;
-      storeCounts.daysFoldStuck += selection.foldStuck;
-      // B1: a deferral past its budget is a stuck fold, and the only way that
-      // becomes audible is the wedge ladder — so the tick is incomplete for
-      // this store, every tick, until the fold drains.
-      if (selection.foldStuck > 0) storeIncomplete = true;
     } catch (error) {
       // M3: a crashed selection is a FAILED subject for evidence purposes —
       // counting it only as "incomplete" made the ledger record `applied` /
@@ -1901,16 +1782,6 @@ export async function runVerificationSweepWithCtx(
         // stale, and mint a phantom alert. Mirrors daysDeferred.
         result.weeksDeferred += 1;
         storeCounts.weeksDeferred += 1;
-      }
-      if (weeklySelection.foldStuck) {
-        // B1: the guard has been holding this store's weekly lane silent past
-        // its budget. The projection really is stale — the loudest thing
-        // verification could say — so stop deferring and make the silence
-        // ALARMED: the tick is incomplete for this store on every tick until
-        // the fold drains, which walks the wedge ladder.
-        result.weeksFoldStuck += 1;
-        storeCounts.weeksFoldStuck += 1;
-        storeIncomplete = true;
       }
       const weekly = weeklySelection.subject;
       if (weekly !== null) {
@@ -2122,10 +1993,8 @@ export async function runVerificationSweepWithCtx(
         snapshotCounts: {
           daysVerified: result.daysVerified,
           daysDeferred: result.daysDeferred,
-          daysFoldStuck: result.daysFoldStuck,
           weeksVerified: result.weeksVerified,
           weeksDeferred: result.weeksDeferred,
-          weeksFoldStuck: result.weeksFoldStuck,
           storesSkippedReseeding: result.storesSkippedReseeding,
           storesSkippedInvalid: result.storesSkippedInvalid,
           storesSkippedMalformed: result.storesSkippedMalformed,

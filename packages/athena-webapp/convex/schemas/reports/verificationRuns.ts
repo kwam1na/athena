@@ -64,18 +64,23 @@ export const reportVerificationRunSchema = v.object({
    * mismatched).
    *
    * CARRY-FORWARD (see `recordVerificationOutcome`'s F6 note, which points
-   * back here): a run that could not check anything — `error` / `truncated` /
-   * `unavailable`, all of which classify with an empty list — RETAINS the
-   * previous run's list whenever a live `unexplainedFingerprint` is being
-   * carried, because the carried `unexplainedDifferences` are only
-   * interpretable against the list they were computed under. Resetting it to
-   * `[]` while the differences persist would make the email render the same
-   * field as both "checked and wrong" and "not checked". So on such a row
-   * `outcome` and `checkedFields` deliberately describe DIFFERENT runs, and
-   * nothing may render "this run checked N fields" off this column — read it
-   * as the streak's basis, and consult `verifiedAt` / `outcome` for what the
-   * latest tick actually managed to do. Same dual-semantics shape as
-   * `verifiedCertifiedFoldRevision` below.
+   * back here): the trigger is an EMPTY checked-field list on the incoming run
+   * (e.g. `error` / `truncated` / `unavailable`, but equally a `partial` whose
+   * every field went unverified) while a live `unexplainedFingerprint` is being
+   * carried — such a run RETAINS the previous run's list, because the carried
+   * `unexplainedDifferences` are only interpretable against the list they were
+   * computed under. Resetting it to `[]` while the differences persist would
+   * make the email render the same field as both "checked and wrong" and "not
+   * checked". If the previous run's list was itself ABSENT, that absence
+   * carries through — the carry never manufactures `[]`, since "unknown" must
+   * not degrade into "nothing was checked". So on such a row `outcome` and
+   * `checkedFields` deliberately describe DIFFERENT runs, and nothing may
+   * render "this run checked N fields" off this column — read it as the
+   * streak's basis, and consult `verifiedAt` / `outcome` for what the latest
+   * tick actually managed to do. `verifiedCertifiedFoldRevision` below is
+   * another column whose meaning depends on context, though on a different
+   * axis: there it turns on `subjectKind`, here on which run is being
+   * described.
    *
    * Optional because rows written before this capture landed have no honest
    * value: absent means "unknown", never "nothing was checked".

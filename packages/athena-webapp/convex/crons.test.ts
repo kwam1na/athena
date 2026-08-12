@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
+import {
+  VERIFICATION_TICK_MINUTES_NON_PROD,
+  VERIFICATION_TICK_MINUTES_PROD,
+} from "./reports/verificationSweep";
+
 describe("Convex cron registration", () => {
   it("registers the shared demo restore at midnight, once a day", () => {
     const source = readFileSync("convex/crons.ts", "utf8");
@@ -65,6 +70,29 @@ describe("Convex cron registration", () => {
     expect(source).toContain('"47 */6 * * *"');
   });
 
+  it("derives the registered cadences from the sweep's tick constants", () => {
+    // The rotation advances exactly ONE store index per tick, so its coverage
+    // bound (ceil(N / 8) ticks) and its freedom from block starvation both rest
+    // on `verificationTickIntervalMs()` matching the cadence Convex actually
+    // fires at. The sweep's own tests step by that same function, so they are
+    // self-consistent for ANY constant value and cannot catch drift; this is
+    // the assertion that can. Both expectations below are built FROM the
+    // constants, so a constant that drifts from crons.ts fails here.
+    const source = readFileSync("convex/crons.ts", "utf8");
+
+    // Prod registers via `crons.hourly`, which is 60 minutes by definition.
+    expect(VERIFICATION_TICK_MINUTES_PROD).toBe(60);
+    expect(source).toContain("crons.hourly(");
+
+    // Non-prod registers a raw cron expression; its hour step must be the
+    // non-prod constant expressed in hours (and it must divide evenly, or the
+    // constant cannot be a cron cadence at all).
+    expect(VERIFICATION_TICK_MINUTES_NON_PROD % 60).toBe(0);
+    expect(source).toContain(
+      `"47 */${VERIFICATION_TICK_MINUTES_NON_PROD / 60} * * *"`,
+    );
+  });
+
   it("keeps the verification sweep interval constant in step with its cron", () => {
     const source = readFileSync(
       "convex/automation/scheduledRunLedger.ts",
@@ -72,6 +100,8 @@ describe("Convex cron registration", () => {
     );
     // resolveScheduledWindow derives idempotency windows from this number, so
     // it must equal the registered PROD cadence (hourly = 60 minutes).
-    expect(source).toContain('"report-verification-sweep": 60');
+    expect(source).toContain(
+      `"report-verification-sweep": ${VERIFICATION_TICK_MINUTES_PROD}`,
+    );
   });
 });
