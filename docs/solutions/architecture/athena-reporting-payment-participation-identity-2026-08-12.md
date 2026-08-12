@@ -125,6 +125,14 @@ is `complete`, and the amendment gate compares both sides for known change.
   accepted revision, as positive legacy authority to read the frozen evidence.
 - Never let a projection go from knowable to unknowable and call that a change.
   An amendment claims the period MOVED; a fact that stopped being provable did
-  not move anything.
+  not move anything. State that rule ONCE and apply it everywhere it belongs —
+  here it had to hold in three places written at different times (the amendment
+  gate, the truth fingerprint that dedupes the amendment's timestamp, and the
+  verifier's expectation of when an amendment is legitimate), and each one was
+  missed in a separate review round.
+- A verifier must expect every cause of a projection's output, not just the
+  causes that existed when the verifier was written. Adding a new reason for a
+  projection to change without teaching the verifier about it converts correct
+  behaviour into a standing alert.
 - Never use the destructive reseed as a rollout backfill, and never replay a
   correction whose outcome the rebuilt source row already carries.
