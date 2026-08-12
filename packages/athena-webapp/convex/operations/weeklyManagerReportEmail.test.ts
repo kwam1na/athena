@@ -698,6 +698,32 @@ describe("accepted weekly manager report top items", () => {
         included: metrics,
         metricVersion: 1,
         outsideSchedule: { ...metrics, unitsSold: 0 },
+        // Both lanes stored: the email's totals combine the lanes, so its
+        // payment rows must combine the SAME lanes to reconcile.
+        paymentMix: {
+          status: "complete" as const,
+          totalMinor: 0,
+          rows: [
+            {
+              method: "cash" as const,
+              amountMinor: 0,
+              shareBasisPoints: 0,
+              tenderUseCount: 4,
+            },
+          ],
+        },
+        outsideSchedulePaymentMix: {
+          status: "complete" as const,
+          totalMinor: 0,
+          rows: [
+            {
+              method: "mobile_money" as const,
+              amountMinor: 0,
+              shareBasisPoints: 0,
+              tenderUseCount: 2,
+            },
+          ],
+        },
         priorPeriod: {
           cycleEndDate: "2026-08-02",
           cycleStartDate: "2026-07-27",
@@ -747,8 +773,16 @@ describe("accepted weekly manager report top items", () => {
       status: "applied",
       storeName: "Wigclub",
     });
+    // The stored fact-backed mix wins over frozen close evidence, and the
+    // caller combines BOTH lanes — the same frame the email's totals cover.
     expect(payload?.paymentTotals).toEqual([
-      { amount: "GH₵10,980", method: "Cash", share: "66.25%", tenderUseCount: 63 },
+      { amount: "GH₵0", method: "Cash", share: "0.00%", tenderUseCount: 4 },
+      {
+        amount: "GH₵0",
+        method: "Mobile Money",
+        share: "0.00%",
+        tenderUseCount: 2,
+      },
     ]);
     expect(payload?.summaryMetrics).toContainEqual({
       detail: "Completed POS transactions",

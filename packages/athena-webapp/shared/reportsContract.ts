@@ -643,16 +643,18 @@ type ReportWeekProjectionBase = {
   /** Optional only for projections materialized before this evidence landed. */
   closeEvidence?: ReportWeekCloseEvidence;
   /**
-   * Fact-backed gross payments by method for this revision, per lane.
+   * The revision's EFFECTIVE fact-backed mix: both lanes combined at read
+   * time (`combineRevisionPaymentMix`), the same frame as the Payments
+   * received figure it renders beside. On an accepted read with an amendment,
+   * this is the amendment's mix — the reader sees amendment totals, so the
+   * mix must match them. Stored documents keep the lanes separate.
    *
    * Optional is LEGACY AUTHORITY, not a rollout convenience: an accepted or
    * corrected report written before this landed is frozen close-backed
    * evidence, and its absent field means "read `closeEvidence.payments`",
-   * never "reconstruct it". New writers always persist `complete` or
-   * `unavailable`.
+   * never "reconstruct it".
    */
   paymentMix?: ReportPaymentMix;
-  outsideSchedulePaymentMix?: ReportPaymentMix;
   ownerRoutes: ReportWeekOwnerRoutes;
 };
 
@@ -948,6 +950,50 @@ export function accumulatePaymentMixFact(
       amountMinor: fact.paymentMixMinor,
     });
   }
+}
+
+/**
+ * Bound the PERSISTED evidence, not just the published conclusion.
+ *
+ * The state rides on the day document, so past the cap it collapses to a
+ * broken marker instead of an ever-growing array that would eventually breach
+ * the document size limit. Applied identically by the authoritative fold and
+ * the incremental path, so a clamped open day and its later refold agree.
+ * Collapsing loses nothing publishable: `derivePaymentMix` already refuses an
+ * over-cap state, and only a full refold could un-break it anyway.
+ */
+export function boundPaymentMixState(
+  state: ReportPaymentMixState,
+): ReportPaymentMixState {
+  if (state.participation.length <= REPORT_PAYMENT_PARTICIPATION_CAP) {
+    return state;
+  }
+  return {
+    amountByMethod: [],
+    participation: [],
+    unattributedMinor: 0,
+    evidenceBroken: true,
+  };
+}
+
+/**
+ * The effective mix for one weekly revision: BOTH lanes combined.
+ *
+ * The Payments figure a reader sees beside the mix is the whole labelled
+ * range — included plus outside-schedule — so the mix must cover the same
+ * frame or its rows cannot reconcile to the number printed above them. Both
+ * lanes absent is a legacy revision (undefined: read the frozen close-backed
+ * evidence); one lane short of complete poisons the combination.
+ */
+export function combineRevisionPaymentMix(
+  included: ReportPaymentMix | undefined,
+  outsideSchedule: ReportPaymentMix | undefined,
+): ReportPaymentMix | undefined {
+  if (included === undefined && outsideSchedule === undefined) return undefined;
+  return addPaymentMix(
+    included ?? UNAVAILABLE_PAYMENT_MIX,
+    outsideSchedule ?? UNAVAILABLE_PAYMENT_MIX,
+  );
 }
 
 /** Merge two states — the incremental path folds a batch into the stored one. */

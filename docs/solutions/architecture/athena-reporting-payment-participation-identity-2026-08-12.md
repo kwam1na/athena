@@ -19,7 +19,7 @@ tags:
   - participation-identity
   - reseed
   - projections
-delivery_diff_fingerprint: 0237474256903c6dc1c745d74aab6ebe0756a6fda8ad346cc3211873d55c8a8e
+delivery_diff_fingerprint: 8cfd216b9e8c98379cfdc9b38cf96b9568df21efcca5bbfb2e33d07b56d8d982
 ---
 
 # Athena Reporting Counts Tender Use by Participation Identity, Not by Allocation
@@ -76,6 +76,12 @@ Two rules follow from that target and are easy to get backwards:
   value on the day it was received, because `paymentsCollectedMinor` counts that
   receipt either way. Reducing gross mix for the reversal would leave the day
   unable to reconcile to its own total. Reversals and refunds move settlement.
+- **The rendered mix covers the same frame as the total beside it.** Reports
+  and the weekly email print Payments received for the whole labelled range —
+  included plus outside-schedule — so the effective mix is both lanes combined
+  at read time (and, on an accepted read with an amendment, the amendment's
+  mix, because the reader sees amendment totals). Stored documents keep the
+  lanes separate.
 - **Absent is unknown, never zero.** A day, revision, or fact written before the
   mix landed carries no mix field, and that absence withholds its lane rather
   than reading as an empty breakdown. On an accepted or corrected report the

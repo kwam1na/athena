@@ -8,7 +8,10 @@ import type {
 } from "../emails/DailyManagerReport";
 import { resolveAppUrl } from "./dailyManagerReportEmail";
 import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
-import { addWeekMetrics } from "../../shared/reportsContract";
+import {
+  addWeekMetrics,
+  combineRevisionPaymentMix,
+} from "../../shared/reportsContract";
 import { formatProductDisplayName } from "../../shared/productDisplayName";
 import type {
   ReportPaymentMix,
@@ -49,8 +52,12 @@ export const getAcceptedWeeklyManagerReportPayload = internalQuery({
       closeEvidence: accepted.closeEvidence,
       // Baseline-only, exactly as before: the automatic email never consumes
       // amendment or current truth, so a delayed retry still describes the
-      // report that was accepted.
-      paymentMix: accepted.paymentMix,
+      // report that was accepted. Both lanes combined — the same frame the
+      // email's own totals cover.
+      paymentMix: combineRevisionPaymentMix(
+        accepted.paymentMix,
+        accepted.outsideSchedulePaymentMix,
+      ),
       scheduleLineage: accepted.scheduleLineage,
       store,
       timezone,

@@ -9,6 +9,7 @@ import type {
 } from "../../shared/reportsContract";
 import {
   accumulatePaymentMixFact,
+  boundPaymentMixState,
   derivePaymentMix,
   derivePaymentPosture,
   emptyPaymentMixState,
@@ -334,8 +335,12 @@ export const foldDay: FoldDayFn = (
     allocatedMinor: metrics.paymentAllocatedMinor,
     allocationOmittedMinor: paymentAllocationOmittedMinor,
   });
+  // Bounded before it is either published or persisted: the state rides on
+  // the day document, so past the participation cap it collapses to a broken
+  // marker rather than an unbounded array.
+  const boundedMixState = boundPaymentMixState(paymentMixState);
   const paymentMix = derivePaymentMix(
-    paymentMixState,
+    boundedMixState,
     metrics.paymentsCollectedMinor,
   );
 
@@ -352,7 +357,7 @@ export const foldDay: FoldDayFn = (
         transactionCount: foldedTransactionCount,
         paymentPosture,
         paymentMix,
-        paymentMixState,
+        paymentMixState: boundedMixState,
       },
       skuDays,
     };
@@ -378,7 +383,7 @@ export const foldDay: FoldDayFn = (
       ...(sawPostCloseFact ? { postCloseNetSalesDeltaMinor } : {}),
       paymentPosture,
       paymentMix,
-      paymentMixState,
+      paymentMixState: boundedMixState,
     },
     skuDays,
   };

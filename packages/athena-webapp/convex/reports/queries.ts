@@ -9,6 +9,7 @@ import { listOpenSyncedSaleInventoryReviewGroupsWithCompleteness } from "../oper
 import { requireReportsStoreAccess } from "./access";
 import {
   addWeekMetrics,
+  combineRevisionPaymentMix,
   combineWeekCompleteness,
   dayPeriodKey,
   isReportingTodayInProgress,
@@ -381,8 +382,12 @@ function toWeeklyCurrentProjection(
     inventoryAttention: inventoryAttentionProjection(doc.inventoryAttention),
     closePosture: doc.closePosture,
     closeEvidence: doc.closeEvidence,
-    paymentMix: doc.paymentMix,
-    outsideSchedulePaymentMix: doc.outsideSchedulePaymentMix,
+    // Combined at read time, like `total`: the Payments figure beside the mix
+    // covers the whole labelled range, so the mix must too.
+    paymentMix: combineRevisionPaymentMix(
+      doc.paymentMix,
+      doc.outsideSchedulePaymentMix,
+    ),
     amendment: doc.amendment
       ? weeklyAmendmentProjection(doc.amendment)
       : undefined,
@@ -501,15 +506,26 @@ function toAcceptedWeeklyProjection(
     closePosture: doc.closePosture,
     closeEvidence,
     /**
-     * Correction-first, like `closeEvidence` and `scheduleLineage` above. A
+     * Correction-first, like `closeEvidence` and `scheduleLineage` above: a
      * corrected report is a repair of frozen close-backed history, so it keeps
-     * reading `closeEvidence.payments`; presenting a fact-backed mix beside
+     * reading `closeEvidence.payments` — presenting a fact-backed mix beside
      * corrected close evidence would mix two provenances in one revision.
+     *
+     * Otherwise amendment-first, matching the totals this read renders: with
+     * an amendment the reader sees amendment figures, so the mix beside them
+     * is the amendment's. Both lanes combine at read time, like `total`.
      */
-    paymentMix: doc.correction ? undefined : doc.paymentMix,
-    outsideSchedulePaymentMix: doc.correction
+    paymentMix: doc.correction
       ? undefined
-      : doc.outsideSchedulePaymentMix,
+      : doc.amendment
+        ? combineRevisionPaymentMix(
+            doc.amendment.paymentMix,
+            doc.amendment.outsideSchedulePaymentMix,
+          )
+        : combineRevisionPaymentMix(
+            doc.paymentMix,
+            doc.outsideSchedulePaymentMix,
+          ),
     // Clients only need to know THAT a correction applied and when. The
     // fingerprints and repair internals stay server-side; the corrected
     // evidence itself already rides `closeEvidence`/`scheduleLineage` above.

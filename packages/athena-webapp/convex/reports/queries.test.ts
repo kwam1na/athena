@@ -2885,26 +2885,24 @@ describe("weekly read contract parity", () => {
     }
   });
 
-  it("projects a revision's own mix and keeps a corrected report close-backed", async () => {
+  it("projects the revision's combined mix and keeps a corrected report close-backed", async () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
     const acceptedBaselineId = await seedAcceptedWeek(t, storeId);
-    const frozenMix = {
+    const laneMix = (
+      method: "cash" | "card" | "mobile_money",
+      amountMinor: number,
+    ) => ({
       status: "complete" as const,
-      totalMinor: 10_000,
+      totalMinor: amountMinor,
       rows: [
-        {
-          method: "cash" as const,
-          amountMinor: 10_000,
-          shareBasisPoints: 10_000,
-          tenderUseCount: 3,
-        },
+        { method, amountMinor, shareBasisPoints: 10_000, tenderUseCount: 3 },
       ],
-    };
+    });
     await t.run((ctx) =>
       ctx.db.patch("reportWeekAccepted", acceptedBaselineId, {
-        paymentMix: frozenMix,
-        outsideSchedulePaymentMix: { status: "unavailable" },
+        paymentMix: laneMix("cash", 7_500),
+        outsideSchedulePaymentMix: laneMix("card", 2_500),
       }),
     );
 
@@ -2916,10 +2914,74 @@ describe("weekly read contract parity", () => {
         }),
       );
 
-    expect((await readAccepted())?.paymentMix).toEqual(frozenMix);
-    expect((await readAccepted())?.outsideSchedulePaymentMix).toEqual({
+    // The Payments figure beside the mix is BOTH lanes combined, so the
+    // projected mix is too — otherwise the breakdown cannot reconcile to the
+    // number printed above it.
+    expect((await readAccepted())?.paymentMix).toEqual({
+      status: "complete",
+      totalMinor: 10_000,
+      rows: [
+        {
+          method: "cash",
+          amountMinor: 7_500,
+          shareBasisPoints: 7_500,
+          tenderUseCount: 3,
+        },
+        {
+          method: "card",
+          amountMinor: 2_500,
+          shareBasisPoints: 2_500,
+          tenderUseCount: 3,
+        },
+      ],
+    });
+
+    // One unknowable lane poisons the combination — never a partial mix.
+    await t.run((ctx) =>
+      ctx.db.patch("reportWeekAccepted", acceptedBaselineId, {
+        outsideSchedulePaymentMix: { status: "unavailable" },
+      }),
+    );
+    expect((await readAccepted())?.paymentMix).toEqual({
       status: "unavailable",
     });
+    await t.run((ctx) =>
+      ctx.db.patch("reportWeekAccepted", acceptedBaselineId, {
+        outsideSchedulePaymentMix: laneMix("card", 2_500),
+      }),
+    );
+
+    // With an amendment, Reports shows amendment totals — so it must show the
+    // amendment's mix beside them, not the baseline's.
+    await t.run(async (ctx) => {
+      const doc = await ctx.db.get("reportWeekAccepted", acceptedBaselineId);
+      await ctx.db.patch("reportWeekAccepted", acceptedBaselineId, {
+        amendment: {
+          changedAt: 3_000,
+          currentFingerprint: "amended-v1",
+          included: doc!.included,
+          includedNetSalesDeltaMinor: 0,
+          outsideSchedule: doc!.outsideSchedule,
+          outsideScheduleNetSalesDeltaMinor: 0,
+          paymentMix: laneMix("mobile_money", 9_000),
+          outsideSchedulePaymentMix: {
+            status: "complete",
+            totalMinor: 0,
+            rows: [],
+          },
+        },
+      });
+    });
+    expect((await readAccepted())?.paymentMix).toMatchObject({
+      status: "complete",
+      totalMinor: 9_000,
+      rows: [{ method: "mobile_money", amountMinor: 9_000 }],
+    });
+    await t.run((ctx) =>
+      ctx.db.patch("reportWeekAccepted", acceptedBaselineId, {
+        amendment: undefined,
+      }),
+    );
 
     // A corrected report repairs frozen close-backed history, so it must keep
     // reading `closeEvidence.payments` rather than presenting two provenances
@@ -2970,7 +3032,6 @@ describe("weekly read contract parity", () => {
 
     const corrected = await readAccepted();
     expect(corrected?.paymentMix).toBeUndefined();
-    expect(corrected?.outsideSchedulePaymentMix).toBeUndefined();
     expect(corrected?.closeEvidence?.payments.rows).toEqual([]);
   });
 

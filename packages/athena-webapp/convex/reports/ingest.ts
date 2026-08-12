@@ -6,6 +6,7 @@ import {
   type ReportDayMetrics,
   type ReportSkuDayMetrics,
   accumulatePaymentMixFact,
+  boundPaymentMixState,
   derivePaymentMix,
   derivePaymentPosture,
   emptyPaymentMixState,
@@ -623,7 +624,9 @@ async function applyToOpenDay(
     (base.paymentsCollectedMinor !== 0 || base.paymentsRefundedMinor !== 0)
       ? { ...emptyPaymentMixState(), evidenceBroken: true }
       : emptyPaymentMixState());
-  const paymentMixState = mergePaymentMixState(priorMixState, batchMixState);
+  const paymentMixState = boundPaymentMixState(
+    mergePaymentMixState(priorMixState, batchMixState),
+  );
 
   const dayPatch = {
     ...next,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { foldDay } from "./foldDay";
+import { REPORT_PAYMENT_PARTICIPATION_CAP } from "../../shared/reportsContract";
 import type {
   CloseRef,
   FoldFact,
@@ -967,6 +968,42 @@ describe("foldDay — payment mix", () => {
         { method: "cash", amountMinor: 3_000, tenderUseCount: 1 },
         { method: "card", amountMinor: 4_000, tenderUseCount: 1 },
       ],
+    });
+  });
+});
+
+describe("foldDay — payment mix participation bound", () => {
+  it("clamps over-cap participation state instead of persisting an unbounded array", () => {
+    const facts: FoldFact[] = [];
+    for (let index = 0; index <= REPORT_PAYMENT_PARTICIPATION_CAP; index += 1) {
+      facts.push(
+        fact({
+          factId: `p-${index}`,
+          sourceDomain: "payments",
+          sourceId: `alloc-${index}`,
+          factKind: "payment",
+          grossAmountMinor: 10,
+          netAmountMinor: 10,
+          paymentAllocationCoverage: "known",
+          paymentAllocationMinor: 10,
+          paymentMethod: "cash",
+          paymentParticipationId: `alloc-${index}`,
+          paymentMixMinor: 10,
+        }),
+      );
+    }
+
+    const { day } = foldDay("GHS", facts);
+    // The published conclusion is honest…
+    expect(day.paymentMix).toEqual({ status: "unavailable" });
+    // …and the PERSISTED evidence is bounded too: the state rides on the day
+    // document, so past the cap it collapses to a broken marker rather than
+    // an ever-growing array that would eventually breach the document limit.
+    expect(day.paymentMixState).toEqual({
+      amountByMethod: [],
+      participation: [],
+      unattributedMinor: 0,
+      evidenceBroken: true,
     });
   });
 });
