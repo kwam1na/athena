@@ -1,6 +1,7 @@
 import { createFileRoute, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { CalendarDaysIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/states/empty/empty-state";
@@ -334,6 +335,31 @@ export function ReportsWeeklyRoute() {
                   aria-label="Weekly report history"
                   className="border-y border-border py-layout-md"
                 >
+                  {selectedReportId ? (
+                    <Button
+                      className="-ml-2 mb-layout-sm h-control-standard gap-2 px-2 text-foreground"
+                      onClick={() =>
+                        void navigate({
+                          search: (current) => ({
+                            ...current,
+                            history: undefined,
+                            historyCursor: undefined,
+                            historyCursorTrail: undefined,
+                            reportId: undefined,
+                            ...closedUnitsSheetSearch,
+                          }),
+                        })
+                      }
+                      type="button"
+                      variant="clear"
+                    >
+                      <CalendarDaysIcon
+                        aria-hidden="true"
+                        className="h-4 w-4"
+                      />
+                      Return to current week
+                    </Button>
+                  ) : null}
                   {history === undefined ? (
                     <p className="text-sm text-muted-foreground">
                       Loading weekly history.

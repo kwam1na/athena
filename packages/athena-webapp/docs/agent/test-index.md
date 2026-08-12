@@ -503,6 +503,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/reports/ReportCustomRangePanel.test.tsx`](../../src/components/reports/ReportCustomRangePanel.test.tsx)
 - [`src/components/reports/ReportDateRangeField.test.tsx`](../../src/components/reports/ReportDateRangeField.test.tsx)
 - [`src/components/reports/ReportDaysPanel.test.tsx`](../../src/components/reports/ReportDaysPanel.test.tsx)
+- [`src/components/reports/ReportSegmentedTabs.test.tsx`](../../src/components/reports/ReportSegmentedTabs.test.tsx)
 - [`src/components/reports/ReportSkuMixChart.test.tsx`](../../src/components/reports/ReportSkuMixChart.test.tsx)
 - [`src/components/reports/ReportTrendChart.test.tsx`](../../src/components/reports/ReportTrendChart.test.tsx)
 - [`src/components/reports/ReportUnitsMovedChartSheet.test.tsx`](../../src/components/reports/ReportUnitsMovedChartSheet.test.tsx)

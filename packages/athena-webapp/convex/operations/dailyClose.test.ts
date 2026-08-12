@@ -50,6 +50,8 @@ type TableName =
   | "expenseSession"
   | "expenseTransaction"
   | "expenseTransactionItem"
+  | "onlineOrder"
+  | "onlineOrderItem"
   | "operationalEvent"
   | "operationalWorkItem"
   | "oversizedOperationalWorkRepair"
@@ -2436,6 +2438,190 @@ describe("end-of-day review backend foundation", () => {
     );
     expect(snapshot.readyItems.map((item) => item.key)).not.toContain(
       "register_session:register-submitted:closed",
+    );
+  });
+
+  it("includes completed storefront revenue in the store-day sales total", async () => {
+    const { db } = createDb({
+      onlineOrder: [
+        {
+          _id: "online-order-1",
+          amount: 72_200,
+          completedAt: Date.UTC(2026, 4, 7, 19, 45),
+          deliveryFee: 0,
+          discount: null,
+          itemCount: 5,
+          orderNumber: "687185",
+          paymentDue: 72_200,
+          status: "picked-up",
+          storeId: "store-1",
+        },
+      ],
+      onlineOrderItem: [
+        {
+          _id: "online-order-item-1",
+          orderId: "online-order-1",
+          price: 14_000,
+          productSkuId: "sku-1",
+          quantity: 3,
+        },
+        {
+          _id: "online-order-item-2",
+          orderId: "online-order-1",
+          price: 20_000,
+          productSkuId: "sku-2",
+          quantity: 1,
+        },
+        {
+          _id: "online-order-item-3",
+          orderId: "online-order-1",
+          price: 10_200,
+          productSkuId: "sku-3",
+          quantity: 1,
+        },
+      ],
+      posTransaction: [
+        {
+          _id: "txn-1",
+          changeGiven: 0,
+          completedAt: Date.UTC(2026, 4, 7, 14),
+          payments: [{ amount: 12_000, method: "cash", timestamp: 1 }],
+          status: "completed",
+          storeId: "store-1",
+          subtotal: 12_000,
+          tax: 0,
+          total: 12_000,
+          totalPaid: 12_000,
+          transactionNumber: "TXN-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.summary.salesTotal).toBe(84_200);
+    expect(snapshot.summary.transactionCount).toBe(2);
+    expect(snapshot.readyItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "online_order:online-order-1:completed",
+          metadata: expect.objectContaining({
+            completedAt: Date.UTC(2026, 4, 7, 19, 45),
+            itemCount: 5,
+            order: "687185",
+            total: 72_200,
+          }),
+          subject: {
+            id: "online-order-1",
+            label: "687185",
+            type: "online_order",
+          },
+          title: "Completed online order",
+        }),
+      ]),
+    );
+    expect(snapshot.sourceCompleteness.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          complete: true,
+          recordCount: 1,
+          source: "online_order",
+          statuses: ["delivered", "picked-up"],
+        }),
+      ]),
+    );
+  });
+
+  it("includes legacy inline storefront items in discounted sales totals", async () => {
+    const { db } = createDb({
+      onlineOrder: [
+        {
+          _id: "online-order-inline",
+          amount: 30_000,
+          completedAt: Date.UTC(2026, 4, 7, 19, 45),
+          deliveryFee: 0,
+          discount: { discountType: "percentage", discountValue: 10 },
+          items: [
+            { price: 10_000, productSkuId: "sku-1", quantity: 3 },
+          ],
+          orderNumber: "INLINE-1",
+          status: "delivered",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.summary.salesTotal).toBe(27_000);
+    expect(snapshot.summary.transactionCount).toBe(1);
+    expect(snapshot.readyItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "online_order:online-order-inline:completed",
+          metadata: expect.objectContaining({ itemCount: 3, total: 27_000 }),
+        }),
+      ]),
+    );
+  });
+
+  it("marks storefront order and item evidence incomplete at their source caps", async () => {
+    const orders = Array.from({ length: 201 }, (_, index) => ({
+      _id: `online-order-${index}`,
+      amount: 1_000,
+      completedAt: Date.UTC(2026, 4, 7, 12, index % 60),
+      deliveryFee: 0,
+      discount: null,
+      orderNumber: `ORDER-${index}`,
+      status: "delivered",
+      storeId: "store-1",
+    }));
+    const orderItems = Array.from({ length: 201 }, (_, index) => ({
+      _id: `online-order-item-${index}`,
+      orderId: "online-order-0",
+      price: 1_000,
+      productSkuId: `sku-${index}`,
+      quantity: 1,
+    }));
+
+    const orderCapSnapshot = await buildDailyCloseSnapshotWithCtx(
+      { db: createDb({ onlineOrder: orders, store: [store] }).db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+    const itemCapSnapshot = await buildDailyCloseSnapshotWithCtx(
+      {
+        db: createDb({
+          onlineOrder: [orders[0]],
+          onlineOrderItem: orderItems,
+          store: [store],
+        }).db,
+      } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(orderCapSnapshot.sourceCompleteness.entries).toContainEqual(
+      expect.objectContaining({
+        complete: false,
+        reason: "online_order_source_cap_reached",
+        recordCount: 200,
+        source: "online_order",
+      }),
+    );
+    expect(itemCapSnapshot.sourceCompleteness.entries).toContainEqual(
+      expect.objectContaining({
+        complete: false,
+        reason: "online_order_item_source_cap_reached",
+        recordCount: 0,
+        source: "online_order_item",
+      }),
     );
   });
 

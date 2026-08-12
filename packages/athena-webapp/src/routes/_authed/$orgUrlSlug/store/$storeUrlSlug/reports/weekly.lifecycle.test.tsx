@@ -591,6 +591,41 @@ describe("ReportsWeeklyRoute query lifecycle", () => {
     expect(state.search.sheetReturn).toBeUndefined();
   });
 
+  it("returns from an accepted week to the current week and closes history", async () => {
+    const user = userEvent.setup();
+    state.search = {
+      history: true,
+      historyCursor: "older-page",
+      historyCursorTrail: [null],
+      overviewWindow: "last_7_days",
+      reportId: "week:2026-07-06",
+      sheetReturn: "sku-61~640",
+      unitsPage: 4,
+      unitsTab: "granular",
+    };
+    render(<ReportsWeeklyRoute />);
+
+    const returnButton = screen.getByRole("button", {
+      name: "Return to current week",
+    });
+    expect(returnButton).toHaveClass("h-control-standard");
+    expect(
+      returnButton.querySelector("svg.lucide-calendar-days"),
+    ).toBeInTheDocument();
+
+    await user.click(returnButton);
+
+    expect(state.search.reportId).toBeUndefined();
+    expect(state.search.history).toBeUndefined();
+    expect(state.search.historyCursor).toBeUndefined();
+    expect(state.search.historyCursorTrail).toBeUndefined();
+    expect(state.search.units).toBeUndefined();
+    expect(state.search.unitsTab).toBeUndefined();
+    expect(state.search.unitsPage).toBeUndefined();
+    expect(state.search.sheetReturn).toBeUndefined();
+    expect(state.search.overviewWindow).toBe("last_7_days");
+  });
+
   it("uses one active query, adds history only on demand, and replaces active with detail", async () => {
     const user = userEvent.setup();
     const { rerender } = render(<ReportsWeeklyRoute />);

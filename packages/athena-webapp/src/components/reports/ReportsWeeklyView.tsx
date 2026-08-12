@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowUpRight, CheckCircle2, Info } from "lucide-react";
 import { FlipNumber } from "@/components/common/FlipNumber";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -46,6 +48,10 @@ import {
   type ReportUnitsMovedFocusSurface,
   type ReportUnitsMovedTab,
 } from "./ReportUnitsMovedChartSheet";
+import {
+  ReportSegmentedTabsList,
+  ReportSegmentedTabsTrigger,
+} from "./ReportSegmentedTabs";
 
 /**
  * The server-owned weekly projection shown by both active and history reads.
@@ -287,6 +293,29 @@ function closeEvidenceCoverageLabel(coverage: WeeklyEvidenceCoverage) {
   return `${coverage.usableDayCount.toLocaleString()} of ${coverage.scheduledDayCount.toLocaleString()} scheduled days`;
 }
 
+function sharedCloseEvidenceCoverage(
+  evidence: WeeklyCloseEvidence | undefined,
+): WeeklyEvidenceCoverage | null {
+  if (!evidence) return null;
+
+  const coverages = [
+    evidence.payments.coverage,
+    evidence.cash.coverage,
+    evidence.expenses.coverage,
+  ];
+  const [first, ...rest] = coverages;
+  if (first.status === "unavailable") return null;
+
+  return rest.every(
+    (coverage) =>
+      coverage.status === first.status &&
+      coverage.usableDayCount === first.usableDayCount &&
+      coverage.scheduledDayCount === first.scheduledDayCount,
+  )
+    ? first
+    : null;
+}
+
 function weeklyPaymentMix(
   rows: WeeklyCloseEvidence["payments"]["rows"],
 ): StorePulsePaymentMixEntry[] {
@@ -495,6 +524,9 @@ export function ReportsWeeklyView({
     report.inventoryAttention?.completeness === "complete" &&
     report.inventoryAttention.newCount === 0 &&
     report.inventoryAttention.carriedForwardCount === 0;
+  const sharedEvidenceCoverage = sharedCloseEvidenceCoverage(
+    report.closeEvidence,
+  );
   /**
    * Mixed currency and a breached fact cap both tell the operator that totals
    * are withheld. Sections keep their shape so the report stays navigable,
@@ -844,67 +876,61 @@ export function ReportsWeeklyView({
             Payment allocation is incomplete.
           </p>
         ) : null}
+        {sharedEvidenceCoverage ? (
+          <dl
+            className="mt-layout-md flex flex-wrap items-baseline gap-x-layout-sm gap-y-1 text-sm"
+            data-testid="weekly-close-evidence-coverage"
+          >
+            <dt className="font-medium text-foreground">
+              Daily Close evidence
+            </dt>
+            <dd className="text-muted-foreground">
+              {sharedEvidenceCoverage.usableDayCount.toLocaleString()} of{" "}
+              {sharedEvidenceCoverage.scheduledDayCount.toLocaleString()}
+              {" scheduled days"}
+            </dd>
+          </dl>
+        ) : null}
       </Section>
 
-      {report.closeEvidence ? (
+      {report.closeEvidence?.payments.rows.length ? (
         <Section title="Payment mix">
-          {report.closeEvidence.payments.coverage.status === "unavailable" ? (
+          {!sharedEvidenceCoverage ? (
             <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
               {closeEvidenceCoverageLabel(
                 report.closeEvidence.payments.coverage,
               )}
             </p>
-          ) : report.closeEvidence.payments.rows.length === 0 ? (
-            /*
-             * Certified zero: covered days exist but recorded no tender at
-             * all. Mirrors the cash lane's covered-zero pattern rather than
-             * the live-sync empty state, which promises data that will never
-             * arrive for a closed week.
-             */
-            <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
-              <span className="font-medium text-foreground">{money(0)}</span> ·{" "}
-              {closeEvidenceCoverageLabel(report.closeEvidence.payments.coverage)}
-            </p>
-          ) : (
-            <>
-              <p className="mt-layout-sm text-sm text-muted-foreground">
-                {closeEvidenceCoverageLabel(
-                  report.closeEvidence.payments.coverage,
-                )}
-              </p>
-              {/* The qualified subtotal: only the covered days' tender value. */}
-              <p className="mt-layout-xs text-sm text-muted-foreground">
-                Covered tender value:{" "}
-                <span className="font-medium text-foreground">
-                  {money(report.closeEvidence.payments.coveredTenderValueMinor)}
-                </span>
-              </p>
-              <div className="mt-layout-md lg:w-1/2">
-                <PaymentMethodsPanel
-                  countNoun="tender use"
-                  paymentMix={weeklyPaymentMix(
-                    report.closeEvidence.payments.rows,
-                  )}
-                  shareSource="provided"
-                  showHeader={false}
-                  totalTransactions={report.closeEvidence.payments.rows.reduce(
-                    (total, row) => total + row.tenderUseCount,
-                    0,
-                  )}
-                  valueFormatter={(payment) => money(payment.total)}
-                  variant="canvas"
-                />
-              </div>
-              {report.closeEvidence.payments.rows.reduce(
-                (total, row) => total + row.shareBasisPoints,
+          ) : null}
+          {/* The qualified subtotal: only the covered days' tender value. */}
+          <p className="mt-layout-xs text-sm text-muted-foreground">
+            Covered tender value:{" "}
+            <span className="font-medium text-foreground">
+              {money(report.closeEvidence.payments.coveredTenderValueMinor)}
+            </span>
+          </p>
+          <div className="mt-layout-md lg:w-1/2">
+            <PaymentMethodsPanel
+              countNoun="tender use"
+              paymentMix={weeklyPaymentMix(report.closeEvidence.payments.rows)}
+              shareSource="provided"
+              showHeader={false}
+              totalTransactions={report.closeEvidence.payments.rows.reduce(
+                (total, row) => total + row.tenderUseCount,
                 0,
-              ) !== 10_000 ? (
-                <p className="mt-layout-sm text-xs text-muted-foreground">
-                  Shares may not total 100% due to rounding.
-                </p>
-              ) : null}
-            </>
-          )}
+              )}
+              valueFormatter={(payment) => money(payment.total)}
+              variant="canvas"
+            />
+          </div>
+          {report.closeEvidence.payments.rows.reduce(
+            (total, row) => total + row.shareBasisPoints,
+            0,
+          ) !== 10_000 ? (
+            <p className="mt-layout-sm text-xs text-muted-foreground">
+              Shares may not total 100% due to rounding.
+            </p>
+          ) : null}
         </Section>
       ) : null}
 
@@ -975,7 +1001,8 @@ export function ReportsWeeklyView({
               </p>
             ) : (
               <p className="mt-layout-xs text-sm leading-6 text-muted-foreground">
-                {report.closeEvidence.cash.coverage.status === "partial" ? (
+                {report.closeEvidence.cash.coverage.status === "partial" &&
+                !sharedEvidenceCoverage ? (
                   `${formatCashVariance(report.closeEvidence.cash.cashVarianceMinor, money)} · ${closeEvidenceCoverageLabel(report.closeEvidence.cash.coverage)}`
                 ) : (
                   <span className="font-medium text-foreground">
@@ -985,7 +1012,8 @@ export function ReportsWeeklyView({
                     )}
                   </span>
                 )}
-                {report.closeEvidence.cash.coverage.status === "complete" ? (
+                {report.closeEvidence.cash.coverage.status === "complete" &&
+                !sharedEvidenceCoverage ? (
                   <span className="block">
                     {closeEvidenceCoverageLabel(
                       report.closeEvidence.cash.coverage,
@@ -1031,11 +1059,13 @@ export function ReportsWeeklyView({
             </p>
           ) : (
             <>
-              <p className="mt-layout-sm text-sm text-muted-foreground">
-                {closeEvidenceCoverageLabel(
-                  report.closeEvidence.expenses.coverage,
-                )}
-              </p>
+              {!sharedEvidenceCoverage ? (
+                <p className="mt-layout-sm text-sm text-muted-foreground">
+                  {closeEvidenceCoverageLabel(
+                    report.closeEvidence.expenses.coverage,
+                  )}
+                </p>
+              ) : null}
               {/* The qualified subtotal: only the covered days' expense spend. */}
               <p className="mt-layout-xs text-sm text-muted-foreground">
                 Covered expense spend:{" "}
@@ -1048,22 +1078,10 @@ export function ReportsWeeklyView({
                   ? "unit"
                   : "units"}
               </p>
-              <div className="mt-layout-md grid gap-layout-xl lg:grid-cols-2">
-                <ExpenseRanking
-                  currency={currency}
-                  emphasis="spend"
-                  remainder={report.closeEvidence.expenses.spendRemainder}
-                  rows={report.closeEvidence.expenses.bySpend}
-                  title="Highest expense spend"
-                />
-                <ExpenseRanking
-                  currency={currency}
-                  emphasis="quantity"
-                  remainder={report.closeEvidence.expenses.quantityRemainder}
-                  rows={report.closeEvidence.expenses.byQuantity}
-                  title="Most consumed expense products"
-                />
-              </div>
+              <ExpenseProductRankings
+                currency={currency}
+                expenses={report.closeEvidence.expenses}
+              />
             </>
           )}
         </Section>
@@ -1225,6 +1243,60 @@ function formatReportTimestamp(at: number): string {
   });
 }
 
+function ExpenseProductRankings({
+  currency,
+  expenses,
+}: {
+  currency: string;
+  expenses: WeeklyCloseEvidence["expenses"];
+}) {
+  const [sortOrder, setSortOrder] = useState<"spend" | "quantity">("spend");
+  const hasExpenseProducts =
+    expenses.bySpend.length > 0 ||
+    expenses.byQuantity.length > 0 ||
+    (expenses.spendRemainder?.productCount ?? 0) > 0 ||
+    (expenses.quantityRemainder?.productCount ?? 0) > 0;
+
+  if (!hasExpenseProducts) return null;
+
+  return (
+    <Tabs
+      className="mt-layout-md"
+      onValueChange={(value) =>
+        setSortOrder(value === "quantity" ? "quantity" : "spend")
+      }
+      value={sortOrder}
+    >
+      <ReportSegmentedTabsList aria-label="Expense product sort order">
+        <ReportSegmentedTabsTrigger value="spend">
+          Expense spend
+        </ReportSegmentedTabsTrigger>
+        <ReportSegmentedTabsTrigger value="quantity">
+          Units consumed
+        </ReportSegmentedTabsTrigger>
+      </ReportSegmentedTabsList>
+      <TabsContent className="mt-layout-md" value="spend">
+        <ExpenseRanking
+          currency={currency}
+          emphasis="spend"
+          remainder={expenses.spendRemainder}
+          rows={expenses.bySpend}
+          title="Highest expense spend"
+        />
+      </TabsContent>
+      <TabsContent className="mt-layout-md" value="quantity">
+        <ExpenseRanking
+          currency={currency}
+          emphasis="quantity"
+          remainder={expenses.quantityRemainder}
+          rows={expenses.byQuantity}
+          title="Most consumed expense products"
+        />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
 function ExpenseRanking({
   currency,
   emphasis,
@@ -1264,10 +1336,10 @@ function ExpenseRanking({
               key={row.productSkuId}
             >
               <span>
-                <span className="block font-medium text-foreground">
+                <span className="block text-sm font-medium leading-5 text-foreground">
                   {formatProductDisplayName(row.productName)}
                 </span>
-                <span className="block text-sm text-muted-foreground">
+                <span className="block text-xs leading-5 text-muted-foreground">
                   {row.productSku}
                 </span>
               </span>

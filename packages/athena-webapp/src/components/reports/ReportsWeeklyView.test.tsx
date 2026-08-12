@@ -469,7 +469,9 @@ describe("ReportsWeeklyView", () => {
     expect(screen.getByText(/Accepted Aug 8, 2026.*Corrected Aug 9, 2026/)).toBeInTheDocument();
   });
 
-  it("renders close-backed cash, payment, and expense evidence value-first", () => {
+  it("renders close-backed cash, payment, and tabbed expense evidence value-first", async () => {
+    const user = userEvent.setup();
+
     render(
       <ReportsWeeklyView
         report={{ ...report, closeEvidence } as WeeklyReportProjection}
@@ -513,15 +515,103 @@ describe("ReportsWeeklyView", () => {
     expect(
       screen.queryByText("Shares may not total 100% due to rounding."),
     ).not.toBeInTheDocument();
+    const expenseSort = screen.getByRole("tablist", {
+      name: "Expense product sort order",
+    });
+    expect(expenseSort).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: "Expense spend" }),
+    ).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Highest expense spend")).toBeInTheDocument();
-    expect(screen.getByText("Most consumed expense products")).toBeInTheDocument();
-    expect(screen.getAllByText("6 of 6 scheduled days")).toHaveLength(3);
+    expect(
+      screen.queryByText("Most consumed expense products"),
+    ).not.toBeInTheDocument();
+    const sharedCoverage = screen.getByTestId("weekly-close-evidence-coverage");
+    expect(sharedCoverage).toHaveTextContent("Daily Close evidence");
+    expect(sharedCoverage).toHaveTextContent("6 of 6 scheduled days");
+    expect(screen.getAllByText("6 of 6 scheduled days")).toHaveLength(1);
     expect(screen.getByText("2 other products")).toBeInTheDocument();
-    expect(screen.getByText("1 other product")).toBeInTheDocument();
-    // Frozen evidence keeps the source spelling; the view normalizes on read.
-    expect(screen.getByText("Styling Gel")).toBeInTheDocument();
-    expect(screen.getByText("Lace Remover")).toBeInTheDocument();
+    expect(screen.queryByText("1 other product")).not.toBeInTheDocument();
+    // Frozen evidence keeps the source spelling; the view normalizes on read
+    // and gives the product label hierarchy a compact reporting treatment.
+    const spendProduct = screen.getByText("Lace Remover");
+    expect(spendProduct).toHaveClass("text-sm");
+    expect(screen.getByText("LR-02")).toHaveClass("text-xs");
+    expect(screen.queryByText("Styling Gel")).not.toBeInTheDocument();
     expect(screen.queryByText("STYLING GEL")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Units consumed" }));
+
+    expect(
+      screen.getByRole("tab", { name: "Units consumed" }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(
+      screen.queryByText("Highest expense spend"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Most consumed expense products")).toBeInTheDocument();
+    expect(screen.getByText("1 other product")).toBeInTheDocument();
+    expect(screen.queryByText("2 other products")).not.toBeInTheDocument();
+    expect(screen.getByText("Styling Gel")).toHaveClass("text-sm");
+    expect(screen.getByText("GEL-01")).toHaveClass("text-xs");
+    expect(screen.queryByText("Lace Remover")).not.toBeInTheDocument();
+  });
+
+  it("keeps lane-specific coverage when Daily Close evidence does not agree", () => {
+    render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          closeEvidence: {
+            ...closeEvidence,
+            cash: {
+              ...closeEvidence.cash,
+              coverage: {
+                scheduledDayCount: 6,
+                status: "partial",
+                usableDayCount: 3,
+              },
+            },
+          },
+        } as WeeklyReportProjection}
+      />,
+    );
+
+    expect(
+      screen.queryByTestId("weekly-close-evidence-coverage"),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("6 of 6 scheduled days")).toHaveLength(2);
+    expect(screen.getByText(/Based on 3 of 6 scheduled days/)).toBeInTheDocument();
+  });
+
+  it("hides expense sort controls when there are no expense products", () => {
+    render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          closeEvidence: {
+            ...closeEvidence,
+            expenses: {
+              ...closeEvidence.expenses,
+              byQuantity: [],
+              bySpend: [],
+              coveredQuantity: 0,
+              coveredSpendMinor: 0,
+              quantityRemainder: null,
+              spendRemainder: null,
+            },
+          },
+        } as WeeklyReportProjection}
+      />,
+    );
+
+    expect(screen.getByText(/Covered expense spend:/)).toBeInTheDocument();
+    expect(screen.queryByRole("tablist", {
+      name: "Expense product sort order",
+    })).not.toBeInTheDocument();
+    expect(screen.queryByText("Highest expense spend")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Most consumed expense products"),
+    ).not.toBeInTheDocument();
   });
 
   it("discloses rounding only when persisted shares do not total 100%", () => {
@@ -566,7 +656,7 @@ describe("ReportsWeeklyView", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders a certified-zero payment week as covered zero, not a sync promise", () => {
+  it("does not render payment mix when there are no payments", () => {
     render(
       <ReportsWeeklyView
         report={{
@@ -587,17 +677,9 @@ describe("ReportsWeeklyView", () => {
       />,
     );
 
-    const paymentMixHeading = screen.getByText("Payment mix");
-    const section = paymentMixHeading.closest("section")!;
-    expect(section).toHaveTextContent("$0 · Based on 3 of 6 scheduled days");
+    expect(screen.queryByText("Payment mix")).not.toBeInTheDocument();
     expect(
-      screen.queryByText(
-        "Payment method shares will appear after completed sales sync.",
-      ),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText("No payment mix yet")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(/Covered tender value:/),
+      screen.queryByRole("region", { name: "Payment methods" }),
     ).not.toBeInTheDocument();
   });
 

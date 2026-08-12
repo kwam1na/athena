@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Store-Day Sales Parity and Weekly Review Refinement</title>
+</head>
+<body>
+    <article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="4d79178e4438fa24d1e3e7bff0b559a670a413e7f889bf6e072714b429e16a5e">
+  <header data-report-section="header">
+    <h1>Store-Day Sales Parity and Weekly Review Refinement</h1>
+    <p>Why Daily Close now agrees with channel-complete reporting</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch codex/eod-storefront-net-sales</li>
+      <li>Focused validation complete</li>
+      <li>Production deploy pending</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Source</dt><dd>61e91573</dd>
+      <dt>Status</dt><dd>Delivery candidate</dd>
+      <dt>Root alignment</dt><dd>Pending merge</dd>
+      <dt>Production</dt><dd>Pending merge</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>Daily Close now includes completed storefront orders in the same store-day sales total used for POS activity. The accepted close can therefore carry channel-complete sales evidence into reporting instead of freezing a lower POS-only total.</p>
+      <p>The weekly workspace also communicates evidence and sort choices more efficiently: shared coverage is stated once, empty payment mix is omitted, expense rankings use one reusable segmented control, and historical weeks offer an explicit return to the current period.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>The mismatch</h2>
+      <p>Reports folded fulfilled online orders, while End of Day Review counted only completed POS transactions. Both surfaces were internally consistent with their own source sets, but they answered the same store-day question with different totals.</p>
+      <p>A safe repair had to include money, counts, inspectable rows, legacy documents, source caps, and Convex read cost together.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model</h2>
+      <p>Think of Daily Close as the store-day envelope. POS and storefront are separate sales lanes entering that envelope. Reports may transform the accepted evidence later, but the envelope cannot omit a lane that reports already recognizes.</p>
+      <p>For current online orders, the parent row now carries the charged paymentDue and compact itemCount needed by the envelope. Older rows use a bounded reconstruction path.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>Before: completed POS transactions fed Daily Close totals, while fulfilled online orders entered reporting facts independently. A day containing online revenue produced a lower EOD number.</p>
+      <p>After: delivered and picked-up orders in the operating-day range contribute paymentDue and one transaction each, create linked ready evidence, and participate in source completeness. Accepted Daily Close facts then flow through the existing dirty-day and weekly projection pipeline.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed</h2>
+      <p>POS payment totals, POS cash totals, cash transaction counts, report acceptance semantics, and frozen historical close snapshots remain unchanged. Only delivered and picked-up storefront statuses are included.</p>
+      <ul>
+        <li>Online-order creation snapshots itemCount beside the existing authoritative paymentDue.</li>
+        <li>Daily Close reads fulfilled orders through the store/status/completed-time index and uses the parent projection without child queries for current data.</li>
+        <li>Legacy orders reconstruct inline or split item rows under one 200-line evidence budget and fail closed when completeness cannot be proven.</li>
+        <li>Weekly payment, cash, and expense coverage collapses into one Daily Close evidence line only when the three lanes agree.</li>
+        <li>Payment mix and expense sort controls disappear when there is no corresponding data.</li>
+        <li>Overview, Units Moved, and weekly expense rankings reuse ReportSegmentedTabs.</li>
+        <li>Historical weekly selection can return to the current week while clearing period-owned sheet state.</li>
+      </ul>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <p>More than 200 qualifying orders or more than 200 reconstructed legacy lines marks source evidence incomplete. The visible snapshot may contain provisional partial totals and rows, but existing completion guards prevent the operator or automation from accepting that unproven close. Escalate the cap breach for engineering remediation, such as a bounded pagination or cap change, then rebuild the snapshot; do not delete or exclude valid sales evidence.</p>
+      <p>Current orders avoid read amplification. Legacy child reads are sequential and constrained by the remaining shared budget.</p>
+      <p>Already completed historical snapshots are not rewritten. The correction applies when the store-day snapshot is built before acceptance or rebuilt after reopening.</p>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and review</h2>
+      <p>The repository merge gate must be rerun after adding this report and solution note. Merge, local-main alignment, Convex deployment, and Athena frontend deployment are still pending and must not be inferred from this candidate report.</p>
+      <ul>
+        <li><code>bun run test -- convex/operations/dailyClose.test.ts</code>: 95 tests passed.</li>
+        <li><code>bun run test -- convex/storeFront/onlineOrder.test.ts</code>: 13 tests passed.</li>
+        <li><code>bun run test -- ReportsWeeklyView.test.tsx</code>: 42 tests passed.</li>
+        <li><code>bun run test -- weekly.lifecycle.test.tsx</code>: 28 tests passed.</li>
+        <li><code>bun run typecheck</code> passed. <code>bun run lint:frontend:changed</code> passed with only 4 Fast Refresh warnings.</li>
+        <li>Final candidate review artifacts under <code>/tmp/compound-engineering/ce-code-review/reports-20260812-final/</code> are clean for correctness, testing, TypeScript, adversarial behavior, agent-native parity, and performance. Maintainability records one non-blocking P3 consolidation note.</li>
+      </ul>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next-time guidance</h2>
+      <ul>
+        <li>When adding a sales channel to reports, update Daily Close total, count, evidence rows, and completeness together.</li>
+        <li>Persist compact parent projections for hot aggregate reads; keep child reconstruction bounded and legacy-only.</li>
+        <li>Use the shared segmented report control for mutually exclusive report orderings.</li>
+        <li>Treat empty analytical sections as absent when they offer neither data nor an operator action.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/convex/operations/dailyClose.ts</code></td><td>Owns the store-day source reads, completeness, ready evidence, and combined sales summary.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/storeFront/helpers/onlineOrder.ts</code></td><td>Snapshots itemCount beside paymentDue when current orders are created.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/schemas/storeFront/onlineOrder/onlineOrder.ts</code></td><td>Keeps itemCount optional so old documents remain readable.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/reports/ReportsWeeklyView.tsx</code></td><td>Presents shared coverage, conditional sections, and tabbed expense rankings.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/reports/ReportSegmentedTabs.tsx</code></td><td>Centralizes segmented-control styling across report surfaces.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reports/weekly.tsx</code></td><td>Owns historical-week selection and return-to-current route state.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A store day has POS sales and one picked-up online order. Why was Reports higher than the old EOD total?</p>
+        <ol data-quiz-options>
+          <li>Daily Close included the order but excluded the POS sale</li>
+          <li data-quiz-correct>Daily Close omitted fulfilled storefront orders</li>
+          <li>Reports treated the picked-up order as cash tender</li>
+          <li>Daily Close counted the order only in transactionCount</li>
+        </ol>
+        <p data-quiz-explanation>Reports included storefront facts while Daily Close originally summarized only POS transactions.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which storefront statuses now contribute to Daily Close?</p>
+        <ol data-quiz-options>
+          <li>Every non-cancelled status</li>
+          <li>Open and ready</li>
+          <li data-quiz-correct>Delivered and picked-up</li>
+          <li>Refunded only</li>
+        </ol>
+        <p data-quiz-explanation>Terminal fulfillment, represented by delivered or picked-up, is the inclusion boundary.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the current-order fast path?</p>
+        <ol data-quiz-options>
+          <li>Scan every order item concurrently</li>
+          <li data-quiz-correct>Use paymentDue and itemCount on the parent order</li>
+          <li>Trust the client subtotal</li>
+          <li>Read report facts back into Daily Close</li>
+        </ol>
+        <p data-quiz-explanation>The parent projection supplies the charged total and evidence count without child queries.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How are older orders handled?</p>
+        <ol data-quiz-options>
+          <li>They are ignored</li>
+          <li>They are migrated during every read</li>
+          <li data-quiz-correct>They use bounded inline or split-row reconstruction</li>
+          <li>They always use amount without discounts</li>
+        </ol>
+        <p data-quiz-explanation>Optional parent fields preserve compatibility, while bounded reconstruction keeps historical totals accurate.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>An order-source cap is exceeded and the snapshot shows some rows. May the close be accepted?</p>
+        <ol data-quiz-options>
+          <li>Yes, because every displayed row is individually valid</li>
+          <li>Yes, after a manager acknowledges the partial total</li>
+          <li data-quiz-correct>No; displayed totals remain provisional and incomplete evidence blocks acceptance</li>
+          <li>No, but the provisional total is persisted as a completed snapshot</li>
+        </ol>
+        <p data-quiz-explanation>Completeness metadata prevents an unproven store-day close from being accepted.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which totals remain POS-only?</p>
+        <ol data-quiz-options>
+          <li>Sales total and transaction count</li>
+          <li data-quiz-correct>Payment totals and cash totals</li>
+          <li>All weekly totals</li>
+          <li>Expense totals</li>
+        </ol>
+        <p data-quiz-explanation>Storefront revenue joins sales, but POS tender and cash attribution remain in their existing lanes.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>When is the shared Daily Close evidence line shown?</p>
+        <ol data-quiz-options>
+          <li>Whenever any lane is complete</li>
+          <li data-quiz-correct>Only when payment, cash, and expense coverage agree</li>
+          <li>Only for historical weeks</li>
+          <li>Whenever payment mix is empty</li>
+        </ol>
+        <p data-quiz-explanation>A single line is safe only when all three coverage values match and are available.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens to Payment mix with zero rows?</p>
+        <ol data-quiz-options>
+          <li>It shows a certified-zero card</li>
+          <li>It renders loading copy</li>
+          <li data-quiz-correct>The section is omitted</li>
+          <li>It becomes a modal</li>
+        </ol>
+        <p data-quiz-explanation>The weekly view no longer renders a section with no payment methods to compare.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What state changes when Return to current week is selected?</p>
+        <ol data-quiz-options>
+          <li>Every report preference, including the Overview window</li>
+          <li>Only the selected report id; history pagination remains</li>
+          <li data-quiz-correct>The historical report, history cursors, and Units Moved sheet/tab/page/return state clear; the Overview window remains</li>
+          <li>The active store and report tab reset</li>
+        </ol>
+        <p data-quiz-explanation>The action exits the selected historical period while preserving unrelated report context.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does this delivery-candidate report prove about production status?</p>
+        <ol data-quiz-options>
+          <li>It proves Convex and Athena are already deployed</li>
+          <li data-quiz-correct>It proves neither merge nor deployment; those finish-line steps remain pending</li>
+          <li>It proves the branch may deploy directly without merging</li>
+          <li>It proves only the storefront surface needs deployment</li>
+        </ol>
+        <p data-quiz-explanation>This report describes a delivery candidate; merge and post-merge deployment are still pending.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>session context historian</dt><dd>Searched prior sessions and repo artifacts, then reconstructed the decision and review history from source evidence when no extractable prior transcript remained.</dd>
+      <dt>delivered diff explorer</dt><dd>Mapped backend, projection, presentation, navigation, test, and generated-artifact changes plus unchanged boundaries and risks.</dd>
+      <dt>final candidate review personas</dt><dd>Correctness, testing, TypeScript, adversarial, agent-native, standards, maintainability, and performance reviewers challenged the candidate; blocking findings were fixed and re-reviewed.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

@@ -76,6 +76,7 @@ export const onlineOrderSchema = v.object({
   externalReference: v.optional(v.string()),
   externalTransactionId: v.optional(v.string()),
   hasVerifiedPayment: v.boolean(),
+  itemCount: v.optional(v.number()),
   items: v.optional(v.array(onlineOrderItemSchema)),
   orderNumber: v.string(),
   orderReceivedEmailSentAt: v.optional(v.number()),
