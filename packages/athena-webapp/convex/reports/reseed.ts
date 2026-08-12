@@ -852,6 +852,9 @@ function paymentFacts(
     ...base,
     factKind: "payment",
     occurredAt: allocation.recordedAt,
+    // The original receipt, reconstructed. It carries gross method evidence
+    // like any receipt — the reversal below moves settlement, never gross mix.
+    ...(paymentAllocationMixDimensions(allocation) ?? {}),
     paymentAllocationCoverage:
       allocation.voidedAt === undefined ? "unknown" : "known",
     ...(allocation.voidedAt === undefined

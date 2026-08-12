@@ -1673,6 +1673,8 @@ describe("verification sweep — never-folded day with real activity (F5)", () =
       expected: metrics(),
       paymentPosture: posture(),
       paymentDifferences: [POSTURE_DIFFERENCE],
+      expectedPaymentMix: { status: "complete" as const, totalMinor: 0, rows: [] },
+      paymentMixDifferences: [],
       unverifiedFields: [],
       truncated: false,
       ...overrides,

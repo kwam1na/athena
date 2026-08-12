@@ -682,8 +682,11 @@ describe("payment allocation helpers", () => {
     }
   });
 
-  it("adds no gross mix contribution from a refund or any reversal shape", async () => {
+  it("keeps gross mix on receipts and off refunds and reversals", async () => {
     const recordedAt = 1_700_000_000_000;
+    reportingMocks.recordFacts.mockClear();
+
+    // An outbound refund is not a receipt: no gross method contribution.
     const { ctx: refundCtx } = paymentContext();
     await recordPaymentAllocationWithCtx(refundCtx as never, {
       amount: 2_500,
@@ -695,43 +698,78 @@ describe("payment allocation helpers", () => {
       targetId: "transaction_9",
       targetType: "pos_transaction",
     });
+    const [refundFact] = reportingMocks.recordFacts.mock.calls.at(-1)?.[2] as Array<
+      Record<string, unknown>
+    >;
+    expect(refundFact.factKind).toBe("payment_refund");
+    expect(refundFact.paymentMixMinor).toBeUndefined();
 
-    const reversalShapes = [
-      // timed void, undated legacy void, voided outbound refund
-      { direction: "in" as const, voidedAt: recordedAt + 60_000 },
-      { direction: "in" as const, voidedAt: undefined },
-      { direction: "out" as const, voidedAt: recordedAt + 60_000 },
-    ];
-    for (const shape of reversalShapes) {
-      const { ctx } = paymentContext([
-        {
-          _id: "allocation_1",
-          allocationType: "retail_sale",
-          amount: 2_500,
-          direction: shape.direction,
-          method: "cash",
-          posTransactionId: "transaction_9",
-          recordedAt,
-          status: "voided",
-          storeId: "store_1",
-          targetId: "transaction_9",
-          targetType: "pos_transaction",
-          ...(shape.voidedAt === undefined ? {} : { voidedAt: shape.voidedAt }),
-        },
-      ]);
-      await voidPaymentAllocationWithCtx(
-        ctx as never,
-        "allocation_1" as Id<"paymentAllocation">,
-      );
-    }
+    // A timed void emits the REVERSAL, which likewise carries no gross mix.
+    const { ctx: voidCtx } = paymentContext([
+      {
+        _id: "allocation_1",
+        allocationType: "retail_sale",
+        amount: 2_500,
+        direction: "in",
+        method: "cash",
+        posTransactionId: "transaction_9",
+        recordedAt,
+        status: "recorded",
+        storeId: "store_1",
+        targetId: "transaction_9",
+        targetType: "pos_transaction",
+      },
+    ]);
+    const now = vi.spyOn(Date, "now").mockReturnValue(recordedAt + 60_000);
+    await voidPaymentAllocationWithCtx(
+      voidCtx as never,
+      "allocation_1" as Id<"paymentAllocation">,
+    );
+    now.mockRestore();
+    const [reversalFact] = reportingMocks.recordFacts.mock.calls.at(-1)?.[2] as Array<
+      Record<string, unknown>
+    >;
+    expect(reversalFact.factKind).toBe("payment_refund");
+    expect(reversalFact.paymentMixMinor).toBeUndefined();
 
-    for (const call of reportingMocks.recordFacts.mock.calls) {
-      for (const fact of call[2] as Array<Record<string, unknown>>) {
-        expect(fact.paymentMixMinor).toBeUndefined();
-        expect(fact.paymentMethod).toBeUndefined();
-        expect(fact.paymentParticipationId).toBeUndefined();
-      }
-    }
+    // An UNDATED legacy void has no reversal date to file, so what it emits is
+    // the original receipt. That receipt still counts toward the day's gross
+    // collected, so it must carry method evidence or the mix could never
+    // reconcile — only settlement coverage is unknown.
+    const { ctx: legacyCtx } = paymentContext([
+      {
+        _id: "allocation_1",
+        allocationType: "retail_sale",
+        amount: 2_500,
+        collectedInStore: false,
+        direction: "in",
+        method: "cash",
+        posTransactionId: "transaction_9",
+        recordedAt,
+        status: "voided",
+        storeId: "store_1",
+        targetId: "transaction_9",
+        targetType: "pos_transaction",
+      },
+    ]);
+    await recordPaymentAllocationWithCtx(legacyCtx as never, {
+      allocationType: "retail_sale",
+      amount: 2_500,
+      direction: "in",
+      method: "cash",
+      posTransactionId: "transaction_9" as Id<"posTransaction">,
+      storeId: "store_1" as Id<"store">,
+      targetId: "transaction_9",
+      targetType: "pos_transaction",
+    });
+    const [legacyFact] = reportingMocks.recordFacts.mock.calls.at(-1)?.[2] as Array<
+      Record<string, unknown>
+    >;
+    expect(legacyFact.factKind).toBe("payment");
+    expect(legacyFact.paymentAllocationCoverage).toBe("unknown");
+    expect(legacyFact.paymentMethod).toBe("cash");
+    expect(legacyFact.paymentMixMinor).toBe(2_500);
+    expect(legacyFact.paymentParticipationId).toBe("transaction_9");
   });
 });
 

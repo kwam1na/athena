@@ -4,9 +4,19 @@ import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import type {
   ReportDayStatus,
+  ReportPaymentMethod,
+  ReportPaymentMix,
   ReportWeekMetrics,
 } from "../../shared/reportsContract";
-import { normalizeWeekMetrics } from "../../shared/reportsContract";
+import {
+  UNAVAILABLE_PAYMENT_MIX,
+  applyPaymentMixContribution,
+  compareReportPaymentMethods,
+  derivePaymentMix,
+  emptyPaymentMixState,
+  normalizeReportPaymentMethod,
+  normalizeWeekMetrics,
+} from "../../shared/reportsContract";
 import { getDiscountValue } from "../inventory/utils";
 import { resolveOperatingDate } from "./operatingDay";
 // Readers, not mappers: `loadOnlineOrderLines` answers "where does this order
@@ -261,6 +271,21 @@ export type VerifyDifference = {
 };
 
 /**
+ * One method's disagreement between the source census and the published mix.
+ *
+ * Value and use count are reported SEPARATELY and per method, because they
+ * fail for different reasons: a wrong value means the arithmetic drifted,
+ * while a wrong `tenderUseCount` means the participation rule drifted — the
+ * exact failure two same-method allocations on one POS transaction produce.
+ */
+export type VerifyPaymentMixDifference = {
+  field: "status" | "amountMinor" | "tenderUseCount";
+  method: ReportPaymentMethod | null;
+  expected: number | string | null;
+  actual: number | string | null;
+};
+
+/**
  * Fields whose source-side expectation can be UNKNOWN rather than wrong.
  *
  * An unchecked field is not a differing field. Everything named here is
@@ -327,6 +352,9 @@ export type VerifyDayResult = {
   expected: VerifiedMetrics;
   paymentPosture: VerifyPaymentPosture;
   paymentDifferences: VerifyPaymentDifference[];
+  /** Independently recomputed gross method values and tender uses. */
+  expectedPaymentMix: ReportPaymentMix;
+  paymentMixDifferences: VerifyPaymentMixDifference[];
   /**
    * Fields no comparison was made on, because the source side could not be
    * established. These NEVER appear in `differences` or `paymentDifferences`
@@ -458,6 +486,8 @@ export async function computeExpectedDay(
   operatingDate: string,
 ): Promise<{
   expected: VerifiedMetrics;
+  /** Gross method values and tender uses, recomputed from the source ledger. */
+  expectedPaymentMix: ReportPaymentMix;
   paymentPosture: VerifyPaymentPosture;
   truncated: boolean;
 }> {
@@ -730,6 +760,18 @@ export async function computeExpectedDay(
   let paymentIncompleteReason: VerifyPaymentPosture["reason"] | null =
     inPeriodCapExceeded ? "source_cap_exceeded" : null;
   let paymentOmittedMinor = 0;
+  /**
+   * The mix, recomputed from the SOURCE ledger.
+   *
+   * Deliberately built here rather than read from facts: the point of this
+   * module is to contradict the projection, and evidence derived from the same
+   * facts the projection folded could not. The rules mirror the emitter's —
+   * POS transaction as participation identity where there is one, allocation
+   * identity otherwise, and the same closed method normalizer — because the
+   * INPUT is independent, not the definition.
+   */
+  const mixState = emptyPaymentMixState();
+  if (inPeriodCapExceeded) mixState.evidenceBroken = true;
 
   for (const allocation of inPeriodAllocations.slice(
     0,
@@ -741,6 +783,21 @@ export async function computeExpectedDay(
     if (allocation.direction === "in") {
       if (originalIsOnTargetDay) {
         expected.paymentsCollectedMinor += amountMinor;
+        // Gross received by method, so an inbound allocation contributes on
+        // the day it was RECEIVED regardless of what later happened to it —
+        // a reversal reduces settlement, never the gross mix.
+        const method = normalizeReportPaymentMethod(allocation.method);
+        if (method) {
+          applyPaymentMixContribution(mixState, {
+            method,
+            participationId: allocation.posTransactionId
+              ? String(allocation.posTransactionId)
+              : String(allocation._id),
+            amountMinor,
+          });
+        } else {
+          mixState.unattributedMinor += amountMinor;
+        }
         if (
           allocation.status === "recorded" ||
           allocation.voidedAt !== undefined
@@ -829,7 +886,70 @@ export async function computeExpectedDay(
     },
   };
 
-  return { expected, paymentPosture, truncated };
+  const expectedPaymentMix = derivePaymentMix(
+    mixState,
+    expected.paymentsCollectedMinor,
+  );
+
+  return { expected, expectedPaymentMix, paymentPosture, truncated };
+}
+
+/**
+ * Compare the recomputed mix with the published one.
+ *
+ * A published `unavailable` beside a recomputed `unavailable` agrees — both
+ * say "not knowable", which is a legitimate conclusion, not a defect. A legacy
+ * day with no mix at all is likewise not contradicted: the verifier reports
+ * the field as unchecked rather than claiming the projection is wrong.
+ */
+export function diffPaymentMix(
+  expected: ReportPaymentMix,
+  actual: ReportPaymentMix | undefined,
+): VerifyPaymentMixDifference[] {
+  if (actual === undefined) return [];
+  if (expected.status !== actual.status) {
+    return [
+      {
+        field: "status",
+        method: null,
+        expected: expected.status,
+        actual: actual.status,
+      },
+    ];
+  }
+  if (expected.status !== "complete" || actual.status !== "complete") return [];
+
+  const methods = [
+    ...new Set([
+      ...expected.rows.map((row) => row.method),
+      ...actual.rows.map((row) => row.method),
+    ]),
+  ].sort(compareReportPaymentMethods);
+
+  const differences: VerifyPaymentMixDifference[] = [];
+  for (const method of methods) {
+    const expectedRow = expected.rows.find((row) => row.method === method);
+    const actualRow = actual.rows.find((row) => row.method === method);
+    // Value and use count are reported separately: one can be right while the
+    // other is wrong, and collapsing them would hide which rule drifted.
+    if ((expectedRow?.amountMinor ?? 0) !== (actualRow?.amountMinor ?? 0)) {
+      differences.push({
+        field: "amountMinor",
+        method,
+        expected: expectedRow?.amountMinor ?? 0,
+        actual: actualRow?.amountMinor ?? 0,
+      });
+    }
+    if ((expectedRow?.tenderUseCount ?? 0) !== (actualRow?.tenderUseCount ?? 0)) {
+      differences.push({
+        field: "tenderUseCount",
+        method,
+        expected: expectedRow?.tenderUseCount ?? 0,
+        actual: actualRow?.tenderUseCount ?? 0,
+      });
+    }
+  }
+  return differences;
 }
 
 // ---------------------------------------------------------------------------
@@ -953,11 +1073,8 @@ export async function verifyDayWithCtx(
     )
     .unique();
 
-  const { expected, paymentPosture, truncated } = await computeExpectedDay(
-    ctx,
-    storeId,
-    operatingDate,
-  );
+  const { expected, expectedPaymentMix, paymentPosture, truncated } =
+    await computeExpectedDay(ctx, storeId, operatingDate);
   // Withheld before diffing, not filtered after: a field the source side could
   // not establish is never a candidate for disagreement.
   const unverifiedFields = unverifiedPaymentFields(paymentPosture);
@@ -977,12 +1094,22 @@ export async function verifyDayWithCtx(
         }
       : null,
   ).filter((difference) => !unverified.has(difference.field));
+  /**
+   * The mix is only comparable when the payment lane itself verified. If the
+   * source census could not be established, "we could not check" must not be
+   * readable as "the mix is wrong" — the same rule the metric lane follows.
+   */
+  const paymentMixDifferences = unverified.has("paymentsCollectedMinor")
+    ? []
+    : diffPaymentMix(expectedPaymentMix, day?.paymentMix);
 
   return {
     dayStatus: day?.status ?? "missing",
     differences,
     expected,
+    expectedPaymentMix,
     paymentDifferences,
+    paymentMixDifferences,
     paymentPosture,
     unverifiedFields,
     factCount: day?.factCount ?? 0,
@@ -993,7 +1120,8 @@ export async function verifyDayWithCtx(
     matches:
       !truncated &&
       differences.length === 0 &&
-      paymentDifferences.length === 0,
+      paymentDifferences.length === 0 &&
+      paymentMixDifferences.length === 0,
     operatingDate,
     truncated,
   };

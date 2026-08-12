@@ -59,6 +59,8 @@ function makeDayResult(
     dayStatus: "reconciled",
     expected: zeroMetrics(),
     paymentPosture: completePosture(),
+    expectedPaymentMix: { status: "complete" as const, totalMinor: 0, rows: [] },
+    paymentMixDifferences: [],
     paymentDifferences: [],
     unverifiedFields: [],
     truncated: false,

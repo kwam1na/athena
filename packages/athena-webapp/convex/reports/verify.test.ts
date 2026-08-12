@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import schema from "../schema";
 import type { Id } from "../_generated/dataModel";
+import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { normalizeReseedCursor, reseedStep, type ReseedCursor } from "./reseed";
 import { foldAndReplaceDay } from "./sweeper";
@@ -1001,5 +1002,331 @@ describe("verify — diffMetrics", () => {
     expect(diffMetrics(expected, { ...expected, refundsMinor: 40 })).toEqual([
       { actual: 40, expected: 4, field: "refundsMinor" },
     ]);
+  });
+});
+
+/** A minimal folded day document, for publishing a mix the verifier can contradict. */
+function dayDocFor(storeId: Id<"store">, operatingDate: string) {
+  return {
+    currency: "GHS",
+    factCount: 0,
+    flags: {
+      hasUncostedRevenue: false,
+      mixedCurrency: false,
+      quarantinedFactCount: 0,
+    },
+    foldVersion: 1,
+    grossProfitMinor: 0,
+    grossSalesMinor: 0,
+    lastFactRecordedAt: NOW,
+    netSalesMinor: 0,
+    operatingDate,
+    paymentAllocatedMinor: 0,
+    paymentsCollectedMinor: 0,
+    paymentsRefundedMinor: 0,
+    refundsMinor: 0,
+    status: "provisional" as const,
+    storeId,
+    uncostedRevenueMinor: 0,
+    unitsReturned: 0,
+    unitsSold: 0,
+  };
+}
+
+describe("verify — payment mix", () => {
+  /** Seed a POS transaction so allocations can carry a real participation id. */
+  async function seedTransaction(
+    ctx: MutationCtx,
+    store: Awaited<ReturnType<typeof seedStore>>,
+    transactionNumber: string,
+  ) {
+    return seedPosSale(ctx, store, {
+      completedAt: at("09:00"),
+      lines: [{ quantity: 1, unitPrice: 1_000 }],
+      transactionNumber,
+    });
+  }
+
+  it("recomputes method values and Daily Close-aligned use counts from allocations", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      const txn = await seedTransaction(ctx, store, "T-A");
+      // Two Cash allocations on ONE transaction: full value, one tender use.
+      await seedPaymentAllocation(ctx, store, {
+        amount: 2_000,
+        method: "cash",
+        posTransactionId: txn,
+        recordedAt: at("09:00"),
+        targetId: "a1",
+      });
+      await seedPaymentAllocation(ctx, store, {
+        amount: 1_000,
+        method: "Cash",
+        posTransactionId: txn,
+        recordedAt: at("09:05"),
+        targetId: "a2",
+      });
+      // Split tender on the same transaction: a second, separate use.
+      await seedPaymentAllocation(ctx, store, {
+        amount: 3_000,
+        method: "momo",
+        posTransactionId: txn,
+        recordedAt: at("09:10"),
+        targetId: "a3",
+      });
+      // Non-POS allocations stand for themselves.
+      await seedPaymentAllocation(ctx, store, {
+        amount: 500,
+        method: "card",
+        recordedAt: at("09:20"),
+        targetId: "b1",
+      });
+      await seedPaymentAllocation(ctx, store, {
+        amount: 500,
+        method: "card",
+        recordedAt: at("09:25"),
+        targetId: "b2",
+      });
+      return store;
+    });
+
+    await t.run(async (ctx: QueryCtx) => {
+      const { expectedPaymentMix } = await computeExpectedDay(
+        ctx,
+        seeded.storeId,
+        DAY1,
+      );
+      expect(expectedPaymentMix).toEqual({
+        status: "complete",
+        totalMinor: 7_000,
+        rows: [
+          {
+            method: "cash",
+            amountMinor: 3_000,
+            shareBasisPoints: 4_286,
+            tenderUseCount: 1,
+          },
+          {
+            method: "card",
+            amountMinor: 1_000,
+            shareBasisPoints: 1_429,
+            tenderUseCount: 2,
+          },
+          {
+            method: "mobile_money",
+            amountMinor: 3_000,
+            shareBasisPoints: 4_286,
+            tenderUseCount: 1,
+          },
+        ],
+      });
+    });
+  });
+
+  it("detects a wrong method value and a wrong use count independently", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      const txn = await seedTransaction(ctx, store, "T-B");
+      await seedPaymentAllocation(ctx, store, {
+        amount: 2_000,
+        method: "cash",
+        posTransactionId: txn,
+        recordedAt: at("09:00"),
+        targetId: "a1",
+      });
+      await seedPaymentAllocation(ctx, store, {
+        amount: 1_000,
+        method: "cash",
+        posTransactionId: txn,
+        recordedAt: at("09:05"),
+        targetId: "a2",
+      });
+      return store;
+    });
+
+    const publish = async (
+      mix: NonNullable<Doc<"reportDay">["paymentMix"]>,
+      collectedMinor = 3_000,
+    ) =>
+      t.run(async (ctx) => {
+        const existing = await ctx.db
+          .query("reportDay")
+          .withIndex("by_storeId_operatingDate", (q) =>
+            q.eq("storeId", seeded.storeId).eq("operatingDate", DAY1),
+          )
+          .unique();
+        const doc = {
+          ...dayDocFor(seeded.storeId, DAY1),
+          paymentsCollectedMinor: collectedMinor,
+          paymentAllocatedMinor: collectedMinor,
+          paymentMix: mix,
+        };
+        if (existing) await ctx.db.patch("reportDay", existing._id, doc);
+        else await ctx.db.insert("reportDay", doc);
+      });
+
+    // Right use count, WRONG value.
+    await publish({
+      status: "complete",
+      totalMinor: 3_000,
+      rows: [
+        {
+          method: "cash",
+          amountMinor: 3_000,
+          shareBasisPoints: 10_000,
+          tenderUseCount: 9,
+        },
+      ],
+    });
+    const wrongCount = await t.run((ctx: QueryCtx) =>
+      verifyDayWithCtx(ctx, seeded.storeId, DAY1),
+    );
+    expect(wrongCount.paymentMixDifferences).toContainEqual(
+      expect.objectContaining({ field: "tenderUseCount", method: "cash" }),
+    );
+
+    // Right value, WRONG use count — the two failures are independent.
+    await publish({
+      status: "complete",
+      totalMinor: 3_000,
+      rows: [
+        {
+          method: "cash",
+          amountMinor: 2_000,
+          shareBasisPoints: 10_000,
+          tenderUseCount: 1,
+        },
+      ],
+    });
+    const wrongValue = await t.run((ctx: QueryCtx) =>
+      verifyDayWithCtx(ctx, seeded.storeId, DAY1),
+    );
+    expect(wrongValue.paymentMixDifferences).toContainEqual(
+      expect.objectContaining({ field: "amountMinor", method: "cash" }),
+    );
+  });
+
+  it("classifies methodless legacy evidence as unavailable, not a mismatched zero", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      await seedPaymentAllocation(ctx, store, {
+        amount: 2_000,
+        method: "cash",
+        recordedAt: at("09:00"),
+        targetId: "a",
+      });
+      // A method reporting cannot classify: the money was still received.
+      await seedPaymentAllocation(ctx, store, {
+        amount: 1_000,
+        method: "cheque",
+        recordedAt: at("09:30"),
+        targetId: "b",
+      });
+      return store;
+    });
+
+    await t.run(async (ctx: QueryCtx) => {
+      const { expected, expectedPaymentMix } = await computeExpectedDay(
+        ctx,
+        seeded.storeId,
+        DAY1,
+      );
+      // Payments totals are untouched by unclassifiable method evidence.
+      expect(expected.paymentsCollectedMinor).toBe(3_000);
+      expect(expectedPaymentMix).toEqual({ status: "unavailable" });
+    });
+  });
+});
+
+describe("verify — payment mix agrees with the fold on reversed receipts", () => {
+  it("keeps a voided receipt's gross method value on the day it was received", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      await seedPaymentAllocation(ctx, store, {
+        amount: 2_000,
+        method: "cash",
+        recordedAt: at("09:00"),
+        targetId: "kept",
+      });
+      // Received, then reversed later the same day. Gross received by method
+      // is a statement about what came IN: the reversal moves settlement, not
+      // the gross mix, so this value must still appear under Cash.
+      await seedPaymentAllocation(ctx, store, {
+        amount: 1_000,
+        method: "cash",
+        recordedAt: at("10:00"),
+        status: "voided",
+        targetId: "reversed",
+        voidedAt: at("11:00"),
+      });
+      return store;
+    });
+
+    await t.run(async (ctx: QueryCtx) => {
+      const { expected, expectedPaymentMix } = await computeExpectedDay(
+        ctx,
+        seeded.storeId,
+        DAY1,
+      );
+      expect(expected.paymentsCollectedMinor).toBe(3_000);
+      // Reconciles to gross collected, with both receipts counted.
+      expect(expectedPaymentMix).toEqual({
+        status: "complete",
+        totalMinor: 3_000,
+        rows: [
+          {
+            method: "cash",
+            amountMinor: 3_000,
+            shareBasisPoints: 10_000,
+            tenderUseCount: 2,
+          },
+        ],
+      });
+    });
+  });
+
+  it("emits the same gross method evidence the verifier expects for a reversed receipt", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      await seedPaymentAllocation(ctx, store, {
+        amount: 2_000,
+        method: "cash",
+        recordedAt: at("09:00"),
+        targetId: "kept",
+      });
+      await seedPaymentAllocation(ctx, store, {
+        amount: 1_000,
+        method: "cash",
+        recordedAt: at("10:00"),
+        status: "voided",
+        targetId: "reversed",
+        voidedAt: at("11:00"),
+      });
+      return store;
+    });
+
+    await runReseed(t, seeded.storeId);
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      const receipts = (await ctx.db.query("reportFact").collect()).filter(
+        (fact) => fact.sourceDomain === "payments" && fact.factKind === "payment",
+      );
+      expect(receipts).toHaveLength(2);
+      // Both receipt facts carry method evidence — the reversed one included,
+      // or its day's mix could never reconcile to its own gross total.
+      expect(receipts.every((fact) => fact.paymentMethod === "cash")).toBe(true);
+      expect(
+        receipts.reduce((sum, fact) => sum + (fact.paymentMixMinor ?? 0), 0),
+      ).toBe(3_000);
+    });
   });
 });
