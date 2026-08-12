@@ -77,7 +77,7 @@
     <tr><td>Action orchestrator with per-subject containment</td><td>One subject&rsquo;s byte-ceiling blowup records as <code>error</code> instead of wedging the tick</td></tr>
     <tr><td>Revision-driven selection (<code>certifiedFoldRevision</code> &gt; last verified)</td><td>Clean days not re-verified every tick; refold and repair naturally re-enqueue</td></tr>
     <tr><td>Pure classification layer between verify and alerting</td><td>Outcomes <code>clean | partial | mismatch | truncated | unavailable | error</code>; only mismatches with unexplained differences alert</td></tr>
-    <tr><td>Streak + fingerprint alert state with explicit re-arm; run row carries a re-arm epoch that participates in the dedupeKey</td><td>The rail&rsquo;s dedupe is a permanent unique lookup &mdash; without the epoch, a recurring identical discrepancy after a clean run would be silently swallowed</td></tr>
+    <tr><td>Streak + fingerprint alert state with explicit re-arm; run row carries a re-arm epoch and a monotonic <code>alertSeq</code> (never reset), both in the dedupeKey</td><td>The rail&rsquo;s dedupe is a permanent unique lookup &mdash; the epoch lets a recurring discrepancy alert again after a clean run; <code>alertSeq</code> keeps an oscillating fingerprint (A&rarr;B&rarr;A, epoch frozen) from rebuilding a byte-identical key</td></tr>
     <tr><td>Revision-gating accepts a scoped blindness to post-fold source drift, mitigated by a low-frequency age-based re-verify of recent settled days</td><td>Bounds detection latency for source writes that land without a dirty mark, without re-paying full verification every tick</td></tr>
     <tr><td>Email gate is config (env), not deploy</td><td>Record-only rollout per automation observe-first convention</td></tr>
     <tr><td><code>scheduledRunLedger</code> over <code>automationFoundation</code></td><td>Alert-only sweep needs no per-store policy modes</td></tr>
@@ -90,7 +90,7 @@
   <div class="unit">
     <h3>U1. Verification-run table and outcome model</h3>
     <span class="tag">R2 R6</span><span class="tag">deps: none</span>
-    <p>New <code>schemas/reports/verificationRuns.ts</code>: one upserted row per subject (store &times; day / store &times; week) carrying outcome, explained/unexplained summary, fingerprint, streak, last-alerted fingerprint, verified revision.</p>
+    <p>New <code>schemas/reports/verificationRuns.ts</code>: one upserted row per subject (store &times; day / store &times; week) carrying outcome, explained/unexplained summary, fingerprint, streak, last-alerted fingerprint, re-arm epoch, monotonic <code>alertSeq</code>, verified revision (week subjects store <code>materializedAt</code> here, a documented reuse).</p>
   </div>
 
   <div class="unit">
@@ -102,19 +102,19 @@
   <div class="unit">
     <h3>U3. Verification sweep orchestrator</h3>
     <span class="tag">R1 R2 R6 R7</span><span class="tag">deps: U1, U2</span>
-    <p><code>reports/verificationSweep.ts</code> &mdash; action pages allowlisted stores; selects settled days (not open, not dirty-marked, not mid-reseed, revision newer than last verified; a legacy day with no <code>certifiedFoldRevision</code> is verified once and re-selected on first stamp); a slow age-based re-verify lane for recent settled days; weekly check gated on <code>reportWeekCurrent.materializedAt</code> advancing (ungated it would dominate the read budget); bounded budgets with sizing arithmetic in comments; per-subject error containment; once-per-streak wedge escalation via operational event; emits the U5 kind only when the email gate is on. Patterns: <code>owedDailyCloseSweep.ts</code>, <code>reports/sweeper.ts</code>.</p>
+    <p><code>reports/verificationSweep.ts</code> &mdash; action pages allowlisted stores; selects settled days (not open, not dirty-marked, not mid-reseed, revision newer than last verified; a legacy day with no <code>certifiedFoldRevision</code> is verified once and re-selected on first stamp); a slow age-based re-verify lane for recent settled days; weekly check bounded by a 6-hour minimum interval plus the <code>materializedAt</code> advancement gate (the time gate is load-bearing &mdash; active stores re-materialize every ~5 minutes) with a pre-flight allocation probe recording <code>truncated</code> over budget (per-date split: follow-up V26-1193); a forward stall probe surfacing fully stalled folds; a capped error slot preventing head-of-line blocking; bounded budgets with sizing arithmetic in comments; per-subject error containment; wedge escalation on a re-alert ladder (3 / 24 / 168 ticks, then weekly) via operational events; emits the U5 kind only when the email gate is on. Patterns: <code>owedDailyCloseSweep.ts</code>, <code>reports/sweeper.ts</code>.</p>
   </div>
 
   <div class="unit">
     <h3>U4. Cron registration + scheduled-run ledger enrollment</h3>
     <span class="tag">R1 R2</span><span class="tag">deps: U3</span>
-    <p>STAGE-branched cron in <code>crons.ts</code> (hourly-class, offset from the reports sweep); new <code>cronFamily</code> + interval-map entry kept in agreement; system + per-store ledger rows via best-effort recording. Source-text assertions in <code>crons.test.ts</code>.</p>
+    <p>STAGE-branched cron in <code>crons.ts</code> (prod hourly at :47, clear of the :00/:30 wall-clock jobs); ledger enrollment touches <em>two</em> places &mdash; the interval-map entry (the type derives via <code>keyof typeof</code>) and the hand-written evidence-args literal union &mdash; kept in step with the registered cadence. The sweep records system + per-store rows via <code>ctx.runMutation</code> in its own try/catch (the best-effort helper takes a MutationCtx, unreachable from the action). Source-text assertions in <code>crons.test.ts</code>.</p>
   </div>
 
   <div class="unit">
     <h3>U5. Notification kind, payload query, email template</h3>
     <span class="tag">R3 R4 R8</span><span class="tag">deps: U1, U2; emitted by U3</span>
-    <p>Registry entry (structural dedupe over kind + store + subject + fingerprint + re-arm epoch), fresh-read payload query <code>operations/reportVerificationAlertEmail.ts</code> reading the run row (not live re-verification), template <code>emails/ReportVerificationAlert.tsx</code> rendering unexplained differences as &ldquo;checked and wrong&rdquo; and unverified fields separately as &ldquo;not checked.&rdquo; Null-suppress if the subject resolved before send; throw on transient failure. Gated off at deploy.</p>
+    <p>Registry entry (structural dedupe over kind + store + subject + fingerprint + re-arm epoch + <code>alertSeq</code>), fresh-read payload query <code>operations/reportVerificationAlertEmail.ts</code> reading the run row (not live re-verification), template <code>emails/ReportVerificationAlert.tsx</code> rendering unexplained differences as &ldquo;checked and wrong&rdquo; and unverified fields separately as &ldquo;not checked.&rdquo; Null-suppress if the subject resolved before send; throw on transient failure. Gated off at deploy.</p>
   </div>
 </section>
 

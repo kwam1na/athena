@@ -69,7 +69,10 @@ function allowlist(storeIds: Array<Id<"store">>): void {
  */
 function sweepCtx(
   t: Harness,
-  opts?: { failQueryWhen?: (args: Record<string, unknown>) => boolean },
+  opts?: {
+    failQueryWhen?: (args: Record<string, unknown>) => boolean;
+    failMutationWhen?: (args: Record<string, unknown>) => boolean;
+  },
 ): VerificationSweepCtx {
   return {
     runQuery: (async (ref: unknown, args: Record<string, unknown>) => {
@@ -79,8 +82,13 @@ function sweepCtx(
 
       return (t.query as any)(ref, args);
     }) as VerificationSweepCtx["runQuery"],
-    runMutation: (async (ref: unknown, args: Record<string, unknown>) =>
-      (t.mutation as any)(ref, args)) as VerificationSweepCtx["runMutation"],
+    runMutation: (async (ref: unknown, args: Record<string, unknown>) => {
+      if (opts?.failMutationWhen?.(args ?? {})) {
+        throw new Error("injected mutation failure");
+      }
+
+      return (t.mutation as any)(ref, args);
+    }) as VerificationSweepCtx["runMutation"],
   };
 }
 
@@ -324,6 +332,31 @@ describe("verification sweep — day selection and outcomes", () => {
     expect(row?.verifiedCertifiedFoldRevision).toBe(1);
     expect(result.alertTransitions).toBe(1);
     expect(result.emitsWouldFire).toBe(0);
+  });
+
+  it("U4 error path — a failing ledger write never fails the sweep's real work", async () => {
+    const seeded = await seedStoreWithDay(t, MISMATCH);
+
+    // Every scheduledRunLedger evidence write throws; the tick must still
+    // verify the day, upsert the run row, and record the alert transition.
+    const result = await runVerificationSweepWithCtx(
+      sweepCtx(t, {
+        failMutationWhen: (args) => "cronFamily" in args,
+      }),
+      { now: NOW },
+    );
+
+    expect(result.daysVerified).toBeGreaterThanOrEqual(1);
+    expect(result.alertTransitions).toBe(1);
+    const row = await runRow(t, seeded.storeId, "day", DAY1);
+    expect(row?.outcome).toBe("mismatch");
+
+    const ledgerRows = await t.run(async (ctx: MutationCtx) =>
+      ctx.db.query("scheduledRunLedger").withIndex("by_runKey").take(10),
+    );
+    expect(
+      ledgerRows.filter((r) => r.cronFamily === "report-verification-sweep"),
+    ).toHaveLength(0);
   });
 
   it("records store-scope and system-scope ledger evidence for the tick", async () => {
