@@ -9,14 +9,20 @@ import {
   consumeCommandApprovalProofWithCtx,
 } from "../../../operations/approvalActions";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
-import { correctSameAmountSinglePaymentAllocationWithCtx } from "../../../operations/paymentAllocations";
+import {
+  correctSameAmountSinglePaymentAllocationWithCtx,
+  paymentAllocationParticipationId,
+} from "../../../operations/paymentAllocations";
 import {
   getPosTransactionById,
   getStoreById,
   patchPosTransaction,
 } from "../../infrastructure/repositories/transactionRepository";
 import { recordFacts } from "../../../reports/ingest";
-import type { NewReportFact } from "../../../../shared/reportsContract";
+import {
+  normalizeReportPaymentMethod,
+  type NewReportFact,
+} from "../../../../shared/reportsContract";
 import { appendPosLifecycleJournalWithCtx } from "../../infrastructure/posLifecycleJournal";
 import { patchRegisterSessionWithAuthority } from "../../../operations/registerSessionAuthorityRevision";
 
@@ -445,11 +451,32 @@ async function applyPaymentMethodCorrection(
     origin: "cloud",
   });
   if (store?.organizationId && event?._id) {
-    // Payment method reclassification carries no revenue delta and the
-    // frozen reports contract has no settlement-method field — record a
-    // zero-magnitude correction fact purely so the reclassification leaves an
-    // audit trail in the fact log without moving any reported metric.
+    // Payment method reclassification carries no revenue delta, so every
+    // monetary field stays zero and no reported total moves. What it DOES
+    // carry is the payment-mix move: the same participation identity the
+    // receipt fact used, shifted from the old normalized method to the new.
+    //
+    // Business time is the ORIGINAL allocation's `recordedAt`, so the move
+    // lands on the operating day the payment was received rather than the day
+    // it was noticed. Knowledge time stays server-stamped inside ingestion, so
+    // an already-accepted week's cutoff still excludes this correction and the
+    // baseline is untouched.
     const currency = store.currency?.trim().toUpperCase() || "GHS";
+    const previousMethod = normalizeReportPaymentMethod(payment.method);
+    const nextMethod = normalizeReportPaymentMethod(args.paymentMethod);
+    // Both ends must be classifiable for the move to be expressible. If either
+    // is not, the mix evidence is simply unavailable — never half a move.
+    const mix =
+      previousMethod && nextMethod
+        ? {
+            paymentMethodFrom: previousMethod,
+            paymentMethod: nextMethod,
+            paymentParticipationId: paymentAllocationParticipationId(
+              correctedAllocation,
+            ),
+            paymentMixMinor: Math.abs(payment.amount),
+          }
+        : {};
     const fact: NewReportFact = {
       currency,
       discountAmountMinor: 0,
@@ -457,13 +484,24 @@ async function applyPaymentMethodCorrection(
       grossAmountMinor: 0,
       lineId: String(event._id),
       netAmountMinor: 0,
-      occurredAt: event.createdAt,
+      occurredAt: correctedAllocation.recordedAt ?? event.createdAt,
       quantity: 0,
       sourceDomain: "pos",
       sourceId: String(args.transaction._id),
       taxAmountMinor: 0,
+      ...mix,
     };
-    await recordFacts(ctx, args.transaction.storeId, [fact]);
+    const reporting = await recordFacts(ctx, args.transaction.storeId, [fact]);
+    if (reporting.outcome !== "recorded") {
+      // Ingestion contains its own failures, which is right for a sale but
+      // wrong here: a correction whose reclassification never lands would
+      // leave the allocation, the transaction, and the register session saying
+      // one method while reporting says another. Throwing rolls the whole
+      // correction back atomically — Convex mutations are transactional.
+      throw new Error(
+        "Payment method correction could not record its reclassification fact.",
+      );
+    }
   }
 
   return {

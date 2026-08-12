@@ -302,9 +302,12 @@ export async function seedPaymentAllocation(
   args: {
     amount: number;
     direction?: "in" | "out";
+    method?: string;
+    posTransactionId?: Id<"posTransaction">;
     recordedAt: number;
     status?: "recorded" | "voided";
     targetId: string;
+    voidedAt?: number;
   },
 ): Promise<Id<"paymentAllocation">> {
   return await ctx.db.insert("paymentAllocation", {
@@ -313,13 +316,17 @@ export async function seedPaymentAllocation(
     collectedInStore: true,
     currency: "GHS",
     direction: args.direction ?? "in",
-    method: "cash",
+    method: args.method ?? "cash",
     organizationId: seeded.organizationId,
     recordedAt: args.recordedAt,
     status: args.status ?? "recorded",
     storeId: seeded.storeId,
     targetId: args.targetId,
     targetType: "pos_transaction",
+    ...(args.posTransactionId === undefined
+      ? {}
+      : { posTransactionId: args.posTransactionId }),
+    ...(args.voidedAt === undefined ? {} : { voidedAt: args.voidedAt }),
   });
 }
 

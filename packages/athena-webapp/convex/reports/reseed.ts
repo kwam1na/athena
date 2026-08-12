@@ -5,6 +5,7 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { NewReportFact } from "../../shared/reportsContract";
 import { normalizeCurrencyCode } from "../../shared/reportsContract";
+import { paymentAllocationMixDimensions } from "../operations/paymentAllocations";
 import { reportingLineCostFromEffect } from "../inventoryLedger/commerceEffects";
 import { getDiscountValue } from "../inventory/utils";
 import { recordFacts } from "./ingest";
@@ -827,6 +828,11 @@ function paymentFacts(
         occurredAt: allocation.recordedAt,
         paymentAllocationCoverage: "known",
         paymentAllocationMinor: isRefund ? -amountMinor : amountMinor,
+        // Purge-then-rebuild: the allocation's PERSISTED method is already its
+        // final state, including after an approved correction. That is why the
+        // `pos_correction` phase must not also replay a method move — doing so
+        // would take the value off the method it actually ends in.
+        ...(paymentAllocationMixDimensions(allocation) ?? {}),
       },
     ];
   }

@@ -330,6 +330,7 @@ describe("payment allocation helpers", () => {
           {
             _id: "allocation_1" as Id<"paymentAllocation">,
             direction: "in",
+            recordedAt: 1_700_000_000_000,
             method: "cash",
             amount: 2500,
             status: "recorded",
@@ -351,6 +352,7 @@ describe("payment allocation helpers", () => {
           {
             _id: "allocation_1" as Id<"paymentAllocation">,
             direction: "in",
+            recordedAt: 1_700_000_000_000,
             method: "cash",
             amount: 1500,
             status: "recorded",
@@ -358,6 +360,7 @@ describe("payment allocation helpers", () => {
           {
             _id: "allocation_2" as Id<"paymentAllocation">,
             direction: "in",
+            recordedAt: 1_700_000_000_000,
             method: "card",
             amount: 1000,
             status: "recorded",
@@ -373,6 +376,7 @@ describe("payment allocation helpers", () => {
           {
             _id: "allocation_1" as Id<"paymentAllocation">,
             direction: "in",
+            recordedAt: 1_700_000_000_000,
             method: "cash",
             amount: 2000,
             status: "recorded",
@@ -591,6 +595,143 @@ describe("payment allocation helpers", () => {
         }),
       ],
     );
+  });
+
+  it("carries normalized method, gross mix value, and POS participation identity", async () => {
+    for (const [method, normalized] of [
+      ["cash", "cash"],
+      ["Card", "card"],
+      [" Mobile Money ", "mobile_money"],
+      ["momo", "mobile_money"],
+      ["mobile-money", "mobile_money"],
+    ] as const) {
+      const { ctx } = paymentContext();
+      await recordPaymentAllocationWithCtx(ctx as never, {
+        amount: 5_000,
+        allocationType: "retail_sale",
+        direction: "in",
+        method,
+        posTransactionId: "transaction_9" as Id<"posTransaction">,
+        storeId: "store_1" as Id<"store">,
+        targetId: "transaction_9",
+        targetType: "pos_transaction",
+      });
+
+      expect(reportingMocks.recordFacts).toHaveBeenLastCalledWith(
+        expect.anything(),
+        "store_1",
+        [
+          expect.objectContaining({
+            factKind: "payment",
+            paymentMethod: normalized,
+            paymentMixMinor: 5_000,
+            // Daily Close counts the TRANSACTION, not the allocation.
+            paymentParticipationId: "transaction_9",
+          }),
+        ],
+      );
+    }
+  });
+
+  it("falls back to allocation identity when no POS transaction backs the receipt", async () => {
+    const { ctx } = paymentContext();
+    await recordPaymentAllocationWithCtx(ctx as never, {
+      amount: 5_000,
+      allocationType: "service_deposit",
+      direction: "in",
+      method: "cash",
+      storeId: "store_1" as Id<"store">,
+      targetId: "work_item_1",
+      targetType: "operational_work_item",
+    });
+
+    expect(reportingMocks.recordFacts).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "store_1",
+      [
+        expect.objectContaining({
+          paymentMethod: "cash",
+          paymentParticipationId: "allocation_1",
+        }),
+      ],
+    );
+  });
+
+  it("leaves Payments totals intact but mix evidence absent for an unsupported method", async () => {
+    for (const method of ["", "   ", "cheque", "bank transfer"]) {
+      const { ctx } = paymentContext();
+      await recordPaymentAllocationWithCtx(ctx as never, {
+        amount: 5_000,
+        allocationType: "retail_sale",
+        direction: "in",
+        method,
+        posTransactionId: "transaction_9" as Id<"posTransaction">,
+        storeId: "store_1" as Id<"store">,
+        targetId: "transaction_9",
+        targetType: "pos_transaction",
+      });
+
+      const [fact] = reportingMocks.recordFacts.mock.calls.at(-1)?.[2] as Array<
+        Record<string, unknown>
+      >;
+      expect(fact.netAmountMinor).toBe(5_000);
+      expect(fact.paymentAllocationMinor).toBe(5_000);
+      expect(fact.paymentMethod).toBeUndefined();
+      expect(fact.paymentParticipationId).toBeUndefined();
+      expect(fact.paymentMixMinor).toBeUndefined();
+    }
+  });
+
+  it("adds no gross mix contribution from a refund or any reversal shape", async () => {
+    const recordedAt = 1_700_000_000_000;
+    const { ctx: refundCtx } = paymentContext();
+    await recordPaymentAllocationWithCtx(refundCtx as never, {
+      amount: 2_500,
+      allocationType: "retail_refund",
+      direction: "out",
+      method: "cash",
+      posTransactionId: "transaction_9" as Id<"posTransaction">,
+      storeId: "store_1" as Id<"store">,
+      targetId: "transaction_9",
+      targetType: "pos_transaction",
+    });
+
+    const reversalShapes = [
+      // timed void, undated legacy void, voided outbound refund
+      { direction: "in" as const, voidedAt: recordedAt + 60_000 },
+      { direction: "in" as const, voidedAt: undefined },
+      { direction: "out" as const, voidedAt: recordedAt + 60_000 },
+    ];
+    for (const shape of reversalShapes) {
+      const { ctx } = paymentContext([
+        {
+          _id: "allocation_1",
+          allocationType: "retail_sale",
+          amount: 2_500,
+          direction: shape.direction,
+          method: "cash",
+          posTransactionId: "transaction_9",
+          recordedAt,
+          status: "voided",
+          storeId: "store_1",
+          targetId: "transaction_9",
+          targetType: "pos_transaction",
+          ...(shape.voidedAt === undefined ? {} : { voidedAt: shape.voidedAt }),
+        },
+      ]);
+      await voidPaymentAllocationWithCtx(
+        ctx as never,
+        "allocation_1" as Id<"paymentAllocation">,
+      );
+    }
+
+    for (const call of reportingMocks.recordFacts.mock.calls) {
+      for (const fact of call[2] as Array<Record<string, unknown>>) {
+        expect(fact.paymentMixMinor).toBeUndefined();
+        expect(fact.paymentMethod).toBeUndefined();
+        expect(fact.paymentParticipationId).toBeUndefined();
+      }
+    }
   });
 });
 

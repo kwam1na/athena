@@ -50,7 +50,10 @@ vi.mock(
   },
 );
 
-vi.mock("../../operations/paymentAllocations", () => ({
+vi.mock("../../operations/paymentAllocations", async (importOriginal) => ({
+  // The participation-identity rule stays real: it is the contract under test,
+  // not a collaborator. Only the mutating helper is stubbed.
+  ...(await importOriginal<typeof import("../../operations/paymentAllocations")>()),
   correctSameAmountSinglePaymentAllocationWithCtx: vi.fn(),
 }));
 
@@ -85,7 +88,14 @@ beforeEach(() => {
     currency: "GHS",
     organizationId: "org-1",
   } as never);
+  // The correction now REQUIRES its reclassification fact to land, so every
+  // case that is not about that failure starts from a successful record.
+  vi.mocked(recordFacts).mockResolvedValue({ outcome: "recorded" } as never);
 });
+
+/** The payment was received on an earlier operating day than the correction. */
+const ORIGINAL_ALLOCATION_RECORDED_AT = Date.parse("2026-08-03T10:00:00Z");
+const CORRECTION_EVENT_AT = Date.parse("2026-08-06T15:00:00Z");
 
 describe("correctTransactionPaymentMethod", () => {
   function createMutationCtx() {
@@ -330,6 +340,151 @@ describe("correctTransactionPaymentMethod", () => {
         }),
       ]),
     );
+  });
+
+  /** The approved same-amount cash -> card correction, wired end to end. */
+  async function runApprovedCashToCardCorrection(
+    ctx: ReturnType<typeof createMutationCtx>,
+    options: { allocationRecordedAt?: number; recordFactsOutcome?: unknown } = {},
+  ) {
+    vi.mocked(consumeCommandApprovalProofWithCtx).mockResolvedValue({
+      kind: "ok",
+      data: {
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        approvedByStaffProfileId: "manager-1",
+        consumedAt: 1,
+        expiresAt: 2,
+      },
+    } as never);
+    vi.mocked(getPosTransactionById).mockResolvedValue({
+      _id: "txn-1" as Id<"posTransaction">,
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-111111",
+      status: "completed",
+      total: 1000,
+      totalPaid: 1000,
+      paymentMethod: "cash",
+      payments: [{ method: "cash", amount: 1000, timestamp: 1 }],
+    } as never);
+    vi.mocked(
+      correctSameAmountSinglePaymentAllocationWithCtx,
+    ).mockResolvedValue({
+      _id: "allocation-1" as Id<"paymentAllocation">,
+      posTransactionId: "txn-1" as Id<"posTransaction">,
+      recordedAt: options.allocationRecordedAt ?? ORIGINAL_ALLOCATION_RECORDED_AT,
+    } as never);
+    vi.mocked(recordOperationalEventWithCtx)
+      .mockResolvedValueOnce({
+        _id: "approval-event-1" as Id<"operationalEvent">,
+      } as never)
+      .mockResolvedValueOnce({
+        _id: "event-1" as Id<"operationalEvent">,
+        createdAt: CORRECTION_EVENT_AT,
+      } as never);
+    vi.mocked(recordFacts).mockResolvedValue(
+      (options.recordFactsOutcome ?? { outcome: "recorded" }) as never,
+    );
+
+    return await correctTransactionPaymentMethod(ctx as never, {
+      actorStaffProfileId: "cashier-1" as Id<"staffProfile">,
+      approvalProofId: "proof-1" as Id<"approvalProof">,
+      transactionId: "txn-1" as Id<"posTransaction">,
+      paymentMethod: "card",
+      reason: "Till entry correction",
+    });
+  }
+
+  it("moves method evidence from old to new while retaining participation identity", async () => {
+    const ctx = createMutationCtx();
+    await runApprovedCashToCardCorrection(ctx);
+
+    expect(recordFacts).toHaveBeenCalledWith(
+      ctx,
+      "store-1",
+      expect.arrayContaining([
+        expect.objectContaining({
+          factKind: "correction",
+          // Payments totals never move: the money was always received.
+          grossAmountMinor: 0,
+          netAmountMinor: 0,
+          paymentMethodFrom: "cash",
+          paymentMethod: "card",
+          paymentMixMinor: 1000,
+          // The same participation the receipt carried, so the tender use
+          // moves rather than being counted twice.
+          paymentParticipationId: "txn-1",
+          // The ORIGINAL allocation's business time: the reclassification
+          // belongs to the day the payment was received, not the day it was
+          // noticed. Knowledge time stays server-stamped at ingest, so an
+          // earlier acceptance cutoff still excludes it.
+          occurredAt: ORIGINAL_ALLOCATION_RECORDED_AT,
+        }),
+      ]),
+    );
+  });
+
+  it("rolls back the correction when its reclassification fact cannot be recorded", async () => {
+    const ctx = createMutationCtx();
+    await expect(
+      runApprovedCashToCardCorrection(ctx, {
+        recordFactsOutcome: { outcome: "contained_failure" },
+      }),
+    ).rejects.toThrow(/reclassification|report|fact/i);
+  });
+
+  it("leaves the fact methodless when the corrected method is not reportable", async () => {
+    const ctx = createMutationCtx();
+    vi.mocked(consumeCommandApprovalProofWithCtx).mockResolvedValue({
+      kind: "ok",
+      data: {
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        approvedByStaffProfileId: "manager-1",
+        consumedAt: 1,
+        expiresAt: 2,
+      },
+    } as never);
+    vi.mocked(getPosTransactionById).mockResolvedValue({
+      _id: "txn-1" as Id<"posTransaction">,
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-111111",
+      status: "completed",
+      total: 1000,
+      totalPaid: 1000,
+      paymentMethod: "cash",
+      payments: [{ method: "cash", amount: 1000, timestamp: 1 }],
+    } as never);
+    vi.mocked(
+      correctSameAmountSinglePaymentAllocationWithCtx,
+    ).mockResolvedValue({
+      _id: "allocation-1" as Id<"paymentAllocation">,
+      posTransactionId: "txn-1" as Id<"posTransaction">,
+      recordedAt: ORIGINAL_ALLOCATION_RECORDED_AT,
+    } as never);
+    vi.mocked(recordOperationalEventWithCtx)
+      .mockResolvedValueOnce({
+        _id: "approval-event-1" as Id<"operationalEvent">,
+      } as never)
+      .mockResolvedValueOnce({
+        _id: "event-1" as Id<"operationalEvent">,
+        createdAt: CORRECTION_EVENT_AT,
+      } as never);
+    vi.mocked(recordFacts).mockResolvedValue({ outcome: "recorded" } as never);
+
+    await correctTransactionPaymentMethod(ctx as never, {
+      actorStaffProfileId: "cashier-1" as Id<"staffProfile">,
+      approvalProofId: "proof-1" as Id<"approvalProof">,
+      transactionId: "txn-1" as Id<"posTransaction">,
+      paymentMethod: "cheque",
+      reason: "Till entry correction",
+    });
+
+    const [fact] = vi.mocked(recordFacts).mock.calls.at(-1)?.[2] as Array<
+      Record<string, unknown>
+    >;
+    expect(fact.paymentMethod).toBeUndefined();
+    expect(fact.paymentMethodFrom).toBeUndefined();
+    expect(fact.paymentMixMinor).toBeUndefined();
+    expect(fact.paymentParticipationId).toBeUndefined();
   });
 
   it("closes the queued approval request after same-submission manager approval", async () => {

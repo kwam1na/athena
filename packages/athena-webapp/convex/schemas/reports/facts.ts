@@ -1,5 +1,12 @@
 import { v } from "convex/values";
 
+/** The closed reporting tender set — mirrors REPORT_PAYMENT_METHODS. */
+const reportPaymentMethod = v.union(
+  v.literal("cash"),
+  v.literal("card"),
+  v.literal("mobile_money"),
+);
+
 /**
  * Canonical fact ledger for the rebuilt reports layer.
  *
@@ -67,6 +74,25 @@ export const reportFactSchema = v.object({
   paymentAllocationCoverage: v.optional(
     v.union(v.literal("known"), v.literal("unknown")),
   ),
+
+  /**
+   * Payment-mix dimensions, all optional and all absent together.
+   *
+   * Absent means this fact makes no gross method contribution — a legacy row,
+   * a refund or reversal, or a receipt whose source method reporting cannot
+   * classify. It never means zero: the value still counts toward Payments
+   * totals, only the method breakdown is unavailable.
+   *
+   * `paymentParticipationId` is the Daily Close-aligned unit of tender use —
+   * the POS transaction where there is one, the allocation otherwise — so
+   * several same-method allocations on one transaction count once.
+   * `paymentMethodFrom` appears only on an approved method-correction fact,
+   * which moves one participation from the old method to the new.
+   */
+  paymentMethod: v.optional(reportPaymentMethod),
+  paymentMethodFrom: v.optional(reportPaymentMethod),
+  paymentParticipationId: v.optional(v.string()),
+  paymentMixMinor: v.optional(v.number()),
 
   quarantine: v.optional(
     v.object({

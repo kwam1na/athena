@@ -895,13 +895,21 @@ export function ReportsWeeklyView({
 
       {report.closeEvidence?.payments.rows.length ? (
         <Section title="Payment mix">
-          {!sharedEvidenceCoverage ? (
-            <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
-              {closeEvidenceCoverageLabel(
-                report.closeEvidence.payments.coverage,
-              )}
-            </p>
-          ) : null}
+          <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
+            <span className="block">
+              Includes payments from completed Daily Closes only
+              {sharedEvidenceCoverage
+                ? `, covering ${report.closeEvidence.payments.coverage.usableDayCount.toLocaleString()} of ${report.closeEvidence.payments.coverage.scheduledDayCount.toLocaleString()} scheduled days.`
+                : "."}
+            </span>
+            {!sharedEvidenceCoverage ? (
+              <span className="block">
+                {closeEvidenceCoverageLabel(
+                  report.closeEvidence.payments.coverage,
+                )}
+              </span>
+            ) : null}
+          </p>
           {/* The qualified subtotal: only the covered days' tender value. */}
           <p className="mt-layout-xs text-sm text-muted-foreground">
             Covered tender value:{" "}
@@ -1050,7 +1058,7 @@ export function ReportsWeeklyView({
       </Section>
 
       {report.closeEvidence ? (
-        <Section title="Expense products">
+        <Section className="lg:w-1/2" title="Expense products">
           {report.closeEvidence.expenses.coverage.status === "unavailable" ? (
             <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
               {closeEvidenceCoverageLabel(

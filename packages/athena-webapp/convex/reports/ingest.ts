@@ -264,6 +264,10 @@ function toFactDoc(
     unitCostMinor: fact.unitCostMinor,
     paymentAllocationMinor: fact.paymentAllocationMinor,
     paymentAllocationCoverage: fact.paymentAllocationCoverage,
+    paymentMethod: fact.paymentMethod,
+    paymentMethodFrom: fact.paymentMethodFrom,
+    paymentParticipationId: fact.paymentParticipationId,
+    paymentMixMinor: fact.paymentMixMinor,
   };
 }
 

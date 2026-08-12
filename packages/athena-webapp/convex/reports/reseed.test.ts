@@ -337,6 +337,153 @@ describe("reseed — fact reconstruction", () => {
     });
   });
 
+  it("rebuilds payment-mix dimensions from each allocation's persisted state", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      const transactionId = await seedPosSale(ctx, store, {
+        completedAt: at("09:00"),
+        lines: [{ quantity: 1, unitPrice: 7_000 }],
+        transactionNumber: "T-MIX",
+      });
+      // Two same-method receipts on ONE POS transaction, plus a split-tender
+      // second method, plus a non-POS receipt and a refund.
+      await seedPaymentAllocation(ctx, store, {
+        amount: 2_000,
+        method: "cash",
+        posTransactionId: transactionId,
+        recordedAt: at("09:00"),
+        targetId: "A",
+      });
+      await seedPaymentAllocation(ctx, store, {
+        amount: 1_000,
+        method: "Cash",
+        posTransactionId: transactionId,
+        recordedAt: at("09:05"),
+        targetId: "A",
+      });
+      await seedPaymentAllocation(ctx, store, {
+        amount: 4_000,
+        method: "momo",
+        posTransactionId: transactionId,
+        recordedAt: at("09:10"),
+        targetId: "A",
+      });
+      await seedPaymentAllocation(ctx, store, {
+        amount: 3_000,
+        method: "card",
+        recordedAt: at("09:20"),
+        targetId: "B",
+      });
+      await seedPaymentAllocation(ctx, store, {
+        amount: 500,
+        direction: "out",
+        method: "cash",
+        posTransactionId: transactionId,
+        recordedAt: at("09:30"),
+        targetId: "A",
+      });
+      return { ...store, transactionId };
+    });
+
+    await runReseed(t, seeded.storeId);
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      const facts = (await ctx.db.query("reportFact").collect())
+        .filter((fact) => fact.sourceDomain === "payments")
+        .sort((left, right) => left.occurredAt - right.occurredAt);
+
+      expect(
+        facts.map((fact) => ({
+          factKind: fact.factKind,
+          method: fact.paymentMethod,
+          mix: fact.paymentMixMinor,
+          participation: fact.paymentParticipationId,
+        })),
+      ).toEqual([
+        {
+          factKind: "payment",
+          method: "cash",
+          mix: 2_000,
+          participation: seeded.transactionId,
+        },
+        {
+          factKind: "payment",
+          method: "cash",
+          mix: 1_000,
+          // Same transaction and method — one tender use, two values.
+          participation: seeded.transactionId,
+        },
+        {
+          factKind: "payment",
+          method: "mobile_money",
+          mix: 4_000,
+          participation: seeded.transactionId,
+        },
+        {
+          // No POS transaction: the allocation stands for itself.
+          factKind: "payment",
+          method: "card",
+          mix: 3_000,
+          participation: expect.stringMatching(/.+/),
+        },
+        {
+          // A refund reverses value, never gross method evidence.
+          factKind: "payment_refund",
+          method: undefined,
+          mix: undefined,
+          participation: undefined,
+        },
+      ]);
+      const nonPos = facts[3];
+      expect(nonPos.paymentParticipationId).toBe(nonPos.sourceId);
+    });
+  });
+
+  it("rebuilds a corrected allocation in its final method without replaying the move", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const store = await seedStore(ctx);
+      const transactionId = await seedPosSale(ctx, store, {
+        completedAt: at("09:00"),
+        lines: [{ quantity: 1, unitPrice: 5_000 }],
+        transactionNumber: "T-CORR",
+      });
+      // The allocation as it exists AFTER an approved cash -> card correction:
+      // the correction patched `method` in place, so the source now reads card.
+      await seedPaymentAllocation(ctx, store, {
+        amount: 5_000,
+        method: "card",
+        posTransactionId: transactionId,
+        recordedAt: at("09:00"),
+        targetId: "C",
+      });
+      return { ...store, transactionId };
+    });
+
+    await runReseed(t, seeded.storeId);
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      const facts = await ctx.db.query("reportFact").collect();
+      const payments = facts.filter((fact) => fact.sourceDomain === "payments");
+      expect(payments).toHaveLength(1);
+      expect(payments[0]).toMatchObject({
+        paymentMethod: "card",
+        paymentMixMinor: 5_000,
+        paymentParticipationId: seeded.transactionId,
+      });
+      // Correction audit history must NOT emit a second reclassification: the
+      // rebuilt receipt already carries the final method, so replaying the move
+      // would take the value off `card` and file it under a method it never
+      // ends in.
+      expect(
+        facts.some((fact) => fact.paymentMethodFrom !== undefined),
+      ).toBe(false);
+    });
+  });
+
   it("keeps the tax line separate so POS net sales reconcile to the header", async () => {
     vi.spyOn(Date, "now").mockReturnValue(NOW);
     const t = convexTest(schema, modules);

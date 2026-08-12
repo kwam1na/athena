@@ -176,7 +176,7 @@ describe("recordFacts — identity and replay", () => {
       expect(facts).toHaveLength(1);
       expect(facts[0]).toMatchObject({
         factKind: "sale",
-        fingerprintVersion: 2,
+        fingerprintVersion: REPORTS_FINGERPRINT_VERSION,
         lineId: "line_1",
         operatingDate: TODAY,
         observedAt: NOW,
@@ -185,7 +185,9 @@ describe("recordFacts — identity and replay", () => {
         sourceId: "txn_1",
         taxAmountMinor: 500,
       });
-      expect(facts[0].fingerprint).toMatch(/^v2:[0-9a-f]{8}$/);
+      expect(facts[0].fingerprint).toMatch(
+        new RegExp(`^v${REPORTS_FINGERPRINT_VERSION}:[0-9a-f]{8}$`),
+      );
       expect(facts[0].quarantine).toBeUndefined();
     });
   });

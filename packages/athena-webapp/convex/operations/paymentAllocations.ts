@@ -2,7 +2,11 @@ import { internalMutation, internalQuery, MutationCtx } from "../_generated/serv
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { recordFacts } from "../reports/ingest";
-import type { NewReportFact } from "../../shared/reportsContract";
+import {
+  normalizeReportPaymentMethod,
+  type NewReportFact,
+  type ReportPaymentMethod,
+} from "../../shared/reportsContract";
 
 export type RecordPaymentAllocationArgs = {
   storeId: Id<"store">;
@@ -69,7 +73,13 @@ export function findSameAmountSinglePaymentAllocation(
   allocations: Array<
     Pick<
       Doc<"paymentAllocation">,
-      "_id" | "amount" | "direction" | "method" | "status"
+      | "_id"
+      | "amount"
+      | "direction"
+      | "method"
+      | "posTransactionId"
+      | "recordedAt"
+      | "status"
     >
   >,
   args: {
@@ -185,6 +195,56 @@ export function paymentAllocationReportingDimensions(
 }
 
 /**
+ * The Daily Close-aligned participation identity for one allocation.
+ *
+ * A POS transaction is the unit Daily Close counts (`buildPaymentTotals`), so
+ * several same-method allocations on one transaction are ONE tender use. An
+ * allocation with no POS transaction has no such grouping to belong to, so it
+ * stands for itself — which keeps non-POS receipts independently countable.
+ *
+ * Kept here, centrally, rather than asked of each payment source: the plan's
+ * scope boundary is one derivation from fields `paymentAllocation` already has.
+ */
+export function paymentAllocationParticipationId(
+  allocation: Pick<Doc<"paymentAllocation">, "_id" | "posTransactionId">,
+): string {
+  return allocation.posTransactionId
+    ? String(allocation.posTransactionId)
+    : String(allocation._id);
+}
+
+/**
+ * The gross payment-mix contribution of one allocation, or null when there is
+ * none to make.
+ *
+ * Only a RECORDED INBOUND allocation contributes: refunds and reversals leave
+ * gross receipts by method untouched (that is what "gross" means here), and an
+ * unsupported or blank method is evidence reporting cannot classify — the
+ * value still counts toward Payments totals, the mix just cannot be published.
+ */
+export function paymentAllocationMixDimensions(
+  allocation: Pick<
+    Doc<"paymentAllocation">,
+    "_id" | "amount" | "direction" | "method" | "posTransactionId" | "status"
+  >,
+): {
+  paymentMethod: ReportPaymentMethod;
+  paymentParticipationId: string;
+  paymentMixMinor: number;
+} | null {
+  if (allocation.status !== "recorded") return null;
+  if (allocation.direction === "out") return null;
+  const paymentMethod = normalizeReportPaymentMethod(allocation.method);
+  if (!paymentMethod) return null;
+
+  return {
+    paymentMethod,
+    paymentParticipationId: paymentAllocationParticipationId(allocation),
+    paymentMixMinor: Math.abs(allocation.amount),
+  };
+}
+
+/**
  * KEEP IN SYNC WITH convex/reports/reseed.ts (`paymentFacts`).
  *
  * Reseed re-derives a whole allocation's evidence; the live path emits the one
@@ -242,6 +302,9 @@ async function ensurePaymentAllocationReportingWithCtx(
               : allocation.recordedAt,
           paymentAllocationMinor: posture.paymentAllocationMinor,
           paymentAllocationCoverage: posture.paymentAllocationCoverage,
+          // Absent together on every shape that makes no gross contribution,
+          // so a fold never sees half a mix dimension.
+          ...(paymentAllocationMixDimensions(allocation) ?? {}),
         };
 
   await recordFacts(ctx, allocation.storeId, [fact]);

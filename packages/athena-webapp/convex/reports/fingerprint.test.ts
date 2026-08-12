@@ -80,7 +80,54 @@ describe("factFingerprint", () => {
       null,
       null,
       null,
+      null,
+      null,
+      null,
+      null,
     ]);
+  });
+
+  it("covers every payment-mix dimension at the current version", () => {
+    const baseline = factFingerprint(fact());
+    const drifted = [
+      fact({ paymentMethod: "cash" }),
+      fact({ paymentMethodFrom: "cash" }),
+      fact({ paymentParticipationId: "txn_1" }),
+      fact({ paymentMixMinor: 9_000 }),
+    ].map((candidate) => factFingerprint(candidate));
+    for (const value of drifted) expect(value).not.toBe(baseline);
+    expect(new Set(drifted).size).toBe(drifted.length);
+  });
+
+  it("keeps a v2 replay on its stored field set — mix fields never enrich it", () => {
+    const v2 = factFingerprint(fact(), 2);
+    expect(
+      factFingerprint(
+        fact({
+          paymentMethod: "cash",
+          paymentParticipationId: "txn_1",
+          paymentMixMinor: 9_000,
+        }),
+        2,
+      ),
+    ).toBe(v2);
+  });
+
+  it("re-hashes a stored v1/v2 row with its own version rather than quarantining", () => {
+    const enriched = fact({
+      paymentMethod: "mobile_money",
+      paymentParticipationId: "txn_1",
+      paymentMixMinor: 9_000,
+    });
+    for (const version of [LEGACY_REPORTS_FINGERPRINT_VERSION, 2]) {
+      expect(
+        matchesStoredFingerprint(enriched, {
+          currency: "GHS",
+          fingerprint: factFingerprint(fact(), version),
+          fingerprintVersion: version,
+        }),
+      ).toBe(true);
+    }
   });
 
   it("keeps legacy replays on their stored field set", () => {

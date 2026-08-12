@@ -7,6 +7,13 @@ import {
 export const LEGACY_REPORTS_FINGERPRINT_VERSION = 1 as const;
 
 /**
+ * Allocation dimensions landed here; kept as a named readable version so a
+ * stored v2 row re-hashes on its own field set instead of being read as drift
+ * the moment a newer version adds fields.
+ */
+const ALLOCATION_REPORTS_FINGERPRINT_VERSION = 2 as const;
+
+/**
  * Content fingerprints for reportFact rows.
  *
  * The fingerprint answers exactly one question: "is this replay byte-identical
@@ -41,11 +48,21 @@ export function fingerprintPayload(
   ];
 
   if (version === LEGACY_REPORTS_FINGERPRINT_VERSION) return payload;
+
+  const withAllocation = [
+    ...payload,
+    fact.paymentAllocationMinor ?? null,
+    fact.paymentAllocationCoverage ?? null,
+  ];
+  if (version === ALLOCATION_REPORTS_FINGERPRINT_VERSION) return withAllocation;
+
   if (version === REPORTS_FINGERPRINT_VERSION) {
     return [
-      ...payload,
-      fact.paymentAllocationMinor ?? null,
-      fact.paymentAllocationCoverage ?? null,
+      ...withAllocation,
+      fact.paymentMethod ?? null,
+      fact.paymentMethodFrom ?? null,
+      fact.paymentParticipationId ?? null,
+      fact.paymentMixMinor ?? null,
     ];
   }
   throw new Error(`Unsupported report fact fingerprint version: ${version}`);
