@@ -19,7 +19,7 @@ tags:
   - gate-admission
   - authorization-identity
   - delivery-order
-delivery_diff_fingerprint: bd80b829ea187627529fb289789362543f781b7d6fc0eff7b1d64ca0d6136a87
+delivery_diff_fingerprint: b6436cf0663b18374fb9c7cfc3af8f2c247555e686933410a278bf05e56f2d12
 ---
 
 # Review Evidence Binds to a Deliverable Identity, and Mechanical Checks Run Before It

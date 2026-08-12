@@ -185,6 +185,25 @@ describe("harness gate admission", () => {
     expect(result).toMatchObject({ admitted: true, status: "passed" });
   });
 
+  it("does not let a superseded record block a candidate that needs no review", async () => {
+    const options = greenOptions({
+      discoverRecords: async () => ({
+        records: [],
+        diagnostics: [
+          {
+            kind: "superseded_record" as const,
+            path: "/records/old.json",
+            reason: "record was written against candidate identity (none)",
+          },
+        ],
+      }),
+    });
+
+    const result = await runHarnessGateAdmission("/repo", options as never);
+    expect(result).toMatchObject({ admitted: true, status: "passed" });
+    expect(result.decision.findings).toEqual([]);
+  });
+
   it("aggregates documentation and review blockers and does not prompt", async () => {
     const promptForWaiver = vi.fn(async () => true);
     const options = greenOptions({
