@@ -1067,6 +1067,96 @@ describe("fold integration", () => {
     expect(days[0].closeId).toBeDefined();
   });
 
+  it("republishes a stale day's payment mix and its bounded participation state", async () => {
+    // Same hazard the transaction-count case below guards: `foldAndReplaceDay`
+    // writes an EXPLICIT document, so a field the fold returns can be dropped
+    // silently on write. This reads the stored row back.
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t, "fold-payment-mix");
+    allow(storeId);
+
+    const receipt = async (args: {
+      sourceId: string;
+      amountMinor: number;
+      method: "cash" | "card" | "mobile_money";
+      participationId: string;
+    }) => {
+      await t.run(async (ctx) => {
+        await ctx.db.insert("reportFact", {
+          storeId,
+          sourceDomain: "payments",
+          sourceId: args.sourceId,
+          lineId: "",
+          factKind: "payment",
+          fingerprint: `fp-${args.sourceId}`,
+          fingerprintVersion: 3,
+          occurredAt: 1_000,
+          recordedAt: 1_000,
+          operatingDate: "2026-07-28",
+          currency: "GHS",
+          grossAmountMinor: args.amountMinor,
+          netAmountMinor: args.amountMinor,
+          taxAmountMinor: 0,
+          discountAmountMinor: 0,
+          quantity: 0,
+          paymentAllocationCoverage: "known",
+          paymentAllocationMinor: args.amountMinor,
+          paymentMethod: args.method,
+          paymentParticipationId: args.participationId,
+          paymentMixMinor: args.amountMinor,
+        });
+      });
+    };
+
+    // Two Cash allocations on one transaction, plus a card split.
+    await receipt({
+      sourceId: "alloc-1",
+      amountMinor: 2_000,
+      method: "cash",
+      participationId: "txn-1",
+    });
+    await receipt({
+      sourceId: "alloc-2",
+      amountMinor: 1_000,
+      method: "cash",
+      participationId: "txn-1",
+    });
+    await receipt({
+      sourceId: "alloc-3",
+      amountMinor: 3_000,
+      method: "card",
+      participationId: "txn-1",
+    });
+
+    await mark(t, storeId, "2026-07-28", "fold_version_bump");
+    await sweep(t);
+
+    const [day] = await t.run(async (ctx) => ctx.db.query("reportDay").take(2));
+    expect(day.paymentsCollectedMinor).toBe(6_000);
+    expect(day.paymentMix).toEqual({
+      status: "complete",
+      totalMinor: 6_000,
+      rows: [
+        {
+          method: "cash",
+          amountMinor: 3_000,
+          shareBasisPoints: 5_000,
+          tenderUseCount: 1,
+        },
+        {
+          method: "card",
+          amountMinor: 3_000,
+          shareBasisPoints: 5_000,
+          tenderUseCount: 1,
+        },
+      ],
+    });
+    expect(day.paymentMixState?.participation).toEqual([
+      { participationId: "txn-1", method: "cash", net: 2 },
+      { participationId: "txn-1", method: "card", net: 1 },
+    ]);
+  });
+
   it("persists the settled transaction count onto the day document", async () => {
     // `foldAndReplaceDay` builds an EXPLICIT day document rather than
     // spreading the fold result, so a field the fold returns can be silently

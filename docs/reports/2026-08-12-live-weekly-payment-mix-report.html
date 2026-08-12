@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Live Weekly Payment Mix</title>
+</head>
+<body>
+    <article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="99e422dc99ebbb67fe02294221ab5d7dd6705275e06781d324dd49ff252228e2">
+  <header data-report-section="header">
+    <h1>Live Weekly Payment Mix</h1>
+    <p>Why the method breakdown now covers the same week as the total printed above it</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch codex/live-weekly-payment-mix</li>
+      <li>V26-1204 to V26-1208</li>
+      <li>58 focused test files, 1,119 tests green</li>
+      <li>Production deploy pending merge</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Source</dt><dd>Branch codex/live-weekly-payment-mix</dd>
+      <dt>Base</dt><dd>2457cf97</dd>
+      <dt>Status</dt><dd>Delivery candidate</dd>
+      <dt>Root alignment</dt><dd>Pending merge</dd>
+      <dt>Production</dt><dd>Pending merge</dd>
+    </dl>
+  </header>
+
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+    <p>Weekly Payment mix now answers the same question as the Payments section directly above it: how did this week's gross payments arrive, by tender method. It reads from the payment-allocation report facts that already feed Payments received, so it covers open days and outside-schedule payments instead of only completed Daily Closes.</p>
+    <p>The hard part was not the money. It was the <em>count</em>. A single POS transaction routinely carries several allocations of the same method, so counting allocation rows would report one cash sale as two cash uses and disagree with Daily Close. The fix is a participation identity: count distinct pairs of <code>(participation identity, normalized method)</code>, where the identity is the POS transaction when there is one and the allocation itself otherwise.</p>
+    <p>Nothing was backfilled and no accepted report was rewritten. Existing accepted and corrected reports keep their frozen close-backed mix, and a revision that cannot produce a breakdown reconciling exactly to its own total says so rather than publishing a partial one.</p>
+  </section>
+
+  <section data-report-section="problem">
+    <h2>The problem in plain language</h2>
+    <p>Two adjacent sections of the weekly report were describing different weeks.</p>
+    <p><strong>Payments received</strong> had already moved onto payment-allocation report facts. It updates as payments arrive and covers the whole labelled date range, including days that are still open and payments taken on days the store was not scheduled to trade.</p>
+    <p><strong>Payment mix</strong> still aggregated completed Daily Closes. A close only exists for a day someone closed, so the mix silently excluded open days and outside-schedule payments. A manager reading the two together saw a method breakdown that did not add up to the total printed immediately above it, with nothing on the page explaining why.</p>
+    <p>This supersedes exactly one earlier decision — the close-backed payment mix from the 2026-08-09 plan. Daily Close remains authoritative for everything else it owns: close status, cash variance, completed POS transaction count, and expense-product evidence.</p>
+  </section>
+
+  <section data-report-section="mental-model">
+    <h2>The mental model</h2>
+    <p>Think of a week's payment evidence as two different kinds of question asked of the same pile of receipts.</p>
+    <p><strong>"How much came in as cash?"</strong> is additive. Every receipt contributes its amount. Two cash receipts of 20 and 10 make 30. You can add these in any order and merge partial sums freely.</p>
+    <p><strong>"How many times was cash used?"</strong> is not additive, because the thing being counted is not the receipt. It is the <em>occasion</em>. If one customer pays for one transaction with two taps of cash, that is one use of cash, not two. Daily Close already answers it this way — <code>buildPaymentTotals</code> counts the transaction.</p>
+    <p>So the fold carries two different accumulators. Value sums. The count is a set of <code>(occasion, method)</code> pairs, and the occasion is named explicitly: the POS transaction when the allocation has one, the allocation itself when it does not. Several same-method allocations on one transaction collapse into one pair; a split-tender transaction produces one pair per method; two unrelated non-POS receipts stay two pairs.</p>
+    <p>One more idea does a lot of work here: <strong>absent is not zero</strong>. A day, revision, or fact written before this change carries no mix field at all. That absence means "unknown", and on an immutable accepted report it means something stronger — "read the frozen close-backed evidence, and do not try to reconstruct me."</p>
+  </section>
+
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+    <h3>Before</h3>
+    <ul>
+      <li>Payments received: payment-allocation report facts, whole labelled week, live.</li>
+      <li>Payment mix: completed Daily Closes only, scheduled included dates only, frozen at close.</li>
+      <li>A method correction moved money between methods in the POS domain but emitted a zero-magnitude correction fact carrying no method information, so reporting could not see it.</li>
+    </ul>
+    <h3>After</h3>
+    <p>One cash receipt now travels a single rail end to end:</p>
+    <ol>
+      <li><strong>Allocation.</strong> A recorded inbound <code>paymentAllocation</code> is written as it always was.</li>
+      <li><strong>Fact.</strong> The existing emitter attaches four optional dimensions to the <code>payment</code> fact it already wrote: normalized method, participation identity, gross mix value, and (on a correction only) the method the value moves off.</li>
+      <li><strong>Day.</strong> The fold accumulates value per method and a net count per <code>(identity, method)</code> pair, then publishes a mix only if the rows sum exactly to that day's <code>paymentsCollectedMinor</code>.</li>
+      <li><strong>Week.</strong> Each lane's days are summed and re-checked against that lane's own received total. Acceptance freezes the same arithmetic from cutoff-bounded facts.</li>
+      <li><strong>Read.</strong> Both lanes are combined at read time, because the Payments figure beside the mix covers the whole labelled range.</li>
+    </ol>
+    <p>An approved cash-to-card correction travels the same rail: the correction fact keeps the receipt's participation identity and carries a signed move from cash to card, dated to the <em>original allocation's</em> business time so it lands on the day the payment was received.</p>
+  </section>
+
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead>
+        <tr><th>File</th><th>Layer</th><th>Why it matters</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>shared/reportsContract.ts</code></td><td>Contract</td><td>The whole vocabulary and the pure fold algebra: method normalizer, mix and state types, <code>applyPaymentMixContribution</code>, <code>derivePaymentMix</code>, <code>boundPaymentMixState</code>, <code>combineRevisionPaymentMix</code>, and both version constants.</td></tr>
+        <tr><td><code>convex/operations/paymentAllocations.ts</code></td><td>Fact ingress</td><td>Derives the participation identity centrally, so no payment source has to know the rule. Receipts carry mix dimensions; refunds do not.</td></tr>
+        <tr><td><code>convex/pos/application/commands/correctTransaction.ts</code></td><td>Fact ingress</td><td>The approved method correction now carries an old-to-new move, and throws when its fact cannot be recorded so the whole correction rolls back atomically.</td></tr>
+        <tr><td><code>convex/reports/fingerprint.ts</code></td><td>Fact ingress</td><td>Version 3 adds the four dimensions while v1 and v2 rows keep re-hashing on their own field sets, so legacy facts validate instead of quarantining as drift.</td></tr>
+        <tr><td><code>convex/reports/foldDay.ts</code></td><td>Day fold</td><td>The correctness authority. Accumulates mix for excluded facts too, because dropped payment evidence is what makes a mix unavailable.</td></tr>
+        <tr><td><code>convex/reports/ingest.ts</code></td><td>Day fold</td><td>The incremental open-day path, which must converge on the same answer the refold will publish.</td></tr>
+        <tr><td><code>convex/reports/sweeper.ts</code></td><td>Day fold</td><td><code>toFoldFact</code> must carry the new dimensions, and <code>foldAndReplaceDay</code> writes an explicit document, so both new day fields had to be added there by hand.</td></tr>
+        <tr><td><code>convex/reports/weekly.ts</code></td><td>Weekly lifecycle</td><td>Per-lane folding, acceptance freezing from cutoff facts, and the amendment gate that only fires on a knowable-to-knowable change.</td></tr>
+        <tr><td><code>convex/reports/queries.ts</code></td><td>Read projection</td><td>Combines both lanes and picks the effective revision: correction first, then amendment, then baseline.</td></tr>
+        <tr><td><code>src/components/reports/ReportsWeeklyView.tsx</code></td><td>Presentation</td><td>Renders fact-backed, known-empty, unavailable, and legacy states through the existing <code>PaymentMethodsPanel</code>.</td></tr>
+        <tr><td><code>convex/operations/weeklyManagerReportEmail.ts</code></td><td>Presentation</td><td>Same rows as Reports for the same baseline, and stays baseline-only so a delayed retry still describes the accepted report.</td></tr>
+        <tr><td><code>convex/reports/verify.ts</code></td><td>Verification</td><td>Recomputes values and use counts from the source ledger and reports the two failure modes separately.</td></tr>
+        <tr><td><code>convex/schemas/reports/facts.ts</code>, <code>derived.ts</code></td><td>Schema</td><td>Every new field optional, so existing stored documents still validate.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section data-report-section="mechanics">
+    <h2>How the counting actually works</h2>
+    <p>The state is deliberately not a set. It is a net count per pair:</p>
+    <pre><code>{ participationId: "txn-1", method: "cash", net: 2 }</code></pre>
+    <p>A receipt adds one to its pair. A method correction subtracts one from the old pair and adds one to the new. A pair with a positive net is exactly one tender use.</p>
+    <p>Why a net count and not add-then-remove? Because the correction fact is dated to the original allocation's business time, so it <em>ties</em> with the receipt it corrects in the fold's sort order. With set membership, whether cash or card survived would depend on which id happened to sort first. With commutative deltas, both orders land on the same answer — which is also what lets the incremental open-day path and the authoritative refold agree without sharing an execution order.</p>
+    <p>Publication is then all-or-nothing. <code>derivePaymentMix</code> refuses when evidence was broken, when any received value could not be attributed to a method, when the participation cap is exceeded, or when a value is not a safe integer. The final gate is arithmetic: if the rows do not sum to exactly the frame's <code>paymentsCollectedMinor</code>, the answer is <code>unavailable</code>. There is no partial state, because a breakdown that contradicts the number beside it is worse than no breakdown.</p>
+  </section>
+
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+    <p>Three behaviours are easy to get backwards and are worth stating explicitly.</p>
+    <p><strong>Gross mix follows the receipt, not the allocation's later fate.</strong> An inbound allocation that is later voided still contributes its gross method value on the day it was received, because <code>paymentsCollectedMinor</code> counts that receipt either way. Withholding the mix value would leave the day unable to reconcile to its own total. Reversals and refunds move settlement, never gross mix. This one was found by the verifier after the emitter had already shipped the opposite rule.</p>
+    <p><strong>An unknown is not a change.</strong> A lane that goes from <code>complete</code> to <code>unavailable</code>, or a legacy baseline that never had a mix, is unknown — and nobody amends an accepted report because a fact stopped being provable. Only a <code>complete</code> mix is hashed into the weekly truth fingerprint, and the amendment gate additionally requires both sides complete and different.</p>
+    <p><strong>Reseed does not replay a correction.</strong> Purge-then-rebuild reads each allocation's persisted method, which is already its post-correction final state. Replaying the correction's audit history would take the value off the method it actually ends in.</p>
+  </section>
+
+  <section data-report-section="changes">
+    <h2>What changed, and what deliberately did not</h2>
+    <h3>Changed</h3>
+    <ul>
+      <li>Four optional dimensions on the existing payment report fact; fingerprint version 3.</li>
+      <li>Day fold publishes a mix plus the bounded participation state behind it; fold version 6, so already-folded days are refreshed by the existing repair.</li>
+      <li>Weekly current, accepted baseline, and amendment carry a per-lane mix; the mix joins weekly truth fingerprinting.</li>
+      <li>Reports and the weekly manager email select and explain the effective revision's mix.</li>
+      <li>The verifier recomputes method values and use counts independently from the source ledger.</li>
+      <li>The approved POS method correction fails atomically when its reclassification fact cannot be recorded.</li>
+    </ul>
+    <h3>Deliberately not changed</h3>
+    <ul>
+      <li>No new table, worker, index, repair queue, taxonomy registry, rollout framework, or UI component.</li>
+      <li>No backfill or rewrite of existing facts, accepted reports, or the sealed Wigclub correction.</li>
+      <li>No refund-method mix, net settlement, processor fees, disputes, or chargebacks.</li>
+      <li>Public reads stay projection-only; no <code>paymentAllocation</code>, <code>reportFact</code>, POS, or Daily Close read was added to a client-facing query.</li>
+      <li>The automatic weekly email stays baseline-only and never consumes amendment or current truth.</li>
+      <li>Payments totals keep their existing meaning: an unclassifiable method leaves them untouched and withholds only the breakdown.</li>
+    </ul>
+  </section>
+
+  <section data-report-section="validation">
+    <h2>Validation and review evidence</h2>
+    <p><strong>Execution posture.</strong> Test-first for all behaviour: each invariant had a failing focused test before its implementation. Sensor-only for the documentation refresh and the pre-existing desktop expense-section layout adjustment.</p>
+    <p><strong>Focused suites.</strong> 58 test files and 1,112 tests green across <code>convex/reports/</code>, <code>convex/operations/paymentAllocations.test.ts</code>, <code>convex/operations/weeklyManagerReportEmail.test.ts</code>, <code>convex/pos/application/correctTransactionPaymentMethod.test.ts</code>, <code>convex/emails/</code>, and <code>src/components/reports/</code>. TypeScript project typecheck clean.</p>
+    <p><strong>What the tests actually pin.</strong> Exact reconciliation to <code>paymentsCollectedMinor</code>; one tender use for repeated same-method allocations on one transaction; one use per method for split tender; non-POS independence; order-independence across seeded shuffles; incremental ingest matching the authoritative refold; a methodless day withholding its lane; acceptance freezing without mutating the baseline; a total-neutral method move still raising an amendment; a legacy weekly row reading unavailable rather than empty; the participation cap clamping persisted state; and the verifier reporting value and use-count mismatches independently.</p>
+    <p><strong>Full suite.</strong> 717 test files and 8,429 tests green across the whole webapp package.</p>
+    <p><strong>Independent review.</strong> Three reviewers ran against the exact prepared candidate tree — backend fold correctness, weekly lifecycle and compatibility, and read-side projection and presentation — and their machine-readable results were merged into a finalized review manifest recorded through <code>harness:review-evidence</code>.</p>
+    <p><strong>Defects found and fixed before merge.</strong> Two rounds of scrutiny found five real defects. A self-review against the plan and each ticket's acceptance criteria caught the first three; independent review caught the last two.</p>
+    <ol>
+      <li>The rendered mix covered only the included lane while the total printed beside it covered the whole labelled range.</li>
+      <li>An accepted read carrying an amendment showed the baseline's mix beside amendment totals.</li>
+      <li>The participation cap gated publication without bounding the array actually persisted on the day document.</li>
+      <li><code>weekTruthFingerprint</code> hashed an unknowable mix as an explicit <code>null</code>, which changed the serialized bytes for every legacy row. The amendment decision itself was safe, but the stored fingerprint is also the dedupe key for <code>changedAt</code> — so the first refresh after deploy would have re-stamped every existing amendment's timestamp, telling readers the week's truth had just moved when nothing had. The fix omits the key entirely rather than nulling it, so a mixless payload hashes byte-for-byte as it always did.</li>
+      <li>The verifier contradicted a projection that honestly withheld its mix. Every day folded from pre-v3 facts publishes <code>unavailable</code> while the source ledger still carries a classifiable method, so the scheduled sweep would have raised a discrepancy on effectively all of history — on days where no total disagreed. A withheld projection is now treated as unchecked; the opposite direction, a projection claiming knowledge the source cannot support, is still reported.</li>
+      <li>A correction onto an unclassifiable method emitted no mix evidence at all, so the receipt kept crediting the old method and the day published that as <code>complete</code> — reconciling arithmetically while naming a method the store's own records no longer claimed. The move is now recorded without a destination, reusing the poison path already written for unclassifiable receipts.</li>
+    </ol>
+    <p>A second review pass on the revised tree found three more, which is the more interesting result — two of them were defects <em>in the first round of fixes</em>:</p>
+    <ol>
+      <li>The fingerprint fix above moved the harm rather than removing it. A legacy baseline never gains a mix, so once fold version 6 drained and the current fold started producing one, the two sides were permanently asymmetric and the re-stamp was guaranteed rather than incidental. A lane is now hashed only when both it and its counterpart are <code>complete</code>, mirroring the amendment gate's knowable-to-knowable rule exactly.</li>
+      <li>The weekly verifier's <code>expectsAmendment</code> never gained the mix-move disjunct that the amendment path did, so a method-only correction — the flagship scenario for this feature, which moves no total by definition — read as a discrepancy and the sweep would have alerted on a correct projection. The same class of false positive as item 5 above, on a different lane. No test covered it; one does now, and it was confirmed to fail without the fix.</li>
+      <li>A comment written during the first round asserted the inverse of the real risk: omitting the baseline mixes at the acceptance call site suppresses detection, it does not manufacture an amendment.</li>
+    </ol>
+    <p>All eight were closed test-first, each with a failing test written first. Three of the eight were caught only because the review ran a second time against the revised tree — a partial follow-up would have missed them.</p>
+    <p><strong>Browser validation.</strong> User-owned by explicit request in the plan; not performed in this delivery.</p>
+    <p><strong>Deployment.</strong> Pending merge. This branch changes <code>docs/solutions/**</code> and <code>docs/reports/**</code>, which the in-app docs workspace compiles into its Vite bundle, so the webapp deploy applies once merged.</p>
+    <p><strong>Root alignment.</strong> Pending merge.</p>
+  </section>
+
+  <section data-report-section="guidance">
+    <h2>Guidance for next time</h2>
+    <p><strong>When a report counts things, name the thing being counted.</strong> If a count is derived from per-row evidence, write down what one unit of the count actually is before writing arithmetic. "Count the rows" is a decision, usually the wrong one, and it is easy to make by accident.</p>
+    <p><strong>Prefer commutative deltas over set mutation</strong> whenever an incremental path and a batch path must agree, or whenever two contributions can share a timestamp. Order-independence bought correctness here for free.</p>
+    <p><strong>Give every published breakdown a reconciliation target</strong> and refuse to publish when it misses. Withholding is cheap; a plausible-looking breakdown that contradicts the number above it costs trust.</p>
+    <p><strong>Treat an absent optional field as unknown</strong> and, on immutable records, as positive authority to read the frozen evidence. Reading absence as zero is how a rollout quietly rewrites history.</p>
+    <p><strong>Build the independent verifier even when the fold looks obviously right.</strong> The one on this branch found a real disagreement between the emitter and the census about voided receipts, after the emitter had shipped.</p>
+    <p><strong>Re-review the revised tree, not just the diff of the fixes.</strong> Two of the three second-pass findings were defects introduced by the first round of fixes, and one of them — the verifier alerting on every method-only amendment — had no test coverage at all. A partial follow-up scoped to "did they apply my suggestions" would have passed both.</p>
+    <p><strong>When a rule exists in two places, expect them to drift.</strong> The knowable-to-knowable rule ended up needing to hold in three: the amendment gate, the truth fingerprint, and the verifier's expectation. Each was fixed in a separate round because each was written at a different time. If a rule has to be restated, restate it in the same words and cross-reference it.</p>
+    <p><strong>Run the mechanical gate before the review that authorizes the tree.</strong> Review evidence binds to an exact tree and the harness re-captures that tree when the evidence is recorded, so a lint failure found afterwards invalidates the authorization and costs a full extra review round. This delivery paid that cost: the gate caught two unjustified <code>.collect()</code> calls in new test fixtures that four review passes had not looked for. Gate findings and reviewer findings belong in the same fix batch.</p>
+    <p><strong>Operationally:</strong> fold version 6 refolds otherwise-clean days through the existing repair, so lanes containing an unrepaired day read <code>unavailable</code> until it drains. Stores whose payment methods fall outside <code>cash</code>, <code>card</code>, and <code>mobile_money</code> will persistently read <code>unavailable</code> until their source data is normalized — which is the honest answer, not a defect.</p>
+  </section>
+
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Ten questions. Eight correct to pass.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why did the weekly Payment mix disagree with the Payments received total printed above it?</p>
+        <ol data-quiz-options>
+          <li>The mix used a different currency conversion.</li>
+          <li data-quiz-correct>The mix aggregated completed Daily Closes, so it excluded open days and outside-schedule payments that Payments received included.</li>
+          <li>The mix was computed on a stale cache.</li>
+          <li>Refunds were subtracted from one figure but not the other.</li>
+        </ol>
+        <p data-quiz-explanation>Payments received had already moved onto payment-allocation facts covering the whole labelled week, while the mix still needed a completed close to exist at all. The two sections were describing different scopes.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the participation identity for an allocation attached to a POS transaction?</p>
+        <ol data-quiz-options>
+          <li>The allocation's own id.</li>
+          <li>The register session id.</li>
+          <li data-quiz-correct>The POS transaction id, so several same-method allocations on one transaction count as one tender use.</li>
+          <li>The customer profile id.</li>
+        </ol>
+        <p data-quiz-explanation>Daily Close counts the transaction. Using the transaction id as the participation identity is what makes the new count agree with <code>buildPaymentTotals</code>.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A single POS transaction is paid with two separate cash allocations of 20 and 10. What does the mix report for cash?</p>
+        <ol data-quiz-options>
+          <li>Value 30, two tender uses.</li>
+          <li data-quiz-correct>Value 30, one tender use.</li>
+          <li>Value 10, one tender use.</li>
+          <li>Value 30, and the day is marked unavailable.</li>
+        </ol>
+        <p data-quiz-explanation>Value is additive so both allocations count in full, but they share one participation identity and method, so the pair contributes a single use.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the participation state store a net count per pair instead of adding and removing set members?</p>
+        <ol data-quiz-options>
+          <li>To reduce the size of the stored document.</li>
+          <li>Because sets are not serializable in Convex.</li>
+          <li data-quiz-correct>Because a method correction is dated to the original allocation's business time and can tie with the receipt it corrects, so the result must not depend on fold order.</li>
+          <li>To allow negative tender-use counts to be displayed.</li>
+        </ol>
+        <p data-quiz-explanation>Commutative deltas make the fold order-independent, which is also what lets the incremental open-day path and the authoritative refold reach the same answer without sharing an execution order.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A day's method rows sum to 9,900 but its <code>paymentsCollectedMinor</code> is 10,000. What is published?</p>
+        <ol data-quiz-options>
+          <li>The rows, with a rounding disclaimer.</li>
+          <li>The rows, plus an "other" row of 100.</li>
+          <li data-quiz-correct>Nothing — the mix is <code>unavailable</code>, because a complete mix must reconcile exactly.</li>
+          <li>The rows, scaled proportionally up to 10,000.</li>
+        </ol>
+        <p data-quiz-explanation>There is deliberately no partial state. A breakdown that does not add up to the total beside it is worse than no breakdown at all.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>An inbound cash allocation is received on Monday and voided on Tuesday. What happens to Monday's cash mix value?</p>
+        <ol data-quiz-options>
+          <li>It is removed, because the payment was reversed.</li>
+          <li data-quiz-correct>It stays, because gross mix follows the receipt and Monday's <code>paymentsCollectedMinor</code> counts that receipt either way.</li>
+          <li>It moves to Tuesday.</li>
+          <li>Monday's mix becomes unavailable.</li>
+        </ol>
+        <p data-quiz-explanation>Reversals move settlement, not gross receipts by method. Removing the value would leave Monday unable to reconcile to its own total — a disagreement the independent verifier actually caught.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>An accepted weekly baseline has no <code>paymentMix</code> field at all. How is that read?</p>
+        <ol data-quiz-options>
+          <li>As an empty mix with zero rows.</li>
+          <li>As a signal to recompute the mix from current facts.</li>
+          <li data-quiz-correct>As legacy authority: read the frozen <code>closeEvidence.payments</code> and do not reconstruct it.</li>
+          <li>As a validation error that blocks the read.</li>
+        </ol>
+        <p data-quiz-explanation>Absent means unknown, and on an immutable accepted record it is positive authority to use the frozen close-backed evidence rather than permission to rewrite history.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A week's mix goes from <code>complete</code> to <code>unavailable</code> because one contributing day lost its method evidence. Should this raise an amendment on the accepted baseline?</p>
+        <ol data-quiz-options>
+          <li>Yes, any change to the stored mix is an amendment.</li>
+          <li data-quiz-correct>No — an amendment claims the week moved, and a fact that stopped being provable did not move anything.</li>
+          <li>Yes, but only if the totals also changed.</li>
+          <li>No, because accepted baselines can never be amended.</li>
+        </ol>
+        <p data-quiz-explanation>Only a <code>complete</code> mix is hashed into the weekly truth fingerprint, and the amendment gate requires both sides complete and different, so an unknown never masquerades as changed truth.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why must a full reseed avoid replaying an approved method correction from audit history?</p>
+        <ol data-quiz-options>
+          <li>Because corrections are not stored durably.</li>
+          <li>Because reseed runs before corrections are applied.</li>
+          <li data-quiz-correct>Because the rebuilt allocation already carries its post-correction final method, so replaying the move would take the value off the method it actually ends in.</li>
+          <li>Because replaying would violate the fact fingerprint.</li>
+        </ol>
+        <p data-quiz-explanation>Purge-then-rebuild reads persisted state, which is already final. The correction's history stays audit-only during reseed.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the read layer combine both the included and outside-schedule lanes before rendering?</p>
+        <ol data-quiz-options>
+          <li>To reduce the number of stored fields.</li>
+          <li>Because the outside-schedule lane is otherwise discarded.</li>
+          <li data-quiz-correct>Because the Payments received figure printed beside the mix covers the whole labelled date range, so the mix must cover the same frame to reconcile.</li>
+          <li>Because acceptance only freezes one lane.</li>
+        </ol>
+        <p data-quiz-explanation>Stored documents keep the lanes separate as evidence. The combination is a read-time conclusion, matching how the headline total is derived.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>Session context subagent</dt>
+      <dd>Read the active and superseded plans, the solution note, the full commit narrative, and prior reporting solution notes. Contributed the supersession history, the rationale behind each non-obvious decision, the explicit out-of-scope list, and the durable lessons. It also correctly reported a limit on its own evidence: because the branch is six commits, the "built one way then changed" sequencing for two course corrections is visible only as final-state code and its defensive commentary, not as separate fix commits.</dd>
+      <dt>Delivered diff subagent</dt>
+      <dd>Analyzed the non-generated diff across every layer. Contributed the changed-file map, the end-to-end trace for both a receipt and a correction, the precise mechanics of the three core algorithms, the compatibility surface for stored rows, the real test totals, and a risk list including fold-version rollout drainage, the new hard failure path in the POS correction command, and the linear scans in the state merge helpers.</dd>
+      <dt>Review subagents</dt>
+      <dd>Three independent reviewers ran against the exact prepared candidate tree: backend fold correctness, weekly lifecycle and compatibility, and read-side projection and presentation. Their machine-readable results back the finalized review manifest recorded through <code>harness:review-evidence</code>.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

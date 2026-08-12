@@ -19,6 +19,7 @@ import type {
   ReportWeekLineage,
   ReportWeekMetrics,
   ReportWeekSummary,
+  ReportPaymentMix,
 } from "~/shared/reportsContract";
 import { formatProductDisplayName } from "~/shared/productDisplayName";
 import {
@@ -155,6 +156,11 @@ export type WeeklyReportProjection = {
     outsideScheduleCoveredDayCount: number | null;
   };
   closeEvidence?: WeeklyCloseEvidence;
+  /**
+   * This revision's own fact-backed mix. Absent means legacy authority: read
+   * `closeEvidence.payments` instead, never reconstruct.
+   */
+  paymentMix?: ReportPaymentMix;
   ownerRoutes?: {
     transactions: {
       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions";
@@ -528,6 +534,15 @@ export function ReportsWeeklyView({
     report.closeEvidence,
   );
   /**
+   * The effective revision's own payment mix.
+   *
+   * `report` IS the selected revision — current, a new accepted baseline, or
+   * an accepted baseline read with its amendment — so this needs no branching
+   * of its own. A legacy accepted or corrected revision carries no mix at all,
+   * and that absence routes to the frozen close-backed section below.
+   */
+  const factBackedPaymentMix = report.paymentMix;
+  /**
    * Mixed currency and a breached fact cap both tell the operator that totals
    * are withheld. Sections keep their shape so the report stays navigable,
    * but every figure derived from those totals reads as unavailable rather
@@ -893,15 +908,67 @@ export function ReportsWeeklyView({
         ) : null}
       </Section>
 
-      {report.closeEvidence?.payments.rows.length ? (
+      {/*
+        Revision selection, in one place: the effective revision's own stored
+        mix wins, and the frozen close-backed rows are the fallback ONLY for a
+        legacy accepted or corrected revision that has no stored mix. Absent is
+        legacy authority, never permission to reconstruct.
+      */}
+      {factBackedPaymentMix ? (
         <Section title="Payment mix">
-          {!sharedEvidenceCoverage ? (
-            <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
-              {closeEvidenceCoverageLabel(
-                report.closeEvidence.payments.coverage,
-              )}
-            </p>
+          <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
+            {factBackedPaymentMix.status === "unavailable"
+              ? "Payment method details aren't available for this period."
+              : factBackedPaymentMix.rows.length === 0
+                ? "No payments were received in this period."
+                : "Gross payments received by method."}
+          </p>
+          {factBackedPaymentMix.status === "complete" &&
+          factBackedPaymentMix.rows.length > 0 ? (
+            <>
+              <div className="mt-layout-md lg:w-1/2">
+                <PaymentMethodsPanel
+                  countNoun="tender use"
+                  paymentMix={weeklyPaymentMix(factBackedPaymentMix.rows)}
+                  shareSource="provided"
+                  showHeader={false}
+                  totalTransactions={factBackedPaymentMix.rows.reduce(
+                    (total, row) => total + row.tenderUseCount,
+                    0,
+                  )}
+                  valueFormatter={(payment) => money(payment.total)}
+                  variant="canvas"
+                />
+              </div>
+              {factBackedPaymentMix.totalMinor > 0 &&
+              factBackedPaymentMix.rows.reduce(
+                (total, row) => total + row.shareBasisPoints,
+                0,
+              ) !== 10_000 ? (
+                <p className="mt-layout-sm text-xs text-muted-foreground">
+                  Shares may not total 100% due to rounding.
+                </p>
+              ) : null}
+            </>
           ) : null}
+        </Section>
+      ) : report.closeEvidence?.payments.rows.length ? (
+        <Section title="Payment mix">
+          <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
+            <span className="block">
+              Includes payments from completed Daily Closes only
+              {sharedEvidenceCoverage
+                ? `, covering ${report.closeEvidence.payments.coverage.usableDayCount.toLocaleString()} of ${report.closeEvidence.payments.coverage.scheduledDayCount.toLocaleString()} scheduled days.`
+                : "."}
+            </span>
+            {!sharedEvidenceCoverage ? (
+              <span className="block">
+                {closeEvidenceCoverageLabel(
+                  report.closeEvidence.payments.coverage,
+                )}
+              </span>
+            ) : null}
+          </p>
           {/* The qualified subtotal: only the covered days' tender value. */}
           <p className="mt-layout-xs text-sm text-muted-foreground">
             Covered tender value:{" "}
@@ -923,7 +990,8 @@ export function ReportsWeeklyView({
               variant="canvas"
             />
           </div>
-          {report.closeEvidence.payments.rows.reduce(
+          {report.closeEvidence.payments.coveredTenderValueMinor > 0 &&
+          report.closeEvidence.payments.rows.reduce(
             (total, row) => total + row.shareBasisPoints,
             0,
           ) !== 10_000 ? (
@@ -1050,7 +1118,7 @@ export function ReportsWeeklyView({
       </Section>
 
       {report.closeEvidence ? (
-        <Section title="Expense products">
+        <Section className="lg:w-1/2" title="Expense products">
           {report.closeEvidence.expenses.coverage.status === "unavailable" ? (
             <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
               {closeEvidenceCoverageLabel(

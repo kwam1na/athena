@@ -176,7 +176,7 @@ describe("recordFacts — identity and replay", () => {
       expect(facts).toHaveLength(1);
       expect(facts[0]).toMatchObject({
         factKind: "sale",
-        fingerprintVersion: 2,
+        fingerprintVersion: REPORTS_FINGERPRINT_VERSION,
         lineId: "line_1",
         operatingDate: TODAY,
         observedAt: NOW,
@@ -185,7 +185,9 @@ describe("recordFacts — identity and replay", () => {
         sourceId: "txn_1",
         taxAmountMinor: 500,
       });
-      expect(facts[0].fingerprint).toMatch(/^v2:[0-9a-f]{8}$/);
+      expect(facts[0].fingerprint).toMatch(
+        new RegExp(`^v${REPORTS_FINGERPRINT_VERSION}:[0-9a-f]{8}$`),
+      );
       expect(facts[0].quarantine).toBeUndefined();
     });
   });
@@ -597,6 +599,132 @@ describe("recordFacts — open-day incremental math", () => {
       const { day: folded } = await refoldDay(ctx, storeId, TODAY);
       expect(day?.paymentPosture).toEqual(folded.paymentPosture);
       expect(folded.flags.mixedCurrency).toBe(true);
+    });
+  });
+
+  it("matches the authoritative refold's payment mix across sequential batches", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { storeId } = await seed(ctx);
+      const receipt = (overrides: Partial<NewReportFact>): NewReportFact => ({
+        ...saleFact(),
+        factKind: "payment",
+        grossAmountMinor: 1_000,
+        lineId: "",
+        netAmountMinor: 1_000,
+        paymentAllocationCoverage: "known",
+        paymentAllocationMinor: 1_000,
+        quantity: 0,
+        ...overrides,
+      });
+
+      // Batch one: two Cash allocations on ONE transaction.
+      await recordFacts(ctx, storeId, [
+        receipt({
+          grossAmountMinor: 2_000,
+          netAmountMinor: 2_000,
+          paymentAllocationMinor: 2_000,
+          paymentMethod: "cash",
+          paymentMixMinor: 2_000,
+          paymentParticipationId: "txn_1",
+          sourceId: "alloc_1",
+        }),
+        receipt({
+          paymentMethod: "cash",
+          paymentMixMinor: 1_000,
+          paymentParticipationId: "txn_1",
+          sourceId: "alloc_2",
+        }),
+      ]);
+
+      expect((await readDay(ctx, storeId, TODAY))?.paymentMix).toMatchObject({
+        status: "complete",
+        totalMinor: 3_000,
+        rows: [{ method: "cash", amountMinor: 3_000, tenderUseCount: 1 }],
+      });
+
+      // Batch two: split tender on the SAME transaction plus a non-POS receipt.
+      await recordFacts(ctx, storeId, [
+        receipt({
+          grossAmountMinor: 4_000,
+          netAmountMinor: 4_000,
+          paymentAllocationMinor: 4_000,
+          paymentMethod: "card",
+          paymentMixMinor: 4_000,
+          paymentParticipationId: "txn_1",
+          sourceId: "alloc_3",
+        }),
+        receipt({
+          grossAmountMinor: 500,
+          netAmountMinor: 500,
+          paymentAllocationMinor: 500,
+          paymentMethod: "mobile_money",
+          paymentMixMinor: 500,
+          paymentParticipationId: "alloc_4",
+          sourceId: "alloc_4",
+        }),
+      ]);
+
+      const day = await readDay(ctx, storeId, TODAY);
+      expect(day?.paymentsCollectedMinor).toBe(7_500);
+      expect(day?.paymentMix).toMatchObject({
+        status: "complete",
+        totalMinor: 7_500,
+        rows: [
+          { method: "cash", amountMinor: 3_000, tenderUseCount: 1 },
+          { method: "card", amountMinor: 4_000, tenderUseCount: 1 },
+          { method: "mobile_money", amountMinor: 500, tenderUseCount: 1 },
+        ],
+      });
+
+      // The open day is a preview, but it must be the SAME preview the fold
+      // will publish — otherwise the number moves when the sweeper runs.
+      const { day: folded } = await refoldDay(ctx, storeId, TODAY);
+      expect(day?.paymentMix).toEqual(folded.paymentMix);
+      expect(day?.paymentMixState).toEqual(folded.paymentMixState);
+    });
+  });
+
+  it("withholds the open day's mix when a batch carries unattributable evidence", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const { storeId } = await seed(ctx);
+      await recordFacts(ctx, storeId, [
+        {
+          ...saleFact(),
+          factKind: "payment",
+          grossAmountMinor: 1_000,
+          lineId: "",
+          netAmountMinor: 1_000,
+          paymentAllocationCoverage: "known",
+          paymentAllocationMinor: 1_000,
+          paymentMethod: "cash",
+          paymentMixMinor: 1_000,
+          paymentParticipationId: "txn_1",
+          quantity: 0,
+          sourceId: "alloc_1",
+        },
+        {
+          // A legacy methodless receipt: Payments totals still count it.
+          ...saleFact(),
+          factKind: "payment",
+          grossAmountMinor: 2_000,
+          lineId: "",
+          netAmountMinor: 2_000,
+          paymentAllocationCoverage: "known",
+          paymentAllocationMinor: 2_000,
+          quantity: 0,
+          sourceId: "alloc_legacy",
+        },
+      ]);
+
+      const day = await readDay(ctx, storeId, TODAY);
+      expect(day?.paymentsCollectedMinor).toBe(3_000);
+      expect(day?.paymentMix).toEqual({ status: "unavailable" });
+      const { day: folded } = await refoldDay(ctx, storeId, TODAY);
+      expect(day?.paymentMix).toEqual(folded.paymentMix);
     });
   });
 

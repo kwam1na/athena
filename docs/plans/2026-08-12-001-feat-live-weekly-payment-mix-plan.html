@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Align weekly payment mix with live payments</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f6f7f9; --surface:#fff; --text:#1d2433; --muted:#667085; --line:#dfe3ea; --accent:#3f51b5; --soft:#eef1ff; --good:#eaf7ee; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.6 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1080px,calc(100% - 32px)); margin:32px auto 64px; }
+    header,section { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:24px; margin-bottom:16px; }
+    h1 { margin:0 0 8px; font-size:clamp(2rem,4vw,3rem); line-height:1.08; letter-spacing:-.025em; }
+    h2 { margin:0 0 14px; font-size:1.35rem; }
+    h3 { margin:0 0 8px; font-size:1rem; }
+    p,ul { margin:8px 0 0; }
+    a { color:var(--accent); }
+    code { background:var(--soft); border-radius:4px; padding:1px 5px; }
+    .meta { color:var(--muted); display:flex; flex-wrap:wrap; gap:8px 18px; }
+    .lede { max-width:78ch; font-size:1.08rem; }
+    nav { display:flex; flex-wrap:wrap; gap:8px; margin-top:20px; }
+    nav a { background:var(--soft); border-radius:999px; padding:6px 11px; text-decoration:none; font-size:.9rem; }
+    .callout { background:var(--good); border-left:4px solid #27864a; border-radius:8px; padding:14px 16px; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; font-size:.94rem; }
+    th,td { border-bottom:1px solid var(--line); padding:10px; text-align:left; vertical-align:top; }
+    th { color:var(--muted); font-weight:650; }
+    .units { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; }
+    article { border:1px solid var(--line); border-radius:10px; padding:16px; }
+    footer { color:var(--muted); text-align:center; font-size:.9rem; margin-top:24px; }
+    @media (prefers-color-scheme:dark) { :root { --bg:#111318; --surface:#191d25; --text:#eef1f6; --muted:#a8b0bf; --line:#303744; --accent:#aeb8ff; --soft:#252b43; --good:#183222; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="meta"><span>Created and deepened August 12, 2026</span><span>Type: feature</span><span>Status: active</span></div>
+    <h1>Align weekly payment mix with live payments</h1>
+    <p class="lede">Add the smallest missing payment-method and participation contribution to Athena's existing report fact, then carry it through the day, week, query, and email rails already in production.</p>
+    <p><a href="2026-08-12-001-feat-live-weekly-payment-mix-plan.md">Canonical Markdown plan</a></p>
+    <nav aria-label="Plan sections"><a href="#goal">Goal</a><a href="#reuse">Reuse</a><a href="#decisions">Decisions</a><a href="#units">Units</a><a href="#removed">Removed complexity</a><a href="#validation">Validation</a></nav>
+  </header>
+
+  <section id="goal">
+    <h2>Goal and boundary</h2>
+    <p>Payment mix will use the same full-frame payment facts as Payments received and represent gross receipts before refunds. POS tender uses match Daily Close by counting each distinct transaction and normalized method pair once; non-POS payments fall back to allocation identity. New accepted reports freeze that evidence; legacy accepted and corrected reports keep their existing close-backed mix.</p>
+    <div class="callout"><strong>Constraint:</strong> no new table, worker, queue, taxonomy registry, rollout framework, endpoint, UI component, or interaction.</div>
+  </section>
+
+  <section id="reuse">
+    <h2>Existing rails reused</h2>
+    <table>
+      <thead><tr><th>Need</th><th>Existing rail</th></tr></thead>
+      <tbody>
+        <tr><td>Source and emission</td><td><code>paymentAllocation</code> and its single report-fact emitter</td></tr>
+        <tr><td>Identity and replay</td><td>Structural <code>reportFact</code> identity plus existing fingerprint versions</td></tr>
+        <tr><td>Current and repair</td><td>Incremental day ingest, dirty marks, sweeper, authoritative day fold</td></tr>
+        <tr><td>Financial lifecycle</td><td>Current, cutoff acceptance, weekly fingerprint, and amendment projection</td></tr>
+        <tr><td>Correction</td><td>Existing manager approval, operational event, lifecycle journal, and correction fact</td></tr>
+        <tr><td>Presentation</td><td>Projection-only queries, <code>PaymentMethodsPanel</code>, and baseline-only email</td></tr>
+        <tr><td>Rollout</td><td>Existing report allowlists, stale-fold repair, and allocation verifier</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="decisions">
+    <h2>Minimal decisions</h2>
+    <table>
+      <thead><tr><th>Decision</th><th>Resolution</th></tr></thead>
+      <tbody>
+        <tr><td>Fact contract</td><td>One optional normalized method and stable participation identity on the existing payment/correction fact; bump the existing fingerprint only.</td></tr>
+        <tr><td>Methods</td><td>Reuse cash, card, and mobile-money conventions plus the existing formatter. Unsupported values make mix unavailable.</td></tr>
+        <tr><td>Tender use</td><td>Count each distinct participation-identity and normalized-method pair once. POS uses transaction identity, matching Daily Close; non-POS uses allocation identity. Every allocation's value still contributes.</td></tr>
+        <tr><td>Correction failure</td><td>If the existing correction fact cannot be recorded, throw and let the Convex transaction roll back atomically.</td></tr>
+        <tr><td>Projection</td><td>One small complete/unavailable mix field on existing day/current/accepted/amendment documents.</td></tr>
+        <tr><td>Legacy</td><td>Absent field on legacy accepted/corrected rows selects frozen <code>closeEvidence.payments</code>.</td></tr>
+        <tr><td>Rollout</td><td>Widen readers, emit/fold, and republish mutable days through current allowlists. Mixed frames remain unavailable.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="units">
+    <h2>Implementation units</h2>
+    <div class="units">
+      <article><h3>U1 · Existing payment facts</h3><p>Add normalized method and a stable participation identity in the central allocation emitter, then retain that identity through the existing approved POS correction fact. Preserve v1/v2 facts; full reseed rebuilds final allocation state without replaying the method move twice.</p></article>
+      <article><h3>U2 · Existing day fold</h3><p>Sum every allocation's value while counting distinct identity-method pairs through incremental ingest and authoritative refold.</p></article>
+      <article><h3>U3 · Existing weekly lifecycle</h3><p>Compose current days, freeze cutoff facts at acceptance, and include mix in the existing amendment fingerprint.</p></article>
+      <article><h3>U4 · Existing presentation</h3><p>Select the effective stored revision and reuse the current Reports panel and weekly email rendering.</p></article>
+      <article><h3>U5 · Existing verification</h3><p>Extend the allocation census with the same transaction-method participation rule and use current allowlists and stale-fold repair; never touch accepted history.</p></article>
+    </div>
+  </section>
+
+  <section id="removed">
+    <h2>Complexity removed from the prior draft</h2>
+    <ul>
+      <li>No payment-method taxonomy schema or service.</li>
+      <li>No pending envelope, outbox, scheduler, or correction-repair worker.</li>
+      <li>No participation ledger or changes across every payment caller; the central emitter derives the stable identity from existing allocation fields.</li>
+      <li>No normalization, mix-contract, or taxonomy version stack.</li>
+      <li>No three-stage feature-gate framework or new alert/classification system.</li>
+      <li>No independent normalization implementation, correction audit replay system, or new history payload branch.</li>
+      <li>No “Show all methods” UI or additional component.</li>
+    </ul>
+  </section>
+
+  <section id="validation">
+    <h2>Focused verification</h2>
+    <ul>
+      <li>Payment fact replay, legacy fingerprint compatibility, refunds/voids, and approved correction rollback.</li>
+      <li>Incremental/refold parity, exact reconciliation to Payments received, and Daily Close-aligned transaction-method use counts.</li>
+      <li>Current, accepted, amendment, legacy accepted, and corrected-preview selection.</li>
+      <li>Allocation verifier comparison and accepted-record immutability during existing refold repair.</li>
+    </ul>
+    <p>Execution uses focused Vitest files already listed in the Markdown plan. Browser validation remains user-owned.</p>
+  </section>
+
+  <footer>Markdown is canonical. This static artifact is a review-focused digest.</footer>
+</main>
+</body>
+</html>

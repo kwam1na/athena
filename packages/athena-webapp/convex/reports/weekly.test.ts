@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import schema from "../schema";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
+import type { ReportWeekLineage } from "../../shared/reportsContract";
+import { stableStringHash } from "./fingerprint";
 import { resolveWeeklyPeriod } from "./weeklyPeriods";
 
 /**
@@ -41,6 +43,8 @@ import {
   availableWeekCurrent,
   computeWeeklyVariancePosture,
   refreshAcceptedWeekForDate,
+  weekTruthFingerprint,
+  ZERO_WEEK_METRICS,
 } from "./weekly";
 
 afterEach(() => {
@@ -266,6 +270,140 @@ describe("foldWeekFromDays", () => {
       complete: false,
       reason: "mixed_currency",
     });
+  });
+
+  it("carries payment mix across the included and outside-schedule lanes", () => {
+    const mix = (
+      rows: Array<{
+        method: "cash" | "card" | "mobile_money";
+        amountMinor: number;
+        tenderUseCount: number;
+      }>,
+    ) => {
+      const totalMinor = rows.reduce((sum, row) => sum + row.amountMinor, 0);
+      return {
+        status: "complete" as const,
+        totalMinor,
+        rows: rows.map((row) => ({
+          ...row,
+          shareBasisPoints:
+            totalMinor === 0
+              ? 0
+              : Math.round((row.amountMinor * 10_000) / totalMinor),
+        })),
+      };
+    };
+
+    const result = foldWeekFromDays({
+      period: period(),
+      days: [
+        day({
+          paymentsCollectedMinor: 100,
+          paymentMix: mix([
+            { method: "cash", amountMinor: 60, tenderUseCount: 1 },
+            { method: "card", amountMinor: 40, tenderUseCount: 2 },
+          ]),
+        }),
+        // An open day inside the frame contributes to both lanes' truth.
+        day({
+          operatingDate: "2026-06-30",
+          status: "open",
+          paymentsCollectedMinor: 20,
+          paymentMix: mix([{ method: "cash", amountMinor: 20, tenderUseCount: 1 }]),
+        }),
+        // Outside the schedule, but inside the labelled range.
+        day({
+          operatingDate: "2026-07-05",
+          paymentsCollectedMinor: 25,
+          paymentMix: mix([
+            { method: "mobile_money", amountMinor: 25, tenderUseCount: 1 },
+          ]),
+        }),
+      ],
+    });
+
+    expect(result.included.paymentsCollectedMinor).toBe(120);
+    expect(result.includedPaymentMix).toEqual({
+      status: "complete",
+      totalMinor: 120,
+      rows: [
+        {
+          method: "cash",
+          amountMinor: 80,
+          shareBasisPoints: 6_667,
+          tenderUseCount: 2,
+        },
+        {
+          method: "card",
+          amountMinor: 40,
+          shareBasisPoints: 3_333,
+          tenderUseCount: 2,
+        },
+      ],
+    });
+    expect(result.outsideSchedulePaymentMix).toEqual({
+      status: "complete",
+      totalMinor: 25,
+      rows: [
+        {
+          method: "mobile_money",
+          amountMinor: 25,
+          shareBasisPoints: 10_000,
+          tenderUseCount: 1,
+        },
+      ],
+    });
+  });
+
+  it("withholds a lane's mix when any contributing day lacks method evidence", () => {
+    const complete = {
+      status: "complete" as const,
+      totalMinor: 100,
+      rows: [
+        {
+          method: "cash" as const,
+          amountMinor: 100,
+          shareBasisPoints: 10_000,
+          tenderUseCount: 1,
+        },
+      ],
+    };
+
+    // A legacy day carries NO mix field at all. Absent is unknown, never zero,
+    // so the lane it belongs to cannot publish a reconciled breakdown.
+    expect(
+      foldWeekFromDays({
+        period: period(),
+        days: [
+          day({ paymentMix: complete }),
+          day({ operatingDate: "2026-06-30", paymentsCollectedMinor: 40 }),
+        ],
+      }).includedPaymentMix,
+    ).toEqual({ status: "unavailable" });
+
+    // An explicitly unavailable day poisons its lane the same way.
+    expect(
+      foldWeekFromDays({
+        period: period(),
+        days: [
+          day({ paymentMix: complete }),
+          day({
+            operatingDate: "2026-06-30",
+            paymentsCollectedMinor: 40,
+            paymentMix: { status: "unavailable" },
+          }),
+        ],
+      }).includedPaymentMix,
+    ).toEqual({ status: "unavailable" });
+
+    // And a lane whose rows do not add up to its own Payments received total
+    // is refused rather than published beside a number it contradicts.
+    expect(
+      foldWeekFromDays({
+        period: period(),
+        days: [day({ paymentsCollectedMinor: 140, paymentMix: complete })],
+      }).includedPaymentMix,
+    ).toEqual({ status: "unavailable" });
   });
 
   it("does not invent a cutoff baseline when frozen evidence lacks observedAt", () => {
@@ -755,6 +893,543 @@ describe("weekly materialization", () => {
         coveredIncludedDayCount: 6,
         includedDayCount: 6,
       });
+    });
+  });
+
+  it("freezes fact-backed mix at acceptance and amends it without touching the baseline", async () => {
+    const t = convexTest(schema, modules);
+    const storeId = await seedStore(t, "weekly-payment-mix-lifecycle");
+    const CUTOFF = NOW + 10;
+
+    /** A payment receipt fact carrying the mix dimensions. */
+    const receipt = async (args: {
+      sourceId: string;
+      amountMinor: number;
+      method: "cash" | "card" | "mobile_money";
+      participationId: string;
+      observedAt: number;
+      operatingDate?: string;
+    }) =>
+      insertFact(t, storeId, {
+        sourceDomain: "payments",
+        sourceId: args.sourceId,
+        lineId: "",
+        factKind: "payment",
+        fingerprintVersion: 3,
+        observedAt: args.observedAt,
+        operatingDate: args.operatingDate ?? "2026-06-29",
+        grossAmountMinor: args.amountMinor,
+        netAmountMinor: args.amountMinor,
+        quantity: 0,
+        paymentAllocationCoverage: "known",
+        paymentAllocationMinor: args.amountMinor,
+        paymentMethod: args.method,
+        paymentParticipationId: args.participationId,
+        paymentMixMinor: args.amountMinor,
+      });
+
+    // Split tender on one transaction, plus a repeated same-method allocation
+    // on that same transaction: 3 methods of value, but Cash used ONCE.
+    await receipt({
+      sourceId: "alloc-1",
+      amountMinor: 60,
+      method: "cash",
+      participationId: "txn-1",
+      observedAt: NOW,
+    });
+    await receipt({
+      sourceId: "alloc-2",
+      amountMinor: 20,
+      method: "cash",
+      participationId: "txn-1",
+      observedAt: NOW,
+    });
+    await receipt({
+      sourceId: "alloc-3",
+      amountMinor: 20,
+      method: "card",
+      participationId: "txn-1",
+      observedAt: NOW,
+    });
+
+    const closeIds = new Map<string, Id<"dailyClose">>();
+    for (const [index, operatingDate] of period().includedDates.entries()) {
+      const closeId = await insertCompletedClose(t, {
+        completedAt: NOW + index,
+        operatingDate,
+        storeId,
+      });
+      closeIds.set(operatingDate, closeId);
+      await insertFoldedCloseDay(t, {
+        closeId,
+        foldedAt: CUTOFF,
+        operatingDate,
+        storeId,
+      });
+    }
+
+    /** Every seeded day carries a mix, so no legacy row withholds the lane. */
+    const cashOnlyMix = (amountMinor: number) => ({
+      status: "complete" as const,
+      totalMinor: amountMinor,
+      rows: [
+        {
+          method: "cash" as const,
+          amountMinor,
+          shareBasisPoints: 10_000,
+          tenderUseCount: 1,
+        },
+      ],
+    });
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      const days = await ctx.db
+        .query("reportDay")
+        .withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", storeId))
+        .collect();
+      for (const row of days) {
+        await ctx.db.patch("reportDay", row._id, {
+          paymentMix: cashOnlyMix(row.paymentsCollectedMinor),
+        });
+      }
+    });
+
+    const finalCloseId = closeIds.get("2026-07-04")!;
+    const baselineOf = async (ctx: MutationCtx) =>
+      ctx.db
+        .query("reportWeekAccepted")
+        .withIndex("by_storeId_cycleStartDate", (q) =>
+          q.eq("storeId", storeId).eq("cycleStartDate", "2026-06-29"),
+        )
+        .unique();
+
+    const frozen = await t.run(async (ctx) => {
+      expect(
+        await materializeAcceptedWeek({
+          acceptedAt: CUTOFF,
+          closeId: finalCloseId,
+          ctx,
+          cutoffObservedAt: CUTOFF,
+          storeId,
+        }),
+      ).toBe("created");
+
+      const baseline = await baselineOf(ctx);
+      expect(baseline?.paymentMix).toEqual({
+        status: "complete",
+        totalMinor: 100,
+        rows: [
+          {
+            method: "cash",
+            amountMinor: 80,
+            shareBasisPoints: 8_000,
+            // 80 minor across TWO allocations on one transaction is one use.
+            tenderUseCount: 1,
+          },
+          {
+            method: "card",
+            amountMinor: 20,
+            shareBasisPoints: 2_000,
+            tenderUseCount: 1,
+          },
+        ],
+      });
+      return {
+        paymentMix: baseline?.paymentMix,
+        baselineFingerprint: baseline?.baselineFingerprint,
+      };
+    });
+
+    // A payment observed AFTER the cutoff: it is later truth, not baseline
+    // truth. The day it lands on has to be refolded for current to see it.
+    await receipt({
+      sourceId: "alloc-late",
+      amountMinor: 50,
+      method: "mobile_money",
+      participationId: "txn-2",
+      observedAt: CUTOFF + 5,
+    });
+
+    await t.run(async (ctx) => {
+      const day = await ctx.db
+        .query("reportDay")
+        .withIndex("by_storeId_operatingDate", (q) =>
+          q.eq("storeId", storeId).eq("operatingDate", "2026-06-29"),
+        )
+        .unique();
+      await ctx.db.patch("reportDay", day!._id, {
+        paymentsCollectedMinor: 150,
+        paymentMix: {
+          status: "complete",
+          totalMinor: 150,
+          rows: [
+            {
+              method: "cash",
+              amountMinor: 100,
+              shareBasisPoints: 6_667,
+              tenderUseCount: 1,
+            },
+            {
+              method: "mobile_money",
+              amountMinor: 50,
+              shareBasisPoints: 3_333,
+              tenderUseCount: 1,
+            },
+          ],
+        },
+      });
+
+      expect(await rebuildCurrentWeek(ctx, storeId, CUTOFF + 20)).toBe("rebuilt");
+      const current = availableWeekCurrent(
+        await ctx.db
+          .query("reportWeekCurrent")
+          .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+          .unique(),
+      );
+
+      // Current moved: five seeded cash-only days plus the amended one.
+      expect(current?.included.paymentsCollectedMinor).toBe(650);
+      expect(current?.paymentMix).toMatchObject({
+        status: "complete",
+        totalMinor: 650,
+        rows: [
+          { method: "cash", amountMinor: 600, tenderUseCount: 6 },
+          { method: "mobile_money", amountMinor: 50, tenderUseCount: 1 },
+        ],
+      });
+
+      // …and the immutable baseline did not.
+      const baseline = await baselineOf(ctx);
+      expect(baseline?.paymentMix).toEqual(frozen.paymentMix);
+      expect(baseline?.baselineFingerprint).toBe(frozen.baselineFingerprint);
+
+      // The mix is part of weekly truth, so the existing amendment path — not
+      // a baseline rewrite — carries the later method evidence.
+      await refreshAcceptedWeekForDate(ctx, storeId, "2026-06-29", CUTOFF + 30);
+      const refreshed = await baselineOf(ctx);
+      expect(refreshed?.paymentMix).toEqual(frozen.paymentMix);
+      expect(refreshed?.baselineFingerprint).toBe(frozen.baselineFingerprint);
+      expect(refreshed?.amendment?.paymentMix).toMatchObject({
+        status: "complete",
+        totalMinor: 650,
+        rows: [
+          { method: "cash", amountMinor: 600 },
+          { method: "mobile_money", amountMinor: 50 },
+        ],
+      });
+    });
+  });
+
+  it("preserves an existing amendment's changedAt when nothing moved", async () => {
+    const t = convexTest(schema, modules);
+    const storeId = await seedStore(t, "weekly-amendment-changed-at");
+    const CUTOFF = NOW + 10;
+    const closeIds = new Map<string, Id<"dailyClose">>();
+    for (const [index, operatingDate] of period().includedDates.entries()) {
+      const closeId = await insertCompletedClose(t, {
+        completedAt: NOW + index,
+        operatingDate,
+        storeId,
+      });
+      closeIds.set(operatingDate, closeId);
+      await insertFoldedCloseDay(t, {
+        closeId,
+        foldedAt: CUTOFF,
+        operatingDate,
+        storeId,
+      });
+    }
+
+    const baselineOf = async (ctx: MutationCtx) =>
+      ctx.db
+        .query("reportWeekAccepted")
+        .withIndex("by_storeId_cycleStartDate", (q) =>
+          q.eq("storeId", storeId).eq("cycleStartDate", "2026-06-29"),
+        )
+        .unique();
+
+    await t.run(async (ctx) => {
+      expect(
+        await materializeAcceptedWeek({
+          acceptedAt: CUTOFF,
+          closeId: closeIds.get("2026-07-04")!,
+          ctx,
+          cutoffObservedAt: CUTOFF,
+          storeId,
+        }),
+      ).toBe("created");
+
+      await refreshAcceptedWeekForDate(ctx, storeId, "2026-07-04", CUTOFF + 20);
+      const first = await baselineOf(ctx);
+      expect(first?.amendment).toBeDefined();
+      const firstChangedAt = first!.amendment!.changedAt;
+
+      // A later refresh over unchanged truth must PRESERVE the timestamp. The
+      // stored `currentFingerprint` is the dedupe key, so anything that changes
+      // how it is computed re-stamps every existing amendment and tells the
+      // reader the week just moved when it did not.
+      await refreshAcceptedWeekForDate(ctx, storeId, "2026-07-04", CUTOFF + 999);
+      expect((await baselineOf(ctx))?.amendment?.changedAt).toBe(firstChangedAt);
+    });
+  });
+
+  it("hashes a mixless week exactly as it did before payment mix existed", () => {
+    // A legacy accepted row carries no mix. Its truth fingerprint must be
+    // byte-identical to the pre-mix hash, or the first refresh after this
+    // change re-stamps its amendment's changedAt for no reason.
+    const legacyPayload = {
+      included: { ...ZERO_WEEK_METRICS },
+      outsideSchedule: { ...ZERO_WEEK_METRICS },
+      scheduleLineage: [] as ReportWeekLineage[],
+    };
+    const preMixHash = stableStringHash(
+      JSON.stringify({
+        included: legacyPayload.included,
+        outsideSchedule: legacyPayload.outsideSchedule,
+        scheduleLineage: [],
+      }),
+    );
+
+    expect(weekTruthFingerprint(legacyPayload)).toBe(preMixHash);
+    // An explicitly unavailable lane is equally unknown, so it hashes the same.
+    expect(
+      weekTruthFingerprint({
+        ...legacyPayload,
+        paymentMix: { status: "unavailable" },
+        outsideSchedulePaymentMix: { status: "unavailable" },
+      }),
+    ).toBe(preMixHash);
+    // A complete mix is knowable truth and changes the hash — but only when
+    // the counterpart it is being compared against is knowable too. Absent
+    // means "no counterpart", which is exactly the legacy baseline case.
+    expect(
+      weekTruthFingerprint({
+        ...legacyPayload,
+        paymentMix: { status: "complete", totalMinor: 0, rows: [] },
+        counterpartPaymentMix: { status: "complete", totalMinor: 7, rows: [] },
+      }),
+    ).not.toBe(preMixHash);
+  });
+
+  it("does not re-stamp changedAt when a legacy lane merely becomes knowable", () => {
+    // The accepted baseline is legacy: no mix, forever. Once fold version 6
+    // drains, the CURRENT fold starts producing a complete mix for the same
+    // week. Nothing knowable moved — the baseline never had a knowable mix to
+    // move from — so the truth fingerprint must not budge, or every existing
+    // amendment gets its changedAt reset the first time it is recomputed.
+    const legacyBaseline = {
+      included: { ...ZERO_WEEK_METRICS },
+      outsideSchedule: { ...ZERO_WEEK_METRICS },
+      scheduleLineage: [] as ReportWeekLineage[],
+    };
+    const completeMix = {
+      status: "complete" as const,
+      totalMinor: 0,
+      rows: [],
+    };
+
+    expect(
+      weekTruthFingerprint({
+        ...legacyBaseline,
+        paymentMix: completeMix,
+        counterpartPaymentMix: undefined,
+        counterpartOutsideSchedulePaymentMix: undefined,
+      }),
+    ).toBe(weekTruthFingerprint(legacyBaseline));
+
+    // But when the counterpart lane IS knowable, the mix is truth again and
+    // must move the hash — otherwise a real method-only correction would
+    // never refresh the amendment's changedAt.
+    expect(
+      weekTruthFingerprint({
+        ...legacyBaseline,
+        paymentMix: completeMix,
+        counterpartPaymentMix: {
+          status: "complete",
+          totalMinor: 5,
+          rows: [],
+        },
+      }),
+    ).not.toBe(weekTruthFingerprint(legacyBaseline));
+  });
+
+  it("hashes a lane's knowable truth, so only a real move re-stamps changedAt", () => {
+    // The fingerprint's job here is to be the changedAt dedupe key. It must
+    // therefore move when — and only when — the amendment gate says the mix
+    // moved, or an existing amendment gets a fresh timestamp for nothing.
+    const base = {
+      included: { ...ZERO_WEEK_METRICS },
+      outsideSchedule: { ...ZERO_WEEK_METRICS },
+      scheduleLineage: [] as ReportWeekLineage[],
+    };
+    const cash = {
+      status: "complete" as const,
+      totalMinor: 100,
+      rows: [
+        {
+          method: "cash" as const,
+          amountMinor: 100,
+          shareBasisPoints: 10_000,
+          tenderUseCount: 1,
+        },
+      ],
+    };
+    const card = { ...cash, rows: [{ ...cash.rows[0], method: "card" as const }] };
+
+    // Rollout drain: the baseline froze a complete mix from facts while the
+    // day rows still read unavailable. When repair lands and the folded lane
+    // becomes complete AND IDENTICAL, nothing moved.
+    const duringDrain = weekTruthFingerprint({
+      ...base,
+      paymentMix: { status: "unavailable" },
+      counterpartPaymentMix: cash,
+    });
+    const afterDrain = weekTruthFingerprint({
+      ...base,
+      paymentMix: cash,
+      counterpartPaymentMix: cash,
+    });
+    expect(afterDrain).toBe(duringDrain);
+
+    // A lane poisoned by a correction onto an unclassifiable method also did
+    // not move the week's knowable truth.
+    expect(
+      weekTruthFingerprint({
+        ...base,
+        paymentMix: { status: "unavailable" },
+        counterpartPaymentMix: cash,
+      }),
+    ).toBe(afterDrain);
+
+    // A genuine knowable-to-knowable move must still re-stamp.
+    expect(
+      weekTruthFingerprint({
+        ...base,
+        paymentMix: card,
+        counterpartPaymentMix: cash,
+      }),
+    ).not.toBe(afterDrain);
+  });
+
+  it("amends on a method-only move that changes no total", async () => {
+    const t = convexTest(schema, modules);
+    const storeId = await seedStore(t, "weekly-method-only-amendment");
+    const CUTOFF = NOW + 10;
+    const closeIds = new Map<string, Id<"dailyClose">>();
+    for (const [index, operatingDate] of period().includedDates.entries()) {
+      const closeId = await insertCompletedClose(t, {
+        completedAt: NOW + index,
+        operatingDate,
+        storeId,
+      });
+      closeIds.set(operatingDate, closeId);
+      await insertFoldedCloseDay(t, {
+        closeId,
+        foldedAt: CUTOFF,
+        operatingDate,
+        storeId,
+      });
+    }
+
+    const laneMix = (method: "cash" | "card") => ({
+      status: "complete" as const,
+      totalMinor: 100,
+      rows: [
+        { method, amountMinor: 100, shareBasisPoints: 10_000, tenderUseCount: 1 },
+      ],
+    });
+    const setEveryDayMix = async (
+      ctx: MutationCtx,
+      mix: ReturnType<typeof laneMix> | { status: "unavailable" },
+    ) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+      const days = await ctx.db
+        .query("reportDay")
+        .withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", storeId))
+        .collect();
+      for (const row of days) {
+        await ctx.db.patch("reportDay", row._id, { paymentMix: mix });
+      }
+    };
+    const baselineOf = async (ctx: MutationCtx) =>
+      ctx.db
+        .query("reportWeekAccepted")
+        .withIndex("by_storeId_cycleStartDate", (q) =>
+          q.eq("storeId", storeId).eq("cycleStartDate", "2026-06-29"),
+        )
+        .unique();
+
+    await t.run(async (ctx) => {
+      await setEveryDayMix(ctx, laneMix("cash"));
+      expect(
+        await materializeAcceptedWeek({
+          acceptedAt: CUTOFF,
+          closeId: closeIds.get("2026-07-04")!,
+          ctx,
+          cutoffObservedAt: CUTOFF,
+          storeId,
+        }),
+      ).toBe("created");
+      // Acceptance folds from cutoff facts while amendments fold from days.
+      // Align the baseline to the day-derived lanes so the ONLY variable left
+      // in this test is the method evidence.
+      expect(await rebuildCurrentWeek(ctx, storeId, CUTOFF + 5)).toBe("rebuilt");
+      const current = availableWeekCurrent(
+        await ctx.db
+          .query("reportWeekCurrent")
+          .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+          .unique(),
+      );
+      const baseline = await baselineOf(ctx);
+      await ctx.db.patch("reportWeekAccepted", baseline!._id, {
+        included: current!.included,
+        outsideSchedule: current!.outsideSchedule,
+        scheduleLineage: current!.scheduleLineage,
+        paymentMix: current!.paymentMix,
+        outsideSchedulePaymentMix: current!.outsideSchedulePaymentMix,
+        amendment: undefined,
+      });
+
+      // A method-only move: no total changes, but the week's method truth
+      // does, and that has to reach the reader through the amendment path.
+      // (The converse — an unavailable lane must NOT argue for an amendment —
+      // is pinned by the weekly source verifier suite, whose fixtures carry
+      // pre-mix legacy days against fact-derived baselines.)
+      await setEveryDayMix(ctx, laneMix("card"));
+      await refreshAcceptedWeekForDate(ctx, storeId, "2026-07-04", CUTOFF + 30);
+      const amended = await baselineOf(ctx);
+      expect(amended?.amendment?.includedNetSalesDeltaMinor).toBe(0);
+      expect(amended?.amendment?.paymentMix).toMatchObject({
+        status: "complete",
+        rows: [{ method: "card", amountMinor: 600 }],
+      });
+    });
+  });
+
+  it("treats a legacy weekly row without mix fields as unavailable, never empty", async () => {
+    const t = convexTest(schema, modules);
+    const storeId = await seedStore(t, "weekly-legacy-mix");
+    // A day folded before the mix landed: payments received, no method
+    // evidence. Absent must not read as a zero-row breakdown.
+    await t.run(async (ctx) => {
+      await ctx.db.insert("reportDay", {
+        ...day({ operatingDate: "2026-06-29", paymentsCollectedMinor: 100 }),
+        storeId,
+        foldedAt: NOW + 1,
+        foldVersion: 1,
+        factCount: 1,
+        lastFactRecordedAt: NOW,
+      });
+
+      expect(await rebuildCurrentWeek(ctx, storeId, NOW + 20)).toBe("rebuilt");
+      const current = availableWeekCurrent(
+        await ctx.db
+          .query("reportWeekCurrent")
+          .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+          .unique(),
+      );
+      expect(current?.included.paymentsCollectedMinor).toBe(100);
+      expect(current?.paymentMix).toEqual({ status: "unavailable" });
     });
   });
 

@@ -187,6 +187,20 @@ export function toFoldFact(fact: Doc<"reportFact">): FoldFact {
     ...(fact.paymentAllocationCoverage !== undefined
       ? { paymentAllocationCoverage: fact.paymentAllocationCoverage }
       : {}),
+    // Absent stays absent: a stored fact with no method evidence must reach
+    // the fold as unattributable, not as a mix field spelled `undefined`.
+    ...(fact.paymentMethod !== undefined
+      ? { paymentMethod: fact.paymentMethod }
+      : {}),
+    ...(fact.paymentMethodFrom !== undefined
+      ? { paymentMethodFrom: fact.paymentMethodFrom }
+      : {}),
+    ...(fact.paymentParticipationId !== undefined
+      ? { paymentParticipationId: fact.paymentParticipationId }
+      : {}),
+    ...(fact.paymentMixMinor !== undefined
+      ? { paymentMixMinor: fact.paymentMixMinor }
+      : {}),
     quarantined: fact.quarantine !== undefined,
   };
 }
@@ -432,6 +446,11 @@ export async function foldAndReplaceDay(
     lastFactRecordedAt: result.day.lastFactRecordedAt,
     flags: result.day.flags,
     paymentPosture: result.day.paymentPosture,
+    // Both, together: the published conclusion and the bounded evidence the
+    // incremental path adds to. Omitting either here is the exact failure
+    // `REPORTS_FOLD_VERSION` 5 was created to repair.
+    paymentMix: result.day.paymentMix,
+    paymentMixState: result.day.paymentMixState,
   };
 
   if (existingDay) {

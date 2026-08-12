@@ -614,6 +614,104 @@ describe("ReportsWeeklyView", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("prefers the revision's fact-backed mix over frozen close evidence", () => {
+    render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          closeEvidence,
+          paymentMix: {
+            status: "complete",
+            totalMinor: 300_000,
+            rows: [
+              {
+                method: "cash",
+                amountMinor: 200_000,
+                shareBasisPoints: 6_667,
+                tenderUseCount: 2,
+              },
+              {
+                method: "mobile_money",
+                amountMinor: 100_000,
+                shareBasisPoints: 3_333,
+                tenderUseCount: 1,
+              },
+            ],
+          },
+        } as WeeklyReportProjection}
+      />,
+    );
+
+    expect(screen.getByText("Payment mix")).toBeInTheDocument();
+    // Fact-backed copy answers a different question than the Daily Close
+    // coverage language it replaces.
+    expect(
+      screen.getByText("Gross payments received by method."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Includes payments from completed Daily Closes only/),
+    ).not.toBeInTheDocument();
+    // The stored rows, not the frozen close-backed ones.
+    expect(screen.getByText("66.67%")).toBeInTheDocument();
+    expect(screen.queryByText("66.25%")).not.toBeInTheDocument();
+    expect(screen.getByText("Mobile Money")).toBeInTheDocument();
+  });
+
+  it("keeps a known-empty mix distinct from an unavailable one", () => {
+    const { unmount } = render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          closeEvidence,
+          paymentMix: { status: "complete", totalMinor: 0, rows: [] },
+        } as WeeklyReportProjection}
+      />,
+    );
+
+    expect(
+      screen.getByText("No payments were received in this period."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Payment methods" }),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    render(
+      <ReportsWeeklyView
+        report={{
+          ...report,
+          closeEvidence,
+          paymentMix: { status: "unavailable" },
+        } as WeeklyReportProjection}
+      />,
+    );
+
+    expect(
+      screen.getByText("Payment method details aren't available for this period."),
+    ).toBeInTheDocument();
+    // No sample rows, and no silent fall back to the close-backed evidence.
+    expect(
+      screen.queryByRole("region", { name: "Payment methods" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("66.25%")).not.toBeInTheDocument();
+  });
+
+  it("keeps legacy close-backed wording for a revision with no stored mix", () => {
+    render(
+      <ReportsWeeklyView
+        report={{ ...report, closeEvidence } as WeeklyReportProjection}
+      />,
+    );
+
+    expect(
+      screen.getByText(/Includes payments from completed Daily Closes only/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Gross payments received by method."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("66.25%")).toBeInTheDocument();
+  });
+
   it("discloses rounding only when persisted shares do not total 100%", () => {
     render(
       <ReportsWeeklyView

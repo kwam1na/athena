@@ -2,7 +2,11 @@ import { internalMutation, internalQuery, MutationCtx } from "../_generated/serv
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { recordFacts } from "../reports/ingest";
-import type { NewReportFact } from "../../shared/reportsContract";
+import {
+  normalizeReportPaymentMethod,
+  type NewReportFact,
+  type ReportPaymentMethod,
+} from "../../shared/reportsContract";
 
 export type RecordPaymentAllocationArgs = {
   storeId: Id<"store">;
@@ -69,7 +73,13 @@ export function findSameAmountSinglePaymentAllocation(
   allocations: Array<
     Pick<
       Doc<"paymentAllocation">,
-      "_id" | "amount" | "direction" | "method" | "status"
+      | "_id"
+      | "amount"
+      | "direction"
+      | "method"
+      | "posTransactionId"
+      | "recordedAt"
+      | "status"
     >
   >,
   args: {
@@ -166,8 +176,9 @@ export function paymentAllocationReportingIdentity(
 }
 
 /**
- * The allocation record is the payment source of truth, so it can state
- * allocation coverage without exposing a tender method to Reports.
+ * Settlement coverage only. This function deliberately returns no tender
+ * method — the gross method evidence rides `paymentAllocationMixDimensions`
+ * below, which is emitted on receipt facts alone.
  */
 export function paymentAllocationReportingDimensions(
   allocation: Pick<Doc<"paymentAllocation">, "amount" | "direction" | "status">,
@@ -181,6 +192,63 @@ export function paymentAllocationReportingDimensions(
     amountMinor,
     paymentAllocationMinor: isReversal || isRefund ? -amountMinor : amountMinor,
     paymentAllocationCoverage: "known" as const,
+  };
+}
+
+/**
+ * The Daily Close-aligned participation identity for one allocation.
+ *
+ * A POS transaction is the unit Daily Close counts (`buildPaymentTotals`), so
+ * several same-method allocations on one transaction are ONE tender use. An
+ * allocation with no POS transaction has no such grouping to belong to, so it
+ * stands for itself — which keeps non-POS receipts independently countable.
+ *
+ * Kept here, centrally, rather than asked of each payment source: the plan's
+ * scope boundary is one derivation from fields `paymentAllocation` already has.
+ */
+export function paymentAllocationParticipationId(
+  allocation: Pick<Doc<"paymentAllocation">, "_id" | "posTransactionId">,
+): string {
+  return allocation.posTransactionId
+    ? String(allocation.posTransactionId)
+    : String(allocation._id);
+}
+
+/**
+ * The gross payment-mix contribution of one allocation, or null when there is
+ * none to make.
+ *
+ * This describes a RECEIPT — money that came in — so it follows the emitted
+ * fact kind, not the allocation's later fate. An inbound allocation that was
+ * subsequently voided still contributes its gross method value on the day it
+ * was received: the reversal moves settlement, and reducing gross mix would
+ * leave the day's rows unable to reconcile to its own `paymentsCollectedMinor`,
+ * which counts that receipt either way. Outbound refunds contribute nothing.
+ *
+ * An unsupported or blank method is evidence reporting cannot classify — the
+ * value still counts toward Payments totals, the mix just cannot be published.
+ *
+ * Callers apply this only where they emit a `payment` fact; a `payment_refund`
+ * never carries mix dimensions.
+ */
+export function paymentAllocationMixDimensions(
+  allocation: Pick<
+    Doc<"paymentAllocation">,
+    "_id" | "amount" | "direction" | "method" | "posTransactionId"
+  >,
+): {
+  paymentMethod: ReportPaymentMethod;
+  paymentParticipationId: string;
+  paymentMixMinor: number;
+} | null {
+  if (allocation.direction === "out") return null;
+  const paymentMethod = normalizeReportPaymentMethod(allocation.method);
+  if (!paymentMethod) return null;
+
+  return {
+    paymentMethod,
+    paymentParticipationId: paymentAllocationParticipationId(allocation),
+    paymentMixMinor: Math.abs(allocation.amount),
   };
 }
 
@@ -232,6 +300,11 @@ async function ensurePaymentAllocationReportingWithCtx(
           factKind: isVoidedRefund ? "payment_refund" : "payment",
           occurredAt: allocation.recordedAt,
           paymentAllocationCoverage: "unknown",
+          // An undated void still emits its ORIGINAL receipt, so the gross
+          // method evidence rides along; only settlement coverage is unknown.
+          ...(isVoidedRefund
+            ? {}
+            : (paymentAllocationMixDimensions(allocation) ?? {})),
         }
       : {
           ...base,
@@ -242,6 +315,11 @@ async function ensurePaymentAllocationReportingWithCtx(
               : allocation.recordedAt,
           paymentAllocationMinor: posture.paymentAllocationMinor,
           paymentAllocationCoverage: posture.paymentAllocationCoverage,
+          // Only a `payment` fact is a receipt. A timed void emits a
+          // `payment_refund` here, and refunds carry no gross mix evidence.
+          ...(posture.factKind === "payment"
+            ? (paymentAllocationMixDimensions(allocation) ?? {})
+            : {}),
         };
 
   await recordFacts(ctx, allocation.storeId, [fact]);

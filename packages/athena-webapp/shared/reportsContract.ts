@@ -47,13 +47,26 @@
  * differs, so correcting the write is not enough on its own — those days need
  * a version they have not seen. Any new field on `DayFoldResult` has to be
  * added to that document too; the omission is silent.
+ *
+ * Version 6 records the day's payment mix and the bounded participation state
+ * behind it. Same reasoning as 4 and 5: a clean day never refolds on its own,
+ * so without the bump every already-folded day would carry no mix forever and
+ * the weekly surface would read the whole of history as unavailable. And, as
+ * version 5 learned the hard way, `foldAndReplaceDay` writes an EXPLICIT
+ * document — both new fields had to be added there too.
  */
-export const REPORTS_FOLD_VERSION = 5 as const;
+export const REPORTS_FOLD_VERSION = 6 as const;
 /**
  * Version 2 adds the source-derived allocation dimensions carried by payment
  * facts. Replays hash with the version already stored on a fact.
+ *
+ * Version 3 adds the payment-mix dimensions: the normalized tender method, the
+ * stable participation identity the method attaches to, the gross value that
+ * participates in the mix, and — on a method-correction fact — the method the
+ * value moves off. A v1/v2 row is re-hashed with its own stored version, so
+ * legacy facts keep validating instead of quarantining as content drift.
  */
-export const REPORTS_FINGERPRINT_VERSION = 2 as const;
+export const REPORTS_FINGERPRINT_VERSION = 3 as const;
 
 export const REPORT_SOURCE_DOMAINS = [
   "pos",
@@ -594,6 +607,13 @@ export type ReportWeekAmendment = {
   sourceCloseAcceptedAt?: number;
   sourceCloseId?: string;
   summary: ReportWeekSummary;
+  /**
+   * Deliberately NO mix here. The amendment's later method truth reaches the
+   * client through the projection's own combined `paymentMix`; a per-lane mix
+   * cannot reconcile against the full-range Payments figure, so publishing one
+   * beside the combined value would only invite the wrong pick. The lanes stay
+   * server-side on the stored document.
+   */
 };
 
 /** Fields shared by the live and accepted weekly projections. */
@@ -626,6 +646,19 @@ type ReportWeekProjectionBase = {
   variancePosture?: ReportWeekVariancePosture;
   /** Optional only for projections materialized before this evidence landed. */
   closeEvidence?: ReportWeekCloseEvidence;
+  /**
+   * The revision's EFFECTIVE fact-backed mix: both lanes combined at read
+   * time (`combineRevisionPaymentMix`), the same frame as the Payments
+   * received figure it renders beside. On an accepted read with an amendment,
+   * this is the amendment's mix — the reader sees amendment totals, so the
+   * mix must match them. Stored documents keep the lanes separate.
+   *
+   * Optional is LEGACY AUTHORITY, not a rollout convenience: an accepted or
+   * corrected report written before this landed is frozen close-backed
+   * evidence, and its absent field means "read `closeEvidence.payments`",
+   * never "reconstruct it".
+   */
+  paymentMix?: ReportPaymentMix;
   ownerRoutes: ReportWeekOwnerRoutes;
 };
 
@@ -685,6 +718,409 @@ export type ReportWeekHistoryPage = {
   pageStatus?: "SplitRecommended" | "SplitRequired" | null;
 };
 
+// ---------------------------------------------------------------------------
+// Payment mix — gross payments received, by tender method
+// ---------------------------------------------------------------------------
+
+/**
+ * The closed set of tender methods reporting can attribute. Athena's payment
+ * domain writes free-text methods, so anything outside this set is evidence we
+ * cannot classify — never a fourth bucket invented at read time.
+ */
+export const REPORT_PAYMENT_METHODS = ["cash", "card", "mobile_money"] as const;
+export type ReportPaymentMethod = (typeof REPORT_PAYMENT_METHODS)[number];
+
+/**
+ * Null-prototype on purpose. Source methods are free text, so a plain object
+ * literal would resolve inherited members — `"constructor"` normalizes to the
+ * `Object` constructor, a value that is neither a method nor null. It would be
+ * written onto a fact and then rejected by the closed-union schema on every
+ * replay, so the day could never converge.
+ */
+const REPORT_PAYMENT_METHOD_ALIASES: Record<string, ReportPaymentMethod> =
+  Object.assign(Object.create(null) as Record<string, ReportPaymentMethod>, {
+    cash: "cash",
+    card: "card",
+    mobile_money: "mobile_money",
+    momo: "mobile_money",
+  });
+
+/**
+ * Athena's existing spelling conventions, applied once: trim, lowercase, and
+ * collapse spaces/hyphens into the underscore form, so `Mobile Money`,
+ * `mobile-money`, and `MoMo` are one method. Anything else returns null —
+ * blank or unsupported method makes MIX unavailable and leaves Payments totals
+ * untouched, because the value was still received.
+ */
+export function normalizeReportPaymentMethod(
+  raw: string | null | undefined,
+): ReportPaymentMethod | null {
+  if (typeof raw !== "string") return null;
+  const collapsed = raw.trim().toLowerCase().replace(/[\s\-_]+/g, "_");
+  if (!collapsed) return null;
+  return REPORT_PAYMENT_METHOD_ALIASES[collapsed] ?? null;
+}
+
+/** Stable display order, so Reports and email never disagree on ordering. */
+export function compareReportPaymentMethods(
+  a: ReportPaymentMethod,
+  b: ReportPaymentMethod,
+): number {
+  return (
+    REPORT_PAYMENT_METHODS.indexOf(a) - REPORT_PAYMENT_METHODS.indexOf(b)
+  );
+}
+
+/** One method's share of gross payments received, with Daily Close use count. */
+export type ReportPaymentMixRow = {
+  method: ReportPaymentMethod;
+  amountMinor: number;
+  shareBasisPoints: number;
+  tenderUseCount: number;
+};
+
+/**
+ * A revision's payment mix.
+ *
+ * Two states only, deliberately: `complete` rows reconcile EXACTLY to that
+ * revision's `paymentsCollectedMinor`, and anything short of that is
+ * `unavailable`. There is no partial mix — a method breakdown that does not
+ * add up to the total beside it is worse than no breakdown at all. Known zero
+ * receipts is `complete` with a zero total and no rows.
+ */
+export type ReportPaymentMix =
+  | { status: "complete"; totalMinor: number; rows: ReportPaymentMixRow[] }
+  | { status: "unavailable" };
+
+export const UNAVAILABLE_PAYMENT_MIX: ReportPaymentMix = {
+  status: "unavailable",
+};
+
+/**
+ * Bounded participation evidence the incremental open-day path carries between
+ * batches.
+ *
+ * `net` is a COUNT, not a value: a receipt adds one for its
+ * `(participationId, method)` pair and a method correction moves one from the
+ * old pair to the new. A pair with a positive net is exactly one tender use,
+ * which is how Daily Close's `buildPaymentTotals` counts a POS transaction
+ * that carries several same-method payments. Order-independence is the point —
+ * incremental ingest and the authoritative refold see facts in different
+ * orders and must land on the same counts.
+ */
+export type ReportPaymentParticipationEntry = {
+  participationId: string;
+  method: ReportPaymentMethod;
+  net: number;
+};
+
+export type ReportPaymentMixState = {
+  amountByMethod: Array<{ method: ReportPaymentMethod; amountMinor: number }>;
+  participation: ReportPaymentParticipationEntry[];
+  /** Gross received whose method could not be attributed. Poisons the mix. */
+  unattributedMinor: number;
+  /** Quarantined or foreign-currency payment evidence was seen. */
+  evidenceBroken: boolean;
+};
+
+export function emptyPaymentMixState(): ReportPaymentMixState {
+  return {
+    amountByMethod: [],
+    participation: [],
+    unattributedMinor: 0,
+    evidenceBroken: false,
+  };
+}
+
+/**
+ * How many `(participationId, method)` pairs one day may track.
+ *
+ * The state rides on the day document, so it needs a ceiling for the same
+ * reason the fact read does. Exceeding it makes the mix unavailable rather
+ * than silently truncating rows into a total that no longer reconciles.
+ */
+export const REPORT_PAYMENT_PARTICIPATION_CAP = 5_000;
+
+/** Fold one fact's mix contribution into mutable state. Pure. */
+export function applyPaymentMixContribution(
+  state: ReportPaymentMixState,
+  contribution: {
+    method: ReportPaymentMethod;
+    methodFrom?: ReportPaymentMethod;
+    participationId: string;
+    amountMinor: number;
+  },
+): void {
+  addPaymentMixAmount(state, contribution.method, contribution.amountMinor);
+  addPaymentParticipation(state, contribution.participationId, contribution.method, 1);
+  if (contribution.methodFrom !== undefined) {
+    addPaymentMixAmount(state, contribution.methodFrom, -contribution.amountMinor);
+    addPaymentParticipation(
+      state,
+      contribution.participationId,
+      contribution.methodFrom,
+      -1,
+    );
+  }
+}
+
+function addPaymentMixAmount(
+  state: ReportPaymentMixState,
+  method: ReportPaymentMethod,
+  amountMinor: number,
+): void {
+  const existing = state.amountByMethod.find((row) => row.method === method);
+  if (existing) {
+    existing.amountMinor += amountMinor;
+    return;
+  }
+  state.amountByMethod.push({ method, amountMinor });
+}
+
+function addPaymentParticipation(
+  state: ReportPaymentMixState,
+  participationId: string,
+  method: ReportPaymentMethod,
+  delta: number,
+): void {
+  const existing = state.participation.find(
+    (entry) => entry.participationId === participationId && entry.method === method,
+  );
+  if (existing) {
+    existing.net += delta;
+    return;
+  }
+  state.participation.push({ participationId, method, net: delta });
+}
+
+/**
+ * The single accumulation rule, shared by the authoritative fold and the
+ * incremental open-day path so the two cannot drift.
+ *
+ * `countable` is whether the fact contributes to this day's metrics at all —
+ * a quarantined or foreign-currency fact does not. Such a fact is not merely
+ * skipped here: payment evidence the day had to exclude BREAKS the mix, because
+ * the remaining rows would still add up to the (equally reduced) collected
+ * total and present a clean breakdown built on damaged evidence.
+ */
+export function accumulatePaymentMixFact(
+  state: ReportPaymentMixState,
+  fact: {
+    factKind: ReportFactKind;
+    netAmountMinor: number;
+    paymentMethod?: ReportPaymentMethod;
+    paymentMethodFrom?: ReportPaymentMethod;
+    paymentParticipationId?: string;
+    paymentMixMinor?: number;
+  },
+  countable: boolean,
+): void {
+  const isPaymentEvidence =
+    fact.factKind === "payment" || fact.factKind === "payment_refund";
+  const isMethodMove =
+    fact.factKind === "correction" && fact.paymentMethodFrom !== undefined;
+
+  if (!countable) {
+    if (isPaymentEvidence || isMethodMove) state.evidenceBroken = true;
+    return;
+  }
+
+  if (fact.factKind === "payment") {
+    if (
+      fact.paymentMethod !== undefined &&
+      fact.paymentParticipationId !== undefined &&
+      fact.paymentMixMinor !== undefined
+    ) {
+      applyPaymentMixContribution(state, {
+        method: fact.paymentMethod,
+        participationId: fact.paymentParticipationId,
+        amountMinor: fact.paymentMixMinor,
+      });
+      return;
+    }
+    // Received, but not classifiable. The value still counts toward Payments
+    // totals, so the mix can no longer reconcile — say so rather than publish
+    // a breakdown that silently omits it.
+    state.unattributedMinor += Math.abs(fact.netAmountMinor);
+    return;
+  }
+
+  // A refund or reversal reduces neither gross method value nor tender use:
+  // "gross payments received by method" is a statement about what came in.
+  if (fact.factKind === "payment_refund") return;
+
+  if (
+    isMethodMove &&
+    fact.paymentParticipationId !== undefined &&
+    fact.paymentMixMinor !== undefined
+  ) {
+    if (fact.paymentMethod !== undefined) {
+      applyPaymentMixContribution(state, {
+        method: fact.paymentMethod,
+        methodFrom: fact.paymentMethodFrom,
+        participationId: fact.paymentParticipationId,
+        amountMinor: fact.paymentMixMinor,
+      });
+      return;
+    }
+    // The value moved OFF a method reporting can classify and ONTO one it
+    // cannot. The receipt fact still names the old method and nothing moves it,
+    // so without this the day would publish a `complete` mix crediting a method
+    // the source no longer claims — reconciling arithmetically and still wrong.
+    // Same poison the unclassifiable receipt uses.
+    state.unattributedMinor += fact.paymentMixMinor;
+  }
+}
+
+/**
+ * Bound the PERSISTED evidence, not just the published conclusion.
+ *
+ * The state rides on the day document, so past the cap it collapses to a
+ * broken marker instead of an ever-growing array that would eventually breach
+ * the document size limit. This is the LIVE guard: both write paths bound
+ * before deriving, so the matching length check inside `derivePaymentMix` is a
+ * defensive backstop for direct callers rather than the enforcing rule.
+ * Applied identically by the authoritative fold and the incremental path, so a
+ * clamped open day and its later refold agree. Collapsing loses nothing
+ * publishable — an over-cap state cannot produce a mix either way, and only a
+ * full refold could un-break it.
+ */
+export function boundPaymentMixState(
+  state: ReportPaymentMixState,
+): ReportPaymentMixState {
+  if (state.participation.length <= REPORT_PAYMENT_PARTICIPATION_CAP) {
+    return state;
+  }
+  return {
+    amountByMethod: [],
+    participation: [],
+    unattributedMinor: 0,
+    evidenceBroken: true,
+  };
+}
+
+/**
+ * The effective mix for one weekly revision: BOTH lanes combined.
+ *
+ * The Payments figure a reader sees beside the mix is the whole labelled
+ * range — included plus outside-schedule — so the mix must cover the same
+ * frame or its rows cannot reconcile to the number printed above them. Both
+ * lanes absent is a legacy revision (undefined: read the frozen close-backed
+ * evidence); one lane short of complete poisons the combination.
+ */
+export function combineRevisionPaymentMix(
+  included: ReportPaymentMix | undefined,
+  outsideSchedule: ReportPaymentMix | undefined,
+): ReportPaymentMix | undefined {
+  if (included === undefined && outsideSchedule === undefined) return undefined;
+  return addPaymentMix(
+    included ?? UNAVAILABLE_PAYMENT_MIX,
+    outsideSchedule ?? UNAVAILABLE_PAYMENT_MIX,
+  );
+}
+
+/** Merge two states — the incremental path folds a batch into the stored one. */
+export function mergePaymentMixState(
+  base: ReportPaymentMixState,
+  addition: ReportPaymentMixState,
+): ReportPaymentMixState {
+  const merged: ReportPaymentMixState = {
+    amountByMethod: base.amountByMethod.map((row) => ({ ...row })),
+    participation: base.participation.map((entry) => ({ ...entry })),
+    unattributedMinor: base.unattributedMinor + addition.unattributedMinor,
+    evidenceBroken: base.evidenceBroken || addition.evidenceBroken,
+  };
+  for (const row of addition.amountByMethod) {
+    addPaymentMixAmount(merged, row.method, row.amountMinor);
+  }
+  for (const entry of addition.participation) {
+    addPaymentParticipation(merged, entry.participationId, entry.method, entry.net);
+  }
+  return merged;
+}
+
+/**
+ * The published conclusion.
+ *
+ * `collectedMinor` is the reconciliation target: the rows must sum to the same
+ * gross the Payments section shows for the same frame, or there is no mix to
+ * publish. Refunds are deliberately NOT subtracted — mix describes gross
+ * receipts by method, and refund method is a separate question.
+ */
+export function derivePaymentMix(
+  state: ReportPaymentMixState,
+  collectedMinor: number,
+): ReportPaymentMix {
+  if (state.evidenceBroken) return UNAVAILABLE_PAYMENT_MIX;
+  if (state.unattributedMinor !== 0) return UNAVAILABLE_PAYMENT_MIX;
+  if (state.participation.length > REPORT_PAYMENT_PARTICIPATION_CAP) {
+    return UNAVAILABLE_PAYMENT_MIX;
+  }
+  if (!Number.isSafeInteger(collectedMinor)) return UNAVAILABLE_PAYMENT_MIX;
+
+  const useCounts = new Map<ReportPaymentMethod, number>();
+  for (const entry of state.participation) {
+    if (entry.net <= 0) continue;
+    useCounts.set(entry.method, (useCounts.get(entry.method) ?? 0) + 1);
+  }
+
+  const rows: ReportPaymentMixRow[] = [];
+  let totalMinor = 0;
+  for (const row of state.amountByMethod) {
+    if (!Number.isSafeInteger(row.amountMinor)) return UNAVAILABLE_PAYMENT_MIX;
+    // A method whose whole value moved away leaves no row — it is not a zero
+    // observation, it is an absence.
+    if (row.amountMinor === 0 && (useCounts.get(row.method) ?? 0) === 0) continue;
+    if (row.amountMinor < 0) return UNAVAILABLE_PAYMENT_MIX;
+    totalMinor += row.amountMinor;
+    rows.push({
+      method: row.method,
+      amountMinor: row.amountMinor,
+      shareBasisPoints: 0,
+      tenderUseCount: useCounts.get(row.method) ?? 0,
+    });
+  }
+
+  if (totalMinor !== collectedMinor) return UNAVAILABLE_PAYMENT_MIX;
+
+  rows.sort((a, b) => compareReportPaymentMethods(a.method, b.method));
+  for (const row of rows) {
+    row.shareBasisPoints =
+      totalMinor === 0 ? 0 : Math.round((row.amountMinor * 10_000) / totalMinor);
+  }
+
+  return { status: "complete", totalMinor, rows };
+}
+
+/** Sum two complete mixes; either one unavailable makes the total unavailable. */
+export function addPaymentMix(
+  a: ReportPaymentMix | undefined,
+  b: ReportPaymentMix | undefined,
+): ReportPaymentMix {
+  if (a?.status !== "complete" || b?.status !== "complete") {
+    return UNAVAILABLE_PAYMENT_MIX;
+  }
+  const totalMinor = a.totalMinor + b.totalMinor;
+  const byMethod = new Map<ReportPaymentMethod, ReportPaymentMixRow>();
+  for (const row of [...a.rows, ...b.rows]) {
+    const existing = byMethod.get(row.method);
+    if (existing) {
+      existing.amountMinor += row.amountMinor;
+      existing.tenderUseCount += row.tenderUseCount;
+      continue;
+    }
+    byMethod.set(row.method, { ...row });
+  }
+  const rows = [...byMethod.values()].sort((left, right) =>
+    compareReportPaymentMethods(left.method, right.method),
+  );
+  for (const row of rows) {
+    row.shareBasisPoints =
+      totalMinor === 0 ? 0 : Math.round((row.amountMinor * 10_000) / totalMinor);
+  }
+  return { status: "complete", totalMinor, rows };
+}
+
 export function derivePaymentPosture(args: {
   collectedMinor: number;
   refundedMinor: number;
@@ -732,6 +1168,14 @@ export type FoldFact = {
   unitCostMinor?: number;
   paymentAllocationMinor?: number;
   paymentAllocationCoverage?: "known" | "unknown";
+  /** Normalized tender method this fact's gross value lands in. */
+  paymentMethod?: ReportPaymentMethod;
+  /** On a method-correction fact: the method the value moves off. */
+  paymentMethodFrom?: ReportPaymentMethod;
+  /** POS transaction id, or allocation identity for a non-POS allocation. */
+  paymentParticipationId?: string;
+  /** Gross value participating in the mix. Never negative. */
+  paymentMixMinor?: number;
   quarantined: boolean;
 };
 
@@ -760,6 +1204,14 @@ export type DayFoldResult = {
     /** Completed POS transactions, from the close. Absent when there is none. */
     transactionCount?: number;
     paymentPosture: ReportPaymentPosture;
+    /** Gross payments by method, reconciled to `paymentsCollectedMinor`. */
+    paymentMix: ReportPaymentMix;
+    /**
+     * The bounded participation evidence behind the mix. Persisted so the
+     * incremental open-day path can add a batch to it without re-reading the
+     * day's facts; the authoritative fold rebuilds it from facts each time.
+     */
+    paymentMixState: ReportPaymentMixState;
   };
   /** Keyed by productSkuId. Only SKUs with activity appear. */
   skuDays: Map<string, SkuDayFoldResult>;
@@ -803,6 +1255,20 @@ export type NewReportFact = {
   /** Source-proven signed allocation; omitted on legacy payment facts. */
   paymentAllocationMinor?: number;
   paymentAllocationCoverage?: "known" | "unknown";
+  /**
+   * Payment-mix dimensions. All four are absent together on a legacy fact, on
+   * a refund/reversal (which contributes no gross mix value or tender use),
+   * and on a receipt whose source method could not be normalized.
+   *
+   * `paymentParticipationId` is the Daily Close-aligned participation identity:
+   * the POS transaction for a POS-backed allocation, so several same-method
+   * allocations on one transaction count as one tender use; the allocation's
+   * own identity otherwise, so non-POS receipts stay independently countable.
+   */
+  paymentMethod?: ReportPaymentMethod;
+  paymentMethodFrom?: ReportPaymentMethod;
+  paymentParticipationId?: string;
+  paymentMixMinor?: number;
 };
 
 export type ReportSkuTransactionEvidence = {

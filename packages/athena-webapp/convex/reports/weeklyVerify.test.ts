@@ -1359,6 +1359,101 @@ describe("weekly source verification — persisted close evidence", () => {
 });
 
 describe("weekly source verification — accepted lifecycle", () => {
+  it("accepts a method-only amendment instead of alerting on it", async () => {
+    // A supported method correction moves NO total, so metric differences
+    // cannot explain the amendment the projection legitimately writes. Without
+    // the mix-move disjunct the verifier reads a correct projection as a
+    // discrepancy and the scheduled sweep alerts on the exact scenario this
+    // feature exists to support.
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx: MutationCtx) => {
+      const store = await seedScheduledStore(ctx);
+      const closeId = await ctx.db.insert(
+        "dailyClose",
+        closeRow(store, FINAL_DATE),
+      );
+      await ctx.db.insert(
+        "reportDay",
+        dayRow(store, FINAL_DATE, {
+          status: "reconciled",
+          closeId,
+          closeAcceptedAt: NOW,
+          closeVarianceMinor: 0,
+          foldedAt: NOW + 1,
+        }),
+      );
+      return { ...store, closeId };
+    });
+
+    const laneMix = (method: "cash" | "card") => ({
+      status: "complete" as const,
+      totalMinor: 0,
+      rows: [
+        { method, amountMinor: 0, shareBasisPoints: 0, tenderUseCount: 1 },
+      ],
+    });
+
+    await t.run(async (ctx: MutationCtx) => {
+      expect(await rebuildCurrentWeek(ctx, seeded.storeId, NOW)).toBe("rebuilt");
+      expect(
+        await materializeAcceptedWeek({
+          acceptedAt: NOW,
+          closeId: seeded.closeId,
+          ctx,
+          cutoffObservedAt: NOW,
+          storeId: seeded.storeId,
+        }),
+      ).toBe("created");
+
+      const accepted = await ctx.db
+        .query("reportWeekAccepted")
+        .withIndex("by_storeId_cycleStartDate", (q) =>
+          q.eq("storeId", seeded.storeId).eq("cycleStartDate", CYCLE_START),
+        )
+        .unique();
+      if (!accepted) throw new Error("missing accepted baseline");
+      const current = await ctx.db
+        .query("reportWeekCurrent")
+        .withIndex("by_storeId", (q) => q.eq("storeId", seeded.storeId))
+        .unique();
+      if (!current || current.availability === "unavailable") {
+        throw new Error("missing current projection");
+      }
+
+      // The baseline froze Cash; the week's method truth has since moved to
+      // Card. Totals, lineage, and close posture are all untouched, so the
+      // amendment carries the close the projection would have stamped.
+      const mixMoveAmendment = {
+        changedAt: NOW + 5,
+        currentFingerprint: "mix-move-v1",
+        included: accepted.included,
+        includedNetSalesDeltaMinor: 0,
+        outsideSchedule: accepted.outsideSchedule,
+        outsideScheduleNetSalesDeltaMinor: 0,
+        paymentMix: laneMix("card"),
+        ...(current.closePosture?.currentCloseId
+          ? {
+              sourceCloseId: current.closePosture.currentCloseId,
+              sourceCloseAcceptedAt: current.closePosture.changedAt,
+            }
+          : {}),
+      };
+      await ctx.db.patch("reportWeekAccepted", accepted._id, {
+        paymentMix: laneMix("cash"),
+        amendment: mixMoveAmendment,
+      });
+      await ctx.db.patch("reportWeekCurrent", current._id, {
+        paymentMix: laneMix("card"),
+        amendment: mixMoveAmendment,
+      });
+
+      expect(await verifyCurrentWeekWithCtx(ctx, seeded.storeId)).toMatchObject({
+        amendmentMatches: true,
+        matches: true,
+      });
+    });
+  });
+
   it("confirms a late fact plus a successor close as a consistent amendment", async () => {
     const t = convexTest(schema, modules);
     const seeded = await t.run(async (ctx: MutationCtx) => {
