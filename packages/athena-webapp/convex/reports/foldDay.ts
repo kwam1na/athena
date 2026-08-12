@@ -8,8 +8,12 @@ import type {
   SkuDayFoldResult,
 } from "../../shared/reportsContract";
 import {
+  accumulatePaymentMixFact,
+  derivePaymentMix,
   derivePaymentPosture,
+  emptyPaymentMixState,
   normalizeCurrencyCode,
+  type ReportPaymentMixState,
 } from "../../shared/reportsContract";
 
 /**
@@ -139,6 +143,7 @@ export const foldDay: FoldDayFn = (
   let postCloseNetSalesDeltaMinor = 0;
   let sawPostCloseFact = false;
   let paymentAllocationOmittedMinor = 0;
+  const paymentMixState: ReportPaymentMixState = emptyPaymentMixState();
 
   for (const fact of ordered) {
     if (fact.recordedAt > lastFactRecordedAt) {
@@ -155,8 +160,12 @@ export const foldDay: FoldDayFn = (
 
     // Excluded from every metric: quarantined facts and foreign-currency facts
     // (no FX rate lives in the fold; converting here would invent numbers).
-    if (fact.quarantined) continue;
-    if (factCurrency !== storeCurrency) continue;
+    const countable = !fact.quarantined && factCurrency === storeCurrency;
+    // Runs for excluded facts too — payment evidence the day had to drop is
+    // what makes the mix unavailable, and that has to be observed before the
+    // `continue` below throws the fact away.
+    accumulatePaymentMixFact(paymentMixState, fact, countable);
+    if (!countable) continue;
 
     // Distinct POS transactions, counted from the facts already being walked.
     // `sourceId` IS the transaction id on a pos-domain fact, so this is exact
@@ -325,6 +334,10 @@ export const foldDay: FoldDayFn = (
     allocatedMinor: metrics.paymentAllocatedMinor,
     allocationOmittedMinor: paymentAllocationOmittedMinor,
   });
+  const paymentMix = derivePaymentMix(
+    paymentMixState,
+    metrics.paymentsCollectedMinor,
+  );
 
   if (close === undefined) {
     return {
@@ -338,6 +351,8 @@ export const foldDay: FoldDayFn = (
         // from facts now, replaced by the close's settled figure later.
         transactionCount: foldedTransactionCount,
         paymentPosture,
+        paymentMix,
+        paymentMixState,
       },
       skuDays,
     };
@@ -362,6 +377,8 @@ export const foldDay: FoldDayFn = (
           : foldedTransactionCount,
       ...(sawPostCloseFact ? { postCloseNetSalesDeltaMinor } : {}),
       paymentPosture,
+      paymentMix,
+      paymentMixState,
     },
     skuDays,
   };

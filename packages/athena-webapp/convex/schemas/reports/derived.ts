@@ -44,6 +44,56 @@ const dayFlags = v.object({
   quarantinedFactCount: v.number(),
 });
 
+/** Mirrors REPORT_PAYMENT_METHODS in shared/reportsContract.ts. */
+const reportPaymentMethod = v.union(
+  v.literal("cash"),
+  v.literal("card"),
+  v.literal("mobile_money"),
+);
+
+/**
+ * Gross payments by method. Two states only: `complete` rows reconcile exactly
+ * to the same frame's `paymentsCollectedMinor`, and everything else is
+ * `unavailable`. There is deliberately no partial shape — a breakdown that
+ * does not add up to the total beside it is worse than none.
+ */
+const paymentMix = v.union(
+  v.object({
+    status: v.literal("complete"),
+    totalMinor: v.number(),
+    rows: v.array(
+      v.object({
+        method: reportPaymentMethod,
+        amountMinor: v.number(),
+        shareBasisPoints: v.number(),
+        tenderUseCount: v.number(),
+      }),
+    ),
+  }),
+  v.object({ status: v.literal("unavailable") }),
+);
+
+/**
+ * The bounded evidence behind a day's mix, carried between incremental
+ * batches. `net` is a participation COUNT, not a value: a pair with a positive
+ * net is one tender use, which is how several same-method allocations on one
+ * POS transaction stay a single use.
+ */
+const paymentMixState = v.object({
+  amountByMethod: v.array(
+    v.object({ method: reportPaymentMethod, amountMinor: v.number() }),
+  ),
+  participation: v.array(
+    v.object({
+      participationId: v.string(),
+      method: reportPaymentMethod,
+      net: v.number(),
+    }),
+  ),
+  unattributedMinor: v.number(),
+  evidenceBroken: v.boolean(),
+});
+
 const paymentPosture = v.object({
   collectedMinor: v.number(),
   refundedMinor: v.number(),
@@ -525,6 +575,18 @@ export const reportDaySchema = v.object({
   flags: dayFlags,
   // Optional while legacy projections refresh; every new fold writes it.
   paymentPosture: v.optional(paymentPosture),
+  /**
+   * Gross payments by method for this day, and the bounded participation
+   * evidence behind it.
+   *
+   * Optional because days folded before the mix landed carry neither. Absent
+   * means UNKNOWN, never an empty mix: a day with zero receipts stores an
+   * explicit `complete` mix with a zero total. Reads that see a legacy day
+   * with positive receipts and no mix must treat it as unavailable —
+   * `REPORTS_FOLD_VERSION` 6 + `foldVersionRepair` is what refreshes history.
+   */
+  paymentMix: v.optional(paymentMix),
+  paymentMixState: v.optional(paymentMixState),
   /**
    * Certified fold revision — the movement trust boundary. Stamped by the
    * fold (U2) on the day and every SKU row it replaces, together. Optional

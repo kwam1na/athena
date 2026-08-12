@@ -18,6 +18,7 @@ import {
 } from "../schemas/reports";
 import {
   REPORT_DAY_METRIC_KEYS,
+  REPORT_PAYMENT_METHODS,
   unitsPerTransaction,
   REPORT_SKU_DAY_METRIC_KEYS,
   REPORT_DAY_STATUSES,
@@ -180,6 +181,35 @@ describe("reports contract ↔ schema parity", () => {
 
   it("keeps knowledge time optional only during the explicit fact migration", () => {
     expect(fieldsOf(reportFactSchema).observedAt.isOptional).toBe("optional");
+  });
+
+  it("keeps every payment-mix fact dimension optional and on the closed method set", () => {
+    const fields = fieldsOf(reportFactSchema);
+    for (const key of [
+      "paymentMethod",
+      "paymentMethodFrom",
+      "paymentParticipationId",
+      "paymentMixMinor",
+    ]) {
+      expect(fields[key].isOptional).toBe("optional");
+    }
+    for (const key of ["paymentMethod", "paymentMethodFrom"]) {
+      expect(unionLiterals(fields[key])).toEqual([...REPORT_PAYMENT_METHODS]);
+    }
+  });
+
+  it("keeps the day's payment mix optional so a legacy day reads unknown, not empty", () => {
+    const fields = fieldsOf(reportDaySchema);
+    expect(fields.paymentMix.isOptional).toBe("optional");
+    expect(fields.paymentMixState.isOptional).toBe("optional");
+    // A complete mix row carries exactly the frozen close-backed row shape, so
+    // Reports and the weekly email can render either source unchanged.
+    const complete = fields.paymentMix.members!.find(
+      (member) => fieldsOf(member).status.value === "complete",
+    )!;
+    expect(Object.keys(fieldsOf(fieldsOf(complete).rows.element!)).sort()).toEqual(
+      ["amountMinor", "method", "shareBasisPoints", "tenderUseCount"],
+    );
   });
 
   it("weekly current and accepted snapshots carry every weekly metric field", () => {

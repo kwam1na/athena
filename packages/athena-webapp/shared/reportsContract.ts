@@ -47,8 +47,15 @@
  * differs, so correcting the write is not enough on its own — those days need
  * a version they have not seen. Any new field on `DayFoldResult` has to be
  * added to that document too; the omission is silent.
+ *
+ * Version 6 records the day's payment mix and the bounded participation state
+ * behind it. Same reasoning as 4 and 5: a clean day never refolds on its own,
+ * so without the bump every already-folded day would carry no mix forever and
+ * the weekly surface would read the whole of history as unavailable. And, as
+ * version 5 learned the hard way, `foldAndReplaceDay` writes an EXPLICIT
+ * document — both new fields had to be added there too.
  */
-export const REPORTS_FOLD_VERSION = 5 as const;
+export const REPORTS_FOLD_VERSION = 6 as const;
 /**
  * Version 2 adds the source-derived allocation dimensions carried by payment
  * facts. Replays hash with the version already stored on a fact.
@@ -858,6 +865,77 @@ function addPaymentParticipation(
   state.participation.push({ participationId, method, net: delta });
 }
 
+/**
+ * The single accumulation rule, shared by the authoritative fold and the
+ * incremental open-day path so the two cannot drift.
+ *
+ * `countable` is whether the fact contributes to this day's metrics at all —
+ * a quarantined or foreign-currency fact does not. Such a fact is not merely
+ * skipped here: payment evidence the day had to exclude BREAKS the mix, because
+ * the remaining rows would still add up to the (equally reduced) collected
+ * total and present a clean breakdown built on damaged evidence.
+ */
+export function accumulatePaymentMixFact(
+  state: ReportPaymentMixState,
+  fact: {
+    factKind: ReportFactKind;
+    netAmountMinor: number;
+    paymentMethod?: ReportPaymentMethod;
+    paymentMethodFrom?: ReportPaymentMethod;
+    paymentParticipationId?: string;
+    paymentMixMinor?: number;
+  },
+  countable: boolean,
+): void {
+  const isPaymentEvidence =
+    fact.factKind === "payment" || fact.factKind === "payment_refund";
+  const isMethodMove =
+    fact.factKind === "correction" && fact.paymentMethodFrom !== undefined;
+
+  if (!countable) {
+    if (isPaymentEvidence || isMethodMove) state.evidenceBroken = true;
+    return;
+  }
+
+  if (fact.factKind === "payment") {
+    if (
+      fact.paymentMethod !== undefined &&
+      fact.paymentParticipationId !== undefined &&
+      fact.paymentMixMinor !== undefined
+    ) {
+      applyPaymentMixContribution(state, {
+        method: fact.paymentMethod,
+        participationId: fact.paymentParticipationId,
+        amountMinor: fact.paymentMixMinor,
+      });
+      return;
+    }
+    // Received, but not classifiable. The value still counts toward Payments
+    // totals, so the mix can no longer reconcile — say so rather than publish
+    // a breakdown that silently omits it.
+    state.unattributedMinor += Math.abs(fact.netAmountMinor);
+    return;
+  }
+
+  // A refund or reversal reduces neither gross method value nor tender use:
+  // "gross payments received by method" is a statement about what came in.
+  if (fact.factKind === "payment_refund") return;
+
+  if (
+    isMethodMove &&
+    fact.paymentMethod !== undefined &&
+    fact.paymentParticipationId !== undefined &&
+    fact.paymentMixMinor !== undefined
+  ) {
+    applyPaymentMixContribution(state, {
+      method: fact.paymentMethod,
+      methodFrom: fact.paymentMethodFrom,
+      participationId: fact.paymentParticipationId,
+      amountMinor: fact.paymentMixMinor,
+    });
+  }
+}
+
 /** Merge two states — the incremental path folds a batch into the stored one. */
 export function mergePaymentMixState(
   base: ReportPaymentMixState,
@@ -1043,6 +1121,14 @@ export type DayFoldResult = {
     /** Completed POS transactions, from the close. Absent when there is none. */
     transactionCount?: number;
     paymentPosture: ReportPaymentPosture;
+    /** Gross payments by method, reconciled to `paymentsCollectedMinor`. */
+    paymentMix: ReportPaymentMix;
+    /**
+     * The bounded participation evidence behind the mix. Persisted so the
+     * incremental open-day path can add a batch to it without re-reading the
+     * day's facts; the authoritative fold rebuilds it from facts each time.
+     */
+    paymentMixState: ReportPaymentMixState;
   };
   /** Keyed by productSkuId. Only SKUs with activity appear. */
   skuDays: Map<string, SkuDayFoldResult>;

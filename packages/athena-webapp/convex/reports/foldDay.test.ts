@@ -614,6 +614,14 @@ describe("foldDay — status, close variance and amendment", () => {
         allocationOmittedMinor: 0,
         hasInvalidAllocation: false,
       },
+      // Zero receipts is a KNOWN empty mix, not missing evidence.
+      paymentMix: { status: "complete", totalMinor: 0, rows: [] },
+      paymentMixState: {
+        amountByMethod: [],
+        participation: [],
+        unattributedMinor: 0,
+        evidenceBroken: false,
+      },
       status: "provisional",
       flags: {
         mixedCurrency: false,
@@ -740,5 +748,225 @@ describe("foldDay — determinism", () => {
     const backward = foldDay("GHS", [...tied].reverse());
     expect(forward).toEqual(backward);
     expect(forward.day.netSalesMinor).toBe(7);
+  });
+});
+
+describe("foldDay — payment mix", () => {
+  /** A recorded inbound allocation with full mix evidence. */
+  function receipt(args: {
+    factId: string;
+    amountMinor: number;
+    method: "cash" | "card" | "mobile_money";
+    participationId: string;
+    occurredAt?: number;
+  }): FoldFact {
+    return fact({
+      factId: args.factId,
+      sourceDomain: "payments",
+      sourceId: `alloc-${args.factId}`,
+      factKind: "payment",
+      occurredAt: args.occurredAt ?? 1_000,
+      grossAmountMinor: args.amountMinor,
+      netAmountMinor: args.amountMinor,
+      paymentAllocationCoverage: "known",
+      paymentAllocationMinor: args.amountMinor,
+      paymentMethod: args.method,
+      paymentParticipationId: args.participationId,
+      paymentMixMinor: args.amountMinor,
+    });
+  }
+
+  it("reconciles complete rows exactly to paymentsCollectedMinor", () => {
+    const { day } = foldDay("GHS", [
+      receipt({ factId: "a", amountMinor: 6_000, method: "cash", participationId: "txn-1" }),
+      receipt({ factId: "b", amountMinor: 3_000, method: "card", participationId: "txn-2" }),
+      receipt({ factId: "c", amountMinor: 1_000, method: "mobile_money", participationId: "txn-3" }),
+    ]);
+
+    expect(day.paymentsCollectedMinor).toBe(10_000);
+    expect(day.paymentMix).toEqual({
+      status: "complete",
+      totalMinor: 10_000,
+      rows: [
+        { method: "cash", amountMinor: 6_000, shareBasisPoints: 6_000, tenderUseCount: 1 },
+        { method: "card", amountMinor: 3_000, shareBasisPoints: 3_000, tenderUseCount: 1 },
+        {
+          method: "mobile_money",
+          amountMinor: 1_000,
+          shareBasisPoints: 1_000,
+          tenderUseCount: 1,
+        },
+      ],
+    });
+  });
+
+  it("counts one tender use for repeated same-method allocations on one transaction", () => {
+    const { day } = foldDay("GHS", [
+      receipt({ factId: "a", amountMinor: 2_000, method: "cash", participationId: "txn-1" }),
+      receipt({ factId: "b", amountMinor: 1_000, method: "cash", participationId: "txn-1" }),
+    ]);
+
+    expect(day.paymentsCollectedMinor).toBe(3_000);
+    // Full combined value, one use — Daily Close's `buildPaymentTotals` rule.
+    expect(day.paymentMix).toMatchObject({
+      status: "complete",
+      rows: [{ method: "cash", amountMinor: 3_000, tenderUseCount: 1 }],
+    });
+  });
+
+  it("counts one use per method for split tender on one transaction", () => {
+    const { day } = foldDay("GHS", [
+      receipt({ factId: "a", amountMinor: 2_000, method: "cash", participationId: "txn-1" }),
+      receipt({ factId: "b", amountMinor: 2_000, method: "card", participationId: "txn-1" }),
+    ]);
+
+    expect(day.paymentMix).toMatchObject({
+      status: "complete",
+      rows: [
+        { method: "cash", amountMinor: 2_000, tenderUseCount: 1 },
+        { method: "card", amountMinor: 2_000, tenderUseCount: 1 },
+      ],
+    });
+  });
+
+  it("keeps non-POS allocations independently countable", () => {
+    const { day } = foldDay("GHS", [
+      receipt({ factId: "a", amountMinor: 2_000, method: "cash", participationId: "alloc-a" }),
+      receipt({ factId: "b", amountMinor: 1_000, method: "cash", participationId: "alloc-b" }),
+    ]);
+
+    expect(day.paymentMix).toMatchObject({
+      status: "complete",
+      rows: [{ method: "cash", amountMinor: 3_000, tenderUseCount: 2 }],
+    });
+  });
+
+  it("moves value and use across methods on a correction without touching totals", () => {
+    const correction = fact({
+      factId: "corr",
+      sourceDomain: "pos",
+      sourceId: "txn-1",
+      lineId: "event-1",
+      factKind: "correction",
+      occurredAt: 2_000,
+      paymentMethodFrom: "cash",
+      paymentMethod: "card",
+      paymentParticipationId: "txn-1",
+      paymentMixMinor: 5_000,
+    });
+    const { day } = foldDay("GHS", [
+      receipt({ factId: "a", amountMinor: 5_000, method: "cash", participationId: "txn-1" }),
+      correction,
+    ]);
+
+    expect(day.paymentsCollectedMinor).toBe(5_000);
+    expect(day.paymentMix).toEqual({
+      status: "complete",
+      totalMinor: 5_000,
+      rows: [
+        { method: "card", amountMinor: 5_000, shareBasisPoints: 10_000, tenderUseCount: 1 },
+      ],
+    });
+  });
+
+  it("publishes a complete empty mix for a day with zero receipts", () => {
+    const { day } = foldDay("GHS", [
+      fact({ factId: "s", factKind: "sale", netAmountMinor: 0 }),
+    ]);
+    expect(day.paymentMix).toEqual({ status: "complete", totalMinor: 0, rows: [] });
+  });
+
+  it("withholds the mix rather than publishing a partial one", () => {
+    const methodless = fact({
+      factId: "legacy",
+      sourceDomain: "payments",
+      sourceId: "alloc-legacy",
+      factKind: "payment",
+      grossAmountMinor: 4_000,
+      netAmountMinor: 4_000,
+      paymentAllocationCoverage: "known",
+      paymentAllocationMinor: 4_000,
+    });
+
+    // A legacy fact with no method at all.
+    expect(
+      foldDay("GHS", [
+        receipt({ factId: "a", amountMinor: 1_000, method: "cash", participationId: "txn-1" }),
+        methodless,
+      ]).day.paymentMix,
+    ).toEqual({ status: "unavailable" });
+
+    // A quarantined payment fact: excluded from totals, so the remaining rows
+    // would still add up — which is exactly why the day must say unavailable
+    // instead of presenting a breakdown built on damaged evidence.
+    expect(
+      foldDay("GHS", [
+        receipt({ factId: "a", amountMinor: 1_000, method: "cash", participationId: "txn-1" }),
+        { ...methodless, quarantined: true },
+      ]).day.paymentMix,
+    ).toEqual({ status: "unavailable" });
+
+    // Foreign-currency payment evidence on the day.
+    expect(
+      foldDay("GHS", [
+        receipt({ factId: "a", amountMinor: 1_000, method: "cash", participationId: "txn-1" }),
+        { ...methodless, currency: "USD" },
+      ]).day.paymentMix,
+    ).toEqual({ status: "unavailable" });
+  });
+
+  it("adds no gross mix value or use from refunds", () => {
+    const { day } = foldDay("GHS", [
+      receipt({ factId: "a", amountMinor: 5_000, method: "cash", participationId: "txn-1" }),
+      fact({
+        factId: "r",
+        sourceDomain: "payments",
+        sourceId: "alloc-r",
+        factKind: "payment_refund",
+        grossAmountMinor: 2_000,
+        netAmountMinor: 2_000,
+        paymentAllocationCoverage: "known",
+        paymentAllocationMinor: -2_000,
+      }),
+    ]);
+
+    expect(day.paymentsRefundedMinor).toBe(2_000);
+    expect(day.paymentMix).toMatchObject({
+      status: "complete",
+      totalMinor: 5_000,
+      rows: [{ method: "cash", amountMinor: 5_000, tenderUseCount: 1 }],
+    });
+  });
+
+  it("folds to the same mix regardless of fact order", () => {
+    const corpus = [
+      receipt({ factId: "a", amountMinor: 2_000, method: "cash", participationId: "txn-1" }),
+      receipt({ factId: "b", amountMinor: 1_000, method: "cash", participationId: "txn-1" }),
+      receipt({ factId: "c", amountMinor: 4_000, method: "mobile_money", participationId: "txn-2" }),
+      fact({
+        factId: "corr",
+        sourceDomain: "pos",
+        sourceId: "txn-2",
+        lineId: "event-1",
+        factKind: "correction",
+        occurredAt: 2_000,
+        paymentMethodFrom: "mobile_money",
+        paymentMethod: "card",
+        paymentParticipationId: "txn-2",
+        paymentMixMinor: 4_000,
+      }),
+    ];
+    const baseline = foldDay("GHS", corpus).day.paymentMix;
+    for (const seed of [1, 7, 42, 1_337]) {
+      expect(foldDay("GHS", shuffle(corpus, seed)).day.paymentMix).toEqual(baseline);
+    }
+    expect(baseline).toMatchObject({
+      status: "complete",
+      totalMinor: 7_000,
+      rows: [
+        { method: "cash", amountMinor: 3_000, tenderUseCount: 1 },
+        { method: "card", amountMinor: 4_000, tenderUseCount: 1 },
+      ],
+    });
   });
 });

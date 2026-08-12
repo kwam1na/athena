@@ -5,7 +5,11 @@ import {
   type NewReportFact,
   type ReportDayMetrics,
   type ReportSkuDayMetrics,
+  accumulatePaymentMixFact,
+  derivePaymentMix,
   derivePaymentPosture,
+  emptyPaymentMixState,
+  mergePaymentMixState,
   normalizeCurrencyCode,
 } from "../../shared/reportsContract";
 import {
@@ -432,6 +436,8 @@ async function applyToOpenDay(
   let lastFactRecordedAt = base.lastFactRecordedAt;
   /** Payment value this batch could not attribute — mirrors the fold's rule. */
   let batchAllocationOmittedMinor = 0;
+  /** This batch's mix contribution, merged into the day's stored state below. */
+  const batchMixState = emptyPaymentMixState();
 
   // SKU deltas are accumulated in memory so a batch touching one SKU several
   // times costs one read + one write, not one per fact.
@@ -444,7 +450,13 @@ async function applyToOpenDay(
     factCount += 1;
     lastFactRecordedAt = Math.max(lastFactRecordedAt, recordedAt);
 
-    if (normalizeCurrencyCode(fact.currency) !== base.currency) {
+    const countable = normalizeCurrencyCode(fact.currency) === base.currency;
+    // Runs for excluded facts too, for the same reason the fold does it there:
+    // payment evidence this day had to drop is what makes the mix unavailable.
+    // Newly inserted facts are never quarantined, so currency is the only
+    // exclusion the incremental path can see.
+    accumulatePaymentMixFact(batchMixState, fact, countable);
+    if (!countable) {
       // Foreign-currency facts are counted but never mixed into totals.
       flags.mixedCurrency = true;
       continue;
@@ -596,6 +608,23 @@ async function applyToOpenDay(
       : Math.max(0, existing.transactionCount + transactionDelta)
     : Math.max(0, transactionDelta);
 
+  /**
+   * The day's mix evidence, carried forward.
+   *
+   * A day that already carries state merges this batch into it. A day written
+   * before the mix landed carries none: if it has any payment volume at all,
+   * that volume is unattributable by definition — no state means no method
+   * evidence — so the merged state starts broken rather than pretending this
+   * batch is the whole day. `foldVersionRepair` is what fixes such a day.
+   */
+  const priorMixState =
+    existing?.paymentMixState ??
+    (existing &&
+    (base.paymentsCollectedMinor !== 0 || base.paymentsRefundedMinor !== 0)
+      ? { ...emptyPaymentMixState(), evidenceBroken: true }
+      : emptyPaymentMixState());
+  const paymentMixState = mergePaymentMixState(priorMixState, batchMixState);
+
   const dayPatch = {
     ...next,
     currency: base.currency,
@@ -606,6 +635,8 @@ async function applyToOpenDay(
     transactionCount,
     lastFactRecordedAt,
     flags,
+    paymentMixState,
+    paymentMix: derivePaymentMix(paymentMixState, next.paymentsCollectedMinor),
     paymentPosture: derivePaymentPosture({
       collectedMinor: next.paymentsCollectedMinor,
       refundedMinor: next.paymentsRefundedMinor,
