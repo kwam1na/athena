@@ -649,8 +649,8 @@ export function weekTruthFingerprint(args: {
    *   the current fold starts producing one, the two sides are permanently
    *   asymmetric and the re-stamp is guaranteed rather than incidental.
    *
-   * This mirrors `laneMixMoved`'s knowable-to-knowable rule exactly. A week
-   * whose mix truly moved between two knowable states still changes the hash.
+   * This mirrors `laneMixMoved`'s knowable-to-knowable rule exactly: the hash
+   * changes when, and only when, that rule reports a move.
    */
   paymentMix?: ReportPaymentMix;
   outsideSchedulePaymentMix?: ReportPaymentMix;
@@ -658,14 +658,25 @@ export function weekTruthFingerprint(args: {
   counterpartPaymentMix?: ReportPaymentMix;
   counterpartOutsideSchedulePaymentMix?: ReportPaymentMix;
 }) {
+  /**
+   * Hash the lane's KNOWABLE TRUTH, which is what the amendment gate compares.
+   *
+   * No knowable counterpart (a legacy baseline) omits the key entirely, so the
+   * payload stays byte-identical to the pre-mix shape. With a knowable
+   * counterpart, an unknowable side falls back to that counterpart rather than
+   * dropping the key — otherwise the hash would move when a lane merely became
+   * knowable during the fold-version-6 drain, or stopped being knowable after
+   * a correction onto an unclassifiable method. Neither is a move, and this
+   * hash is the `changedAt` dedupe key.
+   */
   const knownMix = (
     mix: ReportPaymentMix | undefined,
     counterpart: ReportPaymentMix | undefined,
     key: string,
   ) =>
-    mix?.status === "complete" && counterpart?.status === "complete"
-      ? { [key]: mix }
-      : {};
+    counterpart?.status !== "complete"
+      ? {}
+      : { [key]: mix?.status === "complete" ? mix : counterpart };
   return stableStringHash(
     JSON.stringify({
       included: args.included,

@@ -75971,7 +75971,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_test_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.test.ts",
-      "source_location": "L1294",
+      "source_location": "L1352",
       "target": "weekly_test_baselineof",
       "weight": 1
     },
@@ -76067,7 +76067,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_test_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.test.ts",
-      "source_location": "L1275",
+      "source_location": "L1333",
       "target": "weekly_test_lanemix",
       "weight": 1
     },
@@ -76079,7 +76079,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_test_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.test.ts",
-      "source_location": "L3575",
+      "source_location": "L3633",
       "target": "weekly_test_linkclosetoday",
       "weight": 1
     },
@@ -76103,7 +76103,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_test_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.test.ts",
-      "source_location": "L3554",
+      "source_location": "L3612",
       "target": "weekly_test_patchscheduleexceptions",
       "weight": 1
     },
@@ -76127,7 +76127,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_test_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.test.ts",
-      "source_location": "L3065",
+      "source_location": "L3123",
       "target": "weekly_test_readbaseline",
       "weight": 1
     },
@@ -76139,7 +76139,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_test_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.test.ts",
-      "source_location": "L3056",
+      "source_location": "L3114",
       "target": "weekly_test_readweekmark",
       "weight": 1
     },
@@ -76175,7 +76175,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_test_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.test.ts",
-      "source_location": "L1282",
+      "source_location": "L1340",
       "target": "weekly_test_seteverydaymix",
       "weight": 1
     },
@@ -76199,7 +76199,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1469",
+      "source_location": "L1480",
       "target": "weekly_acceptedinventoryfromclose",
       "weight": 1
     },
@@ -76211,7 +76211,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1800",
+      "source_location": "L1811",
       "target": "weekly_acceptedperiod",
       "weight": 1
     },
@@ -76259,7 +76259,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1446",
+      "source_location": "L1457",
       "target": "weekly_clearweeklyacceptanceintent",
       "weight": 1
     },
@@ -76271,7 +76271,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L794",
+      "source_location": "L805",
       "target": "weekly_computeweeklyvarianceposture",
       "weight": 1
     },
@@ -76283,7 +76283,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L695",
+      "source_location": "L706",
       "target": "weekly_deriveweeklyamendment",
       "weight": 1
     },
@@ -76367,7 +76367,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1514",
+      "source_location": "L1525",
       "target": "weekly_localdateforperiod",
       "weight": 1
     },
@@ -76379,7 +76379,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1313",
+      "source_location": "L1324",
       "target": "weekly_markweekdirty",
       "weight": 1
     },
@@ -76391,7 +76391,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1537",
+      "source_location": "L1548",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -76415,7 +76415,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1500",
+      "source_location": "L1511",
       "target": "weekly_periodstartat",
       "weight": 1
     },
@@ -76427,7 +76427,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1107",
+      "source_location": "L1118",
       "target": "weekly_persistweeklyincompleteness",
       "weight": 1
     },
@@ -76439,7 +76439,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L866",
+      "source_location": "L877",
       "target": "weekly_priorperiodposture",
       "weight": 1
     },
@@ -76463,7 +76463,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1131",
+      "source_location": "L1142",
       "target": "weekly_rebuildcurrentweek",
       "weight": 1
     },
@@ -76475,7 +76475,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L2115",
+      "source_location": "L2126",
       "target": "weekly_reconcilerecentacceptedweeksforstore",
       "weight": 1
     },
@@ -76487,7 +76487,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1892",
+      "source_location": "L1903",
       "target": "weekly_refreshacceptedweek",
       "weight": 1
     },
@@ -76499,7 +76499,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1989",
+      "source_location": "L2000",
       "target": "weekly_refreshacceptedweekfordate",
       "weight": 1
     },
@@ -76511,7 +76511,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1825",
+      "source_location": "L1836",
       "target": "weekly_resolveacceptedweekcloseposture",
       "weight": 1
     },
@@ -76547,7 +76547,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1396",
+      "source_location": "L1407",
       "target": "weekly_resolveweeklyacceptanceintent",
       "weight": 1
     },
@@ -76559,7 +76559,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1959",
+      "source_location": "L1970",
       "target": "weekly_retainacceptedweekdateretry",
       "weight": 1
     },
@@ -76571,7 +76571,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L859",
+      "source_location": "L870",
       "target": "weekly_scheduledoffsets",
       "weight": 1
     },
@@ -76595,7 +76595,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L853",
+      "source_location": "L864",
       "target": "weekly_shiftisodate",
       "weight": 1
     },
@@ -76631,7 +76631,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_reports_weekly_ts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L826",
+      "source_location": "L837",
       "target": "weekly_weeklycloseevidence",
       "weight": 1
     },
@@ -177671,7 +177671,7 @@
       "relation": "calls",
       "source": "weekly_weektruthfingerprint",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L710",
+      "source_location": "L721",
       "target": "weekly_deriveweeklyamendment",
       "weight": 1
     },
@@ -177755,7 +177755,7 @@
       "relation": "calls",
       "source": "weekly_acceptedinventoryfromclose",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1756",
+      "source_location": "L1767",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -177767,7 +177767,7 @@
       "relation": "calls",
       "source": "weekly_acceptedtopskuleaders",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1659",
+      "source_location": "L1670",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -177779,7 +177779,7 @@
       "relation": "calls",
       "source": "weekly_clearweeklyacceptanceintent",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1796",
+      "source_location": "L1807",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -177791,7 +177791,7 @@
       "relation": "calls",
       "source": "weekly_computeweeklyvarianceposture",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1760",
+      "source_location": "L1771",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -177803,7 +177803,7 @@
       "relation": "calls",
       "source": "weekly_deriveweeklyamendment",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1691",
+      "source_location": "L1702",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -177815,7 +177815,7 @@
       "relation": "calls",
       "source": "weekly_foldweekfromacceptedfacts",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1643",
+      "source_location": "L1654",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -177827,7 +177827,7 @@
       "relation": "calls",
       "source": "weekly_foldweekfromdays",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1674",
+      "source_location": "L1685",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -177839,7 +177839,7 @@
       "relation": "calls",
       "source": "weekly_freezeacceptedtopskuleaderidentity",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1656",
+      "source_location": "L1667",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -177851,7 +177851,7 @@
       "relation": "calls",
       "source": "weekly_periodstartat",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1664",
+      "source_location": "L1675",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -177863,7 +177863,7 @@
       "relation": "calls",
       "source": "weekly_persistweeklyincompleteness",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1632",
+      "source_location": "L1643",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -177875,7 +177875,7 @@
       "relation": "calls",
       "source": "weekly_priorperiodposture",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1713",
+      "source_location": "L1724",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -177887,7 +177887,7 @@
       "relation": "calls",
       "source": "weekly_readweekdays",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1666",
+      "source_location": "L1677",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -177899,7 +177899,7 @@
       "relation": "calls",
       "source": "weekly_materializeacceptedweek",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1676",
+      "source_location": "L1687",
       "target": "weekly_resolveacceptedweekcloseposture",
       "weight": 1
     },
@@ -177911,7 +177911,7 @@
       "relation": "calls",
       "source": "weekly_resolveperiodforoperatingdate",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1563",
+      "source_location": "L1574",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -177923,7 +177923,7 @@
       "relation": "calls",
       "source": "weekly_resolveweeklyacceptanceintent",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1590",
+      "source_location": "L1601",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -177935,7 +177935,7 @@
       "relation": "calls",
       "source": "weekly_scheduleweeklymanagerreportnotificationwithctx",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1776",
+      "source_location": "L1787",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -177947,7 +177947,7 @@
       "relation": "calls",
       "source": "weekly_weeklycloseevidence",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1686",
+      "source_location": "L1697",
       "target": "weekly_materializeacceptedweek",
       "weight": 1
     },
@@ -177959,7 +177959,7 @@
       "relation": "calls",
       "source": "weekly_foldweekfromdays",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1060",
+      "source_location": "L1071",
       "target": "weekly_priorperiodposture",
       "weight": 1
     },
@@ -177971,7 +177971,7 @@
       "relation": "calls",
       "source": "weekly_priorperiodposture",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L874",
+      "source_location": "L885",
       "target": "weekly_periodstartat",
       "weight": 1
     },
@@ -177983,7 +177983,7 @@
       "relation": "calls",
       "source": "weekly_readweekdays",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L947",
+      "source_location": "L958",
       "target": "weekly_priorperiodposture",
       "weight": 1
     },
@@ -177995,7 +177995,7 @@
       "relation": "calls",
       "source": "weekly_resolvecurrentperiod",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L929",
+      "source_location": "L940",
       "target": "weekly_priorperiodposture",
       "weight": 1
     },
@@ -178007,7 +178007,7 @@
       "relation": "calls",
       "source": "weekly_scheduledoffsets",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L943",
+      "source_location": "L954",
       "target": "weekly_priorperiodposture",
       "weight": 1
     },
@@ -178019,7 +178019,7 @@
       "relation": "calls",
       "source": "weekly_shiftisodate",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L876",
+      "source_location": "L887",
       "target": "weekly_priorperiodposture",
       "weight": 1
     },
@@ -178031,7 +178031,7 @@
       "relation": "calls",
       "source": "weekly_toweekday",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1034",
+      "source_location": "L1045",
       "target": "weekly_priorperiodposture",
       "weight": 1
     },
@@ -178043,7 +178043,7 @@
       "relation": "calls",
       "source": "weekly_computeweeklyvarianceposture",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1275",
+      "source_location": "L1286",
       "target": "weekly_rebuildcurrentweek",
       "weight": 1
     },
@@ -178055,7 +178055,7 @@
       "relation": "calls",
       "source": "weekly_foldweekfromdays",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1199",
+      "source_location": "L1210",
       "target": "weekly_rebuildcurrentweek",
       "weight": 1
     },
@@ -178067,7 +178067,7 @@
       "relation": "calls",
       "source": "weekly_rebuildcurrentweek",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1237",
+      "source_location": "L1248",
       "target": "weekly_localdateforperiod",
       "weight": 1
     },
@@ -178079,7 +178079,7 @@
       "relation": "calls",
       "source": "weekly_rebuildcurrentweek",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1200",
+      "source_location": "L1211",
       "target": "weekly_periodstartat",
       "weight": 1
     },
@@ -178091,7 +178091,7 @@
       "relation": "calls",
       "source": "weekly_priorperiodposture",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1216",
+      "source_location": "L1227",
       "target": "weekly_rebuildcurrentweek",
       "weight": 1
     },
@@ -178103,7 +178103,7 @@
       "relation": "calls",
       "source": "weekly_readweekdays",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1187",
+      "source_location": "L1198",
       "target": "weekly_rebuildcurrentweek",
       "weight": 1
     },
@@ -178115,7 +178115,7 @@
       "relation": "calls",
       "source": "weekly_resolvecurrentperiod",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1178",
+      "source_location": "L1189",
       "target": "weekly_rebuildcurrentweek",
       "weight": 1
     },
@@ -178127,7 +178127,7 @@
       "relation": "calls",
       "source": "weekly_weeklycloseevidence",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1243",
+      "source_location": "L1254",
       "target": "weekly_rebuildcurrentweek",
       "weight": 1
     },
@@ -178139,7 +178139,7 @@
       "relation": "calls",
       "source": "weekly_markweekdirty",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L2177",
+      "source_location": "L2188",
       "target": "weekly_reconcilerecentacceptedweeksforstore",
       "weight": 1
     },
@@ -178151,7 +178151,7 @@
       "relation": "calls",
       "source": "weekly_materializeacceptedweek",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L2169",
+      "source_location": "L2180",
       "target": "weekly_reconcilerecentacceptedweeksforstore",
       "weight": 1
     },
@@ -178163,7 +178163,7 @@
       "relation": "calls",
       "source": "weekly_refreshacceptedweek",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L2189",
+      "source_location": "L2200",
       "target": "weekly_reconcilerecentacceptedweeksforstore",
       "weight": 1
     },
@@ -178175,7 +178175,7 @@
       "relation": "calls",
       "source": "weekly_resolveperiodforoperatingdate",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L2143",
+      "source_location": "L2154",
       "target": "weekly_reconcilerecentacceptedweeksforstore",
       "weight": 1
     },
@@ -178187,7 +178187,7 @@
       "relation": "calls",
       "source": "weekly_acceptedperiod",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1897",
+      "source_location": "L1908",
       "target": "weekly_refreshacceptedweek",
       "weight": 1
     },
@@ -178199,7 +178199,7 @@
       "relation": "calls",
       "source": "weekly_computeweeklyvarianceposture",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1946",
+      "source_location": "L1957",
       "target": "weekly_refreshacceptedweek",
       "weight": 1
     },
@@ -178211,7 +178211,7 @@
       "relation": "calls",
       "source": "weekly_deriveweeklyamendment",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1915",
+      "source_location": "L1926",
       "target": "weekly_refreshacceptedweek",
       "weight": 1
     },
@@ -178223,7 +178223,7 @@
       "relation": "calls",
       "source": "weekly_foldweekfromdays",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1906",
+      "source_location": "L1917",
       "target": "weekly_refreshacceptedweek",
       "weight": 1
     },
@@ -178235,7 +178235,7 @@
       "relation": "calls",
       "source": "weekly_readweekdays",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1898",
+      "source_location": "L1909",
       "target": "weekly_refreshacceptedweek",
       "weight": 1
     },
@@ -178247,7 +178247,7 @@
       "relation": "calls",
       "source": "weekly_resolveacceptedweekcloseposture",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1909",
+      "source_location": "L1920",
       "target": "weekly_refreshacceptedweek",
       "weight": 1
     },
@@ -178259,7 +178259,7 @@
       "relation": "calls",
       "source": "weekly_weeklycloseevidence",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1939",
+      "source_location": "L1950",
       "target": "weekly_refreshacceptedweek",
       "weight": 1
     },
@@ -178271,7 +178271,7 @@
       "relation": "calls",
       "source": "weekly_materializeacceptedweek",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L2093",
+      "source_location": "L2104",
       "target": "weekly_refreshacceptedweekfordate",
       "weight": 1
     },
@@ -178283,7 +178283,7 @@
       "relation": "calls",
       "source": "weekly_refreshacceptedweek",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L2016",
+      "source_location": "L2027",
       "target": "weekly_refreshacceptedweekfordate",
       "weight": 1
     },
@@ -178295,7 +178295,7 @@
       "relation": "calls",
       "source": "weekly_resolveperiodforoperatingdate",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L2025",
+      "source_location": "L2036",
       "target": "weekly_refreshacceptedweekfordate",
       "weight": 1
     },
@@ -178307,7 +178307,7 @@
       "relation": "calls",
       "source": "weekly_retainacceptedweekdateretry",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L2001",
+      "source_location": "L2012",
       "target": "weekly_refreshacceptedweekfordate",
       "weight": 1
     },
@@ -178319,7 +178319,7 @@
       "relation": "calls",
       "source": "weekly_markweekdirty",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1419",
+      "source_location": "L1430",
       "target": "weekly_resolveweeklyacceptanceintent",
       "weight": 1
     },
@@ -221182,7 +221182,7 @@
       "label": "acceptedInventoryFromClose()",
       "norm_label": "acceptedinventoryfromclose()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1469"
+      "source_location": "L1480"
     },
     {
       "community": 22,
@@ -221191,7 +221191,7 @@
       "label": "acceptedPeriod()",
       "norm_label": "acceptedperiod()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1800"
+      "source_location": "L1811"
     },
     {
       "community": 22,
@@ -221227,7 +221227,7 @@
       "label": "clearWeeklyAcceptanceIntent()",
       "norm_label": "clearweeklyacceptanceintent()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1446"
+      "source_location": "L1457"
     },
     {
       "community": 22,
@@ -221236,7 +221236,7 @@
       "label": "computeWeeklyVariancePosture()",
       "norm_label": "computeweeklyvarianceposture()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L794"
+      "source_location": "L805"
     },
     {
       "community": 22,
@@ -221245,7 +221245,7 @@
       "label": "deriveWeeklyAmendment()",
       "norm_label": "deriveweeklyamendment()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L695"
+      "source_location": "L706"
     },
     {
       "community": 22,
@@ -221308,7 +221308,7 @@
       "label": "localDateForPeriod()",
       "norm_label": "localdateforperiod()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1514"
+      "source_location": "L1525"
     },
     {
       "community": 22,
@@ -221317,7 +221317,7 @@
       "label": "markWeekDirty()",
       "norm_label": "markweekdirty()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1313"
+      "source_location": "L1324"
     },
     {
       "community": 22,
@@ -221326,7 +221326,7 @@
       "label": "materializeAcceptedWeek()",
       "norm_label": "materializeacceptedweek()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1537"
+      "source_location": "L1548"
     },
     {
       "community": 22,
@@ -221344,7 +221344,7 @@
       "label": "periodStartAt()",
       "norm_label": "periodstartat()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1500"
+      "source_location": "L1511"
     },
     {
       "community": 22,
@@ -221353,7 +221353,7 @@
       "label": "persistWeeklyIncompleteness()",
       "norm_label": "persistweeklyincompleteness()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1107"
+      "source_location": "L1118"
     },
     {
       "community": 22,
@@ -221362,7 +221362,7 @@
       "label": "priorPeriodPosture()",
       "norm_label": "priorperiodposture()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L866"
+      "source_location": "L877"
     },
     {
       "community": 22,
@@ -221380,7 +221380,7 @@
       "label": "rebuildCurrentWeek()",
       "norm_label": "rebuildcurrentweek()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1131"
+      "source_location": "L1142"
     },
     {
       "community": 22,
@@ -221389,7 +221389,7 @@
       "label": "reconcileRecentAcceptedWeeksForStore()",
       "norm_label": "reconcilerecentacceptedweeksforstore()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L2115"
+      "source_location": "L2126"
     },
     {
       "community": 22,
@@ -221398,7 +221398,7 @@
       "label": "refreshAcceptedWeek()",
       "norm_label": "refreshacceptedweek()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1892"
+      "source_location": "L1903"
     },
     {
       "community": 22,
@@ -221407,7 +221407,7 @@
       "label": "refreshAcceptedWeekForDate()",
       "norm_label": "refreshacceptedweekfordate()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1989"
+      "source_location": "L2000"
     },
     {
       "community": 22,
@@ -221416,7 +221416,7 @@
       "label": "resolveAcceptedWeekClosePosture()",
       "norm_label": "resolveacceptedweekcloseposture()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1825"
+      "source_location": "L1836"
     },
     {
       "community": 22,
@@ -221443,7 +221443,7 @@
       "label": "resolveWeeklyAcceptanceIntent()",
       "norm_label": "resolveweeklyacceptanceintent()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1396"
+      "source_location": "L1407"
     },
     {
       "community": 22,
@@ -221452,7 +221452,7 @@
       "label": "retainAcceptedWeekDateRetry()",
       "norm_label": "retainacceptedweekdateretry()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L1959"
+      "source_location": "L1970"
     },
     {
       "community": 22,
@@ -221461,7 +221461,7 @@
       "label": "scheduledOffsets()",
       "norm_label": "scheduledoffsets()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L859"
+      "source_location": "L870"
     },
     {
       "community": 22,
@@ -221479,7 +221479,7 @@
       "label": "shiftIsoDate()",
       "norm_label": "shiftisodate()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L853"
+      "source_location": "L864"
     },
     {
       "community": 22,
@@ -221506,7 +221506,7 @@
       "label": "weeklyCloseEvidence()",
       "norm_label": "weeklycloseevidence()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.ts",
-      "source_location": "L826"
+      "source_location": "L837"
     },
     {
       "community": 22,
@@ -286684,7 +286684,7 @@
       "label": "laneMix()",
       "norm_label": "lanemix()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.test.ts",
-      "source_location": "L1275"
+      "source_location": "L1333"
     },
     {
       "community": 96,
@@ -286693,7 +286693,7 @@
       "label": "linkCloseToDay()",
       "norm_label": "linkclosetoday()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.test.ts",
-      "source_location": "L3575"
+      "source_location": "L3633"
     },
     {
       "community": 96,
@@ -286711,7 +286711,7 @@
       "label": "patchScheduleExceptions()",
       "norm_label": "patchscheduleexceptions()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.test.ts",
-      "source_location": "L3554"
+      "source_location": "L3612"
     },
     {
       "community": 96,
@@ -286729,7 +286729,7 @@
       "label": "readBaseline()",
       "norm_label": "readbaseline()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.test.ts",
-      "source_location": "L3065"
+      "source_location": "L3123"
     },
     {
       "community": 96,
@@ -286738,7 +286738,7 @@
       "label": "readWeekMark()",
       "norm_label": "readweekmark()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.test.ts",
-      "source_location": "L3056"
+      "source_location": "L3114"
     },
     {
       "community": 96,
@@ -286765,7 +286765,7 @@
       "label": "setEveryDayMix()",
       "norm_label": "seteverydaymix()",
       "source_file": "packages/athena-webapp/convex/reports/weekly.test.ts",
-      "source_location": "L1282"
+      "source_location": "L1340"
     },
     {
       "community": 96,

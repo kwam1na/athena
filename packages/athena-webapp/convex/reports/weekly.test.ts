@@ -1252,6 +1252,64 @@ describe("weekly materialization", () => {
     ).not.toBe(weekTruthFingerprint(legacyBaseline));
   });
 
+  it("hashes a lane's knowable truth, so only a real move re-stamps changedAt", () => {
+    // The fingerprint's job here is to be the changedAt dedupe key. It must
+    // therefore move when — and only when — the amendment gate says the mix
+    // moved, or an existing amendment gets a fresh timestamp for nothing.
+    const base = {
+      included: { ...ZERO_WEEK_METRICS },
+      outsideSchedule: { ...ZERO_WEEK_METRICS },
+      scheduleLineage: [] as ReportWeekLineage[],
+    };
+    const cash = {
+      status: "complete" as const,
+      totalMinor: 100,
+      rows: [
+        {
+          method: "cash" as const,
+          amountMinor: 100,
+          shareBasisPoints: 10_000,
+          tenderUseCount: 1,
+        },
+      ],
+    };
+    const card = { ...cash, rows: [{ ...cash.rows[0], method: "card" as const }] };
+
+    // Rollout drain: the baseline froze a complete mix from facts while the
+    // day rows still read unavailable. When repair lands and the folded lane
+    // becomes complete AND IDENTICAL, nothing moved.
+    const duringDrain = weekTruthFingerprint({
+      ...base,
+      paymentMix: { status: "unavailable" },
+      counterpartPaymentMix: cash,
+    });
+    const afterDrain = weekTruthFingerprint({
+      ...base,
+      paymentMix: cash,
+      counterpartPaymentMix: cash,
+    });
+    expect(afterDrain).toBe(duringDrain);
+
+    // A lane poisoned by a correction onto an unclassifiable method also did
+    // not move the week's knowable truth.
+    expect(
+      weekTruthFingerprint({
+        ...base,
+        paymentMix: { status: "unavailable" },
+        counterpartPaymentMix: cash,
+      }),
+    ).toBe(afterDrain);
+
+    // A genuine knowable-to-knowable move must still re-stamp.
+    expect(
+      weekTruthFingerprint({
+        ...base,
+        paymentMix: card,
+        counterpartPaymentMix: cash,
+      }),
+    ).not.toBe(afterDrain);
+  });
+
   it("amends on a method-only move that changes no total", async () => {
     const t = convexTest(schema, modules);
     const storeId = await seedStore(t, "weekly-method-only-amendment");
