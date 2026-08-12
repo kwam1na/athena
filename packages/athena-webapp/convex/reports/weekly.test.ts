@@ -982,6 +982,7 @@ describe("weekly materialization", () => {
       ],
     });
     await t.run(async (ctx) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const days = await ctx.db
         .query("reportDay")
         .withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", storeId))
@@ -1341,6 +1342,7 @@ describe("weekly materialization", () => {
       ctx: MutationCtx,
       mix: ReturnType<typeof laneMix> | { status: "unavailable" },
     ) => {
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       const days = await ctx.db
         .query("reportDay")
         .withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", storeId))
