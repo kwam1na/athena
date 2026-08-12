@@ -2885,6 +2885,95 @@ describe("weekly read contract parity", () => {
     }
   });
 
+  it("projects a revision's own mix and keeps a corrected report close-backed", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const acceptedBaselineId = await seedAcceptedWeek(t, storeId);
+    const frozenMix = {
+      status: "complete" as const,
+      totalMinor: 10_000,
+      rows: [
+        {
+          method: "cash" as const,
+          amountMinor: 10_000,
+          shareBasisPoints: 10_000,
+          tenderUseCount: 3,
+        },
+      ],
+    };
+    await t.run((ctx) =>
+      ctx.db.patch("reportWeekAccepted", acceptedBaselineId, {
+        paymentMix: frozenMix,
+        outsideSchedulePaymentMix: { status: "unavailable" },
+      }),
+    );
+
+    const readAccepted = async () =>
+      t.run((ctx) =>
+        handlerOf(getAcceptedWeeklyDetail)(ctx, {
+          storeId,
+          reportId: "week:2026-07-27",
+        }),
+      );
+
+    expect((await readAccepted())?.paymentMix).toEqual(frozenMix);
+    expect((await readAccepted())?.outsideSchedulePaymentMix).toEqual({
+      status: "unavailable",
+    });
+
+    // A corrected report repairs frozen close-backed history, so it must keep
+    // reading `closeEvidence.payments` rather than presenting two provenances
+    // inside one revision.
+    await t.run((ctx) =>
+      ctx.db.patch("reportWeekAccepted", acceptedBaselineId, {
+        correction: {
+          appliedAt: 2_000,
+          candidateFingerprint: "candidate-v1",
+          closeEvidence: {
+            cash: {
+              cashVarianceMinor: 0,
+              coverage: {
+                scheduledDayCount: 1,
+                status: "complete" as const,
+                usableDayCount: 1,
+              },
+            },
+            expenses: {
+              byQuantity: [],
+              bySpend: [],
+              coveredQuantity: 0,
+              coveredSpendMinor: 0,
+              coverage: {
+                scheduledDayCount: 1,
+                status: "complete" as const,
+                usableDayCount: 1,
+              },
+              quantityRemainder: null,
+              spendRemainder: null,
+            },
+            payments: {
+              coveredTenderValueMinor: 0,
+              coverage: {
+                scheduledDayCount: 1,
+                status: "complete" as const,
+                usableDayCount: 1,
+              },
+              rows: [],
+            },
+          },
+          contractVersion: 1,
+          scheduleLineage: [weeklyLineage[0]!],
+          sourceManifestFingerprint: "source-v1",
+        },
+      }),
+    );
+
+    const corrected = await readAccepted();
+    expect(corrected?.paymentMix).toBeUndefined();
+    expect(corrected?.outsideSchedulePaymentMix).toBeUndefined();
+    expect(corrected?.closeEvidence?.payments.rows).toEqual([]);
+  });
+
   it("resolves accepted top-sales leaders correction-first", async () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);

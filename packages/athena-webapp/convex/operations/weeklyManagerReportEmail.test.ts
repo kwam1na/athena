@@ -128,6 +128,7 @@ function lineageDay(localDate: string, dayClosed: boolean) {
 function buildPayload(args: {
   accepted?: Record<string, unknown>;
   closeEvidence?: ReturnType<typeof makeCloseEvidence>;
+  paymentMix?: unknown;
   scheduleLineage?: Array<ReturnType<typeof lineageDay>>;
 }): DailyManagerReportProps {
   return buildAcceptedWeeklyManagerReportPayload({
@@ -141,6 +142,7 @@ function buildPayload(args: {
       ...args.accepted,
     } as never,
     closeEvidence: args.closeEvidence as never,
+    paymentMix: args.paymentMix as never,
     scheduleLineage: (args.scheduleLineage ?? []) as never,
     store: { name: "Wigclub", slug: "wigclub" } as never,
     timezone: "UTC",
@@ -148,6 +150,81 @@ function buildPayload(args: {
     topItemsUrl: "https://example.test/top-items",
   });
 }
+
+describe("accepted weekly manager report payment mix", () => {
+  const factBackedMix = {
+    status: "complete" as const,
+    totalMinor: 300_000,
+    rows: [
+      {
+        method: "cash" as const,
+        amountMinor: 200_000,
+        shareBasisPoints: 6_667,
+        tenderUseCount: 2,
+      },
+      {
+        method: "mobile_money" as const,
+        amountMinor: 100_000,
+        shareBasisPoints: 3_333,
+        tenderUseCount: 1,
+      },
+    ],
+  };
+
+  it("prefers the baseline's fact-backed mix over frozen close evidence", () => {
+    const payload = buildPayload({
+      paymentMix: factBackedMix,
+      closeEvidence: makeCloseEvidence(),
+    });
+
+    // The stored rows, in the contract's method order — the same order and
+    // values Reports renders for this baseline.
+    expect(payload.paymentTotals).toEqual([
+      {
+        amount: "GH₵2,000",
+        method: "Cash",
+        share: "66.67%",
+        tenderUseCount: 2,
+      },
+      {
+        amount: "GH₵1,000",
+        method: "Mobile Money",
+        share: "33.33%",
+        tenderUseCount: 1,
+      },
+    ]);
+    // Daily Close coverage wording belongs to close-backed evidence only.
+    expect(payload.notes ?? "").not.toContain("scheduled days covered");
+  });
+
+  it("publishes no rows and says so when the mix is unavailable", () => {
+    const payload = buildPayload({
+      paymentMix: { status: "unavailable" },
+      closeEvidence: makeCloseEvidence(),
+    });
+
+    expect(payload.paymentTotals).toEqual([]);
+    expect(payload.notes ?? "").toContain(
+      "Payment method details aren't available for this period.",
+    );
+  });
+
+  it("keeps a known-empty mix distinct from an unavailable one", () => {
+    const payload = buildPayload({
+      paymentMix: { status: "complete", totalMinor: 0, rows: [] },
+      closeEvidence: makeCloseEvidence(),
+    });
+
+    expect(payload.paymentTotals).toEqual([]);
+    expect(payload.notes ?? "").not.toContain("aren't available");
+  });
+
+  it("keeps close-backed rows for a revision with no stored mix", () => {
+    const payload = buildPayload({ closeEvidence: makeCloseEvidence() });
+    expect(payload.paymentTotals?.length).toBeGreaterThan(0);
+    expect(payload.paymentTotals?.[0]?.method).toBe("Cash");
+  });
+});
 
 function countedCashSection(payload: DailyManagerReportProps) {
   return payload.reportSections?.find(

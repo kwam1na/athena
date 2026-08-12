@@ -11,6 +11,7 @@ import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSche
 import { addWeekMetrics } from "../../shared/reportsContract";
 import { formatProductDisplayName } from "../../shared/productDisplayName";
 import type {
+  ReportPaymentMix,
   ReportWeekCloseEvidence,
   ReportWeekCloseEvidenceCoverage,
 } from "../../shared/reportsContract";
@@ -46,6 +47,10 @@ export const getAcceptedWeeklyManagerReportPayload = internalQuery({
     return buildAcceptedWeeklyManagerReportPayload({
       accepted,
       closeEvidence: accepted.closeEvidence,
+      // Baseline-only, exactly as before: the automatic email never consumes
+      // amendment or current truth, so a delayed retry still describes the
+      // report that was accepted.
+      paymentMix: accepted.paymentMix,
       scheduleLineage: accepted.scheduleLineage,
       store,
       timezone,
@@ -153,6 +158,8 @@ export function buildAcceptedWeeklyManagerReportPayload(args: {
   accepted: Doc<"reportWeekAccepted">;
   closeEvidence: Doc<"reportWeekAccepted">["closeEvidence"];
   correctedAt?: number;
+  /** The revision's own fact-backed mix; absent means read close evidence. */
+  paymentMix?: ReportPaymentMix;
   scheduleLineage: Doc<"reportWeekAccepted">["scheduleLineage"];
   store: Doc<"store">;
   timezone: string;
@@ -210,16 +217,29 @@ export function buildAcceptedWeeklyManagerReportPayload(args: {
           evidence.cash.coverage.scheduledDayCount,
         )
       : undefined;
-  const paymentRows =
-    evidence && evidence.payments.coverage.status !== "unavailable"
+  /**
+   * Revision selection, matching Reports exactly: this revision's own stored
+   * mix wins, and frozen close-backed rows are the fallback ONLY when it has
+   * none. A corrected preview is built from `correction.closeEvidence` and is
+   * never handed a stored mix, so it stays close-backed by construction.
+   */
+  const storedMix = args.paymentMix;
+  const paymentRows = storedMix
+    ? storedMix.status === "complete"
+      ? storedMix.rows
+      : []
+    : evidence && evidence.payments.coverage.status !== "unavailable"
       ? evidence.payments.rows
       : [];
   const paymentShareBasisPointsTotal = paymentRows.reduce(
     (total, row) => total + row.shareBasisPoints,
     0,
   );
-  const paymentCoverageNote =
-    evidence && evidence.payments.coverage.status === "partial"
+  const paymentCoverageNote = storedMix
+    ? storedMix.status === "unavailable"
+      ? "Payment method details aren't available for this period."
+      : undefined
+    : evidence && evidence.payments.coverage.status === "partial"
       ? `Payment mix reflects ${evidence.payments.coverage.usableDayCount} of ${evidence.payments.coverage.scheduledDayCount} scheduled days covered.`
       : undefined;
   const paymentRoundingNote =

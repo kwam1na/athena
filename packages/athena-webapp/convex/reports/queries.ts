@@ -381,6 +381,8 @@ function toWeeklyCurrentProjection(
     inventoryAttention: inventoryAttentionProjection(doc.inventoryAttention),
     closePosture: doc.closePosture,
     closeEvidence: doc.closeEvidence,
+    paymentMix: doc.paymentMix,
+    outsideSchedulePaymentMix: doc.outsideSchedulePaymentMix,
     amendment: doc.amendment
       ? weeklyAmendmentProjection(doc.amendment)
       : undefined,
@@ -498,6 +500,16 @@ function toAcceptedWeeklyProjection(
     inventoryAttention: inventoryAttentionProjection(doc.inventoryAttention),
     closePosture: doc.closePosture,
     closeEvidence,
+    /**
+     * Correction-first, like `closeEvidence` and `scheduleLineage` above. A
+     * corrected report is a repair of frozen close-backed history, so it keeps
+     * reading `closeEvidence.payments`; presenting a fact-backed mix beside
+     * corrected close evidence would mix two provenances in one revision.
+     */
+    paymentMix: doc.correction ? undefined : doc.paymentMix,
+    outsideSchedulePaymentMix: doc.correction
+      ? undefined
+      : doc.outsideSchedulePaymentMix,
     // Clients only need to know THAT a correction applied and when. The
     // fingerprints and repair internals stay server-side; the corrected
     // evidence itself already rides `closeEvidence`/`scheduleLineage` above.
