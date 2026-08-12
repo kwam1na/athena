@@ -176,8 +176,9 @@ export function paymentAllocationReportingIdentity(
 }
 
 /**
- * The allocation record is the payment source of truth, so it can state
- * allocation coverage without exposing a tender method to Reports.
+ * Settlement coverage only. This function deliberately returns no tender
+ * method — the gross method evidence rides `paymentAllocationMixDimensions`
+ * below, which is emitted on receipt facts alone.
  */
 export function paymentAllocationReportingDimensions(
   allocation: Pick<Doc<"paymentAllocation">, "amount" | "direction" | "status">,

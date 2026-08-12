@@ -454,8 +454,10 @@ async function applyToOpenDay(
     const countable = normalizeCurrencyCode(fact.currency) === base.currency;
     // Runs for excluded facts too, for the same reason the fold does it there:
     // payment evidence this day had to drop is what makes the mix unavailable.
-    // Newly inserted facts are never quarantined, so currency is the only
-    // exclusion the incremental path can see.
+    // Newly INSERTED facts are never quarantined, so currency is the only
+    // exclusion this path can see; a drift-quarantine on an already-stored row
+    // is caught by the standing `day_open` refold, exactly as it already is for
+    // `flags.quarantinedFactCount`.
     accumulatePaymentMixFact(batchMixState, fact, countable);
     if (!countable) {
       // Foreign-currency facts are counted but never mixed into totals.

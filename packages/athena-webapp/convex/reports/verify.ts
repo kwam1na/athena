@@ -2096,10 +2096,36 @@ export async function verifyCurrentWeekWithCtx(
       )
     : [];
   const expectedCurrentCloseId = expectedClosePosture?.currentCloseId;
+  /**
+   * A method-only correction moves no total, so metric differences alone
+   * cannot explain the amendment it legitimately produces. This mirrors
+   * `laneMixMoved` in `reports/weekly.ts`: only a knowable-to-knowable
+   * difference counts, so a legacy baseline (absent mix) or a lane that merely
+   * stopped being provable never argues for one. Without this the sweep would
+   * alert on exactly the scenario this feature exists to support.
+   *
+   * No extra reads: both documents are already in hand.
+   */
+  const laneMixMoved = (
+    baseline: ReportPaymentMix | undefined,
+    next: ReportPaymentMix | undefined,
+  ) =>
+    baseline?.status === "complete" &&
+    next?.status === "complete" &&
+    JSON.stringify(baseline) !== JSON.stringify(next);
+  const acceptedMixMoved = Boolean(
+    accepted &&
+      (laneMixMoved(accepted.paymentMix, current.paymentMix) ||
+        laneMixMoved(
+          accepted.outsideSchedulePaymentMix,
+          current.outsideSchedulePaymentMix,
+        )),
+  );
   const expectsAmendment = Boolean(
     accepted &&
     (acceptedIncludedDifferences.length > 0 ||
       acceptedOutsideDifferences.length > 0 ||
+      acceptedMixMoved ||
       (expectedCurrentCloseId !== undefined &&
         expectedCurrentCloseId !== accepted.closeId)),
   );

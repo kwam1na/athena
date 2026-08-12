@@ -515,7 +515,6 @@ async function applyPaymentMethodCorrection(
     );
   }
 
-
   return {
     transactionId: args.transaction._id,
     previousPaymentMethod: payment.method,

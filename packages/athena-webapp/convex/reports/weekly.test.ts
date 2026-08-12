@@ -1198,13 +1198,58 @@ describe("weekly materialization", () => {
         outsideSchedulePaymentMix: { status: "unavailable" },
       }),
     ).toBe(preMixHash);
-    // A complete mix is knowable truth and must change the hash.
+    // A complete mix is knowable truth and changes the hash — but only when
+    // the counterpart it is being compared against is knowable too. Absent
+    // means "no counterpart", which is exactly the legacy baseline case.
     expect(
       weekTruthFingerprint({
         ...legacyPayload,
         paymentMix: { status: "complete", totalMinor: 0, rows: [] },
+        counterpartPaymentMix: { status: "complete", totalMinor: 7, rows: [] },
       }),
     ).not.toBe(preMixHash);
+  });
+
+  it("does not re-stamp changedAt when a legacy lane merely becomes knowable", () => {
+    // The accepted baseline is legacy: no mix, forever. Once fold version 6
+    // drains, the CURRENT fold starts producing a complete mix for the same
+    // week. Nothing knowable moved — the baseline never had a knowable mix to
+    // move from — so the truth fingerprint must not budge, or every existing
+    // amendment gets its changedAt reset the first time it is recomputed.
+    const legacyBaseline = {
+      included: { ...ZERO_WEEK_METRICS },
+      outsideSchedule: { ...ZERO_WEEK_METRICS },
+      scheduleLineage: [] as ReportWeekLineage[],
+    };
+    const completeMix = {
+      status: "complete" as const,
+      totalMinor: 0,
+      rows: [],
+    };
+
+    expect(
+      weekTruthFingerprint({
+        ...legacyBaseline,
+        paymentMix: completeMix,
+        counterpartPaymentMix: undefined,
+        counterpartOutsideSchedulePaymentMix: undefined,
+      }),
+    ).toBe(weekTruthFingerprint(legacyBaseline));
+
+    // But when the counterpart lane IS knowable, the mix is truth again and
+    // must move the hash — otherwise a real method-only correction would
+    // never refresh the amendment's changedAt.
+    expect(
+      weekTruthFingerprint({
+        ...legacyBaseline,
+        paymentMix: completeMix,
+        counterpartPaymentMix: {
+          status: "complete",
+          totalMinor: 5,
+          rows: [],
+        },
+      }),
+    ).not.toBe(weekTruthFingerprint(legacyBaseline));
   });
 
   it("amends on a method-only move that changes no total", async () => {

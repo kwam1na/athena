@@ -633,30 +633,49 @@ export function weekTruthFingerprint(args: {
   outsideSchedule: ReportWeekMetrics;
   scheduleLineage: ReportWeekLineage[];
   /**
-   * Only a COMPLETE mix is hashed, and an unknowable one is OMITTED from the
-   * payload entirely rather than hashed as null. That keeps an untouched
-   * legacy baseline producing byte-for-byte the fingerprint it always did, so
-   * a lane that merely stopped being knowable neither masquerades as changed
-   * truth nor re-stamps an existing amendment.
+   * A lane's mix is hashed only when it is COMPLETE **on both sides of the
+   * comparison this fingerprint feeds** — its own value and its counterpart's.
+   * Anything else is OMITTED from the payload entirely rather than hashed as
+   * null, because a key spelled `"paymentMix":null` still changes the
+   * serialized bytes.
+   *
+   * Both halves of that rule matter, and each was a bug on its own:
+   *
+   * - Nulling instead of omitting changed the hash of every legacy row, and
+   *   the stored fingerprint is also the `changedAt` dedupe key — so existing
+   *   amendments would be re-stamped the first time they were recomputed.
+   * - Hashing a lane the counterpart cannot match does the same thing later:
+   *   a legacy baseline never gains a mix, so once fold version 6 drains and
+   *   the current fold starts producing one, the two sides are permanently
+   *   asymmetric and the re-stamp is guaranteed rather than incidental.
+   *
+   * This mirrors `laneMixMoved`'s knowable-to-knowable rule exactly. A week
+   * whose mix truly moved between two knowable states still changes the hash.
    */
   paymentMix?: ReportPaymentMix;
   outsideSchedulePaymentMix?: ReportPaymentMix;
+  /** The other side of the comparison. Absent means "no counterpart to match". */
+  counterpartPaymentMix?: ReportPaymentMix;
+  counterpartOutsideSchedulePaymentMix?: ReportPaymentMix;
 }) {
-  // OMITTED, not nulled: a key spelled `"paymentMix":null` still changes the
-  // serialized bytes, which would re-stamp every existing amendment's
-  // `changedAt` the first time it was recomputed. An unknowable mix must
-  // hash exactly as it did before payment mix existed.
-  const knownMix = (mix: ReportPaymentMix | undefined, key: string) =>
-    mix?.status === "complete" ? { [key]: mix } : {};
+  const knownMix = (
+    mix: ReportPaymentMix | undefined,
+    counterpart: ReportPaymentMix | undefined,
+    key: string,
+  ) =>
+    mix?.status === "complete" && counterpart?.status === "complete"
+      ? { [key]: mix }
+      : {};
   return stableStringHash(
     JSON.stringify({
       included: args.included,
       outsideSchedule: args.outsideSchedule,
       // Part of weekly truth: an approved method correction moves no total, so
       // without this the amendment path would never notice it happened.
-      ...knownMix(args.paymentMix, "paymentMix"),
+      ...knownMix(args.paymentMix, args.counterpartPaymentMix, "paymentMix"),
       ...knownMix(
         args.outsideSchedulePaymentMix,
+        args.counterpartOutsideSchedulePaymentMix,
         "outsideSchedulePaymentMix",
       ),
       scheduleLineage: args.scheduleLineage.map((row) => ({
@@ -694,6 +713,11 @@ function deriveWeeklyAmendment(args: {
     scheduleLineage: args.folded.scheduleLineage,
     paymentMix: args.folded.includedPaymentMix,
     outsideSchedulePaymentMix: args.folded.outsideSchedulePaymentMix,
+    // Gated against the BASELINE's lanes: a legacy baseline never gains a mix,
+    // so a lane that only just became knowable must not move this hash.
+    counterpartPaymentMix: args.accepted.paymentMix,
+    counterpartOutsideSchedulePaymentMix:
+      args.accepted.outsideSchedulePaymentMix,
   });
   /**
    * An amendment is a claim that the week MOVED, so only a knowable-to-knowable
@@ -1670,9 +1694,11 @@ export async function materializeAcceptedWeek(args: {
       closeId: args.closeId,
       included: folded.included,
       outsideSchedule: folded.outsideSchedule,
-      // The same lane mixes being frozen onto the baseline below. Omitting
-      // them here would hash the baseline as legacy and manufacture an
-      // amendment on every acceptance.
+      // The cutoff-bounded lane mixes being frozen onto the baseline below,
+      // so `laneMixMoved` has a knowable baseline to compare against. Omitting
+      // them would SUPPRESS detection, not create a spurious amendment: a
+      // later method-only correction would find no knowable baseline lane and
+      // become invisible to the amendment path.
       paymentMix: folded.includedPaymentMix,
       outsideSchedulePaymentMix: folded.outsideSchedulePaymentMix,
       scheduleLineage: currentFolded.scheduleLineage.map((row) => ({
