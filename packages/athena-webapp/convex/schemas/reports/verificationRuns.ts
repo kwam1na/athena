@@ -56,12 +56,29 @@ export const reportVerificationRunSchema = v.object({
   /** Stable digest of unexplainedDifferences; absent when the set is empty. */
   unexplainedFingerprint: v.optional(v.string()),
   /**
-   * Fields this run actually compared. Its COMPLEMENT within the subject's
-   * field inventory is verify.ts's `unverifiedFields` — what the run declined
-   * to make a claim about — which the U5 alert email renders as its own "not
-   * checked" section (R4: unverified is not mismatched). Optional because
-   * rows written before this capture landed have no honest value: absent
-   * means "unknown", never "nothing was checked".
+   * The checked-field list the CURRENT STREAK's recorded differences were
+   * produced under — NOT, in general, the list this row's `outcome` describes.
+   * Its COMPLEMENT within the subject's field inventory is verify.ts's
+   * `unverifiedFields` — what was declined a claim — which the U5 alert email
+   * renders as its own "not checked" section (R4: unverified is not
+   * mismatched).
+   *
+   * CARRY-FORWARD (see `recordVerificationOutcome`'s F6 note, which points
+   * back here): a run that could not check anything — `error` / `truncated` /
+   * `unavailable`, all of which classify with an empty list — RETAINS the
+   * previous run's list whenever a live `unexplainedFingerprint` is being
+   * carried, because the carried `unexplainedDifferences` are only
+   * interpretable against the list they were computed under. Resetting it to
+   * `[]` while the differences persist would make the email render the same
+   * field as both "checked and wrong" and "not checked". So on such a row
+   * `outcome` and `checkedFields` deliberately describe DIFFERENT runs, and
+   * nothing may render "this run checked N fields" off this column — read it
+   * as the streak's basis, and consult `verifiedAt` / `outcome` for what the
+   * latest tick actually managed to do. Same dual-semantics shape as
+   * `verifiedCertifiedFoldRevision` below.
+   *
+   * Optional because rows written before this capture landed have no honest
+   * value: absent means "unknown", never "nothing was checked".
    */
   checkedFields: v.optional(v.array(v.string())),
   /** Consecutive runs producing this same non-clean outcome; 0 after clean. */

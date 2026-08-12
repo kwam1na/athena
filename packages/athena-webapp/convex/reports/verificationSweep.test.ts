@@ -10,16 +10,19 @@ import type { MutationCtx } from "../_generated/server";
 import { REPORTS_SWEEP_STORE_ALLOWLIST_ENV } from "./sweeper";
 import {
   REPORTS_VERIFICATION_ALERT_EMAILS_ENV,
+  VERIFICATION_DEFERRAL_MAX_HOURS,
   VERIFICATION_RUNNER_HEALTH_KEY,
   VERIFICATION_VOID_FACT_SCAN,
   VERIFICATION_WEDGE_THRESHOLD,
   VERIFICATION_WEEK_ALLOCATION_PROBE,
   VERIFICATION_WEEK_MIN_INTERVAL_HOURS,
+  isDeferralExhausted,
   isReverifyTick,
   isVerificationAlertEmailEnabled,
   normalizeMissingDayResult,
   runVerificationSweepWithCtx,
   shouldEscalateWedge,
+  verificationTickIntervalMs,
   type VerificationSweepCtx,
 } from "./verificationSweep";
 import type {
@@ -57,9 +60,16 @@ const NOW = Date.parse("2026-03-10T12:00:00Z");
 const DAY1 = "2026-03-05";
 const DAY2 = "2026-03-04";
 
+/** The rotation's tick index is cadence-derived, so the stage switch is part
+ * of the fixture for the paging tests. Captured once and restored after every
+ * test so a stage-sensitive test cannot leak into its neighbours. */
+const ORIGINAL_STAGE = process.env.STAGE;
+
 afterEach(() => {
   delete process.env[REPORTS_SWEEP_STORE_ALLOWLIST_ENV];
   delete process.env[REPORTS_VERIFICATION_ALERT_EMAILS_ENV];
+  if (ORIGINAL_STAGE === undefined) delete process.env.STAGE;
+  else process.env.STAGE = ORIGINAL_STAGE;
 });
 
 type Harness = ReturnType<typeof convexTest>;
@@ -1119,6 +1129,19 @@ describe("verification sweep — weekly lane", () => {
     // Honest could-not-check, never alertable — NOT `error`.
     expect(row?.outcome).toBe("truncated");
     expect(row?.lastAlertedFingerprint).toBeUndefined();
+
+    // B5 — the store-scope ledger snapshot is a slice of the tick, so a
+    // counter that only ever bumped the tick-scope total was invisible to the
+    // per-store row a reader actually opens.
+    const ledger = await t.run(async (ctx: MutationCtx) =>
+      ctx.db.query("scheduledRunLedger").withIndex("by_runKey").take(50),
+    );
+    const storeRow = ledger.find(
+      (row2) =>
+        row2.cronFamily === "report-verification-sweep" &&
+        row2.scope === "store",
+    )!;
+    expect(storeRow.snapshotCounts?.weeksOverBudget).toBe(1);
   });
 });
 
@@ -1736,40 +1759,79 @@ describe("verification sweep — store paging and allowlist hygiene (F2/F3)", ()
     });
   }
 
-  it("F2 — the per-tick window rotates hourly and covers a 9-store fleet in 2 ticks", async () => {
+  /** Window store ids for `count` CONSECUTIVE ticks of the current stage's
+   * real cadence, starting at NOW. */
+  async function windowsOverTicks(count: number): Promise<Array<string[]>> {
+    const step = verificationTickIntervalMs();
+    const windows: Array<string[]> = [];
+    for (let tick = 0; tick < count; tick += 1) {
+      const selected = await t.query(
+        internal.reports.verificationSweep.listVerificationStoreCandidates,
+        { now: NOW + tick * step },
+      );
+      windows.push(selected.candidates.map((c) => String(c.storeId)));
+    }
+    return windows;
+  }
+
+  it("F2 — the rotation stride IS the window width: 17 stores are covered in ceil(17/8)=3 ticks, on both cadences", async () => {
+    const fleet = await seedFleet(17);
+    allowlist(fleet);
+
+    // 17 is deliberate. At N = 9 — the fleet size this test used to assert —
+    // ceil(N/8) and the stride-1 bound max(1, N-8+1) are BOTH 2, so the old
+    // test could not tell the two rotations apart. At 17 they diverge hard:
+    // ceil(17/8) = 3 against 17-8+1 = 10, which is what the doc comment
+    // promised versus what a one-store stride actually delivered.
+    for (const stage of ["prod", "dev"] as const) {
+      process.env.STAGE = stage;
+      const windows = await windowsOverTicks(3);
+      expect(windows.map((w) => w.length)).toEqual([8, 8, 8]);
+      // Consecutive windows are DISJOINT while the rotation has not wrapped —
+      // the direct signature of a stride equal to the window width. A stride
+      // of 1 overlaps by 7.
+      expect(windows[0]!.filter((id) => windows[1]!.includes(id))).toEqual([]);
+      expect(
+        new Set([...windows[0]!, ...windows[1]!, ...windows[2]!]).size,
+      ).toBe(17);
+    }
+  });
+
+  it("F2 — the non-prod 6-hourly cadence tiles a 48-store fleet, the size a wall-clock-hour stride starves", async () => {
+    const fleet = await seedFleet(48);
+    allowlist(fleet);
+    process.env.STAGE = "dev";
+
+    // The trap the tick index exists to avoid: multiplying the UTC HOUR index
+    // by the window width makes the effective non-prod stride 6 x 8 = 48, and
+    // 48 mod 48 = 0 — every tick would select stores 0..7 and the other 40
+    // would never be verified again. A cadence-derived index strides by 8 and
+    // tiles the fleet in ceil(48/8) = 6 ticks.
+    const windows = await windowsOverTicks(6);
+    expect(new Set(windows.flat()).size).toBe(48);
+    // ...and each tick really did move on.
+    expect(new Set(windows.map((w) => w.join(","))).size).toBe(6);
+  });
+
+  it("F2 — the window is stable within one tick and the wrap is starvation-free for every fleet size", async () => {
     const fleet = await seedFleet(9);
     allowlist(fleet);
-    const HOUR = 60 * 60 * 1000;
+    process.env.STAGE = "prod";
+    const step = verificationTickIntervalMs();
 
-    const first = await t.query(
-      internal.reports.verificationSweep.listVerificationStoreCandidates,
-      { now: NOW },
-    );
-    const second = await t.query(
-      internal.reports.verificationSweep.listVerificationStoreCandidates,
-      { now: NOW + HOUR },
-    );
-    expect(first.candidates).toHaveLength(8);
-    expect(second.candidates).toHaveLength(8);
-    // The windows actually MOVED between ticks...
-    expect(second.candidates.map((c) => String(c.storeId))).not.toEqual(
-      first.candidates.map((c) => String(c.storeId)),
-    );
-    // ...and two consecutive ticks cover the whole fleet (ceil(9/8) = 2):
-    // under the old slice(0, 8) the 9th store was starved forever.
-    const union = new Set(
-      [...first.candidates, ...second.candidates].map((c) => String(c.storeId)),
-    );
-    expect(union.size).toBe(9);
-
-    // Deterministic within an hour window: a retry re-derives the same set.
+    // Deterministic within a tick window: a retry re-derives the same set, so
+    // a crashed tick re-selects exactly the same work.
+    const first = await windowsOverTicks(1);
     const retry = await t.query(
       internal.reports.verificationSweep.listVerificationStoreCandidates,
-      { now: NOW + 1000 },
+      { now: NOW + step - 1 },
     );
-    expect(retry.candidates.map((c) => String(c.storeId))).toEqual(
-      first.candidates.map((c) => String(c.storeId)),
-    );
+    expect(retry.candidates.map((c) => String(c.storeId))).toEqual(first[0]);
+
+    // Over a full rotation period every store appears — the property that
+    // holds for EVERY N because gcd(8, N) <= 8 = the window width.
+    const windows = await windowsOverTicks(Math.ceil(9 / 8));
+    expect(new Set(windows.flat()).size).toBe(9);
   });
 
   it("F2 — the window is cut AFTER filtering, so a reseeding store does not burn a slot", async () => {
@@ -1810,6 +1872,54 @@ describe("verification sweep — store paging and allowlist hygiene (F2/F3)", ()
     );
   });
 
+  it("B6 — invalid allowlist entries land in the system row's skippedCount, split by cause", async () => {
+    const seeded = await seedStoreWithDay(t, MISMATCH);
+    // A well-formed id whose store doc is gone — an allowlist entry nobody
+    // pruned — is a DIFFERENT operator action from a typo, so the two are
+    // counted apart even though both are "invalid".
+    const deletedStoreId = await t.run(async (ctx: MutationCtx) => {
+      const userId = await ctx.db.insert("athenaUser", {
+        email: "gone@example.test",
+      });
+      const organizationId = await ctx.db.insert("organization", {
+        createdByUserId: userId,
+        name: "Gone",
+        slug: "gone-org",
+      });
+      const store = await ctx.db.insert("store", {
+        createdByUserId: userId,
+        currency: "GHS",
+        name: "Gone",
+        organizationId,
+        slug: "gone",
+      });
+      await ctx.db.delete("store", store);
+      return store;
+    });
+    process.env[REPORTS_SWEEP_STORE_ALLOWLIST_ENV] =
+      `not-a-store-id,${String(deletedStoreId)},${String(seeded.storeId)}`;
+
+    const result = await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });
+    expect(result.storesSkippedMalformed).toBe(1);
+    expect(result.storesSkippedMissing).toBe(1);
+    expect(result.storesSkippedInvalid).toBe(2);
+
+    const rows = await t.run(async (ctx: MutationCtx) =>
+      ctx.db.query("scheduledRunLedger").withIndex("by_runKey").take(50),
+    );
+    const systemRow = rows.find(
+      (row) =>
+        row.cronFamily === "report-verification-sweep" &&
+        row.scope === "system",
+    )!;
+    // Before B6 these two entries appeared in NEITHER candidateCount nor
+    // skippedCount: they were invisible on the row shape a reader projects.
+    expect(systemRow.candidateCount).toBe(1);
+    expect(systemRow.skippedCount).toBe(2);
+    expect(systemRow.snapshotCounts?.storesSkippedMalformed).toBe(1);
+    expect(systemRow.snapshotCounts?.storesSkippedMissing).toBe(1);
+  });
+
   it("F3 — a dead candidates query still records a FAILED system ledger row", async () => {
     await seedStoreWithDay(t, MISMATCH);
 
@@ -1841,6 +1951,395 @@ describe("verification sweep — store paging and allowlist hygiene (F2/F3)", ()
   });
 });
 
+describe("verification sweep — the fold-drain deferral is bounded (B1)", () => {
+  let t: Harness;
+  beforeEach(() => {
+    t = convexTest(schema, modules);
+  });
+
+  const PAST_BUDGET_MS = (VERIFICATION_DEFERRAL_MAX_HOURS + 1) * 60 * 60 * 1000;
+  const HOUR = 60 * 60 * 1000;
+
+  it("isDeferralExhausted is total, and never fires before the runner has spoken", () => {
+    expect(isDeferralExhausted(NOW, null)).toBe(false);
+    expect(isDeferralExhausted(NOW, NOW - 1)).toBe(false);
+    expect(isDeferralExhausted(NOW, NOW - PAST_BUDGET_MS)).toBe(true);
+  });
+
+  it("a day mark that NEVER drains stops deferring and wedges the store", async () => {
+    const seeded = await seedStoreWithDay(t, MISMATCH);
+    // The `fact_cap_exceeded` shape: reports/sweeper.ts re-marks the day on
+    // every pass and the mark never drains, so the day is never folded and
+    // never verified. The re-mark carries a FRESH `markedAt` each time, which
+    // is why mark age cannot be the bound.
+    async function reMark(markedAt: number): Promise<void> {
+      await t.run(async (ctx: MutationCtx) => {
+        const existing = await ctx.db
+          .query("reportDirtyDay")
+          .withIndex("by_storeId_operatingDate", (q) =>
+            q.eq("storeId", seeded.storeId).eq("operatingDate", DAY1),
+          )
+          .unique();
+        if (existing) {
+          await ctx.db.patch("reportDirtyDay", existing._id, { markedAt });
+          return;
+        }
+        await ctx.db.insert("reportDirtyDay", {
+          storeId: seeded.storeId,
+          operatingDate: DAY1,
+          reason: "fact_cap_exceeded",
+          markedAt,
+        });
+      });
+    }
+
+    // Tick 1 — nothing is known yet: defer, and say so.
+    await reMark(NOW);
+    const first = await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });
+    expect(first.daysDeferred).toBe(1);
+    expect(first.daysFoldStuck).toBe(0);
+    expect(first.storesIncomplete).toBe(0);
+    expect(await runRow(t, seeded.storeId, "day", DAY1)).toBeNull();
+
+    // Past the budget the mark is still there and still freshly re-marked —
+    // the fold is stuck, not draining.
+    const stuckTicks = [];
+    for (let tick = 0; tick < VERIFICATION_WEDGE_THRESHOLD; tick += 1) {
+      const now = NOW + PAST_BUDGET_MS + tick * HOUR;
+      await reMark(now);
+      stuckTicks.push(await runVerificationSweepWithCtx(sweepCtx(t), { now }));
+    }
+    for (const tick of stuckTicks) {
+      expect(tick.daysFoldStuck).toBe(1);
+      expect(tick.daysDeferred).toBe(0);
+      expect(tick.storesIncomplete).toBe(1);
+    }
+    // Still not verified — a day the pipeline REFUSED to fold is not compared
+    // against its sources; the fault is the pipeline's, not the data's.
+    expect(await runRow(t, seeded.storeId, "day", DAY1)).toBeNull();
+
+    // ...but the silence is now ALARMED. Before B1 this store deferred forever
+    // and emitted nothing at all.
+    const events = await operationalEventsFor(t, seeded.storeId);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.metadata?.consecutiveIncompleteTicks).toBe(
+      VERIFICATION_WEDGE_THRESHOLD,
+    );
+  });
+
+  it("a weekly mark that NEVER drains stops deferring, wedges the store, and writes no phantom row", async () => {
+    const seeded = await t.run(async (ctx: MutationCtx) => {
+      const store = await seedStore(ctx);
+      await ctx.db.insert("reportWeekCurrent", {
+        storeId: store.storeId,
+        availability: "unavailable",
+        unavailableReason: "no_scheduled_dates",
+        lifecyclePosture: "materializing",
+        amendmentPosture: "none",
+        materializedAt: NOW - 10,
+      });
+      // The `write_failure` shape: every failed rebuildCurrentWeek re-marks
+      // the week, so the mark is permanent and permanently fresh.
+      await ctx.db.insert("reportDirtyWeek", {
+        storeId: store.storeId,
+        reason: "write_failure",
+        markedAt: NOW,
+      });
+      return store;
+    });
+    allowlist([seeded.storeId]);
+
+    const first = await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });
+    expect(first.weeksDeferred).toBe(1);
+    expect(first.weeksFoldStuck).toBe(0);
+    expect(first.storesIncomplete).toBe(0);
+
+    const stuck = [];
+    for (let tick = 0; tick < VERIFICATION_WEDGE_THRESHOLD; tick += 1) {
+      const now = NOW + PAST_BUDGET_MS + tick * HOUR;
+      await t.run(async (ctx: MutationCtx) => {
+        const mark = await ctx.db
+          .query("reportDirtyWeek")
+          .withIndex("by_storeId", (q) => q.eq("storeId", seeded.storeId))
+          .unique();
+        await ctx.db.patch("reportDirtyWeek", mark!._id, { markedAt: now });
+      });
+      stuck.push(await runVerificationSweepWithCtx(sweepCtx(t), { now }));
+    }
+
+    // Every tick, not once every VERIFICATION_WEEK_MIN_INTERVAL_HOURS: the
+    // wedge ladder escalates on CONSECUTIVE incomplete ticks, so a stuck
+    // report that only fired every sixth tick could never build a streak.
+    for (const tick of stuck) {
+      expect(tick.weeksFoldStuck).toBe(1);
+      expect(tick.weeksDeferred).toBe(0);
+      expect(tick.storesIncomplete).toBe(1);
+      expect(tick.alertTransitions).toBe(0);
+    }
+    // Nothing written: `verifiedAt` has to keep meaning "last real verdict",
+    // or recording here would rearm the bound and mute the alarm forever.
+    expect(await runRow(t, seeded.storeId, "week", "current")).toBeNull();
+    expect(await operationalEventsFor(t, seeded.storeId)).toHaveLength(1);
+
+    // The ledger carries the reason the store was marked incomplete.
+    const ledger = await t.run(async (ctx: MutationCtx) =>
+      ctx.db.query("scheduledRunLedger").withIndex("by_runKey").take(50),
+    );
+    const systemRow = ledger.find(
+      (row) =>
+        row.cronFamily === "report-verification-sweep" &&
+        row.scope === "system" &&
+        (row.snapshotCounts?.weeksFoldStuck ?? 0) > 0,
+    );
+    expect(systemRow?.snapshotCounts?.weeksFoldStuck).toBe(1);
+  });
+
+  it("a mark that drains inside the budget still defers silently, and verifies next tick", async () => {
+    const seeded = await t.run(async (ctx: MutationCtx) => {
+      const store = await seedStore(ctx);
+      await ctx.db.insert("reportWeekCurrent", {
+        storeId: store.storeId,
+        availability: "unavailable",
+        unavailableReason: "no_scheduled_dates",
+        lifecyclePosture: "materializing",
+        amendmentPosture: "none",
+        materializedAt: NOW - 10,
+      });
+      await ctx.db.insert("reportDirtyWeek", {
+        storeId: store.storeId,
+        reason: "day_folded",
+        markedAt: NOW,
+      });
+      return store;
+    });
+    allowlist([seeded.storeId]);
+
+    // Deferrals inside the budget are exactly as before: quiet, counted, and
+    // never incomplete — the phantom-mismatch race this guard exists for.
+    const deferredTick = await runVerificationSweepWithCtx(sweepCtx(t), {
+      now: NOW + PAST_BUDGET_MS - HOUR,
+    });
+    expect(deferredTick.weeksDeferred).toBe(1);
+    expect(deferredTick.weeksFoldStuck).toBe(0);
+    expect(deferredTick.storesIncomplete).toBe(0);
+
+    await t.run(async (ctx: MutationCtx) => {
+      const mark = await ctx.db
+        .query("reportDirtyWeek")
+        .withIndex("by_storeId", (q) => q.eq("storeId", seeded.storeId))
+        .unique();
+      await ctx.db.delete("reportDirtyWeek", mark!._id);
+    });
+    const drained = await runVerificationSweepWithCtx(sweepCtx(t), {
+      now: NOW + PAST_BUDGET_MS,
+    });
+    expect(drained.weeksVerified).toBe(1);
+    expect(drained.weeksFoldStuck).toBe(0);
+  });
+
+  it("an unrelated past-cycle acceptance mark does not gate the current cycle", async () => {
+    const seeded = await t.run(async (ctx: MutationCtx) => {
+      const store = await seedStore(ctx);
+      const metrics = {
+        grossSalesMinor: 0,
+        netSalesMinor: 0,
+        refundsMinor: 0,
+        unitsSold: 0,
+        unitsReturned: 0,
+        uncostedRevenueMinor: 0,
+        grossProfitMinor: 0,
+        paymentsCollectedMinor: 0,
+        paymentsRefundedMinor: 0,
+        paymentAllocatedMinor: 0,
+        paymentUnsettledMinor: 0,
+        paymentAllocationCoverage: "complete" as const,
+        paymentAllocationOmittedMinor: 0,
+        paymentHasInvalidAllocation: false,
+      };
+      await ctx.db.insert("reportWeekCurrent", {
+        storeId: store.storeId,
+        availability: "available",
+        cycleStartDate: "2026-03-09",
+        cycleEndDate: "2026-03-15",
+        currency: "GHS",
+        metricVersion: 1,
+        materializedAt: NOW - 10,
+        included: metrics,
+        outsideSchedule: metrics,
+        scheduleLineage: [],
+        completeness: { reason: "complete", complete: true },
+      });
+      const closeId = await ctx.db.insert("dailyClose", {
+        storeId: store.storeId,
+        organizationId: store.organizationId,
+        operatingDate: "2026-03-02",
+        status: "completed",
+        isCurrent: false,
+        readiness: {
+          status: "ready",
+          blockerCount: 0,
+          reviewCount: 0,
+          carryForwardCount: 0,
+          readyCount: 0,
+        },
+        summary: {},
+        sourceSubjects: [],
+        carryForwardWorkItemIds: [],
+        createdAt: NOW - 1000,
+        updatedAt: NOW - 1000,
+      });
+      // Acceptance work for LAST week's baseline. reportDirtyWeek is a
+      // per-store singleton, so without cycle scoping this one mark would hold
+      // the CURRENT cycle's verification silent until it drained.
+      await ctx.db.insert("reportDirtyWeek", {
+        storeId: store.storeId,
+        reason: "acceptance_requested",
+        markedAt: NOW,
+        intent: {
+          cycleStartDate: "2026-03-02",
+          closeId,
+          cutoffObservedAt: NOW - 1000,
+        },
+      });
+      return store;
+    });
+
+    const unrelated = await t.query(
+      internal.reports.verificationSweep.selectWeeklySubject,
+      { storeId: seeded.storeId, now: NOW },
+    );
+    expect(unrelated.deferred).toBe(false);
+    expect(unrelated.subject?.subjectKey).toBe("2026-03-09");
+
+    // ...unless the same mark reports a fold INSIDE the current frame, which
+    // is the pipeline saying this cycle moved too.
+    await t.run(async (ctx: MutationCtx) => {
+      const mark = await ctx.db
+        .query("reportDirtyWeek")
+        .withIndex("by_storeId", (q) => q.eq("storeId", seeded.storeId))
+        .unique();
+      await ctx.db.patch("reportDirtyWeek", mark!._id, {
+        foldedDates: ["2026-03-11"],
+      });
+    });
+    const overlapping = await t.query(
+      internal.reports.verificationSweep.selectWeeklySubject,
+      { storeId: seeded.storeId, now: NOW },
+    );
+    expect(overlapping.deferred).toBe(true);
+    expect(overlapping.subject).toBeNull();
+  });
+});
+
+describe("verification sweep — weekly lane containment (B7)", () => {
+  let t: Harness;
+  beforeEach(() => {
+    t = convexTest(schema, modules);
+  });
+
+  async function seedWeeklyStore(): Promise<SeededStore> {
+    const seeded = await t.run(async (ctx: MutationCtx) => {
+      const store = await seedStore(ctx);
+      await insertReportDay(ctx, store.storeId, DAY1, MISMATCH);
+      await ctx.db.insert("reportWeekCurrent", {
+        storeId: store.storeId,
+        availability: "unavailable",
+        unavailableReason: "no_scheduled_dates",
+        lifecyclePosture: "materializing",
+        amendmentPosture: "none",
+        materializedAt: NOW - 10,
+      });
+      return store;
+    });
+    allowlist([seeded.storeId]);
+    return seeded;
+  }
+
+  it("records error for a failing WEEKLY subject without killing the tick", async () => {
+    const seeded = await seedWeeklyStore();
+
+    const result = await runVerificationSweepWithCtx(
+      // `verifyWeekSubject` is the only query whose args are exactly
+      // { storeId }.
+      sweepCtx(t, {
+        failQueryWhen: (args) =>
+          "storeId" in args && Object.keys(args).length === 1,
+      }),
+      { now: NOW },
+    );
+
+    // The weekly subject records `error` — the analogue of the day lane's
+    // containment, and the assertion that catches a no-op'd
+    // recordErrorOutcome as much as a rethrown catch.
+    const week = await runRow(t, seeded.storeId, "week", "current");
+    expect(week?.outcome).toBe("error");
+    expect(result.subjectsErrored).toBe(1);
+    expect(result.weeksVerified).toBe(0);
+    expect(result.storesIncomplete).toBe(1);
+    // The failing week did not stop the day lane.
+    expect((await runRow(t, seeded.storeId, "day", DAY1))?.outcome).toBe(
+      "mismatch",
+    );
+    expect(result.daysVerified).toBeGreaterThanOrEqual(1);
+  });
+
+  it("a crashed WEEKLY selection is a contained failure, not a dead tick", async () => {
+    const seeded = await seedWeeklyStore();
+
+    const result = await runVerificationSweepWithCtx(
+      // `selectWeeklySubject` is { storeId, now }; the day selection also
+      // carries `reVerify`, and `gatherDaySubject` carries no `now`.
+      sweepCtx(t, {
+        failQueryWhen: (args) =>
+          "storeId" in args && "now" in args && !("reVerify" in args),
+      }),
+      { now: NOW },
+    );
+
+    expect(result.subjectsErrored).toBe(1);
+    expect(result.storesIncomplete).toBe(1);
+    expect(result.weeksVerified).toBe(0);
+    expect(result.weeksDeferred).toBe(0);
+    // The day lane completed, and the ledger sees a failure rather than a
+    // clean tick.
+    expect((await runRow(t, seeded.storeId, "day", DAY1))?.outcome).toBe(
+      "mismatch",
+    );
+    const ledger = await t.run(async (ctx: MutationCtx) =>
+      ctx.db.query("scheduledRunLedger").withIndex("by_runKey").take(50),
+    );
+    const storeRow = ledger.find(
+      (row) =>
+        row.cronFamily === "report-verification-sweep" && row.scope === "store",
+    )!;
+    expect(storeRow.failedCount).toBe(1);
+    expect(storeRow.snapshotCounts?.incomplete).toBe(1);
+  });
+
+  it("an errored weekly subject is re-selected and clears on the next tick", async () => {
+    const seeded = await seedWeeklyStore();
+    await runVerificationSweepWithCtx(
+      sweepCtx(t, {
+        failQueryWhen: (args) =>
+          "storeId" in args && Object.keys(args).length === 1,
+      }),
+      { now: NOW },
+    );
+    expect((await runRow(t, seeded.storeId, "week", "current"))?.outcome).toBe(
+      "error",
+    );
+
+    // An `error` row has no verified generation, so it re-runs as soon as the
+    // frequency bound allows — the weekly analogue of the day lane's rule.
+    await runVerificationSweepWithCtx(sweepCtx(t), {
+      now: NOW + WEEK_INTERVAL_MS + 1,
+    });
+    expect((await runRow(t, seeded.storeId, "week", "current"))?.outcome).toBe(
+      "unavailable",
+    );
+  });
+});
+
 describe("verification sweep — alert payload integrity (F6/F7)", () => {
   let t: Harness;
   beforeEach(() => {
@@ -1851,6 +2350,16 @@ describe("verification sweep — alert payload integrity (F6/F7)", () => {
     const seeded = await seedStoreWithDay(t, MISMATCH);
     await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });
     const broken = await runRow(t, seeded.storeId, "day", DAY1);
+    // B8 — pin the PREMISE, not just the conclusion. Every assertion below
+    // reads "carried == broken", which is vacuously satisfiable if the first
+    // sweep failed to produce a live streak at all (a non-mismatch outcome
+    // leaves both fingerprints undefined and both checked lists incomparable).
+    // Asserting the seeded mismatch really was recorded means a future failure
+    // names its own cause instead of surfacing as an opaque `[]` mismatch six
+    // lines later.
+    expect(broken?.outcome).toBe("mismatch");
+    expect(broken?.unexplainedFingerprint).toEqual(expect.any(String));
+    expect(broken!.unexplainedDifferences.length).toBeGreaterThan(0);
     expect(broken?.checkedFields?.length).toBeGreaterThan(0);
 
     // An `error` run records checkedFields [] from the classifier; while the
@@ -1874,6 +2383,44 @@ describe("verification sweep — alert payload integrity (F6/F7)", () => {
     for (const difference of carried!.unexplainedDifferences) {
       expect(carried!.checkedFields).toContain(difference.field);
     }
+  });
+
+  it("B4 — a could-not-check run carries an ABSENT checked list forward as absent, never as []", async () => {
+    const seeded = await seedStoreWithDay(t, MISMATCH);
+    await runVerificationSweepWithCtx(sweepCtx(t), { now: NOW });
+
+    // A row written before the checkedFields capture landed: absent means
+    // "unknown", never "nothing was checked" (the email honours that with
+    // `?? inventory`).
+    await t.run(async (ctx: MutationCtx) => {
+      const row = (await ctx.db
+        .query("reportVerificationRun")
+        .withIndex("by_store_subject", (q) =>
+          q
+            .eq("storeId", seeded.storeId)
+            .eq("subjectKind", "day")
+            .eq("subjectKey", DAY1),
+        )
+        .unique())!;
+      await ctx.db.patch("reportVerificationRun", row._id, {
+        checkedFields: undefined,
+      });
+    });
+
+    await patchDay(t, seeded.storeId, DAY1, { certifiedFoldRevision: 2 });
+    await runVerificationSweepWithCtx(
+      sweepCtx(t, { failQueryWhen: (args) => args.operatingDate === DAY1 }),
+      { now: NOW + 1 },
+    );
+
+    const carried = await runRow(t, seeded.storeId, "day", DAY1);
+    expect(carried?.outcome).toBe("error");
+    // The streak is live...
+    expect(carried?.unexplainedFingerprint).toEqual(expect.any(String));
+    // ...and "unknown" survived as unknown. Writing [] here would persist
+    // exactly the claim F6 exists to prevent: every field rendered as "not
+    // checked" while the carried differences say they were checked and wrong.
+    expect(carried?.checkedFields).toBeUndefined();
   });
 
   it("F7 — a superseded alertSeq suppresses the delayed intent; the current one renders", async () => {

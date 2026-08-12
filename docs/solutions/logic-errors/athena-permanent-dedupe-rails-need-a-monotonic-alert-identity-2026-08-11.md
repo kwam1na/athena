@@ -20,7 +20,7 @@ tags:
   - fingerprint
   - streaks
   - test-blind-spot
-delivery_diff_fingerprint: 755ebf4c7e5f8a576f3f4794f71cb95b17a494870494aec06a0b80b0546a0449
+delivery_diff_fingerprint: fdecbe083f6389d006b3812aae7eeb5f0b58a7a7a9bc03faf49841bc8fda5e06
 ---
 
 # Permanent-dedupe rails need a monotonic alert identity
@@ -82,11 +82,28 @@ return joinKeyComponents([
 ]);
 ```
 
+The key change is only half the fix. The other half is at **send time**:
+`getReportVerificationAlertPayload`
+(`convex/operations/reportVerificationAlertEmail.ts`) now re-reads the run row
+and **refuses an intent whose `alertSeq` no longer matches it**, and the
+registry forwards the component into that query for exactly that check. Without
+it, the same change that lets an oscillating A → B → A alert three times also
+makes a late-dispatched *first* A intent renderable against the row that the
+*second* A now owns — the identical email goes out twice. The key change alone
+converts a silent DROP into a silent DUPLICATE; it does not remove the failure,
+it moves it. Generally: **a monotonic identity added to a dedupe key must be
+re-validated wherever the payload is rebuilt from a fresh read**, because the
+key makes the intent unique while the payload is still reconstructed from
+whatever the row says at dispatch.
+
 Two ordering details matter:
 
-1. `alertSeq` is optional on pre-existing rows, so the key builder must give
-   the missing case an explicit honest value (`?? 0`) rather than letting
-   `undefined` stringify into a permanent key.
+1. `alertSeq` is optional on the row, so the key builder must give the missing
+   case an explicit honest value (`?? 0`) rather than letting `undefined`
+   stringify into a permanent key. (In this delivery the `reportVerificationRun`
+   table itself landed in the same diff, so no pre-existing rows ever lacked the
+   column — the `?? 0` is forward-compat hygiene for the optional validator, not
+   an accommodation of live legacy data, and is **not** a backfill precedent.)
 2. The tests now cover the actual hole: the pure-layer test gives an A → B → A
    oscillation three distinct alert identities, and the orchestrator test
    (`verificationSweep.test.ts`, "T2b") drives the oscillation **inside one
@@ -111,18 +128,26 @@ require the decision counter itself to repeat, which it structurally cannot.
   every key component: if all of them are derived from current state, some
   state cycle will rebuild an old key. Include at least one monotonic,
   never-reset component (sequence, decision counter).
-- A monotonic column added to an existing table is optional on old rows; the
-  key builder must map absence to a stable explicit value, never let
-  `String(undefined)` into a permanent key.
+- An optional monotonic column (whether genuinely absent on old rows, or merely
+  declared optional as here) forces the key builder to map absence to a stable
+  explicit value — never let `String(undefined)` into a permanent key.
 - When a state machine has two re-alert paths (epoch bump vs. fingerprint
   churn), a test per path — the flap test must *freeze* the variable the other
   path relies on, otherwise it proves the wrong path and greenwashes the hole.
-- Same delivery, adjacent trap: streak state carried across runs must persist
-  its tracked **field list**, not just the fingerprint (a hash is not
-  invertible). Carrying only the hash makes the next run's
-  "still-the-same-fields" check a vacuous `.every` over `[]`, which clears
-  streaks unchecked (`verificationClassify.ts`,
-  `VerificationStreakState.unexplainedFields`).
+- Same delivery, adjacent trap, hit **twice**: every companion field that
+  carried state is *interpreted against* must carry forward with it. A hash is
+  not invertible, so a field list reset to `[]` while the hash persists does not
+  fail loudly — it silently answers a different question. Two instances, one
+  rule: (a) carrying only the fingerprint makes the next run's
+  "still-the-same-fields" check a vacuous `.every` over `[]`, clearing streaks
+  unchecked (`verificationClassify.ts`,
+  `VerificationStreakState.unexplainedFields`); (b) resetting `checkedFields` on
+  a could-not-check run that still carries `unexplainedDifferences` makes the
+  alert email's *complement* (the "not checked" section) lie, rendering the same
+  field as both "checked and wrong" and "not checked" — hence the carry-forward
+  in `recordVerificationOutcome` (`verificationSweep.ts`, F6) and the
+  dual-semantics note on the `checkedFields` schema field. Whenever you persist
+  a digest, ask what must travel alongside it to stay readable.
 
 ## Related Issues
 

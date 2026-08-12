@@ -15,7 +15,10 @@ import { RegisterCloseoutVarianceAlert } from "../emails/RegisterCloseoutVarianc
 import { ReportVerificationAlert } from "../emails/ReportVerificationAlert";
 
 export type NotificationCategory =
-  "cash_controls" | "eod" | "system_health" | "approvals";
+  | "cash_controls"
+  | "eod"
+  | "system_health"
+  | "approvals";
 export type NotificationChannel = "email" | "in_app";
 export type NotificationPayload = Record<string, unknown>;
 export type PreparedNotificationEmail = { subject: string; html: string };
@@ -64,7 +67,10 @@ type CloseoutMatchPayload = {
 };
 
 export type DailyManagerReportSendStatus =
-  "applied" | "prepared" | "skipped" | "failed";
+  | "applied"
+  | "prepared"
+  | "skipped"
+  | "failed";
 
 type DailyManagerReportPayload = {
   storeId: Id<"store">;
@@ -383,9 +389,7 @@ export const weeklyReportCorrectionPreview = internalAction({
   handler: async (
     ctx,
     args,
-  ): Promise<
-    (PreparedNotificationEmail & { contentDigest: string }) | null
-  > => {
+  ): Promise<(PreparedNotificationEmail & { contentDigest: string }) | null> => {
     const report = await ctx.runQuery(
       internal.operations.weeklyManagerReportEmail
         .getCorrectedWeeklyManagerReportPayload,

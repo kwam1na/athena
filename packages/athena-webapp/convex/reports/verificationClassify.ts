@@ -1,9 +1,9 @@
 import type {
+  VerifiedMetrics,
   VerifyCurrentWeekResult,
   VerifyDayResult,
   VerifyDifference,
   VerifyPaymentDifference,
-  VerifyUnverifiedField,
 } from "./verify";
 
 /**
@@ -256,7 +256,58 @@ const WEEK_CONSISTENCY_FIELDS = [
   "amendmentMatches",
   "inventoryMatches",
   "closeEvidenceMatches",
-] as const;
+] as const satisfies readonly WeekConsistencyLane[];
+
+/**
+ * COMPLETENESS assertions for the three inventories above.
+ *
+ * The `satisfies` clauses catch RENAMES (a listed name that no longer exists in
+ * the source union stops satisfying it) but say nothing about ADDITIONS: a new
+ * key on `VerifiedMetrics` would simply be absent from both `checkedFields` and
+ * the alert email's inventory, and because `confirmsClean` requires every
+ * tracked field to appear in `checkedFields`, a streak on that new field could
+ * NEVER clear. These type-only assertions fail the build instead: `Exclude`
+ * leaves the uncovered names, and a non-`never` residue makes the annotated
+ * `true` unassignable.
+ */
+type _MissingMetricField = Exclude<
+  keyof VerifiedMetrics,
+  (typeof DAY_METRIC_FIELDS)[number]
+>;
+const _assertDayMetricFieldsCovered: [_MissingMetricField] extends [never]
+  ? true
+  : false = true;
+
+type _MissingPostureField = Exclude<
+  VerifyPaymentDifference["field"],
+  (typeof PAYMENT_POSTURE_FIELDS)[number]
+>;
+const _assertPaymentPostureFieldsCovered: [_MissingPostureField] extends [never]
+  ? true
+  : false = true;
+
+/**
+ * The verified week's consistency lanes, derived from the result shape rather
+ * than hand-listed: every boolean key whose name ends in `Matches`. The week's
+ * own `matches` (lowercase, the aggregate) is excluded by the casing.
+ */
+type WeekConsistencyLane = {
+  [
+    K in keyof Extract<VerifyCurrentWeekResult, { outcome: "verified" }>
+  ]: K extends `${string}Matches` ? K : never;
+}[keyof Extract<VerifyCurrentWeekResult, { outcome: "verified" }>];
+
+type _MissingWeekLane = Exclude<
+  WeekConsistencyLane,
+  (typeof WEEK_CONSISTENCY_FIELDS)[number]
+>;
+const _assertWeekLanesCovered: [_MissingWeekLane] extends [never]
+  ? true
+  : false = true;
+
+void _assertDayMetricFieldsCovered;
+void _assertPaymentPostureFieldsCovered;
+void _assertWeekLanesCovered;
 
 /**
  * Every field a DAY verification run can make a claim about — the composed
@@ -431,7 +482,10 @@ export function classifyDayResult(
   result: VerifyDayResult,
   context?: DayClassificationContext,
 ): VerificationClassification {
-  const unverified = new Set<VerifyUnverifiedField>(result.unverifiedFields);
+  // Widened to `Set<string>` (as verify.ts itself does) so metric names that
+  // are not members of VerifyUnverifiedField can be asked about without a cast
+  // asserting something false to get the answer `false`.
+  const unverified = new Set<string>(result.unverifiedFields);
   const allDifferences: ClassifiedDifference[] = [
     ...result.differences,
     ...result.paymentDifferences,
@@ -453,9 +507,7 @@ export function classifyDayResult(
   }
 
   const checkedFields = [
-    ...DAY_METRIC_FIELDS.filter(
-      (field) => !unverified.has(field as VerifyUnverifiedField),
-    ),
+    ...DAY_METRIC_FIELDS.filter((field) => !unverified.has(field)),
     ...PAYMENT_POSTURE_FIELDS.filter((field) => !unverified.has(field)),
   ];
 
@@ -489,11 +541,23 @@ export function classifyDayResult(
  * `no_scheduled_dates`, and every reason on a non-allowlisted store — is an
  * expected state, recorded and never alerted.
  */
-const CONFIG_DEFECT_UNAVAILABLE_REASONS = new Set([
+type WeekUnavailableReason = Extract<
+  VerifyCurrentWeekResult,
+  { outcome: "unavailable" }
+>["reason"];
+
+// Tethered to verify.ts's reason union in BOTH directions: the `satisfies`
+// rejects a member that no longer exists there (a bare `new Set([...])` widens
+// to `Set<string>`, so renaming a reason would silently reclassify a
+// config/pipeline defect on an allowlisted store as an expected record-only
+// state — an alert that quietly stops being raised), while the explicit
+// `Set<WeekUnavailableReason>` keeps `.has` answerable for every reason,
+// including the ones deliberately absent from this allowlist.
+const CONFIG_DEFECT_UNAVAILABLE_REASONS = new Set<WeekUnavailableReason>([
   "missing_schedule",
   "missing_timezone",
   "missing_day_fold",
-]);
+] as const satisfies readonly WeekUnavailableReason[]);
 
 export function classifyWeekResult(
   result: VerifyCurrentWeekResult,
@@ -527,7 +591,10 @@ export function classifyWeekResult(
     });
   }
 
-  const unverified = new Set<VerifyUnverifiedField>(result.unverifiedFields);
+  // Widened to `Set<string>` (as verify.ts itself does) so metric names that
+  // are not members of VerifyUnverifiedField can be asked about without a cast
+  // asserting something false to get the answer `false`.
+  const unverified = new Set<string>(result.unverifiedFields);
   const included: ClassifiedDifference[] = [
     ...result.includedDifferences,
     ...result.includedPaymentDifferences,
@@ -562,9 +629,7 @@ export function classifyWeekResult(
   }
 
   const checkedFields = [
-    ...DAY_METRIC_FIELDS.filter(
-      (field) => !unverified.has(field as VerifyUnverifiedField),
-    ),
+    ...DAY_METRIC_FIELDS.filter((field) => !unverified.has(field)),
     ...PAYMENT_POSTURE_FIELDS.filter((field) => !unverified.has(field)),
     ...WEEK_CONSISTENCY_FIELDS,
   ];

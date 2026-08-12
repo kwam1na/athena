@@ -66,13 +66,55 @@ import {
  * Stores verified per tick. Production today folds a handful of allowlisted
  * stores (single-digit); 8 covers the fleet in one tick with headroom. A
  * larger fleet rotates statelessly: the per-tick window starts at
- * (UTC hour index mod eligible-store count) and wraps, so a fleet of N
- * eligible stores is fully covered every ceil(N/8) hourly ticks with no
- * stored cursor (see `listVerificationStoreCandidates`). Reseeding and
- * malformed allowlist entries are filtered out BEFORE the window is cut, so a
- * skipped store never burns one of the 8 slots.
+ * (tick index × this width, mod eligible-store count) and wraps, so a fleet of
+ * N eligible stores is fully covered every ceil(N/8) ticks with no stored
+ * cursor (see `listVerificationStoreCandidates`, which carries the proof).
+ * Reseeding and malformed allowlist entries are filtered out BEFORE the window
+ * is cut, so a skipped store never burns one of the 8 slots.
  */
 export const VERIFICATION_STORES_PER_TICK = 8;
+
+/**
+ * Tick cadence, in minutes, MIRRORING the `report-verification-sweep`
+ * registration in `crons.ts`: hourly in prod, every six hours everywhere else.
+ *
+ * WHY THIS EXISTS AND WHY IT IS NOT `SCHEDULED_CRON_INTERVAL_MINUTES` (B2).
+ * The rotation below needs a TICK INDEX that advances by exactly one per
+ * actual execution — that is the whole basis of the "stride equals the window
+ * width" coverage proof. Deriving it from wall-clock hours makes the stride
+ * 1 in prod (windows overlap by 7; full coverage takes N-7 ticks, not
+ * ceil(N/8)); deriving it from the ledger's `SCHEDULED_CRON_INTERVAL_MINUTES`
+ * (60, the run-key window, which is prod-shaped for both stages) makes the
+ * non-prod index jump by 6 per tick, i.e. a stride of 48 mod N — and wherever
+ * gcd(48, N) > 8 whole blocks of stores are never selected at all. The index
+ * has to come from the REAL cadence of the deployment it runs on, so both
+ * numbers live here beside the cron that must agree with them.
+ *
+ * `crons.test.ts` is the guard that these stay in step with `crons.ts`.
+ */
+export const VERIFICATION_TICK_MINUTES_PROD = 60;
+export const VERIFICATION_TICK_MINUTES_NON_PROD = 6 * 60;
+
+/** Milliseconds between two scheduled ticks on THIS deployment. */
+export function verificationTickIntervalMs(): number {
+  return (
+    (process.env.STAGE === "prod"
+      ? VERIFICATION_TICK_MINUTES_PROD
+      : VERIFICATION_TICK_MINUTES_NON_PROD) *
+    60 *
+    1000
+  );
+}
+
+/**
+ * The stateless rotation cursor: a monotonic counter that advances by exactly
+ * one per scheduled tick, derived from the clock and the cadence rather than
+ * stored. A crashed tick changes nothing — the next one simply reads the next
+ * index.
+ */
+export function verificationTickIndex(now: number): number {
+  return Math.floor(now / verificationTickIntervalMs());
+}
 
 /**
  * Trailing operating dates examined per store. 14 = a fortnight: covers a
@@ -183,6 +225,41 @@ export const VERIFICATION_REVERIFY_RECENT_DAYS = 3;
  * subjects = 3 extra day verifications per store per day.
  */
 export const VERIFICATION_REVERIFY_EVERY_HOURS = 24;
+
+/**
+ * The longest a subject may stay SILENT behind the fold-drain guard, in hours.
+ *
+ * WHY (B1). Both lanes defer while the fold has not drained: verifying against
+ * output the pipeline already knows is stale would mint a phantom mismatch.
+ * But a dirty mark is NOT guaranteed to drain. `reports/sweeper.ts` re-marks a
+ * day `fact_cap_exceeded` on every pass ("will keep refusing until the cap is
+ * raised") and re-marks `reportDirtyWeek` `write_failure` after every failed
+ * `rebuildCurrentWeek`; in both cases the projection is genuinely stale, which
+ * is PRECISELY what verification exists to surface, and an unbounded guard
+ * suppresses the detector exactly when the pipeline is broken.
+ *
+ * WHY NOT MARK AGE. The obvious bound — "defer only while the mark is fresh" —
+ * does not hold: `markDayDirty` / `markWeekDirty` UPSERT, patching
+ * `markedAt: now` on the existing row, so every re-mark refreshes the age and
+ * the two failure modes above (plus a busy store's per-fact `day_open` upsert)
+ * keep a mark permanently "fresh". Mark age measures write traffic, not drain
+ * progress. The honest question is instead: how long has this SUBJECT gone
+ * without any verdict at all? That is already persisted — `verifiedAt` on the
+ * subject's run row, and `createdAt` on the store's runner-health row for a
+ * subject that has never been verified — so the bound needs no new column and
+ * no new counter.
+ *
+ * Past the bound the guard STOPS deferring: the tick is recorded incomplete
+ * for the store, every tick, so the existing wedge ladder escalates within
+ * VERIFICATION_WEDGE_THRESHOLD ticks and keeps re-alerting. Silence becomes an
+ * alarm rather than a counter nobody reads. Nothing is written to the run row
+ * on this path, deliberately: `verifiedAt` has to keep meaning "last real
+ * verdict", or refreshing it would rearm the bound and mute the alarm forever.
+ *
+ * 24h = four missed 6-hour weekly windows (VERIFICATION_WEEK_MIN_INTERVAL_
+ * HOURS), i.e. well past any legitimate drain, and one day of unverified days.
+ */
+export const VERIFICATION_DEFERRAL_MAX_HOURS = 24;
 
 /**
  * Consecutive incomplete ticks before a store's runner escalates to an
@@ -334,6 +411,23 @@ export function isVerificationAlertEmailEnabled(storeId: string): boolean {
  * VERIFICATION_REVERIFY_EVERY_HOURS, so a missed lane tick is caught up by the
  * very next hourly tick. This function is the schedule; the age check is the
  * guarantee.
+ *
+ * B3 NOTE — this gate RESONATES with the store rotation, and the age check
+ * above is why that is survivable rather than a hole. Re-verify ticks are the
+ * tick indices ≡ 0 (mod R) where R is this cadence expressed in ticks (24 in
+ * prod, 4 in non-prod), and `listVerificationStoreCandidates` starts its
+ * window at (tickIndex × S) mod N for S = VERIFICATION_STORES_PER_TICK. So the
+ * window starts seen ON re-verify ticks are the multiples of gcd(R·S, N), and
+ * whenever gcd(R·S, N) > S some stores never land on a SCHEDULED re-verify
+ * tick at all (prod: N = 16 starves 8 stores, N = 24 starves 16). Those stores
+ * are not starved of the LANE, only of its schedule: they are still selected
+ * every ceil(N/S) ticks, and `selectVerificationDaySubjects` admits their
+ * recent settled days on age alone once the run row passes
+ * VERIFICATION_REVERIFY_EVERY_HOURS. Worst-case lane latency for such a store
+ * is therefore 24h + ceil(N/S) ticks instead of exactly 24h. Left as a
+ * documented skew rather than fixed with a rotation offset, because every
+ * offset that breaks the resonance also breaks the exact ceil(N/S) coverage
+ * tiling the rotation is built on, and the fleet is single-digit.
  */
 export function isReverifyTick(now: number): boolean {
   return (
@@ -428,8 +522,8 @@ type StoreCandidate = {
 export const listVerificationStoreCandidates = internalQuery({
   args: {
     /** Tick instant — the stateless rotation cursor: the selection window
-     * starts at (UTC hour index mod eligible count), so consecutive hourly
-     * ticks walk the whole fleet with nothing stored. */
+     * starts at (tick index × window width, mod eligible count), so
+     * consecutive ticks TILE the fleet with nothing stored. */
     now: v.number(),
   },
   handler: async (
@@ -438,10 +532,15 @@ export const listVerificationStoreCandidates = internalQuery({
   ): Promise<{
     candidates: StoreCandidate[];
     storesSkippedReseeding: number;
-    /** Allowlist entries that are not valid store ids (malformed env text) or
-     * whose store doc no longer exists. Skipped, never fatal: one bad entry
-     * must not kill the whole tick. */
-    storesSkippedInvalid: number;
+    /** Allowlist entries that are not valid store ids — raw operator text that
+     * does not name a store at all. Skipped, never fatal: one bad entry must
+     * not kill the whole tick. */
+    storesSkippedMalformed: number;
+    /** Allowlist entries that ARE well-formed store ids whose store doc no
+     * longer exists — a deleted store still listed in the env. Counted apart
+     * from malformed text (B6) because the two want different operator
+     * actions: fix the typo, versus prune the allowlist. */
+    storesSkippedMissing: number;
   }> => {
     // The allowlist IS the universe: a store outside it is never read at all
     // (the ticket's "distinct handling without source reads" — absence of any
@@ -449,19 +548,20 @@ export const listVerificationStoreCandidates = internalQuery({
     const allowed = [...readStoreAllowlist()].sort();
     const eligible: StoreCandidate[] = [];
     let storesSkippedReseeding = 0;
-    let storesSkippedInvalid = 0;
+    let storesSkippedMalformed = 0;
+    let storesSkippedMissing = 0;
 
     for (const raw of allowed) {
       // The env value is raw operator text: normalize instead of casting, so
       // a malformed entry is a counted skip rather than a thrown read.
       const storeId = ctx.db.normalizeId("store", raw);
       if (storeId === null) {
-        storesSkippedInvalid += 1;
+        storesSkippedMalformed += 1;
         continue;
       }
       const store = await ctx.db.get("store", storeId);
       if (!store) {
-        storesSkippedInvalid += 1;
+        storesSkippedMissing += 1;
         continue;
       }
       // Reseed guard (sweeper idiom): a mid-reseed store's derived rows are
@@ -479,22 +579,44 @@ export const listVerificationStoreCandidates = internalQuery({
     }
 
     // Stateless rotation over the ELIGIBLE list (filtered first, so skips do
-    // not burn slots): the window starts at the UTC hour index mod N and
-    // wraps, taking at most VERIFICATION_STORES_PER_TICK entries. Coverage
-    // bound: every eligible store is selected at least once every ceil(N/8)
-    // hourly ticks — no store is permanently starved, and no cursor is
-    // stored (a crashed tick changes nothing; the next hour's window simply
-    // starts one step further).
+    // not burn slots): the window starts at (tickIndex × S) mod N for
+    // S = VERIFICATION_STORES_PER_TICK, wraps, and takes min(N, S) entries.
+    //
+    // THE STRIDE IS THE WINDOW WIDTH (B2), and that is the whole proof. Ticks
+    // i = 0 … ceil(N/S) − 1 have starts 0, S, 2S, … , all of them < N (because
+    // S·(ceil(N/S) − 1) < N), so they are literal multiples of S rather than
+    // wrapped ones, and their windows tile [0, S·ceil(N/S)) ⊇ [0, N). Every
+    // eligible store is therefore selected at least once every ceil(N/S)
+    // ticks, for EVERY N — nothing is starved, and no cursor is stored (a
+    // crashed tick changes nothing; the next tick's window simply starts one
+    // full window further on).
+    //
+    // The stride is what makes the bound true. Advancing by ONE store per
+    // tick — the shape this replaced — leaves consecutive windows overlapping
+    // by S−1 and full coverage takes max(1, N − S + 1) ticks: at N = 17 that
+    // is 10 ticks where the comment promised 3. Multiplying the WALL-CLOCK
+    // HOUR by S instead is worse than either: it is correct in prod and
+    // silently reintroduces permanent starvation in non-prod, where ticks are
+    // six hours apart and the effective stride becomes 6S = 48 mod N (with
+    // gcd(48, N) > S, whole blocks are never selected). Hence
+    // `verificationTickIndex`, which counts REAL ticks on this deployment.
     const candidates: StoreCandidate[] = [];
     if (eligible.length > 0) {
-      const start = Math.floor(args.now / (60 * 60 * 1000)) % eligible.length;
+      const start =
+        (verificationTickIndex(args.now) * VERIFICATION_STORES_PER_TICK) %
+        eligible.length;
       const count = Math.min(eligible.length, VERIFICATION_STORES_PER_TICK);
       for (let index = 0; index < count; index += 1) {
         candidates.push(eligible[(start + index) % eligible.length]!);
       }
     }
 
-    return { candidates, storesSkippedReseeding, storesSkippedInvalid };
+    return {
+      candidates,
+      storesSkippedReseeding,
+      storesSkippedMalformed,
+      storesSkippedMissing,
+    };
   },
 });
 
@@ -533,6 +655,37 @@ async function hasPendingDirtyMark(
   return mark !== null;
 }
 
+/** The store's runner-health row — the store-scope "when did this runner last
+ * say anything" anchor, used to bound the fold-drain deferral of a subject
+ * that has NEVER produced a run row of its own. */
+async function loadRunnerHealthRow(
+  ctx: QueryCtx,
+  storeId: Id<"store">,
+): Promise<Doc<"reportVerificationRun"> | null> {
+  return loadRunRow(ctx, storeId, "week", VERIFICATION_RUNNER_HEALTH_KEY);
+}
+
+/**
+ * Has the fold-drain guard held this subject silent past its budget?
+ *
+ * `lastVerdictAt` is the most recent instant this subject (or, for a subject
+ * never verified, this store's runner) actually said something. `null` means
+ * the runner has never spoken at all — the store's very first tick — where
+ * there is nothing to have exceeded, so deferring is still right.
+ *
+ * See VERIFICATION_DEFERRAL_MAX_HOURS for why the bound is measured on the
+ * verdict rather than on the dirty mark's own age.
+ */
+export function isDeferralExhausted(
+  now: number,
+  lastVerdictAt: number | null,
+): boolean {
+  if (lastVerdictAt === null) return false;
+  return (
+    now - lastVerdictAt >= VERIFICATION_DEFERRAL_MAX_HOURS * 60 * 60 * 1000
+  );
+}
+
 export const selectVerificationDaySubjects = internalQuery({
   args: {
     storeId: v.id("store"),
@@ -545,7 +698,16 @@ export const selectVerificationDaySubjects = internalQuery({
   handler: async (
     ctx,
     args,
-  ): Promise<{ dates: string[]; deferred: number }> => {
+  ): Promise<{
+    dates: string[];
+    /** Dates the fold-drain guard deferred WITHIN its budget — the fold is
+     * still draining and the next tick picks them up. */
+    deferred: number;
+    /** Dates the guard has now been deferring past VERIFICATION_DEFERRAL_MAX_
+     * HOURS: the fold is stuck, not draining, and the store's tick is recorded
+     * incomplete so the wedge ladder escalates (B1). */
+    foldStuck: number;
+  }> => {
     // Newest-first window of folded days. The newest date anchors the
     // calendar; a store with no reportDay rows has no day work (nothing folds
     // there yet, so there is no fold output to contradict).
@@ -556,7 +718,7 @@ export const selectVerificationDaySubjects = internalQuery({
       )
       .order("desc")
       .take(VERIFICATION_DAY_LOOKBACK);
-    if (days.length === 0) return { dates: [], deferred: 0 };
+    if (days.length === 0) return { dates: [], deferred: 0, foldStuck: 0 };
 
     const dayByDate = new Map(days.map((day) => [day.operatingDate, day]));
     const anchor = days[0]!.operatingDate;
@@ -603,9 +765,14 @@ export const selectVerificationDaySubjects = internalQuery({
     const stallSelected: string[] = [];
     const erroredCandidates: Array<{ date: string; verifiedAt: number }> = [];
     let deferred = 0;
+    let foldStuck = 0;
     // Settled existing days seen so far, newest first — the re-verify lane's
     // candidate pool.
     let settledSeen = 0;
+    // Store-scope fallback anchor for the deferral bound, loaded once: a date
+    // that has never been verified has no `verifiedAt` of its own, so the
+    // runner's own first tick stands in. Absent on the very first tick ever.
+    const health = await loadRunnerHealthRow(ctx, args.storeId);
 
     for (const date of candidateDates) {
       const day = dayByDate.get(date);
@@ -613,17 +780,40 @@ export const selectVerificationDaySubjects = internalQuery({
       // A day still in progress is not settled; skip without deferring.
       if (day?.status === "open") continue;
 
+      const isSettledExisting = day !== undefined;
+      // Loaded BEFORE the dirty-mark gate (it was after) because the gate now
+      // needs this subject's own last verdict instant to bound its deferral.
+      // Same reads, same order of cost — only the sequence moved.
+      const run = await loadRunRow(ctx, args.storeId, "day", date);
+
       // Pending dirty mark: the fold has not caught up — verifying now would
-      // contradict output the pipeline already knows is stale. Defer.
+      // contradict output the pipeline already knows is stale. Defer, but only
+      // WITHIN the deferral budget (B1): `fact_cap_exceeded` is re-marked by
+      // every sweeper pass and never drains, and an unbounded deferral there
+      // means the day is never verified again while `daysDeferred` quietly
+      // counts up and nothing escalates. Past the budget the date is still not
+      // verified — comparing against a fold the pipeline has explicitly
+      // REFUSED to write would attribute a pipeline fault to the data — but it
+      // is reported as stuck, which flips the store incomplete and rings the
+      // wedge ladder.
       if (await hasPendingDirtyMark(ctx, args.storeId, date)) {
-        deferred += 1;
+        if (
+          isDeferralExhausted(
+            args.now,
+            run?.verifiedAt ?? health?.createdAt ?? null,
+          )
+        ) {
+          foldStuck += 1;
+        } else {
+          deferred += 1;
+        }
         continue;
       }
 
-      const isSettledExisting = day !== undefined;
+      // Counted only for dates that reach the selection decision, exactly as
+      // before the gate moved: the re-verify lane's window is "the most recent
+      // M settled days this tick can actually act on".
       if (isSettledExisting) settledSeen += 1;
-
-      const run = await loadRunRow(ctx, args.storeId, "day", date);
 
       // An `error` run row means the subject was never actually verified, so
       // it is always stale — but it goes to the capped error pool, not the
@@ -683,7 +873,7 @@ export const selectVerificationDaySubjects = internalQuery({
       ...selected,
     ].slice(0, VERIFICATION_DAYS_PER_STORE);
 
-    return { dates, deferred };
+    return { dates, deferred, foldStuck };
   },
 });
 
@@ -854,17 +1044,56 @@ export type WeeklySubjectSelection = {
  * or any pending `reportDirtyDay` mark for a date inside the current cycle
  * frame, means the fold has not drained yet — defer, exactly like a dirty
  * day. Both reads are bounded `.take(1)` existence probes on indexes.
+ *
+ * The weekly mark is SCOPED to the current cycle where it carries a cycle
+ * identifier (`weekMarkBlocksCycle`), so an unrelated stale acceptance mark for
+ * a past cycle cannot hold the current cycle's verification silent.
  */
+type CycleFrame = { cycleStartDate: string; cycleEndDate: string };
+
+/**
+ * Does this `reportDirtyWeek` mark say anything about the CURRENT cycle?
+ *
+ * `reportDirtyWeek` is a per-store singleton, so one mark carries whatever the
+ * pipeline last wanted done. Almost every reason means "rebuild the current
+ * week", and those block. The exception is an `acceptance_requested` mark
+ * whose durable `intent.cycleStartDate` names a DIFFERENT cycle: that is work
+ * on a past week's accepted baseline, and it must not gate the current one —
+ * unless its own `foldedDates` show a date inside the current frame, which is
+ * the pipeline saying the current cycle moved too.
+ */
+function weekMarkBlocksCycle(
+  mark: Doc<"reportDirtyWeek">,
+  cycleFrame: CycleFrame | null,
+): boolean {
+  if (cycleFrame === null) return true;
+  const intentCycle = mark.intent?.cycleStartDate;
+  if (
+    mark.reason !== "acceptance_requested" ||
+    intentCycle === undefined ||
+    intentCycle === cycleFrame.cycleStartDate
+  ) {
+    return true;
+  }
+  return (mark.foldedDates ?? []).some(
+    (date) =>
+      date >= cycleFrame.cycleStartDate && date <= cycleFrame.cycleEndDate,
+  );
+}
+
 async function hasPendingWeeklyDirtyMarks(
   ctx: QueryCtx,
   storeId: Id<"store">,
-  cycleFrame: { cycleStartDate: string; cycleEndDate: string } | null,
+  cycleFrame: CycleFrame | null,
 ): Promise<boolean> {
   const weekMarks = await ctx.db
     .query("reportDirtyWeek")
     .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
     .take(1);
-  if (weekMarks.length > 0) return true;
+  const weekMark = weekMarks[0];
+  if (weekMark !== undefined && weekMarkBlocksCycle(weekMark, cycleFrame)) {
+    return true;
+  }
   if (cycleFrame !== null) {
     const dayMarks = await ctx.db
       .query("reportDirtyDay")
@@ -880,9 +1109,7 @@ async function hasPendingWeeklyDirtyMarks(
   return false;
 }
 
-function cycleFrameOf(
-  current: Doc<"reportWeekCurrent">,
-): { cycleStartDate: string; cycleEndDate: string } | null {
+function cycleFrameOf(current: Doc<"reportWeekCurrent">): CycleFrame | null {
   return "cycleStartDate" in current
     ? {
         cycleStartDate: current.cycleStartDate,
@@ -902,17 +1129,50 @@ export const selectWeeklySubject = internalQuery({
      * (pending dirty marks) — counted as weeksDeferred, mirroring the day
      * lane's daysDeferred. */
     deferred: boolean;
+    /** True when the fold-drain guard has held the weekly lane silent past
+     * VERIFICATION_DEFERRAL_MAX_HOURS: the fold is stuck, not draining (B1).
+     * Reported on EVERY tick while it holds — not gated behind the 6-hourly
+     * due-ness interval — because it is the alarm, and an alarm that fires
+     * once every six hours cannot build the consecutive-incomplete streak the
+     * wedge ladder escalates on. */
+    foldStuck: boolean;
   }> => {
     const current = await ctx.db
       .query("reportWeekCurrent")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .unique();
-    if (!current) return { subject: null, deferred: false };
+    if (!current) return { subject: null, deferred: false, foldStuck: false };
 
     const subjectKey =
       "cycleStartDate" in current ? current.cycleStartDate : "current";
 
     const run = await loadRunRow(ctx, args.storeId, "week", subjectKey);
+
+    // Fold-drain guard (F1), evaluated BEFORE the due-ness gates so a stuck
+    // fold is visible every tick: a due subject with pending dirty marks would
+    // be verified against a projection the pipeline already knows is stale.
+    // Within budget that is a COUNTED deferral, not a silent skip; past it the
+    // fold is stuck rather than draining (B1) and the store's tick is recorded
+    // incomplete instead. Nothing is written on the stuck path — `verifiedAt`
+    // has to keep meaning "last real verdict" or the bound would rearm itself
+    // and mute the alarm.
+    const pendingMarks = await hasPendingWeeklyDirtyMarks(
+      ctx,
+      args.storeId,
+      cycleFrameOf(current),
+    );
+    if (pendingMarks) {
+      const health = await loadRunnerHealthRow(ctx, args.storeId);
+      if (
+        isDeferralExhausted(
+          args.now,
+          run?.verifiedAt ?? health?.createdAt ?? null,
+        )
+      ) {
+        return { subject: null, deferred: false, foldStuck: true };
+      }
+    }
+
     if (run !== null) {
       // FREQUENCY BOUND (H1). `materializedAt` advances on every weekly
       // rebuild — every ~5 minutes for an actively-trading store — so the
@@ -922,7 +1182,7 @@ export const selectWeeklySubject = internalQuery({
         args.now - run.verifiedAt <
         VERIFICATION_WEEK_MIN_INTERVAL_HOURS * 60 * 60 * 1000
       ) {
-        return { subject: null, deferred: false };
+        return { subject: null, deferred: false, foldStuck: false };
       }
       // Staleness gate: past the interval, still skip when the projection has
       // not been re-materialized since the last verified generation. An
@@ -932,18 +1192,14 @@ export const selectWeeklySubject = internalQuery({
         run.verifiedCertifiedFoldRevision !== undefined &&
         run.verifiedCertifiedFoldRevision >= current.materializedAt
       ) {
-        return { subject: null, deferred: false };
+        return { subject: null, deferred: false, foldStuck: false };
       }
     }
 
-    // Fold-drain guard (F1): a due subject with pending dirty marks would be
-    // verified against a projection the pipeline already knows is stale.
-    // Defer — the next tick (or the one after the 5-minute sweep drains the
-    // marks) picks it up. This is a COUNTED deferral, not a silent skip.
-    if (
-      await hasPendingWeeklyDirtyMarks(ctx, args.storeId, cycleFrameOf(current))
-    ) {
-      return { subject: null, deferred: true };
+    // The due subject's share of the guard above: within budget, defer and
+    // count it. (The stuck case already returned.)
+    if (pendingMarks) {
+      return { subject: null, deferred: true, foldStuck: false };
     }
 
     // Pre-flight read-budget probe (H2). The union of the seven days' payment
@@ -969,6 +1225,7 @@ export const selectWeeklySubject = internalQuery({
         overBudget: allocationProbe.length > VERIFICATION_WEEK_ALLOCATION_PROBE,
       },
       deferred: false,
+      foldStuck: false,
     };
   },
 });
@@ -1162,11 +1419,18 @@ export const recordVerificationOutcome = internalMutation({
     // carried differences) and "not checked" (as the complement of an empty
     // checked list). While the streak is live, an empty checked list from a
     // could-not-check run keeps the last real one.
-    const checkedFields =
+    //
+    // B4 — carry the stored value THROUGH, including its absence. The schema
+    // defines absent as "unknown, never nothing was checked", and the alert
+    // email honours that (`?? inventory`). Defaulting an absent stored value to
+    // `args.checkedFields` — which is `[]` on exactly this path — would degrade
+    // "unknown" into the very claim F6 exists to prevent. `undefined` here
+    // leaves the column absent on both the patch and the insert.
+    const checkedFields: string[] | undefined =
       args.checkedFields.length === 0 &&
       state.fingerprint !== null &&
       existing !== null
-        ? (existing.checkedFields ?? args.checkedFields)
+        ? existing.checkedFields
         : args.checkedFields;
 
     const rowDoc = {
@@ -1329,14 +1593,25 @@ export type VerificationSweepCtx = Pick<ActionCtx, "runQuery" | "runMutation">;
 export type VerificationSweepResult = {
   storesScanned: number;
   storesSkippedReseeding: number;
-  /** Allowlist entries that were not valid, existing store ids (F3). */
+  /** Allowlist entries that were not valid, existing store ids (F3) — the sum
+   * of the two counters below, kept as the headline number. */
   storesSkippedInvalid: number;
+  /** Of those, entries that are not store ids at all (malformed env text). */
+  storesSkippedMalformed: number;
+  /** Of those, well-formed ids whose store doc no longer exists (B6). */
+  storesSkippedMissing: number;
   daysVerified: number;
   daysDeferred: number;
+  /** Day subjects the fold-drain guard has now been deferring past
+   * VERIFICATION_DEFERRAL_MAX_HOURS — a stuck fold, not a draining one (B1).
+   * Flips the store incomplete so the wedge ladder escalates. */
+  daysFoldStuck: number;
   weeksVerified: number;
   /** Weekly subjects deferred because the fold was still draining — pending
    * reportDirtyWeek / in-frame reportDirtyDay marks (F1). */
   weeksDeferred: number;
+  /** Weekly subjects whose fold-drain deferral is past its budget (B1). */
+  weeksFoldStuck: number;
   subjectsErrored: number;
   /** Subjects whose run transitioned to alertable this tick (recorded even
    * while the email gate is off — the R8 record-only rollout). */
@@ -1404,13 +1679,18 @@ export async function runVerificationSweepWithCtx(
   // inside its run-key window rather than absent.
   let candidates: StoreCandidate[] = [];
   let storesSkippedReseeding = 0;
-  let storesSkippedInvalid = 0;
+  let storesSkippedMalformed = 0;
+  let storesSkippedMissing = 0;
   try {
-    ({ candidates, storesSkippedReseeding, storesSkippedInvalid } =
-      await ctx.runQuery(
-        internal.reports.verificationSweep.listVerificationStoreCandidates,
-        { now },
-      ));
+    ({
+      candidates,
+      storesSkippedReseeding,
+      storesSkippedMalformed,
+      storesSkippedMissing,
+    } = await ctx.runQuery(
+      internal.reports.verificationSweep.listVerificationStoreCandidates,
+      { now },
+    ));
   } catch (error) {
     logSwallowed("store_candidates", error);
     try {
@@ -1444,10 +1724,14 @@ export async function runVerificationSweepWithCtx(
       storesScanned: 0,
       storesSkippedReseeding: 0,
       storesSkippedInvalid: 0,
+      storesSkippedMalformed: 0,
+      storesSkippedMissing: 0,
       daysVerified: 0,
       daysDeferred: 0,
+      daysFoldStuck: 0,
       weeksVerified: 0,
       weeksDeferred: 0,
+      weeksFoldStuck: 0,
       subjectsErrored: 1,
       alertTransitions: 0,
       emitsWouldFire: 0,
@@ -1460,11 +1744,15 @@ export async function runVerificationSweepWithCtx(
   const result: VerificationSweepResult = {
     storesScanned: candidates.length,
     storesSkippedReseeding,
-    storesSkippedInvalid,
+    storesSkippedInvalid: storesSkippedMalformed + storesSkippedMissing,
+    storesSkippedMalformed,
+    storesSkippedMissing,
     daysVerified: 0,
     daysDeferred: 0,
+    daysFoldStuck: 0,
     weeksVerified: 0,
     weeksDeferred: 0,
+    weeksFoldStuck: 0,
     subjectsErrored: 0,
     alertTransitions: 0,
     emitsWouldFire: 0,
@@ -1479,14 +1767,22 @@ export async function runVerificationSweepWithCtx(
     let storeIncomplete = false;
 
     // Per-store ledger counters (snapshot of this store's slice of the tick).
+    // B5 — every counter the tick-scope result carries has a per-store twin
+    // here, so the store-scope ledger snapshot is a true slice of the tick
+    // rather than a subset that silently omits whichever counters were added
+    // last (`weeksOverBudget` had drifted out of this object).
     const storeCounts = {
       daysVerified: 0,
       daysDeferred: 0,
+      daysFoldStuck: 0,
       weeksVerified: 0,
       weeksDeferred: 0,
+      weeksFoldStuck: 0,
+      weeksOverBudget: 0,
       subjectsErrored: 0,
       alertTransitions: 0,
       emitsWouldFire: 0,
+      wedgeEscalations: 0,
     };
 
     // --- Day lane ----------------------------------------------------------
@@ -1499,6 +1795,12 @@ export async function runVerificationSweepWithCtx(
       dates = selection.dates;
       result.daysDeferred += selection.deferred;
       storeCounts.daysDeferred += selection.deferred;
+      result.daysFoldStuck += selection.foldStuck;
+      storeCounts.daysFoldStuck += selection.foldStuck;
+      // B1: a deferral past its budget is a stuck fold, and the only way that
+      // becomes audible is the wedge ladder — so the tick is incomplete for
+      // this store, every tick, until the fold drains.
+      if (selection.foldStuck > 0) storeIncomplete = true;
     } catch (error) {
       // M3: a crashed selection is a FAILED subject for evidence purposes —
       // counting it only as "incomplete" made the ledger record `applied` /
@@ -1600,6 +1902,16 @@ export async function runVerificationSweepWithCtx(
         result.weeksDeferred += 1;
         storeCounts.weeksDeferred += 1;
       }
+      if (weeklySelection.foldStuck) {
+        // B1: the guard has been holding this store's weekly lane silent past
+        // its budget. The projection really is stale — the loudest thing
+        // verification could say — so stop deferring and make the silence
+        // ALARMED: the tick is incomplete for this store on every tick until
+        // the fold drains, which walks the wedge ladder.
+        result.weeksFoldStuck += 1;
+        storeCounts.weeksFoldStuck += 1;
+        storeIncomplete = true;
+      }
       const weekly = weeklySelection.subject;
       if (weekly !== null) {
         try {
@@ -1658,7 +1970,10 @@ export async function runVerificationSweepWithCtx(
                 now,
               },
             );
-            if (weekly.overBudget) result.weeksOverBudget += 1;
+            if (weekly.overBudget) {
+              result.weeksOverBudget += 1;
+              storeCounts.weeksOverBudget += 1;
+            }
             result.weeksVerified += 1;
             storeCounts.weeksVerified += 1;
             if (recorded.shouldAlert) {
@@ -1717,7 +2032,10 @@ export async function runVerificationSweepWithCtx(
           now,
         },
       );
-      if (health.escalated) result.wedgeEscalations += 1;
+      if (health.escalated) {
+        result.wedgeEscalations += 1;
+        storeCounts.wedgeEscalations += 1;
+      }
     } catch (error) {
       // Health recording itself failing leaves the previous streak in place;
       // the next tick's write catches up.
@@ -1793,15 +2111,25 @@ export async function runVerificationSweepWithCtx(
         processedCount: result.storesScanned,
         succeededCount: storesSucceeded,
         failedCount: result.storesIncomplete,
-        skippedCount: result.storesSkippedReseeding,
+        // B6 — an allowlist entry that names no store is neither a candidate
+        // nor, before this, a skip: it appeared in NEITHER number on the row
+        // shape a reader actually projects. Both skip classes belong here, the
+        // way the store rows count daysDeferred + weeksDeferred.
+        skippedCount:
+          result.storesSkippedReseeding + result.storesSkippedInvalid,
         sourceSubjectType: "reportVerificationRun",
         sampleSubjectIds: candidates.map((c) => c.storeId).slice(0, 25),
         snapshotCounts: {
           daysVerified: result.daysVerified,
           daysDeferred: result.daysDeferred,
+          daysFoldStuck: result.daysFoldStuck,
           weeksVerified: result.weeksVerified,
           weeksDeferred: result.weeksDeferred,
+          weeksFoldStuck: result.weeksFoldStuck,
+          storesSkippedReseeding: result.storesSkippedReseeding,
           storesSkippedInvalid: result.storesSkippedInvalid,
+          storesSkippedMalformed: result.storesSkippedMalformed,
+          storesSkippedMissing: result.storesSkippedMissing,
           subjectsErrored: result.subjectsErrored,
           alertTransitions: result.alertTransitions,
           emitsWouldFire: result.emitsWouldFire,
