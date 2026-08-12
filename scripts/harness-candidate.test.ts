@@ -7,6 +7,7 @@ import {
   projectReviewActivation,
   type CandidateDiffEntry,
 } from "./harness-candidate";
+import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
 
 type Observation = {
   headSha: string;
@@ -18,7 +19,10 @@ type Observation = {
   untracked: string;
 };
 
-function createCandidateSpawn(observations: Observation[]) {
+function createCandidateSpawn(
+  observations: Observation[],
+  treeContents: Record<string, string> = {},
+) {
   let observationIndex = 0;
   let commandIndex = 0;
   const commands = [
@@ -34,6 +38,14 @@ function createCandidateSpawn(observations: Observation[]) {
 
   return (command: string[]) => {
     const key = command.join(" ");
+    if (key.startsWith("git ls-tree ")) {
+      const treeSha = command.at(-1) ?? "";
+      return {
+        exited: Promise.resolve(0),
+        stdout: new Response(treeContents[treeSha] ?? "").body,
+        stderr: new Response("").body,
+      };
+    }
     expect(key).toBe(commands[commandIndex]);
     const observation =
       observations[Math.min(observationIndex, observations.length - 1)];
@@ -107,6 +119,67 @@ describe("stable harness candidate capture", () => {
         baseTipSha: "base-tip-a",
         diffBaseSha: "merge-base-a",
       }),
+    });
+  });
+
+  it("binds a deliverable identity that ignores review-neutral paths", async () => {
+    const sourceEntry =
+      "100644 blob blob-source-a\tpackages/athena-webapp/convex/reports/weeklyClose.ts";
+    const reportEntry =
+      "100644 blob blob-report-a\tdocs/reports/2026/athena-weekly-close.html";
+    const withoutReport = await captureStableHarnessCandidate("/repo", {
+      spawn: createCandidateSpawn([cleanObservation, cleanObservation], {
+        "tree-a": sourceEntry,
+      }),
+    });
+    const withReport = await captureStableHarnessCandidate("/repo", {
+      spawn: createCandidateSpawn([cleanObservation, cleanObservation], {
+        "tree-a": `${sourceEntry}\0${reportEntry}`,
+      }),
+    });
+    const withEditedSource = await captureStableHarnessCandidate("/repo", {
+      spawn: createCandidateSpawn([cleanObservation, cleanObservation], {
+        "tree-a": sourceEntry.replace("blob-source-a", "blob-source-b"),
+      }),
+    });
+
+    expect(withoutReport.ok && withoutReport.candidate.identityVersion).toBe(
+      HARNESS_REVIEW_IDENTITY_VERSION,
+    );
+    expect(withoutReport.ok && withoutReport.candidate.deliverableTreeSha).toBe(
+      withReport.ok ? withReport.candidate.deliverableTreeSha : "missing",
+    );
+    expect(
+      withoutReport.ok && withoutReport.candidate.deliverableTreeSha,
+    ).not.toBe(
+      withEditedSource.ok
+        ? withEditedSource.candidate.deliverableTreeSha
+        : "missing",
+    );
+  });
+
+  it("fails closed when the candidate tree cannot be identified", async () => {
+    const observationSpawn = createCandidateSpawn([
+      cleanObservation,
+      cleanObservation,
+    ]);
+    await expect(
+      captureStableHarnessCandidate("/repo", {
+        spawn(command) {
+          if (command.join(" ").startsWith("git ls-tree ")) {
+            return {
+              exited: Promise.resolve(128),
+              stdout: new Response("").body,
+              stderr: new Response("fatal: not a tree object\n").body,
+            };
+          }
+          return observationSpawn(command);
+        },
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      status: "candidate_unprepared",
+      reason: "fatal: not a tree object",
     });
   });
 

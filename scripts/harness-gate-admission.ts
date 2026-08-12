@@ -114,6 +114,8 @@ function toEvaluatorContext(
 function candidateBinding(candidate: HarnessCandidate, worktreeId: string) {
   return {
     treeSha: candidate.treeSha,
+    deliverableTreeSha: candidate.deliverableTreeSha,
+    identityVersion: candidate.identityVersion,
     baseRef: candidate.baseRef,
     baseTipSha: candidate.baseTipSha,
     diffBaseSha: candidate.diffBaseSha,

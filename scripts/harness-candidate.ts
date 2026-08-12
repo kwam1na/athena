@@ -1,3 +1,8 @@
+import {
+  computeDeliverableTreeIdentity,
+  type HarnessReviewIdentityVersion,
+} from "./harness-review-identity";
+
 export const HARNESS_CANDIDATE_SCHEMA_VERSION = 1;
 export const HARNESS_CANDIDATE_BASE_REF = "origin/main" as const;
 
@@ -16,6 +21,13 @@ export type HarnessCandidate = {
   schemaVersion: typeof HARNESS_CANDIDATE_SCHEMA_VERSION;
   headSha: string;
   treeSha: string;
+  /**
+   * Identity of the reviewable content inside `treeSha`. Review evidence binds
+   * to this rather than the raw tree so delivery narration can land without
+   * invalidating an approval; see `harness-review-identity.ts`.
+   */
+  deliverableTreeSha: string;
+  identityVersion: HarnessReviewIdentityVersion;
   mode: "clean" | "staged-index";
   baseRef: typeof HARNESS_CANDIDATE_BASE_REF;
   baseTipSha: string;
@@ -34,7 +46,12 @@ export type HarnessCandidateCapture =
 
 type CandidateObservation = Omit<
   HarnessCandidate,
-  "schemaVersion" | "mode" | "treeSha" | "untrackedFiles"
+  | "schemaVersion"
+  | "mode"
+  | "treeSha"
+  | "deliverableTreeSha"
+  | "identityVersion"
+  | "untrackedFiles"
 > & {
   headTreeSha: string;
   indexTreeSha: string;
@@ -187,9 +204,18 @@ function sameObservation(
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+type PendingCandidate = Omit<
+  HarnessCandidate,
+  "deliverableTreeSha" | "identityVersion"
+>;
+
+type PendingCandidateCapture =
+  | { ok: true; candidate: PendingCandidate }
+  | Extract<HarnessCandidateCapture, { ok: false }>;
+
 function candidateFromObservation(
   observation: CandidateObservation,
-): HarnessCandidateCapture {
+): PendingCandidateCapture {
   const untrackedFiles = observation.untracked
     .split("\n")
     .map((entry) => normalizeRepoPath(entry.trim()))
@@ -246,7 +272,16 @@ export async function captureStableHarnessCandidate(
           "candidate HEAD, index, base, merge base, status, or untracked files changed during capture";
         continue;
       }
-      return candidateFromObservation(after);
+      const pending = candidateFromObservation(after);
+      if (!pending.ok) return pending;
+      // The identity is a pure function of the stable tree, so it is computed
+      // after the observation bracket rather than inside it.
+      const identity = await computeDeliverableTreeIdentity(
+        rootDir,
+        pending.candidate.treeSha,
+        { spawn },
+      );
+      return { ok: true, candidate: { ...pending.candidate, ...identity } };
     } catch (error) {
       return {
         ok: false,

@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { recordHarnessReviewEvidence } from "./harness-review-evidence";
+import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
 
 const roots: string[] = [];
 
@@ -19,6 +20,8 @@ async function fixture(providerId: "ce-code-review" | "execute" = "execute") {
   const worktreeId = "worktree-a";
   const candidate = {
     treeSha: "tree-a",
+    deliverableTreeSha: "deliverable-a",
+    identityVersion: HARNESS_REVIEW_IDENTITY_VERSION,
     baseRef: "origin/main",
     baseTipSha: "base-a",
     diffBaseSha: "merge-base-a",
@@ -159,19 +162,75 @@ describe("harness review evidence", () => {
     ).rejects.toThrow();
   });
 
-  it("rejects a manifest that does not match the independently captured candidate", async () => {
+  it.each([
+    ["reviewed content changed", { deliverableTreeSha: "deliverable-after" }],
+    ["the base tip moved", { baseTipSha: "base-b" }],
+    ["the merge base moved", { diffBaseSha: "merge-base-b" }],
+  ])(
+    "rejects a manifest whose candidate no longer matches because %s",
+    async (_label, override) => {
+      const setup = await fixture();
+      await expect(
+        recordHarnessReviewEvidence(setup.rootDir, setup.manifestPath, {
+          storageDir: setup.storageDir,
+          providerRunRoots: { execute: setup.providerRoot },
+          captureCandidate: async () => ({
+            ok: true,
+            candidate: { ...setup.candidate, ...override },
+          }),
+          resolveWorktreeId: async () => setup.worktreeId,
+        }),
+      ).rejects.toThrow(/candidate does not match/);
+    },
+  );
+
+  it("records evidence when only review-neutral content moved the raw tree", async () => {
     const setup = await fixture();
+    const result = await recordHarnessReviewEvidence(
+      setup.rootDir,
+      setup.manifestPath,
+      {
+        storageDir: setup.storageDir,
+        providerRunRoots: { execute: setup.providerRoot },
+        captureCandidate: async () => ({
+          ok: true,
+          candidate: { ...setup.candidate, treeSha: "tree-after-report" },
+        }),
+        resolveWorktreeId: async () => setup.worktreeId,
+        now: () => "2026-08-12T00:00:00.000Z",
+      },
+    );
+
+    // The record keeps the reviewed tree, not the tree the report landed on.
+    expect(result.candidate).toEqual(setup.candidate);
+  });
+
+  it.each([
+    ["a missing deliverable identity", { deliverableTreeSha: undefined }],
+    ["an unknown identity version", { identityVersion: "deliverable-tree/v0" }],
+    ["a missing identity version", { identityVersion: undefined }],
+  ])("rejects a manifest candidate with %s", async (_label, override) => {
+    const setup = await fixture();
+    const candidate = { ...setup.candidate, ...override };
+    for (const [key, value] of Object.entries(override)) {
+      if (value === undefined)
+        delete (candidate as Record<string, unknown>)[key];
+    }
+    await writeFile(
+      setup.manifestPath,
+      `${JSON.stringify({ ...setup.manifest, candidate }, null, 2)}\n`,
+    );
     await expect(
       recordHarnessReviewEvidence(setup.rootDir, setup.manifestPath, {
         storageDir: setup.storageDir,
         providerRunRoots: { execute: setup.providerRoot },
         captureCandidate: async () => ({
           ok: true,
-          candidate: { ...setup.candidate, treeSha: "tree-after-review" },
+          candidate: setup.candidate,
         }),
         resolveWorktreeId: async () => setup.worktreeId,
       }),
-    ).rejects.toThrow(/candidate does not match/);
+    ).rejects.toThrow(/identity|candidate/i);
   });
 
   it("rejects copied manifests and missing reviewer artifacts", async () => {

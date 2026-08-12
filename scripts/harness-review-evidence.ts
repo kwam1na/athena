@@ -14,6 +14,7 @@ import {
   resolveHarnessObligationStorageContext,
   type HarnessObligationCandidateBinding,
 } from "./harness-obligation-records";
+import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
 
 export const HARNESS_REVIEW_MANIFEST_SCHEMA_VERSION = 1;
 export const HARNESS_REVIEWER_ARTIFACT_SCHEMA_VERSION = 1;
@@ -129,6 +130,14 @@ function candidateBinding(value: unknown): HarnessObligationCandidateBinding {
     !isNonEmptyString(candidate.diffBaseSha)
   ) {
     throw new Error("review manifest candidate is incomplete");
+  }
+  if (
+    !isNonEmptyString(candidate.deliverableTreeSha) ||
+    candidate.identityVersion !== HARNESS_REVIEW_IDENTITY_VERSION
+  ) {
+    throw new Error(
+      `review manifest candidate must name a ${HARNESS_REVIEW_IDENTITY_VERSION} deliverable identity; take it from \`bun run harness:review-context\``,
+    );
   }
   return candidate as HarnessObligationCandidateBinding;
 }
@@ -336,12 +345,20 @@ function isWithin(parent: string, child: string) {
   );
 }
 
+/**
+ * Recording compares the same deliverable identity the gate later compares, so
+ * an approval survives a landed-change report or solution note committed after
+ * the final pass. Everything a reviewer read still has to be identical.
+ */
 function sameCandidate(
   left: HarnessObligationCandidateBinding,
   right: HarnessObligationCandidateBinding,
 ) {
   return (
-    left.treeSha === right.treeSha &&
+    left.identityVersion === HARNESS_REVIEW_IDENTITY_VERSION &&
+    right.identityVersion === HARNESS_REVIEW_IDENTITY_VERSION &&
+    Boolean(left.deliverableTreeSha) &&
+    left.deliverableTreeSha === right.deliverableTreeSha &&
     left.baseRef === right.baseRef &&
     left.baseTipSha === right.baseTipSha &&
     left.diffBaseSha === right.diffBaseSha
@@ -353,8 +370,25 @@ async function defaultCaptureCandidate(
 ): Promise<CandidateCaptureResult> {
   const captured = await captureStableHarnessCandidate(rootDir);
   if (!captured.ok) return captured;
-  const { treeSha, baseRef, baseTipSha, diffBaseSha } = captured.candidate;
-  return { ok: true, candidate: { treeSha, baseRef, baseTipSha, diffBaseSha } };
+  const {
+    treeSha,
+    deliverableTreeSha,
+    identityVersion,
+    baseRef,
+    baseTipSha,
+    diffBaseSha,
+  } = captured.candidate;
+  return {
+    ok: true,
+    candidate: {
+      treeSha,
+      deliverableTreeSha,
+      identityVersion,
+      baseRef,
+      baseTipSha,
+      diffBaseSha,
+    },
+  };
 }
 
 export async function recordHarnessReviewEvidence(

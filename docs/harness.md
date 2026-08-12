@@ -282,10 +282,21 @@ bun run pr:athena:scorecard
 
 `pr:athena:prepare` is one wrapper-owned preparation boundary. It checks Bun and
 dependency parity, repairs generated artifacts, stages tracked changes, rejects
-unstaged or untracked ambiguity, captures the complete candidate tree plus base
-tip and merge base, and only then publishes a worktree-local preparation
-receipt. It does not stage new files automatically; stage intended new files
-explicitly and rerun preparation.
+unstaged or untracked ambiguity, runs the mechanical checks, captures the
+complete candidate tree plus base tip and merge base, and only then publishes a
+worktree-local preparation receipt. It does not stage new files automatically;
+stage intended new files explicitly and rerun preparation.
+
+The mechanical stage (`pr:athena:mechanical`, also runnable on its own) runs the
+deterministic per-package lint scripts that the validation map selects for the
+changed files. It exists to fix an ordering problem: those checks used to run
+only inside the heavy provider, which is gated behind `review.green`, so a lint
+rule could fail only *after* an expensive multi-agent review had been recorded,
+and the one-line fix then invalidated that review. Because preparation publishes
+no receipt when a mechanical check fails, and both `harness:review-context` and
+gate admission require a current receipt, **a tree that cannot pass the
+mechanical rules can never reach review**. The stage stays deliberately cheap:
+tests, build, and typecheck remain in the heavy provider.
 
 `pr:athena:preflight` then aggregates validation-map coverage, live harness
 audit, audit-fixture consistency, and harness-script sibling-test policy before
@@ -312,7 +323,29 @@ Approved review workflows run `pr:athena:prepare`, capture
 `harness:review-context`, complete an independent review of that exact candidate,
 and submit a provider-owned `final-manifest.json` through
 `harness:review-evidence`. Any review fix requires preparation and a complete
-re-review of the resulting candidate. The admission wrapper evaluates
+re-review of the resulting candidate.
+
+Review evidence binds to the candidate's **deliverable identity**, not its raw
+tree SHA. The identity (`deliverable-tree/v1`, in
+`scripts/harness-review-identity.ts`) is a digest of every tracked path in the
+prepared tree except `docs/reports/` and `docs/solutions/`, together with the
+base ref, base tip, merge base, and worktree. The consequence is narrow and
+deliberate:
+
+- Committing a landed-change report or a solution note after the final pass does
+  **not** invalidate the recorded evidence. Preparation must be rerun, because
+  the receipt still binds to the raw tree, but the review does not.
+- Any other change does invalidate it, including a comment-only edit, a mode
+  change, a rename with identical contents, and any edit under `_generated/`,
+  `routeTree.gen.ts`, `graphify-out/`, or `artifacts/`. The neutral set is
+  deliberately narrower than `isDeliverableFingerprintPath` in
+  `scripts/delivery-diff-fingerprint.ts`, which answers a different question
+  (report freshness) and may exclude generated artifacts that nothing here
+  re-derives.
+- Both the reviewed raw tree and the deliverable identity are written into the
+  gate decision event, so a past authorization stays interpretable.
+- Records written under an earlier identity version are reported as superseded
+  and ignored. They never satisfy an obligation, and they never block one. The admission wrapper evaluates
 documentation once, reports all blockers together, records a correlated gate
 decision, rechecks the candidate immediately before spawning, and owns the
 heavy command list. `pr:athena:scorecard` runs after proof recording so it reads
@@ -466,7 +499,7 @@ so CI and local harness runs read the same declared version.
 
 | Phase | Command | Notes |
 | --- | --- | --- |
-| Prepare | `pr:athena:prepare` | Dependency check, generated-artifact repair, then blocks if unstaged or untracked files would prevent reusable proof. |
+| Prepare | `pr:athena:prepare` | Dependency check, generated-artifact repair, mechanical per-package lint (`pr:athena:mechanical`), then blocks if unstaged or untracked files would prevent reusable proof. |
 | Preflight | `pr:athena:preflight` | Validation-map coverage, live harness audit, audit-fixture consistency, and harness-script sibling-test policy. |
 | Validate | `pr:athena:validate` | The guarded provider evaluates registered obligations before docs, workflow, Convex, frontend, architecture, typecheck, and coverage work; then writes same-tree provider evidence and runs harness review, inferential review, audit, and graphify check. |
 | Record proof | `pr:athena:record-proof` | Records the git-private proof for the validated tree. |

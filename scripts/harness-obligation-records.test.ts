@@ -7,6 +7,7 @@ import {
   discoverHarnessObligationRecords,
   publishHarnessObligationRecord,
 } from "./harness-obligation-records";
+import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
 
 const roots: string[] = [];
 
@@ -21,6 +22,8 @@ async function fixture() {
 
 const candidate = {
   treeSha: "tree-a",
+  deliverableTreeSha: "deliverable-a",
+  identityVersion: HARNESS_REVIEW_IDENTITY_VERSION,
   baseRef: "origin/main",
   baseTipSha: "base-a",
   diffBaseSha: "merge-base-a",
@@ -68,6 +71,40 @@ describe("harness obligation records", () => {
     });
     expect(discovered.records).toEqual([first.record]);
     expect(discovered.diagnostics).toEqual([]);
+  });
+
+  it("ignores a record that predates the deliverable identity instead of blocking on it", async () => {
+    const { root, storageDir } = await fixture();
+    const published = await publishHarnessObligationRecord(
+      root,
+      {
+        gateId: "athena.pr-validation",
+        obligationId: "review.green",
+        candidate,
+        resolution: { kind: "waiver" },
+      },
+      { storageDir, now: () => "2026-08-11T00:00:00.000Z" },
+    );
+    const legacy = JSON.parse(await readFile(published.path, "utf8"));
+    delete legacy.candidate.deliverableTreeSha;
+    delete legacy.candidate.identityVersion;
+    await writeFile(published.path, `${JSON.stringify(legacy, null, 2)}\n`);
+
+    const discovered = await discoverHarnessObligationRecords(root, {
+      gateId: published.gateId,
+      obligationId: published.obligationId,
+      storageDir,
+    });
+
+    // A superseded identity is a version transition, not tampering: the record
+    // must not satisfy anything, and must not block the gate either.
+    expect(discovered.records).toEqual([]);
+    expect(discovered.diagnostics).toEqual([
+      expect.objectContaining({
+        kind: "superseded_record",
+        path: published.path,
+      }),
+    ]);
   });
 
   it("keeps evidence semantic identity distinct by provider run and final pass", async () => {

@@ -7,9 +7,17 @@ import type {
   HarnessProviderId,
   PreventedCostClass,
 } from "./harness-gate-registry";
+import {
+  HARNESS_REVIEW_IDENTITY_VERSION,
+  type HarnessReviewIdentityVersion,
+} from "./harness-review-identity";
 
 export type CandidateBinding = {
+  /** The exact prepared tree. Recorded for audit, not used for freshness. */
   treeSha: string;
+  /** Identity of the reviewable content inside `treeSha`. */
+  deliverableTreeSha: string;
+  identityVersion: HarnessReviewIdentityVersion;
   baseRef: string;
   baseTipSha: string;
   diffBaseSha: string;
@@ -165,12 +173,22 @@ export type EvaluateGateObligationsInput = {
   records: DiscoveredObligationRecord[];
 };
 
+/**
+ * Freshness compares the deliverable identity, not the raw tree: a reviewer
+ * approves reviewable content, and delivery narration is deliberately outside
+ * it. Both sides must name the same known identity version and a non-empty
+ * digest, so a record that predates the identity — or claims an unknown one —
+ * fails closed as stale rather than matching on absent fields.
+ */
 function candidateBindingsEqual(
   left: CandidateBinding,
   right: CandidateBinding,
 ) {
   return (
-    left.treeSha === right.treeSha &&
+    left.identityVersion === HARNESS_REVIEW_IDENTITY_VERSION &&
+    right.identityVersion === HARNESS_REVIEW_IDENTITY_VERSION &&
+    Boolean(left.deliverableTreeSha) &&
+    left.deliverableTreeSha === right.deliverableTreeSha &&
     left.baseRef === right.baseRef &&
     left.baseTipSha === right.baseTipSha &&
     left.diffBaseSha === right.diffBaseSha &&

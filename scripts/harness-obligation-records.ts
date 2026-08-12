@@ -11,6 +11,11 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 
+import {
+  HARNESS_REVIEW_IDENTITY_VERSION,
+  type HarnessReviewIdentityVersion,
+} from "./harness-review-identity";
+
 export const HARNESS_OBLIGATION_RECORD_SCHEMA_VERSION = 1;
 const RECORDS_GIT_PATH = "codex/harness-obligations/v1/records";
 
@@ -27,6 +32,8 @@ type CommandRunner = (
 
 export type HarnessObligationCandidateBinding = {
   treeSha: string;
+  deliverableTreeSha: string;
+  identityVersion: HarnessReviewIdentityVersion;
   baseRef: string;
   baseTipSha: string;
   diffBaseSha: string;
@@ -64,6 +71,12 @@ export type HarnessObligationRecordInput = Omit<
 
 export type HarnessObligationRecordDiagnostic =
   | { kind: "malformed_record"; path: string; reason: string }
+  /**
+   * A record written against an earlier candidate-identity version. It cannot
+   * satisfy anything, but it is a version transition rather than tampering, so
+   * it is reported without blocking the gate.
+   */
+  | { kind: "superseded_record"; path: string; reason: string }
   | { kind: "ignored_neighbor"; path: string };
 
 type RecordRuntimeOptions = {
@@ -308,6 +321,14 @@ export async function discoverHarnessObligationRecords(
     }
     try {
       const record = parseRecord(JSON.parse(await readFile(filePath, "utf8")));
+      if (record.candidate.identityVersion !== HARNESS_REVIEW_IDENTITY_VERSION) {
+        diagnostics.push({
+          kind: "superseded_record",
+          path: filePath,
+          reason: `record was written against candidate identity ${record.candidate.identityVersion ?? "(none)"}; the current identity is ${HARNESS_REVIEW_IDENTITY_VERSION}`,
+        });
+        continue;
+      }
       if (
         record.worktreeId !== worktreeId ||
         record.gateId !== selector.gateId ||

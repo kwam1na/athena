@@ -16,6 +16,7 @@ import {
   ATHENA_PR_VALIDATION_GATE_ID,
   HARNESS_GATE_REGISTRY,
 } from "./harness-gate-registry";
+import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
 
 const HEAVY_PROVIDER_COMMANDS =
   HARNESS_GATE_REGISTRY.gates[ATHENA_PR_VALIDATION_GATE_ID]
@@ -25,6 +26,8 @@ const candidate = {
   schemaVersion: 1 as const,
   headSha: "head-a",
   treeSha: "tree-a",
+  deliverableTreeSha: "deliverable-a",
+  identityVersion: HARNESS_REVIEW_IDENTITY_VERSION,
   mode: "clean" as const,
   baseRef: "origin/main" as const,
   baseTipSha: "base-a",
@@ -121,6 +124,65 @@ describe("harness gate admission", () => {
     expect(
       options._spies.spawnHeavy.mock.calls.map(([command]) => command),
     ).toEqual(HEAVY_PROVIDER_COMMANDS);
+  });
+
+  it("records which candidate identity authorized the decision", async () => {
+    const options = greenOptions();
+    await runHarnessGateAdmission("/repo", options as never);
+    for (const [, event] of options._spies.writeDecisionEvent.mock.calls) {
+      expect(event.candidate).toMatchObject({
+        treeSha: candidate.treeSha,
+        deliverableTreeSha: candidate.deliverableTreeSha,
+        identityVersion: HARNESS_REVIEW_IDENTITY_VERSION,
+      });
+    }
+  });
+
+  it("admits recorded evidence whose raw tree predates a review-neutral commit", async () => {
+    const options = greenOptions({
+      projectActivation: async () => ({
+        relevantLineCount: 50,
+        relevantPaths: ["src/app.ts"],
+        excludedPaths: [],
+        binaryPaths: [],
+        sensitiveScenarioIds: [],
+      }),
+      discoverRecords: async () => ({
+        records: [
+          {
+            schemaVersion: 1 as const,
+            recordId: "record-a",
+            worktreeId: "worktree-a",
+            gateId: ATHENA_PR_VALIDATION_GATE_ID,
+            obligationId: "review.green" as const,
+            candidate: {
+              treeSha: "tree-before-report",
+              deliverableTreeSha: candidate.deliverableTreeSha,
+              identityVersion: HARNESS_REVIEW_IDENTITY_VERSION,
+              baseRef: candidate.baseRef,
+              baseTipSha: candidate.baseTipSha,
+              diffBaseSha: candidate.diffBaseSha,
+            },
+            resolution: {
+              kind: "evidence" as const,
+              providerId: "execute",
+              runId: "run-a",
+              finalPassId: "pass-a",
+              manifestDigest: "digest-a",
+              outcome: "green" as const,
+              blockingCount: 0 as const,
+              unresolvedActionableCount: 0 as const,
+              degradedReviewerCount: 0 as const,
+            },
+            createdAt: "2026-08-12T00:00:00.000Z",
+          },
+        ],
+        diagnostics: [],
+      }),
+    });
+
+    const result = await runHarnessGateAdmission("/repo", options as never);
+    expect(result).toMatchObject({ admitted: true, status: "passed" });
   });
 
   it("aggregates documentation and review blockers and does not prompt", async () => {
