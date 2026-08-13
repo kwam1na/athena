@@ -52,6 +52,24 @@ describe("review-neutral path policy", () => {
     expect(isReviewNeutralPath(repoPath)).toBe(true);
   });
 
+  it("treats a post-run machine record as review neutral", () => {
+    // A record describes a run that already happened, so writing one must not
+    // invalidate the review evidence it reports on.
+    expect(
+      isReviewNeutralPath(
+        "telemetry/delivery-runs/2026-06-18T12-00-00-000Z-codex-thing.json",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not exempt the rest of telemetry/ from review", () => {
+    // The exemption is scoped to the record directory: a future sibling under
+    // telemetry/ must not silently inherit an escape from the reviewed
+    // deliverable.
+    expect(isReviewNeutralPath("telemetry/some-future-record.json")).toBe(false);
+    expect(isReviewNeutralPath("telemetry/scripts/run.ts")).toBe(false);
+  });
+
   it.each([
     "packages/athena-webapp/convex/reports/weeklyClose.ts",
     "packages/athena-webapp/convex/_generated/api.d.ts",

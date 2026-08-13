@@ -36,6 +36,35 @@ export type HarnessObligationCandidateBinding = {
   diffBaseSha: string;
 };
 
+/**
+ * `reviewCost` is provider-self-reported: the orchestrator sums whatever its
+ * agent platform reports when a subagent finishes. The manifest digest proves
+ * the number was not altered after recording, but nothing here can prove it was
+ * accurate when written — unlike the candidate shas, which are independently
+ * re-derived. Treat it as a cost trend signal, not as audit-grade evidence.
+ *
+ * The shape stays agent-harness agnostic on purpose: `unit` is an open slug
+ * (`tokens` where a platform meters tokens; another platform may meter
+ * something else entirely) and `reportedBy` names the platform that produced
+ * the numbers. Consumers must not compare across units, and should treat a
+ * change of `reportedBy` as a break in the trend rather than a movement in it —
+ * different agent runtimes meter different work.
+ */
+export type HarnessReviewCostReport = {
+  unit: string;
+  total: number;
+  byReviewer?: Record<string, number>;
+  reportedBy?: string;
+};
+
+export type HarnessReviewLoopTelemetry = {
+  iterationCount: number;
+  findingCounts?: { P0: number; P1: number; P2: number; P3: number };
+  deferredExpansionCount: number;
+  deferredIssueIds: string[];
+  reviewCost?: HarnessReviewCostReport;
+};
+
 export type HarnessReviewEvidenceResolution = {
   kind: "evidence";
   providerId: string;
@@ -46,6 +75,7 @@ export type HarnessReviewEvidenceResolution = {
   blockingCount: 0;
   unresolvedActionableCount: 0;
   degradedReviewerCount: 0;
+  reviewLoopTelemetry?: HarnessReviewLoopTelemetry;
 };
 
 export type HarnessWaiverResolution = { kind: "waiver" };
@@ -155,6 +185,83 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
+function isNonNegativeAmount(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+/**
+ * One definition, called by both the record parser and the manifest parser.
+ * They previously re-implemented these checks and had already drifted —
+ * findingCounts was validated on one side only.
+ */
+export function isValidReviewLoopTelemetry(
+  value: unknown,
+): value is HarnessReviewLoopTelemetry {
+  if (!value || typeof value !== "object") return false;
+  const telemetry = value as Partial<HarnessReviewLoopTelemetry>;
+  if (
+    !Number.isInteger(telemetry.iterationCount) ||
+    (telemetry.iterationCount as number) < 1
+  ) {
+    return false;
+  }
+  if (
+    !Number.isInteger(telemetry.deferredExpansionCount) ||
+    (telemetry.deferredExpansionCount as number) < 0
+  ) {
+    return false;
+  }
+  if (
+    !Array.isArray(telemetry.deferredIssueIds) ||
+    !telemetry.deferredIssueIds.every(isNonEmptyString) ||
+    telemetry.deferredIssueIds.length !== telemetry.deferredExpansionCount
+  ) {
+    return false;
+  }
+  if (
+    telemetry.findingCounts !== undefined &&
+    (["P0", "P1", "P2", "P3"] as const).some(
+      (severity) =>
+        !Number.isInteger(telemetry.findingCounts?.[severity]) ||
+        (telemetry.findingCounts?.[severity] as number) < 0,
+    )
+  ) {
+    return false;
+  }
+  return (
+    telemetry.reviewCost === undefined || isValidReviewCost(telemetry.reviewCost)
+  );
+}
+
+/**
+ * Amounts are validated for shape, not for membership in a fixed unit set: a
+ * platform that meters fractional units is as valid as one that counts whole
+ * tokens. Per-reviewer amounts may sum to less than the run total — orchestrator
+ * turns, validators, and fixer passes all spend outside any single reviewer —
+ * but never more.
+ */
+export function isValidReviewCost(
+  value: unknown,
+): value is HarnessReviewCostReport {
+  if (!value || typeof value !== "object") return false;
+  const cost = value as HarnessReviewCostReport;
+  if (!isNonEmptyString(cost.unit)) return false;
+  if (!isNonNegativeAmount(cost.total)) return false;
+  if (cost.reportedBy !== undefined && !isNonEmptyString(cost.reportedBy)) {
+    return false;
+  }
+  if (cost.byReviewer === undefined) return true;
+  if (!cost.byReviewer || typeof cost.byReviewer !== "object") return false;
+  const entries = Object.entries(cost.byReviewer);
+  return (
+    entries.every(
+      ([reviewer, amount]) =>
+        isNonEmptyString(reviewer) && isNonNegativeAmount(amount),
+    ) &&
+    entries.reduce((total, [, amount]) => total + amount, 0) <= cost.total
+  );
+}
+
 function parseRecord(value: unknown): HarnessObligationRecord {
   if (!value || typeof value !== "object")
     throw new Error("record must be an object");
@@ -198,6 +305,19 @@ function parseRecord(value: unknown): HarnessObligationRecord {
       resolution.degradedReviewerCount !== 0
     ) {
       throw new Error("evidence resolution is not final green");
+    }
+    if (resolution.reviewLoopTelemetry !== undefined) {
+      // Cost is checked first so its diagnostic names the actual problem
+      // rather than reporting the whole block as invalid.
+      const cost = (
+        resolution.reviewLoopTelemetry as Partial<HarnessReviewLoopTelemetry>
+      ).reviewCost;
+      if (cost !== undefined && !isValidReviewCost(cost)) {
+        throw new Error("review loop cost report is invalid");
+      }
+      if (!isValidReviewLoopTelemetry(resolution.reviewLoopTelemetry)) {
+        throw new Error("review loop telemetry is invalid");
+      }
     }
   } else if (resolution?.kind !== "waiver") {
     throw new Error("invalid resolution discriminant");

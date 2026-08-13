@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   discoverHarnessObligationRecords,
+  isValidReviewCost,
+  isValidReviewLoopTelemetry,
   publishHarnessObligationRecord,
 } from "./harness-obligation-records";
 import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
@@ -33,6 +35,73 @@ afterEach(async () => {
   await Promise.all(
     roots.splice(0).map((root) => rm(root, { recursive: true })),
   );
+});
+
+describe("review loop telemetry validation", () => {
+  const valid = {
+    iterationCount: 2,
+    deferredExpansionCount: 1,
+    deferredIssueIds: ["V26-1300"],
+    findingCounts: { P0: 0, P1: 1, P2: 2, P3: 0 },
+  };
+
+  it("accepts a complete telemetry block", () => {
+    expect(isValidReviewLoopTelemetry(valid)).toBe(true);
+    expect(
+      isValidReviewLoopTelemetry({ ...valid, findingCounts: undefined }),
+    ).toBe(true);
+  });
+
+  it.each([
+    ["a zero iteration count", { ...valid, iterationCount: 0 }],
+    ["a fractional iteration count", { ...valid, iterationCount: 1.5 }],
+    [
+      "deferral ids that disagree with the count",
+      { ...valid, deferredIssueIds: [] },
+    ],
+    [
+      "a negative finding count",
+      { ...valid, findingCounts: { P0: -1, P1: 0, P2: 0, P3: 0 } },
+    ],
+    [
+      "a fractional finding count",
+      { ...valid, findingCounts: { P0: 0.5, P1: 0, P2: 0, P3: 0 } },
+    ],
+    [
+      "an invalid cost report",
+      { ...valid, reviewCost: { unit: "", total: 1 } },
+    ],
+  ])("rejects %s", (_label, telemetry) => {
+    // findingCounts in particular: the record and manifest parsers used to
+    // validate this differently, so one definition now serves both.
+    expect(isValidReviewLoopTelemetry(telemetry)).toBe(false);
+  });
+});
+
+describe("review cost validation", () => {
+  it("accepts any metered unit and rejects shapes that are not costs", () => {
+    // Shape, not membership in a fixed unit set: a platform metering fractional
+    // credits is as valid as one counting whole tokens.
+    expect(isValidReviewCost({ unit: "tokens", total: 10 })).toBe(true);
+    expect(isValidReviewCost({ unit: "credits", total: 1.5 })).toBe(true);
+    expect(isValidReviewCost({ unit: "", total: 10 })).toBe(false);
+    expect(isValidReviewCost({ unit: "tokens", total: -1 })).toBe(false);
+    // Per-reviewer amounts may sum below the run total, never above it.
+    expect(
+      isValidReviewCost({
+        unit: "tokens",
+        total: 100,
+        byReviewer: { a: 60, b: 40 },
+      }),
+    ).toBe(true);
+    expect(
+      isValidReviewCost({
+        unit: "tokens",
+        total: 100,
+        byReviewer: { a: 60, b: 41 },
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("harness obligation records", () => {
@@ -258,6 +327,253 @@ describe("harness obligation records", () => {
       ),
     ).rejects.toThrow(/conflicting existing obligation record/);
     expect(await readFile(published.path, "utf8")).toBe("{}\n");
+  });
+
+  it("round-trips evidence resolutions carrying review-loop telemetry", async () => {
+    const { root, storageDir } = await fixture();
+    const evidenceResolution = {
+      kind: "evidence" as const,
+      providerId: "execute",
+      runId: "run-a",
+      finalPassId: "pass-a",
+      manifestDigest: "digest-a",
+      outcome: "green" as const,
+      blockingCount: 0 as const,
+      unresolvedActionableCount: 0 as const,
+      degradedReviewerCount: 0 as const,
+      reviewLoopTelemetry: {
+        iterationCount: 2,
+        findingCounts: { P0: 0, P1: 1, P2: 2, P3: 0 },
+        deferredExpansionCount: 1,
+        deferredIssueIds: ["V26-1300"],
+      },
+    };
+    await publishHarnessObligationRecord(
+      root,
+      {
+        gateId: "athena.pr-validation",
+        obligationId: "review.green",
+        candidate,
+        resolution: evidenceResolution,
+      },
+      { storageDir, now: () => "2026-08-11T00:00:00.000Z" },
+    );
+
+    const discovered = await discoverHarnessObligationRecords(root, {
+      gateId: "athena.pr-validation",
+      obligationId: "review.green",
+      storageDir,
+    });
+    expect(discovered.records).toHaveLength(1);
+    expect(discovered.records[0]?.resolution).toMatchObject({
+      kind: "evidence",
+      reviewLoopTelemetry: {
+        iterationCount: 2,
+        deferredExpansionCount: 1,
+        deferredIssueIds: ["V26-1300"],
+      },
+    });
+  });
+
+  it("round-trips self-reported token usage on the evidence resolution", async () => {
+    const { root, storageDir } = await fixture();
+    await publishHarnessObligationRecord(
+      root,
+      {
+        gateId: "athena.pr-validation",
+        obligationId: "review.green",
+        candidate,
+        resolution: {
+          kind: "evidence",
+          providerId: "execute",
+          runId: "run-a",
+          finalPassId: "pass-a",
+          manifestDigest: "digest-a",
+          outcome: "green",
+          blockingCount: 0,
+          unresolvedActionableCount: 0,
+          degradedReviewerCount: 0,
+          reviewLoopTelemetry: {
+            iterationCount: 2,
+            deferredExpansionCount: 0,
+            deferredIssueIds: [],
+            reviewCost: {
+              unit: "tokens",
+              total: 512345,
+              reportedBy: "claude-code",
+              byReviewer: { correctness: 190000, adversarial: 150000 },
+            },
+          },
+        },
+      },
+      { storageDir, now: () => "2026-08-11T00:00:00.000Z" },
+    );
+
+    const discovered = await discoverHarnessObligationRecords(root, {
+      gateId: "athena.pr-validation",
+      obligationId: "review.green",
+      storageDir,
+    });
+    expect(discovered.records[0]?.resolution).toMatchObject({
+      reviewLoopTelemetry: {
+        reviewCost: {
+          unit: "tokens",
+          total: 512345,
+          reportedBy: "claude-code",
+          byReviewer: { correctness: 190000, adversarial: 150000 },
+        },
+      },
+    });
+  });
+
+  it.each([
+    ["a negative total", { unit: "tokens", total: -1 }],
+    ["no unit", { total: 100 }],
+    [
+      "per-reviewer amounts above the run total",
+      {
+        unit: "tokens",
+        total: 100,
+        byReviewer: { correctness: 80, adversarial: 40 },
+      },
+    ],
+  ])(
+    "reports records with %s in the review cost as diagnostics",
+    async (_label, reviewCost) => {
+      const { root, storageDir } = await fixture();
+      const published = await publishHarnessObligationRecord(
+        root,
+        {
+          gateId: "athena.pr-validation",
+          obligationId: "review.green",
+          candidate,
+          resolution: {
+            kind: "evidence",
+            providerId: "execute",
+            runId: "run-a",
+            finalPassId: "pass-a",
+            manifestDigest: "digest-a",
+            outcome: "green",
+            blockingCount: 0,
+            unresolvedActionableCount: 0,
+            degradedReviewerCount: 0,
+            reviewLoopTelemetry: {
+              iterationCount: 1,
+              deferredExpansionCount: 0,
+              deferredIssueIds: [],
+              reviewCost: { unit: "tokens", total: 100 },
+            },
+          },
+        },
+        { storageDir, now: () => "2026-08-11T00:00:00.000Z" },
+      );
+      const stored = JSON.parse(await readFile(published.path, "utf8"));
+      stored.resolution.reviewLoopTelemetry.reviewCost = reviewCost;
+      await writeFile(published.path, `${JSON.stringify(stored, null, 2)}\n`);
+
+      const discovered = await discoverHarnessObligationRecords(root, {
+        gateId: "athena.pr-validation",
+        obligationId: "review.green",
+        storageDir,
+      });
+      expect(discovered.records).toEqual([]);
+      expect(discovered.diagnostics).toMatchObject([
+        {
+          kind: "malformed_record",
+          reason: "review loop cost report is invalid",
+        },
+      ]);
+    },
+  );
+
+  it.each([
+    ["a fractional iteration count", 1.5],
+    ["a zero iteration count", 0],
+  ])(
+    "reports records with %s as diagnostics",
+    async (_label, iterationCount) => {
+      const { root, storageDir } = await fixture();
+      const published = await publishHarnessObligationRecord(
+        root,
+        {
+          gateId: "athena.pr-validation",
+          obligationId: "review.green",
+          candidate,
+          resolution: {
+            kind: "evidence",
+            providerId: "execute",
+            runId: "run-a",
+            finalPassId: "pass-a",
+            manifestDigest: "digest-a",
+            outcome: "green",
+            blockingCount: 0,
+            unresolvedActionableCount: 0,
+            degradedReviewerCount: 0,
+            reviewLoopTelemetry: {
+              iterationCount: 2,
+              deferredExpansionCount: 0,
+              deferredIssueIds: [],
+            },
+          },
+        },
+        { storageDir, now: () => "2026-08-11T00:00:00.000Z" },
+      );
+      const stored = JSON.parse(await readFile(published.path, "utf8"));
+      stored.resolution.reviewLoopTelemetry.iterationCount = iterationCount;
+      await writeFile(published.path, `${JSON.stringify(stored, null, 2)}\n`);
+
+      const discovered = await discoverHarnessObligationRecords(root, {
+        gateId: "athena.pr-validation",
+        obligationId: "review.green",
+        storageDir,
+      });
+      expect(discovered.records).toEqual([]);
+      expect(discovered.diagnostics).toMatchObject([
+        { kind: "malformed_record", reason: "review loop telemetry is invalid" },
+      ]);
+    },
+  );
+
+  it("reports records with malformed review-loop telemetry as diagnostics", async () => {
+    const { root, storageDir } = await fixture();
+    const published = await publishHarnessObligationRecord(
+      root,
+      {
+        gateId: "athena.pr-validation",
+        obligationId: "review.green",
+        candidate,
+        resolution: {
+          kind: "evidence",
+          providerId: "execute",
+          runId: "run-a",
+          finalPassId: "pass-a",
+          manifestDigest: "digest-a",
+          outcome: "green",
+          blockingCount: 0,
+          unresolvedActionableCount: 0,
+          degradedReviewerCount: 0,
+          reviewLoopTelemetry: {
+            iterationCount: 2,
+            deferredExpansionCount: 1,
+            deferredIssueIds: ["V26-1300"],
+          },
+        },
+      },
+      { storageDir, now: () => "2026-08-11T00:00:00.000Z" },
+    );
+    const stored = JSON.parse(await readFile(published.path, "utf8"));
+    stored.resolution.reviewLoopTelemetry.deferredIssueIds = [];
+    await writeFile(published.path, `${JSON.stringify(stored, null, 2)}\n`);
+
+    const discovered = await discoverHarnessObligationRecords(root, {
+      gateId: "athena.pr-validation",
+      obligationId: "review.green",
+      storageDir,
+    });
+    expect(discovered.records).toEqual([]);
+    expect(discovered.diagnostics).toMatchObject([
+      { kind: "malformed_record", reason: "review loop telemetry is invalid" },
+    ]);
   });
 
   it("discovers only records in the current worktree-local directory", async () => {

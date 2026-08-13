@@ -51,6 +51,9 @@ Do not use this skill when:
 - "I'll merge first and add the landed-change report in a second PR."
 - "I noticed something adjacent, so I should silently expand this ticket."
 - "A vague improvement idea deserves a proactive ticket."
+- "A reviewer asked for it, so it must be in scope for this ticket."
+- "That P1 is really out-of-scope work, so I can defer it." (P0/P1 always block; only P2/P3 expansion findings defer.)
+- "It's classified expansion, so I can just drop it." (Deferral means a filed follow-up issue, not silence.)
 
 ## Shared Context
 
@@ -77,7 +80,8 @@ Use this resolution order before asking the user for context:
 - Prefer the repo's PR-equivalent validation command when one exists; do not assume local `pre-push` hooks cover the full remote CI surface.
 - Default execution posture is `test-first` for new behavior and bug fixes, `characterization-first` for unclear legacy behavior, and `sensor-only` only for pure docs, generated artifacts, configuration, or mechanical changes with no behavior.
 - `auto_review_and_merge = on` unless the user opts out.
-- Merge target `main`; merge method `squash`; review loops run relevant reviewer subagents until unanimous approval with no numeric cap.
+- Merge target `main`; merge method `squash`; review loops run relevant reviewer subagents until unanimous approval on in-contract work with no numeric cap. P0/P1 findings always block regardless of scope classification; P2/P3 findings scope-classified `expansion` and confirmed by the review's scope check resolve by follow-up Linear issue, never by silently growing the delivery.
+- Pass the ticket's delivery contract (title, scope, acceptance criteria; plus plan requirements when a plan exists) into every review dispatch via the review skill's `contract:` argument so scope classification judges against the actual ticket, not an inferred intent line.
 - Merge is the default delivery posture. Do not stop at an open PR when auto-review and merge are on.
 - After merge, fast-forward the local root checkout to `origin/main`; do not leave the repo on a stale local `main`.
 - Before merge, run repo-local `$ce-landed-change-report` for behavior changes, architecture/workflow changes, operator/customer-facing surfaces, cross-layer contracts, coordinated batches, or high-risk refactors. Use the PR URL, candidate head SHA, Linear issue context, and delivered diff as report inputs, follow that skill's subagent requirements, and commit the report to the delivery branch.
@@ -153,9 +157,9 @@ Use this resolution order before asking the user for context:
 For Athena changes that activate the registered `review.green` obligation, run one independent evidence-bearing review checkpoint before `bun run pr:athena`:
 
 1. Run `bun run pr:athena:prepare`, then capture the exact prepared identity with `bun run harness:review-context`. Preparation runs the mechanical checks (`pr:athena:mechanical` — per-package lint plus project typecheck) and publishes no receipt when they fail, so a deterministic lint or type failure is always discovered before any review is dispatched. Fix it and prepare again; never spend a review on a tree that has not been prepared.
-2. Dispatch the complete relevant reviewer set against that exact tree and merge their machine-readable results under `/tmp/compound-engineering/execute/<run-id>/`. Do not count implementation subagents as independent reviewers.
+2. Dispatch the complete relevant reviewer set against that exact tree — passing the ticket's delivery contract via `contract:` — and merge their machine-readable results under `/tmp/compound-engineering/execute/<run-id>/`. Do not count implementation subagents as independent reviewers.
 3. If a review fix changes the candidate, run `bun run pr:athena:prepare` again and repeat the complete review on the resulting context. A partial follow-up cannot authorize the changed tree.
-4. Only after every required reviewer completes with unanimous approval and zero blocking or unresolved actionable findings, finalize `/tmp/compound-engineering/execute/<run-id>/final-manifest.json` with provider `execute`, the context's worktree/candidate fields, reviewer artifacts, findings and mutation sequence, final pass ID, `verdict: "green"`, zero counts, `editedAfterFinalPass: false`, and `finalized: true`.
+4. Only after every required reviewer completes with unanimous approval and zero blocking or unresolved in-scope actionable findings, finalize `/tmp/compound-engineering/execute/<run-id>/final-manifest.json` with provider `execute`, the context's worktree/candidate fields, reviewer artifacts, findings and mutation sequence, final pass ID, `verdict: "green"`, zero counts, `editedAfterFinalPass: false`, and `finalized: true`. In-scope means every finding except confirmed deferred-expansion ones: P0/P1 findings are in-scope by definition regardless of scope classification, and a P2/P3 `expansion` finding counts as resolved only when its scope check confirmed the deferral AND a follow-up Linear issue exists — record each in the manifest's `findings` with `disposition: "deferred"` and its `deferredIssueId`. A deferral without a filed issue id is unresolved actionable work; the evidence recorder rejects it and it blocks finalization. Also include the manifest's `reviewLoopTelemetry` block (`iterationCount`, `findingCounts` by severity, `deferredExpansionCount`, `deferredIssueIds`, and `reviewCost` when your agent platform reports what a dispatch consumed) so the same review_iteration/finding-count telemetry posted to Linear also lands repo-side in the obligation record and delivery-run ledger. `reviewCost` carries the platform's own `unit` and `total` plus a `reportedBy` naming that platform — report what it told you, summed across every review round, never an estimate and never converted between units; omit the block when the platform reports nothing.
 5. Run `bun run harness:review-evidence -- /tmp/compound-engineering/execute/<run-id>/final-manifest.json`. If review is degraded, times out, exhausts a fix loop, or leaves actionable work, do not finalize or record evidence.
 
 This checkpoint authorizes only the exact pre-validation candidate. Keep the later merge-ready review loop below as a separate post-validation stage.
@@ -223,11 +227,13 @@ After opening the PR:
 
 ### 9. Run The Review + Merge Loop
 
-- Run `$requesting-code-review`.
+- Run `$requesting-code-review`, passing the ticket's delivery contract via the review skill's `contract:` argument.
 - Treat any of the following as blocking:
   - internal review `decision = CHANGES_REQUESTED`
   - `critical_count > 0`
   - `important_count > 0`
+  - unresolved in-scope actionable internal findings (everything except confirmed deferred-expansion findings; P0/P1 are in-scope by definition)
+  - a deferred-expansion finding with no filed follow-up Linear issue (deferral without a ticket is unresolved)
   - GitHub review state `CHANGES_REQUESTED`
   - unresolved actionable PR review threads or comments
   - any PR check that failed or was cancelled
@@ -239,8 +245,17 @@ After opening the PR:
   - if both are true, do both
 - The follow-up issue should capture the failing remote check, the local validations that passed, the root cause, and the local command, harness mapping, or coverage addition needed so the failure is caught before CI next time.
 - Link that follow-up issue from the current Linear ticket and the PR comment trail when it materially affects the handoff.
-- Keep looping relevant reviewer subagents until unanimous approval: every selected reviewer must report approval/no blocking findings, GitHub feedback must have no unresolved actionable blockers, and checks must be passing or auto-mergeable. There is no numeric iteration cap; stop only when the next fix is not clear, permissions/repo settings block progress, or genuine user input is required.
+- Keep looping relevant reviewer subagents until unanimous approval on in-scope work: every selected reviewer must report approval/no blocking in-scope findings, every confirmed deferred-expansion finding must have its follow-up Linear issue filed and linked, GitHub feedback must have no unresolved actionable blockers, and checks must be passing or auto-mergeable. There is no numeric iteration cap; stop only when the next fix is not clear, permissions/repo settings block progress, or genuine user input is required.
+- File deferred-expansion follow-up issues directly via Linear MCP per the Defaults — do not invoke `$track`'s workflow for single deferral follow-ups. The ticket body, however, must follow `$track`'s `references/atomic-ticket-template.md` structure so the deferred ticket is executable by this skill later without re-derivation. Populate it from the review finding plus `$compound-delivery-kernel`'s ticket-evidence requirements:
+  - **Summary**: the finding's `why_it_matters`, plus one line naming the source (review run id, PR, and originating ticket) and why it was deferred (P2/P3 expansion beyond the delivery contract, confirmed by scope check).
+  - **Scope**: the concrete change from `suggested_fix` (with any named assumptions carried over); the out-of-scope boundary is the originating ticket's delivered behavior.
+  - **Acceptance Criteria / Test Scenarios**: derive from the finding's failure mode and evidence; quote the evidence lines per the kernel's ticket-evidence rules.
+  - **Execution Posture / Observability / Expected Sensors / Compounding Opportunity**: fill per the template's own defaults for the work's shape; do not leave them implicit.
+  - **Dependencies**: the originating ticket when the deferred work builds on its landed behavior.
+  Link the new issue from the originating ticket and the PR. If a review produces a cluster of related expansion findings large enough to need decomposition into multiple tickets, that is the rare case where handing the cluster to `$track` is appropriate.
+- Reviewer churn control: a finding first raised in a later round against code that was already present and approved in an earlier round is not automatically blocking — adjudicate its scope and severity like any other finding before treating it as a blocker. The strict P0/P1 rule still applies; churn control never waves through a real defect. This dampens the ratchet where each fix round invites fresh scope on already-approved code.
 - If a review-loop edit changes the deliverable diff, refresh the solution/report fingerprints, rerun the report reviewer when applicable, and keep those artifacts in this same PR.
+- After the final `bun run pr:athena` passes, run `bun run delivery:telemetry-record` and commit the resulting `telemetry/delivery-runs/*.json` to this delivery branch, so the run's outcome, duration, review-loop iterations, and review cost survive past this worktree. This is enforced by the `telemetry.recorded` gate obligation (once a passing gate run has completed against the current deliverable) and by the CI telemetry check — a substantial delivery with no current record does not merge. It is demanded only at or above 150 changed source lines, the same threshold `compound:check` uses, and a record describing an older deliverable diff counts as stale: if review-loop edits change the deliverable after you recorded, re-run the gate and re-record. Agents cannot waive it; only an interactive human can. Record after the gate, never mid-run — the gate proves the tree it validated, and a mid-run write invalidates that proof. `telemetry/delivery-runs/` is review-neutral and fingerprint-neutral, so committing the record needs only a cheap `bun run pr:athena:prepare`, not a re-review or a report regeneration.
 - After the review loop is unanimously green and the candidate head, telemetry, report, and compounding artifacts are final, post or refresh the merge-ready Linear comment with the PR URL, candidate head SHA, final telemetry, validation evidence, report path or skip reason, and compounding decision. Keep the ticket in the accurate pre-merge state so merge automation can move it to `Done`.
 - When local gates and review gates pass, mark the PR ready if needed and arm auto-merge with `bun run github:pr-merge -- <pr-number-or-url> --auto --method squash` unless the user explicitly asked you to wait through merge completion or repo settings reject auto-merge.
 - If auto-merge cannot be armed and all PR checks are already green, squash-merge into `main` with `bun run github:pr-merge -- <pr-number-or-url> --method squash --delete-branch`.

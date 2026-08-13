@@ -11,6 +11,8 @@
     "reports:presentation:check": "bun scripts/report-presentation-check.ts",
     "docs:links:check": "bun scripts/docs-solution-link-check.ts",
     "delivery:documentation-check": "bun scripts/delivery-documentation-check.ts",
+    "delivery:telemetry-record": "bun scripts/delivery-run-telemetry.ts record",
+    "delivery:telemetry-check": "bun scripts/delivery-run-telemetry.ts check --base origin/main",
     "graphify:check": "bun scripts/graphify-check.ts",
     "graphify:rebuild": "bun scripts/graphify-rebuild.ts",
     "dependency:check": "bun scripts/frontend-dependency-parity.ts --repair",

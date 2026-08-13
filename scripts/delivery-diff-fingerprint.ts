@@ -18,6 +18,7 @@ export function isDeliverableFingerprintPath(repoPath: string) {
   if (
     normalizedPath.startsWith("docs/reports/") ||
     normalizedPath.startsWith("docs/solutions/") ||
+    normalizedPath.startsWith("telemetry/delivery-runs/") ||
     normalizedPath.startsWith("graphify-out/") ||
     normalizedPath.startsWith("artifacts/") ||
     normalizedPath.startsWith("coverage/") ||

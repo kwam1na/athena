@@ -25,7 +25,8 @@
           "requires_verification",
           "confidence",
           "evidence",
-          "pre_existing"
+          "pre_existing",
+          "scope"
         ],
         "properties": {
           "title": {
@@ -83,6 +84,11 @@
           "pre_existing": {
             "type": "boolean",
             "description": "True if this issue exists in unchanged code unrelated to the current diff"
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["in_contract", "adjacent", "expansion"],
+            "description": "Relationship of the finding's FIX to the delivery contract (the <delivery-contract> block when provided; otherwise plan requirements or the intent summary). in_contract = fixing this is part of delivering what the contract promises: defects in the changed behavior, broken promises, regressions the diff introduces. adjacent = the fix touches the changed code but delivers hardening or quality beyond the contract's promises: extra edge-case handling, extra coverage, refactors of just-written code. expansion = the fix grows the delivery beyond the contract: new capability, generalization, configurability, handling cases the contract never promised. Severity and scope are independent axes, with one hard interaction: synthesis treats P0 and P1 findings as blocking regardless of scope -- newly shipped breakage is always the delivery's job, so scope classification never defers a P0/P1. When unsure between adjacent and expansion, pick adjacent; when unsure between in_contract and adjacent, pick in_contract. The conservative direction is toward blocking, not toward deferral."
           }
         }
       }
@@ -124,6 +130,12 @@
       "manual": "Actionable issue that requires design decisions or cross-cutting changes. Examples: redesign data model, add pagination strategy, choose between architectural approaches.",
       "advisory": "Informational or operational item that should be surfaced in the report only. Examples: design asymmetry the PR improves but does not fully resolve, residual risk notes, deployment considerations."
     },
+    "scope_classes": {
+      "description": "Scope classifies the fix's relationship to the delivery contract, not the finding's validity. It exists so valid-but-out-of-contract work can be deferred to a follow-up ticket instead of silently growing the delivery. Deferral eligibility is narrow: severity P2/P3 AND scope expansion AND autofix_class gated_auto/manual. Everything else follows normal severity/routing rules. P0/P1 block regardless of scope.",
+      "in_contract": "Delivering the contract requires this fix. Includes every defect in behavior the diff ships.",
+      "adjacent": "Hardening or quality work on the changed code beyond what the contract promises. Stays in the normal actionable flow -- adjacent is not deferral-eligible.",
+      "expansion": "Work that grows the delivery beyond the contract. P2/P3 expansion findings are deferral-eligible: externalizing callers resolve them by filing a follow-up ticket rather than fixing in-loop."
+    },
     "owners": {
       "review-fixer": "The in-skill fixer can own this when policy allows.",
       "downstream-resolver": "Turn this into residual work for later resolution.",
@@ -132,7 +144,7 @@
     },
     "return_tiers": {
       "description": "Finding fields are split into two tiers. The full schema (with all required fields) applies to the artifact file on disk. The compact return to the orchestrator omits detail-tier fields. Both are valid uses of this schema in different contexts.",
-      "merge_tier": "Returned to orchestrator: title, severity, file, line, confidence, autofix_class, owner, requires_verification, pre_existing, suggested_fix (optional). Plus top-level reviewer, residual_risks, testing_gaps.",
+      "merge_tier": "Returned to orchestrator: title, severity, file, line, confidence, autofix_class, owner, requires_verification, pre_existing, scope, suggested_fix (optional). Plus top-level reviewer, residual_risks, testing_gaps.",
       "detail_tier": "Required in artifact file, omitted from compact return: why_it_matters, evidence. The artifact file must pass full schema validation including all required fields. Headless output depends on why_it_matters and evidence being present in the artifact."
     }
   }

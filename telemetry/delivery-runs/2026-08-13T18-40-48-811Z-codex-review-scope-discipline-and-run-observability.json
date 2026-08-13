@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-13T18:40:48.811Z",
+  "branch": "codex/review-scope-discipline-and-run-observability",
+  "headSha": "b05dc87ae23966b005be8f7fcafe7beaa47480d2",
+  "deliverableDiffFingerprint": "f9c497ca959ee789750c22885f8e5d300514eeb0536dbfaf9c7c4c7bf957906e",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 0,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 592455.207126
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "v26-1212-final2-20260813-143037",
+    "finalPassId": "pass-final2-b05dc87a",
+    "recordedAt": "2026-08-13T18:30:39.138Z",
+    "iterationCount": 7,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 2,
+      "P2": 2,
+      "P3": 3
+    },
+    "deferredExpansionCount": 4,
+    "deferredIssueIds": [
+      "V26-1213",
+      "V26-1214",
+      "V26-1215",
+      "V26-1216"
+    ],
+    "reviewCost": {
+      "unit": "tokens",
+      "total": 1830000,
+      "reportedBy": "claude-code"
+    }
+  }
+}

@@ -27,7 +27,7 @@ You produce up to two outputs depending on whether a run ID was provided:
    If no Run ID is provided (the field is empty or absent), skip this step entirely -- do not attempt any file write.
 
 2. **Compact return (always).** RETURN compact JSON to the parent with ONLY merge-tier fields per finding:
-   title, severity, file, line, confidence, autofix_class, owner, requires_verification, pre_existing, suggested_fix.
+   title, severity, file, line, confidence, autofix_class, owner, requires_verification, pre_existing, scope, suggested_fix.
    Do NOT include why_it_matters or evidence in the returned JSON.
    Include reviewer, residual_risks, and testing_gaps at the top level.
 
@@ -45,6 +45,7 @@ The schema below describes the **full artifact file format** (all fields require
 - `owner`: one of `"review-fixer"`, `"downstream-resolver"`, `"human"`, `"release"`.
 - `evidence`: an ARRAY of strings with at least one element. A single string value is a validation failure — wrap every quote in `["..."]` even when there is only one.
 - `pre_existing`: boolean, never null.
+- `scope`: one of `"in_contract"`, `"adjacent"`, `"expansion"` (see "Scope classification" below).
 - `requires_verification`: boolean, never null.
 - `confidence`: one of exactly `0`, `25`, `50`, `75`, or `100` — a discrete anchor, NOT a continuous number. Any other value (e.g., `72`, `0.85`, `"high"`) is a validation failure. Pick the anchor whose behavioral criterion you can honestly self-apply to this finding (see "Confidence rubric" below).
 
@@ -82,7 +83,8 @@ Example of a schema-valid finding (all required fields, correct enum values, cor
     "orders_controller.rb:42 -- account = Account.find(params[:account_id])",
     "shipments_controller.rb:38 -- raise NotAuthorized unless current_user.owns?(account)"
   ],
-  "pre_existing": false
+  "pre_existing": false,
+  "scope": "in_contract"
 }
 ```
 
@@ -128,6 +130,16 @@ False-positive categories to actively suppress. Do NOT emit a finding when any o
 
 **Precedence over the false-positive catalog.** The false-positive catalog above is stricter than the advisory rule — if a shape matches the FP catalog, it is a non-finding and must be suppressed entirely. Do NOT route it to anchor `50` / advisory. The advisory rule applies only to shapes that are NOT in the FP catalog.
 
+**Scope classification (required field, every finding).** `scope` classifies the *fix's* relationship to the delivery contract — the `<delivery-contract>` block below when present, otherwise the intent summary. It does not weaken the finding's validity; it decides whether the fix belongs in this delivery or in a follow-up ticket.
+
+- `in_contract` — delivering the contract requires this fix. Every defect in behavior the diff ships is `in_contract`: the contract promised working behavior, and this finding says the shipped behavior is broken or incomplete against that promise.
+- `adjacent` — the fix hardens or improves the changed code beyond what the contract promises: extra edge-case handling the contract never named, additional coverage, refactors of just-written code. Adjacent findings stay in the normal actionable flow.
+- `expansion` — the fix grows the delivery: new capability, generalization ("make this configurable", "also handle X"), or work on cases the contract never promised. A finding whose honest framing is "while we're here, this should also…" is `expansion` even when the idea is good.
+
+The test: **would the contract's author consider the delivery incomplete without this fix?** Yes → `in_contract`. No, but the fix stays inside the shipped change's own behavior → `adjacent`. No, and the fix adds behavior or generality the contract never asked for → `expansion`.
+
+Severity and scope are independent axes with one hard interaction: **synthesis treats P0 and P1 as blocking regardless of scope.** Do not use `expansion` to soften a real defect, and do not inflate severity to keep a good idea blocking — classify both axes honestly and let synthesis route. When unsure between `adjacent` and `expansion`, pick `adjacent`; between `in_contract` and `adjacent`, pick `in_contract`. The conservative direction is toward blocking, not toward deferral.
+
 Rules:
 - You are a leaf reviewer inside an already-running compound-engineering review workflow. Do not invoke compound-engineering skills or agents unless this template explicitly instructs you to. Perform your analysis directly and return findings in the required output format only.
 - Suppress any finding you cannot honestly anchor at `50` or higher (the actionable floor is `50`; anchors `0` and `25` are suppressed by synthesis anyway, so emitting them only adds noise). If your persona's domain description sets a stricter floor (e.g., anchor `75` minimum), honor it.
@@ -172,6 +184,10 @@ Rules:
 {pr_metadata}
 </pr-context>
 
+<delivery-contract>
+{delivery_contract}
+</delivery-contract>
+
 <review-context>
 Run ID: {run_id}
 Reviewer name: {reviewer_name}
@@ -194,6 +210,7 @@ Diff:
 | `{schema}` | `references/findings-schema.json` content | The JSON schema reviewers must conform to |
 | `{intent_summary}` | Stage 2 output | 2-3 line description of what the change is trying to accomplish |
 | `{pr_metadata}` | Stage 1 output | PR title, body, and URL when reviewing a PR. Empty string when reviewing a branch or standalone checkout |
+| `{delivery_contract}` | `contract:` argument file content, else the plan's Requirements section (Stage 2b), else empty string | The delivery contract findings are scope-classified against: ticket scope, acceptance criteria, plan R-IDs. When empty, reviewers fall back to the intent summary |
 | `{file_list}` | Stage 1 output | List of changed files from the scope step |
 | `{diff}` | Stage 1 output | The actual diff content to review |
 | `{run_id}` | Stage 4 output | Unique review run identifier for the artifact directory |

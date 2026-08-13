@@ -14,6 +14,10 @@ import {
 } from "./harness-candidate";
 import { evaluateDeliveryDocumentationCheck } from "./delivery-documentation-check";
 import {
+  evaluateDeliveryRunTelemetryCheck,
+  type DeliveryRunTelemetryFindingCode,
+} from "./delivery-run-telemetry";
+import {
   classifyCurrentHarnessExecutionContext,
   type HarnessExecutionContext as ClassifiedExecutionContext,
 } from "./harness-execution-context";
@@ -27,6 +31,7 @@ import {
 import {
   ATHENA_PR_VALIDATION_GATE_ID,
   HARNESS_GATE_REGISTRY,
+  type HarnessObligationId,
 } from "./harness-gate-registry";
 import {
   discoverHarnessObligationRecords,
@@ -48,6 +53,9 @@ type PreparationEvaluation = Awaited<
 >;
 type DocumentationEvaluation = ReturnType<
   typeof evaluateDeliveryDocumentationCheck
+>;
+type TelemetryEvaluation = ReturnType<
+  typeof evaluateDeliveryRunTelemetryCheck
 >;
 type ActivationProjection = Awaited<
   ReturnType<typeof evaluateCandidateReviewActivation>
@@ -80,6 +88,7 @@ type AdmissionOptions = {
   classifyContext?: () => ClassifiedExecutionContext;
   discoverRecords?: typeof discoverHarnessObligationRecords;
   evaluateDocumentation?: (rootDir: string) => DocumentationEvaluation;
+  evaluateTelemetry?: (rootDir: string) => TelemetryEvaluation;
   resolveWorktreeId?: (rootDir: string) => Promise<string>;
   captureCandidate?: typeof captureStableHarnessCandidate;
   writeDecisionEvent?: (
@@ -87,10 +96,14 @@ type AdmissionOptions = {
     event: HarnessGateDecisionEvent,
   ) => Promise<string>;
   spawnHeavy?: (command: readonly string[], rootDir: string) => Promise<number>;
-  promptForWaiver?: (decision: GateObligationDecision) => Promise<boolean>;
+  promptForWaiver?: (
+    decision: GateObligationDecision,
+    obligationIds: readonly string[],
+  ) => Promise<boolean>;
   publishWaiver?: (
     rootDir: string,
     candidate: CandidateBinding,
+    obligationId: string,
   ) => Promise<unknown>;
   now?: () => string;
   logger?: Pick<Console, "log" | "error">;
@@ -193,6 +206,25 @@ function documentationProviderResult(result: DocumentationEvaluation) {
   };
 }
 
+function telemetryProviderResult(result: TelemetryEvaluation) {
+  return {
+    providerId: "delivery-run-telemetry-check",
+    runId: randomUUID(),
+    status: result.status === "pass" ? ("green" as const) : ("failed" as const),
+    // The provider's own code is preserved rather than flattened: only a
+    // missing record is waivable, so a malformed one must not arrive wearing
+    // the waivable code.
+    findings: result.findings.map((finding) => ({
+      code: finding.code,
+      message: `Delivery-run telemetry: ${finding.message}`,
+      remediation:
+        finding.code === "telemetry_record_malformed"
+          ? "Regenerate the record with `bun run delivery:telemetry-record` instead of editing it by hand."
+          : "Run `bun run delivery:telemetry-record` after the passing gate run and commit the record.",
+    })),
+  };
+}
+
 function reviewProjection(projection: ActivationProjection) {
   return {
     relevantChangedLines: projection.relevantLineCount,
@@ -201,47 +233,90 @@ function reviewProjection(projection: ActivationProjection) {
   };
 }
 
+/**
+ * Which blocked findings an interactive human may waive, per obligation. The
+ * codes are enumerated rather than blanket-allowed so a waiver stays an
+ * "I accept this missing artifact" decision and never becomes a way past a
+ * malformed record or an unknown provider.
+ */
+export const WAIVABLE_FINDING_CODES: {
+  "review.green": readonly string[];
+  // Typed against the provider's own code union: a misspelling here would
+  // otherwise type-check and silently make the waiver unofferable forever.
+  "telemetry.recorded": readonly DeliveryRunTelemetryFindingCode[];
+} = {
+  "review.green": [
+    "review_evidence_missing",
+    "stale_evidence",
+    "unknown_provider",
+    "evidence_not_green",
+  ],
+  "telemetry.recorded": ["telemetry_record_missing"],
+};
+
+function waivableBlockedObligationIds(
+  decision: GateObligationDecision,
+  context: HarnessExecutionContext,
+) {
+  if (context.kind !== "interactive_human") return [];
+  const blocked = decision.resolutions.filter(
+    (resolution) => resolution.kind === "blocked",
+  );
+  if (blocked.length === 0) return [];
+  const waivable = blocked.every((resolution) => {
+    const obligation =
+      HARNESS_GATE_REGISTRY.obligations[resolution.obligationId];
+    const allowedCodes =
+      WAIVABLE_FINDING_CODES[resolution.obligationId as HarnessObligationId];
+    return (
+      Boolean(obligation?.humanWaiverAllowed) &&
+      allowedCodes !== undefined &&
+      resolution.findings.every((finding) => allowedCodes.includes(finding.code))
+    );
+  });
+  return waivable ? blocked.map((resolution) => resolution.obligationId) : [];
+}
+
 function canOfferInvocationWaiver(
   decision: GateObligationDecision,
   context: HarnessExecutionContext,
 ) {
-  if (context.kind !== "interactive_human") return false;
-  const blocked = decision.resolutions.filter(
-    (resolution) => resolution.kind === "blocked",
-  );
-  return (
-    blocked.length === 1 &&
-    blocked[0].obligationId === "review.green" &&
-    blocked[0].findings.every((finding) =>
-      [
-        "review_evidence_missing",
-        "stale_evidence",
-        "unknown_provider",
-        "evidence_not_green",
-      ].includes(finding.code),
-    )
-  );
+  return waivableBlockedObligationIds(decision, context).length > 0;
 }
 
 function withInvocationWaiver(
   candidate: CandidateBinding,
   records: DiscoveredObligationRecord[],
+  obligationIds: readonly string[],
 ) {
   return [
     ...records,
-    {
+    ...obligationIds.map((obligationId) => ({
       schemaVersion: 1 as const,
       kind: "waiver" as const,
       recordId: `invocation:${randomUUID()}`,
       gateId: ATHENA_PR_VALIDATION_GATE_ID,
-      obligationId: "review.green",
+      obligationId,
       candidate,
-    },
+    })),
   ];
 }
 
-async function defaultPrompt(decision: GateObligationDecision) {
-  console.log("Review evidence is missing for this prepared candidate.");
+/**
+ * The prompt must name every obligation the single confirmation waives. One
+ * "yes" can now cover more than review evidence, and consent to a headline that
+ * names only one of them is not consent to the rest.
+ */
+async function defaultPrompt(
+  decision: GateObligationDecision,
+  obligationIds: readonly string[] = [],
+) {
+  const named = obligationIds.length > 0
+    ? obligationIds.join(", ")
+    : "review.green";
+  console.log(
+    `This prepared candidate is blocked by: ${named}.`,
+  );
   for (const remediation of decision.remediation.human)
     console.log(`- ${remediation}`);
   const terminal = createInterface({
@@ -250,7 +325,7 @@ async function defaultPrompt(decision: GateObligationDecision) {
   });
   try {
     const answer = await terminal.question(
-      "Proceed with an invocation-scoped human waiver? Type 'yes' to continue: ",
+      `Waive ${named} for this invocation? Type 'yes' to continue: `,
     );
     return answer.trim().toLowerCase() === "yes";
   } catch {
@@ -453,6 +528,18 @@ export async function runHarnessGateAdmission(
   const documentation = (
     options.evaluateDocumentation ?? evaluateDeliveryDocumentationCheck
   )(rootDir);
+  const telemetry = (
+    options.evaluateTelemetry ??
+    // Derived from the classified context, never from a raw CI env var: agent
+    // sandboxes commonly export CI, and letting that switch this evaluation
+    // into strict mode disables the bootstrap leniency and leaves a
+    // non-interactive agent with no legal move. The real CI enforcement point
+    // is the separate delivery:telemetry-check workflow step.
+    ((dir: string) =>
+      evaluateDeliveryRunTelemetryCheck(dir, {
+        ciMode: context.kind === "repository_ci",
+      }))
+  )(rootDir);
   const discovered = await (
     options.discoverRecords ?? discoverHarnessObligationRecords
   )(rootDir, {
@@ -473,13 +560,21 @@ export async function runHarnessGateAdmission(
     candidate: binding,
     reviewProjection: reviewProjection(projection),
     executionContext: context,
-    liveProviderResults: [documentationProviderResult(documentation)],
+    liveProviderResults: [
+      documentationProviderResult(documentation),
+      telemetryProviderResult(telemetry),
+    ],
     records,
   });
   let decision = evaluateGateObligations(decisionInput());
   let invocationWaiver = false;
+  let waivedObligationIds: readonly string[] = [];
   if (!decision.admitted && canOfferInvocationWaiver(decision, context)) {
-    const accepted = await (options.promptForWaiver ?? defaultPrompt)(decision);
+    waivedObligationIds = waivableBlockedObligationIds(decision, context);
+    const accepted = await (options.promptForWaiver ?? defaultPrompt)(
+      decision,
+      waivedObligationIds,
+    );
     if (accepted) {
       const promptCapture = await (
         options.captureCandidate ?? captureStableHarnessCandidate
@@ -503,7 +598,7 @@ export async function runHarnessGateAdmission(
           ],
         };
       } else {
-        records = withInvocationWaiver(binding, records);
+        records = withInvocationWaiver(binding, records, waivedObligationIds);
         decision = evaluateGateObligations(decisionInput());
         invocationWaiver = decision.admitted;
       }
@@ -661,16 +756,28 @@ export async function runHarnessGateAdmission(
     };
   }
   if (invocationWaiver) {
-    await (
-      options.publishWaiver ??
-      ((dir, currentCandidate) =>
-        publishHarnessObligationRecord(dir, {
-          gateId: ATHENA_PR_VALIDATION_GATE_ID,
-          obligationId: "review.green",
-          candidate: currentCandidate,
-          resolution: { kind: "waiver" },
-        }))
-    )(rootDir, binding);
+    // One durable waiver record per *historical* obligation the human accepted,
+    // so the audit trail names what was waived rather than implying
+    // review.green. Live obligations are re-evaluated every run and their
+    // waivers are invocation-scoped, so a durable record for them would never
+    // be read back — the decision event is their audit trail.
+    const durableWaivers = waivedObligationIds.filter(
+      (obligationId) =>
+        HARNESS_GATE_REGISTRY.obligations[obligationId]?.freshness.kind !==
+          "live",
+    );
+    for (const obligationId of durableWaivers) {
+      await (
+        options.publishWaiver ??
+        ((dir, currentCandidate, waivedObligationId) =>
+          publishHarnessObligationRecord(dir, {
+            gateId: ATHENA_PR_VALIDATION_GATE_ID,
+            obligationId: waivedObligationId,
+            candidate: currentCandidate,
+            resolution: { kind: "waiver" },
+          }))
+      )(rootDir, binding, obligationId);
+    }
   }
   await writeEvent(
     rootDir,

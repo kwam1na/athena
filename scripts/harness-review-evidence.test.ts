@@ -488,6 +488,8 @@ describe("harness review evidence", () => {
         id: "finding-a",
         actionable: true,
         blocking: false,
+        severity: "P2",
+        scope: "in_contract",
         disposition: "unresolved",
       },
     ],
@@ -497,6 +499,8 @@ describe("harness review evidence", () => {
         id: "finding-a",
         actionable: true,
         blocking: false,
+        severity: "P2",
+        scope: "in_contract",
         disposition: "ignored",
       },
     ],
@@ -545,6 +549,415 @@ describe("harness review evidence", () => {
           providerRunRoots: { execute: setup.providerRoot },
         }),
       ).rejects.toThrow(/final mutation/);
+    },
+  );
+
+  const deferredFinding = {
+    id: "finding-a",
+    actionable: true,
+    blocking: false,
+    severity: "P2",
+    scope: "expansion",
+    disposition: "deferred",
+    deferredIssueId: "V26-1300",
+  };
+
+  function recordOptions(setup: Awaited<ReturnType<typeof fixture>>) {
+    return {
+      storageDir: setup.storageDir,
+      providerRunRoots: { execute: setup.providerRoot },
+      captureCandidate: async () => ({
+        ok: true as const,
+        candidate: setup.candidate,
+      }),
+      resolveWorktreeId: async () => setup.worktreeId,
+      now: () => "2026-08-11T00:00:00.000Z",
+    };
+  }
+
+  it("records a deferred expansion finding and derives loop telemetry", async () => {
+    const setup = await fixture();
+    await writeFile(
+      setup.manifestPath,
+      `${JSON.stringify(
+        {
+          ...setup.manifest,
+          findings: [deferredFinding],
+          mutationSequence: [
+            { preparedTreeSha: "tree-0", reviewedInPassId: "pass-0" },
+            { preparedTreeSha: "tree-a", reviewedInPassId: "pass-a" },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    const result = await recordHarnessReviewEvidence(
+      setup.rootDir,
+      setup.manifestPath,
+      recordOptions(setup),
+    );
+    expect(result.resolution).toMatchObject({
+      kind: "evidence",
+      outcome: "green",
+      reviewLoopTelemetry: {
+        iterationCount: 2,
+        deferredExpansionCount: 1,
+        deferredIssueIds: ["V26-1300"],
+      },
+    });
+  });
+
+  it.each([
+    ["missing issue id", { ...deferredFinding, deferredIssueId: undefined }],
+    ["blocking finding", { ...deferredFinding, blocking: true }],
+    ["non-actionable finding", { ...deferredFinding, actionable: false }],
+  ])("rejects a deferred %s", async (_label, finding) => {
+    const setup = await fixture();
+    await writeFile(
+      setup.manifestPath,
+      `${JSON.stringify(
+        { ...setup.manifest, findings: [finding] },
+        null,
+        2,
+      )}\n`,
+    );
+    await expect(
+      recordHarnessReviewEvidence(setup.rootDir, setup.manifestPath, {
+        storageDir: setup.storageDir,
+        providerRunRoots: { execute: setup.providerRoot },
+      }),
+    ).rejects.toThrow(/deferred findings must be actionable, non-blocking/);
+  });
+
+  it.each([
+    [
+      "a P0 finding",
+      { ...deferredFinding, severity: "P0" },
+      /defers a P0\/P1 finding/,
+    ],
+    [
+      "a P1 finding",
+      { ...deferredFinding, severity: "P1" },
+      /defers a P0\/P1 finding/,
+    ],
+    [
+      "an in-contract finding",
+      { ...deferredFinding, scope: "in_contract" },
+      /scope is not expansion/,
+    ],
+    [
+      "an adjacent finding",
+      { ...deferredFinding, scope: "adjacent" },
+      /scope is not expansion/,
+    ],
+    [
+      "a placeholder issue id",
+      { ...deferredFinding, deferredIssueId: "TODO" },
+      /tracker-shaped follow-up issue id/,
+    ],
+    [
+      "a lowercase issue id",
+      { ...deferredFinding, deferredIssueId: "v26-1300" },
+      /tracker-shaped follow-up issue id/,
+    ],
+  ])(
+    "refuses to defer %s, so the eligibility rule is machine-checked rather than trusted",
+    async (_label, finding, message) => {
+      const setup = await fixture();
+      await writeFile(
+        setup.manifestPath,
+        `${JSON.stringify({ ...setup.manifest, findings: [finding] }, null, 2)}\n`,
+      );
+      await expect(
+        recordHarnessReviewEvidence(setup.rootDir, setup.manifestPath, {
+          storageDir: setup.storageDir,
+          providerRunRoots: { execute: setup.providerRoot },
+        }),
+      ).rejects.toThrow(message);
+    },
+  );
+
+  it.each([
+    ["a missing severity", { ...deferredFinding, severity: undefined }],
+    ["a missing scope", { ...deferredFinding, scope: undefined }],
+    ["an unknown severity", { ...deferredFinding, severity: "P9" }],
+    ["an unknown scope", { ...deferredFinding, scope: "someday" }],
+  ])("rejects a finding with %s", async (_label, finding) => {
+    const setup = await fixture();
+    await writeFile(
+      setup.manifestPath,
+      `${JSON.stringify({ ...setup.manifest, findings: [finding] }, null, 2)}\n`,
+    );
+    await expect(
+      recordHarnessReviewEvidence(setup.rootDir, setup.manifestPath, {
+        storageDir: setup.storageDir,
+        providerRunRoots: { execute: setup.providerRoot },
+      }),
+    ).rejects.toThrow(/contains an invalid finding/);
+  });
+
+  it.each([
+    ["a negative finding count", { P0: -1, P1: 0, P2: 0, P3: 0 }],
+    ["a fractional finding count", { P0: 0.5, P1: 0, P2: 0, P3: 0 }],
+    ["a missing severity key", { P0: 0, P1: 0, P2: 0 }],
+  ])("rejects manifest telemetry with %s", async (_label, findingCounts) => {
+    // The manifest and record parsers share one predicate now, so this can no
+    // longer be validated on only one side.
+    const setup = await fixture();
+    await writeFile(
+      setup.manifestPath,
+      `${JSON.stringify(
+        {
+          ...setup.manifest,
+          reviewLoopTelemetry: {
+            iterationCount: 1,
+            deferredExpansionCount: 0,
+            deferredIssueIds: [],
+            findingCounts,
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await expect(
+      recordHarnessReviewEvidence(setup.rootDir, setup.manifestPath, {
+        storageDir: setup.storageDir,
+        providerRunRoots: { execute: setup.providerRoot },
+      }),
+    ).rejects.toThrow(/telemetry is invalid/);
+  });
+
+  it("fails validation rather than crashing on non-string deferral ids", async () => {
+    const setup = await fixture();
+    await writeFile(
+      setup.manifestPath,
+      `${JSON.stringify(
+        {
+          ...setup.manifest,
+          reviewLoopTelemetry: {
+            iterationCount: 1,
+            deferredExpansionCount: 2,
+            deferredIssueIds: [1, 2],
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await expect(
+      recordHarnessReviewEvidence(setup.rootDir, setup.manifestPath, {
+        storageDir: setup.storageDir,
+        providerRunRoots: { execute: setup.providerRoot },
+      }),
+    ).rejects.toThrow(/telemetry is invalid/);
+  });
+
+  it("rejects telemetry claiming finding counts its own findings contradict", async () => {
+    // Every finding carries a validated severity, so an all-zero claim over a
+    // findings array containing real severities would let a record misdescribe
+    // its own run with no trace.
+    const setup = await fixture();
+    await writeFile(
+      setup.manifestPath,
+      `${JSON.stringify(
+        {
+          ...setup.manifest,
+          findings: [deferredFinding],
+          reviewLoopTelemetry: {
+            iterationCount: 1,
+            findingCounts: { P0: 0, P1: 0, P2: 0, P3: 0 },
+            deferredExpansionCount: 1,
+            deferredIssueIds: ["V26-1300"],
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await expect(
+      recordHarnessReviewEvidence(setup.rootDir, setup.manifestPath, {
+        storageDir: setup.storageDir,
+        providerRunRoots: { execute: setup.providerRoot },
+      }),
+    ).rejects.toThrow(/findingCounts must match the severities/);
+  });
+
+  it("accepts explicit loop telemetry that matches the deferred findings", async () => {
+    const setup = await fixture();
+    await writeFile(
+      setup.manifestPath,
+      `${JSON.stringify(
+        {
+          ...setup.manifest,
+          findings: [deferredFinding],
+          reviewLoopTelemetry: {
+            iterationCount: 3,
+            // Must match the manifest's own findings: one deferred P2.
+            findingCounts: { P0: 0, P1: 0, P2: 1, P3: 0 },
+            deferredExpansionCount: 1,
+            deferredIssueIds: ["V26-1300"],
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    const result = await recordHarnessReviewEvidence(
+      setup.rootDir,
+      setup.manifestPath,
+      recordOptions(setup),
+    );
+    expect(result.resolution).toMatchObject({
+      reviewLoopTelemetry: {
+        iterationCount: 3,
+        findingCounts: { P0: 0, P1: 0, P2: 1, P3: 0 },
+        deferredExpansionCount: 1,
+        deferredIssueIds: ["V26-1300"],
+      },
+    });
+  });
+
+  it.each([
+    [
+      "token-metered platform",
+      {
+        unit: "tokens",
+        total: 512345,
+        reportedBy: "claude-code",
+        byReviewer: { correctness: 190000, adversarial: 150000 },
+      },
+    ],
+    [
+      "platform metering fractional units of its own",
+      { unit: "credits", total: 12.5, reportedBy: "some-other-runtime" },
+    ],
+  ])(
+    "records a self-reported review cost from a %s",
+    async (_label, reviewCost) => {
+      const setup = await fixture();
+      await writeFile(
+        setup.manifestPath,
+        `${JSON.stringify(
+          {
+            ...setup.manifest,
+            reviewLoopTelemetry: {
+              iterationCount: 2,
+              deferredExpansionCount: 0,
+              deferredIssueIds: [],
+              reviewCost,
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      const result = await recordHarnessReviewEvidence(
+        setup.rootDir,
+        setup.manifestPath,
+        recordOptions(setup),
+      );
+      expect(result.resolution).toMatchObject({
+        reviewLoopTelemetry: { reviewCost },
+      });
+    },
+  );
+
+  it.each([
+    ["missing unit", { total: 100 }],
+    ["empty unit", { unit: "", total: 100 }],
+    ["negative total", { unit: "tokens", total: -1 }],
+    // JSON has no infinity: a platform serializing one lands here as null.
+    ["null total", { unit: "tokens", total: Number.POSITIVE_INFINITY }],
+    [
+      "per-reviewer amounts exceeding the run total",
+      {
+        unit: "tokens",
+        total: 100,
+        byReviewer: { correctness: 80, adversarial: 40 },
+      },
+    ],
+    [
+      "negative per-reviewer amount",
+      { unit: "tokens", total: 100, byReviewer: { correctness: -1 } },
+    ],
+    [
+      "empty reporting platform",
+      { unit: "tokens", total: 100, reportedBy: "" },
+    ],
+  ])("rejects a review cost with a %s", async (_label, reviewCost) => {
+    const setup = await fixture();
+    await writeFile(
+      setup.manifestPath,
+      `${JSON.stringify(
+        {
+          ...setup.manifest,
+          reviewLoopTelemetry: {
+            iterationCount: 1,
+            deferredExpansionCount: 0,
+            deferredIssueIds: [],
+            reviewCost,
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await expect(
+      recordHarnessReviewEvidence(setup.rootDir, setup.manifestPath, {
+        storageDir: setup.storageDir,
+        providerRunRoots: { execute: setup.providerRoot },
+      }),
+    ).rejects.toThrow(/reviewCost must name a unit and a non-negative total/);
+  });
+
+  it.each([
+    [
+      "deferral count that disagrees with the findings",
+      { iterationCount: 2, deferredExpansionCount: 0, deferredIssueIds: [] },
+      /deferral facts must match/,
+    ],
+    [
+      "issue ids that disagree with the findings",
+      {
+        iterationCount: 2,
+        deferredExpansionCount: 1,
+        deferredIssueIds: ["V26-9999"],
+      },
+      /deferral facts must match/,
+    ],
+    [
+      "non-positive iteration count",
+      {
+        iterationCount: 0,
+        deferredExpansionCount: 1,
+        deferredIssueIds: ["V26-1300"],
+      },
+      /iterationCount must be a positive integer/,
+    ],
+  ])(
+    "rejects explicit loop telemetry with a %s",
+    async (_label, reviewLoopTelemetry, message) => {
+      const setup = await fixture();
+      await writeFile(
+        setup.manifestPath,
+        `${JSON.stringify(
+          {
+            ...setup.manifest,
+            findings: [deferredFinding],
+            reviewLoopTelemetry,
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      await expect(
+        recordHarnessReviewEvidence(setup.rootDir, setup.manifestPath, {
+          storageDir: setup.storageDir,
+          providerRunRoots: { execute: setup.providerRoot },
+        }),
+      ).rejects.toThrow(message);
     },
   );
 });

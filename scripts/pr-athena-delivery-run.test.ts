@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -8,9 +8,18 @@ import { describe, expect, it } from "vitest";
 import {
   consumeHarnessGateDecisionEvents,
   parseProviderSkippedEvents,
+  resolveSummaryBaseline,
   runPrAthenaDeliveryRun,
   writePrAthenaProviderEvidence,
 } from "./pr-athena-delivery-run";
+import {
+  createDeliveryRunLedger,
+  writeDeliveryRunLedger,
+} from "./harness-delivery-run-ledger";
+import {
+  buildDeliveryRunTelemetryRecord,
+  writeDeliveryRunTelemetryRecord,
+} from "./delivery-run-telemetry";
 
 const candidate = {
   treeSha: "tree-a",
@@ -567,6 +576,117 @@ describe("pr-athena delivery run wrapper", () => {
         proofState: "proof_recorded",
         summary: { commandCount: 5 },
       });
+    } finally {
+      await rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it("promotes a passing previous latest to baseline, appends history, and folds review-loop telemetry", async () => {
+    const rootDir = await mkdtemp(path.join(tmpdir(), "athena-pr-baseline-"));
+    let tick = 0;
+    const reviewLoop = {
+      providerId: "execute",
+      runId: "run-a",
+      finalPassId: "pass-a",
+      recordedAt: "2026-06-17T12:00:00.000Z",
+      iterationCount: 2,
+      deferredExpansionCount: 1,
+      deferredIssueIds: ["V26-1300"],
+    };
+
+    try {
+      const run = () =>
+        runPrAthenaDeliveryRun(rootDir, {
+          ...gateEventHarness(),
+          nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
+          monotonicMs: () => tick++ * 1000,
+          runCommand: async () => ({ exitCode: 0 }),
+          resolveReviewLoopSummary: async () => reviewLoop,
+        });
+
+      const first = await run();
+      expect(first.ledger.reviewLoop).toMatchObject({
+        iterationCount: 2,
+        deferredExpansionCount: 1,
+        deferredIssueIds: ["V26-1300"],
+      });
+      const firstGeneratedAt = first.ledger.generatedAt;
+
+      const second = await run();
+
+      const baseline = JSON.parse(
+        await readFile(
+          path.join(rootDir, "artifacts/harness-delivery-runs/baseline.json"),
+          "utf8",
+        ),
+      );
+      expect(baseline).toMatchObject({
+        status: "pass",
+        generatedAt: firstGeneratedAt,
+      });
+
+      const historyDir = path.join(
+        rootDir,
+        "artifacts/harness-delivery-runs/history",
+      );
+      const historyEntries = (await readdir(historyDir)).sort();
+      expect(historyEntries).toHaveLength(2);
+      expect(historyEntries.at(-1)).toBe(
+        `${second.ledger.generatedAt.replace(/[:.]/g, "-")}.json`,
+      );
+    } finally {
+      await rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it("prefers the tracked telemetry corpus over the worktree baseline", async () => {
+    const rootDir = await mkdtemp(path.join(tmpdir(), "athena-pr-tracked-"));
+
+    try {
+      const ledger = createDeliveryRunLedger({
+        generatedAt: "2026-06-17T12:00:00.000Z",
+        status: "pass",
+        proofState: "proof_recorded",
+        commandSpans: [],
+      });
+
+      await expect(resolveSummaryBaseline(rootDir)).resolves.toEqual({
+        baseline: null,
+      });
+
+      await writeDeliveryRunLedger(rootDir, ledger, {
+        baselinePath: "artifacts/harness-delivery-runs/baseline.json",
+      });
+      await expect(resolveSummaryBaseline(rootDir)).resolves.toMatchObject({
+        baselineSource: "worktree",
+      });
+
+      await writeDeliveryRunTelemetryRecord(
+        rootDir,
+        buildDeliveryRunTelemetryRecord(
+          createDeliveryRunLedger({
+            generatedAt: "2026-06-18T12:00:00.000Z",
+            status: "pass",
+            proofState: "proof_recorded",
+            commandSpans: [],
+          }),
+          {
+            branch: "codex/landed",
+            headSha: "abc123",
+            deliverableDiffFingerprint: "fingerprint-a",
+          },
+        ),
+      );
+      await expect(resolveSummaryBaseline(rootDir)).resolves.toMatchObject({
+        baselineSource: "tracked",
+        baseline: { generatedAt: "2026-06-18T12:00:00.000Z" },
+      });
+
+      // A branch must not compare against its own committed record: that is a
+      // near-zero self-delta dressed as a cross-delivery trend.
+      await expect(
+        resolveSummaryBaseline(rootDir, { currentBranch: "codex/landed" }),
+      ).resolves.toMatchObject({ baselineSource: "worktree" });
     } finally {
       await rm(rootDir, { recursive: true, force: true });
     }
