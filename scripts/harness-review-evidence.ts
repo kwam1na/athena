@@ -10,9 +10,12 @@ import {
   type HarnessProviderId,
 } from "./harness-gate-registry";
 import {
+  isValidReviewCost,
+  isValidReviewLoopTelemetry,
   publishHarnessObligationRecord,
   resolveHarnessObligationStorageContext,
   type HarnessObligationCandidateBinding,
+  type HarnessReviewLoopTelemetry,
 } from "./harness-obligation-records";
 import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
 import {
@@ -28,9 +31,26 @@ type FinalReviewFinding = {
   id: string;
   actionable: boolean;
   blocking: boolean;
+  severity: "P0" | "P1" | "P2" | "P3";
+  scope: "in_contract" | "adjacent" | "expansion";
   disposition:
-    "resolved" | "advisory" | "pre_existing" | "unresolved" | "ignored";
+    | "resolved"
+    | "advisory"
+    | "pre_existing"
+    | "deferred"
+    | "unresolved"
+    | "ignored";
+  deferredIssueId?: string;
 };
+
+const FINDING_SEVERITIES = ["P0", "P1", "P2", "P3"] as const;
+const FINDING_SCOPES = ["in_contract", "adjacent", "expansion"] as const;
+/**
+ * A tracker id, not merely a non-empty string: "TODO" or "x" must not read as
+ * filed work once it is copied into the obligation record and the run summary.
+ * Existence is still unverifiable from here — the shape check is the floor.
+ */
+const DEFERRED_ISSUE_ID = /^[A-Z][A-Z0-9]*-\d+$/;
 
 export type HarnessFinalReviewManifest = {
   schemaVersion: typeof HARNESS_REVIEW_MANIFEST_SCHEMA_VERSION;
@@ -55,6 +75,7 @@ export type HarnessFinalReviewManifest = {
   blockingCount: 0;
   editedAfterFinalPass: false;
   finalized: true;
+  reviewLoopTelemetry: HarnessReviewLoopTelemetry;
 };
 
 type HarnessReviewerArtifact = {
@@ -229,10 +250,13 @@ function parseManifest(value: unknown): HarnessFinalReviewManifest {
         !isNonEmptyString(finding?.id) ||
         typeof finding.actionable !== "boolean" ||
         typeof finding.blocking !== "boolean" ||
+        !FINDING_SEVERITIES.includes(finding.severity) ||
+        !FINDING_SCOPES.includes(finding.scope) ||
         ![
           "resolved",
           "advisory",
           "pre_existing",
+          "deferred",
           "unresolved",
           "ignored",
         ].includes(finding.disposition),
@@ -240,12 +264,53 @@ function parseManifest(value: unknown): HarnessFinalReviewManifest {
   ) {
     throw new Error("review manifest contains an invalid finding");
   }
+  const deferredFindings = findings.filter(
+    (finding) => finding.disposition === "deferred",
+  );
+  if (
+    deferredFindings.some(
+      (finding) =>
+        !finding.actionable ||
+        finding.blocking ||
+        !isNonEmptyString(finding.deferredIssueId),
+    )
+  ) {
+    throw new Error(
+      "review manifest deferred findings must be actionable, non-blocking, and name their filed follow-up issue id",
+    );
+  }
+  // The eligibility rule is enforced here rather than trusted to the reviewing
+  // agent: the same orchestrator authors the manifest, so "P0/P1 never defer"
+  // and "only expansion defers" must be machine-checked to mean anything.
+  if (
+    deferredFindings.some((finding) => ["P0", "P1"].includes(finding.severity))
+  ) {
+    throw new Error(
+      "review manifest defers a P0/P1 finding; critical and high-severity findings block regardless of scope",
+    );
+  }
+  if (deferredFindings.some((finding) => finding.scope !== "expansion")) {
+    throw new Error(
+      "review manifest defers a finding whose scope is not expansion; only work beyond the delivery contract may be deferred",
+    );
+  }
+  if (
+    deferredFindings.some(
+      (finding) => !DEFERRED_ISSUE_ID.test(finding.deferredIssueId as string),
+    )
+  ) {
+    throw new Error(
+      "review manifest deferred findings must name a tracker-shaped follow-up issue id (e.g. V26-1234)",
+    );
+  }
   if (
     findings.some(
       (finding) =>
         finding.blocking ||
         (finding.actionable &&
-          !["resolved", "pre_existing"].includes(finding.disposition)),
+          !["resolved", "pre_existing", "deferred"].includes(
+            finding.disposition,
+          )),
     )
   ) {
     throw new Error(
@@ -277,6 +342,80 @@ function parseManifest(value: unknown): HarnessFinalReviewManifest {
       "review manifest final mutation was not prepared and re-reviewed in the final pass",
     );
   }
+  const deferredIssueIds = deferredFindings
+    .map((finding) => finding.deferredIssueId as string)
+    .sort((left, right) => left.localeCompare(right));
+  let reviewLoopTelemetry: HarnessReviewLoopTelemetry;
+  if (raw.reviewLoopTelemetry === undefined) {
+    // Older manifests carry no telemetry block; derive the loop facts that are
+    // provable from the manifest itself so every new record is trend-readable.
+    reviewLoopTelemetry = {
+      iterationCount: Math.max(1, mutationSequence.length),
+      findingCounts: findings.reduce(
+        (counts, finding) => ({ ...counts, [finding.severity]: counts[finding.severity] + 1 }),
+        { P0: 0, P1: 0, P2: 0, P3: 0 } as Record<"P0" | "P1" | "P2" | "P3", number>,
+      ),
+      deferredExpansionCount: deferredFindings.length,
+      deferredIssueIds,
+    };
+  } else {
+    const telemetry = raw.reviewLoopTelemetry as
+      Partial<HarnessReviewLoopTelemetry>;
+    if (
+      telemetry.reviewCost !== undefined &&
+      !isValidReviewCost(telemetry.reviewCost)
+    ) {
+      throw new Error(
+        "review manifest telemetry reviewCost must name a unit and a non-negative total, with per-reviewer amounts summing no higher than the run total",
+      );
+    }
+    // Shape is validated by the one shared predicate; only the cross-check
+    // against this manifest's own findings is local to here.
+    if (!isValidReviewLoopTelemetry(telemetry)) {
+      throw new Error(
+        "review manifest telemetry is invalid: iterationCount must be a positive integer, " +
+          "findingCounts non-negative integers for P0-P3, and deferredIssueIds a string list " +
+          "matching deferredExpansionCount",
+      );
+    }
+    const claimedIds = [...telemetry.deferredIssueIds].sort((left, right) =>
+      left.localeCompare(right),
+    );
+    if (
+      telemetry.deferredExpansionCount !== deferredFindings.length ||
+      claimedIds.length !== deferredIssueIds.length ||
+      claimedIds.some((id, index) => id !== deferredIssueIds[index])
+    ) {
+      throw new Error(
+        "review manifest telemetry deferral facts must match the deferred findings",
+      );
+    }
+    // Derived from the findings, never taken on trust: every finding now
+    // carries a validated severity, so a claimed all-zero count over a findings
+    // array containing P0/P1 would let a record misdescribe its own run with no
+    // trace. The deferral facts are cross-checked the same way.
+    const derivedCounts = findings.reduce(
+      (counts, finding) => ({ ...counts, [finding.severity]: counts[finding.severity] + 1 }),
+      { P0: 0, P1: 0, P2: 0, P3: 0 } as Record<"P0" | "P1" | "P2" | "P3", number>,
+    );
+    if (
+      telemetry.findingCounts !== undefined &&
+      (["P0", "P1", "P2", "P3"] as const).some(
+        (severity) => telemetry.findingCounts?.[severity] !== derivedCounts[severity],
+      )
+    ) {
+      throw new Error(
+        "review manifest telemetry findingCounts must match the severities of the manifest's own findings",
+      );
+    }
+    reviewLoopTelemetry = {
+      iterationCount: telemetry.iterationCount as number,
+      findingCounts: derivedCounts,
+      deferredExpansionCount: deferredFindings.length,
+      deferredIssueIds,
+      ...(telemetry.reviewCost ? { reviewCost: telemetry.reviewCost } : {}),
+    };
+  }
 
   return {
     schemaVersion: HARNESS_REVIEW_MANIFEST_SCHEMA_VERSION,
@@ -298,6 +437,7 @@ function parseManifest(value: unknown): HarnessFinalReviewManifest {
     blockingCount: 0,
     editedAfterFinalPass: false,
     finalized: true,
+    reviewLoopTelemetry,
   };
 }
 
@@ -512,6 +652,7 @@ export async function recordHarnessReviewEvidence(
         blockingCount: 0,
         unresolvedActionableCount: 0,
         degradedReviewerCount: 0,
+        reviewLoopTelemetry: manifest.reviewLoopTelemetry,
       },
     },
     { storageDir: options.storageDir, now: options.now },

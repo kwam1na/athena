@@ -62,6 +62,12 @@ function input(
         status: "green",
         findings: [],
       },
+      {
+        providerId: "delivery-run-telemetry-check",
+        runId: "telemetry-1",
+        status: "green",
+        findings: [],
+      },
     ],
     records: [evidence()],
     ...overrides,
@@ -165,6 +171,12 @@ describe("evaluateGateObligations", () => {
                 remediation: "Regenerate the landed-change report",
               },
             ],
+          },
+          {
+            providerId: "delivery-run-telemetry-check",
+            runId: "telemetry-2",
+            status: "green",
+            findings: [],
           },
         ],
       }),
@@ -426,6 +438,137 @@ describe("evaluateGateObligations", () => {
         "review.green",
       )?.kind,
     ).toBe("delegated");
+  });
+
+  it("honors a human waiver for a live obligation, but never for an agent", () => {
+    const failingTelemetry = [
+      {
+        providerId: "delivery-documentation-check" as const,
+        runId: "docs-3",
+        status: "green" as const,
+        findings: [],
+      },
+      {
+        providerId: "delivery-run-telemetry-check" as const,
+        runId: "telemetry-3",
+        status: "failed" as const,
+        findings: [
+          {
+            code: "telemetry_record_missing",
+            message: "No telemetry record for this delivery",
+            remediation: "Run bun run delivery:telemetry-record",
+          },
+        ],
+      },
+    ];
+    // Live obligations honor invocation-scoped waivers only: they are
+    // re-evaluated from scratch each run, so a durable record must not carry a
+    // waiver — possibly granted for a different failure — into later runs.
+    const waiver = {
+      schemaVersion: 1 as const,
+      kind: "waiver" as const,
+      recordId: "invocation:waiver-telemetry-1",
+      gateId: ATHENA_PR_VALIDATION_GATE_ID,
+      obligationId: "telemetry.recorded" as const,
+      candidate,
+    };
+
+    // A waiver must work the same whether the obligation is satisfied by
+    // historical evidence or by a live provider.
+    expect(
+      resolution(
+        evaluateGateObligations(
+          input({
+            executionContext: { kind: "interactive_human" },
+            liveProviderResults: failingTelemetry,
+            records: [evidence(), waiver],
+          }),
+        ),
+        "telemetry.recorded",
+      ),
+    ).toMatchObject({
+      kind: "waived",
+      waiverRecordId: "invocation:waiver-telemetry-1",
+    });
+
+    // The same waiver, published durably, must not admit a later run.
+    expect(
+      resolution(
+        evaluateGateObligations(
+          input({
+            executionContext: { kind: "interactive_human" },
+            liveProviderResults: failingTelemetry,
+            records: [
+              evidence(),
+              { ...waiver, recordId: "durable-waiver-telemetry-1" },
+            ],
+          }),
+        ),
+        "telemetry.recorded",
+      )?.kind,
+    ).toBe("blocked");
+
+    const agentDecision = evaluateGateObligations(
+      input({
+        executionContext: { kind: "agent", signal: "CODEX_THREAD_ID" },
+        liveProviderResults: failingTelemetry,
+        records: [evidence(), waiver],
+      }),
+    );
+    expect(resolution(agentDecision, "telemetry.recorded")?.kind).toBe(
+      "blocked",
+    );
+    expect(agentDecision.admitted).toBe(false);
+  });
+
+  it("selects the lexicographically first waiver when several apply", () => {
+    // Deterministic selection so the reported waiverRecordId is stable across
+    // runs when a candidate carries more than one waiver record.
+    const waiverFor = (recordId: string) => ({
+      schemaVersion: 1 as const,
+      kind: "waiver" as const,
+      recordId,
+      gateId: ATHENA_PR_VALIDATION_GATE_ID,
+      obligationId: "review.green" as const,
+      candidate,
+    });
+
+    expect(
+      resolution(
+        evaluateGateObligations(
+          input({
+            executionContext: { kind: "interactive_human" },
+            records: [waiverFor("waiver-b"), waiverFor("waiver-a")],
+          }),
+        ),
+        "review.green",
+      ),
+    ).toMatchObject({ kind: "waived", waiverRecordId: "waiver-a" });
+  });
+
+  it("keeps a historical obligation's waiver durable", () => {
+    // The invocation-scoping rule applies to live obligations only; review.green
+    // waivers must still carry across runs for the same candidate.
+    expect(
+      resolution(
+        evaluateGateObligations(
+          input({
+            executionContext: { kind: "interactive_human" },
+            records: [
+              {
+                schemaVersion: 1 as const,
+                kind: "waiver" as const,
+                recordId: "durable-review-waiver",
+                gateId: ATHENA_PR_VALIDATION_GATE_ID,
+                obligationId: "review.green" as const,
+                candidate,
+              },
+            ],
+          }),
+        ),
+        "review.green",
+      ),
+    ).toMatchObject({ kind: "waived", waiverRecordId: "durable-review-waiver" });
   });
 
   it("does not let a waiver hide an applicable malformed record", () => {

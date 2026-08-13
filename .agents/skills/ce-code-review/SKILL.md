@@ -27,6 +27,7 @@ Parse `$ARGUMENTS` for the following optional tokens. Strip each recognized toke
 | `mode:headless`     | `mode:headless`                                   | Select headless mode for programmatic callers (see Mode Detection below) |
 | `base:<sha-or-ref>` | `base:abc1234` or `base:origin/main`              | Skip scope detection — use this as the diff base directly                |
 | `plan:<path>`       | `plan:docs/plans/2026-03-25-001-feat-foo-plan.md` | Load this plan for requirements verification                             |
+| `contract:<path>`   | `contract:/tmp/.../V26-1234-contract.md`          | Load this file as the delivery contract for scope classification (ticket scope, acceptance criteria). Overrides the plan-derived contract |
 
 All tokens are optional. Each one present means one less thing to infer. When absent, fall back to existing behavior for that stage.
 
@@ -62,7 +63,7 @@ All tokens are optional. Each one present means one less thing to infer. When ab
 - **Skip all user questions.** Never use the platform question tool (`AskUserQuestion` in Claude Code, `request_user_input` in Codex, `ask_user` in Gemini, `ask_user` in Pi (requires the `pi-ask-user` extension)) or other interactive prompts. Infer intent conservatively if the diff metadata is thin.
 - **Require a determinable diff scope.** If headless mode cannot determine a diff scope (no branch, PR, or `base:` ref determinable without user interaction), emit `Review failed (headless mode). Reason: no diff scope detected. Re-invoke with a branch name, PR number, or base:<ref>.` and stop without dispatching agents.
 - **Apply only `safe_auto -> review-fixer` findings in a single pass.** No bounded re-review rounds. Leave `gated_auto`, `manual`, `human`, and `release` work unresolved and return them in the structured output.
-- **Return all non-auto findings as structured text output.** Use the headless output envelope format (see Stage 6 below) preserving severity, autofix_class, owner, requires_verification, confidence, pre_existing, and suggested_fix per finding. Enrich with detail-tier fields (why_it_matters, evidence[]) from the per-agent artifact files on disk (see Detail enrichment in Stage 6).
+- **Return all non-auto findings as structured text output.** Use the headless output envelope format (see Stage 6 below) preserving severity, autofix_class, owner, requires_verification, confidence, pre_existing, scope, and suggested_fix per finding. Confirmed deferred-expansion findings appear in their own envelope section; the caller — not this skill — resolves each by filing a follow-up ticket. Enrich with detail-tier fields (why_it_matters, evidence[]) from the per-agent artifact files on disk (see Detail enrichment in Stage 6).
 - **Write a run artifact** under `/tmp/compound-engineering/ce-code-review/<run-id>/` summarizing findings, applied fixes, and advisory outputs. Include the artifact path in the structured output.
 - **Do not file tickets or externalize work.** The caller receives structured findings and routes downstream work itself.
 - **Do not switch the shared checkout.** If the caller passes an explicit PR or branch target, `mode:headless` must run in an isolated checkout/worktree or stop instead of running `gh pr checkout` / `git checkout`. When stopping, emit `Review failed (headless mode). Reason: cannot switch shared checkout. Re-invoke with base:<ref> to review the current checkout, or run from an isolated worktree.`
@@ -103,6 +104,20 @@ Routing rules:
 - **Choose the more conservative route on disagreement.** A merged finding may move from `safe_auto` to `gated_auto` or `manual`, but never the other way without stronger evidence.
 - **Only `safe_auto -> review-fixer` enters the in-skill fixer queue automatically.**
 - **`requires_verification: true` means a fix is not complete without targeted tests, a focused re-review, or operational validation.**
+
+## Scope Classification
+
+Severity answers urgency and routing answers who acts; **scope answers whether the fix belongs in this delivery at all.** Every finding carries `scope: in_contract | adjacent | expansion`, classified against the delivery contract — the `contract:` argument file when provided, else the plan's Requirements section (Stage 2b), else the intent summary. See the findings schema and subagent template for the per-class definitions personas apply.
+
+Scope exists to close a specific gap: reviewers produce valid, well-evidenced findings whose fixes grow the delivery beyond its ticket ("also handle X", "make this configurable"), and a merge gate that only counts unresolved actionable findings forces the orchestrator to fix them all — silent scope creep. Scope gives valid-but-out-of-contract work a legitimate disposition (defer to a follow-up ticket) instead of only two bad ones (fix it or ignore it).
+
+Rules:
+
+- **Synthesis owns the final scope**, same as routing. Persona-provided scope is input. On disagreement between reviewers, keep the more in-contract classification (`in_contract` > `adjacent` > `expansion`); synthesis may reclassify toward `expansion` only with stated reasoning against the contract.
+- **P0 and P1 block regardless of scope.** This is a hard rule with no override: newly shipped breakage is always the delivery's job. Scope classification is recorded on P0/P1 findings but never removes them from the blocking set.
+- **Deferral eligibility is narrow:** severity P2/P3 AND scope `expansion` AND autofix_class `gated_auto`/`manual`. `adjacent` findings are never deferral-eligible — they follow normal severity rules. `advisory` findings already have a non-blocking home and do not need deferral.
+- **Deferral is not deletion.** Deferral-eligible findings are excluded from the blocking verdict but reported in full in their own section, routed to `downstream-resolver`, and — for externalizing callers — resolved only by an actually-filed follow-up ticket. This mirrors how `pre_existing` findings are reported but excluded from the verdict.
+- **Missing scope defaults to `in_contract`.** A compact return lacking the field is treated as blocking-eligible, not dropped — the conservative direction is toward blocking.
 
 ## Reviewers
 
@@ -357,6 +372,8 @@ Locate the plan document so Stage 6 can verify requirements completeness. Check 
 
 If a plan is found, read its **Requirements** section — `## Requirements` in current plans, `## Requirements Trace` in legacy ones — and the R-IDs (R1, R2, etc.) listed there, plus **Implementation Units** (items listed under the `## Implementation Units` section). Store the extracted requirements list and `plan_source` for Stage 6. Do not block the review if no plan is found — requirements verification is additive, not required.
 
+**Delivery contract resolution.** Also resolve the delivery contract used for scope classification, in priority order: (1) the `contract:` argument file content, verbatim; (2) the plan's Requirements section extracted above; (3) empty — reviewers fall back to the intent summary. Store the resolved contract text as `{delivery_contract}` for Stage 4 dispatch. Orchestrating callers (execute, lfg) should pass `contract:` with the ticket's scope and acceptance criteria — an explicit contract makes scope adjudication concrete instead of inferred.
+
 ### Stage 3: Select reviewers
 
 Read the diff and file list from Stage 1. The 4 always-on personas and 2 CE always-on agents are automatic. For each cross-cutting and stack-specific conditional persona in the persona catalog included below, decide whether the diff warrants it. This is agent judgment, not keyword matching.
@@ -434,9 +451,10 @@ Spawn each selected persona reviewer using the subagent template included below.
 2. Shared diff-scope rules from the diff-scope reference included below
 3. The JSON output contract from the findings schema included below
 4. PR metadata: title, body, and URL when reviewing a PR (empty string otherwise). Passed in a `<pr-context>` block so reviewers can verify code against stated intent
-5. Review context: intent summary, file list, diff
-6. Run ID and reviewer name for the artifact file path
-7. **For `project-standards` only:** the standards file path list from Stage 3b, wrapped in a `<standards-paths>` block appended to the review context
+5. The resolved delivery contract from Stage 2b (empty string when none), passed in a `<delivery-contract>` block for scope classification
+6. Review context: intent summary, file list, diff
+7. Run ID and reviewer name for the artifact file path
+8. **For `project-standards` only:** the standards file path list from Stage 3b, wrapped in a `<standards-paths>` block appended to the review context
 
 Persona sub-agents are **read-only** with respect to the project: they review and return structured JSON. They do not edit project files or propose refactors. The one permitted write is saving their full analysis to the run-artifact path specified in the output contract (under `/tmp/compound-engineering/ce-code-review/<run-id>/`).
 
@@ -458,6 +476,7 @@ Each persona sub-agent writes full JSON (all schema fields) to `/tmp/compound-en
       "owner": "downstream-resolver",
       "requires_verification": true,
       "pre_existing": false,
+      "scope": "in_contract",
       "suggested_fix": "Add current_user.owns?(account) guard before lookup"
     }
   ],
@@ -474,7 +493,7 @@ Detail-tier fields (`why_it_matters`, `evidence`) are in the artifact file only.
 
 ### Stage 5: Merge findings
 
-Convert multiple reviewer compact JSON returns into one deduplicated, confidence-gated finding set. The compact returns contain merge-tier fields (title, severity, file, line, confidence, autofix_class, owner, requires_verification, pre_existing) plus the optional suggested_fix. Detail-tier fields (why_it_matters, evidence) are on disk in the per-agent artifact files and are not loaded at this stage.
+Convert multiple reviewer compact JSON returns into one deduplicated, confidence-gated finding set. The compact returns contain merge-tier fields (title, severity, file, line, confidence, autofix_class, owner, requires_verification, pre_existing, scope) plus the optional suggested_fix. Detail-tier fields (why_it_matters, evidence) are on disk in the per-agent artifact files and are not loaded at this stage.
 
 `confidence` is one of 5 discrete anchors (`0`, `25`, `50`, `75`, `100`) with behavioral definitions in the findings schema. Synthesis treats anchors as integers; do not coerce to floats.
 
@@ -488,6 +507,7 @@ Convert multiple reviewer compact JSON returns into one deduplicated, confidence
      - confidence: integer in {0, 25, 50, 75, 100}
      - line: positive integer
      - pre_existing, requires_verification: boolean
+     - scope: in_contract | adjacent | expansion. A missing or invalid scope does **not** drop the finding — default it to `in_contract` (the conservative, blocking-eligible direction) and count the default for Coverage.
    - Do not validate against the full schema here -- the full schema (including why_it_matters and evidence) applies to the artifact files on disk, not the compact returns.
 2. **Deduplicate.** Compute fingerprint: `normalize(file) + line_bucket(line, +/-3) + normalize(title)`. When fingerprints match, merge: keep highest severity, keep highest anchor, note which reviewers flagged it. Dedup runs over the full validated set (including anchor 50) so cross-reviewer promotion in step 3 can lift matching anchor-50 findings into the actionable tier.
 3. **Cross-reviewer agreement.** When 2+ independent reviewers flag the same issue (same fingerprint), promote the merged finding by one anchor step: `50 -> 75`, `75 -> 100`, `100 -> 100`. Cross-reviewer corroboration is a stronger signal than any single reviewer's anchor; the promotion routes a previously-soft finding into the actionable tier or strengthens its already-actionable position. Note the agreement in the Reviewer column of the output (e.g., "security, correctness").
@@ -523,10 +543,19 @@ When a finding qualifies, route by mode:
 
 Demotion is intentionally narrow. The conservative scope (testing/maintainability + P2/P3 + advisory) is the starting point; do not expand the rule by guessing which other personas overproduce noise. If real review runs show another persona consistently emitting weak signal, expand with evidence.
 
+6d. **Scope adjudication and deferral partition.** For each merged finding, set the final `scope` per the Scope Classification rules: on reviewer disagreement keep the more in-contract classification (`in_contract` > `adjacent` > `expansion`); synthesis may reclassify toward `expansion` only with stated reasoning against the delivery contract. Then partition:
+
+- **P0/P1 findings:** always blocking-eligible regardless of scope. Record the scope; never defer.
+- **Deferral candidates:** severity P2/P3 AND final scope `expansion` AND autofix_class `gated_auto`/`manual`. Move these to the **deferred-expansion queue** — reported in full, routed to `downstream-resolver`, excluded from the blocking verdict.
+- **Everything else** (`in_contract`, `adjacent`, and all `advisory`/`safe_auto` findings) stays in its normal flow from steps 6-6c.
+
+**Scope check (externalizing modes only — headless, autofix, and interactive option C).** Before a deferral candidate lands in the deferred-expansion queue, spawn one validator-style sub-agent per candidate through the Stage 5b machinery (same mid-tier model, same bounded scheduler, read-only). The validator receives the delivery contract, the finding (title, why_it_matters when available, evidence, suggested_fix), and the diff, and answers one question: `Would the contract's author consider this delivery incomplete without this fix? Return { "in_contract": true | false, "reason": "<one sentence>" }.` On `in_contract: true` (or validator failure — conservative bias is toward blocking), the finding returns to the normal actionable flow with scope corrected to `adjacent`; on `false`, it is confirmed deferred. This check exists because in externalizing modes the same orchestrator that wrote the code adjudicates its own scope — a motivated-reasoning risk toward under-fixing dressed as deferral. Record check counts and reversals for Coverage. When no delivery contract was resolved in Stage 2b (empty contract), skip the check and do **not** defer — without a contract to judge against, deferral has no basis, so deferral candidates stay in the normal actionable flow with scope `adjacent`.
+
 7. **Confidence gate.** After dedup, promotion, and demotion have shaped the primary set, suppress remaining findings below anchor 75. Exception: P0 findings at anchor 50+ survive the gate -- critical-but-uncertain issues must not be silently dropped. Record the suppressed count by anchor (so Coverage can report "N findings suppressed at anchor 50, M at anchor 25"). The gate runs late deliberately: anchor-50 findings need a chance to be promoted by step 3 (cross-reviewer corroboration) or rerouted by step 6c (mode-aware demotion to soft buckets) before any drop decision.
-8. **Partition the work.** Build three sets:
+8. **Partition the work.** Build four sets:
    - in-skill fixer queue: only `safe_auto -> review-fixer`
-   - residual actionable queue: unresolved `gated_auto` or `manual` findings whose owner is `downstream-resolver`
+   - residual actionable queue: unresolved `gated_auto` or `manual` findings whose owner is `downstream-resolver`, excluding the deferred-expansion queue
+   - deferred-expansion queue: the step 6d deferral partition — valid P2/P3 `expansion` work resolved by follow-up ticket, not counted toward the verdict
    - report-only queue: `advisory` findings plus anything owned by `human` or `release`
 9. **Sort.** Order by severity (P0 first) -> anchor (descending) -> file path -> line number.
 10. **Collect coverage data.** Union residual_risks and testing_gaps across reviewers.
@@ -585,13 +614,14 @@ Assemble the final report using **pipe-delimited markdown tables for findings** 
      Omit this section entirely when no plan was found — do not mention the absence of a plan.
 4. **Applied Fixes.** Include only if a fix phase ran in this invocation.
 5. **Residual Actionable Work.** Include when unresolved actionable findings were handed off or should be handed off.
-6. **Pre-existing.** Separate section, does not count toward verdict.
-7. **Learnings & Past Solutions.** Surface ce-learnings-researcher results: if past solutions are relevant, flag them as "Known Pattern" with links to docs/solutions/ files.
-8. **Agent-Native Gaps.** Surface ce-agent-native-reviewer results. Omit section if no gaps found.
-9. **Schema Drift Check.** If ce-schema-drift-detector ran, summarize whether drift was found. If drift exists, list the unrelated schema objects and the required cleanup command. If clean, say so briefly.
-10. **Deployment Notes.** If ce-deployment-verification-agent ran, surface the key Go/No-Go items: blocking pre-deploy checks, the most important verification queries, rollback caveats, and monitoring focus areas. Keep the checklist actionable rather than dropping it into Coverage.
-11. **Coverage.** Suppressed count by anchor (e.g., "N findings suppressed at anchor 50, M at anchor 25"), mode-aware demotion count (interactive/report-only) or suppression count (headless/autofix), validator drop count and reasons (when Stage 5b ran), validator over-budget drops (when the 15-cap fired), residual risks, testing gaps, failed/timed-out reviewers, and any intent uncertainty carried by non-interactive modes.
-12. **Verdict.** Ready to merge / Ready with fixes / Not ready. Fix order if applicable. When an `explicit` plan has unaddressed requirements, the verdict must reflect it — a PR that's code-clean but missing planned requirements is "Not ready" unless the omission is intentional. When an `inferred` plan has unaddressed requirements, note it in the verdict reasoning but do not block on it alone.
+6. **Deferred Expansion Work.** Include when the deferred-expansion queue is non-empty. Full finding rows (same table format), each marked with its scope-check verdict. State explicitly that these are valid findings whose fixes exceed the delivery contract, that they do not count toward the verdict, and that the caller resolves them by filing follow-up tickets — not by silently expanding this delivery and not by dropping them.
+7. **Pre-existing.** Separate section, does not count toward verdict.
+8. **Learnings & Past Solutions.** Surface ce-learnings-researcher results: if past solutions are relevant, flag them as "Known Pattern" with links to docs/solutions/ files.
+9. **Agent-Native Gaps.** Surface ce-agent-native-reviewer results. Omit section if no gaps found.
+10. **Schema Drift Check.** If ce-schema-drift-detector ran, summarize whether drift was found. If drift exists, list the unrelated schema objects and the required cleanup command. If clean, say so briefly.
+11. **Deployment Notes.** If ce-deployment-verification-agent ran, surface the key Go/No-Go items: blocking pre-deploy checks, the most important verification queries, rollback caveats, and monitoring focus areas. Keep the checklist actionable rather than dropping it into Coverage.
+12. **Coverage.** Suppressed count by anchor (e.g., "N findings suppressed at anchor 50, M at anchor 25"), mode-aware demotion count (interactive/report-only) or suppression count (headless/autofix), scope adjudication counts (N deferred as expansion, M deferral candidates returned to actionable by the scope check, K findings defaulted to `in_contract` on missing scope), validator drop count and reasons (when Stage 5b ran), validator over-budget drops (when the 15-cap fired), residual risks, testing gaps, failed/timed-out reviewers, and any intent uncertainty carried by non-interactive modes.
+13. **Verdict.** Ready to merge / Ready with fixes / Not ready. Fix order if applicable. Deferred-expansion findings do not count toward the verdict — a review whose only remaining actionable work is confirmed-deferred expansion findings is "Ready to merge" (or "Ready with fixes" while the safe_auto/in-contract queue is outstanding), with the deferrals named in the verdict reasoning. When an `explicit` plan has unaddressed requirements, the verdict must reflect it — a PR that's code-clean but missing planned requirements is "Not ready" unless the omission is intentional. When an `inferred` plan has unaddressed requirements, note it in the verdict reasoning but do not block on it alone.
 
 Do not include time estimates.
 
@@ -626,6 +656,12 @@ Manual findings (actionable, needs handoff):
   Why: <why_it_matters>
   Evidence: <evidence[0]>
 
+Deferred expansion findings (valid, out of contract; do not fix in this delivery — caller resolves each by filing a follow-up ticket):
+
+[P2][expansion -> downstream-resolver][scope-check: confirmed] File: <file:line> -- <title> (<reviewer>, confidence <N>)
+  Why: <why_it_matters>
+  Suggested fix: <suggested_fix or "none">
+
 Advisory findings (report-only):
 
 [P2][advisory -> human] File: <file:line> -- <title> (<reviewer>, confidence <N>)
@@ -656,6 +692,7 @@ Testing gaps:
 Coverage:
 - Suppressed: <N> findings below anchor 75 (P0 at anchor 50+ retained)
 - Mode-aware demotion suppressions: <N> findings suppressed (testing/maintainability advisory P2-P3)
+- Scope adjudication: <N> deferred as expansion, <M> returned to actionable by scope check, <K> defaulted to in_contract on missing scope
 - Validator drops: <N> findings rejected by Stage 5b validator
   - <file:line> -- <reason>
 - Validator over-budget drops: <N> findings exceeded the 15-cap and were not validated
@@ -678,6 +715,7 @@ Review complete
 - The `Artifact:` line gives callers the path to the full run artifact for machine-readable access to the complete findings schema. The text envelope is the primary handoff; the artifact is for debugging and full-fidelity access.
 - Findings with `owner: release` appear in the Advisory section (they are operational/rollout items, not code fixes).
 - Findings with `pre_existing: true` appear in the Pre-existing section regardless of autofix_class.
+- Confirmed deferred-expansion findings appear only in the Deferred expansion section — never duplicated into Gated-auto/Manual — and do not count toward the Verdict. The `[scope-check: confirmed]` marker records that the Stage 5 step 6d validator confirmed the deferral.
 - The Verdict appears in the metadata header (deliberately reordered from the interactive format where it appears at the bottom) so programmatic callers get the verdict first.
 - Omit any section with zero items.
 - If all reviewers fail or time out, emit `Code review degraded (headless mode). Reason: 0 of N reviewers returned results.` followed by "Review complete".
@@ -708,11 +746,13 @@ After presenting findings and verdict (Stage 6), route the next steps by mode. R
 
 #### Step 1: Build the action sets
 
-- **Clean review** means zero findings after suppression and pre-existing separation. Skip the fix/handoff phase when the review is clean.
+- **Clean review** means zero findings after suppression, pre-existing separation, and deferred-expansion separation. Skip the fix/handoff phase when the review is clean (deferred-expansion findings still need their follow-up tickets — clean refers to in-delivery fix work only).
 - **Fixer queue:** final findings routed to `safe_auto -> review-fixer`.
-- **Residual actionable queue:** unresolved `gated_auto` or `manual` findings whose final owner is `downstream-resolver`.
+- **Residual actionable queue:** unresolved `gated_auto` or `manual` findings whose final owner is `downstream-resolver`, excluding the deferred-expansion queue.
+- **Deferred-expansion queue:** the Stage 5 step 6d deferral partition. These never enter the fixer queue in any mode — the disposition is a follow-up ticket (filed by the caller in headless/autofix, offered via `references/tracker-defer.md` in interactive), not an in-delivery fix.
 - **Report-only queue:** `advisory` findings and any outputs owned by `human` or `release`.
 - **Never convert advisory-only outputs into fix work or ticket handoff.** Deployment notes, residual risks, and release-owned items stay in the report.
+- **Never convert deferred-expansion findings into in-delivery fix work.** Fixing them anyway silently expands the delivery beyond its contract — the exact failure mode the scope axis exists to prevent. Equally, never drop them: deferral without a ticket is unresolved.
 
 #### Step 2: Choose policy by mode
 
@@ -825,7 +865,7 @@ The fixer accepts two queue shapes depending on which caller invoked it:
 - When an Athena caller explicitly requests an evidence-bearing review, run `bun run pr:athena:prepare` before the complete review pass and capture its identity with `bun run harness:review-context`. Preparation runs the mechanical checks — per-package lint plus project typecheck — and publishes no receipt when they fail, so fix those before dispatching reviewers rather than after. Ordinary report-only reviews do not issue gate evidence.
 - Copy the candidate from `harness:review-context` verbatim into the manifest, including `deliverableTreeSha` and `identityVersion`; the recorder rejects a candidate that names no current deliverable identity. Evidence binds to that identity, so a `docs/reports/**` or `docs/solutions/**` commit after the final pass needs only another `pr:athena:prepare`, while any other edit needs a complete re-review.
 - For an evidence-bearing run, keep all required reviewer JSON under `/tmp/compound-engineering/ce-code-review/<run-id>/`. If any fix changes the candidate, prepare again and rerun the complete required reviewer set against the resulting context; the dispatch-time `metadata.json`, a partial follow-up, textual verdict, ignored actionable work, or an exhausted bounded loop is never sufficient evidence.
-- Only after the final prepared pass is `Ready to merge`, every required reviewer completed, and blocking/unresolved actionable counts are zero, finalize `/tmp/compound-engineering/ce-code-review/<run-id>/final-manifest.json` with provider `ce-code-review`, unique run/final-pass IDs, exact worktree/candidate context, reviewer artifacts, findings/dispositions, mutation sequence, `verdict: "green"`, zero counts, `editedAfterFinalPass: false`, and `finalized: true`. Then run `bun run harness:review-evidence -- /tmp/compound-engineering/ce-code-review/<run-id>/final-manifest.json`; the recorder independently checks the manifest root, artifacts, final candidate, base, and worktree before writing evidence.
+- Only after the final prepared pass is `Ready to merge`, every required reviewer completed, and blocking/unresolved in-scope actionable counts are zero (confirmed deferred-expansion findings count as resolved only with a filed follow-up ticket; P0/P1 are in-scope by definition), finalize `/tmp/compound-engineering/ce-code-review/<run-id>/final-manifest.json` with provider `ce-code-review`, unique run/final-pass IDs, exact worktree/candidate context, reviewer artifacts, findings/dispositions, mutation sequence, `verdict: "green"`, zero counts, `editedAfterFinalPass: false`, and `finalized: true`. Record each deferred finding in the manifest's `findings` with `disposition: "deferred"` and its `deferredIssueId` (the recorder rejects a deferred finding with no issue id, and rejects blocking or non-actionable deferrals). Include a `reviewLoopTelemetry` block — `iterationCount` (review passes run), `findingCounts` by severity (P0-P3), `deferredExpansionCount`, and `deferredIssueIds` — so loop telemetry survives into the obligation record and the delivery-run ledger; when omitted, the recorder derives iteration count from the mutation sequence and deferral facts from the findings. Also include `reviewCost` when your agent platform reports what a dispatch consumed on completion. The block is deliberately platform-neutral: `unit` names whatever the platform meters (`tokens` on platforms that count tokens; use the platform's own unit otherwise), `total` sums every reviewer, validator, and fixer dispatch across all rounds, `byReviewer` gives per-reviewer amounts when you can attribute them, and `reportedBy` names the agent platform that produced the numbers so later runs can tell one runtime's accounting from another's. Report what the platform actually told you — do not estimate, do not convert between units, and omit the block entirely rather than guessing. Per-reviewer amounts may sum below `total` (orchestrator turns and validators are not reviewers) but never above it; the recorder rejects a manifest that claims otherwise. Then run `bun run harness:review-evidence -- /tmp/compound-engineering/ce-code-review/<run-id>/final-manifest.json`; the recorder independently checks the manifest root, artifacts, final candidate, base, and worktree before writing evidence.
 - In autofix mode, the run artifact is the handoff. Orchestrators read the artifact's residual actionable work and route it as appropriate. The skill itself does not file tickets or prompt the user in autofix.
 - Interactive mode may offer to externalize residual actionable work via `references/tracker-defer.md` (named tracker -> GitHub Issues via `gh`), but it is not required to finish the review.
 

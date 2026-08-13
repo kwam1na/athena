@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Let reviewers defer out-of-scope work, and make delivery runs leave a trace</title>
+  </head>
+  <body>
+    <article
+      data-athena-landed-change-report="v2"
+      data-athena-report-diff-fingerprint="0524815f4e29636d758aa7fd850381a6d50b4c01e3774b2228c369de79e823eb"
+      data-athena-report-base="origin/main"
+    >
+      <header data-report-section="header">
+        <h1>Let reviewers defer out-of-scope work, and make delivery runs leave a trace</h1>
+        <ul data-report-pills>
+          <li>Delivery candidate</li>
+          <li>Branch codex/review-scope-discipline-and-run-observability</li>
+          <li>Review loop / delivery gates / observability</li>
+          <li>929 harness tests green</li>
+        </ul>
+        <dl data-report-meta>
+          <dt>PR</dt>
+          <dd>PLACEHOLDER_PR</dd>
+          <dt>Issue</dt>
+          <dd>V26-1212</dd>
+          <dt>Status</dt>
+          <dd>Delivery candidate, pre-merge</dd>
+          <dt>Execution posture</dt>
+          <dd>test-first for harness changes, sensor-only for skill prose</dd>
+        </dl>
+      </header>
+
+      <section data-report-section="summary">
+        <h2>Executive summary</h2>
+        <p>
+          Athena requires a review loop before the merge gate, and that loop earns
+          its place — it catches edge cases nothing else does. But reviewers
+          regularly propose changes that are <em>correct and out of scope</em>:
+          "also handle X", "make this configurable", "generalize this helper".
+          The merge gate demanded zero unresolved actionable findings, and
+          deferral was not a recognized way to resolve one. So the only legal
+          move was to implement the suggestion, and the delivery quietly grew.
+        </p>
+        <p>
+          This change gives every finding a <strong>scope</strong> — is fixing it
+          part of delivering this ticket, or is it expansion beyond it? Critical
+          defects are unaffected: P0 and P1 always block, whatever their scope.
+          Lower-severity expansion work can now be resolved the honest way, by
+          filing a follow-up ticket, and the harness refuses to accept a deferral
+          that has no ticket id attached.
+        </p>
+        <p>
+          Measuring whether that works needs data the repo did not keep. Every
+          record of how a delivery actually ran — its duration, its review
+          iterations, its cost — lived in a gitignored file, a Git-private
+          per-worktree directory, or <code>/tmp</code>. Since each ticket starts
+          in a fresh worktree, none of it survived. The second half of this
+          change adds <code>telemetry/delivery-runs/</code>: a small tracked
+          record per run, so the trend outlives the worktree that produced it.
+        </p>
+      </section>
+
+      <section data-report-section="problem">
+        <h2>The problem</h2>
+        <h3>A gate that counts findings turns every good idea into scope</h3>
+        <p>
+          Findings carried two axes: severity (P0-P3, "how urgent") and
+          <code>autofix_class</code> ("who acts next"). Neither answers "does
+          fixing this belong in <em>this</em> delivery?". There was exactly one
+          escape hatch — <code>pre_existing</code> — and it only covers untouched
+          code, not a good suggestion about code the diff genuinely changed.
+        </p>
+        <p>
+          Meanwhile the evidence recorder rejected any actionable finding whose
+          disposition was not <code>resolved</code> or <code>pre_existing</code>,
+          and the execute loop treated unresolved actionable findings as
+          blocking. A valid P2 saying "this should also be configurable" had no
+          disposition that satisfied the gate except being built. And because
+          each fix produced fresh diff for the next round to review, the loop
+          could ratchet: more scope inviting more scope, with no convergence
+          definition beyond "every reviewer approves".
+        </p>
+        <h3>Nothing remembered how a delivery ran</h3>
+        <p>
+          The delivery-run ledger is gitignored and overwritten every run. Its
+          companion <code>baseline.json</code> was <em>read</em> by the scorecard
+          but written by nothing, and the ledger writer's history option had no
+          caller — dead code describing a feature that did not exist. Obligation
+          records live under <code>.git/codex/</code>, which for a linked
+          worktree resolves inside that worktree's private directory and is never
+          pushed. Reviewer findings live in <code>/tmp</code> and are reaped.
+        </p>
+        <p>
+          The practical consequence: "is the review loop getting more expensive?"
+          was unanswerable, and the iteration counts the workflow posts to Linear
+          existed nowhere in the repo.
+        </p>
+      </section>
+
+      <section data-report-section="mental-model">
+        <h2>The mental model</h2>
+        <p>
+          Think of a finding as answering three questions, not two. <em>How
+          urgent is it?</em> is severity. <em>Who acts next?</em> is routing.
+          The new question is <em>whose job is it?</em> — this delivery's, or a
+          future one's.
+        </p>
+        <p>
+          Scope has three values. <code>in_contract</code> means the delivery is
+          incomplete without the fix; every defect in behavior the diff ships
+          lands here. <code>adjacent</code> means the fix hardens the changed code
+          beyond what was promised. <code>expansion</code> means the fix grows the
+          delivery — new capability, generality, configurability nobody asked
+          for.
+        </p>
+        <p>
+          Only a narrow slice may be deferred: P2/P3, classified
+          <code>expansion</code>, with a concrete fix proposed. Two guardrails
+          keep that honest. <strong>P0 and P1 block regardless of scope</strong>,
+          because shipped breakage is always the delivery's job. And
+          <strong>deferral is not deletion</strong>: the finding is only resolved
+          once a follow-up ticket exists, and the recorder rejects a deferral
+          whose issue id is missing.
+        </p>
+        <p>
+          For telemetry, the model is the one the repo already uses for the
+          landed-change report and the solution note: an artifact that describes
+          a delivery must not count as part of the delivery it describes.
+          Otherwise writing it invalidates the review evidence it reports on.
+          That is why <code>telemetry/delivery-runs/</code> is registered review-neutral and
+          fingerprint-neutral — the same exemption, for the same reason.
+        </p>
+      </section>
+
+      <section data-report-section="before-after">
+        <h2>Before and after</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Situation</th>
+              <th>Before</th>
+              <th>After</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Valid P2 whose fix expands the ticket</td>
+              <td>No disposition satisfies the gate except implementing it</td>
+              <td>Deferrable via a filed follow-up ticket, recorded as <code>deferred</code> with its issue id</td>
+            </tr>
+            <tr>
+              <td>P0/P1 in changed code</td>
+              <td>Blocks</td>
+              <td>Blocks, regardless of scope classification — unchanged by design</td>
+            </tr>
+            <tr>
+              <td>Deferral with no ticket filed</td>
+              <td>n/a</td>
+              <td>Rejected by the evidence recorder; counts as unresolved</td>
+            </tr>
+            <tr>
+              <td>Review cost and iteration count</td>
+              <td>Linear comments only; nothing repo-side</td>
+              <td>Recorded in the obligation record, folded into the ledger, printed in the run summary</td>
+            </tr>
+            <tr>
+              <td>Scorecard baseline comparison</td>
+              <td>Permanently absent — read by the scorecard, written by nothing</td>
+              <td>Previous passing run promoted to baseline before each run overwrites latest</td>
+            </tr>
+            <tr>
+              <td>Cost trend across deliveries</td>
+              <td>Impossible: every sink is per-worktree or ephemeral</td>
+              <td>Tracked <code>telemetry/delivery-runs/</code> corpus, preferred as the summary's baseline</td>
+            </tr>
+            <tr>
+              <td>Human with a small change and no telemetry record</td>
+              <td>n/a</td>
+              <td>Owes nothing below 150 changed source lines; at or above it, may waive interactively</td>
+            </tr>
+            <tr>
+              <td>Agent skipping the telemetry record</td>
+              <td>n/a</td>
+              <td>Blocked by the gate obligation and by CI; no agent waiver exists</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="key-files">
+        <h2>Key files</h2>
+        <dl>
+          <dt><code>.agents/skills/ce-code-review/references/findings-schema.json</code></dt>
+          <dd>Adds the required <code>scope</code> field and documents the deferral-eligibility rule.</dd>
+          <dt><code>.agents/skills/ce-code-review/SKILL.md</code></dt>
+          <dd>Scope adjudication at synthesis, the validator scope check, the deferred-expansion queue, and the verdict rule that excludes it.</dd>
+          <dt><code>.agents/skills/execute/SKILL.md</code></dt>
+          <dd>Gate redefined around in-scope work, deferral ticket shape, reviewer churn control, telemetry recording step.</dd>
+          <dt><code>scripts/harness-review-evidence.ts</code></dt>
+          <dd>Accepts <code>disposition: "deferred"</code> with a required issue id; validates and derives <code>reviewLoopTelemetry</code>.</dd>
+          <dt><code>scripts/harness-obligation-records.ts</code></dt>
+          <dd>Persists loop telemetry and the harness-agnostic <code>reviewCost</code>; validates its shape.</dd>
+          <dt><code>scripts/harness-delivery-run-ledger.ts</code></dt>
+          <dd>Baseline promotion, run history with retention, and the <code>[pr:athena]</code> run summary formatter.</dd>
+          <dt><code>scripts/delivery-run-telemetry.ts</code></dt>
+          <dd>New. The tracked record, the recorder command, and the <code>telemetry.recorded</code> sensor.</dd>
+          <dt><code>scripts/harness-gate-registry.ts</code></dt>
+          <dd>The new obligation and provider, plus a validator invariant tying <code>humanWaiverAllowed</code> to the <code>waived</code> resolution kind.</dd>
+          <dt><code>scripts/harness-gate-obligations.ts</code></dt>
+          <dd>Shared <code>humanWaiverFor</code> so a waiver works on live obligations, not only evidence-backed ones.</dd>
+          <dt><code>scripts/harness-review-identity.ts</code>, <code>scripts/delivery-diff-fingerprint.ts</code></dt>
+          <dd>Register <code>telemetry/delivery-runs/</code> as review-neutral and fingerprint-neutral — the record directory specifically, so a future sibling does not inherit the exemption.</dd>
+        </dl>
+      </section>
+
+      <section data-report-section="changes">
+        <h2>What changed</h2>
+        <h3>Scope discipline in the review loop</h3>
+        <p>
+          Findings carry <code>scope</code>, proposed by personas and finalized by
+          synthesis, judged against a delivery contract passed into the review.
+          On disagreement synthesis keeps the more in-contract classification.
+          Deferral candidates in externalizing modes pass an independent scope
+          check before deferral is confirmed, because the orchestrator that wrote
+          the code should not adjudicate its own scope unchallenged. Confirmed
+          deferrals are reported in their own section and excluded from the
+          verdict, exactly as pre-existing findings already were.
+        </p>
+        <h3>Telemetry, and a durable home for it</h3>
+        <p>
+          The final manifest carries iteration count, finding counts by severity,
+          deferral facts, and a review cost. Cost is deliberately
+          agent-harness agnostic: it names its own unit and the platform that
+          reported it, is never converted between units, and the run summary
+          withholds a delta when the previous run metered differently. Records
+          land in <code>telemetry/delivery-runs/</code>, one file per run named by
+          timestamp and branch so parallel worktrees never conflict.
+        </p>
+        <h3>Enforcement sized to the delivery</h3>
+        <p>
+          A <code>telemetry.recorded</code> obligation and a CI check require a
+          record whose fingerprint matches the current deliverable diff — but only at
+          or above 150 changed source lines, the same threshold the solution-note
+          sensor uses. An interactive human may waive it; an agent cannot.
+          Making that waiver work exposed a latent bug worth naming: waivers were
+          only consulted on the historical-evidence path, so
+          <code>humanWaiverAllowed</code> was silently inert on live obligations.
+        </p>
+      </section>
+
+      <section data-report-section="validation">
+        <h2>Validation</h2>
+        <ul>
+          <li><code>bun test scripts/</code> — 929 pass, 0 fail, 2362 assertions across 62 files.</li>
+          <li><code>bun run pr:athena:preflight</code> — no contract findings, harness audit passed.</li>
+          <li><code>bun run harness:check</code> and <code>bun run harness:audit</code> — passed.</li>
+          <li><code>bun run compound:check</code> and <code>bun run landed-report:check</code> — satisfied by this report and the paired solution note.</li>
+          <li>
+            <code>bun run delivery:telemetry-check</code> exercised live on this
+            branch, with its bootstrap, demand, stale, and satisfied states
+            pinned by a real-git integration test in
+            <code>scripts/delivery-run-telemetry.test.ts</code>.
+          </li>
+          <li>Full <code>bun run pr:athena</code> gate run before merge, with review evidence recorded for the exact prepared candidate.</li>
+        </ul>
+        <p>
+          One caveat worth recording: <code>worktree-manager</code> failed once
+          under full-suite load and passed in isolation and on re-run. It is not
+          touched by this branch and matches the repo's known load-related
+          flakiness.
+        </p>
+      </section>
+
+      <section data-report-section="guidance">
+        <h2>Guidance for the next delivery</h2>
+        <ul>
+          <li>
+            When a reviewer proposes something good but out of contract, classify
+            it rather than arguing about it. If it is P2/P3 expansion, file the
+            follow-up ticket and record the id — the gate will accept that and
+            reject silence.
+          </li>
+          <li>
+            Never reach for scope to soften a real defect. P0 and P1 block
+            regardless, and inflating or deflating severity to route around that
+            is the one failure mode this design cannot catch for you.
+          </li>
+          <li>
+            Record telemetry after the gate passes, never mid-run: the gate
+            proves the tree it validated, and a mid-run tracked write invalidates
+            that proof against its own run.
+          </li>
+          <li>
+            If review-loop edits change the deliverable after you recorded, the
+            record is stale — re-run and re-record, the same way a stale report
+            is regenerated.
+          </li>
+          <li>
+            When adding a registry flag, check that the code honoring it runs on
+            every path the registry can select. Test the cross-product, not the
+            flag.
+          </li>
+        </ul>
+      </section>
+
+
+      <section data-report-section="quiz" data-quiz-pass-threshold="8">
+        <h2>Comprehension quiz</h2>
+        <p>Ten questions; eight correct to pass.</p>
+        <ol data-quiz>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Before this change, why did a valid "this should also be
+              configurable" finding tend to grow the delivery?
+            </p>
+            <ol data-quiz-options>
+              <li>Reviewers were instructed to expand scope when in doubt.</li>
+              <li data-quiz-correct>
+                The merge gate required zero unresolved actionable findings and
+                deferral was not a recognized resolution, so implementing it was
+                the only legal disposition.
+              </li>
+              <li>The gate had no way to detect the finding at all.</li>
+              <li>Findings were always auto-applied by the fixer.</li>
+            </ol>
+            <p data-quiz-explanation>
+              A gate that counts unresolved findings without a disposition for out-of-contract work leaves implementing the suggestion as the only legal move, so good ideas silently become scope.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Which findings may be deferred?</p>
+            <ol data-quiz-options>
+              <li>Any finding the agent judges unimportant.</li>
+              <li>Any finding classified <code>expansion</code>.</li>
+              <li data-quiz-correct>
+                P2/P3 findings classified <code>expansion</code> with a concrete
+                proposed fix, once a scope check confirms them.
+              </li>
+              <li>Only findings in untouched code.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Deferral is narrow on purpose: only lower-severity work whose fix grows the delivery beyond its contract, and only once a scope check confirms it.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              A P1 defect is classified <code>expansion</code>. What happens?
+            </p>
+            <ol data-quiz-options>
+              <li>It is deferred, since scope outranks severity.</li>
+              <li data-quiz-correct>
+                It blocks. P0 and P1 block regardless of scope; the classification
+                is recorded but never defers them.
+              </li>
+              <li>It becomes advisory.</li>
+              <li>The gate asks the user to choose.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Severity and scope are independent axes with one hard interaction. Newly shipped breakage is always the delivery's job, so no scope classification defers it.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What makes a deferral "resolved" as far as the evidence recorder is
+              concerned?
+            </p>
+            <ol data-quiz-options>
+              <li>Marking it deferred in the manifest.</li>
+              <li data-quiz-correct>
+                A <code>deferred</code> disposition carrying the filed follow-up
+                issue id, on an actionable, non-blocking finding.
+              </li>
+              <li>A reviewer agreeing in prose.</li>
+              <li>Nothing — deferrals are never recorded.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The harness cannot verify the work was really filed, but it can refuse a deferral that names nothing — so deferral degrades into a ticket, never into silence.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why is <code>telemetry/delivery-runs/</code> registered review-neutral and
+              fingerprint-neutral?
+            </p>
+            <ol data-quiz-options>
+              <li>To keep it out of code review for convenience.</li>
+              <li data-quiz-correct>
+                Otherwise recording a run would invalidate the review evidence and
+                stale the report for the very run it describes.
+              </li>
+              <li>Because it is generated code.</li>
+              <li>Because CI cannot read it otherwise.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The record describes a run that already happened. If it counted as reviewed content, writing it would invalidate the very evidence and report it describes.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why did the cost trend need a tracked corpus rather than the
+              existing ledger?
+            </p>
+            <ol data-quiz-options>
+              <li>The ledger format was too large to keep.</li>
+              <li data-quiz-correct>
+                The ledger is gitignored and per-worktree, and every ticket starts
+                in a fresh worktree, so its baseline is always empty on a first
+                run.
+              </li>
+              <li>The ledger is written only in CI.</li>
+              <li>The scorecard cannot read JSON.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The ledger is gitignored and lives in one worktree, and every ticket starts in a fresh one, so its baseline is empty on a first run and can never span deliveries.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Two runs report cost in different units. What does the run summary
+              print?
+            </p>
+            <ol data-quiz-options>
+              <li>A delta computed after converting units.</li>
+              <li data-quiz-correct>
+                No delta, and a note that the last passing run metered in the
+                other unit.
+              </li>
+              <li>A delta with a warning.</li>
+              <li>Nothing at all.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Different platforms meter different work, so a cross-unit subtraction would produce a number with no meaning. Withholding the delta is more honest than computing one.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              When is a telemetry record demanded, and of whom?
+            </p>
+            <ol data-quiz-options>
+              <li>Every change, from everyone, with no waiver.</li>
+              <li data-quiz-correct>
+                At or above 150 changed source lines; an interactive human may waive it,
+                an agent may not.
+              </li>
+              <li>Only in CI, never locally.</li>
+              <li>Only when a reviewer asks for one.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The artifact scales with the delivery, matching the solution-note threshold, and the waiver exists for the population the obligation is not aimed at.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why must <code>delivery:telemetry-record</code> run after the gate
+              rather than inside it?
+            </p>
+            <ol data-quiz-options>
+              <li>It is slower than the gate.</li>
+              <li data-quiz-correct>
+                The gate records a proof over the tree it validated, so writing a
+                tracked file mid-run would invalidate that proof against its own
+                run.
+              </li>
+              <li>The ledger is only readable after CI.</li>
+              <li>Git refuses writes during the gate.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The gate proves the tree it validated. Writing a tracked file mid-run changes that tree, invalidating the proof against the very run that produced it.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why was <code>humanWaiverAllowed</code> silently inert on live
+              obligations?
+            </p>
+            <ol data-quiz-options>
+              <li>The registry validator rejected it.</li>
+              <li>Live obligations cannot be blocked.</li>
+              <li data-quiz-correct>
+                The live evaluator was never passed the records or execution
+                context a waiver needs, and no layer reported the mismatch — the
+                block looked identical to a declined waiver.
+              </li>
+              <li>Waivers expired before evaluation.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The live evaluator was never passed the records or execution context a waiver needs, and a block from an unconsulted waiver is indistinguishable from a declined one.
+            </p>
+          </li>
+        </ol>
+      </section>
+      <section data-report-section="subagent-evidence">
+        <h2>Subagent evidence</h2>
+        <dl>
+          <dt>Observability survey subagent</dt>
+          <dd>
+            Read-only sweep of the repo's delivery-run observability surfaces:
+            the artifacts directories and their writers, the review-evidence
+            recorder and its identity binding, the scorecard and trend tooling,
+            the report and solution corpora, and Convex schema. It established
+            the three-tier durability picture (tracked narrative, Git-private
+            machine records, ephemeral artifacts) and identified the never-written
+            baseline, the dead history option, and the absence of any repo-side
+            review-iteration telemetry — the findings this delivery acts on.
+          </dd>
+          <dt>Delivered-diff verification subagent</dt>
+          <dd>
+            Independent read-only verification of <code>git diff
+            origin/main...HEAD</code>: the changed-file map with per-file line
+            counts, the behavior boundaries claimed in the before/after table
+            (including confirming from <code>git show
+            origin/main:scripts/harness-gate-obligations.ts</code> that the live
+            evaluator previously received no <code>input</code>), the test
+            coverage map, and the list of deliberately unchanged behavior.
+          </dd>
+          <dt>Independent review subagents</dt>
+          <dd>
+            The evidence-bearing review checkpoint dispatches the required
+            reviewer set against this exact prepared candidate before
+            <code>bun run pr:athena</code>. Their machine-readable results and the
+            finalized manifest are recorded through <code>bun run
+            harness:review-evidence</code>; implementation agents are not counted
+            as independent reviewers.
+          </dd>
+        </dl>
+      </section>
+    </article>
+  </body>
+</html>

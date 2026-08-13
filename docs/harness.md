@@ -330,6 +330,38 @@ waive review for the exact worktree/candidate/base, while CI delegation requires
 the allowlisted `athena-pr-tests` workflow/job/event policy. Documentation
 currentness is an always-on live fact and cannot be waived.
 
+The `telemetry.recorded` obligation asks a different question: did this delivery
+leave a durable record of how it ran? It is satisfied by a tracked
+`telemetry/delivery-runs/*.json` file whose `deliverableDiffFingerprint` matches
+the current deliverable diff. To satisfy it by hand:
+
+1. Run `bun run pr:athena` and let it pass. The gate writes its ledger at the end
+   of the run, so the first run in a fresh worktree has nothing to record yet and
+   the obligation stays quiet.
+2. Run `bun run delivery:telemetry-record`. This promotes that ledger into a
+   tracked record naming the branch, run outcome, duration, review-loop
+   iterations, and self-reported review cost.
+3. Commit the record. Only tracked records satisfy the obligation — one left
+   untracked in the worktree would not survive it — and
+   `telemetry/delivery-runs/` is review-neutral and fingerprint-neutral, so
+   committing costs a cheap `bun run pr:athena:prepare` rather than a re-review,
+   and never stales the landed-change report.
+
+The demand scales with the delivery: below 150 changed source lines — the same
+threshold `compound:check` uses for solution notes — no record is required at
+all, though a record that is present and malformed is still reported at any
+size. Locally the demand waits until a *passing* gate run has completed against
+the current deliverable, because the record it asks for can only come from such a
+run; CI, the merge authority, has no such leniency.
+A record that describes an older deliverable diff is treated as stale, exactly as
+a stale report or solution note is, because telemetry that predates the final fix
+round misreports what actually merged, and only a record of a run that *passed*
+counts. An interactive human may waive it for that one
+invocation — a live obligation is re-evaluated every run, so unlike
+`review.green` the waiver does not persist across runs; agents cannot, since silently skipping the record is the failure
+the obligation exists to prevent. CI enforces it independently via
+`bun run delivery:telemetry-check`.
+
 Approved review workflows run `pr:athena:prepare`, capture
 `harness:review-context`, complete an independent review of that exact candidate,
 and submit a provider-owned `final-manifest.json` through
@@ -339,8 +371,10 @@ re-review of the resulting candidate.
 Review evidence binds to the candidate's **deliverable identity**, not its raw
 tree SHA. The identity (`deliverable-tree/v1`, in
 `scripts/harness-review-identity.ts`) is a digest of every tracked path in the
-prepared tree except `docs/reports/` and `docs/solutions/`, together with the
-base ref, base tip, merge base, and worktree. The consequence is narrow and
+prepared tree except `docs/reports/`, `docs/solutions/`, and
+`telemetry/delivery-runs/`, together with the base ref, base tip, merge base, and
+worktree. The third prefix is the record directory specifically, not all of
+`telemetry/`, so a future sibling directory does not inherit the exemption. The consequence is narrow and
 deliberate:
 
 - Committing a landed-change report or a solution note after the final pass does
@@ -492,6 +526,8 @@ type and where the output lands.
 | `bun run architecture:check` | Run architecture boundary checks. |
 | `bun run compound:check` | Enforce the solution-note delivery guardrail. |
 | `bun run delivery:documentation-check` | Combined solution-note and landed-change-report policy check. |
+| `bun run delivery:telemetry-record` | Promote a passing delivery-run ledger into the tracked telemetry corpus. |
+| `bun run delivery:telemetry-check` | Enforce a current delivery-run telemetry record for substantial deliveries. |
 | `bun run reports:presentation:check` | Presentation contract for every `docs/reports/*.html`. |
 | `bun run docs:links:check` | Cross-references in `docs/solutions/**/*.md` resolve to servable docs. |
 | `bun run graphify:check` | Freshness gate for tracked graphify artifacts. |
@@ -600,6 +636,18 @@ Tracked, freshness-gated graphify artifacts:
 `graphify-out/graph.html` is committed but sits outside the freshness gate. See
 [Graphify](./graphify.md) for the artifact and Python-runtime details.
 
+Tracked delivery-run telemetry, written by `delivery:telemetry-record`:
+
+- `telemetry/delivery-runs/<timestamp>-<branch>.json`
+
+This is machine-generated evidence that is deliberately tracked, unlike the
+`artifacts/harness-delivery-runs/` ledger it is promoted from. The ledger is
+git-ignored and per-worktree, and every ticket starts in a fresh worktree, so a
+trend across deliveries cannot live there. One small record per substantial
+delivery is committed instead, and `telemetry/delivery-runs/` is registered
+review-neutral and fingerprint-neutral so writing one never invalidates the
+review evidence or the landed-change report it describes.
+
 Local and CI evidence outputs, all git-ignored:
 
 | Path | Written by |
@@ -624,8 +672,9 @@ evidence, not reviewable source.
 schedule (Mondays 14:00 UTC), and on manual dispatch.
 
 - The `harness-validation` job runs self-review, review with
-  `--validation-provided-by athena-pr-tests`, docs check, architecture check,
-  audit, inferential review in `shadow` mode, scorecard, and graphify freshness.
+  `--validation-provided-by athena-pr-tests`, docs check, delivery-run telemetry
+  check, architecture check, audit, inferential review in `shadow` mode,
+  scorecard, and graphify freshness.
 - The `harness-janitor` job runs only on schedule or manual dispatch. It runs the
   janitor in report mode, persists inferential history, persists runtime trend
   history, and regenerates the telemetry scorecard.

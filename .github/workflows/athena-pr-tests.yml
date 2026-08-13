@@ -47,6 +47,9 @@ jobs:
       - name: Check delivery documentation
         run: bun run delivery:documentation-check
 
+      - name: Check delivery-run telemetry record
+        run: bun run delivery:telemetry-check
+
       - name: Install Graphify runtime
         run: python3 -m pip install -r .graphify-requirements.txt
 

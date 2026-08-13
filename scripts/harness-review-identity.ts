@@ -18,9 +18,22 @@ import { createHash } from "node:crypto";
  * content, and nothing here re-derives them to prove they still match their
  * reviewed sources.
  */
+/**
+ * `telemetry/delivery-runs/` joins the narration paths for a different reason
+ * than they did:
+ * it holds machine records *about* a delivery run, written once that run has
+ * already happened. Recording one cannot change what a reviewer approved, and
+ * treating it as reviewed content would make the observability write invalidate
+ * the very review evidence it describes. Anything placed under `telemetry/` is
+ * outside the reviewed deliverable by definition, so it must stay a record of
+ * work rather than a place to put work. The prefix is deliberately the record
+ * directory rather than all of `telemetry/`, so a future sibling directory does
+ * not silently inherit an exemption from review.
+ */
 export const REVIEW_NEUTRAL_PATH_PREFIXES = [
   "docs/reports/",
   "docs/solutions/",
+  "telemetry/delivery-runs/",
 ] as const;
 
 export const HARNESS_REVIEW_IDENTITY_VERSION = "deliverable-tree/v1" as const;

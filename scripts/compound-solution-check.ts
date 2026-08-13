@@ -29,7 +29,7 @@ type CompoundSolutionFinding = {
   message: string;
 };
 
-const DEFAULT_SOURCE_LINE_THRESHOLD = 150;
+export const DEFAULT_SOURCE_LINE_THRESHOLD = 150;
 export const REQUIRED_SOLUTION_FRONTMATTER_FIELDS = [
   "title",
   "date",
@@ -247,7 +247,7 @@ function hasAgentDocSolutionReference(
   return false;
 }
 
-function totalConsiderableSourceLineChanges(
+export function totalConsiderableSourceLineChanges(
   sourceLineChanges: Map<string, LineChange>
 ) {
   let total = 0;
@@ -445,7 +445,7 @@ function collectChangedFiles(rootDir: string, baseRef: string) {
   ]);
 }
 
-function collectSourceLineChanges(rootDir: string, baseRef: string, changedFiles: string[]) {
+export function collectSourceLineChanges(rootDir: string, baseRef: string, changedFiles: string[]) {
   const changes = new Map<string, LineChange>();
 
   mergeLineChanges(

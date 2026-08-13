@@ -1,11 +1,15 @@
 export const ATHENA_PR_VALIDATION_GATE_ID = "athena.pr-validation" as const;
 
 export type HarnessGateId = typeof ATHENA_PR_VALIDATION_GATE_ID;
-export type HarnessObligationId = "review.green" | "documentation.current";
+export type HarnessObligationId =
+  | "review.green"
+  | "documentation.current"
+  | "telemetry.recorded";
 export type HistoricalReviewProviderId = "ce-code-review" | "execute";
 export type HarnessProviderId =
   | HistoricalReviewProviderId
-  | "delivery-documentation-check";
+  | "delivery-documentation-check"
+  | "delivery-run-telemetry-check";
 export type HarnessCiPolicyId = "athena-pr-tests";
 export type PreventedCostClass = "merge_grade_validation";
 
@@ -109,7 +113,11 @@ export const HARNESS_GATE_REGISTRY: HarnessGateRegistry = {
   gates: {
     [ATHENA_PR_VALIDATION_GATE_ID]: {
       id: ATHENA_PR_VALIDATION_GATE_ID,
-      obligationIds: ["review.green", "documentation.current"],
+      obligationIds: [
+        "review.green",
+        "documentation.current",
+        "telemetry.recorded",
+      ],
       preventedCostClass: "merge_grade_validation",
       admissionEntrypoint: "pr:athena:validate-provider",
       publicEntrypoints: [
@@ -188,6 +196,27 @@ export const HARNESS_GATE_REGISTRY: HarnessGateRegistry = {
         human: "Update the required delivery documentation and evaluate again.",
       },
     },
+    "telemetry.recorded": {
+      id: "telemetry.recorded",
+      description:
+        "A durable delivery-run telemetry record exists for this branch's deliverable change.",
+      activation: { kind: "always" },
+      providerIds: ["delivery-run-telemetry-check"],
+      providerPolicy: "all",
+      freshness: { kind: "live" },
+      allowedResolutionKinds: ["satisfied_live_fact", "waived"],
+      // An interactive human gets the same escape hatch review.green grants
+      // them. Agents do not: the waiver path is interactive-human only, which
+      // is exactly the population this obligation exists to hold to account.
+      humanWaiverAllowed: true,
+      ciDelegationPolicyIds: [],
+      remediation: {
+        machine:
+          "After the passing pr:athena run, run `bun run delivery:telemetry-record` and commit the telemetry/delivery-runs record.",
+        human:
+          "Run `bun run delivery:telemetry-record` after the gate passes and commit the resulting telemetry/delivery-runs record with the delivery.",
+      },
+    },
   },
   providers: {
     "ce-code-review": {
@@ -197,6 +226,10 @@ export const HARNESS_GATE_REGISTRY: HarnessGateRegistry = {
     execute: { id: "execute", kind: "historical_evidence" },
     "delivery-documentation-check": {
       id: "delivery-documentation-check",
+      kind: "live_deterministic",
+    },
+    "delivery-run-telemetry-check": {
+      id: "delivery-run-telemetry-check",
       kind: "live_deterministic",
     },
   },
@@ -247,6 +280,22 @@ export function validateHarnessGateRegistry(
   }
 
   for (const obligation of Object.values(registry.obligations)) {
+    // `humanWaiverAllowed` and a `waived` resolution kind are two halves of one
+    // decision. When they disagree the mismatch is invisible at runtime: an
+    // allowed-but-unproducible `waived` is a no-op, and a permitted waiver whose
+    // resolution kind is disallowed reads to the caller as an ordinary block.
+    // Requiring them to agree makes both halves of the illegal combination a
+    // declaration-time finding instead of silent behavior.
+    if (
+      obligation.humanWaiverAllowed !==
+        obligation.allowedResolutionKinds.includes("waived")
+    ) {
+      findings.push(
+        obligation.humanWaiverAllowed
+          ? `Obligation ${obligation.id} allows a human waiver but omits "waived" from allowedResolutionKinds`
+          : `Obligation ${obligation.id} allows the "waived" resolution but sets humanWaiverAllowed false`,
+      );
+    }
     for (const providerId of obligation.providerIds) {
       if (!registry.providers[providerId]) {
         findings.push(

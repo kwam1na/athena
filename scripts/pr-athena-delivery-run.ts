@@ -4,17 +4,32 @@ import path from "node:path";
 
 import {
   createDeliveryRunLedger,
+  deliveryRunHistoryPath,
+  formatDeliveryRunSummary,
+  promotePassingLatestToBaseline,
+  pruneDeliveryRunHistory,
+  readDeliveryRunBaseline,
   type DeliveryRunGateDecisionEvent,
   type DeliveryRunProviderSkippedEvent,
   type DeliveryRunCommandSpan,
   type DeliveryRunCommandStatus,
   type DeliveryRunLedger,
+  type DeliveryRunBaselineLike,
   type DeliveryRunProofState,
+  type DeliveryRunReviewLoopSummary,
   type DeliveryRunStatus,
   writeDeliveryRunLedger,
 } from "./harness-delivery-run-ledger";
+import {
+  collectChangedPathsForDiff,
+  readLatestPassingDeliveryRunTelemetry,
+} from "./delivery-run-telemetry";
+import { collectDeliverableDiffFingerprint } from "./delivery-diff-fingerprint";
 import { ATHENA_PR_VALIDATION_GATE_ID } from "./harness-gate-registry";
-import { resolveHarnessObligationStorageContext } from "./harness-obligation-records";
+import {
+  discoverHarnessObligationRecords,
+  resolveHarnessObligationStorageContext,
+} from "./harness-obligation-records";
 import { evaluatePrAthenaPreparationReceipt } from "./pr-athena-prepare";
 
 const DEFAULT_PROVIDER_EVIDENCE_PATH =
@@ -59,6 +74,10 @@ type PrAthenaDeliveryRunOptions = {
     expected: ExpectedGateDecisionEvent,
     providerExitCode: number,
   ) => Promise<DeliveryRunGateDecisionEvent[]>;
+  resolveReviewLoopSummary?: (
+    rootDir: string,
+  ) => Promise<DeliveryRunReviewLoopSummary | undefined>;
+  resolveDeliverableFingerprint?: (rootDir: string) => string | undefined;
 };
 
 type PrAthenaPhase = {
@@ -477,6 +496,96 @@ function interruptedExitCode(error: unknown) {
   return null;
 }
 
+/**
+ * Fold the newest review-evidence record's loop telemetry into the ledger so
+ * "how many rounds, what got found, what was deferred" survives repo-side
+ * instead of living only in Linear comments. Best-effort: records are optional
+ * (telemetry is a newer manifest field) and storage may be unresolvable in
+ * non-git contexts, so failures degrade to an absent reviewLoop section.
+ */
+async function resolveReviewLoopSummaryFromRecords(
+  rootDir: string,
+): Promise<DeliveryRunReviewLoopSummary | undefined> {
+  try {
+    const { records } = await discoverHarnessObligationRecords(rootDir, {
+      gateId: ATHENA_PR_VALIDATION_GATE_ID,
+      obligationId: "review.green",
+    });
+    return records
+      .flatMap((record) =>
+        record.resolution.kind === "evidence" &&
+        record.resolution.reviewLoopTelemetry
+          ? [
+              {
+                providerId: record.resolution.providerId,
+                runId: record.resolution.runId,
+                finalPassId: record.resolution.finalPassId,
+                recordedAt: record.createdAt,
+                ...record.resolution.reviewLoopTelemetry,
+              },
+            ]
+          : [],
+      )
+      .sort((left, right) => right.recordedAt.localeCompare(left.recordedAt))
+      .at(0);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The tracked telemetry corpus wins over the worktree ledger: every ticket
+ * starts in a fresh worktree, so the local baseline is empty on a first run and
+ * only ever compares runs of the same ticket. A committed record compares this
+ * delivery against the last one that landed.
+ */
+export async function resolveSummaryBaseline(
+  rootDir: string,
+  options: { currentBranch?: string } = {},
+): Promise<{
+  baseline: DeliveryRunBaselineLike | null;
+  baselineSource?: "tracked" | "worktree";
+}> {
+  // Records this branch already committed describe this same delivery, so
+  // comparing against them would report a near-zero self-delta dressed as a
+  // cross-delivery trend.
+  const currentBranch = options.currentBranch ?? currentBranchName(rootDir);
+  const tracked = await readLatestPassingDeliveryRunTelemetry(rootDir, {
+    excludeBranch: currentBranch,
+  }).catch(() => null);
+  if (tracked) return { baseline: tracked, baselineSource: "tracked" };
+
+  const local = await readDeliveryRunBaseline(rootDir).catch(() => null);
+  return local
+    ? { baseline: local, baselineSource: "worktree" }
+    : { baseline: null };
+}
+
+function currentBranchName(rootDir: string) {
+  const result = Bun.spawnSync(["git", "branch", "--show-current"], {
+    cwd: rootDir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  // Records written on a detached HEAD are named "detached-head", so the
+  // exclusion must use the same name or a run compares against itself.
+  const branch = result.exitCode === 0 ? result.stdout.toString().trim() : "";
+  return branch || "detached-head";
+}
+
+/** Best-effort: a fingerprint failure must not abort a gate run. */
+function defaultDeliverableFingerprint(rootDir: string) {
+  try {
+    return collectDeliverableDiffFingerprint(
+      rootDir,
+      "origin/main",
+      collectChangedPathsForDiff(rootDir, "origin/main"),
+    );
+  } catch {
+    return undefined;
+  }
+}
+
 function interruptedReason(error: unknown) {
   if (
     error &&
@@ -502,6 +611,13 @@ export async function runPrAthenaDeliveryRun(
   const runCommand = options.runCommand ?? runProcess;
   const shouldWriteLedger = options.writeLedger ?? true;
   const commandSpans: DeliveryRunCommandSpan[] = [];
+
+  // Captured before the phases run: this names the tree the gate is about to
+  // validate. Recomputing after the run would stamp a tree the run never saw if
+  // anything landed mid-run, and the record would then claim a pass for it.
+  const deliverableDiffFingerprint = (
+    options.resolveDeliverableFingerprint ?? defaultDeliverableFingerprint
+  )(rootDir);
 
   let status: DeliveryRunStatus = "pass";
   let proofState: DeliveryRunProofState = "proof_not_recorded";
@@ -602,6 +718,10 @@ export async function runPrAthenaDeliveryRun(
     }
   }
 
+  const reviewLoop = await (
+    options.resolveReviewLoopSummary ?? resolveReviewLoopSummaryFromRecords
+  )(rootDir);
+
   let ledger = createDeliveryRunLedger({
     generatedAt: nowIso(),
     status,
@@ -611,9 +731,14 @@ export async function runPrAthenaDeliveryRun(
     gateDecisionEvents,
     blockedReason,
     interruptedReason: interruptedReasonValue,
+    reviewLoop,
+    ...(deliverableDiffFingerprint ? { deliverableDiffFingerprint } : {}),
   });
 
   if (shouldWriteLedger) {
+    // Preserve the previous passing run as the scorecard's comparison point
+    // before this run overwrites latest.json.
+    await promotePassingLatestToBaseline(rootDir);
     await writeDeliveryRunLedger(rootDir, ledger);
   }
 
@@ -630,10 +755,15 @@ export async function runPrAthenaDeliveryRun(
     gateDecisionEvents,
     blockedReason,
     interruptedReason: interruptedReasonValue,
+    reviewLoop,
+    ...(deliverableDiffFingerprint ? { deliverableDiffFingerprint } : {}),
   });
 
   if (shouldWriteLedger) {
-    await writeDeliveryRunLedger(rootDir, ledger);
+    await writeDeliveryRunLedger(rootDir, ledger, {
+      historyPath: deliveryRunHistoryPath(ledger.generatedAt),
+    });
+    await pruneDeliveryRunHistory(rootDir);
   }
 
   return { exitCode, ledger };
@@ -654,6 +784,26 @@ if (import.meta.main) {
     process.exit(1);
   }
 
-  const { exitCode } = await runPrAthenaDeliveryRun(process.cwd());
+  const { exitCode, ledger } = await runPrAthenaDeliveryRun(process.cwd());
+  // Observability must never decide the gate: a poisoned tracked record that
+  // broke rendering would otherwise turn every later passing run into a crash.
+  try {
+    const { baseline, baselineSource } = await resolveSummaryBaseline(
+      process.cwd(),
+    );
+    for (
+      const line of formatDeliveryRunSummary(ledger, baseline, {
+        ...(baselineSource ? { baselineSource } : {}),
+      })
+    ) {
+      console.log(line);
+    }
+  } catch (error) {
+    console.error(
+      `[pr:athena] run summary unavailable: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
   process.exit(exitCode);
 }

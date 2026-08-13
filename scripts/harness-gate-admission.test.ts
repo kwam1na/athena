@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   defaultScenarios,
   runHarnessGateAdmission,
+  WAIVABLE_FINDING_CODES,
   writeHarnessGateDecisionEvent,
 } from "./harness-gate-admission";
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
@@ -61,6 +62,7 @@ function greenOptions(overrides: Record<string, unknown> = {}) {
     }),
     discoverRecords: async () => ({ records: [], diagnostics: [] }),
     evaluateDocumentation: () => ({ status: "pass" as const, findings: [] }),
+    evaluateTelemetry: () => ({ status: "pass" as const, findings: [] }),
     resolveWorktreeId: async () => "worktree-a",
     captureCandidate: async () => ({ ok: true as const, candidate }),
     writeDecisionEvent,
@@ -101,6 +103,25 @@ afterEach(async () => {
 });
 
 describe("harness gate admission", () => {
+  it("gives every waivable obligation a non-empty finding-code allow-list", () => {
+    // The registry invariant pairs humanWaiverAllowed with the waived
+    // resolution kind; this is the third half of the same decision. Without it
+    // a future obligation can declare a waiver that admission silently never
+    // offers — the inert-flag failure this delivery exists to prevent.
+    for (const [id, obligation] of Object.entries(
+      HARNESS_GATE_REGISTRY.obligations,
+    )) {
+      if (!obligation.humanWaiverAllowed) continue;
+      expect(
+        WAIVABLE_FINDING_CODES[id as keyof typeof WAIVABLE_FINDING_CODES],
+      ).toBeTruthy();
+      expect(
+        WAIVABLE_FINDING_CODES[id as keyof typeof WAIVABLE_FINDING_CODES]
+          ?.length,
+      ).toBeGreaterThan(0);
+    }
+  });
+
   it("blocks qualifying agent work without evidence before any heavy spawn", async () => {
     const options = greenOptions({
       projectActivation: async () => ({
@@ -225,6 +246,143 @@ describe("harness gate admission", () => {
     ]);
     expect(promptForWaiver).not.toHaveBeenCalled();
     expect(options._spies.spawnHeavy).not.toHaveBeenCalled();
+  });
+
+  const missingTelemetry = () => ({
+    status: "fail" as const,
+    findings: [
+      {
+        code: "telemetry_record_missing" as const,
+        message: "Deliverable change detected without a telemetry record.",
+      },
+    ],
+  });
+
+  it("blocks an agent on a missing telemetry record and never offers it a waiver", async () => {
+    const promptForWaiver = vi.fn(async () => true);
+    const options = greenOptions({
+      evaluateTelemetry: missingTelemetry,
+      promptForWaiver,
+    });
+    const result = await runHarnessGateAdmission("/repo", options as never);
+    expect(result.status).not.toBe("passed");
+    expect(result.decision.findings.map((finding) => finding.code)).toContain(
+      "telemetry_record_missing",
+    );
+    // The waiver path is interactive-human only — agents are exactly the
+    // population this obligation exists to hold to account.
+    expect(promptForWaiver).not.toHaveBeenCalled();
+    expect(options._spies.spawnHeavy).not.toHaveBeenCalled();
+  });
+
+  it("lets an interactive human waive a missing telemetry record and publishes that waiver by name", async () => {
+    const publishWaiver = vi.fn(async () => undefined);
+    const options = greenOptions({
+      classifyContext: () => ({
+        kind: "human" as const,
+        interactive: true as const,
+      }),
+      evaluateTelemetry: missingTelemetry,
+      promptForWaiver: vi.fn(async () => true),
+      publishWaiver,
+    });
+    const result = await runHarnessGateAdmission("/repo", options as never);
+
+    expect(result.status).toBe("passed");
+    // telemetry.recorded is a live obligation: its waiver is invocation-scoped,
+    // so no durable record is published — one would never be read back, and the
+    // decision event is its audit trail.
+    expect(publishWaiver).not.toHaveBeenCalled();
+  });
+
+  it("refuses to waive a malformed telemetry record, which is not the waivable code", async () => {
+    const promptForWaiver = vi.fn(async () => true);
+    const options = greenOptions({
+      classifyContext: () => ({
+        kind: "human" as const,
+        interactive: true as const,
+      }),
+      evaluateTelemetry: () => ({
+        status: "fail" as const,
+        findings: [
+          {
+            code: "telemetry_record_malformed" as const,
+            message: "Changed telemetry record is not a valid record.",
+          },
+        ],
+      }),
+      promptForWaiver,
+    });
+    const result = await runHarnessGateAdmission("/repo", options as never);
+
+    expect(result.status).not.toBe("passed");
+    // A waiver means "I accept this missing artifact", never "I accept this
+    // corrupt one" — so the malformed code must not reach the waiver path.
+    expect(promptForWaiver).not.toHaveBeenCalled();
+    expect(result.decision.findings.map((finding) => finding.code)).toContain(
+      "telemetry_record_malformed",
+    );
+  });
+
+  it("waives every blocked obligation under one prompt, and names them all in it", async () => {
+    const publishWaiver = vi.fn(async () => undefined);
+    const promptForWaiver = vi.fn(async () => true);
+    const options = greenOptions({
+      classifyContext: () => ({
+        kind: "human" as const,
+        interactive: true as const,
+      }),
+      projectActivation: async () => ({
+        relevantLineCount: 50,
+        relevantPaths: ["src/app.ts"],
+        excludedPaths: [],
+        binaryPaths: [],
+        sensitiveScenarioIds: [],
+      }),
+      discoverRecords: async () => ({ records: [], diagnostics: [] }),
+      evaluateTelemetry: missingTelemetry,
+      promptForWaiver,
+      publishWaiver,
+    });
+    const result = await runHarnessGateAdmission("/repo", options as never);
+
+    expect(result.status).toBe("passed");
+    // One "yes" now covers more than review evidence, so the prompt must name
+    // everything that single confirmation waives.
+    const promptedIds = promptForWaiver.mock.calls[0]?.[1] as string[];
+    expect([...promptedIds].sort()).toEqual([
+      "review.green",
+      "telemetry.recorded",
+    ]);
+    // Both are waived by the one confirmation, but only the historical
+    // obligation gets a durable record; the live one is invocation-scoped.
+    expect(publishWaiver).toHaveBeenCalledTimes(1);
+    expect(publishWaiver.mock.calls[0]?.[2]).toBe("review.green");
+  });
+
+  it("does not offer a waiver when a blocked obligation carries a non-waivable finding", async () => {
+    const promptForWaiver = vi.fn(async () => true);
+    const options = greenOptions({
+      classifyContext: () => ({
+        kind: "human" as const,
+        interactive: true as const,
+      }),
+      evaluateDocumentation: () => ({
+        status: "fail" as const,
+        findings: [
+          {
+            policy: "compound-solution" as const,
+            label: "Solution notes" as const,
+            message: "missing",
+          },
+        ],
+      }),
+      promptForWaiver,
+    });
+    const result = await runHarnessGateAdmission("/repo", options as never);
+
+    expect(result.status).not.toBe("passed");
+    expect(promptForWaiver).not.toHaveBeenCalled();
   });
 
   it("uses an invocation waiver and publishes it only after successful unchanged validation", async () => {

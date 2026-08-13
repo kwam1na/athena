@@ -233,10 +233,51 @@ function isActive(
   );
 }
 
+/**
+ * A human waiver applies to any obligation that allows one, whether it is
+ * satisfied by historical evidence or by a live provider. Keeping the lookup
+ * shared means an obligation's `humanWaiverAllowed` flag means the same thing
+ * wherever it is declared, instead of silently applying only to evidence-backed
+ * obligations.
+ */
+function humanWaiverFor(
+  gate: HarnessGateDefinition,
+  obligation: HarnessObligationDefinition,
+  input: EvaluateGateObligationsInput,
+) {
+  if (input.executionContext.kind !== "interactive_human") return null;
+  if (!obligation.humanWaiverAllowed) return null;
+  // A live obligation is re-evaluated from scratch every run, so its waiver is
+  // scoped to the invocation that granted it. Honoring a durable record here
+  // would let one "yes" to a missing artifact silently admit a *different*
+  // failure — including finding codes the offer deliberately excludes — on
+  // every later run against the same candidate.
+  const invocationScopedOnly = obligation.freshness.kind === "live";
+  const waivers = input.records
+    .filter(
+      (record): record is WaiverRecord =>
+        record.kind === "waiver" &&
+        record.gateId === gate.id &&
+        record.obligationId === obligation.id &&
+        (!invocationScopedOnly || record.recordId.startsWith("invocation:")) &&
+        candidateBindingsEqual(record.candidate, input.candidate),
+    )
+    .sort((left, right) => left.recordId.localeCompare(right.recordId));
+  if (waivers.length === 0) return null;
+  return {
+    kind: "waived" as const,
+    gateId: gate.id,
+    obligationId: obligation.id,
+    waiverRecordId: waivers[0].recordId,
+    candidate: waivers[0].candidate,
+  };
+}
+
 function evaluateLiveObligation(
   gate: HarnessGateDefinition,
   obligation: HarnessObligationDefinition,
   results: readonly LiveProviderResult[],
+  input: EvaluateGateObligationsInput,
 ): { resolution: ObligationResolution; diagnostics: ObligationFinding[] } {
   const providerResults = obligation.providerIds.flatMap((providerId) =>
     results.filter((result) => result.providerId === providerId),
@@ -301,6 +342,8 @@ function evaluateLiveObligation(
       ? greenResults.length === obligation.providerIds.length
       : greenResults.length > 0;
   if (!satisfied) {
+    const waived = humanWaiverFor(gate, obligation, input);
+    if (waived) return { resolution: waived, diagnostics: findings };
     return {
       resolution: {
         kind: "blocked",
@@ -557,31 +600,12 @@ function evaluateHistoricalObligation(
     }
   }
 
-  if (
-    input.executionContext.kind === "interactive_human" &&
-    obligation.humanWaiverAllowed
-  ) {
-    const waivers = input.records
-      .filter(
-        (record): record is WaiverRecord =>
-          record.kind === "waiver" &&
-          record.gateId === gate.id &&
-          record.obligationId === obligation.id &&
-          candidateBindingsEqual(record.candidate, input.candidate),
-      )
-      .sort((left, right) => left.recordId.localeCompare(right.recordId));
-    if (waivers.length > 0) {
-      return {
-        resolution: {
-          kind: "waived",
-          gateId: gate.id,
-          obligationId: obligation.id,
-          waiverRecordId: waivers[0].recordId,
-          candidate: waivers[0].candidate,
-        },
-        diagnostics: evidenceResult.blockingFindings,
-      };
-    }
+  const waived = humanWaiverFor(gate, obligation, input);
+  if (waived) {
+    return {
+      resolution: waived,
+      diagnostics: evidenceResult.blockingFindings,
+    };
   }
 
   const findings =
@@ -674,7 +698,7 @@ export function evaluateGateObligations(
 
     const evaluation =
       obligation.freshness.kind === "live"
-        ? evaluateLiveObligation(gate, obligation, input.liveProviderResults)
+        ? evaluateLiveObligation(gate, obligation, input.liveProviderResults, input)
         : evaluateHistoricalObligation(gate, obligation, input);
     resolutions.push(
       enforceAllowedResolution(gate, obligation, evaluation.resolution),

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -32,7 +34,11 @@ describe("HARNESS_GATE_REGISTRY", () => {
         "pr:athena:validate",
         "pr:athena:validate-provider",
       ],
-      obligationIds: ["review.green", "documentation.current"],
+      obligationIds: [
+        "review.green",
+        "documentation.current",
+        "telemetry.recorded",
+      ],
       privateProviderCommands: [
         ["bun", "run", "reports:presentation:check"],
         ["bun", "run", "docs:links:check"],
@@ -87,6 +93,20 @@ describe("HARNESS_GATE_REGISTRY", () => {
     });
 
     expect(
+      HARNESS_GATE_REGISTRY.obligations["telemetry.recorded"],
+    ).toMatchObject({
+      providerPolicy: "all",
+      providerIds: ["delivery-run-telemetry-check"],
+      allowedResolutionKinds: ["satisfied_live_fact", "waived"],
+      freshness: { kind: "live" },
+      activation: { kind: "always" },
+      // An interactive human gets the same escape hatch review.green grants
+      // them; agents never reach the waiver path, which is the population this
+      // obligation exists to hold to account.
+      humanWaiverAllowed: true,
+    });
+
+    expect(
       validateHarnessGateRegistry(
         HARNESS_GATE_REGISTRY,
         knownSensitiveScenarioIds,
@@ -116,6 +136,58 @@ describe("HARNESS_GATE_REGISTRY", () => {
         expect.stringContaining("unknown sensitive scenario missing.scenario"),
       ]),
     );
+  });
+
+  it.each([
+    [
+      "a permitted waiver whose resolution kind is disallowed",
+      (registry: HarnessGateRegistry) => {
+        registry.obligations["documentation.current"].humanWaiverAllowed = true;
+      },
+      'Obligation documentation.current allows a human waiver but omits "waived"',
+    ],
+    [
+      "an allowed waived resolution no human may produce",
+      (registry: HarnessGateRegistry) => {
+        registry.obligations["documentation.current"].allowedResolutionKinds =
+          ["satisfied_live_fact", "waived"];
+      },
+      'Obligation documentation.current allows the "waived" resolution but sets humanWaiverAllowed false',
+    ],
+  ])("reports %s", (_label, mutate, expected) => {
+    // Either half alone is silent at runtime: the waiver is unproducible, or
+    // the block is indistinguishable from a declined waiver.
+    const registry = structuredClone(
+      HARNESS_GATE_REGISTRY,
+    ) as HarnessGateRegistry;
+    mutate(registry);
+
+    expect(
+      validateHarnessGateRegistry(registry, knownSensitiveScenarioIds),
+    ).toEqual(expect.arrayContaining([expect.stringContaining(expected)]));
+  });
+
+  it("keeps obligation remediation pointing at commands that exist", () => {
+    // Remediation text is the only instruction a blocked human gets, so a
+    // renamed package script must not leave it naming a command that is gone.
+    const scripts = Object.keys(
+      JSON.parse(readFileSync("package.json", "utf8")).scripts as Record<
+        string,
+        string
+      >,
+    );
+    const referenced = Object.values(HARNESS_GATE_REGISTRY.obligations)
+      .flatMap((obligation) => [
+        obligation.remediation.machine,
+        obligation.remediation.human,
+      ])
+      .flatMap((text) => [...text.matchAll(/`bun run ([a-z0-9:_-]+)`/g)])
+      .map((match) => match[1]);
+
+    expect(referenced.length).toBeGreaterThan(0);
+    for (const script of referenced) {
+      expect(scripts).toContain(script);
+    }
   });
 
   it("reports duplicate stable IDs even when object keys differ", () => {
