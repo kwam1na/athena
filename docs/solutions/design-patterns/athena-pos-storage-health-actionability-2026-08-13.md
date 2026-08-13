@@ -11,7 +11,7 @@ applies_when:
   - "A browser capability or storage signal is reported as terminal health"
   - "Operators need to distinguish actionable pressure from informational diagnostics"
 tags: [pos, storage-health, diagnostics, operator-ux, convex]
-delivery_diff_fingerprint: f73879e5f7b46bce119183a3b2ca92e14d8b7fe893e3162e868fdae9b9f3812a
+delivery_diff_fingerprint: 8c16a4e18ce0cd1c9337cff19ab7e709f0876225f3b4e563a36432b3e5e045d5
 ---
 
 # Actionable POS Storage Health Diagnostics

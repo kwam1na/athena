@@ -431,7 +431,7 @@ describe("POSTerminalDetailViewContent", () => {
     const storageAttention = screen.getByRole("button", {
       name: "Storage needs attention. Browser storage usage is high.",
     });
-    await user.hover(storageAttention);
+    await user.click(storageAttention);
 
     expect(
       await screen.findByText("Why storage needs attention"),
@@ -442,6 +442,10 @@ describe("POSTerminalDetailViewContent", () => {
     expect(screen.getByText("148 events")).toBeInTheDocument();
     expect(screen.getByText("128 MB of 2 GB (6%)")).toBeInTheDocument();
     expect(screen.getByText("Normal")).toBeInTheDocument();
+    expect(screen.getByText("Denied")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Persistent storage is not granted."),
+    ).not.toBeInTheDocument();
   });
 
   it("shows when the terminal is not on the latest webapp version", async () => {

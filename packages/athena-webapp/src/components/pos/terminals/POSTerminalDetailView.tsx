@@ -665,6 +665,7 @@ function TerminalHealthBadge({
   classification: ReturnType<typeof classifyTerminalHealth>;
   runtimeStatus: TerminalRuntimeStatus | null;
 }) {
+  const [storageDetailOpen, setStorageDetailOpen] = useState(false);
   const localStore = runtimeStatus?.localStore;
   const showsStorageDetail = classification.label === "Storage needs attention";
 
@@ -693,11 +694,12 @@ function TerminalHealthBadge({
 
   return (
     <TooltipProvider delayDuration={150}>
-      <Tooltip>
+      <Tooltip open={storageDetailOpen} onOpenChange={setStorageDetailOpen}>
         <TooltipTrigger asChild>
           <button
             aria-label={`${classification.label}. ${primaryReason}`}
             className="rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            onClick={() => setStorageDetailOpen((open) => !open)}
             type="button"
           >
             {badge}
@@ -761,12 +763,6 @@ function getStorageAttentionReasons(
     reasons.push("The local event ledger needs support.");
   } else if (localStore.ledgerPressure === "warning") {
     reasons.push("The local event ledger is above its maintenance threshold.");
-  }
-
-  if (localStore.persistence === "denied") {
-    reasons.push("Persistent storage is not granted.");
-  } else if (localStore.persistence === "unsupported") {
-    reasons.push("Persistent storage is not supported by this browser.");
   }
 
   return reasons;
