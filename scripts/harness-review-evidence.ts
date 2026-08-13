@@ -15,6 +15,10 @@ import {
   type HarnessObligationCandidateBinding,
 } from "./harness-obligation-records";
 import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
+import {
+  evaluatePrAthenaPreparationReceipt,
+  type PrAthenaPreparationEvaluation,
+} from "./pr-athena-prepare";
 
 export const HARNESS_REVIEW_MANIFEST_SCHEMA_VERSION = 1;
 export const HARNESS_REVIEWER_ARTIFACT_SCHEMA_VERSION = 1;
@@ -346,9 +350,16 @@ function isWithin(parent: string, child: string) {
 }
 
 /**
- * Recording compares the same deliverable identity the gate later compares, so
- * an approval survives a landed-change report or solution note committed after
- * the final pass. Everything a reviewer read still has to be identical.
+ * Recording stays strict on the raw tree, deliberately.
+ *
+ * The deliverable identity exists so an approval survives a report or solution
+ * note committed *after* the final pass — that is a gate-time concern. At
+ * recording time the manifest is being written against the tree that was just
+ * prepared and reviewed, so requiring an exact `treeSha` match costs nothing and
+ * buys something the gate cannot: it proves the raw tree the record names is the
+ * tree that actually existed. That value is persisted into the obligation record
+ * and the gate decision event as the audit anchor, so it must be verified rather
+ * than taken from the provider's word.
  */
 function sameCandidate(
   left: HarnessObligationCandidateBinding,
@@ -359,6 +370,7 @@ function sameCandidate(
     right.identityVersion === HARNESS_REVIEW_IDENTITY_VERSION &&
     Boolean(left.deliverableTreeSha) &&
     left.deliverableTreeSha === right.deliverableTreeSha &&
+    left.treeSha === right.treeSha &&
     left.baseRef === right.baseRef &&
     left.baseTipSha === right.baseTipSha &&
     left.diffBaseSha === right.diffBaseSha
@@ -506,7 +518,28 @@ export async function recordHarnessReviewEvidence(
   );
 }
 
-export async function collectHarnessReviewContext(rootDir: string) {
+/**
+ * Requiring the preparation receipt here is what makes the mechanical stage an
+ * ordering *mechanism* rather than a convention: preparation publishes no
+ * receipt for a tree that fails a deterministic rule, so a reviewer cannot even
+ * be given a candidate to review until that tree passes.
+ */
+export async function collectHarnessReviewContext(
+  rootDir: string,
+  options: {
+    evaluatePreparation?: (
+      rootDir: string,
+    ) => Promise<PrAthenaPreparationEvaluation>;
+  } = {},
+) {
+  const preparation = await (
+    options.evaluatePreparation ?? evaluatePrAthenaPreparationReceipt
+  )(rootDir);
+  if (!preparation.prepared) {
+    throw new Error(
+      `Review context is unavailable: ${preparation.reason}. Remediation: ${preparation.remediation}`,
+    );
+  }
   const [captured, storage] = await Promise.all([
     defaultCaptureCandidate(rootDir),
     resolveHarnessObligationStorageContext(rootDir, {}),

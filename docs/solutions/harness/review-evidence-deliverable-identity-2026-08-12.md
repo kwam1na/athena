@@ -19,7 +19,7 @@ tags:
   - gate-admission
   - authorization-identity
   - delivery-order
-delivery_diff_fingerprint: b6436cf0663b18374fb9c7cfc3af8f2c247555e686933410a278bf05e56f2d12
+delivery_diff_fingerprint: 900d06ebd558234e08914ca6ebbe7b4e628a6adcce22f2816666856b45405a11
 ---
 
 # Review Evidence Binds to a Deliverable Identity, and Mechanical Checks Run Before It
@@ -81,13 +81,22 @@ not an ergonomic tweak. Three properties kept it honest:
   identity are written into the existing gate decision event, so a past
   authorization stays interpretable after the identity changes again. No new
   event type was added.
-- **Version transitions must be ignorable, not fatal.** Records written under an
-  earlier identity are reported as `superseded_record` and skipped. The first
-  implementation let them fall through to the record-identity digest check,
-  which reports `malformed_record` — a *blocking* finding. That would have
-  bricked the gate in every worktree holding an older record until someone
-  deleted files by hand. Superseded is a version transition; malformed is
-  tampering. They must not share a code path.
+- **The audit anchor is verified, not asserted.** The loosening is only needed
+  at gate time, where the tree legitimately moves. Recording happens against the
+  tree that was just prepared and reviewed, so `harness:review-evidence` keeps
+  an exact `treeSha` match. An earlier draft dropped it there too, which would
+  have written a provider-supplied raw tree that nothing ever checked into the
+  obligation record and the decision event — destroying the very interpretability
+  the previous bullet claims. Loosen at exactly one layer, and only the layer
+  that needs it.
+- **Do not add a mechanism for a failure you have not reproduced.** An earlier
+  draft added a `superseded_record` diagnostic so records from an older identity
+  would not be treated as tampering. The premise was wrong: the record digest is
+  computed over whatever candidate fields a record carries, so a genuine
+  pre-identity record still proves its own slot identity, stays readable, and
+  simply fails closed as stale evidence — which is correct, because a re-review
+  is required anyway. The extra classification only removed tamper evidence from
+  the diagnostics. It was deleted.
 
 The residual risk is stated rather than hidden: `docs/reports/**` and
 `docs/solutions/**` ship in the in-app docs workspace bundle, so this admits
@@ -107,12 +116,23 @@ event.
 - Before binding an approval to a hash, decide explicitly *what is being
   approved*. Derive the hash from that answer instead of from whatever the
   version-control system happens to hand you.
-- When an identity gains a version, give old records a distinct non-blocking
-  diagnostic in the same change. Test the transition, not just the new format.
+- Check what the existing record format actually does under the new rule before
+  adding machinery for the transition. Here it already failed closed correctly,
+  and the machinery would only have cost tamper evidence.
 - Pin the rejection cases before writing the loosening: comment-only edits, mode
   changes, renames with identical contents, deletions, and moved base refs all
   have tests in `scripts/harness-review-identity.test.ts`, including against
   real Git.
+- **Parse `git ls-tree -z` as bytes, not as text.** The `-z` form is
+  NUL-delimited precisely because a path may contain a newline or a trailing
+  space, and it is unquoted. An independent review proved that splitting on `\n`
+  as well as `\0`, `.trim()`ing each record, or rewriting `\` to `/` each
+  produced a *digest collision* — two trees with different reviewed content
+  sharing one identity, so a recorded approval would admit the tree nobody read.
+  The backslash rewrite was the worst of the three: it folded a legal
+  `docs\reports\x.html` onto the excluded `docs/reports/x.html` and dropped it
+  out of the reviewed deliverable entirely. Sort by byte value too — 
+  `localeCompare` makes the digest depend on the host ICU build.
 
 ## Examples
 

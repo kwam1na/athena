@@ -7,14 +7,16 @@ import {
   HARNESS_REVIEW_IDENTITY_VERSION,
   computeDeliverableTreeIdentity,
   isReviewNeutralPath,
+  parseTreeEntries,
 } from "./harness-review-identity";
 
 type TreeEntry = { mode: string; objectSha: string; path: string };
 
 function lsTreeOutput(entries: TreeEntry[]) {
+  // `-z` output is NUL-terminated, including after the final record.
   return entries
-    .map((entry) => `${entry.mode} blob ${entry.objectSha}\t${entry.path}`)
-    .join("\n");
+    .map((entry) => `${entry.mode} blob ${entry.objectSha}\t${entry.path}\0`)
+    .join("");
 }
 
 function createSpawn(treeOutputs: Record<string, string>) {
@@ -161,6 +163,82 @@ describe("deliverable tree identity", () => {
     expect(withArtifact.deliverableTreeSha).not.toBe(base.deliverableTreeSha);
   });
 
+  it("does not let a trailing space in a path collide with the trimmed path", async () => {
+    const plain = await identityFor([sourceEntry]);
+    const trailingSpace = await identityFor([
+      { ...sourceEntry, path: `${sourceEntry.path} ` },
+    ]);
+
+    expect(trailingSpace.deliverableTreeSha).not.toBe(plain.deliverableTreeSha);
+  });
+
+  it("does not let a newline in a path forge a second entry", async () => {
+    const forgedRecord = `100644 blob blob-report-a\tdocs/reports/x.html`;
+    const injected = await identityFor([
+      { ...sourceEntry, path: `${sourceEntry.path}\n${forgedRecord}` },
+    ]);
+    const plain = await identityFor([sourceEntry]);
+
+    // Splitting on anything but NUL would parse the forged half as its own
+    // entry, drop it as review-neutral, and collide with the plain tree.
+    expect(injected.deliverableTreeSha).not.toBe(plain.deliverableTreeSha);
+  });
+
+  it("keeps a legal newline in a path parsable instead of hard-failing", async () => {
+    const newlinePath = await identityFor([
+      { ...sourceEntry, path: "packages/athena-webapp/convex/we\nird.ts" },
+    ]);
+
+    expect(newlinePath.deliverableTreeSha).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("does not fold a backslash path onto a review-neutral path", async () => {
+    const withBackslashPath = await identityFor([
+      sourceEntry,
+      {
+        mode: "100644",
+        objectSha: "blob-report-a",
+        path: "docs\\reports\\x.html",
+      },
+    ]);
+    const withoutIt = await identityFor([sourceEntry]);
+
+    // `docs\reports\x.html` is a legal, distinct path. Rewriting the separator
+    // would exclude it from the reviewed deliverable entirely.
+    expect(isReviewNeutralPath("docs\\reports\\x.html")).toBe(false);
+    expect(withBackslashPath.deliverableTreeSha).not.toBe(
+      withoutIt.deliverableTreeSha,
+    );
+  });
+
+  it("keeps a path containing a space inside the reviewed deliverable", async () => {
+    const spacedPath =
+      "packages/storefront-webapp/src/components/states/checkout unavailable/CheckoutUnavailable.tsx";
+    const entries = parseTreeEntries(
+      `100644 blob blob-spaced-a\t${spacedPath}\0`,
+    );
+
+    expect(entries).toEqual([
+      { mode: "100644", objectSha: "blob-spaced-a", path: spacedPath },
+    ]);
+    expect(isReviewNeutralPath(spacedPath)).toBe(false);
+  });
+
+  it("is ordered by byte value rather than host collation", async () => {
+    const entryFor = (path: string) => ({
+      mode: "100644",
+      objectSha: "blob-a",
+      path,
+    });
+    const ascending = await identityFor([entryFor("a/Z.ts"), entryFor("a/a.ts")]);
+    const descending = await identityFor([
+      entryFor("a/a.ts"),
+      entryFor("a/Z.ts"),
+    ]);
+
+    expect(ascending.deliverableTreeSha).toBe(descending.deliverableTreeSha);
+  });
+
   it("fails loudly when the tree cannot be read", async () => {
     await expect(
       computeDeliverableTreeIdentity("/repo", "tree-missing", {
@@ -196,7 +274,16 @@ async function gitFixture() {
   await git(rootDir, ["config", "user.name", "Harness"]);
   await mkdir(path.join(rootDir, "src"), { recursive: true });
   await mkdir(path.join(rootDir, "docs", "reports"), { recursive: true });
+  // This repo really does track a path containing a space, so the fixture does
+  // too: a tightened record regex must fail here, not in production.
+  await mkdir(path.join(rootDir, "src", "checkout unavailable"), {
+    recursive: true,
+  });
   await writeFile(path.join(rootDir, "src", "app.ts"), "export const a = 1;\n");
+  await writeFile(
+    path.join(rootDir, "src", "checkout unavailable", "View.tsx"),
+    "export const View = null;\n",
+  );
   await git(rootDir, ["add", "-A"]);
   await git(rootDir, ["commit", "--quiet", "-m", "base"]);
   return rootDir;
@@ -236,6 +323,22 @@ describe("deliverable tree identity against real Git", () => {
 
     expect(afterReport.deliverableTreeSha).toBe(reviewed.deliverableTreeSha);
     expect(afterComment.deliverableTreeSha).not.toBe(
+      reviewed.deliverableTreeSha,
+    );
+  });
+
+  it("keeps a real spaced path inside the identity and reacts to its content", async () => {
+    const rootDir = await gitFixture();
+    const reviewed = await headTreeIdentity(rootDir);
+
+    await writeFile(
+      path.join(rootDir, "src", "checkout unavailable", "View.tsx"),
+      "export const View = 1;\n",
+    );
+    await git(rootDir, ["add", "-A"]);
+    await git(rootDir, ["commit", "--quiet", "-m", "spaced"]);
+
+    expect((await headTreeIdentity(rootDir)).deliverableTreeSha).not.toBe(
       reviewed.deliverableTreeSha,
     );
   });

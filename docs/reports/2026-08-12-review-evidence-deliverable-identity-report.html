@@ -7,7 +7,7 @@
   <body>
     <article
       data-athena-landed-change-report="v2"
-      data-athena-report-diff-fingerprint="b6436cf0663b18374fb9c7cfc3af8f2c247555e686933410a278bf05e56f2d12"
+      data-athena-report-diff-fingerprint="900d06ebd558234e08914ca6ebbe7b4e628a6adcce22f2816666856b45405a11"
       data-athena-report-base="origin/main"
     >
       <header data-report-section="header">
@@ -16,7 +16,7 @@
           <li>Delivery candidate</li>
           <li>Branch codex/V26-1209-cheap-gate-before-review</li>
           <li>Harness / delivery gates</li>
-          <li>792 harness tests green</li>
+          <li>800 harness tests green</li>
         </ul>
         <dl data-report-meta>
           <dt>PR</dt>
@@ -263,9 +263,9 @@
             <tr>
               <td><code>scripts/harness-obligation-records.ts</code></td>
               <td>
-                Adds the non-blocking <code>superseded_record</code> diagnostic
-                so records from an earlier identity are ignored rather than
-                reported as tampering.
+                Carries the identity fields on the persisted candidate binding.
+                A record written before the identity existed stays readable and
+                self-consistent, and fails closed as stale evidence.
               </td>
             </tr>
             <tr>
@@ -307,8 +307,14 @@
             The gate decision event carries the identity that authorized it.
           </li>
           <li>
-            Obligation records from an earlier identity are reported as
-            superseded and skipped.
+            Recording keeps an exact raw-tree match, so the audit anchor written
+            into the record and the decision event is verified rather than taken
+            from the provider's word. Only the gate comparison is identity-only.
+          </li>
+          <li>
+            <code>harness:review-context</code> now requires a current
+            preparation receipt, which is what makes the mechanical ordering a
+            mechanism rather than a convention.
           </li>
         </ul>
         <h3>Deliberately unchanged</h3>
@@ -368,14 +374,16 @@
           <code>candidateBindingsEqual</code> was touched.
         </p>
         <ul>
-          <li><code>bun run harness:test</code> — 792 tests across 58 files, green</li>
+          <li><code>bun run harness:test</code> — 800 tests across 58 files, green</li>
           <li><code>bun run pr:athena:preflight</code> — pass</li>
           <li><code>bun run architecture:check</code> — pass</li>
           <li><code>bun run compound:check</code> — pass</li>
           <li>
-            New suites: <code>scripts/harness-review-identity.test.ts</code> (23
-            tests, including real-Git integration covering a report-only commit
-            and a comment-only source commit) and
+            New suites: <code>scripts/harness-review-identity.test.ts</code> (30
+            tests, including real-Git integration covering a report-only commit,
+            a comment-only source commit, and a tracked path containing a space,
+            plus the trailing-space, newline-injection and backslash digest
+            collisions an independent review proved against the first draft) and
             <code>scripts/harness-mechanical-check.test.ts</code> (9 tests)
           </li>
           <li>
@@ -587,21 +595,24 @@
           </li>
           <li data-quiz-question>
             <p data-quiz-prompt>
-              What happens to an obligation record written before the deliverable
-              identity existed?
+              Why does <code>harness:review-evidence</code> still require an exact
+              raw-tree match when the gate does not?
             </p>
             <ol data-quiz-options>
-              <li>It is upgraded in place and continues to satisfy the obligation.</li>
-              <li>It is reported as a malformed record, which blocks the gate.</li>
+              <li>Because the deliverable identity is too slow to compute twice.</li>
               <li data-quiz-correct>
-                It is reported as a superseded record: it satisfies nothing and
-                blocks nothing.
+                Recording happens against the tree that was just prepared and
+                reviewed, so the match is free — and it proves the raw tree
+                written into the record and the decision event as the audit
+                anchor is real rather than provider-supplied.
               </li>
-              <li>It is deleted automatically the first time it is discovered.</li>
+              <li>Because waiver records cannot carry a deliverable identity.</li>
+              <li>Because the gate re-derives the raw tree from the manifest anyway.</li>
             </ol>
             <p data-quiz-explanation>
-              Treating a version transition as tampering would have blocked the
-              gate in every worktree holding an older record.
+              The loosening is only needed where the tree legitimately moves,
+              which is at gate time. Loosening it at both layers would have made
+              the audit anchor unverified.
             </p>
           </li>
           <li data-quiz-question>

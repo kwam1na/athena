@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { recordHarnessReviewEvidence } from "./harness-review-evidence";
+import {
+  collectHarnessReviewContext,
+  recordHarnessReviewEvidence,
+} from "./harness-review-evidence";
 import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
 
 const roots: string[] = [];
@@ -164,6 +167,7 @@ describe("harness review evidence", () => {
 
   it.each([
     ["reviewed content changed", { deliverableTreeSha: "deliverable-after" }],
+    ["the raw tree changed", { treeSha: "tree-after" }],
     ["the base tip moved", { baseTipSha: "base-b" }],
     ["the merge base moved", { diffBaseSha: "merge-base-b" }],
   ])(
@@ -184,25 +188,23 @@ describe("harness review evidence", () => {
     },
   );
 
-  it("records evidence when only review-neutral content moved the raw tree", async () => {
+  it("stays strict on the raw tree at recording time so the audit anchor is verified", async () => {
     const setup = await fixture();
-    const result = await recordHarnessReviewEvidence(
-      setup.rootDir,
-      setup.manifestPath,
-      {
+
+    // Recording happens against the tree that was just prepared and reviewed,
+    // so an unverified treeSha would be persisted into the obligation record
+    // and the gate decision event as an audit anchor nothing ever checked.
+    await expect(
+      recordHarnessReviewEvidence(setup.rootDir, setup.manifestPath, {
         storageDir: setup.storageDir,
         providerRunRoots: { execute: setup.providerRoot },
         captureCandidate: async () => ({
           ok: true,
-          candidate: { ...setup.candidate, treeSha: "tree-after-report" },
+          candidate: { ...setup.candidate, treeSha: "tree-claimed-by-provider" },
         }),
         resolveWorktreeId: async () => setup.worktreeId,
-        now: () => "2026-08-12T00:00:00.000Z",
-      },
-    );
-
-    // The record keeps the reviewed tree, not the tree the report landed on.
-    expect(result.candidate).toEqual(setup.candidate);
+      }),
+    ).rejects.toThrow(/candidate does not match/);
   });
 
   it.each([
@@ -230,7 +232,22 @@ describe("harness review evidence", () => {
         }),
         resolveWorktreeId: async () => setup.worktreeId,
       }),
-    ).rejects.toThrow(/identity|candidate/i);
+    ).rejects.toThrow(/deliverable identity|harness:review-context/);
+  });
+
+  it("refuses to hand out a review context without a current preparation receipt", async () => {
+    const setup = await fixture();
+
+    await expect(
+      collectHarnessReviewContext(setup.rootDir, {
+        evaluatePreparation: async () => ({
+          prepared: false,
+          status: "missing",
+          reason: "no current pr:athena preparation receipt was found",
+          remediation: "bun run pr:athena:prepare",
+        }),
+      }),
+    ).rejects.toThrow(/Review context is unavailable/);
   });
 
   it("rejects copied manifests and missing reviewer artifacts", async () => {

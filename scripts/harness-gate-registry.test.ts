@@ -61,7 +61,15 @@ describe("HARNESS_GATE_REGISTRY", () => {
         "delegated",
         "not_applicable",
       ],
-      freshness: { kind: "exact_candidate" },
+      // The declared freshness must keep naming what the evaluator actually
+      // compares: the candidate's deliverable identity, not its raw tree SHA.
+      freshness: {
+        kind: "exact_candidate",
+        requireDeliverableTreeSha: true,
+        requireBaseRef: true,
+        requireBaseTipSha: true,
+        requireWorktreeId: true,
+      },
       activation: {
         kind: "review_projection",
         minimumRelevantChangedLines: 50,

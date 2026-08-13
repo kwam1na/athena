@@ -48,8 +48,14 @@ export type DeliverableTreeIdentityOptions = {
   spawn?: ReviewIdentityCommandRunner;
 };
 
+/**
+ * Git tree paths are always POSIX-separated and are never quoted under `-z`,
+ * so this deliberately does NOT rewrite backslashes. `docs\reports\x.html` is a
+ * legal, distinct path; rewriting it would fold it onto the excluded
+ * `docs/reports/x.html` and drop it out of the reviewed deliverable entirely.
+ */
 function normalizeRepoPath(repoPath: string) {
-  return repoPath.replaceAll("\\", "/").replace(/^\.\//, "");
+  return repoPath.replace(/^\.\//, "");
 }
 
 export function isReviewNeutralPath(repoPath: string) {
@@ -65,15 +71,22 @@ export type DeliverableTreeEntry = {
   path: string;
 };
 
+/**
+ * `-z` output is NUL-delimited precisely because a Git path may contain a
+ * newline, a trailing space, or a quote. Splitting on anything but NUL, or
+ * trimming a record, lets two different trees produce one identity — so this
+ * splits on NUL only and keeps every byte of the path.
+ */
 export function parseTreeEntries(output: string): DeliverableTreeEntry[] {
   return output
-    .split(/\0|\n/)
-    .map((record) => record.trim())
-    .filter(Boolean)
+    .split("\0")
+    .filter((record) => record.length > 0)
     .map((record) => {
-      const match = /^(\S+) (\S+) (\S+)\t(.+)$/.exec(record);
+      const match = /^(\S+) (\S+) (\S+)\t([\s\S]+)$/.exec(record);
       if (!match) {
-        throw new Error(`git ls-tree produced an unparsable record: ${record}`);
+        throw new Error(
+          `git ls-tree produced an unparsable record: ${JSON.stringify(record)}`,
+        );
       }
       return { mode: match[1], objectSha: match[3], path: match[4] };
     });
@@ -87,7 +100,11 @@ export function digestDeliverableEntries(
   const deliverableEntries = entries
     .filter((entry) => !isReviewNeutralPath(entry.path))
     .map((entry) => ({ ...entry, path: normalizeRepoPath(entry.path) }))
-    .sort((left, right) => left.path.localeCompare(right.path));
+    // Byte order, not locale order: `localeCompare` varies with the host ICU
+    // build, so the same tree could digest differently on two machines.
+    .sort((left, right) =>
+      left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+    );
 
   for (const entry of deliverableEntries) {
     hash.update(`${entry.mode}\0${entry.objectSha}\0${entry.path}\0`);

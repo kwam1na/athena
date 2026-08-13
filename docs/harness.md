@@ -343,9 +343,14 @@ deliberate:
   (report freshness) and may exclude generated artifacts that nothing here
   re-derives.
 - Both the reviewed raw tree and the deliverable identity are written into the
-  gate decision event, so a past authorization stays interpretable.
-- Records written under an earlier identity version are reported as superseded
-  and ignored. They never satisfy an obligation, and they never block one. The admission wrapper evaluates
+  gate decision event, so a past authorization stays interpretable. The raw tree
+  is verified at recording time — `harness:review-evidence` still requires an
+  exact `treeSha` match, because recording happens against the tree that was
+  just prepared and reviewed. Only the later gate comparison is identity-only.
+- A record written before the identity existed stays readable and self-consistent
+  but cannot match a current candidate, so it fails closed as stale evidence.
+
+The admission wrapper evaluates
 documentation once, reports all blockers together, records a correlated gate
 decision, rechecks the candidate immediately before spawning, and owns the
 heavy command list. `pr:athena:scorecard` runs after proof recording so it reads

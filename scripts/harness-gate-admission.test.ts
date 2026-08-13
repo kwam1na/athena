@@ -129,6 +129,7 @@ describe("harness gate admission", () => {
   it("records which candidate identity authorized the decision", async () => {
     const options = greenOptions();
     await runHarnessGateAdmission("/repo", options as never);
+    expect(options._spies.writeDecisionEvent).toHaveBeenCalledTimes(2);
     for (const [, event] of options._spies.writeDecisionEvent.mock.calls) {
       expect(event.candidate).toMatchObject({
         treeSha: candidate.treeSha,
@@ -183,25 +184,6 @@ describe("harness gate admission", () => {
 
     const result = await runHarnessGateAdmission("/repo", options as never);
     expect(result).toMatchObject({ admitted: true, status: "passed" });
-  });
-
-  it("does not let a superseded record block a candidate that needs no review", async () => {
-    const options = greenOptions({
-      discoverRecords: async () => ({
-        records: [],
-        diagnostics: [
-          {
-            kind: "superseded_record" as const,
-            path: "/records/old.json",
-            reason: "record was written against candidate identity (none)",
-          },
-        ],
-      }),
-    });
-
-    const result = await runHarnessGateAdmission("/repo", options as never);
-    expect(result).toMatchObject({ admitted: true, status: "passed" });
-    expect(result.decision.findings).toEqual([]);
   });
 
   it("aggregates documentation and review blockers and does not prompt", async () => {
