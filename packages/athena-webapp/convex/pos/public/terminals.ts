@@ -828,6 +828,7 @@ function stripRuntimeStatusInput(
       healthObservedAt: status.localStore.healthObservedAt,
       lastSuccessfulDurableCommitAt:
         status.localStore.lastSuccessfulDurableCommitAt,
+      ledgerEventCount: status.localStore.ledgerEventCount,
       ledgerPressure: status.localStore.ledgerPressure,
       maintenance: status.localStore.maintenance,
       migration: status.localStore.migration,

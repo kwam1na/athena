@@ -1704,6 +1704,37 @@ describe("terminal health presentation", () => {
     );
   });
 
+  it.each(["denied", "unsupported"] as const)(
+    "keeps %s persistent storage diagnostic-only",
+    (persistence) => {
+      expect(
+        classifyTerminalHealth({
+          health: "online",
+          runtimeStatus: {
+            localStore: {
+              available: true,
+              ledgerPressure: "normal",
+              persistence,
+              pressure: "normal",
+              terminalSeedReady: true,
+            },
+            receivedAt: Date.now(),
+            sync: {
+              failedEventCount: 0,
+              localOnlyEventCount: 0,
+              pendingEventCount: 0,
+              reviewEventCount: 0,
+              status: "synced",
+              uploadableEventCount: 0,
+            },
+          },
+          syncEvidence: { unresolvedConflictCount: 0 },
+          terminal: { status: "active" },
+        }),
+      ).toEqual(expect.objectContaining({ label: "Healthy" }));
+    },
+  );
+
   it.each([
     ["maintenance", "active", "Maintenance in progress"],
     ["migration", "running", "Maintenance in progress"],

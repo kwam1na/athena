@@ -5,6 +5,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -306,7 +307,9 @@ describe("POSTerminalDetailViewContent", () => {
   });
 
   it("renders identity, check-in, sync, conflict, and support notes", async () => {
-    render(<POSTerminalDetailViewContent detail={detail} isLoading={false} />);
+    const { container } = render(
+      <POSTerminalDetailViewContent detail={detail} isLoading={false} />,
+    );
 
     expect(
       screen.getByRole("heading", { name: "Front counter" }),
@@ -331,6 +334,18 @@ describe("POSTerminalDetailViewContent", () => {
     expect(screen.getByText("Readiness evidence")).toBeInTheDocument();
     expect(screen.getByText("Runtime report")).toBeInTheDocument();
     expect(screen.getByText("Latest terminal report")).toBeInTheDocument();
+    expect(
+      Array.from(container.querySelectorAll("time"), (element) =>
+        element.getAttribute("datetime"),
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        new Date(detail.terminal.registeredAt).toISOString(),
+        new Date(detail.runtimeStatus!.receivedAt).toISOString(),
+        new Date(detail.runtimeStatus!.reportedAt).toISOString(),
+      ]),
+    );
+    expect(container.querySelectorAll("time")).toHaveLength(4);
     expect(screen.getByText("Active drawer")).toBeInTheDocument();
     expect(screen.getByText("Register 1 Closing")).toBeInTheDocument();
     expect(screen.getByText("Upload queue")).toBeInTheDocument();
@@ -373,6 +388,60 @@ describe("POSTerminalDetailViewContent", () => {
     expect(screen.getByText("Local only")).toBeInTheDocument();
     expect(screen.getByText("IndexedDB blocked")).toBeInTheDocument();
     expect(screen.getByText("Upload failed")).toBeInTheDocument();
+  });
+
+  it("explains why storage needs attention without presenting the event count as the cause", async () => {
+    const user = userEvent.setup();
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [],
+          health: "online",
+          runtimeStatus: {
+            ...detail.runtimeStatus!,
+            localStore: {
+              available: true,
+              ledgerEventCount: 148,
+              ledgerPressure: "normal",
+              persistence: "denied",
+              pressure: "warning",
+              quotaBytes: 2 * 1024 * 1024 * 1024,
+              terminalSeedReady: true,
+              usageBytes: 128 * 1024 * 1024,
+            },
+            sync: {
+              ...detail.runtimeStatus!.sync,
+              failedEventCount: 0,
+              reviewEventCount: 0,
+              reviewEvents: [],
+              status: "synced",
+            },
+          },
+          syncEvidence: {
+            ...detail.syncEvidence,
+            unresolvedConflictCount: 0,
+            unresolvedConflicts: [],
+          },
+        }}
+        isLoading={false}
+      />,
+    );
+
+    const storageAttention = screen.getByRole("button", {
+      name: "Storage needs attention. Browser storage usage is high.",
+    });
+    await user.hover(storageAttention);
+
+    expect(
+      await screen.findByText("Why storage needs attention"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Browser storage usage is high."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("148 events")).toBeInTheDocument();
+    expect(screen.getByText("128 MB of 2 GB (6%)")).toBeInTheDocument();
+    expect(screen.getByText("Normal")).toBeInTheDocument();
   });
 
   it("shows when the terminal is not on the latest webapp version", async () => {
@@ -452,6 +521,7 @@ describe("POSTerminalDetailViewContent", () => {
   });
 
   it("starts Remote Assist from an enrolled online terminal", async () => {
+    const lastPresenceAt = Date.now();
     const onStartRemoteAssist = vi.fn(async () => ({
       data: {
         _id: "session-1",
@@ -461,7 +531,7 @@ describe("POSTerminalDetailViewContent", () => {
       kind: "ok" as const,
     }));
 
-    render(
+    const { container } = render(
       <POSTerminalDetailViewContent
         canStartRemoteAssist
         detail={detail}
@@ -472,7 +542,7 @@ describe("POSTerminalDetailViewContent", () => {
           accessPolicy: "unattended_allowed",
           displayName: "Front counter",
           enrollmentStatus: "active",
-          lastPresenceAt: Date.now(),
+          lastPresenceAt,
           presenceStatus: "online",
         }}
       />,
@@ -480,6 +550,10 @@ describe("POSTerminalDetailViewContent", () => {
 
     expect(screen.getByText("Remote Assist")).toBeInTheDocument();
     expect(screen.getByText("Ready for support session")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Last Remote Assist presence/).closest("time"),
+    ).toHaveAttribute("datetime", new Date(lastPresenceAt).toISOString());
+    expect(container.querySelectorAll("time")).toHaveLength(5);
 
     fireEvent.change(screen.getByLabelText("Reason"), {
       target: { value: "Drawer repair support" },

@@ -125,6 +125,7 @@ export const posTerminalRuntimeLocalStoreValidator = v.object({
   ),
   healthObservedAt: v.optional(v.number()),
   lastSuccessfulDurableCommitAt: v.optional(v.number()),
+  ledgerEventCount: v.optional(v.number()),
   ledgerPressure: v.optional(
     v.union(
       v.literal("normal"),

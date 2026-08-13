@@ -307,6 +307,7 @@ export type TerminalRuntimeStatusInput = {
     healthFreshness?: Doc<"posTerminalRuntimeStatus">["localStore"]["healthFreshness"];
     healthObservedAt?: number;
     lastSuccessfulDurableCommitAt?: number;
+    ledgerEventCount?: number;
     ledgerPressure?: Doc<"posTerminalRuntimeStatus">["localStore"]["ledgerPressure"];
     maintenance?: Doc<"posTerminalRuntimeStatus">["localStore"]["maintenance"];
     migration?: Doc<"posTerminalRuntimeStatus">["localStore"]["migration"];
@@ -552,6 +553,7 @@ export async function submitTerminalRuntimeStatus(
       lastSuccessfulDurableCommitAt: positiveTimestamp(
         args.status.localStore.lastSuccessfulDurableCommitAt,
       ),
+      ledgerEventCount: positiveCount(args.status.localStore.ledgerEventCount),
       ledgerPressure: args.status.localStore.ledgerPressure,
       maintenance: args.status.localStore.maintenance,
       migration: args.status.localStore.migration,

@@ -22,6 +22,7 @@ export const POS_LOCAL_LEDGER_CRITICAL_AGE_MS = 90 * 24 * 60 * 60_000;
 
 export type PosLocalStorageHealth = {
   engineReadiness: PosLocalStorageEngineReadiness;
+  ledgerEventCount?: number;
   ledgerPressure: PosLocalStoragePressure;
   maintenance: PosLocalStorageMaintenanceState;
   migration: PosLocalStorageMigrationState;
@@ -135,6 +136,7 @@ export function toSafePosLocalStorageHealthDiagnostic(
   now = Date.now(),
 ): SafePosLocalStorageHealthDiagnostic {
   const observedAt = safeTimestamp(health.observedAt) ?? 0;
+  const ledgerEventCount = safeEventCount(health.ledgerEventCount);
   return {
     engineReadiness: allowValue(
       health.engineReadiness,
@@ -142,6 +144,7 @@ export function toSafePosLocalStorageHealthDiagnostic(
       "unknown",
     ),
     freshness: storageHealthFreshness(observedAt, now),
+    ...(ledgerEventCount !== undefined ? { ledgerEventCount } : {}),
     ledgerPressure: allowValue(
       health.ledgerPressure,
       ["normal", "warning", "critical", "unknown"] as const,
@@ -225,6 +228,14 @@ function safeTimestamp(value: unknown) {
 
 function safeCapacity(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
+}
+
+function safeEventCount(value: unknown) {
+  return typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= 0
     ? value
     : undefined;
 }
