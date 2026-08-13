@@ -7,7 +7,7 @@
   <body>
     <article
       data-athena-landed-change-report="v2"
-      data-athena-report-diff-fingerprint="cb606dee6fc448043b30b87a06ad2bcffc91cd9ae136ee92c46887827e1e0d24"
+      data-athena-report-diff-fingerprint="221e231d373ee69425a73ae7267aa1f95271cba1481cce9a7346718e80c8fe69"
       data-athena-report-base="origin/main"
     >
       <header data-report-section="header">
@@ -152,8 +152,9 @@
           </li>
           <li>
             <code>harness:review-context</code> and gate admission both require a
-            current receipt, so a mechanically-failing tree can never reach a
-            reviewer
+            current receipt, so a tree that fails a mechanical rule selected for
+            its changed files can never reach a reviewer (selection is
+            per-package; a branch touching no package selects nothing)
           </li>
           <li>Reviewers review a tree that has already passed every deterministic rule</li>
         </ol>

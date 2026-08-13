@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   HARNESS_REVIEW_IDENTITY_VERSION,
   computeDeliverableTreeIdentity,
+  digestDeliverableEntries,
   isReviewNeutralPath,
   parseTreeEntries,
 } from "./harness-review-identity";
@@ -237,6 +238,22 @@ describe("deliverable tree identity", () => {
     ]);
 
     expect(ascending.deliverableTreeSha).toBe(descending.deliverableTreeSha);
+  });
+
+  it("pins the digest framing and comparator with a golden vector", () => {
+    // `a/Z.ts` sorts before `a/a.ts` by byte value and after it under most ICU
+    // collations, so this literal changes if the comparator, the field framing,
+    // or the identity-version domain prefix ever changes. An authorization
+    // digest that varies by host would reject evidence recorded on another
+    // machine, so the exact bytes are the contract.
+    const identity = digestDeliverableEntries([
+      { mode: "100644", objectSha: "blob-a", path: "a/a.ts" },
+      { mode: "100644", objectSha: "blob-a", path: "a/Z.ts" },
+    ]);
+
+    expect(identity.deliverableTreeSha).toBe(
+      "b25f071c04958c3374932dab019de14eab68be4df7f8c6c035dd88d726296714",
+    );
   });
 
   it("fails loudly when the tree cannot be read", async () => {

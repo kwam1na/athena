@@ -299,8 +299,11 @@ only inside the heavy provider, which is gated behind `review.green`, so a lint
 rule could fail only *after* an expensive multi-agent review had been recorded,
 and the one-line fix then invalidated that review. Because preparation publishes
 no receipt when a mechanical check fails, and both `harness:review-context` and
-gate admission require a current receipt, **a tree that cannot pass the
-mechanical rules can never reach review**. Tests and build stay in the heavy
+gate admission require a current receipt, **a tree that fails a mechanical rule
+selected for its changed files can never reach review**. Selection is
+per-package, so a branch that touches no package — this file's own harness
+scripts, for instance — selects nothing and relies on the heavy provider as
+before. Tests and build stay in the heavy
 provider — they are neither cheap nor purely mechanical — but typecheck belongs
 here: it is deterministic, it is the class the ticket names alongside lint, and
 ~45s at prepare is far cheaper than the review round a late type error would

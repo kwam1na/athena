@@ -19,7 +19,7 @@ tags:
   - gate-admission
   - authorization-identity
   - delivery-order
-delivery_diff_fingerprint: cb606dee6fc448043b30b87a06ad2bcffc91cd9ae136ee92c46887827e1e0d24
+delivery_diff_fingerprint: 221e231d373ee69425a73ae7267aa1f95271cba1481cce9a7346718e80c8fe69
 ---
 
 # Review Evidence Binds to a Deliverable Identity, and Mechanical Checks Run Before It
@@ -57,9 +57,10 @@ package-scoped, not scenario-scoped, because `tsc -p` is project-wide; scoping
 it per scenario let a type error in an unlisted file reach review, which was
 caught only by running a real type error through the stage. Preparation publishes
 no receipt when that stage fails, and both `harness:review-context` and gate
-admission require a current receipt. A tree that cannot pass a mechanical rule
-therefore cannot reach review at all — the ordering is a mechanism, not a
-reminder. Tests and build stay in the heavy provider; typecheck does not. It was
+admission require a current receipt. A tree that fails a mechanical rule selected
+for its changed files therefore cannot reach review at all — the ordering is a
+mechanism, not a reminder. Selection is per-package, so a branch touching no
+package selects nothing and relies on the heavy provider as before. Tests and build stay in the heavy provider; typecheck does not. It was
 excluded from the first draft on an unmeasured assumption that it was expensive,
 which quietly under-delivered an acceptance criterion naming typecheck
 explicitly. Measured, the athena-webapp project typecheck is ~45s — trivial
@@ -109,9 +110,10 @@ not an ergonomic tweak. Three properties kept it honest:
 The residual risk is stated rather than hidden: `docs/reports/**` and
 `docs/solutions/**` ship in the in-app docs workspace bundle, so this admits
 post-review edits to shipped content. Those paths still have live gate
-obligations (`delivery:documentation-check`, `landed-report:check`,
-`compound:check`), and the raw-tree divergence stays visible in the decision
-event.
+obligations — the always-on `documentation.current`, whose
+`delivery-documentation-check` provider wraps both `compound:check` and
+`landed-report:check` — and the raw-tree divergence stays visible in the
+decision event.
 
 ## Prevention
 
@@ -131,7 +133,7 @@ event.
   changes, renames with identical contents, deletions, and moved base refs all
   have tests in `scripts/harness-review-identity.test.ts`, including against
   real Git.
-- **Parse `git ls-tree -z` as bytes, not as text.** The `-z` form is
+- **Treat `git ls-tree -z` output as a NUL-delimited stream, not as lines.** The `-z` form is
   NUL-delimited precisely because a path may contain a newline or a trailing
   space, and it is unquoted. An independent review proved that splitting on `\n`
   as well as `\0`, `.trim()`ing each record, or rewriting `\` to `/` each
@@ -140,7 +142,12 @@ event.
   The backslash rewrite was the worst of the three: it folded a legal
   `docs\reports\x.html` onto the excluded `docs/reports/x.html` and dropped it
   out of the reviewed deliverable entirely. Sort by byte value too — 
-  `localeCompare` makes the digest depend on the host ICU build.
+  `localeCompare` makes the digest depend on the host ICU build. One collision
+  class deliberately survives: stdout is decoded as UTF-8, so two paths that
+  differ only in invalid UTF-8 bytes fold together. Closing it means decoding
+  the stream as bytes, which this delivery did not do — the working tree cannot
+  hold such names on APFS, and the raw-tree divergence stays visible in the
+  decision event.
 
 ## Examples
 

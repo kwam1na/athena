@@ -328,6 +328,29 @@ describe("evaluateGateObligations", () => {
     }
   });
 
+  it("rejects legacy evidence even when the current candidate also lacks an identity", () => {
+    // Pins the non-empty guard itself: without it, two absent digests would
+    // compare equal and a pre-identity record would authorize the gate.
+    const legacyCandidate = { ...candidate } as Partial<CandidateBinding>;
+    delete legacyCandidate.deliverableTreeSha;
+    const decision = evaluateGateObligations(
+      input({
+        candidate: legacyCandidate as CandidateBinding,
+        records: [
+          evidence("ce-code-review", {
+            candidate: legacyCandidate as CandidateBinding,
+          }),
+        ],
+      }),
+    );
+
+    expect(decision.admitted).toBe(false);
+    expect(resolution(decision, "review.green")).toMatchObject({
+      kind: "blocked",
+      findings: [expect.objectContaining({ code: "stale_evidence" })],
+    });
+  });
+
   it("rejects legacy evidence that carries no deliverable identity", () => {
     const legacyCandidate = { ...candidate } as Partial<CandidateBinding>;
     delete legacyCandidate.deliverableTreeSha;
