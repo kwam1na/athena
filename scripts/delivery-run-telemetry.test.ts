@@ -546,9 +546,14 @@ describe("delivery run telemetry against a real repository", () => {
     git(rootDir, ["add", "."]);
     git(rootDir, ["commit", "-m", "substantial"]);
 
-    // No ledger: the demand would block the run that satisfies it.
+    // No ledger: the demand would block the run that satisfies it. ciMode is
+    // explicit because the default reads process.env.CI, which is set in CI —
+    // a local-behavior assertion must not depend on where it runs.
     expect(
-      evaluateDeliveryRunTelemetryCheck(rootDir, { baseRef: "base-ref" }),
+      evaluateDeliveryRunTelemetryCheck(rootDir, {
+        baseRef: "base-ref",
+        ciMode: false,
+      }),
     ).toMatchObject({ status: "pass" });
 
     // CI has no bootstrap leniency.
@@ -628,13 +633,19 @@ describe("delivery run telemetry against a real repository", () => {
 
     await writeLedger(rootDir, "blocked", fingerprint);
     expect(
-      evaluateDeliveryRunTelemetryCheck(rootDir, { baseRef: "base-ref" }),
+      evaluateDeliveryRunTelemetryCheck(rootDir, {
+        baseRef: "base-ref",
+        ciMode: false,
+      }),
     ).toMatchObject({ status: "pass" });
 
     // The same fingerprint from a *passing* run does make the demand fair.
     await writeLedger(rootDir, "pass", fingerprint);
     expect(
-      evaluateDeliveryRunTelemetryCheck(rootDir, { baseRef: "base-ref" }).status,
+      evaluateDeliveryRunTelemetryCheck(rootDir, {
+        baseRef: "base-ref",
+        ciMode: false,
+      }).status,
     ).toBe("fail");
   });
 

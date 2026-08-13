@@ -14987,7 +14987,7 @@
       "relation": "calls",
       "source": "delivery_run_telemetry_test_git",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L598",
+      "source_location": "L603",
       "target": "delivery_run_telemetry_test_changedpathsforfixture",
       "weight": 1
     },
@@ -15011,7 +15011,7 @@
       "relation": "calls",
       "source": "delivery_run_telemetry_test_recordafterledger",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L588",
+      "source_location": "L593",
       "target": "delivery_run_telemetry_test_changedpathsforfixture",
       "weight": 1
     },
@@ -15023,7 +15023,7 @@
       "relation": "calls",
       "source": "delivery_run_telemetry_test_writeledger",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L590",
+      "source_location": "L595",
       "target": "delivery_run_telemetry_test_recordafterledger",
       "weight": 1
     },
@@ -151787,7 +151787,7 @@
       "relation": "contains",
       "source": "scripts_delivery_run_telemetry_test_ts",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L595",
+      "source_location": "L600",
       "target": "delivery_run_telemetry_test_changedpathsforfixture",
       "weight": 1
     },
@@ -151859,7 +151859,7 @@
       "relation": "contains",
       "source": "scripts_delivery_run_telemetry_test_ts",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L584",
+      "source_location": "L589",
       "target": "delivery_run_telemetry_test_recordafterledger",
       "weight": 1
     },
@@ -235774,7 +235774,7 @@
       "label": "changedPathsForFixture()",
       "norm_label": "changedpathsforfixture()",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L595"
+      "source_location": "L600"
     },
     {
       "community": 278,
@@ -235828,7 +235828,7 @@
       "label": "recordAfterLedger()",
       "norm_label": "recordafterledger()",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L584"
+      "source_location": "L589"
     },
     {
       "community": 278,
