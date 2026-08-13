@@ -7,7 +7,7 @@
   <body>
     <article
       data-athena-landed-change-report="v2"
-      data-athena-report-diff-fingerprint="27ffed2f1d9ae13ca259fada6cda92291c1b98f77749ec47a72d415ea749b2b4"
+      data-athena-report-diff-fingerprint="cb606dee6fc448043b30b87a06ad2bcffc91cd9ae136ee92c46887827e1e0d24"
       data-athena-report-base="origin/main"
     >
       <header data-report-section="header">
@@ -221,9 +221,10 @@
               <td>
                 New. Selects the deterministic checks: the per-package lint
                 scripts from the same registry scenarios
-                <code>harness:review</code> uses, plus the project typecheck for
-                any package with a changed file (<code>tsc -p</code> is
-                project-wide, so scenario scoping would miss it). Runs every
+                <code>harness:review</code> uses, plus the project typecheck of
+                any package that has a changed file and declares one
+                (<code>tsc -p</code> is project-wide, so scenario scoping would
+                miss it). Runs every
                 selected command so one run reports every failure, and fails
                 closed if a selected package manifest cannot be read.
               </td>

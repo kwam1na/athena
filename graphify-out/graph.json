@@ -22919,7 +22919,7 @@
       "relation": "calls",
       "source": "harness_mechanical_check_formatmechanicalcheckfailure",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L302",
+      "source_location": "L308",
       "target": "harness_mechanical_check_main",
       "weight": 1
     },
@@ -22931,7 +22931,7 @@
       "relation": "calls",
       "source": "harness_mechanical_check_runharnessmechanicalcheck",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L300",
+      "source_location": "L306",
       "target": "harness_mechanical_check_main",
       "weight": 1
     },
@@ -22943,7 +22943,7 @@
       "relation": "calls",
       "source": "harness_mechanical_check_normalizerepopath",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L98",
+      "source_location": "L104",
       "target": "harness_mechanical_check_matchestouchedpath",
       "weight": 1
     },
@@ -22955,7 +22955,7 @@
       "relation": "calls",
       "source": "harness_mechanical_check_selectmechanicalcommands",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L220",
+      "source_location": "L226",
       "target": "harness_mechanical_check_runharnessmechanicalcheck",
       "weight": 1
     },
@@ -22967,7 +22967,7 @@
       "relation": "calls",
       "source": "harness_mechanical_check_ismechanicalrawcommand",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L159",
+      "source_location": "L165",
       "target": "harness_mechanical_check_selectmechanicalcommands",
       "weight": 1
     },
@@ -22979,7 +22979,7 @@
       "relation": "calls",
       "source": "harness_mechanical_check_ismechanicalscript",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L133",
+      "source_location": "L139",
       "target": "harness_mechanical_check_selectmechanicalcommands",
       "weight": 1
     },
@@ -156383,7 +156383,7 @@
       "relation": "contains",
       "source": "scripts_harness_mechanical_check_ts",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L174",
+      "source_location": "L180",
       "target": "harness_mechanical_check_defaultreadpackagemanifest",
       "weight": 1
     },
@@ -156395,7 +156395,7 @@
       "relation": "contains",
       "source": "scripts_harness_mechanical_check_ts",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L187",
+      "source_location": "L193",
       "target": "harness_mechanical_check_defaultrunpackagescript",
       "weight": 1
     },
@@ -156407,7 +156407,7 @@
       "relation": "contains",
       "source": "scripts_harness_mechanical_check_ts",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L200",
+      "source_location": "L206",
       "target": "harness_mechanical_check_defaultrunrawcommand",
       "weight": 1
     },
@@ -156419,7 +156419,7 @@
       "relation": "contains",
       "source": "scripts_harness_mechanical_check_ts",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L287",
+      "source_location": "L293",
       "target": "harness_mechanical_check_formatmechanicalcheckfailure",
       "weight": 1
     },
@@ -156443,7 +156443,7 @@
       "relation": "contains",
       "source": "scripts_harness_mechanical_check_ts",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L89",
+      "source_location": "L95",
       "target": "harness_mechanical_check_ismechanicalscript",
       "weight": 1
     },
@@ -156455,7 +156455,7 @@
       "relation": "contains",
       "source": "scripts_harness_mechanical_check_ts",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L299",
+      "source_location": "L305",
       "target": "harness_mechanical_check_main",
       "weight": 1
     },
@@ -156467,7 +156467,7 @@
       "relation": "contains",
       "source": "scripts_harness_mechanical_check_ts",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L93",
+      "source_location": "L99",
       "target": "harness_mechanical_check_matchestouchedpath",
       "weight": 1
     },
@@ -156491,7 +156491,7 @@
       "relation": "contains",
       "source": "scripts_harness_mechanical_check_ts",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L211",
+      "source_location": "L217",
       "target": "harness_mechanical_check_runharnessmechanicalcheck",
       "weight": 1
     },
@@ -156503,7 +156503,7 @@
       "relation": "contains",
       "source": "scripts_harness_mechanical_check_ts",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L115",
+      "source_location": "L121",
       "target": "harness_mechanical_check_selectmechanicalcommands",
       "weight": 1
     },
@@ -222061,7 +222061,7 @@
       "label": "defaultReadPackageManifest()",
       "norm_label": "defaultreadpackagemanifest()",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L174"
+      "source_location": "L180"
     },
     {
       "community": 220,
@@ -222070,7 +222070,7 @@
       "label": "defaultRunPackageScript()",
       "norm_label": "defaultrunpackagescript()",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L187"
+      "source_location": "L193"
     },
     {
       "community": 220,
@@ -222079,7 +222079,7 @@
       "label": "defaultRunRawCommand()",
       "norm_label": "defaultrunrawcommand()",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L200"
+      "source_location": "L206"
     },
     {
       "community": 220,
@@ -222088,7 +222088,7 @@
       "label": "formatMechanicalCheckFailure()",
       "norm_label": "formatmechanicalcheckfailure()",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L287"
+      "source_location": "L293"
     },
     {
       "community": 220,
@@ -222106,7 +222106,7 @@
       "label": "isMechanicalScript()",
       "norm_label": "ismechanicalscript()",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L89"
+      "source_location": "L95"
     },
     {
       "community": 220,
@@ -222115,7 +222115,7 @@
       "label": "main()",
       "norm_label": "main()",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L299"
+      "source_location": "L305"
     },
     {
       "community": 220,
@@ -222124,7 +222124,7 @@
       "label": "matchesTouchedPath()",
       "norm_label": "matchestouchedpath()",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L93"
+      "source_location": "L99"
     },
     {
       "community": 220,
@@ -222142,7 +222142,7 @@
       "label": "runHarnessMechanicalCheck()",
       "norm_label": "runharnessmechanicalcheck()",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L211"
+      "source_location": "L217"
     },
     {
       "community": 220,
@@ -222151,7 +222151,7 @@
       "label": "selectMechanicalCommands()",
       "norm_label": "selectmechanicalcommands()",
       "source_file": "scripts/harness-mechanical-check.ts",
-      "source_location": "L115"
+      "source_location": "L121"
     },
     {
       "community": 220,

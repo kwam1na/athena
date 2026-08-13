@@ -89,17 +89,42 @@ describe("mechanical command selection", () => {
     // tsc -p is project-wide, so a file whose validation scenario does not list
     // the typecheck command can still break it.
     const scenarioWithoutTypecheck = selectMechanicalCommands([CONVEX_FILE]);
-    const unlistedFile = selectMechanicalCommands([
-      "packages/athena-webapp/src/routes/v261209NotInAnyScenario.tsx",
+    const fileWhoseScenariosOmitTypecheck = selectMechanicalCommands([
+      "packages/athena-webapp/src/routes/v261209ScenarioWithoutTypecheck.tsx",
     ]);
 
-    for (const selected of [scenarioWithoutTypecheck, unlistedFile]) {
+    for (const selected of [
+      scenarioWithoutTypecheck,
+      fileWhoseScenariosOmitTypecheck,
+    ]) {
       expect(
         selected.flatMap((command) =>
           command.kind === "raw" ? [command.command] : [],
         ),
       ).toContain("bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json");
     }
+  });
+
+  it("selects the typecheck for a non-source change inside the package", () => {
+    // tsc -p is project-wide, so package scoping deliberately does not filter
+    // by extension. Pinned so a future narrowing is a visible decision.
+    const selected = selectMechanicalCommands([
+      "packages/athena-webapp/docs/agent/index.md",
+    ]);
+
+    expect(
+      selected.flatMap((command) =>
+        command.kind === "raw" ? [command.command] : [],
+      ),
+    ).toContain("bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json");
+  });
+
+  it("normalizes a leading ./ so the same change selects the same commands", () => {
+    expect(
+      selectMechanicalCommands(["packages/athena-webapp/src/routes/demo.tsx"]),
+    ).toEqual(
+      selectMechanicalCommands(["./packages/athena-webapp/src/routes/demo.tsx"]),
+    );
   });
 
   it("selects no typecheck when the package was not touched", () => {
@@ -213,19 +238,28 @@ describe("harness mechanical check", () => {
   });
 
   it("skips a selected script the package does not define", async () => {
+    // ROUTE_FILE selects three scripts; the manifest defines one, so the other
+    // two must be reported as skipped rather than run or failed.
+    const runPackageScript = vi.fn(async () => 0);
     const setup = options({
+      getChangedFiles: async () => [ROUTE_FILE],
+      runPackageScript,
       readPackageManifest: async () => ({
         name: "@athena/webapp",
-        scripts: { "lint:convex:changed": "echo ok" },
+        scripts: { "lint:frontend:changed": "echo ok" },
       }),
     });
     const result = await runHarnessMechanicalCheck("/repo", setup as never);
 
     expect(result.status).toBe("pass");
-    expect(result.ranCommands).toContain("@athena/webapp:lint:convex:changed");
-    expect(result.skippedCommands).not.toContain(
-      "@athena/webapp:lint:convex:changed",
+    expect(result.ranCommands).toContain("@athena/webapp:lint:frontend:changed");
+    expect(result.skippedCommands).toEqual(
+      expect.arrayContaining([
+        "@athena/webapp:lint:architecture",
+        "@athena/webapp:lint:convex:changed",
+      ]),
     );
+    expect(runPackageScript).toHaveBeenCalledTimes(1);
   });
 
   it("fails closed when a selected package manifest cannot be read", async () => {

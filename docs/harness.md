@@ -289,10 +289,12 @@ stage intended new files explicitly and rerun preparation.
 
 The mechanical stage (`pr:athena:mechanical`, also runnable on its own) runs the
 deterministic checks for the changed files: the per-package lint scripts the
-validation map selects, plus the project typecheck for every package with a
-changed file. Typecheck is package-scoped rather than scenario-scoped because
-`tsc -p` is project-wide — a file whose validation scenario happens not to list
-the typecheck command can still break it. It exists to fix an ordering problem: those checks used to run
+validation map selects, plus the project typecheck of every package that has a
+changed file *and* declares a typecheck in its validation scenarios (so
+`valkey-proxy-server`, which declares none, gets none). Typecheck is
+package-scoped rather than scenario-scoped because `tsc -p` is project-wide — a
+file whose validation scenario happens not to list the typecheck command can
+still break it. It exists to fix an ordering problem: those checks used to run
 only inside the heavy provider, which is gated behind `review.green`, so a lint
 rule could fail only *after* an expensive multi-agent review had been recorded,
 and the one-line fix then invalidated that review. Because preparation publishes

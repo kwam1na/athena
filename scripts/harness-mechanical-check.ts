@@ -83,7 +83,13 @@ type MechanicalCheckOptions = {
 const DEFAULT_BASE_REF = "origin/main";
 
 function normalizeRepoPath(repoPath: string) {
-  return repoPath.replaceAll("\\", "/").replace(/^\.\//, "");
+  // The trailing-slash strip matters: a registry entry written as
+  // `packages/foo/` would otherwise build the prefix `packages/foo//`, match
+  // nothing, and silently deselect that package's mechanical checks.
+  return repoPath
+    .replaceAll("\\", "/")
+    .replace(/^\.\//, "")
+    .replace(/\/$/, "");
 }
 
 function isMechanicalScript(script: string): script is MechanicalPackageScript {

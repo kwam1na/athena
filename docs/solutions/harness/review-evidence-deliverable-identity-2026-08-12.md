@@ -19,7 +19,7 @@ tags:
   - gate-admission
   - authorization-identity
   - delivery-order
-delivery_diff_fingerprint: 27ffed2f1d9ae13ca259fada6cda92291c1b98f77749ec47a72d415ea749b2b4
+delivery_diff_fingerprint: cb606dee6fc448043b30b87a06ad2bcffc91cd9ae136ee92c46887827e1e0d24
 ---
 
 # Review Evidence Binds to a Deliverable Identity, and Mechanical Checks Run Before It
@@ -52,7 +52,7 @@ rounds:
 runs a mechanical stage (`scripts/harness-mechanical-check.ts`, also exposed as
 `bun run pr:athena:mechanical`) that executes the deterministic checks for the
 changed files: the per-package lint scripts the validation map selects, plus the
-project typecheck for every package with a changed file. Typecheck is
+project typecheck of every package that has a changed file and declares one. Typecheck is
 package-scoped, not scenario-scoped, because `tsc -p` is project-wide; scoping
 it per scenario let a type error in an unlisted file reach review, which was
 caught only by running a real type error through the stage. Preparation publishes
