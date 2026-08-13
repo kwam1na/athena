@@ -115,6 +115,31 @@ describe("observePosLocalStorageHealth", () => {
     expect(diagnostic).not.toHaveProperty("privateEngineDetail");
   });
 
+  it.each([
+    { expected: 0, value: 0 },
+    { expected: 148, value: 148 },
+    { expected: undefined, value: -1 },
+    { expected: undefined, value: 1.5 },
+    { expected: undefined, value: Number.NaN },
+    { expected: undefined, value: "148" },
+  ])("sanitizes the local ledger event count $value", ({ expected, value }) => {
+    const diagnostic = toSafePosLocalStorageHealthDiagnostic(
+      {
+        engineReadiness: "ready",
+        ledgerEventCount: value,
+        ledgerPressure: "normal",
+        maintenance: "idle",
+        migration: "idle",
+        observedAt: 1_000,
+        persistence: "granted",
+        pressure: "normal",
+      } as never,
+      2_000,
+    );
+
+    expect(diagnostic.ledgerEventCount).toBe(expected);
+  });
+
   it("marks old or invalid evidence stale or unknown", () => {
     const base = {
       engineReadiness: "ready" as const,
