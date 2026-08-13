@@ -10,9 +10,12 @@ import {
   type EvaluateGateObligationsInput,
   type EvidenceRecord,
 } from "./harness-gate-obligations";
+import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
 
 const candidate: CandidateBinding = {
   treeSha: "tree-1",
+  deliverableTreeSha: "deliverable-1",
+  identityVersion: HARNESS_REVIEW_IDENTITY_VERSION,
   baseRef: "origin/main",
   baseTipSha: "base-tip-1",
   diffBaseSha: "merge-base-1",
@@ -257,7 +260,22 @@ describe("evaluateGateObligations", () => {
       ],
       [
         evidence("ce-code-review", {
-          candidate: { ...candidate, treeSha: "old" },
+          candidate: { ...candidate, deliverableTreeSha: "deliverable-old" },
+        }),
+      ],
+      [
+        evidence("ce-code-review", {
+          candidate: { ...candidate, baseTipSha: "base-tip-moved" },
+        }),
+      ],
+      [
+        evidence("ce-code-review", {
+          candidate: { ...candidate, diffBaseSha: "merge-base-moved" },
+        }),
+      ],
+      [
+        evidence("ce-code-review", {
+          candidate: { ...candidate, worktreeId: "worktree-other" },
         }),
       ],
       [evidence("ce-code-review", { providerId: "unknown-provider" })],
@@ -270,6 +288,87 @@ describe("evaluateGateObligations", () => {
       expect(decision.admitted).toBe(false);
       expect(resolution(decision, "review.green")?.kind).toBe("blocked");
     }
+  });
+
+  it("keeps evidence current when only review-neutral content moved the raw tree", () => {
+    const decision = evaluateGateObligations(
+      input({
+        records: [
+          evidence("ce-code-review", {
+            candidate: { ...candidate, treeSha: "tree-before-report" },
+          }),
+        ],
+      }),
+    );
+
+    expect(decision.admitted).toBe(true);
+    expect(resolution(decision, "review.green")).toMatchObject({
+      kind: "satisfied_evidence",
+      candidate: { deliverableTreeSha: candidate.deliverableTreeSha },
+    });
+  });
+
+  it("rejects evidence recorded under a different or missing identity version", () => {
+    for (const identityVersion of ["deliverable-tree/v0", undefined]) {
+      const decision = evaluateGateObligations(
+        input({
+          records: [
+            evidence("ce-code-review", {
+              candidate: {
+                ...candidate,
+                identityVersion,
+              } as CandidateBinding,
+            }),
+          ],
+        }),
+      );
+
+      expect(decision.admitted).toBe(false);
+      expect(resolution(decision, "review.green")?.kind).toBe("blocked");
+    }
+  });
+
+  it("rejects legacy evidence even when the current candidate also lacks an identity", () => {
+    // Pins the non-empty guard itself: without it, two absent digests would
+    // compare equal and a pre-identity record would authorize the gate.
+    const legacyCandidate = { ...candidate } as Partial<CandidateBinding>;
+    delete legacyCandidate.deliverableTreeSha;
+    const decision = evaluateGateObligations(
+      input({
+        candidate: legacyCandidate as CandidateBinding,
+        records: [
+          evidence("ce-code-review", {
+            candidate: legacyCandidate as CandidateBinding,
+          }),
+        ],
+      }),
+    );
+
+    expect(decision.admitted).toBe(false);
+    expect(resolution(decision, "review.green")).toMatchObject({
+      kind: "blocked",
+      findings: [expect.objectContaining({ code: "stale_evidence" })],
+    });
+  });
+
+  it("rejects legacy evidence that carries no deliverable identity", () => {
+    const legacyCandidate = { ...candidate } as Partial<CandidateBinding>;
+    delete legacyCandidate.deliverableTreeSha;
+    const decision = evaluateGateObligations(
+      input({
+        records: [
+          evidence("ce-code-review", {
+            candidate: legacyCandidate as CandidateBinding,
+          }),
+        ],
+      }),
+    );
+
+    expect(decision.admitted).toBe(false);
+    expect(resolution(decision, "review.green")).toMatchObject({
+      kind: "blocked",
+      findings: [expect.objectContaining({ code: "stale_evidence" })],
+    });
   });
 
   it("uses evidence before waiver, ignores waivers for agents, and supports authorized delegation", () => {

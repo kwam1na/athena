@@ -7,6 +7,7 @@ import {
   discoverHarnessObligationRecords,
   publishHarnessObligationRecord,
 } from "./harness-obligation-records";
+import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
 
 const roots: string[] = [];
 
@@ -21,6 +22,8 @@ async function fixture() {
 
 const candidate = {
   treeSha: "tree-a",
+  deliverableTreeSha: "deliverable-a",
+  identityVersion: HARNESS_REVIEW_IDENTITY_VERSION,
   baseRef: "origin/main",
   baseTipSha: "base-a",
   diffBaseSha: "merge-base-a",
@@ -67,6 +70,35 @@ describe("harness obligation records", () => {
       storageDir,
     });
     expect(discovered.records).toEqual([first.record]);
+    expect(discovered.diagnostics).toEqual([]);
+  });
+
+  it("keeps a record that predates the deliverable identity readable and self-consistent", async () => {
+    const { root, storageDir } = await fixture();
+    const legacyCandidate = { ...candidate } as Record<string, unknown>;
+    delete legacyCandidate.deliverableTreeSha;
+    delete legacyCandidate.identityVersion;
+    const published = await publishHarnessObligationRecord(
+      root,
+      {
+        gateId: "athena.pr-validation",
+        obligationId: "review.green",
+        candidate: legacyCandidate as typeof candidate,
+        resolution: { kind: "waiver" },
+      },
+      { storageDir, now: () => "2026-08-11T00:00:00.000Z" },
+    );
+
+    const discovered = await discoverHarnessObligationRecords(root, {
+      gateId: published.gateId,
+      obligationId: published.obligationId,
+      storageDir,
+    });
+
+    // A record written before the identity existed still proves its own slot
+    // identity, so it is readable rather than reported as tampering. It simply
+    // cannot match a current candidate; see harness-gate-obligations.test.ts.
+    expect(discovered.records).toEqual([published.record]);
     expect(discovered.diagnostics).toEqual([]);
   });
 

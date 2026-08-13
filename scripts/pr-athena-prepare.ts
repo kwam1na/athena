@@ -9,6 +9,11 @@ import {
   type HarnessCandidate,
   type HarnessCandidateCapture,
 } from "./harness-candidate";
+import {
+  formatMechanicalCheckFailure,
+  runHarnessMechanicalCheck,
+  type HarnessMechanicalCheckResult,
+} from "./harness-mechanical-check";
 import { runPreCommitGeneratedArtifacts } from "./pre-commit-generated-artifacts";
 import { assertPrAthenaProofReady } from "./pre-push-validation-proof";
 
@@ -24,6 +29,7 @@ const PREPARATION_WIRING_PATHS = [
   "scripts/frontend-dependency-parity.ts",
   "scripts/pre-commit-generated-artifacts.ts",
   "scripts/pre-push-validation-proof.ts",
+  "scripts/harness-mechanical-check.ts",
 ] as const;
 
 type PrepareLogger = Pick<Console, "log">;
@@ -45,6 +51,9 @@ type PrepareOptions = {
   runDependencyCheck?: (rootDir: string) => void | Promise<void>;
   runGeneratedArtifacts?: (rootDir: string) => void | Promise<void>;
   assertProofReady?: (rootDir: string) => unknown | Promise<unknown>;
+  runMechanicalCheck?: (
+    rootDir: string,
+  ) => Promise<Pick<HarnessMechanicalCheckResult, "status" | "failures">>;
   captureCandidate?: (rootDir: string) => Promise<HarnessCandidateCapture>;
   resolveReceiptPath?: (rootDir: string) => Promise<string>;
   now?: () => Date;
@@ -174,6 +183,25 @@ export async function runPrAthenaPreparation(
   );
   logger.log("[pr:athena] Confirming candidate readiness...");
   await (options.assertProofReady ?? assertPrAthenaProofReady)(rootDir);
+
+  // Mechanical rules are deterministic, so they run before anything expensive
+  // is spent on this tree — including the review whose evidence a later fix
+  // would invalidate. No receipt means no review context and no gate admission.
+  logger.log("[pr:athena] Running mechanical checks...");
+  const mechanical = await (
+    options.runMechanicalCheck ?? runHarnessMechanicalCheck
+  )(rootDir);
+  if (mechanical.status !== "pass") {
+    throw new Error(
+      formatMechanicalCheckFailure({
+        status: "fail",
+        changedFileCount: 0,
+        ranCommands: [],
+        skippedCommands: [],
+        ...mechanical,
+      }),
+    );
+  }
 
   const capture = await (
     options.captureCandidate ?? captureStableHarnessCandidate

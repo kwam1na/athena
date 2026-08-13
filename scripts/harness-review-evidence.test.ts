@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { recordHarnessReviewEvidence } from "./harness-review-evidence";
+import {
+  collectHarnessReviewContext,
+  recordHarnessReviewEvidence,
+} from "./harness-review-evidence";
+import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
 
 const roots: string[] = [];
 
@@ -19,6 +23,8 @@ async function fixture(providerId: "ce-code-review" | "execute" = "execute") {
   const worktreeId = "worktree-a";
   const candidate = {
     treeSha: "tree-a",
+    deliverableTreeSha: "deliverable-a",
+    identityVersion: HARNESS_REVIEW_IDENTITY_VERSION,
     baseRef: "origin/main",
     baseTipSha: "base-a",
     diffBaseSha: "merge-base-a",
@@ -159,19 +165,89 @@ describe("harness review evidence", () => {
     ).rejects.toThrow();
   });
 
-  it("rejects a manifest that does not match the independently captured candidate", async () => {
+  it.each([
+    ["reviewed content changed", { deliverableTreeSha: "deliverable-after" }],
+    ["the raw tree changed", { treeSha: "tree-after" }],
+    ["the base tip moved", { baseTipSha: "base-b" }],
+    ["the merge base moved", { diffBaseSha: "merge-base-b" }],
+  ])(
+    "rejects a manifest whose candidate no longer matches because %s",
+    async (_label, override) => {
+      const setup = await fixture();
+      await expect(
+        recordHarnessReviewEvidence(setup.rootDir, setup.manifestPath, {
+          storageDir: setup.storageDir,
+          providerRunRoots: { execute: setup.providerRoot },
+          captureCandidate: async () => ({
+            ok: true,
+            candidate: { ...setup.candidate, ...override },
+          }),
+          resolveWorktreeId: async () => setup.worktreeId,
+        }),
+      ).rejects.toThrow(/candidate does not match/);
+    },
+  );
+
+  it("stays strict on the raw tree at recording time so the audit anchor is verified", async () => {
     const setup = await fixture();
+
+    // Recording happens against the tree that was just prepared and reviewed,
+    // so an unverified treeSha would be persisted into the obligation record
+    // and the gate decision event as an audit anchor nothing ever checked.
     await expect(
       recordHarnessReviewEvidence(setup.rootDir, setup.manifestPath, {
         storageDir: setup.storageDir,
         providerRunRoots: { execute: setup.providerRoot },
         captureCandidate: async () => ({
           ok: true,
-          candidate: { ...setup.candidate, treeSha: "tree-after-review" },
+          candidate: { ...setup.candidate, treeSha: "tree-claimed-by-provider" },
         }),
         resolveWorktreeId: async () => setup.worktreeId,
       }),
     ).rejects.toThrow(/candidate does not match/);
+  });
+
+  it.each([
+    ["a missing deliverable identity", { deliverableTreeSha: undefined }],
+    ["an unknown identity version", { identityVersion: "deliverable-tree/v0" }],
+    ["a missing identity version", { identityVersion: undefined }],
+  ])("rejects a manifest candidate with %s", async (_label, override) => {
+    const setup = await fixture();
+    const candidate = { ...setup.candidate, ...override };
+    for (const [key, value] of Object.entries(override)) {
+      if (value === undefined)
+        delete (candidate as Record<string, unknown>)[key];
+    }
+    await writeFile(
+      setup.manifestPath,
+      `${JSON.stringify({ ...setup.manifest, candidate }, null, 2)}\n`,
+    );
+    await expect(
+      recordHarnessReviewEvidence(setup.rootDir, setup.manifestPath, {
+        storageDir: setup.storageDir,
+        providerRunRoots: { execute: setup.providerRoot },
+        captureCandidate: async () => ({
+          ok: true,
+          candidate: setup.candidate,
+        }),
+        resolveWorktreeId: async () => setup.worktreeId,
+      }),
+    ).rejects.toThrow(/deliverable identity|harness:review-context/);
+  });
+
+  it("refuses to hand out a review context without a current preparation receipt", async () => {
+    const setup = await fixture();
+
+    await expect(
+      collectHarnessReviewContext(setup.rootDir, {
+        evaluatePreparation: async () => ({
+          prepared: false,
+          status: "missing",
+          reason: "no current pr:athena preparation receipt was found",
+          remediation: "bun run pr:athena:prepare",
+        }),
+      }),
+    ).rejects.toThrow(/Review context is unavailable/);
   });
 
   it("rejects copied manifests and missing reviewer artifacts", async () => {

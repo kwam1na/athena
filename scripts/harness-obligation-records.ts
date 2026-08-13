@@ -11,6 +11,8 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 
+import type { HarnessReviewIdentityVersion } from "./harness-review-identity";
+
 export const HARNESS_OBLIGATION_RECORD_SCHEMA_VERSION = 1;
 const RECORDS_GIT_PATH = "codex/harness-obligations/v1/records";
 
@@ -27,6 +29,8 @@ type CommandRunner = (
 
 export type HarnessObligationCandidateBinding = {
   treeSha: string;
+  deliverableTreeSha: string;
+  identityVersion: HarnessReviewIdentityVersion;
   baseRef: string;
   baseTipSha: string;
   diffBaseSha: string;

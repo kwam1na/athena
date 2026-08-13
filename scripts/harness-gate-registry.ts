@@ -35,7 +35,13 @@ export type ObligationFreshness =
   | { kind: "live" }
   | {
       kind: "exact_candidate";
-      requireTreeSha: true;
+      /**
+       * Freshness binds the candidate's deliverable identity, not its raw tree
+       * SHA: delivery narration under docs/reports/ and docs/solutions/ may move
+       * the raw tree without changing what a reviewer approved. See
+       * scripts/harness-review-identity.ts.
+       */
+      requireDeliverableTreeSha: true;
       requireBaseRef: true;
       requireBaseTipSha: true;
       requireWorktreeId: true;
@@ -145,7 +151,7 @@ export const HARNESS_GATE_REGISTRY: HarnessGateRegistry = {
       providerPolicy: "existential",
       freshness: {
         kind: "exact_candidate",
-        requireTreeSha: true,
+        requireDeliverableTreeSha: true,
         requireBaseRef: true,
         requireBaseTipSha: true,
         requireWorktreeId: true,

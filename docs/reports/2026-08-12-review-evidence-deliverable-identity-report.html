@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Stop cheap gate failures from invalidating expensive review evidence</title>
+  </head>
+  <body>
+    <article
+      data-athena-landed-change-report="v2"
+      data-athena-report-diff-fingerprint="221e231d373ee69425a73ae7267aa1f95271cba1481cce9a7346718e80c8fe69"
+      data-athena-report-base="origin/main"
+    >
+      <header data-report-section="header">
+        <h1>Stop cheap gate failures from invalidating expensive review evidence</h1>
+        <ul data-report-pills>
+          <li>Delivery candidate</li>
+          <li>Branch codex/V26-1209-cheap-gate-before-review</li>
+          <li>Harness / delivery gates</li>
+          <li>800 harness tests green</li>
+        </ul>
+        <dl data-report-meta>
+          <dt>PR</dt>
+          <dd>#759</dd>
+          <dt>Issue</dt>
+          <dd>V26-1209</dd>
+          <dt>Status</dt>
+          <dd>Delivery candidate, pre-merge</dd>
+          <dt>Execution posture</dt>
+          <dd>test-first</dd>
+        </dl>
+      </header>
+
+      <section data-report-section="summary">
+        <h2>Executive summary</h2>
+        <p>
+          Athena refuses to spend merge-grade validation on code no reviewer has
+          approved. That rule is enforced by an obligation called
+          <code>review.green</code>, whose evidence binds to the exact tree a
+          reviewer looked at. The rule is right. Two side effects of how it was
+          implemented were not, and both cost the previous delivery (PR #758)
+          three extra full review rounds.
+        </p>
+        <p>
+          First, the cheap deterministic checks — a lint rule, a formatting rule
+          — lived <em>inside</em> the expensive gate. So a two-line lint failure
+          could only be discovered after three reviewers had already approved the
+          tree, and fixing it invalidated all three approvals. Second, evidence
+          bound to the raw Git tree, so committing the mandatory landed-change
+          report (a document written <em>after</em> the code it describes)
+          invalidated the approval of code it never touched.
+        </p>
+        <p>
+          This change puts the mechanical checks in front of review and makes
+          that ordering structural rather than remembered, and it rebinds review
+          evidence to a <strong>deliverable identity</strong> that ignores
+          delivery narration and nothing else.
+        </p>
+      </section>
+
+      <section data-report-section="problem">
+        <h2>The problem, in plain language</h2>
+        <p>
+          Imagine a building inspector who signs off on a floor plan. The
+          signature is only valid for the plan they actually read, which is
+          correct: if you move a wall afterwards, the signature should not carry
+          over. Athena implements that by hashing the whole set of files and
+          binding the approval to the hash.
+        </p>
+        <p>Two things went wrong with that arrangement.</p>
+        <p>
+          <strong>The cheap inspection ran last.</strong> Checking that the
+          drawing uses the right line weights needs no judgement at all, and
+          costs almost nothing. But that check was bundled into the expensive
+          post-approval stage. So the trivial defect surfaced only after three
+          expert reviews were paid for, and correcting it voided them. In
+          Athena's terms: <code>lint:convex:changed</code> ran only inside the
+          heavy <code>pr:athena</code> provider, which
+          <code>harness-gate-admission</code> will not start without current
+          review evidence.
+        </p>
+        <p>
+          <strong>The hash counted the cover letter.</strong> Delivery requires a
+          landed-change report and a solution note — documents describing the
+          work, necessarily written after it. Because the hash covered every
+          file, filing those documents changed the hash and voided the approval.
+          The repo already knew better: <code>isDeliverableFingerprintPath</code>
+          in <code>scripts/delivery-diff-fingerprint.ts</code> had excluded
+          <code>docs/reports/</code> and <code>docs/solutions/</code> from what
+          counts as a deliverable change for years. The evidence binding had
+          simply never been told.
+        </p>
+      </section>
+
+      <section data-report-section="mental-model">
+        <h2>The mental model</h2>
+        <p>
+          The useful question is not "did the bytes change?" but
+          <strong>"is this the thing the reviewer approved?"</strong> Those are
+          different questions, and answering the second one with the first is
+          what produced the friction.
+        </p>
+        <p>Think of three concentric rings around a delivery:</p>
+        <ul>
+          <li>
+            <strong>Reviewed content</strong> — source, tests, configuration,
+            harness scripts, generated artifacts. A reviewer's approval is
+            <em>about</em> this ring. Any change to it invalidates the approval,
+            including a comment-only edit.
+          </li>
+          <li>
+            <strong>Delivery narration</strong> — <code>docs/reports/</code> and
+            <code>docs/solutions/</code>. Written after the reviewed content, to
+            explain it. Changing it does not change what was approved.
+          </li>
+          <li>
+            <strong>Everything about the base</strong> — base ref, base tip,
+            merge base, worktree. Still bound exactly, because an approval of a
+            diff against one base says nothing about another base.
+          </li>
+        </ul>
+        <p>
+          The new identity, <code>deliverable-tree/v1</code>, is just a hash of
+          the first ring plus an exact match on the third. The second ring is
+          excluded — and only the second ring.
+        </p>
+        <p>
+          The second idea is even simpler: <strong>a check that needs no
+          judgement must not be discoverable only after judgement has been paid
+          for.</strong> Rather than documenting that ordering and hoping agents
+          remember it, preparation now refuses to issue the receipt that review
+          requires.
+        </p>
+      </section>
+
+      <section data-report-section="before-after">
+        <h2>Before and after</h2>
+        <h3>Ordering of the deterministic checks</h3>
+        <p><strong>Before:</strong></p>
+        <ol>
+          <li><code>pr:athena:prepare</code> publishes a receipt</li>
+          <li><code>harness:review-context</code> names the candidate</li>
+          <li>Reviewers review; <code>harness:review-evidence</code> records the approval</li>
+          <li><code>pr:athena</code> admits the heavy provider — <em>and only here does <code>lint:convex:changed</code> run</em></li>
+          <li>Lint fails on two lines; the fix changes the tree; every approval in step 3 is now stale</li>
+        </ol>
+        <p><strong>After:</strong></p>
+        <ol>
+          <li>
+            <code>pr:athena:prepare</code> runs the mechanical stage
+            (<code>pr:athena:mechanical</code>) and publishes
+            <strong>no receipt</strong> if it fails
+          </li>
+          <li>
+            <code>harness:review-context</code> and gate admission both require a
+            current receipt, so a tree that fails a mechanical rule selected for
+            its changed files can never reach a reviewer (selection is
+            per-package; a branch touching no package selects nothing)
+          </li>
+          <li>Reviewers review a tree that has already passed every deterministic rule</li>
+        </ol>
+        <h3>What "same candidate" means</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Change after the final review pass</th>
+              <th>Before</th>
+              <th>After</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Commit under <code>docs/reports/</code> or <code>docs/solutions/</code></td>
+              <td>Evidence invalidated; full re-review</td>
+              <td>Evidence still current; re-run the cheap <code>prepare</code></td>
+            </tr>
+            <tr>
+              <td>Comment-only edit to a source file</td>
+              <td>Evidence invalidated</td>
+              <td>Evidence invalidated</td>
+            </tr>
+            <tr>
+              <td>File mode change, or rename with identical contents</td>
+              <td>Evidence invalidated</td>
+              <td>Evidence invalidated</td>
+            </tr>
+            <tr>
+              <td>Edit under <code>_generated/</code>, <code>graphify-out/</code>, <code>artifacts/</code></td>
+              <td>Evidence invalidated</td>
+              <td>Evidence invalidated</td>
+            </tr>
+            <tr>
+              <td><code>origin/main</code> advances, or the merge base moves</td>
+              <td>Evidence invalidated</td>
+              <td>Evidence invalidated</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="key-files">
+        <h2>Key files</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Why it matters</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>scripts/harness-review-identity.ts</code></td>
+              <td>
+                New. Defines the review-neutral path set, the
+                <code>deliverable-tree/v1</code> version constant, and the digest
+                over <code>git ls-tree -r -z</code> entries (mode, blob SHA,
+                path). The single source of truth for "is this the reviewed
+                thing?"
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripts/harness-mechanical-check.ts</code></td>
+              <td>
+                New. Selects the deterministic checks: the per-package lint
+                scripts from the same registry scenarios
+                <code>harness:review</code> uses, plus the project typecheck of
+                any package that has a changed file and declares one
+                (<code>tsc -p</code> is project-wide, so scenario scoping would
+                miss it). Runs every
+                selected command so one run reports every failure, and fails
+                closed if a selected package manifest cannot be read.
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripts/pr-athena-prepare.ts</code></td>
+              <td>
+                Runs the mechanical stage before capturing the candidate, so a
+                failure means no receipt. The mechanical script is added to
+                <code>PREPARATION_WIRING_PATHS</code>, so changing the gate
+                invalidates existing receipts.
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripts/harness-candidate.ts</code></td>
+              <td>
+                Every captured candidate now carries
+                <code>deliverableTreeSha</code> and
+                <code>identityVersion</code>. Computed after the stability
+                bracket, because it is a pure function of the settled tree.
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripts/harness-gate-obligations.ts</code></td>
+              <td>
+                <code>candidateBindingsEqual</code> now compares the deliverable
+                identity instead of the raw tree, and requires a known identity
+                version and a non-empty digest on <em>both</em> sides so absent
+                fields can never match.
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripts/harness-review-evidence.ts</code></td>
+              <td>
+                Recording applies the same rule the gate later applies, and
+                rejects a manifest candidate that names no current deliverable
+                identity.
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripts/harness-obligation-records.ts</code></td>
+              <td>
+                Carries the identity fields on the persisted candidate binding.
+                A record written before the identity existed stays readable and
+                self-consistent, and fails closed as stale evidence.
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripts/harness-gate-admission.ts</code></td>
+              <td>
+                Carries both the raw tree and the deliverable identity into the
+                existing gate decision event, so a past authorization stays
+                interpretable.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>docs/harness.md</code>,
+                <code>.agents/skills/execute/SKILL.md</code>,
+                <code>.agents/skills/ce-code-review/SKILL.md</code>
+              </td>
+              <td>
+                State the required order explicitly, so the next agent does not
+                rediscover it the expensive way.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="changes">
+        <h2>What changed, and what deliberately did not</h2>
+        <h3>Changed</h3>
+        <ul>
+          <li>
+            A mechanical stage runs inside <code>pr:athena:prepare</code> and is
+            also available on its own as <code>bun run pr:athena:mechanical</code>.
+          </li>
+          <li>
+            Review evidence freshness compares a deliverable identity rather than
+            the raw tree SHA, at both recording time and gate time.
+          </li>
+          <li>
+            The gate decision event carries the identity that authorized it.
+          </li>
+          <li>
+            Recording keeps an exact raw-tree match, so the audit anchor written
+            into the record and the decision event is verified rather than taken
+            from the provider's word. Only the gate comparison is identity-only.
+          </li>
+          <li>
+            <code>harness:review-context</code> now requires a current
+            preparation receipt, which is what makes the mechanical ordering a
+            mechanism rather than a convention.
+          </li>
+        </ul>
+        <h3>Deliberately unchanged</h3>
+        <ul>
+          <li>
+            <strong>The preparation receipt still binds to the raw tree.</strong>
+            A documentation commit still requires re-running
+            <code>prepare</code> — which is cheap and deterministic. Only the
+            expensive half was loosened.
+          </li>
+          <li>
+            <strong>Admission still requires an unchanged candidate</strong>
+            across the whole run: before, immediately before spawning, and after
+            the provider. That check compares the full raw candidate, not the
+            deliverable identity.
+          </li>
+          <li>
+            <strong>The neutral set is narrower than the delivery
+            fingerprint's.</strong> <code>isDeliverableFingerprintPath</code>
+            also excludes <code>_generated/</code>,
+            <code>routeTree.gen.ts</code>, <code>graphify-out/</code>, and
+            <code>artifacts/</code>. Those stay inside the reviewed deliverable
+            here: they are executable or gate-consumed content, and nothing in
+            the identity re-derives them to prove they still match their reviewed
+            sources.
+          </li>
+          <li>
+            Which obligations exist, the reviewer set, and the admission policy
+            for unreviewed code — all explicitly out of scope for this ticket.
+          </li>
+          <li>
+            Tests and build stay in the heavy provider — neither is cheap nor
+            purely mechanical. Typecheck does not: it is the same deterministic
+            class as lint, the acceptance criterion names it, and the measured
+            athena-webapp project typecheck is ~45s, which is trivial against the
+            review round a late type error would invalidate.
+          </li>
+        </ul>
+        <h3>Stated residual risk</h3>
+        <p>
+          <code>docs/reports/</code> and <code>docs/solutions/</code> compile
+          into the Athena webapp's in-app docs bundle, so this does admit
+          post-review edits to shipped content. Those paths keep live gate
+          obligations (<code>delivery:documentation-check</code>,
+          <code>landed-report:check</code>, <code>compound:check</code>), and any
+          divergence between the reviewed raw tree and the current one stays
+          visible in the decision event. That trade is recorded in the solution
+          note rather than left implicit.
+        </p>
+      </section>
+
+      <section data-report-section="validation">
+        <h2>Validation and review evidence</h2>
+        <p>
+          Execution posture was <code>test-first</code>, and the ticket asked for
+          the rejection cases to be pinned before any loosening. They were: the
+          comment-only, mode-change, rename, deletion, generated-artifact, and
+          moved-base rejections all had failing tests before
+          <code>candidateBindingsEqual</code> was touched.
+        </p>
+        <ul>
+          <li><code>bun run harness:test</code> — 800 tests across 58 files, green</li>
+          <li><code>bun run pr:athena:preflight</code> — pass</li>
+          <li><code>bun run architecture:check</code> — pass</li>
+          <li><code>bun run compound:check</code> — pass</li>
+          <li>
+            New suites: <code>scripts/harness-review-identity.test.ts</code> (30
+            tests, including real-Git integration covering a report-only commit,
+            a comment-only source commit, and a tracked path containing a space,
+            plus the trailing-space, newline-injection and backslash digest
+            collisions an independent review proved against the first draft) and
+            <code>scripts/harness-mechanical-check.test.ts</code> (9 tests)
+          </li>
+          <li>
+            Extended suites: candidate capture, gate obligations, gate admission,
+            review evidence, obligation records, preparation, and pre-push
+            validation proof
+          </li>
+          <li>
+            End-to-end reproduction of the PR #758 failure class: a
+            <code>@convex-dev/no-collect-in-query</code> violation was introduced
+            in a scratch Convex module, failed
+            <code>bun run pr:athena:mechanical</code>, and blocked
+            <code>bun run pr:athena:prepare</code> before any review could be
+            dispatched. The scratch module was then removed.
+          </li>
+        </ul>
+        <p>
+          <strong>Review:</strong> the independent evidence-bearing review
+          checkpoint runs against this exact prepared candidate before
+          <code>bun run pr:athena</code>; this report is committed to the
+          delivery branch first so it is part of the reviewed tree.
+        </p>
+        <p>
+          <strong>Deployment and root alignment:</strong> pending at the time of
+          writing. This branch changes <code>docs/solutions/</code> and
+          <code>docs/reports/</code>, which the in-app docs workspace compiles
+          into the Athena webapp bundle, so the post-merge deploy surface is
+          <code>scripts/deploy-vps.sh athena-local</code>. No Convex runtime,
+          storefront, or proxy code changed.
+        </p>
+      </section>
+
+      <section data-report-section="guidance">
+        <h2>Guidance for next time</h2>
+        <ul>
+          <li>
+            <strong>Prepare, then review, then validate.</strong>
+            <code>pr:athena:prepare</code> now fails on a deterministic lint
+            error and publishes no receipt. If preparation blocks, fix and
+            prepare again — never dispatch reviewers against a tree that has not
+            been prepared.
+          </li>
+          <li>
+            <strong>A documentation commit no longer costs a review round.</strong>
+            Commit the landed-change report and the solution note, re-run
+            <code>bun run pr:athena:prepare</code>, and continue. Any other edit
+            — including a comment — still requires a complete re-review.
+          </li>
+          <li>
+            <strong>Still write the report before the final review loop.</strong>
+            The identity removes the re-review cost of that ordering; it does not
+            license documenting after merge.
+          </li>
+          <li>
+            <strong>Copy the candidate from <code>harness:review-context</code>
+            verbatim</strong> into the review manifest, including
+            <code>deliverableTreeSha</code> and <code>identityVersion</code>. The
+            recorder rejects a manifest that names no current identity.
+          </li>
+          <li>
+            <strong>If you ever version the identity again</strong>, give old
+            records a distinct non-blocking diagnostic in the same change and
+            test the transition. A blocking diagnostic would strand every
+            worktree holding an older record.
+          </li>
+          <li>
+            Run <code>bun run pr:athena:mechanical</code> directly for a fast
+            answer to "would the deterministic rules stop me?" without preparing.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="quiz" data-quiz-pass-threshold="8">
+        <h2>Comprehension quiz</h2>
+        <p>Ten questions; eight correct to pass.</p>
+        <ol data-quiz>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why could a two-line lint failure invalidate three reviewer
+              approvals before this change?
+            </p>
+            <ol data-quiz-options>
+              <li>Reviewers were required to run lint themselves and had skipped it.</li>
+              <li data-quiz-correct>
+                The lint ran only inside the heavy provider, which will not start
+                without recorded review evidence — so the failure surfaced after
+                the review, and the fix changed the approved tree.
+              </li>
+              <li>The lint rule was newly added in the same branch.</li>
+              <li>Evidence expired on a timer that the lint run exceeded.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The gate deliberately refuses heavy validation for unreviewed code,
+              and the deterministic checks were on the wrong side of that gate.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What makes the new ordering structural rather than merely
+              documented?
+            </p>
+            <ol data-quiz-options>
+              <li>A pre-push hook rejects the push when lint fails.</li>
+              <li>The delivery skills instruct agents to run lint first.</li>
+              <li data-quiz-correct>
+                Preparation publishes no receipt when the mechanical stage fails,
+                and both review-context and gate admission require a current
+                receipt.
+              </li>
+              <li>CI runs the lint before the review job is scheduled.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The receipt is the shared precondition, so removing it removes both
+              the path to review and the path to admission.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Which paths does <code>deliverable-tree/v1</code> exclude from the
+              reviewed deliverable?
+            </p>
+            <ol data-quiz-options>
+              <li data-quiz-correct><code>docs/reports/</code> and <code>docs/solutions/</code>, and nothing else.</li>
+              <li>Everything <code>isDeliverableFingerprintPath</code> excludes.</li>
+              <li>All Markdown and HTML files anywhere in the repo.</li>
+              <li>All generated artifacts, since they are derived from reviewed sources.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The neutral set is deliberately narrower than the delivery
+              fingerprint's, which answers a different question.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why do generated artifacts such as <code>_generated/</code> stay
+              inside the reviewed deliverable, even though the delivery
+              fingerprint excludes them?
+            </p>
+            <ol data-quiz-options>
+              <li>They change too rarely for the exclusion to be worth it.</li>
+              <li>Git cannot compute a stable hash for generated files.</li>
+              <li data-quiz-correct>
+                They are executable or gate-consumed content, and nothing in the
+                identity re-derives them to prove they still match their reviewed
+                sources.
+              </li>
+              <li>Reviewers are required to read them line by line.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Excluding them would assume a derivation the identity never checks.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              A reviewer approves the tree. You then fix a typo in a code
+              comment. What happens?
+            </p>
+            <ol data-quiz-options>
+              <li>Nothing; comments are not reviewable content.</li>
+              <li data-quiz-correct>
+                The deliverable identity changes, the evidence goes stale, and a
+                complete re-review is required.
+              </li>
+              <li>The evidence survives but the decision event records a warning.</li>
+              <li>The gate prompts for a human waiver automatically.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The identity hashes blob SHAs, so any content change to a
+              non-neutral path moves it. The anti-tamper property is unchanged.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              After the final review pass you commit the landed-change report.
+              What must you do before running <code>bun run pr:athena</code>?
+            </p>
+            <ol data-quiz-options>
+              <li>Re-run the complete reviewer set against the new tree.</li>
+              <li data-quiz-correct>
+                Re-run <code>bun run pr:athena:prepare</code>; the receipt still
+                binds to the raw tree, but the recorded review does not.
+              </li>
+              <li>Nothing — both the receipt and the evidence ignore that path.</li>
+              <li>Record a fresh evidence manifest with the new tree SHA.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Only the expensive half was loosened. Preparation is cheap and
+              deterministic, so it kept the strictest binding.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              How does a past authorization stay interpretable after the identity
+              rule changed?
+            </p>
+            <ol data-quiz-options>
+              <li>A new <code>identity_change</code> event type is emitted.</li>
+              <li>The old records are rewritten into the new format on read.</li>
+              <li data-quiz-correct>
+                The existing gate decision event carries both the raw tree and
+                the deliverable identity with its version.
+              </li>
+              <li>The identity version is inferred from the record's timestamp.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The ticket explicitly required reusing the existing event and
+              adding no new event type.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why does <code>harness:review-evidence</code> still require an exact
+              raw-tree match when the gate does not?
+            </p>
+            <ol data-quiz-options>
+              <li>Because the deliverable identity is too slow to compute twice.</li>
+              <li data-quiz-correct>
+                Recording happens against the tree that was just prepared and
+                reviewed, so the match is free — and it proves the raw tree
+                written into the record and the decision event as the audit
+                anchor is real rather than provider-supplied.
+              </li>
+              <li>Because waiver records cannot carry a deliverable identity.</li>
+              <li>Because the gate re-derives the raw tree from the manifest anyway.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The loosening is only needed where the tree legitimately moves,
+              which is at gate time. Loosening it at both layers would have made
+              the audit anchor unverified.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why do tests and build stay in the heavy provider while typecheck
+              runs in the mechanical stage?
+            </p>
+            <ol data-quiz-options>
+              <li>Tests and build are not selected by the validation map.</li>
+              <li>Typecheck is already covered by the pre-push hook.</li>
+              <li data-quiz-correct>
+                Tests and build are neither cheap nor purely mechanical, so
+                they stay behind the gate; typecheck is deterministic and
+                measured at ~45s, so it runs early.
+              </li>
+              <li>Typecheck cannot fail deterministically.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Preparation is re-run often, so minutes spent there are paid
+              repeatedly — but 45s of typecheck is far cheaper than the review
+              round a late type error invalidates.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why does the freshness comparison require a known identity version
+              and a non-empty digest on <em>both</em> sides?
+            </p>
+            <ol data-quiz-options>
+              <li>To let records from any future version continue to match.</li>
+              <li data-quiz-correct>
+                So a record with absent identity fields can never match by
+                comparing two undefined values; it must fail closed as stale.
+              </li>
+              <li>Because the digest is optional for waiver records.</li>
+              <li>To keep the comparison constant-time.</li>
+            </ol>
+            <p data-quiz-explanation>
+              An equality check over missing fields is the classic way a
+              fail-closed rule quietly becomes fail-open.
+            </p>
+          </li>
+        </ol>
+      </section>
+
+      <section data-report-section="subagent-evidence">
+        <h2>Subagent evidence</h2>
+        <dl>
+          <dt>Delivered-diff research subagent</dt>
+          <dd>
+            Read-only analysis of <code>git diff origin/main...HEAD</code> and
+            the changed files. Contributed the changed-file map, the
+            before/after of where freshness is decided and where the
+            deterministic lint runs, the behaviour boundaries listed in the
+            before/after table, the test-coverage map, and the list of
+            deliberately unchanged behaviour (the raw-tree preparation receipt
+            and the unchanged-candidate checks across an admission run).
+          </dd>
+          <dt>Independent review subagents</dt>
+          <dd>
+            The evidence-bearing review checkpoint dispatches the required
+            reviewer set against this exact prepared candidate before
+            <code>bun run pr:athena</code>. Their machine-readable results and
+            the finalized manifest are recorded through
+            <code>bun run harness:review-evidence</code>; implementation agents
+            are not counted as independent reviewers.
+          </dd>
+          <dt>Session context</dt>
+          <dd>
+            Taken from the delivery conversation itself rather than a historian
+            subagent: this ticket was authored from the PR #758 delivery in the
+            same working period, and its evidence (the
+            <code>@convex-dev/no-collect-in-query</code> failure and the two
+            documentation-only invalidations) is quoted directly in the Linear
+            issue.
+          </dd>
+        </dl>
+      </section>
+    </article>
+  </body>
+</html>

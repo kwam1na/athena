@@ -36,6 +36,7 @@
     "bun-version:check": "bun scripts/bun-version-check.ts",
     "pr:athena:prepare": "bun scripts/pr-athena-prepare.ts",
     "pr:athena:preflight": "bun scripts/harness-contract-preflight.ts",
+    "pr:athena:mechanical": "bun scripts/harness-mechanical-check.ts",
     "pr:athena:validate": "bun run pr:athena:validate-provider && bun scripts/pr-athena-delivery-run.ts write-provider-evidence && bun run pr:athena:validate-review",
     "pr:athena:validate-provider": "bun scripts/harness-gate-admission.ts",
     "harness:review-context": "bun scripts/harness-review-evidence.ts context",

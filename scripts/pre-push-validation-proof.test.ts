@@ -119,6 +119,10 @@ function createSpawn(outputs: {
       output = next.unstagedFiles;
     } else if (command.join(" ") === "bun --version") {
       output = next.bunVersion;
+    } else if (command[0] === "git" && command[1] === "ls-tree") {
+      // The candidate identity reads the prepared tree; contents are irrelevant
+      // to proof reuse, which still binds to the raw tree SHA.
+      output = `100644 blob blob-a\tsrc/app.ts`;
     } else {
       throw new Error(`unexpected command: ${command.join(" ")}`);
     }

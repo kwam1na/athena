@@ -137,7 +137,11 @@ is `complete`, and the amendment gate compares both sides for known change.
 - Never use the destructive reseed as a rollout backfill, and never replay a
   correction whose outcome the rebuilt source row already carries.
 - Run the mechanical gate BEFORE the review pass that authorizes the tree, not
-  after. Review evidence binds to an exact tree, and the harness re-captures
-  that tree when the evidence is recorded — so a lint or format failure found
-  afterwards invalidates the authorization and costs a whole extra review
-  round. Gate findings and reviewer findings belong in the same fix batch.
+  after. This is now enforced rather than remembered: `pr:athena:prepare` runs
+  the mechanical checks and publishes no receipt when they fail, so a tree that
+  fails a deterministic rule cannot reach `harness:review-context` or gate
+  admission. Review evidence also binds to a deliverable identity now, so a
+  `docs/reports/**` or `docs/solutions/**` commit no longer invalidates an
+  approval. Any other post-review edit still does. See
+  [Review Evidence Binds to a Deliverable Identity](../harness/review-evidence-deliverable-identity-2026-08-12.md).
+  Gate findings and reviewer findings still belong in the same fix batch.
