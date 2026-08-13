@@ -19,7 +19,7 @@ tags:
   - gate-admission
   - authorization-identity
   - delivery-order
-delivery_diff_fingerprint: 900d06ebd558234e08914ca6ebbe7b4e628a6adcce22f2816666856b45405a11
+delivery_diff_fingerprint: 27ffed2f1d9ae13ca259fada6cda92291c1b98f77749ec47a72d415ea749b2b4
 ---
 
 # Review Evidence Binds to a Deliverable Identity, and Mechanical Checks Run Before It
@@ -50,13 +50,21 @@ rounds:
 
 **Mechanical before review, enforced structurally.** `pr:athena:prepare` now
 runs a mechanical stage (`scripts/harness-mechanical-check.ts`, also exposed as
-`bun run pr:athena:mechanical`) that executes the deterministic per-package lint
-scripts the validation map selects for the changed files. Preparation publishes
+`bun run pr:athena:mechanical`) that executes the deterministic checks for the
+changed files: the per-package lint scripts the validation map selects, plus the
+project typecheck for every package with a changed file. Typecheck is
+package-scoped, not scenario-scoped, because `tsc -p` is project-wide; scoping
+it per scenario let a type error in an unlisted file reach review, which was
+caught only by running a real type error through the stage. Preparation publishes
 no receipt when that stage fails, and both `harness:review-context` and gate
 admission require a current receipt. A tree that cannot pass a mechanical rule
 therefore cannot reach review at all — the ordering is a mechanism, not a
-reminder. The stage stays cheap on purpose: tests, build, and typecheck remain
-in the heavy provider.
+reminder. Tests and build stay in the heavy provider; typecheck does not. It was
+excluded from the first draft on an unmeasured assumption that it was expensive,
+which quietly under-delivered an acceptance criterion naming typecheck
+explicitly. Measured, the athena-webapp project typecheck is ~45s — trivial
+against the review round a late type error invalidates. Measure before calling a
+deterministic check too expensive to run early.
 
 **Evidence binds to a deliverable identity.**
 `scripts/harness-review-identity.ts` defines `deliverable-tree/v1`: a SHA-256

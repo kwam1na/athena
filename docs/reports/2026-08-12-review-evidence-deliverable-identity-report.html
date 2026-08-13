@@ -7,7 +7,7 @@
   <body>
     <article
       data-athena-landed-change-report="v2"
-      data-athena-report-diff-fingerprint="900d06ebd558234e08914ca6ebbe7b4e628a6adcce22f2816666856b45405a11"
+      data-athena-report-diff-fingerprint="27ffed2f1d9ae13ca259fada6cda92291c1b98f77749ec47a72d415ea749b2b4"
       data-athena-report-base="origin/main"
     >
       <header data-report-section="header">
@@ -219,10 +219,13 @@
             <tr>
               <td><code>scripts/harness-mechanical-check.ts</code></td>
               <td>
-                New. Selects the deterministic per-package lint scripts from the
-                same registry scenarios <code>harness:review</code> uses, runs
-                every selected command so one run reports every failure, and
-                fails closed if a selected package manifest cannot be read.
+                New. Selects the deterministic checks: the per-package lint
+                scripts from the same registry scenarios
+                <code>harness:review</code> uses, plus the project typecheck for
+                any package with a changed file (<code>tsc -p</code> is
+                project-wide, so scenario scoping would miss it). Runs every
+                selected command so one run reports every failure, and fails
+                closed if a selected package manifest cannot be read.
               </td>
             </tr>
             <tr>
@@ -346,9 +349,11 @@
             for unreviewed code — all explicitly out of scope for this ticket.
           </li>
           <li>
-            Tests, build, and typecheck stay in the heavy provider. The
-            mechanical stage is lint-only on purpose, because it runs on every
-            prepare.
+            Tests and build stay in the heavy provider — neither is cheap nor
+            purely mechanical. Typecheck does not: it is the same deterministic
+            class as lint, the acceptance criterion names it, and the measured
+            athena-webapp project typecheck is ~45s, which is trivial against the
+            review round a late type error would invalidate.
           </li>
         </ul>
         <h3>Stated residual risk</h3>
@@ -617,21 +622,23 @@
           </li>
           <li data-quiz-question>
             <p data-quiz-prompt>
-              Why is the mechanical stage limited to per-package lint rather than
-              also running tests and typecheck?
+              Why do tests and build stay in the heavy provider while typecheck
+              runs in the mechanical stage?
             </p>
             <ol data-quiz-options>
-              <li>Tests and typecheck are not deterministic.</li>
-              <li>They are already covered by the pre-push hook.</li>
+              <li>Tests and build are not selected by the validation map.</li>
+              <li>Typecheck is already covered by the pre-push hook.</li>
               <li data-quiz-correct>
-                The stage runs on every prepare, so it must stay cheap; the
-                expensive checks remain in the heavy provider.
+                Tests and build are neither cheap nor purely mechanical, so
+                they stay behind the gate; typecheck is deterministic and
+                measured at ~45s, so it runs early.
               </li>
-              <li>They cannot be selected from the validation map.</li>
+              <li>Typecheck cannot fail deterministically.</li>
             </ol>
             <p data-quiz-explanation>
-              Preparation is re-run often, including after every review fix, so
-              minutes spent there would be paid repeatedly.
+              Preparation is re-run often, so minutes spent there are paid
+              repeatedly — but 45s of typecheck is far cheaper than the review
+              round a late type error invalidates.
             </p>
           </li>
           <li data-quiz-question>

@@ -288,15 +288,21 @@ worktree-local preparation receipt. It does not stage new files automatically;
 stage intended new files explicitly and rerun preparation.
 
 The mechanical stage (`pr:athena:mechanical`, also runnable on its own) runs the
-deterministic per-package lint scripts that the validation map selects for the
-changed files. It exists to fix an ordering problem: those checks used to run
+deterministic checks for the changed files: the per-package lint scripts the
+validation map selects, plus the project typecheck for every package with a
+changed file. Typecheck is package-scoped rather than scenario-scoped because
+`tsc -p` is project-wide — a file whose validation scenario happens not to list
+the typecheck command can still break it. It exists to fix an ordering problem: those checks used to run
 only inside the heavy provider, which is gated behind `review.green`, so a lint
 rule could fail only *after* an expensive multi-agent review had been recorded,
 and the one-line fix then invalidated that review. Because preparation publishes
 no receipt when a mechanical check fails, and both `harness:review-context` and
 gate admission require a current receipt, **a tree that cannot pass the
-mechanical rules can never reach review**. The stage stays deliberately cheap:
-tests, build, and typecheck remain in the heavy provider.
+mechanical rules can never reach review**. Tests and build stay in the heavy
+provider — they are neither cheap nor purely mechanical — but typecheck belongs
+here: it is deterministic, it is the class the ticket names alongside lint, and
+~45s at prepare is far cheaper than the review round a late type error would
+invalidate.
 
 `pr:athena:preflight` then aggregates validation-map coverage, live harness
 audit, audit-fixture consistency, and harness-script sibling-test policy before
@@ -504,7 +510,7 @@ so CI and local harness runs read the same declared version.
 
 | Phase | Command | Notes |
 | --- | --- | --- |
-| Prepare | `pr:athena:prepare` | Dependency check, generated-artifact repair, mechanical per-package lint (`pr:athena:mechanical`), then blocks if unstaged or untracked files would prevent reusable proof. |
+| Prepare | `pr:athena:prepare` | Dependency check, generated-artifact repair, mechanical lint and typecheck (`pr:athena:mechanical`), then blocks if unstaged or untracked files would prevent reusable proof. |
 | Preflight | `pr:athena:preflight` | Validation-map coverage, live harness audit, audit-fixture consistency, and harness-script sibling-test policy. |
 | Validate | `pr:athena:validate` | The guarded provider evaluates registered obligations before docs, workflow, Convex, frontend, architecture, typecheck, and coverage work; then writes same-tree provider evidence and runs harness review, inferential review, audit, and graphify check. |
 | Record proof | `pr:athena:record-proof` | Records the git-private proof for the validated tree. |

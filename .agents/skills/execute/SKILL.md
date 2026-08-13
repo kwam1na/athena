@@ -152,7 +152,7 @@ Use this resolution order before asking the user for context:
 
 For Athena changes that activate the registered `review.green` obligation, run one independent evidence-bearing review checkpoint before `bun run pr:athena`:
 
-1. Run `bun run pr:athena:prepare`, then capture the exact prepared identity with `bun run harness:review-context`. Preparation runs the mechanical checks (`pr:athena:mechanical`) and publishes no receipt when they fail, so a deterministic lint failure is always discovered before any review is dispatched. Fix it and prepare again; never spend a review on a tree that has not been prepared.
+1. Run `bun run pr:athena:prepare`, then capture the exact prepared identity with `bun run harness:review-context`. Preparation runs the mechanical checks (`pr:athena:mechanical` — per-package lint plus project typecheck) and publishes no receipt when they fail, so a deterministic lint or type failure is always discovered before any review is dispatched. Fix it and prepare again; never spend a review on a tree that has not been prepared.
 2. Dispatch the complete relevant reviewer set against that exact tree and merge their machine-readable results under `/tmp/compound-engineering/execute/<run-id>/`. Do not count implementation subagents as independent reviewers.
 3. If a review fix changes the candidate, run `bun run pr:athena:prepare` again and repeat the complete review on the resulting context. A partial follow-up cannot authorize the changed tree.
 4. Only after every required reviewer completes with unanimous approval and zero blocking or unresolved actionable findings, finalize `/tmp/compound-engineering/execute/<run-id>/final-manifest.json` with provider `execute`, the context's worktree/candidate fields, reviewer artifacts, findings and mutation sequence, final pass ID, `verdict: "green"`, zero counts, `editedAfterFinalPass: false`, and `finalized: true`.
@@ -162,7 +162,7 @@ This checkpoint authorizes only the exact pre-validation candidate. Keep the lat
 
 Order matters, and the harness now enforces the expensive half of it:
 
-- Mechanical before review. `pr:athena:prepare` will not issue a receipt for a tree that fails a deterministic per-package lint rule, and `harness:review-context` requires that receipt.
+- Mechanical before review. `pr:athena:prepare` will not issue a receipt for a tree that fails a deterministic lint rule or the project typecheck, and `harness:review-context` requires that receipt.
 - Review evidence binds to the candidate's deliverable identity, not its raw tree. Committing the landed-change report or the solution note after the final pass does not invalidate a recorded review; rerun `bun run pr:athena:prepare` (cheap) and continue. Any other edit — including a comment-only change or a regenerated artifact — does invalidate it and requires a complete re-review.
 - Still generate the report and solution note before the final review-and-merge loop. The identity removes the re-review cost of that ordering; it does not license documenting after merge.
 

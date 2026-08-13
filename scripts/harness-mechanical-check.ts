@@ -16,9 +16,11 @@ import { getChangedFilesForHarnessReview } from "./harness-review";
  * a tree that fails a mechanical rule, and no review context or gate admission
  * without a receipt.
  *
- * Keep this list deterministic and cheap. Tests, builds, and typecheck stay in
- * the heavy provider; a check that needs minutes does not belong in every
- * prepare.
+ * Keep this set deterministic. Tests and builds stay in the heavy provider
+ * because they are neither cheap nor purely mechanical; project typecheck is
+ * included because it is exactly the deterministic class the ticket names
+ * (lint/format/typecheck) and ~45s at prepare is far cheaper than the review
+ * round a late type error would invalidate.
  */
 export const MECHANICAL_PACKAGE_SCRIPTS = [
   "lint:convex:changed",
@@ -26,13 +28,25 @@ export const MECHANICAL_PACKAGE_SCRIPTS = [
   "lint:architecture",
 ] as const;
 
+/**
+ * Registry `raw` commands that qualify as mechanical. Matched by shape rather
+ * than by a copied literal so a registry edit cannot silently drop the check,
+ * and kept strict enough that the command can be spawned as argv with no shell:
+ * anything carrying an operator, redirect, or extra argument fails the match.
+ */
+const MECHANICAL_RAW_COMMAND_PATTERN =
+  /^bunx tsc --noEmit -p packages\/[a-z0-9-]+\/tsconfig\.json$/;
+
+export function isMechanicalRawCommand(command: string) {
+  return MECHANICAL_RAW_COMMAND_PATTERN.test(command.trim());
+}
+
 export type MechanicalPackageScript =
   (typeof MECHANICAL_PACKAGE_SCRIPTS)[number];
 
-export type MechanicalCommand = {
-  packageDir: string;
-  script: MechanicalPackageScript;
-};
+export type MechanicalCommand =
+  | { kind: "script"; packageDir: string; script: MechanicalPackageScript }
+  | { kind: "raw"; command: string };
 
 export type MechanicalFailure = {
   command: string;
@@ -62,6 +76,7 @@ type MechanicalCheckOptions = {
     workspace: string,
     script: string,
   ) => Promise<number>;
+  runRawCommand?: (rootDir: string, command: string) => Promise<number>;
   logger?: Pick<Console, "log" | "error">;
 };
 
@@ -80,8 +95,11 @@ function matchesTouchedPath(
   packageDir: string,
   touchedPath: string,
 ) {
+  const normalizedTouchedPath = normalizeRepoPath(touchedPath);
   const prefix = normalizeRepoPath(
-    `${normalizeRepoPath(packageDir)}/${normalizeRepoPath(touchedPath)}`,
+    normalizedTouchedPath
+      ? `${normalizeRepoPath(packageDir)}/${normalizedTouchedPath}`
+      : normalizeRepoPath(packageDir),
   );
   const normalizedFile = normalizeRepoPath(changedFile);
   return (
@@ -101,6 +119,8 @@ export function selectMechanicalCommands(
   const seen = new Set<string>();
 
   for (const app of HARNESS_APP_REGISTRY) {
+    // Changed-file lints are scenario-scoped, exactly as `harness:review`
+    // selects them.
     for (const scenario of app.validationScenarios) {
       const matched = changedFiles.some((changedFile) =>
         scenario.touchedPaths.some((touchedPath) =>
@@ -116,7 +136,34 @@ export function selectMechanicalCommands(
         const key = `${app.packageDir}:${command.script}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        selected.push({ packageDir: app.packageDir, script: command.script });
+        selected.push({
+          kind: "script",
+          packageDir: app.packageDir,
+          script: command.script,
+        });
+      }
+    }
+
+    // Typecheck is not scenario-scoped, because `tsc -p` is not: any changed
+    // file in the package can break the project build, including one whose
+    // validation scenario happens not to list the typecheck command. Scoping it
+    // per scenario would let a type error reach review, which is the whole
+    // failure this stage exists to prevent.
+    const packageTouched = changedFiles.some((changedFile) =>
+      matchesTouchedPath(changedFile, app.packageDir, ""),
+    );
+    if (!packageTouched) continue;
+
+    for (const scenario of app.validationScenarios) {
+      for (const command of scenario.commands) {
+        if (command.kind !== "raw" || !isMechanicalRawCommand(command.command)) {
+          continue;
+        }
+        const normalized = command.command.trim();
+        const key = `raw:${normalized}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        selected.push({ kind: "raw", command: normalized });
       }
     }
   }
@@ -150,6 +197,17 @@ async function defaultRunPackageScript(
   return child.exited;
 }
 
+async function defaultRunRawCommand(rootDir: string, command: string) {
+  // Spawned as argv, never through a shell: the pattern that admitted this
+  // command already rejects operators, redirects, and extra arguments.
+  const child = Bun.spawn(command.split(" "), {
+    cwd: rootDir,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  return child.exited;
+}
+
 export async function runHarnessMechanicalCheck(
   rootDir: string,
   options: MechanicalCheckOptions = {},
@@ -163,11 +221,27 @@ export async function runHarnessMechanicalCheck(
   const readManifest =
     options.readPackageManifest ?? defaultReadPackageManifest;
   const runPackageScript = options.runPackageScript ?? defaultRunPackageScript;
+  const runRawCommand = options.runRawCommand ?? defaultRunRawCommand;
   const ranCommands: string[] = [];
   const skippedCommands: string[] = [];
   const failures: MechanicalFailure[] = [];
 
   for (const command of selected) {
+    if (command.kind === "raw") {
+      logger.log(`[pr:athena] Mechanical check: ${command.command}`);
+      const exitCode = await runRawCommand(rootDir, command.command);
+      if (exitCode !== 0) {
+        failures.push({
+          command: command.command,
+          exitCode,
+          reason: `${command.command} exited with code ${exitCode}`,
+        });
+        continue;
+      }
+      ranCommands.push(command.command);
+      continue;
+    }
+
     const manifest = await readManifest(command.packageDir, rootDir);
     const workspace = manifest?.name;
     if (!workspace) {
