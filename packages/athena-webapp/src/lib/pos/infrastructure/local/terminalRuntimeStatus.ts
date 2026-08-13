@@ -435,6 +435,9 @@ export function buildPosTerminalRuntimeStatus(
             engineReadiness: safeStorageHealth.engineReadiness,
             healthFreshness: safeStorageHealth.freshness,
             healthObservedAt: safeStorageHealth.observedAt,
+            ...(safeStorageHealth.ledgerEventCount !== undefined
+              ? { ledgerEventCount: safeStorageHealth.ledgerEventCount }
+              : {}),
             ledgerPressure: safeStorageHealth.ledgerPressure,
             maintenance: safeStorageHealth.maintenance,
             migration: safeStorageHealth.migration,

@@ -476,6 +476,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
               ledgerSummary?.ok === true
                 ? classifyPosLocalLedgerPressure(ledgerSummary.value)
                 : "unknown",
+            ...(ledgerSummary?.ok === true
+              ? { ledgerEventCount: ledgerSummary.value.eventCount }
+              : {}),
             ...(lifecycle?.lastSuccessfulDurableCommitAt
               ? {
                   lastSuccessfulDurableCommitAt:

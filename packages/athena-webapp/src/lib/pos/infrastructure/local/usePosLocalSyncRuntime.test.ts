@@ -3366,6 +3366,10 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         ok: true,
         value: [],
       })),
+      readLedgerSummary: vi.fn(async () => ({
+        ok: true,
+        value: { eventCount: 12_345, oldestEventAt: Date.now() - 60_000 },
+      })),
       readProvisionedTerminalSeed: vi.fn(async () => ({
         ok: true,
         value: {
@@ -3404,6 +3408,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         expect.objectContaining({
           status: expect.objectContaining({
             localStore: expect.objectContaining({
+              ledgerEventCount: 12_345,
               terminalSeedReady: true,
             }),
             source: "register",

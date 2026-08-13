@@ -88,6 +88,7 @@ describe("terminalRuntimeStatus", () => {
         "syncSecretHash abcdef1234567890abcdef1234567890 failed",
       storageHealth: {
         engineReadiness: "ready",
+        ledgerEventCount: 12_345,
         ledgerPressure: "normal",
         maintenance: "idle",
         migration: "idle",
@@ -161,6 +162,7 @@ describe("terminalRuntimeStatus", () => {
         healthFreshness: "fresh",
         healthObservedAt: 1_900,
         lastSuccessfulDurableCommitAt: 1_800,
+        ledgerEventCount: 12_345,
         ledgerPressure: "normal",
         maintenance: "idle",
         migration: "idle",

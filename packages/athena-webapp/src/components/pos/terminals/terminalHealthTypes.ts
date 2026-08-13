@@ -56,6 +56,7 @@ export type TerminalRuntimeStatus = {
     healthFreshness?: "fresh" | "stale" | "unknown";
     healthObservedAt?: number;
     lastSuccessfulDurableCommitAt?: number;
+    ledgerEventCount?: number;
     ledgerPressure?: "normal" | "warning" | "critical" | "unknown";
     maintenance?: "idle" | "active" | "blocked" | "unknown";
     migration?: "idle" | "running" | "failed" | "unknown";

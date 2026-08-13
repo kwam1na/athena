@@ -27,6 +27,7 @@ import { NoPermissionView } from "@/components/states/no-permission/NoPermission
 import { ProtectedAdminSignInView } from "@/components/states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { RelativeTimestamp } from "@/components/ui/relative-timestamp";
 import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
@@ -56,7 +57,6 @@ import {
   formatAge,
   formatRegisterNumber,
   formatStatusLabel,
-  formatTerminalTimestamp,
   getReviewEvidenceCount,
   getStaffAuthorityLabel,
   getSupportSafeAttentionReasonSummary,
@@ -458,7 +458,12 @@ function RuntimeReportGroup({
       <div className="divide-y divide-border/70">
         <RailSignalRow
           label="Reported"
-          value={formatTerminalTimestamp(runtimeStatus?.reportedAt)}
+          value={
+            <RelativeTimestamp
+              fallback="Not recorded"
+              value={runtimeStatus?.reportedAt}
+            />
+          }
         />
         <RailSignalRow
           label="Active drawer"
@@ -653,6 +658,148 @@ function RailSection({
   );
 }
 
+function TerminalHealthBadge({
+  classification,
+  runtimeStatus,
+}: {
+  classification: ReturnType<typeof classifyTerminalHealth>;
+  runtimeStatus: TerminalRuntimeStatus | null;
+}) {
+  const [storageDetailOpen, setStorageDetailOpen] = useState(false);
+  const localStore = runtimeStatus?.localStore;
+  const showsStorageDetail = classification.label === "Storage needs attention";
+
+  const badge = (
+    <Badge className={classification.toneClassName} variant="outline">
+      {classification.label}
+    </Badge>
+  );
+
+  if (!showsStorageDetail || !localStore) {
+    return badge;
+  }
+
+  const attentionReasons = getStorageAttentionReasons(localStore);
+  const primaryReason = attentionReasons[0] ?? classification.description;
+  const eventCount =
+    typeof localStore.ledgerEventCount === "number" &&
+    Number.isSafeInteger(localStore.ledgerEventCount) &&
+    localStore.ledgerEventCount >= 0
+      ? `${new Intl.NumberFormat("en-US").format(localStore.ledgerEventCount)} events`
+      : "Not reported";
+  const storageUsage = formatStorageUsage(
+    localStore.usageBytes,
+    localStore.quotaBytes,
+  );
+
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip open={storageDetailOpen} onOpenChange={setStorageDetailOpen}>
+        <TooltipTrigger asChild>
+          <button
+            aria-label={`${classification.label}. ${primaryReason}`}
+            className="rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            onClick={() => setStorageDetailOpen((open) => !open)}
+            type="button"
+          >
+            {badge}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent className="w-72 p-layout-sm">
+          <p className="text-xs font-medium">Why storage needs attention</p>
+          <div className="mt-layout-2xs space-y-1 text-xs text-warning">
+            {attentionReasons.map((reason) => (
+              <p key={reason}>{reason}</p>
+            ))}
+          </div>
+          <dl className="mt-layout-sm divide-y divide-border/70 border-t border-border/70 text-xs">
+            <StorageDiagnosticRow label="Local events" value={eventCount} />
+            <StorageDiagnosticRow
+              label="Storage used"
+              value={storageUsage ?? "Not reported"}
+            />
+            <StorageDiagnosticRow
+              label="Ledger pressure"
+              value={formatStatusLabel(localStore.ledgerPressure ?? "unknown")}
+            />
+            <StorageDiagnosticRow
+              label="Persistence"
+              value={formatStatusLabel(localStore.persistence ?? "unknown")}
+            />
+          </dl>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function StorageDiagnosticRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-layout-sm py-layout-2xs">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="text-right font-medium text-popover-foreground">{value}</dd>
+    </div>
+  );
+}
+
+function getStorageAttentionReasons(
+  localStore: TerminalRuntimeStatus["localStore"],
+) {
+  const reasons: string[] = [];
+
+  if (localStore.pressure === "critical") {
+    reasons.push("Available browser storage is critically low.");
+  } else if (localStore.pressure === "warning") {
+    reasons.push("Browser storage usage is high.");
+  }
+
+  if (localStore.ledgerPressure === "critical") {
+    reasons.push("The local event ledger needs support.");
+  } else if (localStore.ledgerPressure === "warning") {
+    reasons.push("The local event ledger is above its maintenance threshold.");
+  }
+
+  return reasons;
+}
+
+function formatStorageUsage(usageBytes?: number, quotaBytes?: number) {
+  if (
+    typeof usageBytes !== "number" ||
+    !Number.isFinite(usageBytes) ||
+    usageBytes < 0 ||
+    typeof quotaBytes !== "number" ||
+    !Number.isFinite(quotaBytes) ||
+    quotaBytes <= 0
+  ) {
+    return null;
+  }
+
+  const percentage = Math.round((usageBytes / quotaBytes) * 100);
+  return `${formatStorageBytes(usageBytes)} of ${formatStorageBytes(quotaBytes)} (${percentage}%)`;
+}
+
+function formatStorageBytes(bytes: number) {
+  if (bytes === 0) return "0 B";
+
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const unitIndex = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1,
+  );
+  const value = bytes / 1024 ** unitIndex;
+  const formattedValue = new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: value < 10 && unitIndex > 0 ? 1 : 0,
+  }).format(value);
+
+  return `${formattedValue} ${units[unitIndex]}`;
+}
+
 function TerminalContextRail({
   classification,
   detail,
@@ -675,9 +822,10 @@ function TerminalContextRail({
             <p className="text-sm text-foreground">
               {formatRegisterNumber(detail.terminal.registerNumber)}
             </p>
-            <Badge className={classification.toneClassName} variant="outline">
-              {classification.label}
-            </Badge>
+            <TerminalHealthBadge
+              classification={classification}
+              runtimeStatus={runtimeStatus}
+            />
           </div>
         </div>
         <RailField
@@ -686,7 +834,7 @@ function TerminalContextRail({
         />
         <RailField
           label="Registered"
-          value={formatTerminalTimestamp(detail.terminal.registeredAt)}
+          value={<RelativeTimestamp value={detail.terminal.registeredAt} />}
         />
       </RailSection>
 
@@ -697,7 +845,12 @@ function TerminalContextRail({
         >
           <RailField
             label="Received"
-            value={formatTerminalTimestamp(runtimeStatus?.receivedAt)}
+            value={
+              <RelativeTimestamp
+                fallback="Not recorded"
+                value={runtimeStatus?.receivedAt}
+              />
+            }
           />
           <RailField
             label="Source"
@@ -2701,8 +2854,11 @@ function RemoteAssistPanel({
             </p>
             {client?.lastPresenceAt ? (
               <p className="mt-2 text-xs text-muted-foreground">
-                Last Remote Assist presence{" "}
-                {formatTerminalTimestamp(client.lastPresenceAt)}.
+                <RelativeTimestamp
+                  prefix="Last Remote Assist presence"
+                  value={client.lastPresenceAt}
+                />
+                .
               </p>
             ) : null}
           </div>
@@ -2736,7 +2892,12 @@ function RemoteAssistPanel({
         />
         <RecoveryMetric
           label="Freshness"
-          value={formatTerminalTimestamp(detail.runtimeStatus?.receivedAt)}
+          value={
+            <RelativeTimestamp
+              fallback="Not recorded"
+              value={detail.runtimeStatus?.receivedAt}
+            />
+          }
         />
       </div>
 

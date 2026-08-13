@@ -68,6 +68,7 @@ describe("terminal runtime material", () => {
       localStore: {
         ...base.localStore,
         healthObservedAt: 200,
+        ledgerEventCount: 12_345,
         schemaVersion: 2,
         usageBytes: 900,
       },

@@ -978,9 +978,7 @@ export function classifyTerminalHealth(
     runtimeStatus.localStore?.pressure === "critical" ||
     runtimeStatus.localStore?.pressure === "warning" ||
     runtimeStatus.localStore?.ledgerPressure === "critical" ||
-    runtimeStatus.localStore?.ledgerPressure === "warning" ||
-    runtimeStatus.localStore?.persistence === "denied" ||
-    runtimeStatus.localStore?.persistence === "unsupported"
+    runtimeStatus.localStore?.ledgerPressure === "warning"
   ) {
     return {
       description:
