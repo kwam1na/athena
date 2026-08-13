@@ -20,7 +20,7 @@ tags:
   - gate-obligations
   - delivery-telemetry
   - scope-discipline
-delivery_diff_fingerprint: 0524815f4e29636d758aa7fd850381a6d50b4c01e3774b2228c369de79e823eb
+delivery_diff_fingerprint: f9c497ca959ee789750c22885f8e5d300514eeb0536dbfaf9c7c4c7bf957906e
 ---
 
 # Review Findings Carry a Scope Axis, and Delivery Runs Leave a Durable Record
