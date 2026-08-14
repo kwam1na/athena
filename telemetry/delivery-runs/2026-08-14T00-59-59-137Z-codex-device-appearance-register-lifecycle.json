@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-14T00:59:59.137Z",
+  "branch": "codex/device-appearance-register-lifecycle",
+  "headSha": "859b7bbd4863d8c70c94ede2315c9b1bc5b8ca85",
+  "deliverableDiffFingerprint": "1857b1564f1e9d690cbe716665ad888f282a0b34b298ae4ca3d6a634655940a9",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 6,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 856359.612624
+  },
+  "reviewLoop": {
+    "providerId": "ce-code-review",
+    "runId": "athena-adaptive-windows-final",
+    "finalPassId": "final-e54dd95e",
+    "recordedAt": "2026-08-14T00:45:35.883Z",
+    "iterationCount": 5,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}
