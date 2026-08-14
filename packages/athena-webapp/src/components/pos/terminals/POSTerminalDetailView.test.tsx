@@ -429,23 +429,85 @@ describe("POSTerminalDetailViewContent", () => {
     );
 
     const storageAttention = screen.getByRole("button", {
-      name: "Storage needs attention. Browser storage usage is high.",
+      name: "Local data needs attention. Athena browser storage usage is high.",
     });
     await user.click(storageAttention);
 
     expect(
-      await screen.findByText("Why storage needs attention"),
+      await screen.findByText("Why local data needs attention"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Browser storage usage is high."),
+      screen.getByText("Athena browser storage usage is high."),
     ).toBeInTheDocument();
     expect(screen.getByText("148 events")).toBeInTheDocument();
     expect(screen.getByText("128 MB of 2 GB (6%)")).toBeInTheDocument();
+    expect(screen.getByText("Athena browser storage")).toBeInTheDocument();
+    expect(screen.getByText("Local event ledger")).toBeInTheDocument();
     expect(screen.getByText("Normal")).toBeInTheDocument();
     expect(screen.getByText("Denied")).toBeInTheDocument();
     expect(
       screen.queryByText("Persistent storage is not granted."),
     ).not.toBeInTheDocument();
+  });
+
+  it("identifies age-driven ledger maintenance separately from browser storage", async () => {
+    const user = userEvent.setup();
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [],
+          health: "online",
+          runtimeStatus: {
+            ...detail.runtimeStatus!,
+            localStore: {
+              available: true,
+              ledgerEventCount: 3_826,
+              ledgerPressure: "warning",
+              persistence: "granted",
+              pressure: "normal",
+              quotaBytes: 10 * 1024 * 1024 * 1024,
+              terminalSeedReady: true,
+              usageBytes: 490 * 1024 * 1024,
+            },
+            sync: {
+              ...detail.runtimeStatus!.sync,
+              failedEventCount: 0,
+              reviewEventCount: 0,
+              reviewEvents: [],
+              status: "synced",
+            },
+          },
+          syncEvidence: {
+            ...detail.syncEvidence,
+            unresolvedConflictCount: 0,
+            unresolvedConflicts: [],
+          },
+        }}
+        isLoading={false}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /Local data needs attention\. The oldest retained local event is at least 30 days old\./,
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        "The oldest retained local event is at least 30 days old.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Keep this terminal online. Athena cleans up eligible events when no cashier is signed in.",
+      ),
+    ).toBeInTheDocument();
+    const storageDetails = within(screen.getByRole("tooltip"));
+    expect(storageDetails.getByText("490 MB of 10 GB (5%)")).toBeInTheDocument();
+    expect(storageDetails.getByText("Normal")).toBeInTheDocument();
+    expect(storageDetails.getByText("Warning")).toBeInTheDocument();
   });
 
   it("shows when the terminal is not on the latest webapp version", async () => {

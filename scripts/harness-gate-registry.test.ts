@@ -87,9 +87,10 @@ describe("HARNESS_GATE_REGISTRY", () => {
     ).toMatchObject({
       providerPolicy: "all",
       providerIds: ["delivery-documentation-check"],
-      allowedResolutionKinds: ["satisfied_live_fact"],
+      allowedResolutionKinds: ["satisfied_live_fact", "waived"],
       freshness: { kind: "live" },
       activation: { kind: "always" },
+      humanWaiverAllowed: true,
     });
 
     expect(
@@ -142,15 +143,15 @@ describe("HARNESS_GATE_REGISTRY", () => {
     [
       "a permitted waiver whose resolution kind is disallowed",
       (registry: HarnessGateRegistry) => {
-        registry.obligations["documentation.current"].humanWaiverAllowed = true;
+        registry.obligations["documentation.current"].allowedResolutionKinds =
+          ["satisfied_live_fact"];
       },
       'Obligation documentation.current allows a human waiver but omits "waived"',
     ],
     [
       "an allowed waived resolution no human may produce",
       (registry: HarnessGateRegistry) => {
-        registry.obligations["documentation.current"].allowedResolutionKinds =
-          ["satisfied_live_fact", "waived"];
+        registry.obligations["documentation.current"].humanWaiverAllowed = false;
       },
       'Obligation documentation.current allows the "waived" resolution but sets humanWaiverAllowed false',
     ],

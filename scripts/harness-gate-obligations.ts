@@ -82,6 +82,17 @@ export type WaiverRecord = {
   candidate: CandidateBinding;
 };
 
+export type AttestedWaiverRecord = {
+  schemaVersion: 1;
+  kind: "attested_waiver";
+  recordId: string;
+  gateId: string;
+  obligationId: "documentation.current";
+  candidate: CandidateBinding;
+  approvedBy: string;
+  attestationUrl: string;
+};
+
 export type InvalidObligationRecord = {
   kind: "invalid";
   gateId: string;
@@ -94,7 +105,10 @@ export type InvalidObligationRecord = {
 };
 
 export type DiscoveredObligationRecord =
-  EvidenceRecord | WaiverRecord | InvalidObligationRecord;
+  | EvidenceRecord
+  | WaiverRecord
+  | AttestedWaiverRecord
+  | InvalidObligationRecord;
 
 type ResolutionBase = {
   gateId: string;
@@ -120,6 +134,8 @@ export type WaivedResolution = ResolutionBase & {
   kind: "waived";
   waiverRecordId: string;
   candidate: CandidateBinding;
+  approvedBy?: string;
+  attestationUrl?: string;
 };
 
 export type DelegatedResolution = ResolutionBase & {
@@ -234,19 +250,39 @@ function isActive(
 }
 
 /**
- * A human waiver applies to any obligation that allows one, whether it is
- * satisfied by historical evidence or by a live provider. Keeping the lookup
- * shared means an obligation's `humanWaiverAllowed` flag means the same thing
- * wherever it is declared, instead of silently applying only to evidence-backed
- * obligations.
+ * A verified GitHub attestation crosses execution contexts because the
+ * admission adapter has already proven its human issuer and portable candidate
+ * binding. Otherwise a waiver is available only to the interactive human who
+ * accepted it. Keeping both paths here preserves `waived` as one resolution
+ * kind without confusing an attestation with provider-green evidence.
  */
-function humanWaiverFor(
+function waiverFor(
   gate: HarnessGateDefinition,
   obligation: HarnessObligationDefinition,
   input: EvaluateGateObligationsInput,
 ) {
-  if (input.executionContext.kind !== "interactive_human") return null;
   if (!obligation.humanWaiverAllowed) return null;
+  const attested = input.records
+    .filter(
+      (record): record is AttestedWaiverRecord =>
+        record.kind === "attested_waiver" &&
+        record.gateId === gate.id &&
+        record.obligationId === obligation.id &&
+        candidateBindingsEqual(record.candidate, input.candidate),
+    )
+    .sort((left, right) => left.recordId.localeCompare(right.recordId));
+  if (attested.length > 0) {
+    return {
+      kind: "waived" as const,
+      gateId: gate.id,
+      obligationId: obligation.id,
+      waiverRecordId: attested[0].recordId,
+      candidate: attested[0].candidate,
+      approvedBy: attested[0].approvedBy,
+      attestationUrl: attested[0].attestationUrl,
+    };
+  }
+  if (input.executionContext.kind !== "interactive_human") return null;
   // A live obligation is re-evaluated from scratch every run, so its waiver is
   // scoped to the invocation that granted it. Honoring a durable record here
   // would let one "yes" to a missing artifact silently admit a *different*
@@ -342,7 +378,7 @@ function evaluateLiveObligation(
       ? greenResults.length === obligation.providerIds.length
       : greenResults.length > 0;
   if (!satisfied) {
-    const waived = humanWaiverFor(gate, obligation, input);
+    const waived = waiverFor(gate, obligation, input);
     if (waived) return { resolution: waived, diagnostics: findings };
     return {
       resolution: {
@@ -600,7 +636,7 @@ function evaluateHistoricalObligation(
     }
   }
 
-  const waived = humanWaiverFor(gate, obligation, input);
+  const waived = waiverFor(gate, obligation, input);
   if (waived) {
     return {
       resolution: waived,

@@ -1,0 +1,200 @@
+name: Athena Documentation Waiver
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: Repository name with owner.
+        required: true
+        type: string
+      pr_number:
+        description: Pull request number.
+        required: true
+        type: string
+      head_sha:
+        description: Exact pull request head commit being waived.
+        required: true
+        type: string
+      base_ref:
+        description: Harness base ref.
+        required: true
+        type: string
+      base_sha:
+        description: Exact base tip used to prepare the candidate.
+        required: true
+        type: string
+      diff_base_sha:
+        description: Merge base used to classify the candidate.
+        required: true
+        type: string
+      deliverable_tree_sha:
+        description: Candidate deliverable-tree identity.
+        required: true
+        type: string
+      identity_version:
+        description: Deliverable identity schema.
+        required: true
+        type: string
+      waived_finding_codes:
+        description: JSON array of documentation finding codes accepted by the human.
+        required: true
+        type: string
+      reason:
+        description: Human-readable reason for the exception.
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  checks: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  publish-waiver:
+    name: Publish candidate-bound documentation waiver
+    runs-on: ubuntu-latest
+    environment: athena-documentation-waiver
+
+    steps:
+      - name: Verify protected-environment approval
+        uses: actions/github-script@v8
+        env:
+          INPUT_REPOSITORY: ${{ inputs.repository }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+          INPUT_HEAD_SHA: ${{ inputs.head_sha }}
+          INPUT_BASE_REF: ${{ inputs.base_ref }}
+          INPUT_BASE_SHA: ${{ inputs.base_sha }}
+          INPUT_DIFF_BASE_SHA: ${{ inputs.diff_base_sha }}
+          INPUT_DELIVERABLE_TREE_SHA: ${{ inputs.deliverable_tree_sha }}
+          INPUT_IDENTITY_VERSION: ${{ inputs.identity_version }}
+          INPUT_WAIVED_FINDING_CODES: ${{ inputs.waived_finding_codes }}
+          INPUT_REASON: ${{ inputs.reason }}
+        with:
+          script: |
+            const repository = process.env.INPUT_REPOSITORY;
+            const prNumber = Number(process.env.INPUT_PR_NUMBER);
+            const headSha = process.env.INPUT_HEAD_SHA;
+            const baseRef = process.env.INPUT_BASE_REF;
+            const baseSha = process.env.INPUT_BASE_SHA;
+            const diffBaseSha = process.env.INPUT_DIFF_BASE_SHA;
+            const deliverableTreeSha = process.env.INPUT_DELIVERABLE_TREE_SHA;
+            const identityVersion = process.env.INPUT_IDENTITY_VERSION;
+            const reason = process.env.INPUT_REASON?.trim();
+            const allowedCodes = new Set(["compound-solution", "landed-change-report"]);
+            const waivedFindingCodes = JSON.parse(process.env.INPUT_WAIVED_FINDING_CODES ?? "null");
+
+            if (repository !== `${context.repo.owner}/${context.repo.repo}`) {
+              core.setFailed("The requested repository does not match this workflow repository.");
+              return;
+            }
+            if (!Number.isInteger(prNumber) || prNumber < 1 || !reason) {
+              core.setFailed("The waiver request is missing its PR number or reason.");
+              return;
+            }
+            if (
+              !Array.isArray(waivedFindingCodes) ||
+              waivedFindingCodes.length === 0 ||
+              waivedFindingCodes.some((code) => !allowedCodes.has(code))
+            ) {
+              core.setFailed("The waiver request contains unsupported finding codes.");
+              return;
+            }
+
+            const { data: reviews } = await github.request(
+              "GET /repos/{owner}/{repo}/actions/runs/{run_id}/approvals",
+              { ...context.repo, run_id: context.runId },
+            );
+            const approval = [...reviews].reverse().find(
+              (review) =>
+                review.state === "approved" &&
+                review.user?.type === "User" &&
+                review.environments?.some(
+                  (environment) => environment.name === "athena-documentation-waiver",
+                ),
+            );
+            if (!approval?.user?.login || approval.user.login === context.actor) {
+              core.setFailed(
+                "A separate human must approve the protected athena-documentation-waiver environment.",
+              );
+              return;
+            }
+            const { data: permission } =
+              await github.rest.repos.getCollaboratorPermissionLevel({
+                ...context.repo,
+                username: approval.user.login,
+              });
+            if (!["admin", "maintain", "write"].includes(permission.permission)) {
+              core.setFailed("The environment approver is not an authorized collaborator.");
+              return;
+            }
+
+            const { data: pull } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: prNumber,
+            });
+            if (
+              pull.head.sha !== headSha ||
+              pull.base.sha !== baseSha ||
+              `origin/${pull.base.ref}` !== baseRef
+            ) {
+              core.setFailed("The pull request head or base changed before approval.");
+              return;
+            }
+
+            const attestation = {
+              schemaVersion: 1,
+              kind: "documentation_waiver",
+              repository,
+              prNumber,
+              headSha,
+              deliverableTreeSha,
+              identityVersion,
+              baseRef,
+              baseTipSha: baseSha,
+              diffBaseSha,
+              obligationId: "documentation.current",
+              waivedFindingCodes: [...new Set(waivedFindingCodes)].sort(),
+              requestedBy: context.actor,
+              approvedBy: approval.user.login,
+              approvalEnvironment: "athena-documentation-waiver",
+              reason,
+              workflowRunId: context.runId,
+              createdAt: new Date().toISOString(),
+            };
+            require("node:fs").writeFileSync(
+              "documentation-waiver-attestation.json",
+              `${JSON.stringify(attestation, null, 2)}\n`,
+              { encoding: "utf8", mode: 0o600 },
+            );
+      - name: Publish immutable waiver attestation
+        uses: actions/upload-artifact@v4
+        with:
+          name: athena-documentation-waiver-attestation
+          path: documentation-waiver-attestation.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish waiver check
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const attestation = JSON.parse(
+              require("node:fs").readFileSync(
+                "documentation-waiver-attestation.json",
+                "utf8",
+              ),
+            );
+            await github.rest.checks.create({
+              ...context.repo,
+              name: "athena/documentation-waiver",
+              head_sha: attestation.headSha,
+              status: "completed",
+              conclusion: "success",
+              external_id: `athena-documentation-waiver/v1/${context.runId}`,
+              details_url: `${context.serverUrl}/${attestation.repository}/actions/runs/${context.runId}`,
+              output: {
+                title: "Human documentation waiver accepted",
+                summary: `Requested by ${attestation.requestedBy} and approved by ${attestation.approvedBy} for PR #${attestation.prNumber}.`,
+              },
+            });

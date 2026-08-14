@@ -16,11 +16,13 @@ import {
   getRegisterCloseoutApprovalPolicy,
   prepareDailyCloseAutomationWithCtx,
   runHistoricEodAutoCloseBatchWithCtx,
+  runHistoricEodAutoCloseForDateWithCtx,
   runDailyCloseAutoCompleteEligibilityWithCtx,
   runConfiguredDailyOperationsAutomationWithCtx,
   runDailyOpeningAutomationWithCtx,
   runScheduledDailyOperationsAutomationWithCtx,
   emitDailyManagerReportNotificationsForEodAutomationWithCtx,
+  emitHistoricEodDailyManagerReportWithCtx,
   updateEodAutoCompletePolicy,
   updateOpeningAutoStartPolicy,
   updateRegisterCloseoutApprovalPolicy,
@@ -42,6 +44,9 @@ const admissionMocks = vi.hoisted(() => ({
   getSharedDemoActorWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
 }));
+const notificationMocks = vi.hoisted(() => ({
+  emitNotificationWithCtx: vi.fn(),
+}));
 
 vi.mock("../stockOps/access", () => ({
   requireStoreFullAdminAccess: accessMocks.requireStoreFullAdminAccess,
@@ -53,6 +58,37 @@ vi.mock("../lib/athenaUserAuth", () => ({
 vi.mock("../sharedDemo/actor", () => ({
   getSharedDemoActorWithCtx: admissionMocks.getSharedDemoActorWithCtx,
 }));
+vi.mock("../notifications/emit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../notifications/emit")>()),
+  emitNotificationWithCtx: notificationMocks.emitNotificationWithCtx,
+}));
+
+it("emits an applied daily manager report intent for a historic catch-up close", async () => {
+  notificationMocks.emitNotificationWithCtx.mockResolvedValue({
+    created: true,
+    intentId: "intent-1",
+  });
+
+  await emitHistoricEodDailyManagerReportWithCtx({} as MutationCtx, {
+    operatingDate: "2026-07-21",
+    storeId: "store-1" as Id<"store">,
+  });
+
+  expect(notificationMocks.emitNotificationWithCtx).toHaveBeenCalledWith(
+    expect.anything(),
+    {
+      kind: "eod.daily_manager_report",
+      payload: {
+        operatingDate: "2026-07-21",
+        status: "applied",
+        storeId: "store-1",
+      },
+      storeId: "store-1",
+      subjectId: "store-1:2026-07-21",
+      subjectType: "dailyClose",
+    },
+  );
+});
 
 type TableName =
   | "approvalRequest"
@@ -2556,24 +2592,25 @@ describe("daily operations automation adapter", () => {
       ],
     });
 
-    const result = await runHistoricEodAutoCloseBatchWithCtx(
+    notificationMocks.emitNotificationWithCtx.mockResolvedValue({
+      created: true,
+      intentId: "intent-historic-close",
+    });
+    const result = await runHistoricEodAutoCloseForDateWithCtx(
       { db } as unknown as MutationCtx,
       {
         asOfOperatingDate: "2026-06-10",
-        endOperatingDate: "2026-06-08",
-        maxDays: 1,
         mode: "apply",
-        startOperatingDate: "2026-06-08",
+        notifyDailyManagerReport: true,
+        operatingDate: "2026-06-08",
         storeId: "store-1" as Id<"store">,
       },
     );
 
     expect(result).toMatchObject({
-      applied: 1,
-      candidates: 1,
-      failed: 0,
-      quarantined: 0,
+      action: "applied",
     });
+    expect(notificationMocks.emitNotificationWithCtx).toHaveBeenCalledTimes(1);
     expect(inserts.map((insert) => insert.table)).toEqual([
       "automationRun",
       "dailyClose",

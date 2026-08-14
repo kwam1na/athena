@@ -414,6 +414,7 @@ export async function runOwedDailyCloseSweepWithCtx(
             {
               asOfOperatingDate: candidate.asOfOperatingDate,
               mode,
+              notifyDailyManagerReport: mode === "apply",
               operatingDate,
               storeId: candidate.storeId,
             },
@@ -427,8 +428,8 @@ export async function runOwedDailyCloseSweepWithCtx(
           });
         }
 
-      // Escalate only what this sweep could not settle, so a day that just
-      // closed above never raises a stale alert on its way out.
+        // Escalate only what this sweep could not settle, so a day that just
+        // closed above never raises a stale alert on its way out.
         const closedThisSweep = new Set(
           results
             .filter(

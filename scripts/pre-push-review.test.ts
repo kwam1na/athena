@@ -1062,7 +1062,7 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain("harness-implementation-tests:");
     expect(workflow).toContain("fetch-depth: 0");
     expect(workflow).toContain("run: bun run workflow:check");
-    expect(workflow).toContain("run: bun run delivery:documentation-check");
+    expect(workflow).toContain("run: bun run delivery:documentation-admission");
     expect(workflow).toContain(
       "run: bun run harness:self-review --base origin/main",
     );
@@ -1133,6 +1133,12 @@ describe("repo harness ergonomics", () => {
     );
     expect(packageJson.scripts?.["delivery:documentation-check"]).toBe(
       "bun scripts/delivery-documentation-check.ts",
+    );
+    expect(packageJson.scripts?.["delivery:documentation-admission"]).toBe(
+      "bun scripts/delivery-documentation-admission.ts",
+    );
+    expect(packageJson.scripts?.["harness:waive-documentation"]).toBe(
+      "bun scripts/documentation-waiver-command.ts",
     );
     expect(packageJson.scripts?.["pr:athena:validate-provider"]).toBe(
       "bun scripts/harness-gate-admission.ts",

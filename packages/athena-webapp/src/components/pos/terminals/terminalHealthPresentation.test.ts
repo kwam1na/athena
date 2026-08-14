@@ -1699,7 +1699,7 @@ describe("terminal health presentation", () => {
       }),
     ).toEqual(
       expect.objectContaining({
-        label: "Storage needs attention",
+        label: "Local data needs attention",
       }),
     );
   });

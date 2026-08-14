@@ -980,12 +980,15 @@ export function classifyTerminalHealth(
     runtimeStatus.localStore?.ledgerPressure === "critical" ||
     runtimeStatus.localStore?.ledgerPressure === "warning"
   ) {
+    const browserStoragePressure = runtimeStatus.localStore?.pressure;
     return {
       description:
-        runtimeStatus.localStore.pressure === "critical"
-          ? "Local storage space is critically low. Keep this terminal online and contact support."
-          : "Local storage needs attention. Keep this terminal online when possible and contact support.",
-      label: "Storage needs attention",
+        browserStoragePressure === "critical"
+          ? "Athena browser storage is critically low. Keep this terminal online and contact support."
+          : browserStoragePressure === "warning"
+            ? "Athena browser storage usage is high. Keep this terminal online when possible and contact support."
+            : "The local event ledger needs maintenance. Keep this terminal online; Athena cleans up eligible events when no cashier is signed in.",
+      label: "Local data needs attention",
       toneClassName: "border-warning/30 bg-warning/15 text-warning",
     };
   }

@@ -28,6 +28,7 @@ describe("owed daily close selection", () => {
     const derivedNow = Date.parse("2026-07-25T00:30:00.000Z");
     vi.spyOn(Date, "now").mockReturnValue(derivedNow);
     const queryArgs: Array<Record<string, unknown>> = [];
+    const mutationCalls: Array<Record<string, unknown>> = [];
     const scheduled: Array<Record<string, unknown>> = [];
     const ctx = {
       runQuery: async (_reference: unknown, args: unknown) => {
@@ -52,6 +53,7 @@ describe("owed daily close selection", () => {
         };
       },
       runMutation: async (_reference: unknown, args: unknown) => {
+        mutationCalls.push(args as Record<string, unknown>);
         const mutationArgs = args as { storeId: string };
         if (mutationArgs.storeId === "store-first") {
           throw new Error("first store failed");
@@ -70,6 +72,22 @@ describe("owed daily close selection", () => {
       mode: "apply",
     });
     expect(queryArgs).toEqual([{ now: derivedNow }]);
+    expect(mutationCalls).toEqual([
+      {
+        asOfOperatingDate: AS_OF,
+        mode: "apply",
+        notifyDailyManagerReport: true,
+        operatingDate: "2026-07-21",
+        storeId: "store-first",
+      },
+      {
+        asOfOperatingDate: AS_OF,
+        mode: "apply",
+        notifyDailyManagerReport: true,
+        operatingDate: "2026-07-22",
+        storeId: "store-second",
+      },
+    ]);
     expect(scheduled).toEqual([
       {
         cursor: "tail-cursor",
