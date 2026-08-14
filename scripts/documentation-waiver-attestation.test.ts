@@ -19,12 +19,18 @@ const expected = {
 };
 
 const attestation: DocumentationWaiverAttestation = {
-  schemaVersion: 1,
+  schemaVersion: 4,
   kind: "documentation_waiver",
   ...expected,
   obligationId: "documentation.current",
   waivedFindingCodes: ["compound-solution", "landed-change-report"],
   requestedBy: "waiver-requester",
+  requestedByType: "User",
+  relayedBy: "github-actions[bot]",
+  relayWorkflowRunId: 455,
+  passkeyApprovalId: "approval-1",
+  passkeyCredentialId: "credential-1",
+  passkeyApprovedAt: 1_723_659_000_000,
   approvedBy: "human-reviewer",
   approvalEnvironment: "athena-documentation-waiver",
   reason: "Documentation is intentionally deferred for this candidate.",
@@ -38,7 +44,17 @@ const workflowRun = {
   path: ".github/workflows/athena-documentation-waiver.yml",
   headBranch: "main",
   conclusion: "success",
-  actor: "waiver-requester",
+  actor: "github-actions[bot]",
+  actorType: "Bot",
+  relay: {
+    id: 455,
+    event: "workflow_dispatch",
+    path: ".github/workflows/athena-documentation-waiver-request.yml",
+    headBranch: "main",
+    conclusion: "success",
+    actor: "waiver-requester",
+    actorType: "User",
+  },
   approvals: [
     {
       state: "approved",
@@ -94,6 +110,12 @@ describe("verifyDocumentationWaiverAttestation", () => {
     ["wrong workflow", { path: ".github/workflows/other.yml" }],
     ["wrong event", { event: "pull_request" }],
     ["wrong actor", { actor: "automation" }],
+    ["human requester", { actorType: "User" }],
+    ["unapproved bot requester", { actor: "other-app[bot]" }],
+    [
+      "wrong relay workflow",
+      { relay: { ...workflowRun.relay, path: ".github/workflows/other.yml" } },
+    ],
     ["no environment approval", { approvals: [] }],
     [
       "self approval",
@@ -136,7 +158,17 @@ describe("discoverDocumentationWaiverAttestation", () => {
           path: ".github/workflows/athena-documentation-waiver.yml",
           head_branch: "main",
           conclusion: "success",
-          actor: { login: "waiver-requester" },
+          actor: { login: "github-actions[bot]", type: "Bot" },
+        };
+      }
+      if (path.endsWith("/actions/runs/455")) {
+        return {
+          id: 455,
+          event: "workflow_dispatch",
+          path: ".github/workflows/athena-documentation-waiver-request.yml",
+          head_branch: "main",
+          conclusion: "success",
+          actor: { login: "waiver-requester", type: "User" },
         };
       }
       if (path.endsWith("/actions/runs/456/approvals")) {
@@ -216,13 +248,23 @@ describe("discoverDocumentationWaiverAttestation", () => {
           },
         ];
       }
+      if (path.endsWith("/actions/runs/455")) {
+        return {
+          id: 455,
+          event: "workflow_dispatch",
+          path: ".github/workflows/athena-documentation-waiver-request.yml",
+          head_branch: "main",
+          conclusion: "success",
+          actor: { login: "waiver-requester", type: "User" },
+        };
+      }
       return {
         id: 456,
         event: "workflow_dispatch",
         path: ".github/workflows/athena-documentation-waiver.yml",
         head_branch: "main",
         conclusion: "success",
-        actor: { login: "waiver-requester" },
+        actor: { login: "github-actions[bot]", type: "Bot" },
       };
     };
 

@@ -43,6 +43,10 @@ on:
         description: Human-readable reason for the exception.
         required: true
         type: string
+      relay_run_id:
+        description: Trusted default-branch relay workflow run.
+        required: true
+        type: string
 
 permissions:
   actions: read
@@ -50,14 +54,27 @@ permissions:
   contents: read
   pull-requests: read
 
+concurrency:
+  group: documentation-waiver-issuer-${{ inputs.head_sha }}
+  cancel-in-progress: true
+
 jobs:
   publish-waiver:
     name: Publish candidate-bound documentation waiver
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment: athena-documentation-waiver
 
     steps:
-      - name: Verify protected-environment approval
+      - name: Download immutable relay request
+        uses: actions/download-artifact@v4
+        with:
+          name: athena-documentation-waiver-request-${{ inputs.relay_run_id }}
+          path: relay-request
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.relay_run_id }}
+
+      - name: Verify relay and protected-environment approval
         uses: actions/github-script@v8
         env:
           INPUT_REPOSITORY: ${{ inputs.repository }}
@@ -70,6 +87,7 @@ jobs:
           INPUT_IDENTITY_VERSION: ${{ inputs.identity_version }}
           INPUT_WAIVED_FINDING_CODES: ${{ inputs.waived_finding_codes }}
           INPUT_REASON: ${{ inputs.reason }}
+          INPUT_RELAY_RUN_ID: ${{ inputs.relay_run_id }}
         with:
           script: |
             const repository = process.env.INPUT_REPOSITORY;
@@ -81,14 +99,48 @@ jobs:
             const deliverableTreeSha = process.env.INPUT_DELIVERABLE_TREE_SHA;
             const identityVersion = process.env.INPUT_IDENTITY_VERSION;
             const reason = process.env.INPUT_REASON?.trim();
+            const relayRunId = Number(process.env.INPUT_RELAY_RUN_ID);
+            const trustedRequester = "github-actions[bot]";
             const allowedCodes = new Set(["compound-solution", "landed-change-report"]);
             const waivedFindingCodes = JSON.parse(process.env.INPUT_WAIVED_FINDING_CODES ?? "null");
-
+            const relayEnvelope = JSON.parse(
+              require("node:fs").readFileSync(
+                "relay-request/documentation-waiver-request.json",
+                "utf8",
+              ),
+            );
+            const relayedInputs = relayEnvelope.inputs;
+            const expectedRelayedInputs = {
+              repository,
+              pr_number: process.env.INPUT_PR_NUMBER,
+              head_sha: headSha,
+              base_ref: baseRef,
+              base_sha: baseSha,
+              diff_base_sha: diffBaseSha,
+              deliverable_tree_sha: deliverableTreeSha,
+              identity_version: identityVersion,
+              waived_finding_codes: process.env.INPUT_WAIVED_FINDING_CODES,
+              reason: process.env.INPUT_REASON,
+            };
+            const relayedInputKeys = Object.keys(relayedInputs).sort();
+            const expectedRelayedInputKeys = Object.keys(expectedRelayedInputs).sort();
+            const relayedInputsMatch =
+              JSON.stringify(relayedInputKeys) ===
+                JSON.stringify(expectedRelayedInputKeys) &&
+              expectedRelayedInputKeys.every(
+                (key) => relayedInputs[key] === expectedRelayedInputs[key],
+              );
             if (repository !== `${context.repo.owner}/${context.repo.repo}`) {
               core.setFailed("The requested repository does not match this workflow repository.");
               return;
             }
-            if (!Number.isInteger(prNumber) || prNumber < 1 || !reason) {
+            if (
+              !Number.isInteger(prNumber) ||
+              prNumber < 1 ||
+              !Number.isInteger(relayRunId) ||
+              relayRunId < 1 ||
+              !reason
+            ) {
               core.setFailed("The waiver request is missing its PR number or reason.");
               return;
             }
@@ -105,6 +157,36 @@ jobs:
               "GET /repos/{owner}/{repo}/actions/runs/{run_id}/approvals",
               { ...context.repo, run_id: context.runId },
             );
+            const { data: workflowRun } = await github.rest.actions.getWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
+            if (
+              workflowRun.actor?.login !== trustedRequester ||
+              workflowRun.actor?.type !== "Bot"
+            ) {
+              core.setFailed(
+                "Only the repository-scoped GitHub Actions relay may request a portable waiver.",
+              );
+              return;
+            }
+            const { data: relayRun } = await github.rest.actions.getWorkflowRun({
+              ...context.repo,
+              run_id: relayRunId,
+            });
+            if (
+              relayRun.event !== "workflow_dispatch" ||
+              relayRun.path !== ".github/workflows/athena-documentation-waiver-request.yml" ||
+              relayRun.head_branch !== "main" ||
+              relayRun.conclusion !== "success" ||
+              relayRun.actor?.type !== "User" ||
+              !relayedInputsMatch
+            ) {
+              core.setFailed(
+                "The waiver was not relayed by the trusted successful default-branch request workflow.",
+              );
+              return;
+            }
             const approval = [...reviews].reverse().find(
               (review) =>
                 review.state === "approved" &&
@@ -142,8 +224,8 @@ jobs:
               return;
             }
 
-            const attestation = {
-              schemaVersion: 1,
+            const verifiedContext = {
+              schemaVersion: 4,
               kind: "documentation_waiver",
               repository,
               prNumber,
@@ -155,7 +237,11 @@ jobs:
               diffBaseSha,
               obligationId: "documentation.current",
               waivedFindingCodes: [...new Set(waivedFindingCodes)].sort(),
-              requestedBy: context.actor,
+              requestedBy: relayRun.actor.login,
+              requestedByType: relayRun.actor.type,
+              relayedBy: workflowRun.actor.login,
+              relayWorkflowRunId: relayRunId,
+              passkeyApprovalId: relayEnvelope.passkeyApprovalId,
               approvedBy: approval.user.login,
               approvalEnvironment: "athena-documentation-waiver",
               reason,
@@ -163,10 +249,73 @@ jobs:
               createdAt: new Date().toISOString(),
             };
             require("node:fs").writeFileSync(
-              "documentation-waiver-attestation.json",
-              `${JSON.stringify(attestation, null, 2)}\n`,
+              "verified-waiver-context.json",
+              `${JSON.stringify(verifiedContext, null, 2)}\n`,
               { encoding: "utf8", mode: 0o600 },
             );
+
+      - name: Consume verified iPhone passkey approval
+        env:
+          WAIVER_API_URL: ${{ vars.ATHENA_WAIVER_API_URL }}
+          WAIVER_BROKER_SECRET: ${{ secrets.ATHENA_WAIVER_BROKER_SECRET }}
+        run: |
+          set -euo pipefail
+          approval_id="$(jq -er '.passkeyApprovalId' verified-waiver-context.json)"
+          jq '{
+            repository,
+            prNumber,
+            headSha,
+            baseRef,
+            baseSha: .baseTipSha,
+            diffBaseSha,
+            deliverableTreeSha,
+            identityVersion,
+            waivedFindingCodes,
+            reason
+          }' verified-waiver-context.json > consume-candidate.json
+          curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            --retry 3 --retry-all-errors --retry-delay 2 \
+            --request POST \
+            --header "Authorization: Bearer $WAIVER_BROKER_SECRET" \
+            --header "Content-Type: application/json" \
+            --data-binary @consume-candidate.json \
+            "$WAIVER_API_URL/requests/$approval_id/consume" \
+            > passkey-approval-receipt.json
+
+      - name: Finalize passkey-bound attestation
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const context = JSON.parse(fs.readFileSync("verified-waiver-context.json", "utf8"));
+          const receipt = JSON.parse(fs.readFileSync("passkey-approval-receipt.json", "utf8"));
+          const approved = receipt.candidate ?? {};
+          const matches =
+            receipt.approvalId === context.passkeyApprovalId &&
+            approved.repository === context.repository &&
+            approved.prNumber === context.prNumber &&
+            approved.headSha === context.headSha &&
+            approved.baseRef === context.baseRef &&
+            approved.baseSha === context.baseTipSha &&
+            approved.diffBaseSha === context.diffBaseSha &&
+            approved.deliverableTreeSha === context.deliverableTreeSha &&
+            approved.identityVersion === context.identityVersion &&
+            JSON.stringify(approved.waivedFindingCodes) === JSON.stringify(context.waivedFindingCodes) &&
+            approved.reason === context.reason &&
+            typeof receipt.credentialId === "string" && receipt.credentialId.length > 0 &&
+            Number.isFinite(receipt.approvedAt);
+          if (!matches) throw new Error("The consumed passkey approval does not match the verified candidate.");
+          const attestation = {
+            ...context,
+            passkeyCredentialId: receipt.credentialId,
+            passkeyApprovedAt: receipt.approvedAt,
+          };
+          fs.writeFileSync(
+            "documentation-waiver-attestation.json",
+            `${JSON.stringify(attestation, null, 2)}\n`,
+            { encoding: "utf8", mode: 0o600 },
+          );
+          NODE
       - name: Publish immutable waiver attestation
         uses: actions/upload-artifact@v4
         with:

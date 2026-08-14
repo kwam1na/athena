@@ -37,6 +37,7 @@ import { colorRoutes } from "./http/domains/core/routes/colors";
 import { savedBagRoutes } from "./http/domains/customerChannel/routes/savedBag";
 import { mtnMomoRoutes } from "./http/domains/moneyMovement/routes";
 import { whatsappMessagingRoutes } from "./http/domains/customerMessaging/routes/whatsapp";
+import { harnessWaiverRoutes } from "./http/domains/core/routes/harnessWaivers";
 
 const app: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -79,6 +80,7 @@ app.route("/analytics", analyticsRoutes);
 app.route("/tracking-events", trackingEventRoutes);
 app.route("/marketing/walkthrough-requests", walkthroughRequestRoutes);
 app.route("/marketing/funnel-events", landingFunnelEventRoutes);
+app.route("/harness/waivers", harnessWaiverRoutes);
 
 app.route("/auth", authRoutes);
 

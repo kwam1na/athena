@@ -22,6 +22,7 @@ export const ATHENA_VIEW_SURFACE_CATALOG = {
       "/:orgUrlSlug/settings",
       "/:orgUrlSlug/settings/organization",
       "/:orgUrlSlug/settings/stores/:storeUrlSlug",
+      "/:orgUrlSlug/settings/waiver-passkey",
     ],
   },
   "store.entry": {

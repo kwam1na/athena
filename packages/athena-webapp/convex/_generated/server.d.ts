@@ -25,6 +25,11 @@ import type { DataModel } from "./dataModel.js";
  * Typesafe environment variables declared in `convex.config.ts`.
  */
 type Env = {
+  readonly ATHENA_WAIVER_BROKER_SECRET: string | undefined;
+  readonly ATHENA_WAIVER_ENROLLMENT_TOKEN_HASH: string | undefined;
+  readonly ATHENA_WAIVER_ORIGIN: string | undefined;
+  readonly ATHENA_WAIVER_REVIEWER_EMAIL: string | undefined;
+  readonly ATHENA_WAIVER_RP_ID: string | undefined;
   readonly LANDING_FUNNEL_HOURLY_LIMIT: string | undefined;
   readonly LANDING_FUNNEL_INGRESS_DISABLED: string | undefined;
   readonly MAILERSEND_API_KEY: string | undefined;

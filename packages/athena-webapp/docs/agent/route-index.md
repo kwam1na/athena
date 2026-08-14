@@ -46,6 +46,8 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/privacy.test.tsx`](../../src/routes/privacy.test.tsx)
 - [`src/routes/privacy.tsx`](../../src/routes/privacy.tsx)
 - [`src/routes/register-interest.tsx`](../../src/routes/register-interest.tsx)
+- [`src/routes/waiver.approve.test.tsx`](../../src/routes/waiver.approve.test.tsx)
+- [`src/routes/waiver.approve.tsx`](../../src/routes/waiver.approve.tsx)
 - [`src/routes/walkthrough.test.tsx`](../../src/routes/walkthrough.test.tsx)
 - [`src/routes/walkthrough.tsx`](../../src/routes/walkthrough.tsx)
 
@@ -55,6 +57,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/_authed/$orgUrlSlug/settings/index.tsx`](../../src/routes/_authed/$orgUrlSlug/settings/index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/settings/organization/index.tsx`](../../src/routes/_authed/$orgUrlSlug/settings/organization/index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug.tsx`](../../src/routes/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug.tsx)
+- [`src/routes/_authed/$orgUrlSlug/settings/waiver-passkey.tsx`](../../src/routes/_authed/$orgUrlSlug/settings/waiver-passkey.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/assets.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/assets.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.$bagId.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.$bagId.tsx)

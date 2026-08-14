@@ -21,12 +21,14 @@ import { Route as WalkthroughRouteImport } from './routes/walkthrough'
 import { Route as DocsIndexRouteImport } from './routes/docs.index'
 import { Route as JoinTeamIndexRouteImport } from './routes/join-team.index'
 import { Route as LoginLayoutRouteImport } from './routes/login/_layout'
+import { Route as WaiverApproveRouteImport } from './routes/waiver.approve'
 import { Route as AuthedOrgUrlSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/index'
 import { Route as DocsReportsIndexRouteImport } from './routes/docs.reports.index'
 import { Route as DocsReportsSlugRouteImport } from './routes/docs.reports.$slug'
 import { Route as DocsSolutionsIndexRouteImport } from './routes/docs.solutions.index'
 import { Route as LoginLayoutIndexRouteImport } from './routes/login/_layout.index'
 import { Route as AuthedOrgUrlSlugSettingsIndexRouteImport } from './routes/_authed/$orgUrlSlug/settings/index'
+import { Route as AuthedOrgUrlSlugSettingsWaiverPasskeyRouteImport } from './routes/_authed/$orgUrlSlug/settings/waiver-passkey'
 import { Route as AuthedOrgUrlSlugStoreIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/index'
 import { Route as DocsSolutionsCategorySlugRouteImport } from './routes/docs.solutions.$category.$slug'
 import { Route as AuthedOrgUrlSlugSettingsOrganizationIndexRouteImport } from './routes/_authed/$orgUrlSlug/settings/organization/index'
@@ -168,6 +170,11 @@ const LoginLayoutRoute = LoginLayoutRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WaiverApproveRoute = WaiverApproveRouteImport.update({
+  id: '/waiver/approve',
+  path: '/waiver/approve',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthedOrgUrlSlugIndexRoute = AuthedOrgUrlSlugIndexRouteImport.update({
   id: '/$orgUrlSlug/',
   path: '/$orgUrlSlug/',
@@ -197,6 +204,12 @@ const AuthedOrgUrlSlugSettingsIndexRoute =
   AuthedOrgUrlSlugSettingsIndexRouteImport.update({
     id: '/$orgUrlSlug/settings/',
     path: '/$orgUrlSlug/settings/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugSettingsWaiverPasskeyRoute =
+  AuthedOrgUrlSlugSettingsWaiverPasskeyRouteImport.update({
+    id: '/$orgUrlSlug/settings/waiver-passkey',
+    path: '/$orgUrlSlug/settings/waiver-passkey',
     getParentRoute: () => AuthedRoute,
   } as any)
 const AuthedOrgUrlSlugStoreIndexRoute =
@@ -719,6 +732,7 @@ export interface FileRoutesByFullPath {
   '/register-interest': typeof RegisterInterestRoute
   '/walkthrough': typeof WalkthroughRoute
   '/login': typeof LoginLayoutRouteWithChildren
+  '/waiver/approve': typeof WaiverApproveRoute
   '/docs/': typeof DocsIndexRoute
   '/join-team/': typeof JoinTeamIndexRoute
   '/docs/reports/$slug': typeof DocsReportsSlugRoute
@@ -726,6 +740,7 @@ export interface FileRoutesByFullPath {
   '/docs/reports/': typeof DocsReportsIndexRoute
   '/docs/solutions/': typeof DocsSolutionsIndexRoute
   '/login/': typeof LoginLayoutIndexRoute
+  '/$orgUrlSlug/settings/waiver-passkey': typeof AuthedOrgUrlSlugSettingsWaiverPasskeyRoute
   '/docs/solutions/$category/$slug': typeof DocsSolutionsCategorySlugRoute
   '/$orgUrlSlug/settings/': typeof AuthedOrgUrlSlugSettingsIndexRoute
   '/$orgUrlSlug/store/': typeof AuthedOrgUrlSlugStoreIndexRoute
@@ -817,6 +832,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/register-interest': typeof RegisterInterestRoute
   '/walkthrough': typeof WalkthroughRoute
+  '/waiver/approve': typeof WaiverApproveRoute
   '/docs': typeof DocsIndexRoute
   '/join-team': typeof JoinTeamIndexRoute
   '/docs/reports/$slug': typeof DocsReportsSlugRoute
@@ -824,6 +840,7 @@ export interface FileRoutesByTo {
   '/docs/reports': typeof DocsReportsIndexRoute
   '/docs/solutions': typeof DocsSolutionsIndexRoute
   '/login': typeof LoginLayoutIndexRoute
+  '/$orgUrlSlug/settings/waiver-passkey': typeof AuthedOrgUrlSlugSettingsWaiverPasskeyRoute
   '/docs/solutions/$category/$slug': typeof DocsSolutionsCategorySlugRoute
   '/$orgUrlSlug/settings': typeof AuthedOrgUrlSlugSettingsIndexRoute
   '/$orgUrlSlug/store': typeof AuthedOrgUrlSlugStoreIndexRoute
@@ -917,6 +934,7 @@ export interface FileRoutesById {
   '/register-interest': typeof RegisterInterestRoute
   '/walkthrough': typeof WalkthroughRoute
   '/login/_layout': typeof LoginLayoutRouteWithChildren
+  '/waiver/approve': typeof WaiverApproveRoute
   '/docs/': typeof DocsIndexRoute
   '/join-team/': typeof JoinTeamIndexRoute
   '/docs/reports/$slug': typeof DocsReportsSlugRoute
@@ -924,6 +942,7 @@ export interface FileRoutesById {
   '/docs/reports/': typeof DocsReportsIndexRoute
   '/docs/solutions/': typeof DocsSolutionsIndexRoute
   '/login/_layout/': typeof LoginLayoutIndexRoute
+  '/_authed/$orgUrlSlug/settings/waiver-passkey': typeof AuthedOrgUrlSlugSettingsWaiverPasskeyRoute
   '/docs/solutions/$category/$slug': typeof DocsSolutionsCategorySlugRoute
   '/_authed/$orgUrlSlug/settings/': typeof AuthedOrgUrlSlugSettingsIndexRoute
   '/_authed/$orgUrlSlug/store/': typeof AuthedOrgUrlSlugStoreIndexRoute
@@ -1019,6 +1038,7 @@ export interface FileRouteTypes {
     | '/register-interest'
     | '/walkthrough'
     | '/login'
+    | '/waiver/approve'
     | '/docs/'
     | '/join-team/'
     | '/docs/reports/$slug'
@@ -1026,6 +1046,7 @@ export interface FileRouteTypes {
     | '/docs/reports/'
     | '/docs/solutions/'
     | '/login/'
+    | '/$orgUrlSlug/settings/waiver-passkey'
     | '/docs/solutions/$category/$slug'
     | '/$orgUrlSlug/settings/'
     | '/$orgUrlSlug/store/'
@@ -1117,6 +1138,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/register-interest'
     | '/walkthrough'
+    | '/waiver/approve'
     | '/docs'
     | '/join-team'
     | '/docs/reports/$slug'
@@ -1124,6 +1146,7 @@ export interface FileRouteTypes {
     | '/docs/reports'
     | '/docs/solutions'
     | '/login'
+    | '/$orgUrlSlug/settings/waiver-passkey'
     | '/docs/solutions/$category/$slug'
     | '/$orgUrlSlug/settings'
     | '/$orgUrlSlug/store'
@@ -1216,6 +1239,7 @@ export interface FileRouteTypes {
     | '/register-interest'
     | '/walkthrough'
     | '/login/_layout'
+    | '/waiver/approve'
     | '/docs/'
     | '/join-team/'
     | '/docs/reports/$slug'
@@ -1223,6 +1247,7 @@ export interface FileRouteTypes {
     | '/docs/reports/'
     | '/docs/solutions/'
     | '/login/_layout/'
+    | '/_authed/$orgUrlSlug/settings/waiver-passkey'
     | '/docs/solutions/$category/$slug'
     | '/_authed/$orgUrlSlug/settings/'
     | '/_authed/$orgUrlSlug/store/'
@@ -1318,6 +1343,7 @@ export interface RootRouteChildren {
   RegisterInterestRoute: typeof RegisterInterestRoute
   WalkthroughRoute: typeof WalkthroughRoute
   LoginLayoutRoute: typeof LoginLayoutRouteWithChildren
+  WaiverApproveRoute: typeof WaiverApproveRoute
   JoinTeamIndexRoute: typeof JoinTeamIndexRoute
 }
 
@@ -1407,6 +1433,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginLayoutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/waiver/approve': {
+      id: '/waiver/approve'
+      path: '/waiver/approve'
+      fullPath: '/waiver/approve'
+      preLoaderRoute: typeof WaiverApproveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authed/$orgUrlSlug/': {
       id: '/_authed/$orgUrlSlug/'
       path: '/$orgUrlSlug'
@@ -1447,6 +1480,13 @@ declare module '@tanstack/react-router' {
       path: '/$orgUrlSlug/settings'
       fullPath: '/$orgUrlSlug/settings/'
       preLoaderRoute: typeof AuthedOrgUrlSlugSettingsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/settings/waiver-passkey': {
+      id: '/_authed/$orgUrlSlug/settings/waiver-passkey'
+      path: '/$orgUrlSlug/settings/waiver-passkey'
+      fullPath: '/$orgUrlSlug/settings/waiver-passkey'
+      preLoaderRoute: typeof AuthedOrgUrlSlugSettingsWaiverPasskeyRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/store/': {
@@ -2093,6 +2133,7 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteWithCh
 
 interface AuthedRouteChildren {
   AuthedOrgUrlSlugIndexRoute: typeof AuthedOrgUrlSlugIndexRoute
+  AuthedOrgUrlSlugSettingsWaiverPasskeyRoute: typeof AuthedOrgUrlSlugSettingsWaiverPasskeyRoute
   AuthedOrgUrlSlugSettingsIndexRoute: typeof AuthedOrgUrlSlugSettingsIndexRoute
   AuthedOrgUrlSlugStoreIndexRoute: typeof AuthedOrgUrlSlugStoreIndexRoute
   AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute: typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
@@ -2170,6 +2211,8 @@ interface AuthedRouteChildren {
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedOrgUrlSlugIndexRoute: AuthedOrgUrlSlugIndexRoute,
+  AuthedOrgUrlSlugSettingsWaiverPasskeyRoute:
+    AuthedOrgUrlSlugSettingsWaiverPasskeyRoute,
   AuthedOrgUrlSlugSettingsIndexRoute: AuthedOrgUrlSlugSettingsIndexRoute,
   AuthedOrgUrlSlugStoreIndexRoute: AuthedOrgUrlSlugStoreIndexRoute,
   AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute:
@@ -2360,6 +2403,7 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterInterestRoute: RegisterInterestRoute,
   WalkthroughRoute: WalkthroughRoute,
   LoginLayoutRoute: LoginLayoutRouteWithChildren,
+  WaiverApproveRoute: WaiverApproveRoute,
   JoinTeamIndexRoute: JoinTeamIndexRoute,
 }
 export const routeTree = rootRouteImport

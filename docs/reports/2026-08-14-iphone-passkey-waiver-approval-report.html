@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>iPhone Passkey Approval for Documentation Waivers</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="4c21a0f5abedebcf481e373fab2f332fe7eb0bd5bf0f5d744997cbda834393f0">
+  <header data-report-section="header">
+    <h1>iPhone Passkey Approval for Documentation Waivers</h1>
+    <p>A candidate-bound human-presence ceremony secured by a separately bootstrapped reviewer passkey</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch codex/waiver-app-dispatch</li>
+      <li>Focused tests green</li>
+      <li>Merge and deploy pending</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Status</dt><dd>Delivery candidate</dd>
+      <dt>Merge</dt><dd>Pending</dd>
+      <dt>Production</dt><dd>Pending</dd>
+      <dt>Enrollment</dt><dd>Required after deploy</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>After a trusted one-time enrollment from the reviewer’s iPhone, documentation waivers require a user-verified assertion from that sole passkey. Enrollment additionally requires a one-time secret chosen and configured outside agent runtimes. Agents retain full ability to prepare and dispatch a request, but GitHub credentials, a PTY, and possession of the approval URL do not provide approval authority.</p>
+      <p>The assertion is short-lived, single-use, and bound to the exact repository, pull request, head, base, merge base, deliverable tree, finding codes, and reason. The protected GitHub Environment remains a second review layer, not the proof of human presence. WebAuthn verifies a platform authenticator and user verification; it does not cryptographically attest the Apple device make.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why the prior boundary was insufficient</h2>
+      <p>A GitHub Environment approval proves that an authorized account approved a job. It does not prove a human was present when an agent can use that account’s token or call the same API. Likewise, hiding an Actions-write token behind a CLI only hides a capability; it does not narrow it.</p>
+      <p>The required boundary is an authentication ceremony that performs local user verification and signs the exact server challenge without exposing the private credential to the agent runtime.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model</h2>
+      <p>Think of the workflow as a sealed envelope. The agent may fill in the candidate details and deliver the envelope. Convex creates a one-time seal for exactly those details. Face ID unlocks the reviewer’s passkey on the iPhone and produces the seal. GitHub and CI then verify that the sealed envelope, relay run, issuer run, and live pull request still describe the same candidate.</p>
+      <pre><code>request != approval
+agent -&gt; candidate request
+iPhone Face ID -&gt; user-verified passkey assertion
+relay -&gt; immutable artifact
+issuer + CI -&gt; exact-candidate and provenance verification</code></pre>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>Before: the dispatcher entered a protected GitHub Environment and a repository reviewer approved the job. An agent holding that reviewer’s GitHub credential could potentially reproduce the approval API call.</p>
+      <p>After: the unprivileged relay first waits for a candidate-bound WebAuthn assertion from the enrolled iPhone passkey. Only an approved request can dispatch the issuer. The issuer consumes the approval once, verifies the immutable relay artifact, and still passes through the protected Environment as defense in depth.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what did not</h2>
+      <ul>
+        <li>Added one-time authenticated passkey enrollment for the configured reviewer.</li>
+        <li>Added a public tokenized approval page; the token locates a request but cannot approve it.</li>
+        <li>Added Convex challenge, credential, approval, expiry, counter, and consumption storage.</li>
+        <li>Added a default-branch relay with narrow job-scoped Actions permission and immutable typed artifact.</li>
+        <li>Upgraded waiver attestations to schema v4 with relay and passkey provenance.</li>
+        <li>Kept local waivers, ordinary documentation satisfaction, exact finding coverage, and candidate drift checks unchanged.</li>
+        <li>Kept the protected GitHub Environment as an additional reviewer checkpoint.</li>
+      </ul>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <ul>
+        <li>The path fails closed until production configuration, backend deployment, and first trusted iPhone enrollment are complete.</li>
+        <li>The first enrollment is a sensitive bootstrap ceremony: it requires the configured Athena reviewer identity plus a separately held one-time secret, and the bootstrap hash is removed afterward.</li>
+        <li>WebAuthn enforces platform attachment and user verification but does not prove the authenticator is Apple hardware; using the intended iPhone is an operational requirement.</li>
+        <li>There is deliberately no self-service replacement or recovery fallback after enrollment.</li>
+        <li>The pending authentication expires after 15 minutes; successful Face ID opens a separate 10-minute issuer-consumption window.</li>
+        <li>Consumption is idempotent only for the same exact candidate, so transient publication retries reuse the same receipt without authorizing different work; any candidate, base, finding, workflow, actor, or artifact drift rejects the waiver.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and release status</h2>
+      <p>Current candidate evidence: 29 workflow/CLI/attestation tests and 25 passkey-policy/storage/broker/rendered-consent tests pass; Convex code generation, full webapp TypeScript checking, workflow parsing, documentation links, Graphify rebuild, and diff whitespace checks pass. Independent security, correctness, testing, adversarial, report-quality, and agent-native reviews are green. The final merge-grade pr:athena gate, pull-request CI, merge, production deploy, smoke checks, and one-time iPhone enrollment remain pending at report creation.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Human operating procedure</h2>
+      <ul>
+        <li>Choose a one-time enrollment secret outside agent runtimes and configure only its lowercase SHA-256 digest in Convex production.</li>
+        <li>After production deploy, sign in to Athena on the reviewer’s iPhone and open the organization settings passkey page.</li>
+        <li>Enter the one-time secret and enroll with Face ID; Athena stores the public credential only, then the bootstrap hash should be removed.</li>
+        <li>For a waiver, let a human or agent run the waiver request command and open the approval URL from the workflow summary on the iPhone.</li>
+        <li>Verify every displayed candidate field, finding code, and reason, then approve with Face ID.</li>
+        <li>Complete the separate GitHub Environment review when the protected issuer requests it.</li>
+        <li>If the candidate changes or the request expires, prepare and approve a new request.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>.github/workflows/athena-documentation-waiver-request.yml</code></td><td>Creates and polls the passkey request, publishes the immutable relay artifact, and narrowly dispatches the issuer.</td></tr>
+        <tr><td><code>.github/workflows/athena-documentation-waiver.yml</code></td><td>Consumes the passkey approval and verifies relay, environment, and exact-candidate provenance before issuance.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/harnessWaiver/passkeys.ts</code></td><td>Generates and verifies user-verified WebAuthn registration and authentication ceremonies.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/harnessWaiver/storage.ts</code></td><td>Makes registration and approval state expiring, counter-checked, and single-use.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/http/domains/core/routes/harnessWaivers.ts</code></td><td>Exposes the narrowly authenticated workflow broker without giving callers a GitHub Actions-write credential.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/routes/_authed/$orgUrlSlug/settings/waiver-passkey.tsx</code></td><td>Provides the authenticated one-time iPhone enrollment ceremony.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/routes/waiver.approve.tsx</code></td><td>Displays exact candidate details and invokes Face ID approval from the tokenized request.</td></tr>
+        <tr><td><code>scripts/documentation-waiver-attestation.ts</code></td><td>Defines schema-v4 relay/passkey provenance and independently re-fetches trusted workflow state in CI.</td></tr>
+        <tr><td><code>docs/harness.md</code></td><td>Documents preparation, enrollment, approval, configuration, and fail-closed boundaries.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>After trusted enrollment, what proves human presence for a waiver?</p>
+        <ol data-quiz-options>
+          <li>The workflow dispatcher identity</li>
+          <li data-quiz-correct>A user-verified assertion from the enrolled reviewer passkey</li>
+          <li>An interactive PTY</li>
+          <li>The approval URL</li>
+        </ol>
+        <p data-quiz-explanation>User verification unlocks the private passkey locally and WebAuthn verifies the signed challenge; the other items can all be available to an agent.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>May an agent dispatch a waiver request?</p>
+        <ol data-quiz-options>
+          <li>No, dispatch itself must be human-only</li>
+          <li data-quiz-correct>Yes, because request and approval are separate authorities</li>
+          <li>Only from an iPhone</li>
+          <li>Only after CI has passed</li>
+        </ol>
+        <p data-quiz-explanation>Agent action parity is preserved for preparation and dispatch, while the passkey ceremony is the intentional human-only boundary.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What authority does possession of the public approval URL grant?</p>
+        <ol data-quiz-options>
+          <li>It approves the waiver</li>
+          <li>It resets the passkey</li>
+          <li data-quiz-correct>It locates the candidate request but grants no approval authority</li>
+          <li>It bypasses the Environment</li>
+        </ol>
+        <p data-quiz-explanation>The high-entropy token selects a pending request; verification still requires the enrolled credential and user verification.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is the approval candidate-bound?</p>
+        <ol data-quiz-options>
+          <li>So one approval can cover future commits</li>
+          <li data-quiz-correct>So the signed decision applies only to the exact PR identity and findings shown</li>
+          <li>So GitHub can skip checkout</li>
+          <li>So local waivers become portable</li>
+        </ol>
+        <p data-quiz-explanation>Binding repository, PR, commits, tree, findings, and reason prevents reuse after drift or for a different obligation.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the protected GitHub Environment now?</p>
+        <ol data-quiz-options>
+          <li>The sole proof of human presence</li>
+          <li data-quiz-correct>A defense-in-depth reviewer checkpoint</li>
+          <li>Unused legacy configuration</li>
+          <li>A replacement for WebAuthn</li>
+        </ol>
+        <p data-quiz-explanation>The passkey assertion supplies human presence; the Environment remains a separate safety layer.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens when an approved request is consumed?</p>
+        <ol data-quiz-options>
+          <li>It can be replayed until merge</li>
+          <li data-quiz-correct>It becomes single-use and a later retry needs a fresh request</li>
+          <li>It enrolls another credential</li>
+          <li>It waives every documentation finding</li>
+        </ol>
+        <p data-quiz-explanation>Consumption prevents replay; a failed later issuer attempt must start a newly approved request.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What must happen immediately after production deployment?</p>
+        <ol data-quiz-options>
+          <li>Disable the Environment</li>
+          <li data-quiz-correct>The configured reviewer uses the separately held bootstrap secret to enroll the intended iPhone passkey</li>
+          <li>Give the agent the credential export</li>
+          <li>Remove candidate checks</li>
+        </ol>
+        <p data-quiz-explanation>The system fails closed before enrollment; the separate secret protects the sensitive first-enrollment ceremony, and its configured hash is removed afterward.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where is the passkey private key stored?</p>
+        <ol data-quiz-options>
+          <li>In GitHub Actions secrets</li>
+          <li>In Convex</li>
+          <li data-quiz-correct>On the reviewer’s passkey provider/device; Athena stores the public credential</li>
+          <li>In the CLI receipt</li>
+        </ol>
+        <p data-quiz-explanation>WebAuthn verification uses the stored public key; the private credential remains protected by the iPhone and passkey ecosystem.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which change still invalidates an approved waiver?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Changing the PR head or base</li>
+          <li>Opening the link on an iPhone</li>
+          <li>Using JSON CLI output</li>
+          <li>Having a protected Environment</li>
+        </ol>
+        <p data-quiz-explanation>Head, base, merge-base, tree, or finding drift changes the candidate identity and fails verification.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Can the workflow-introducing bootstrap PR use this new waiver path?</p>
+        <ol data-quiz-options>
+          <li>Yes, workflows always use branch definitions</li>
+          <li data-quiz-correct>No, trusted dispatch workflows must already exist on the default branch</li>
+          <li>Yes, if Face ID succeeds</li>
+          <li>Only with an admin bypass</li>
+        </ol>
+        <p data-quiz-explanation>The request and issuer definitions must be trusted from the default branch, so this introducing candidate must satisfy ordinary documentation obligations.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>Session context historian</dt><dd>Recovered the harness admission model, traced the rejected token and GitHub-only authority attempts, confirmed the merged-PR/deploy/enrollment finish line, and found a stale authority sentence that was corrected.</dd>
+      <dt>Delivered diff explorer</dt><dd>Mapped workflow, CLI, Convex, UI, documentation, and generated-artifact changes; identified bootstrap, replay, recovery, and first-enrollment boundaries.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

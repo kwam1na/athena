@@ -1,0 +1,136 @@
+name: Request Athena Documentation Waiver
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository: { required: true, type: string }
+      pr_number: { required: true, type: string }
+      head_sha: { required: true, type: string }
+      base_ref: { required: true, type: string }
+      base_sha: { required: true, type: string }
+      diff_base_sha: { required: true, type: string }
+      deliverable_tree_sha: { required: true, type: string }
+      identity_version: { required: true, type: string }
+      waived_finding_codes: { required: true, type: string }
+      reason: { required: true, type: string }
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: documentation-waiver-request-${{ inputs.head_sha }}
+  cancel-in-progress: true
+
+jobs:
+  relay-request:
+    name: Relay waiver request as repository automation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Create iPhone passkey approval request
+        env:
+          WAIVER_API_URL: ${{ vars.ATHENA_WAIVER_API_URL }}
+          WAIVER_BROKER_SECRET: ${{ secrets.ATHENA_WAIVER_BROKER_SECRET }}
+          WAIVER_INPUTS: ${{ toJSON(inputs) }}
+        run: |
+          set -euo pipefail
+          test -n "$WAIVER_API_URL"
+          test -n "$WAIVER_BROKER_SECRET"
+          node <<'NODE'
+          const inputs = JSON.parse(process.env.WAIVER_INPUTS);
+          const candidate = {
+            repository: inputs.repository,
+            prNumber: Number(inputs.pr_number),
+            headSha: inputs.head_sha,
+            baseRef: inputs.base_ref,
+            baseSha: inputs.base_sha,
+            diffBaseSha: inputs.diff_base_sha,
+            deliverableTreeSha: inputs.deliverable_tree_sha,
+            identityVersion: inputs.identity_version,
+            waivedFindingCodes: JSON.parse(inputs.waived_finding_codes),
+            reason: inputs.reason,
+          };
+          require("node:fs").writeFileSync("broker-candidate.json", JSON.stringify(candidate));
+          NODE
+          curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            --request POST \
+            --header "Authorization: Bearer $WAIVER_BROKER_SECRET" \
+            --header "Content-Type: application/json" \
+            --data-binary @broker-candidate.json \
+            "$WAIVER_API_URL/requests" > passkey-request.json
+          approval_url="$(jq -er '.approvalUrl' passkey-request.json)"
+          {
+            echo '### iPhone passkey approval required'
+            echo
+            echo "[Approve this exact candidate with Face ID]($approval_url)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for iPhone passkey approval
+        env:
+          WAIVER_API_URL: ${{ vars.ATHENA_WAIVER_API_URL }}
+          WAIVER_BROKER_SECRET: ${{ secrets.ATHENA_WAIVER_BROKER_SECRET }}
+        run: |
+          set -euo pipefail
+          approval_id="$(jq -er '.approvalId' passkey-request.json)"
+          for attempt in $(seq 1 90); do
+            status_json="$(curl --fail-with-body --silent --show-error \
+              --connect-timeout 10 --max-time 20 \
+              --header "Authorization: Bearer $WAIVER_BROKER_SECRET" \
+              "$WAIVER_API_URL/requests/$approval_id")" || {
+                sleep 10
+                continue
+              }
+            status="$(jq -er '.status' <<<"$status_json")" || {
+              sleep 10
+              continue
+            }
+            if [ "$status" = "approved" ]; then exit 0; fi
+            if [ "$status" != "pending" ]; then exit 1; fi
+            sleep 10
+          done
+          echo "Passkey approval timed out." >&2
+          exit 1
+
+      - name: Write immutable relay request
+        env:
+          WAIVER_INPUTS: ${{ toJSON(inputs) }}
+        run: |
+          umask 077
+          node <<'NODE'
+          const fs = require("node:fs");
+          fs.writeFileSync(
+            "documentation-waiver-request.json",
+            JSON.stringify({
+              inputs: JSON.parse(process.env.WAIVER_INPUTS),
+              passkeyApprovalId: JSON.parse(fs.readFileSync("passkey-request.json", "utf8")).approvalId,
+            }),
+          );
+          NODE
+
+      - name: Publish relay request
+        uses: actions/upload-artifact@v4
+        with:
+          name: athena-documentation-waiver-request-${{ github.run_id }}
+          path: documentation-waiver-request.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Dispatch protected waiver issuer
+        uses: actions/github-script@v8
+        env:
+          WAIVER_INPUTS: ${{ toJSON(inputs) }}
+        with:
+          script: |
+            const inputs = JSON.parse(process.env.WAIVER_INPUTS);
+            if (inputs.repository !== `${context.repo.owner}/${context.repo.repo}`) {
+              core.setFailed("The requested repository does not match this workflow repository.");
+              return;
+            }
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo,
+              workflow_id: "athena-documentation-waiver.yml",
+              ref: "main",
+              inputs: { ...inputs, relay_run_id: String(context.runId) },
+            });

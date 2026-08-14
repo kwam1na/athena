@@ -73,6 +73,10 @@ import type * as emails_WalkthroughRequestNotification from "../emails/Walkthrou
 import type * as emails_WeeklyManagerReport from "../emails/WeeklyManagerReport.js";
 import type * as emails_emailOperationalCtaStyles from "../emails/emailOperationalCtaStyles.js";
 import type * as env from "../env.js";
+import type * as harnessWaiver_config from "../harnessWaiver/config.js";
+import type * as harnessWaiver_passkeyPolicy from "../harnessWaiver/passkeyPolicy.js";
+import type * as harnessWaiver_passkeys from "../harnessWaiver/passkeys.js";
+import type * as harnessWaiver_storage from "../harnessWaiver/storage.js";
 import type * as http from "../http.js";
 import type * as http_domains_core_routes_analytics from "../http/domains/core/routes/analytics.js";
 import type * as http_domains_core_routes_auth from "../http/domains/core/routes/auth.js";
@@ -80,6 +84,7 @@ import type * as http_domains_core_routes_bannerMessage from "../http/domains/co
 import type * as http_domains_core_routes_boundedBody from "../http/domains/core/routes/boundedBody.js";
 import type * as http_domains_core_routes_categories from "../http/domains/core/routes/categories.js";
 import type * as http_domains_core_routes_colors from "../http/domains/core/routes/colors.js";
+import type * as http_domains_core_routes_harnessWaivers from "../http/domains/core/routes/harnessWaivers.js";
 import type * as http_domains_core_routes_index from "../http/domains/core/routes/index.js";
 import type * as http_domains_core_routes_landingFunnelEvents from "../http/domains/core/routes/landingFunnelEvents.js";
 import type * as http_domains_core_routes_organizations from "../http/domains/core/routes/organizations.js";
@@ -407,6 +412,7 @@ import type * as schemas_contextTracking from "../schemas/contextTracking.js";
 import type * as schemas_customerMessaging_customerMessageDelivery from "../schemas/customerMessaging/customerMessageDelivery.js";
 import type * as schemas_customerMessaging_index from "../schemas/customerMessaging/index.js";
 import type * as schemas_customerMessaging_receiptShareToken from "../schemas/customerMessaging/receiptShareToken.js";
+import type * as schemas_harnessWaiver from "../schemas/harnessWaiver.js";
 import type * as schemas_intelligence from "../schemas/intelligence.js";
 import type * as schemas_inventory_appVerificationCode from "../schemas/inventory/appVerificationCode.js";
 import type * as schemas_inventory_athenaUser from "../schemas/inventory/athenaUser.js";
@@ -686,6 +692,10 @@ declare const fullApi: ApiFromModules<{
   "emails/WeeklyManagerReport": typeof emails_WeeklyManagerReport;
   "emails/emailOperationalCtaStyles": typeof emails_emailOperationalCtaStyles;
   env: typeof env;
+  "harnessWaiver/config": typeof harnessWaiver_config;
+  "harnessWaiver/passkeyPolicy": typeof harnessWaiver_passkeyPolicy;
+  "harnessWaiver/passkeys": typeof harnessWaiver_passkeys;
+  "harnessWaiver/storage": typeof harnessWaiver_storage;
   http: typeof http;
   "http/domains/core/routes/analytics": typeof http_domains_core_routes_analytics;
   "http/domains/core/routes/auth": typeof http_domains_core_routes_auth;
@@ -693,6 +703,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/core/routes/boundedBody": typeof http_domains_core_routes_boundedBody;
   "http/domains/core/routes/categories": typeof http_domains_core_routes_categories;
   "http/domains/core/routes/colors": typeof http_domains_core_routes_colors;
+  "http/domains/core/routes/harnessWaivers": typeof http_domains_core_routes_harnessWaivers;
   "http/domains/core/routes/index": typeof http_domains_core_routes_index;
   "http/domains/core/routes/landingFunnelEvents": typeof http_domains_core_routes_landingFunnelEvents;
   "http/domains/core/routes/organizations": typeof http_domains_core_routes_organizations;
@@ -1020,6 +1031,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/customerMessaging/customerMessageDelivery": typeof schemas_customerMessaging_customerMessageDelivery;
   "schemas/customerMessaging/index": typeof schemas_customerMessaging_index;
   "schemas/customerMessaging/receiptShareToken": typeof schemas_customerMessaging_receiptShareToken;
+  "schemas/harnessWaiver": typeof schemas_harnessWaiver;
   "schemas/intelligence": typeof schemas_intelligence;
   "schemas/inventory/appVerificationCode": typeof schemas_inventory_appVerificationCode;
   "schemas/inventory/athenaUser": typeof schemas_inventory_athenaUser;

@@ -20,5 +20,10 @@ export default defineApp({
     WALKTHROUGH_HMAC_PRIOR_KEYRING: v.optional(v.string()),
     LANDING_FUNNEL_HOURLY_LIMIT: v.optional(v.string()),
     LANDING_FUNNEL_INGRESS_DISABLED: v.optional(v.string()),
+    ATHENA_WAIVER_REVIEWER_EMAIL: v.optional(v.string()),
+    ATHENA_WAIVER_BROKER_SECRET: v.optional(v.string()),
+    ATHENA_WAIVER_ENROLLMENT_TOKEN_HASH: v.optional(v.string()),
+    ATHENA_WAIVER_RP_ID: v.optional(v.string()),
+    ATHENA_WAIVER_ORIGIN: v.optional(v.string()),
   },
 });
