@@ -13,7 +13,7 @@ symptoms:
 root_cause: boundary_mismatch
 resolution_type: architecture
 severity: medium
-delivery_diff_fingerprint: f728a5c3a53e46b3c4a3d94792cf84343eb14f6f3742f3a62f7e849feb8b4417
+delivery_diff_fingerprint: 4f5723b7c76a0ecd526c0471ff32f481be5a8ca2638809ae6fd01132e1398733
 tags:
   - daily-operations
   - store-pulse
