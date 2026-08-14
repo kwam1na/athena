@@ -75,10 +75,11 @@ const dailyReport = {
 };
 
 describe("registry catalog", () => {
-  it("registers exactly the seven shipped kinds with their categories and channels", () => {
+  it("registers exactly the eight shipped kinds with their categories and channels", () => {
     expect(listNotificationKinds().sort()).toEqual([
       "approvals.request_created",
       "eod.daily_manager_report",
+      "eod.stale_daily_close",
       "eod.weekly_manager_report",
       "pos.terminal_health",
       "register.closeout_match",
@@ -105,6 +106,7 @@ describe("registry catalog", () => {
     expect(getNotificationKind("eod.daily_manager_report").category).toBe(
       "eod",
     );
+    expect(getNotificationKind("eod.stale_daily_close").category).toBe("eod");
     expect(getNotificationKind("eod.weekly_manager_report").category).toBe(
       "eod",
     );
@@ -472,6 +474,111 @@ describe("eod.daily_manager_report payload branching", () => {
   });
 });
 
+describe("eod.stale_daily_close preparation", () => {
+  it.each([
+    ["missing store", { ageInDays: 2, operatingDate: "2026-07-28" }],
+    [
+      "malformed date",
+      { ageInDays: 2, operatingDate: "July 28", storeId: STORE_ID },
+    ],
+    [
+      "negative age",
+      { ageInDays: -1, operatingDate: "2026-07-28", storeId: STORE_ID },
+    ],
+    [
+      "non-numeric age",
+      {
+        ageInDays: "2",
+        operatingDate: "2026-07-28",
+        storeId: STORE_ID,
+      },
+    ],
+    [
+      "NaN age",
+      { ageInDays: Number.NaN, operatingDate: "2026-07-28", storeId: STORE_ID },
+    ],
+    [
+      "infinite age",
+      {
+        ageInDays: Number.POSITIVE_INFINITY,
+        operatingDate: "2026-07-28",
+        storeId: STORE_ID,
+      },
+    ],
+    [
+      "negative infinite age",
+      {
+        ageInDays: Number.NEGATIVE_INFINITY,
+        operatingDate: "2026-07-28",
+        storeId: STORE_ID,
+      },
+    ],
+    [
+      "fractional age",
+      { ageInDays: 2.5, operatingDate: "2026-07-28", storeId: STORE_ID },
+    ],
+  ])("rejects and suppresses invalid durable payload: %s", async (_, payload) => {
+    const definition = getNotificationKind("eod.stale_daily_close");
+    expect(() => definition.dedupeKey(payload)).toThrow(
+      "Invalid eod.stale_daily_close payload",
+    );
+    const { prepared, calls } = await prepare(
+      "eod.stale_daily_close",
+      payload,
+      [dailyReport],
+    );
+    expect(prepared).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  it("builds the aligned still-open email from a fresh daily-close read", async () => {
+    const { prepared, calls, callArgs } = await prepare(
+      "eod.stale_daily_close",
+      {
+        ageInDays: 2,
+        operatingDate: "2026-07-28",
+        storeId: STORE_ID,
+      },
+      [
+        {
+          ...dailyReport,
+          blockers: [
+            {
+              message:
+                "Close or review the register, then complete EOD Review.",
+              title: "Open register session",
+            },
+          ],
+        },
+      ],
+    );
+
+    expect(calls).toEqual([
+      "operations/dailyManagerReportEmail:getStaleDailyManagerReportPayloadForDate",
+    ]);
+    expect(callArgs).toEqual([
+      { operatingDate: "2026-07-28", storeId: STORE_ID },
+    ]);
+    expect(prepared?.subject).toBe("Still open: Accra EOD Review - 2026-07-28");
+    expect(prepared?.html).toContain("Open register session");
+    expect(prepared?.html).toContain("has remained open for 2 days");
+  });
+
+  it("suppresses the stale email when the day has since closed", async () => {
+    const { prepared } = await prepare(
+      "eod.stale_daily_close",
+      {
+        ageInDays: 2,
+        operatingDate: "2026-07-28",
+        storeId: STORE_ID,
+      },
+      [null],
+    );
+
+    expect(prepared).toBeNull();
+  });
+});
+
 describe("report verification discrepancy preparation", () => {
   const payload = {
     storeId: STORE_ID,
@@ -625,6 +732,16 @@ describe("registry dedupe key recipes", () => {
     expect(
       dedupeKey("eod.daily_manager_report", { ...base, status: "failed" }),
     ).toBe(`${prefix}:action_required`);
+  });
+
+  it("keys a stale close email once per store day", () => {
+    expect(
+      dedupeKey("eod.stale_daily_close", {
+        ageInDays: 2,
+        operatingDate: "2026-07-28",
+        storeId: STORE_ID,
+      }),
+    ).toBe(`eod.stale_daily_close:${STORE_ID}:2026-07-28`);
   });
 
   it("keys the weekly report by its immutable accepted baseline", () => {

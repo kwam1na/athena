@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-14T10:07:14.993Z",
+  "branch": "codex/stale-eod-manager-email",
+  "headSha": "25d73408e3fe0e0b028f2c5affc02594b9860499",
+  "deliverableDiffFingerprint": "ae53a0e83dda3f8c3ebcafe871cce5babefc5f2fb3486c990ce6b5afc13cbc29",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 6,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 745263.2063729999
+  },
+  "reviewLoop": {
+    "providerId": "ce-code-review",
+    "runId": "20260814-055500-final",
+    "finalPassId": "final-25d73408",
+    "recordedAt": "2026-08-14T09:54:49.561Z",
+    "iterationCount": 4,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

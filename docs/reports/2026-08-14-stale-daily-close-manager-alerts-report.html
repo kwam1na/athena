@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Stale Daily Close Manager Alerts</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="ae53a0e83dda3f8c3ebcafe871cce5babefc5f2fb3486c990ce6b5afc13cbc29">
+  <header data-report-section="header">
+    <h1>Stale Daily Close Manager Alerts</h1>
+    <p>How bounded close evidence now remains actionable without creating duplicate manager email</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch codex/stale-eod-manager-email</li>
+      <li>Expanded focused regression suites green</li>
+      <li>Merge and Convex production deploy pending</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Candidate head</dt><dd>ed544ebc</dd>
+      <dt>Base</dt><dd>origin/main at 2864580c</dd>
+      <dt>PR</dt><dd>Pending creation</dd>
+      <dt>Production</dt><dd>Pending Convex deploy</dd>
+      <dt>Root alignment</dt><dd>Pending merge</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>This candidate lets Daily Close proceed conservatively when only the open-operational-work membership read is capped, while retaining explicit incomplete evidence and the observed carry-forward count. A day that remains owed for two days now emits one manager-facing EOD alert through Athena&#x27;s existing notification rail.</p>
+      <p>The alert is deduplicated by store and operating date, rebuilds blocker context from the latest qualifying skipped or failed run, and suppresses itself if the close is no longer open. A no-audience dispatch remains re-armable with the latest age payload, so adding an EOD subscriber does not permanently consume or stale the alert.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Problem and context</h2>
+      <p>A production investigation initially appeared to implicate a rejected register closeout, but that closeout belonged to the next operating date. The actual stale day had 204 raw open-work rows, representing 61 logical carry-forward groups. Athena&#x27;s shared 200-row read cap marked the source incomplete and the global fail-closed guard quarantined the day even though open operational work is specifically allowed to carry forward.</p>
+      <p>The owed-close sweep already retried stale days and wrote a deduplicated operational event at the two-day threshold. It did not create a manager-facing notification, so the system had internal evidence without a direct path for the operator to review the close.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model</h2>
+      <p>Think of source completeness as a set of circuit breakers, not one master switch. Missing financial or transactional evidence keeps Daily Close stopped. A capped list of open operational work can proceed conservatively because Athena carries forward every observed group, records that membership is incomplete, and does not invent unobserved members.</p>
+      <p>The alert is a durable intent, not a direct send. The sweep records the stale state and notification intent atomically; the existing delivery rail later rechecks the live close and latest automation run before rendering the email.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>Before: the owed sweep retried a historic close, every incomplete source blocked completion, and the stale threshold produced only an operational event. Open-work saturation at 201 rows looked the same as missing financial evidence.</p>
+      <p>After: non-open-work incomplete sources still fail closed. Open-work membership probes the open and in-progress statuses independently up to 500 rows plus a sentinel; either status returning a 501st row marks membership incomplete while preserving every safely observed ID, item, logical group, and observed count. Unobserved rows are never invented. At the stale threshold, the same mutation emits a deduplicated email intent that resolves fresh blocker data and an EOD Review URL at send time.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what did not</h2>
+      <p>Changed: human, scheduled, and historic close paths share the source-specific completeness rule; persisted carry-forward counts remain meaningful under saturation; the notification registry owns a new email-only eod.stale_daily_close kind; enabled EOD policies are processed in bounded 50-store pages whose continuation is persisted before per-store work; the bounded three-date attempt window rotates by UTC hour so both hourly and two-hourly schedules cover every four-to-seven-day backlog; only attempted dates escalate; and configured EOD subscribers receive calm manager-facing copy with one EOD Review action.</p>
+      <p>Unchanged: the seven-day owed lookback, maximum three owed dates per store per sweep, two-day stale threshold, operational stale event, recipient subscriptions, delivery retries, and all true financial or transactional blockers. There is no browser route or direct email send from the sweep.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <ul>
+        <li>When either open-work status returns a 501st row, Athena records incomplete membership and an observed logical count, persists all safely observed handoffs, and excludes the unobserved sentinel; downstream readers must still honor the completeness metadata.</li>
+        <li>The store/date dedupe key deliberately sends one stale alert, not a daily reminder sequence; only a prior no-audience suppression may re-arm the same intent after subscription setup, refreshing its age while preserving sent-recipient dedupe.</li>
+        <li>If the close completes, preparation returns no email; later dry-run rows do not hide an earlier qualifying skipped or failed run while the close remains open.</li>
+        <li>Every other incomplete source continues to block or quarantine completion.</li>
+        <li>The stale operational event and notification intent share one Convex mutation, avoiding partial durable state.</li>
+        <li>A throwing store is recorded as a failed candidate without starving later stores on the same page, and cannot erase the already-persisted continuation for later policy pages; candidate discovery, rotation, store work, and every continuation share one root-derived timestamp.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and delivery status</h2>
+      <p>Focused Vitest coverage spans the notification registry and rail, Daily Close, Daily Operations automation, owed-close unit and integration behavior, and the React Email template. The expanded regression slices passed alongside changed-Convex lint, TypeScript, Graphify rebuild, solution/report checks, and git diff validation.</p>
+      <p>The final required reviewer set is green. The repository merge gate, PR CI, merge, root fast-forward, and production Convex deploy remain pending and must not be inferred from this candidate report.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next-time guidance</h2>
+      <ul>
+        <li>Validate the operating date attached to each apparent blocker before attributing a stale day to adjacent-day activity.</li>
+        <li>Classify completeness per source and document safe fallback semantics instead of relying on one aggregate boolean.</li>
+        <li>When bounded evidence proceeds, preserve observed counts and incomplete metadata; never turn truncation into zero.</li>
+        <li>Use the notification registry for policy, recipient selection, retry, dedupe, and send-time truth checks.</li>
+        <li>Extend tests at the cap boundary through completion, next-Opening handoff, and carry-forward resolution, plus repeated, recent, completed, and no-longer-qualifying stale states.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/convex/operations/dailyClose.ts</code></td><td>Defines source-specific completion blockers and conservative saturated open-work persistence.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/dailyOperationsAutomation.ts</code></td><td>Applies the same rule to historic automatic close attempts.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts</code></td><td>Emits the stale event and durable notification intent at the existing threshold.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/notifications/registry.ts</code></td><td>Owns stable store/date dedupe and fresh send-time preparation.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/dailyManagerReportEmail.ts</code></td><td>Reuses authoritative store, blocker, cash-position, and report-link semantics.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/emails/StaleDailyCloseAlert.tsx</code></td><td>Renders restrained manager copy and the single EOD Review action.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why can an incomplete open-work membership read proceed when other incomplete sources cannot?</p>
+        <ol data-quiz-options>
+          <li>Open work is ignored during close</li>
+          <li data-quiz-correct>Observed open work can be carried forward conservatively while missing financial evidence could corrupt the close</li>
+          <li>The query always returns every row</li>
+          <li>Managers manually approve every truncated read</li>
+        </ol>
+        <p data-quiz-explanation>The rule is source-specific: observed operational work has a conservative carry-forward fallback, while financial and transactional sources still require exhaustive evidence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What exactly triggers incomplete open-work membership?</p>
+        <ol data-quiz-options>
+          <li>The combined open and in-progress total exceeds 500</li>
+          <li data-quiz-correct>Either the open or in-progress status query returns a 501st row</li>
+          <li>The selected carry-forward IDs exceed 500 after grouping</li>
+          <li>Any operational work remains at the end of day</li>
+        </ol>
+        <p data-quiz-explanation>Each status is bounded independently with take(501); the 501st row in either status proves that status membership was truncated.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where is the manager-facing email first represented durably?</p>
+        <ol data-quiz-options>
+          <li>As rendered HTML stored by the sweep before the transaction commits</li>
+          <li data-quiz-correct>As a notification intent emitted through the registry rail</li>
+          <li>As a delivery attempt created only after recipient resolution</li>
+          <li>As a new email-specific ledger introduced by this branch</li>
+        </ol>
+        <p data-quiz-explanation>The sweep emits a registry-owned notification intent; existing delivery machinery later handles recipients, retry, preparation, and sending.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What prevents repeated sweeps from emailing repeatedly?</p>
+        <ol data-quiz-options>
+          <li>A random UUID</li>
+          <li>The manager&#x27;s browser session</li>
+          <li data-quiz-correct>A stable kind/store/operating-date dedupe key</li>
+          <li>The seven-day lookback alone</li>
+        </ol>
+        <p data-quiz-explanation>The business identity eod.stale_daily_close:&lt;storeId&gt;:&lt;operatingDate&gt; remains stable across retries.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>When will preparation suppress an already-created stale intent?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>When the close is completed or the latest automation run is no longer skipped or failed</li>
+          <li>Only when the intent was already deduplicated at creation time</li>
+          <li>When recipient resolution finds more than one EOD subscriber</li>
+          <li>Only when the seven-day owed lookback expires</li>
+        </ol>
+        <p data-quiz-explanation>Preparation rechecks live close and automation state so queued work cannot send stale guidance; creation-time dedupe alone does not prove the alert is still relevant.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which behavior intentionally remains fail-closed?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Incomplete non-operational-work sources</li>
+          <li>A repeated stale sweep</li>
+          <li>A completed close</li>
+          <li>The email template fallback text</li>
+        </ol>
+        <p data-quiz-explanation>Only operational-work membership has the conservative saturated fallback; other incomplete evidence still blocks completion.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is the observed logical count used instead of the selected member count under saturation?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>The selected list is intentionally empty when membership is truncated, so its length would understate observed grouped work</li>
+          <li>The combined status cap guarantees the selected list contains exactly 500 logical groups</li>
+          <li>The notification dedupe key requires the count to remain stable</li>
+          <li>The observed count includes financial sources that the selected list excludes</li>
+        </ol>
+        <p data-quiz-explanation>When either per-status query is truncated, Athena avoids speculative per-item carry-forward writes; the selected list therefore cannot represent all observed logical groups.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What was the key production-diagnosis correction?</p>
+        <ol data-quiz-options>
+          <li>The email service was offline</li>
+          <li data-quiz-correct>A rejected register belonged to the next day; the stale day was blocked by open-work query saturation</li>
+          <li>The store had no timezone</li>
+          <li>The manager subscription was deleted</li>
+        </ol>
+        <p data-quiz-explanation>Operating-date ownership ruled out the adjacent-day register event and exposed the artificial source-cap blocker.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which validation is complete at the time of this candidate report?</p>
+        <ol data-quiz-options>
+          <li>The full merge gate and required GitHub checks</li>
+          <li data-quiz-correct>Expanded focused regression suites, mechanical checks, and the final required reviewer set</li>
+          <li>The merged-main production Convex deploy</li>
+          <li>Only the email template test, with backend suites deferred</li>
+        </ol>
+        <p data-quiz-explanation>The report records green focused/mechanical proof and the final required reviewer set while keeping the broad gate, CI, merge, and deploy pending.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the correct extension path if product later wants repeated reminders?</p>
+        <ol data-quiz-options>
+          <li>Remove all deduplication</li>
+          <li data-quiz-correct>Add an explicit reminder or re-arm epoch contract and test it</li>
+          <li>Send directly from the sweep</li>
+          <li>Treat financial sources as non-blocking</li>
+        </ol>
+        <p data-quiz-explanation>The current one-alert contract is deliberate; repeated reminders need a durable sequence or re-arm identity rather than weakening idempotency.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>session context historian</dt><dd>Reconstructed the production diagnosis correction, copy decisions, discarded screenshot, prior validation, and still-pending finish line from recent Codex sessions.</dd>
+      <dt>delivered diff explorer</dt><dd>Mapped the changed layers, before/after flow, failure boundaries, generated artifacts, test coverage, and intentionally unchanged behavior from git and source.</dd>
+      <dt>quiz and report reviewer</dt><dd>Corrected the per-status source boundary and subscriber policy wording, and strengthened quiz alternatives so they test the actual delivery contract.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

@@ -3,6 +3,7 @@ import { internal } from "../_generated/api";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { getNotificationKind } from "./registry";
+import { SUBSCRIPTION_RESOLUTION_CAP } from "./deliveryPolicy";
 
 export type EmitNotificationArgs = {
   kind: string;
@@ -47,6 +48,48 @@ export async function emitNotificationWithCtx(
     .withIndex("by_dedupeKey", (q) => q.eq("dedupeKey", dedupeKey))
     .unique();
   if (existing) {
+    // A stale-close alert remains true until the close completes. If its first
+    // dispatch found no EOD audience, let a later sweep re-arm the same intent
+    // after subscriptions are configured. The permanent dedupe key and
+    // recipient delivery keys still prevent duplicate sends.
+    if (
+      args.kind === "eod.stale_daily_close" &&
+      existing.status === "suppressed" &&
+      existing.suppressedReason === "no_recipients"
+    ) {
+      const deliveries = await ctx.db
+        .query("notificationDelivery")
+        .withIndex("by_intentId", (q) => q.eq("intentId", existing._id))
+        .take(SUBSCRIPTION_RESOLUTION_CAP);
+      const now = Date.now();
+      for (const delivery of deliveries) {
+        if (
+          delivery.status !== "suppressed" ||
+          delivery.errorCode !== "no_recipients"
+        ) {
+          continue;
+        }
+        await ctx.db.patch("notificationDelivery", delivery._id, {
+          status: "retryable_failure",
+          errorCode: undefined,
+          nextAttemptAt: now,
+          terminalAt: undefined,
+          updatedAt: now,
+        });
+      }
+      await ctx.db.patch("notificationIntent", existing._id, {
+        payload: args.payload,
+        requeuedAt: now,
+        status: "pending",
+        suppressedReason: undefined,
+        sweepAttempts: 0,
+      });
+      await ctx.scheduler.runAfter(
+        0,
+        internal.notifications.dispatch.dispatchIntent,
+        { intentId: existing._id },
+      );
+    }
     return { intentId: existing._id, created: false };
   }
 

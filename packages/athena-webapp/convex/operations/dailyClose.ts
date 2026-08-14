@@ -74,6 +74,7 @@ import { getOrderAmount } from "../inventory/utils";
 export { buildAdjustmentReportTotals, listAppliedTransactionAdjustmentsForDay };
 
 const DAILY_CLOSE_QUERY_LIMIT = 200;
+const OPEN_OPERATIONAL_WORK_ITEM_SOURCE_LIMIT = 500;
 const DAILY_CLOSE_CARRY_FORWARD_SOURCE_PROBE_LIMIT = 1_000;
 const REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT = 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -1046,6 +1047,7 @@ function logicalGroupAsCarryForwardItem(
         status: group.status,
         type: group.representative.type,
       },
+      carryForwardWorkItemIds: group.items.map((item) => item._id),
     };
   }
 
@@ -1093,10 +1095,6 @@ async function patchDailyCloseCarryForwardWorkItemMetadata(
   },
 ) {
   for (const workItem of args.workItems) {
-    if (workItem.type !== DAILY_CLOSE_CARRY_FORWARD_TYPE) {
-      continue;
-    }
-
     await ctx.db.patch("operationalWorkItem", workItem._id, {
       metadata: {
         ...(workItem.metadata ?? {}),
@@ -1624,11 +1622,11 @@ async function listOpenOperationalWorkItems(
         .withIndex("by_storeId_status", (q) =>
           q.eq("storeId", storeId).eq("status", status),
         )
-        .take(DAILY_CLOSE_QUERY_LIMIT + 1),
+        .take(OPEN_OPERATIONAL_WORK_ITEM_SOURCE_LIMIT + 1),
     ),
   );
   const boundedWorkItems = workItems.map((page) =>
-    page.slice(0, DAILY_CLOSE_QUERY_LIMIT),
+    page.slice(0, OPEN_OPERATIONAL_WORK_ITEM_SOURCE_LIMIT),
   );
 
   return {
@@ -1636,14 +1634,14 @@ async function listOpenOperationalWorkItems(
     completeness: sourceCompletenessEntry({
       source: "operational_work_item",
       complete: workItems.every(
-        (page) => page.length <= DAILY_CLOSE_QUERY_LIMIT,
+        (page) => page.length <= OPEN_OPERATIONAL_WORK_ITEM_SOURCE_LIMIT,
       ),
       readMode: "by_storeId_status",
       recordCount: boundedWorkItems.reduce(
         (count, page) => count + page.length,
         0,
       ),
-      limit: DAILY_CLOSE_QUERY_LIMIT,
+      limit: OPEN_OPERATIONAL_WORK_ITEM_SOURCE_LIMIT,
       reason: "operational_work_item_source_cap_reached",
       statuses: [...OPEN_OPERATIONAL_WORK_ITEM_STATUSES],
     }),
@@ -2262,16 +2260,16 @@ function buildDailyCloseReportSnapshot(args: {
   summary: Record<string, unknown>;
 }): DailyCloseReportSnapshot {
   const selectedWorkItemIds = new Set(args.carryForwardWorkItemIds);
-  const selectedSnapshotItems = args.snapshot.carryForwardItems.filter(
-    (item) => {
+  const selectedSnapshotItems = hasIncompleteOperationalWork(args.snapshot)
+    ? args.snapshot.carryForwardItems
+    : args.snapshot.carryForwardItems.filter((item) => {
       const memberIds =
         item.carryForwardWorkItemIds ??
         (item.subject.type === "operational_work_item"
           ? [item.subject.id as Id<"operationalWorkItem">]
           : []);
       return memberIds.some((memberId) => selectedWorkItemIds.has(memberId));
-    },
-  );
+      });
   const snapshotMemberIds = new Set(
     selectedSnapshotItems.flatMap((item) => item.carryForwardWorkItemIds ?? []),
   );
@@ -2381,6 +2379,17 @@ function buildDailyCloseReportSnapshot(args: {
   };
 }
 
+function observedIncompleteOperationalWorkItemIds(
+  snapshot: DailyCloseSnapshot,
+) {
+  if (!hasIncompleteOperationalWork(snapshot)) return [];
+  return uniqueOperationalWorkItemIds(
+    snapshot.carryForwardItems.flatMap(
+      (item) => item.carryForwardWorkItemIds ?? [],
+    ),
+  );
+}
+
 function snapshotReviewedItems(
   snapshot: DailyCloseSnapshot,
   reviewedItemKeys?: string[],
@@ -2397,6 +2406,25 @@ function snapshotReviewedItems(
 
 function incompleteSourceCompletenessEntries(snapshot: DailyCloseSnapshot) {
   return snapshot.sourceCompleteness.entries.filter((entry) => !entry.complete);
+}
+
+export function isToleratedIncompleteDailyCloseCompletionSource(entry: {
+  complete: boolean;
+  source: string;
+}) {
+  return !entry.complete && entry.source === "operational_work_item";
+}
+
+function completionBlockingIncompleteSources(snapshot: DailyCloseSnapshot) {
+  return incompleteSourceCompletenessEntries(snapshot).filter(
+    (entry) => !isToleratedIncompleteDailyCloseCompletionSource(entry),
+  );
+}
+
+function hasIncompleteOperationalWork(snapshot: DailyCloseSnapshot) {
+  return snapshot.sourceCompleteness.entries.some(
+    isToleratedIncompleteDailyCloseCompletionSource,
+  );
 }
 
 function completionAttributionForDailyClose(
@@ -4364,7 +4392,7 @@ export async function completeDailyCloseWithCtx(
     });
   }
 
-  const incompleteSources = incompleteSourceCompletenessEntries(snapshot);
+  const incompleteSources = completionBlockingIncompleteSources(snapshot);
   if (incompleteSources.length > 0) {
     return userError({
       code: "precondition_failed",
@@ -4464,6 +4492,7 @@ export async function completeDailyCloseWithCtx(
   const reviewedItemKeys = snapshot.reviewItems.map((item) => item.key);
   const carryForwardWorkItemIds = uniqueOperationalWorkItemIds([
     ...(snapshot.existingClose?.carryForwardWorkItemIds ?? []),
+    ...observedIncompleteOperationalWorkItemIds(snapshot),
     ...linkedWorkItemResult.workItems.map((workItem) => workItem._id),
     ...createdWorkItemResult.workItems.map((workItem) => workItem._id),
   ] as Id<"operationalWorkItem">[]);
@@ -4479,13 +4508,16 @@ export async function completeDailyCloseWithCtx(
     snapshot,
     carryForwardWorkItemIds,
   );
+  const persistedCarryForwardCount = hasIncompleteOperationalWork(snapshot)
+    ? snapshot.openWorkMembership.observedLogicalCount
+    : logicalCarryForwardCount;
   const readiness = {
     ...snapshot.readiness,
-    carryForwardCount: logicalCarryForwardCount,
+    carryForwardCount: persistedCarryForwardCount,
   };
   const summary = {
     ...snapshot.summary,
-    carryForwardWorkItemCount: logicalCarryForwardCount,
+    carryForwardWorkItemCount: persistedCarryForwardCount,
   };
   const reportSnapshotArgs = {
     carryForwardWorkItemIds,
@@ -4722,7 +4754,7 @@ export async function completeDailyCloseForAutomationWithCtx(
     });
   }
 
-  const incompleteSources = incompleteSourceCompletenessEntries(snapshot);
+  const incompleteSources = completionBlockingIncompleteSources(snapshot);
   if (incompleteSources.length > 0) {
     return userError({
       code: "precondition_failed",
@@ -4776,14 +4808,29 @@ export async function completeDailyCloseForAutomationWithCtx(
     });
   }
 
-  const carryForwardResult = await validateAutomationCarryForwardWorkItems(
-    ctx,
-    {
-      organizationId: store.organizationId,
-      snapshot,
-      storeId: args.storeId,
-    },
-  );
+  const carryForwardResult = hasIncompleteOperationalWork(snapshot)
+    ? await validateCarryForwardWorkItemIds(ctx, {
+        storeId: args.storeId,
+        workItemIds: observedIncompleteOperationalWorkItemIds(snapshot),
+      }).then((result) =>
+        result.ok
+          ? {
+              ok: true as const,
+              workItemIds: result.workItems.map((item) => item._id),
+              workItems: result.workItems,
+            }
+          : {
+              ok: false as const,
+              message:
+                "Observed carry-forward work changed before EOD Review completed.",
+              metadata: { reason: "observed_carry_forward_unavailable" },
+            },
+      )
+    : await validateAutomationCarryForwardWorkItems(ctx, {
+        organizationId: store.organizationId,
+        snapshot,
+        storeId: args.storeId,
+      });
 
   if (!carryForwardResult.ok) {
     return userError({
@@ -4800,13 +4847,16 @@ export async function completeDailyCloseForAutomationWithCtx(
     snapshot,
     carryForwardWorkItemIds,
   );
+  const persistedCarryForwardCount = hasIncompleteOperationalWork(snapshot)
+    ? snapshot.openWorkMembership.observedLogicalCount
+    : logicalCarryForwardCount;
   const readiness = {
     ...snapshot.readiness,
-    carryForwardCount: logicalCarryForwardCount,
+    carryForwardCount: persistedCarryForwardCount,
   };
   const summary = {
     ...snapshot.summary,
-    carryForwardWorkItemCount: logicalCarryForwardCount,
+    carryForwardWorkItemCount: persistedCarryForwardCount,
   };
   const automationDecisionEvidence = buildEodAutomationDecisionEvidence({
     automationScheduleEvidence: args.automationScheduleEvidence,
@@ -5029,12 +5079,6 @@ export async function resolveDailyCloseCarryForwardWithCtx(
   if (!dailyClose.carryForwardWorkItemIds.includes(workItem._id)) {
     return carryForwardResolutionValidationError(
       "Carry-forward work is not linked to this EOD Review.",
-    );
-  }
-
-  if (workItem.type !== DAILY_CLOSE_CARRY_FORWARD_TYPE) {
-    return carryForwardResolutionValidationError(
-      "Only Daily Close carry-forward work can be resolved here.",
     );
   }
 

@@ -35,6 +35,7 @@ import {
 import {
   buildDailyCloseSnapshotWithCtx,
   completeDailyCloseForAutomationWithCtx,
+  isToleratedIncompleteDailyCloseCompletionSource,
 } from "./dailyClose";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
 import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
@@ -1184,7 +1185,14 @@ export async function runHistoricEodAutoCloseForDateWithCtx(
     storeId: args.storeId,
   });
 
-  if (!snapshot.sourceCompleteness.complete) {
+  const completionBlockingIncompleteSources =
+    snapshot.sourceCompleteness.entries.filter(
+      (entry) =>
+        !entry.complete &&
+        !isToleratedIncompleteDailyCloseCompletionSource(entry),
+    );
+
+  if (completionBlockingIncompleteSources.length > 0) {
     return recordHistoricEodQuarantineWithCtx(ctx, {
       classification: "quarantine_incomplete_source_reads",
       decisionReason:

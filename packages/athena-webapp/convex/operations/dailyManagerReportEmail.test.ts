@@ -458,6 +458,136 @@ describe("wasActionRequiredNotifiedBeforeRail", () => {
   });
 });
 
+describe("getStaleDailyManagerReportPayloadForDate", () => {
+  const OPERATING_DATE = "2026-07-16";
+
+  async function seedStore(ctx: MutationCtx) {
+    const userId = await ctx.db.insert("athenaUser", {
+      email: "owner@example.com",
+      normalizedEmail: "owner@example.com",
+    });
+    const organizationId = await ctx.db.insert("organization", {
+      createdByUserId: userId,
+      name: "Accra",
+      slug: "accra",
+    });
+    const storeId = await ctx.db.insert("store", {
+      createdByUserId: userId,
+      currency: "GHS",
+      name: "Accra",
+      organizationId,
+      slug: "accra",
+    });
+    return { organizationId, storeId };
+  }
+
+  async function insertRun(
+    ctx: MutationCtx,
+    seeded: Awaited<ReturnType<typeof seedStore>>,
+    outcome: "dry_run" | "skipped" | "failed",
+    updatedAt: number,
+    createdAt = updatedAt,
+  ) {
+    return ctx.db.insert("automationRun", {
+      action: "eod.auto_complete",
+      createdAt,
+      domain: "daily_operations",
+      eventIds: [],
+      idempotencyKey: `stale:${outcome}:${updatedAt}`,
+      mutationBoundary: "daily_close",
+      operatingDate: OPERATING_DATE,
+      organizationId: seeded.organizationId,
+      outcome,
+      policyMode: outcome === "dry_run" ? "dry_run" : "enabled",
+      policyVersion: "daily-operations.v1",
+      snapshotCounts: {},
+      sourceSubjects: [],
+      storeId: seeded.storeId,
+      triggerType: "scheduled",
+      updatedAt,
+    });
+  }
+
+  const ask = (
+    t: ReturnType<typeof convexTest>,
+    storeId: Id<"store">,
+  ) =>
+    t.query(
+      internal.operations.dailyManagerReportEmail
+        .getStaleDailyManagerReportPayloadForDate,
+      { operatingDate: OPERATING_DATE, storeId },
+    );
+
+  it("returns null without a qualifying run", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(seedStore);
+    expect(await ask(t, seeded.storeId)).toBeNull();
+    await t.run((ctx) => insertRun(ctx, seeded, "dry_run", 2));
+    expect(await ask(t, seeded.storeId)).toBeNull();
+  });
+
+  for (const outcome of ["skipped", "failed"] as const) {
+    it(`prepares the open report from a ${outcome} run`, async () => {
+      const t = convexTest(schema, modules);
+      const seeded = await t.run(seedStore);
+      await t.run((ctx) => insertRun(ctx, seeded, outcome, 2));
+      expect(await ask(t, seeded.storeId)).toMatchObject({ status: outcome });
+    });
+  }
+
+  it("keeps the latest qualifying run when a later dry-run row exists", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(seedStore);
+    await t.run(async (ctx) => {
+      await insertRun(ctx, seeded, "failed", 2);
+      await insertRun(ctx, seeded, "dry_run", 3);
+    });
+    expect(await ask(t, seeded.storeId)).toMatchObject({ status: "failed" });
+  });
+
+  it("selects qualifying runs by updated time rather than creation time", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(seedStore);
+    await t.run(async (ctx) => {
+      await insertRun(ctx, seeded, "failed", 10, 1);
+      await insertRun(ctx, seeded, "skipped", 5, 2);
+    });
+    expect(await ask(t, seeded.storeId)).toMatchObject({
+      status: "failed",
+    });
+  });
+
+  it("suppresses when an active completed close exists", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(seedStore);
+    await t.run(async (ctx) => {
+      await insertRun(ctx, seeded, "failed", 2);
+      await ctx.db.insert("dailyClose", {
+        carryForwardWorkItemIds: [],
+        completedAt: 3,
+        createdAt: 3,
+        isCurrent: false,
+        lifecycleStatus: "active",
+        operatingDate: OPERATING_DATE,
+        organizationId: seeded.organizationId,
+        readiness: {
+          blockerCount: 0,
+          carryForwardCount: 0,
+          readyCount: 0,
+          reviewCount: 0,
+          status: "ready",
+        },
+        sourceSubjects: [],
+        status: "completed",
+        storeId: seeded.storeId,
+        summary: {},
+        updatedAt: 3,
+      });
+    });
+    expect(await ask(t, seeded.storeId)).toBeNull();
+  });
+});
+
 describe("units sold in the closed-day report payload", () => {
   const OPERATING_DATE = "2026-07-16";
   const PRIOR_OPERATING_DATE = "2026-07-15";

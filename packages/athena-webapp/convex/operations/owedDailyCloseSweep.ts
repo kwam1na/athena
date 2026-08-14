@@ -39,6 +39,7 @@ import {
   internalAction,
   internalMutation,
   internalQuery,
+  type ActionCtx,
   type QueryCtx,
 } from "../_generated/server";
 import {
@@ -47,6 +48,7 @@ import {
   operatingDateForPolicy,
 } from "./dailyOperationsAutomation";
 import { recordOperationalEventWithCtx } from "./operationalEvents";
+import { emitNotificationWithCtx } from "../notifications/emit";
 
 const DAILY_OPERATIONS_AUTOMATION_DOMAIN = "daily_operations";
 const EOD_AUTO_COMPLETE_ACTION = "eod.auto_complete";
@@ -68,11 +70,40 @@ const OWED_DAILY_CLOSE_STALE_EVENT_TYPE = "daily_close.owed_stale";
 export type OwedDailyCloseSelection = {
   /** Every unclosed date inside the lookback window, oldest first. */
   owed: string[];
-  /** The bounded slice this sweep will act on, oldest first. */
-  attempt: string[];
   /** Owed dates past the staleness threshold; these need a human. */
   stale: string[];
 };
+
+export function dailyCloseSweepResultSettled(result: { action: string }) {
+  return result.action === "applied" || result.action === "already_completed";
+}
+
+// Production runs hourly and non-production every two hours. An hour-based
+// slot advances the start by one in prod and two in non-prod; with a
+// three-date attempt window both cadences cover every backlog length allowed
+// by the seven-day lookback (including even lengths where a point cursor with
+// a two-step stride would otherwise starve one parity).
+const OWED_DAILY_CLOSE_ROTATION_MS = 60 * 60_000;
+
+export function selectRotatingOwedDailyCloseAttempt(input: {
+  asOfOperatingDate: string;
+  now: number;
+  owed: string[];
+  maxPerSweep?: number;
+}) {
+  if (input.owed.length === 0) return [];
+  const maxPerSweep = input.maxPerSweep ?? OWED_DAILY_CLOSE_MAX_PER_SWEEP;
+  const dayStart = Date.parse(`${input.asOfOperatingDate}T00:00:00.000Z`);
+  const slot = Math.max(
+    0,
+    Math.floor((input.now - dayStart) / OWED_DAILY_CLOSE_ROTATION_MS),
+  );
+  const start = slot % input.owed.length;
+  return Array.from(
+    { length: Math.min(maxPerSweep, input.owed.length) },
+    (_, offset) => input.owed[(start + offset) % input.owed.length],
+  );
+}
 
 /**
  * Pure selection of which store days are still owed a close.
@@ -85,20 +116,19 @@ export function selectOwedDailyCloseDates(input: {
   asOfOperatingDate: string;
   completedOperatingDates: string[];
   lookbackDays?: number;
-  maxPerSweep?: number;
   staleAfterDays?: number;
 }): OwedDailyCloseSelection {
-  const empty: OwedDailyCloseSelection = { owed: [], attempt: [], stale: [] };
+  const empty: OwedDailyCloseSelection = { owed: [], stale: [] };
 
   if (!isValidOperatingDate(input.asOfOperatingDate)) {
     return empty;
   }
 
   const lookbackDays = input.lookbackDays ?? OWED_DAILY_CLOSE_LOOKBACK_DAYS;
-  const maxPerSweep = input.maxPerSweep ?? OWED_DAILY_CLOSE_MAX_PER_SWEEP;
-  const staleAfterDays = input.staleAfterDays ?? OWED_DAILY_CLOSE_STALE_AFTER_DAYS;
+  const staleAfterDays =
+    input.staleAfterDays ?? OWED_DAILY_CLOSE_STALE_AFTER_DAYS;
 
-  if (lookbackDays < 1 || maxPerSweep < 1) {
+  if (lookbackDays < 1) {
     return empty;
   }
 
@@ -121,7 +151,6 @@ export function selectOwedDailyCloseDates(input: {
 
   return {
     owed,
-    attempt: owed.slice(0, maxPerSweep),
     stale: owed.filter((operatingDate) => operatingDate <= staleOnOrBefore),
   };
 }
@@ -132,19 +161,7 @@ type OwedDailyCloseStoreCandidate = {
   storeId: Id<"store">;
 } & OwedDailyCloseSelection;
 
-async function listEnabledEodPolicies(ctx: QueryCtx) {
-  const policies = await ctx.db
-    .query("automationPolicy")
-    .withIndex("by_domain_action_mode", (q) =>
-      q
-        .eq("domain", DAILY_OPERATIONS_AUTOMATION_DOMAIN)
-        .eq("action", EOD_AUTO_COMPLETE_ACTION)
-        .eq("mode", "enabled"),
-    )
-    .take(50);
-
-  return policies.filter((policy) => policy.paused !== true);
-}
+const OWED_DAILY_CLOSE_POLICY_PAGE_SIZE = 50;
 
 async function completedOperatingDatesForStore(
   ctx: QueryCtx,
@@ -171,14 +188,14 @@ async function completedOperatingDatesForStore(
     .map((close) => close.operatingDate);
 }
 
-export const listOwedDailyCloseCandidates = internalQuery({
-  args: { now: v.optional(v.number()) },
-  handler: async (ctx, args): Promise<OwedDailyCloseStoreCandidate[]> => {
-    const now = args.now ?? Date.now();
-    const policies = await listEnabledEodPolicies(ctx);
+async function candidatesForPolicies(
+  ctx: QueryCtx,
+  policies: Doc<"automationPolicy">[],
+  now: number,
+) {
     const candidates: OwedDailyCloseStoreCandidate[] = [];
 
-    for (const policy of policies) {
+    for (const policy of policies.filter((entry) => entry.paused !== true)) {
       const asOfOperatingDate = operatingDateForPolicy({
         now,
         operatingTimezoneOffsetMinutes: policy.operatingTimezoneOffsetMinutes,
@@ -214,7 +231,51 @@ export const listOwedDailyCloseCandidates = internalQuery({
       });
     }
 
-    return candidates;
+  return candidates;
+}
+
+export const listOwedDailyCloseCandidatePage = internalQuery({
+  args: { cursor: v.optional(v.string()), now: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const page = await ctx.db
+      .query("automationPolicy")
+      .withIndex("by_domain_action_mode", (q) =>
+        q
+          .eq("domain", DAILY_OPERATIONS_AUTOMATION_DOMAIN)
+          .eq("action", EOD_AUTO_COMPLETE_ACTION)
+          .eq("mode", "enabled"),
+      )
+      .paginate({
+        cursor: args.cursor ?? null,
+        numItems: OWED_DAILY_CLOSE_POLICY_PAGE_SIZE,
+      });
+    return {
+      candidates: await candidatesForPolicies(
+        ctx,
+        page.page,
+        args.now ?? Date.now(),
+      ),
+      continueCursor: page.continueCursor,
+      isDone: page.isDone,
+    };
+  },
+});
+
+// Retained as a focused first-page inspection surface for existing tests and
+// support diagnostics. The action below owns continuation across every page.
+export const listOwedDailyCloseCandidates = internalQuery({
+  args: { now: v.optional(v.number()) },
+  handler: async (ctx, args): Promise<OwedDailyCloseStoreCandidate[]> => {
+    const page = await ctx.db
+      .query("automationPolicy")
+      .withIndex("by_domain_action_mode", (q) =>
+        q
+          .eq("domain", DAILY_OPERATIONS_AUTOMATION_DOMAIN)
+          .eq("action", EOD_AUTO_COMPLETE_ACTION)
+          .eq("mode", "enabled"),
+      )
+      .take(OWED_DAILY_CLOSE_POLICY_PAGE_SIZE);
+    return candidatesForPolicies(ctx, page, args.now ?? Date.now());
   },
 });
 
@@ -226,6 +287,17 @@ export const recordOwedDailyCloseStaleEscalation = internalMutation({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    const completedClose = await ctx.db
+      .query("dailyClose")
+      .withIndex("by_storeId_operatingDate_lifecycleStatus", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("operatingDate", args.operatingDate)
+          .eq("lifecycleStatus", "active"),
+      )
+      .first();
+    if (completedClose?.status === "completed") return false;
+
     // Dedupes on (store, subject, event type), so a day that stays stuck
     // escalates once rather than every sweep.
     await recordOperationalEventWithCtx(ctx, {
@@ -243,6 +315,20 @@ export const recordOwedDailyCloseStaleEscalation = internalMutation({
       subjectType: "daily_close",
       ...(args.organizationId ? { organizationId: args.organizationId } : {}),
     });
+
+    await emitNotificationWithCtx(ctx, {
+      kind: "eod.stale_daily_close",
+      storeId: args.storeId,
+      ...(args.organizationId ? { organizationId: args.organizationId } : {}),
+      subjectId: `${args.storeId}:${args.operatingDate}`,
+      subjectType: "dailyClose",
+      payload: {
+        ageInDays: args.ageInDays,
+        operatingDate: args.operatingDate,
+        storeId: args.storeId,
+      },
+    });
+    return true;
   },
 });
 
@@ -252,6 +338,7 @@ type OwedDailyCloseSweepResult = {
   results: Array<{
     action: string;
     classification: string;
+    error?: string;
     operatingDate: string;
     storeId: Id<"store">;
   }>;
@@ -266,79 +353,129 @@ type OwedDailyCloseSweepResult = {
  * into its own module through `internal.`, and without it TypeScript cannot
  * break the inference cycle.
  */
-export const runOwedDailyCloseSweep = internalAction({
+export async function runOwedDailyCloseSweepWithCtx(
+  ctx: Pick<ActionCtx, "runMutation" | "runQuery" | "scheduler">,
   args: {
-    mode: v.optional(v.union(v.literal("dry_run"), v.literal("apply"))),
-    now: v.optional(v.number()),
+    cursor?: string;
+    mode?: "dry_run" | "apply";
+    now?: number;
   },
-  handler: async (ctx, args): Promise<OwedDailyCloseSweepResult> => {
+): Promise<OwedDailyCloseSweepResult> {
     const mode = args.mode ?? "apply";
-    const candidates: OwedDailyCloseStoreCandidate[] = await ctx.runQuery(
-      internal.operations.owedDailyCloseSweep.listOwedDailyCloseCandidates,
-      args.now === undefined ? {} : { now: args.now },
+    const now = args.now ?? Date.now();
+    const page: {
+      candidates: OwedDailyCloseStoreCandidate[];
+      continueCursor: string;
+      isDone: boolean;
+    } = await ctx.runQuery(
+      internal.operations.owedDailyCloseSweep.listOwedDailyCloseCandidatePage,
+      {
+        ...(args.cursor ? { cursor: args.cursor } : {}),
+        now,
+      },
     );
+    const candidates = page.candidates;
+
+    // Persist continuation before touching any store on this page. Actions do
+    // not provide a transaction across scheduler writes and later mutations;
+    // queuing first ensures one malformed or transiently failing store cannot
+    // strand every policy behind it. Carry the single derived timestamp so
+    // every page makes operating-date and rotation decisions from one sweep
+    // snapshot even when the cron omitted `now`.
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
+        {
+          cursor: page.continueCursor,
+          mode,
+          now,
+        },
+      );
+    }
 
     const results: OwedDailyCloseSweepResult["results"] = [];
     const escalations: Array<{ operatingDate: string; storeId: Id<"store"> }> =
       [];
 
     for (const candidate of candidates) {
-      for (const operatingDate of candidate.attempt) {
-        const result = await ctx.runMutation(
-          internal.operations.dailyOperationsAutomation
-            .runHistoricEodAutoCloseForDate,
-          {
-            asOfOperatingDate: candidate.asOfOperatingDate,
-            mode,
+      let activeOperatingDate = candidate.owed[0] ?? candidate.asOfOperatingDate;
+      try {
+        const attempt = selectRotatingOwedDailyCloseAttempt({
+          asOfOperatingDate: candidate.asOfOperatingDate,
+          now,
+          owed: candidate.owed,
+        });
+        for (const operatingDate of attempt) {
+          activeOperatingDate = operatingDate;
+          const result = await ctx.runMutation(
+            internal.operations.dailyOperationsAutomation
+              .runHistoricEodAutoCloseForDate,
+            {
+              asOfOperatingDate: candidate.asOfOperatingDate,
+              mode,
+              operatingDate,
+              storeId: candidate.storeId,
+            },
+          );
+
+          results.push({
+            action: result.action,
+            classification: result.classification ?? "unknown",
             operatingDate,
             storeId: candidate.storeId,
-          },
-        );
-
-        results.push({
-          action: result.action,
-          classification: result.classification ?? "unknown",
-          operatingDate,
-          storeId: candidate.storeId,
-        });
-      }
+          });
+        }
 
       // Escalate only what this sweep could not settle, so a day that just
       // closed above never raises a stale alert on its way out.
-      const closedThisSweep = new Set(
-        results
-          .filter(
-            (result) =>
-              result.storeId === candidate.storeId &&
-              (result.action === "completed" ||
-                result.action === "already_completed"),
-          )
-          .map((result) => result.operatingDate),
-      );
-
-      for (const operatingDate of candidate.stale) {
-        if (closedThisSweep.has(operatingDate)) continue;
-        if (mode === "dry_run") {
-          escalations.push({ operatingDate, storeId: candidate.storeId });
-          continue;
-        }
-
-        await ctx.runMutation(
-          internal.operations.owedDailyCloseSweep
-            .recordOwedDailyCloseStaleEscalation,
-          {
-            ageInDays: daysBetweenOperatingDates(
-              operatingDate,
-              candidate.asOfOperatingDate,
-            ),
-            operatingDate,
-            ...(candidate.organizationId
-              ? { organizationId: candidate.organizationId }
-              : {}),
-            storeId: candidate.storeId,
-          },
+        const closedThisSweep = new Set(
+          results
+            .filter(
+              (result) =>
+                result.storeId === candidate.storeId &&
+                dailyCloseSweepResultSettled(result),
+            )
+            .map((result) => result.operatingDate),
         );
-        escalations.push({ operatingDate, storeId: candidate.storeId });
+
+        const attemptedDates = new Set(attempt);
+        for (const operatingDate of candidate.stale) {
+          if (!attemptedDates.has(operatingDate)) continue;
+          if (closedThisSweep.has(operatingDate)) continue;
+          if (mode === "dry_run") {
+            escalations.push({ operatingDate, storeId: candidate.storeId });
+            continue;
+          }
+
+          activeOperatingDate = operatingDate;
+          const recorded = await ctx.runMutation(
+            internal.operations.owedDailyCloseSweep
+              .recordOwedDailyCloseStaleEscalation,
+            {
+              ageInDays: daysBetweenOperatingDates(
+                operatingDate,
+                candidate.asOfOperatingDate,
+              ),
+              operatingDate,
+              ...(candidate.organizationId
+                ? { organizationId: candidate.organizationId }
+                : {}),
+              storeId: candidate.storeId,
+            },
+          );
+          if (recorded) {
+            escalations.push({ operatingDate, storeId: candidate.storeId });
+          }
+        }
+      } catch (error) {
+        results.push({
+          action: "failed",
+          classification: "owed_daily_close_candidate_failed",
+          error: error instanceof Error ? error.message : String(error),
+          operatingDate: activeOperatingDate,
+          storeId: candidate.storeId,
+        });
       }
     }
 
@@ -348,7 +485,15 @@ export const runOwedDailyCloseSweep = internalAction({
       results,
       scannedStoreCount: candidates.length,
     };
+}
+
+export const runOwedDailyCloseSweep = internalAction({
+  args: {
+    cursor: v.optional(v.string()),
+    mode: v.optional(v.union(v.literal("dry_run"), v.literal("apply"))),
+    now: v.optional(v.number()),
   },
+  handler: runOwedDailyCloseSweepWithCtx,
 });
 
 function daysBetweenOperatingDates(from: string, to: string) {

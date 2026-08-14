@@ -67,6 +67,7 @@ import type * as emails_RegisterCloseoutMatchReportPreview from "../emails/Regis
 import type * as emails_RegisterCloseoutVarianceAlert from "../emails/RegisterCloseoutVarianceAlert.js";
 import type * as emails_RegisterCloseoutVarianceAlertPreview from "../emails/RegisterCloseoutVarianceAlertPreview.js";
 import type * as emails_ReportVerificationAlert from "../emails/ReportVerificationAlert.js";
+import type * as emails_StaleDailyCloseAlert from "../emails/StaleDailyCloseAlert.js";
 import type * as emails_VerificationCode from "../emails/VerificationCode.js";
 import type * as emails_WalkthroughRequestNotification from "../emails/WalkthroughRequestNotification.js";
 import type * as emails_WeeklyManagerReport from "../emails/WeeklyManagerReport.js";
@@ -679,6 +680,7 @@ declare const fullApi: ApiFromModules<{
   "emails/RegisterCloseoutVarianceAlert": typeof emails_RegisterCloseoutVarianceAlert;
   "emails/RegisterCloseoutVarianceAlertPreview": typeof emails_RegisterCloseoutVarianceAlertPreview;
   "emails/ReportVerificationAlert": typeof emails_ReportVerificationAlert;
+  "emails/StaleDailyCloseAlert": typeof emails_StaleDailyCloseAlert;
   "emails/VerificationCode": typeof emails_VerificationCode;
   "emails/WalkthroughRequestNotification": typeof emails_WalkthroughRequestNotification;
   "emails/WeeklyManagerReport": typeof emails_WeeklyManagerReport;

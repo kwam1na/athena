@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   OWED_DAILY_CLOSE_LOOKBACK_DAYS,
-  OWED_DAILY_CLOSE_MAX_PER_SWEEP,
+  dailyCloseSweepResultSettled,
+  selectRotatingOwedDailyCloseAttempt,
+  runOwedDailyCloseSweepWithCtx,
   selectOwedDailyCloseDates,
 } from "./owedDailyCloseSweep";
 
@@ -22,13 +24,114 @@ function fullWindow() {
 }
 
 describe("owed daily close selection", () => {
+  it("persists continuation and attempts the next same-page store after a store failure", async () => {
+    const derivedNow = Date.parse("2026-07-25T00:30:00.000Z");
+    vi.spyOn(Date, "now").mockReturnValue(derivedNow);
+    const queryArgs: Array<Record<string, unknown>> = [];
+    const scheduled: Array<Record<string, unknown>> = [];
+    const ctx = {
+      runQuery: async (_reference: unknown, args: unknown) => {
+        queryArgs.push(args as Record<string, unknown>);
+        return {
+          candidates: [
+            {
+              asOfOperatingDate: AS_OF,
+              owed: ["2026-07-21"],
+              stale: ["2026-07-21"],
+              storeId: "store-first",
+            },
+            {
+              asOfOperatingDate: AS_OF,
+              owed: ["2026-07-22"],
+              stale: [],
+              storeId: "store-second",
+            },
+          ],
+          continueCursor: "tail-cursor",
+          isDone: false,
+        };
+      },
+      runMutation: async (_reference: unknown, args: unknown) => {
+        const mutationArgs = args as { storeId: string };
+        if (mutationArgs.storeId === "store-first") {
+          throw new Error("first store failed");
+        }
+        return { action: "applied", classification: "completed" };
+      },
+      scheduler: {
+        runAfter: async (_delay: number, _reference: unknown, args: unknown) => {
+          scheduled.push(args as Record<string, unknown>);
+          return "scheduled-id";
+        },
+      },
+    };
+
+    const result = await runOwedDailyCloseSweepWithCtx(ctx as never, {
+      mode: "apply",
+    });
+    expect(queryArgs).toEqual([{ now: derivedNow }]);
+    expect(scheduled).toEqual([
+      {
+        cursor: "tail-cursor",
+        mode: "apply",
+        now: derivedNow,
+      },
+    ]);
+    expect(result.results).toEqual([
+      {
+        action: "failed",
+        classification: "owed_daily_close_candidate_failed",
+        error: "first store failed",
+        operatingDate: "2026-07-21",
+        storeId: "store-first",
+      },
+      {
+        action: "applied",
+        classification: "completed",
+        operatingDate: "2026-07-22",
+        storeId: "store-second",
+      },
+    ]);
+    vi.restoreAllMocks();
+  });
+  it.each([
+    ["hourly", 1],
+    ["two-hourly", 2],
+  ] as const)(
+    "covers backlog lengths 4-7 at the real %s cadence",
+    (_, cadenceHours) => {
+      for (let backlogLength = 4; backlogLength <= 7; backlogLength += 1) {
+        const owed = fullWindow().slice(0, backlogLength);
+        const attempted = new Set<string>();
+        for (let run = 0; run < backlogLength; run += 1) {
+          for (const date of selectRotatingOwedDailyCloseAttempt({
+            asOfOperatingDate: AS_OF,
+            now:
+              Date.parse(`${AS_OF}T00:30:00.000Z`) +
+              run * cadenceHours * 60 * 60_000,
+            owed,
+          })) {
+            attempted.add(date);
+          }
+        }
+        expect([...attempted].sort()).toEqual(owed);
+      }
+    },
+  );
+  it("treats an applied historic close as settled in the same sweep", () => {
+    expect(dailyCloseSweepResultSettled({ action: "applied" })).toBe(true);
+    expect(dailyCloseSweepResultSettled({ action: "already_completed" })).toBe(
+      true,
+    );
+    expect(dailyCloseSweepResultSettled({ action: "quarantined" })).toBe(false);
+  });
   it("owes nothing when every day in the window is closed", () => {
     expect(
       selectOwedDailyCloseDates({
         asOfOperatingDate: AS_OF,
         completedOperatingDates: fullWindow(),
       }),
-    ).toEqual({ owed: [], attempt: [], stale: [] });
+    ).toEqual({ owed: [], stale: [] });
   });
 
   it("finds the one day that missed its window", () => {
@@ -42,7 +145,6 @@ describe("owed daily close selection", () => {
     });
 
     expect(result.owed).toEqual(["2026-07-24"]);
-    expect(result.attempt).toEqual(["2026-07-24"]);
     // One day old is well inside the transient-blocker band.
     expect(result.stale).toEqual([]);
   });
@@ -67,20 +169,6 @@ describe("owed daily close selection", () => {
     });
 
     expect(result.owed).not.toContain("2026-07-17");
-  });
-
-  it("drains a backlog oldest-first in bounded slices", () => {
-    const result = selectOwedDailyCloseDates({
-      asOfOperatingDate: AS_OF,
-      completedOperatingDates: [],
-    });
-
-    expect(result.attempt).toHaveLength(OWED_DAILY_CLOSE_MAX_PER_SWEEP);
-    expect(result.attempt).toEqual([
-      "2026-07-18",
-      "2026-07-19",
-      "2026-07-20",
-    ]);
   });
 
   it("escalates only the days past the staleness threshold", () => {
@@ -108,16 +196,14 @@ describe("owed daily close selection", () => {
     expect(result.stale).not.toContain("2026-07-24");
   });
 
-  it("honors explicit bounds", () => {
+  it("honors an explicit lookback bound", () => {
     const result = selectOwedDailyCloseDates({
       asOfOperatingDate: AS_OF,
       completedOperatingDates: [],
       lookbackDays: 2,
-      maxPerSweep: 1,
     });
 
     expect(result.owed).toEqual(["2026-07-23", "2026-07-24"]);
-    expect(result.attempt).toEqual(["2026-07-23"]);
   });
 
   it("selects nothing for a malformed operating date", () => {
@@ -126,7 +212,7 @@ describe("owed daily close selection", () => {
         asOfOperatingDate: "not-a-date",
         completedOperatingDates: [],
       }),
-    ).toEqual({ owed: [], attempt: [], stale: [] });
+    ).toEqual({ owed: [], stale: [] });
   });
 
   it("selects nothing when bounds are degenerate", () => {
@@ -136,7 +222,7 @@ describe("owed daily close selection", () => {
         completedOperatingDates: [],
         lookbackDays: 0,
       }),
-    ).toEqual({ owed: [], attempt: [], stale: [] });
+    ).toEqual({ owed: [], stale: [] });
   });
 
   it("crosses a month boundary correctly", () => {

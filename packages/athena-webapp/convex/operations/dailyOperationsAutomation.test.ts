@@ -870,7 +870,10 @@ describe("daily operations automation adapter", () => {
   it("skips EOD preparation when the review is already completed", async () => {
     const reportSnapshot = {
       carryForwardItems: [],
-      carryForwardWorkItemIds: [],
+      carryForwardWorkItemIds: expect.arrayContaining([
+        "work-cap-1",
+        "work-cap-500",
+      ]),
       closeMetadata: {
         completedAt: Date.UTC(2026, 5, 8, 22),
         completedByUserId: "user-1",
@@ -2757,6 +2760,83 @@ describe("daily operations automation adapter", () => {
           quarantineReason: "incomplete_source_reads",
         }),
       },
+    });
+  });
+
+  it("historic automation completes when only open operational-work evidence exceeds the probe", async () => {
+    const operationalWorkItems = Array.from({ length: 501 }, (_, index) => ({
+      _id: `work-cap-${index + 1}`,
+      approvalState: "not_required",
+      createdAt: Date.UTC(2026, 5, 8, 12, index % 60),
+      organizationId: "org-1",
+      priority: "normal",
+      status: "open",
+      storeId: "store-1",
+      title: `Carry-forward ${index + 1}`,
+      type: "stock_adjustment_follow_up",
+    }));
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      operationalWorkItem: operationalWorkItems,
+      store: [store],
+      storeSchedule: [storeSchedule()],
+    });
+
+    const result = await runHistoricEodAutoCloseBatchWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        asOfOperatingDate: "2026-06-10",
+        endOperatingDate: "2026-06-08",
+        maxDays: 1,
+        mode: "apply",
+        startOperatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({ applied: 1, candidates: 1, quarantined: 0 });
+    expect(
+      inserts.find((insert) => insert.table === "dailyClose")?.value,
+    ).toMatchObject({
+      actorType: "automation",
+      carryForwardWorkItemIds: expect.arrayContaining([
+        "work-cap-1",
+        "work-cap-500",
+      ]),
+      readiness: { carryForwardCount: 500 },
+      reportSnapshot: {
+        carryForwardGroups: expect.arrayContaining([
+          expect.objectContaining({ memberWorkItemIds: ["work-cap-1"] }),
+        ]),
+        carryForwardItems: expect.arrayContaining([
+          expect.objectContaining({
+            metadata: expect.objectContaining({
+              membershipCompleteness: "incomplete",
+            }),
+          }),
+        ]),
+        openWorkMembership: {
+          completeness: "incomplete",
+          observedLogicalCount: 500,
+        },
+        summary: { carryForwardWorkItemCount: 500 },
+      },
+      sourceCompleteness: {
+        complete: false,
+        entries: expect.arrayContaining([
+          expect.objectContaining({
+            complete: false,
+            source: "operational_work_item",
+          }),
+        ]),
+      },
+      status: "completed",
     });
   });
 

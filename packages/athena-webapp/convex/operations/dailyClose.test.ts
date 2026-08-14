@@ -5187,10 +5187,10 @@ describe("end-of-day review backend foundation", () => {
     ).toHaveLength(0);
   });
 
-  it("fails closed when carry-forward source evidence exceeds the EOD probe", async () => {
+  it("completes with incomplete open-work evidence without duplicating a carry-forward beyond the snapshot probe", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
     const nonMatchingCarryForwardItems = Array.from(
-      { length: 200 },
+      { length: 500 },
       (_, index) => ({
         _id: `work-existing-${index}`,
         approvalState: "not_required",
@@ -5252,11 +5252,16 @@ describe("end-of-day review backend foundation", () => {
     );
 
     expect(result).toMatchObject({
-      kind: "user_error",
-      error: {
-        code: "precondition_failed",
-        message:
-          "EOD Review cannot complete until all source evidence is loaded.",
+      kind: "ok",
+      data: {
+        action: "completed",
+        dailyClose: {
+          reportSnapshot: {
+            openWorkMembership: {
+              completeness: "incomplete",
+            },
+          },
+        },
       },
     });
     expect(
@@ -5272,10 +5277,10 @@ describe("end-of-day review backend foundation", () => {
   });
 
   it.each(["open", "in_progress"] as const)(
-    "treats exactly 200 %s operational work rows as complete and a 201st row as an incomplete sentinel",
+    "treats exactly 500 %s operational work rows as complete and a 501st row as an incomplete sentinel",
     async (status) => {
       const completeDb = createDb({
-        operationalWorkItem: openOperationalWorkItems(200, status),
+        operationalWorkItem: openOperationalWorkItems(500, status),
         store: [store],
       });
       const completeSnapshot = await buildDailyCloseSnapshotWithCtx(
@@ -5289,15 +5294,15 @@ describe("end-of-day review backend foundation", () => {
       expect(completeSnapshot.sourceCompleteness.entries).toContainEqual(
         expect.objectContaining({
           complete: true,
-          limit: 200,
-          recordCount: 200,
+          limit: 500,
+          recordCount: 500,
           source: "operational_work_item",
         }),
       );
-      expect(completeSnapshot.summary.openWorkItemCount).toBe(200);
+      expect(completeSnapshot.summary.openWorkItemCount).toBe(500);
       expect(completeSnapshot.openWorkMembership).toEqual({
         completeness: "complete",
-        observedLogicalCount: 200,
+        observedLogicalCount: 500,
       });
       expect(
         completeSnapshot.carryForwardItems.every(
@@ -5306,7 +5311,7 @@ describe("end-of-day review backend foundation", () => {
       ).toBe(true);
 
       const incompleteDb = createDb({
-        operationalWorkItem: openOperationalWorkItems(201, status),
+        operationalWorkItem: openOperationalWorkItems(501, status),
         store: [store],
       });
       const incompleteSnapshot = await buildDailyCloseSnapshotWithCtx(
@@ -5320,21 +5325,21 @@ describe("end-of-day review backend foundation", () => {
       expect(incompleteSnapshot.sourceCompleteness.entries).toContainEqual(
         expect.objectContaining({
           complete: false,
-          limit: 200,
-          recordCount: 200,
+          limit: 500,
+          recordCount: 500,
           reason: "operational_work_item_source_cap_reached",
           source: "operational_work_item",
         }),
       );
-      expect(incompleteSnapshot.summary.openWorkItemCount).toBe(200);
+      expect(incompleteSnapshot.summary.openWorkItemCount).toBe(500);
       expect(incompleteSnapshot.openWorkMembership).toEqual({
         completeness: "incomplete",
-        observedLogicalCount: 200,
+        observedLogicalCount: 500,
       });
       expect(
         incompleteSnapshot.carryForwardItems.every(
           (item) =>
-            item.carryForwardWorkItemIds === undefined &&
+            item.carryForwardWorkItemIds?.length === 1 &&
             item.subject.type === "incomplete_logical_operational_work_group" &&
             item.metadata?.membershipCompleteness === "incomplete",
         ),
@@ -5342,9 +5347,17 @@ describe("end-of-day review backend foundation", () => {
     },
   );
 
-  it("fails human and automation completion closed when an operational-work lane has a 201st row", async () => {
+  it("allows human and automation completion when only operational-work evidence exceeds the probe", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
     const humanDb = createDb({
-      operationalWorkItem: openOperationalWorkItems(201, "open"),
+      approvalProof: [
+        dailyCloseApprovalProof(),
+        dailyCloseCarryForwardApprovalProof({
+          subjectId:
+            "dailyClose-1:work-source-boundary-open-1:completed",
+        }),
+      ],
+      operationalWorkItem: openOperationalWorkItems(501, "open"),
       store: [store],
     });
     const humanResult = await completeDailyCloseWithCtx(
@@ -5352,30 +5365,101 @@ describe("end-of-day review backend foundation", () => {
       {
         actorStaffProfileId: "staff-1" as Id<"staffProfile">,
         actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId: "approval-proof-1" as Id<"approvalProof">,
         operatingDate: "2026-05-07",
         storeId: "store-1" as Id<"store">,
       },
     );
 
     expect(humanResult).toMatchObject({
-      kind: "user_error",
-      error: {
-        code: "precondition_failed",
-        message:
-          "EOD Review cannot complete until all source evidence is loaded.",
-        metadata: {
-          incompleteSources: [
-            expect.objectContaining({
-              complete: false,
-              source: "operational_work_item",
-            }),
-          ],
+      kind: "ok",
+      data: {
+        action: "completed",
+        dailyClose: {
+          reportSnapshot: {
+            openWorkMembership: {
+              completeness: "incomplete",
+              observedLogicalCount: 500,
+            },
+          },
+          sourceCompleteness: {
+            complete: false,
+            entries: expect.arrayContaining([
+              expect.objectContaining({
+                complete: false,
+                source: "operational_work_item",
+              }),
+            ]),
+          },
         },
       },
     });
+    if (humanResult.kind !== "ok") throw new Error("Expected human close");
+    expect(humanResult.data.dailyClose.readiness.carryForwardCount).toBe(500);
+    expect(
+      humanResult.data.dailyClose.reportSnapshot?.summary
+        .carryForwardWorkItemCount,
+    ).toBe(500);
+    expect(
+      humanResult.data.dailyClose.reportSnapshot?.carryForwardItems,
+    ).toHaveLength(500);
+    expect(
+      humanResult.data.dailyClose.reportSnapshot?.carryForwardGroups,
+    ).toHaveLength(500);
+    expect(humanResult.data.dailyClose.carryForwardWorkItemIds).toHaveLength(
+      500,
+    );
+    const observedId = humanResult.data.dailyClose.carryForwardWorkItemIds[0]!;
+    const unobservedId = openOperationalWorkItems(501, "open")
+      .map((item) => item._id)
+      .find(
+        (workItemId) =>
+          !humanResult.data.dailyClose.carryForwardWorkItemIds.includes(
+            workItemId as Id<"operationalWorkItem">,
+          ),
+      )!;
+    expect(humanResult.data.dailyClose.carryForwardWorkItemIds).not.toContain(
+      unobservedId,
+    );
+    const openingContext = await getDailyCloseOpeningContextWithCtx(
+      { db: humanDb.db } as unknown as QueryCtx,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    expect(openingContext.carryForwardWorkItems).toHaveLength(500);
+    expect(
+      openingContext.carryForwardWorkItems.map((item) => item._id),
+    ).toContain(observedId);
+    expect(
+      openingContext.carryForwardWorkItems.map((item) => item._id),
+    ).not.toContain(unobservedId);
+
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 10));
+    const resolution = await resolveDailyCloseCarryForwardWithCtx(
+      { db: humanDb.db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId:
+          "approval-proof-carry-forward-1" as Id<"approvalProof">,
+        businessDate: "2026-05-07",
+        dailyCloseId: humanResult.data.dailyClose._id,
+        outcome: "completed",
+        reason: "Observed handoff completed.",
+        sourceId: observedId,
+        storeId: "store-1" as Id<"store">,
+        workItemId: observedId,
+      },
+    );
+    expect(resolution).toMatchObject({
+      kind: "ok",
+      data: { action: "completed" },
+    });
 
     const automationDb = createDb({
-      operationalWorkItem: openOperationalWorkItems(201, "in_progress"),
+      operationalWorkItem: openOperationalWorkItems(501, "in_progress"),
       store: [store],
     });
     const automationResult = await completeDailyCloseForAutomationWithCtx(
@@ -5392,24 +5476,50 @@ describe("end-of-day review backend foundation", () => {
     );
 
     expect(automationResult).toMatchObject({
-      kind: "user_error",
-      error: {
-        code: "precondition_failed",
-        message:
-          "EOD Review automation cannot complete without complete source evidence.",
-        metadata: {
-          incompleteSources: [
-            expect.objectContaining({
-              complete: false,
-              source: "operational_work_item",
-            }),
-          ],
+      kind: "ok",
+      data: {
+        action: "completed",
+        dailyClose: {
+          reportSnapshot: {
+            openWorkMembership: {
+              completeness: "incomplete",
+              observedLogicalCount: 500,
+            },
+          },
+          sourceCompleteness: {
+            complete: false,
+            entries: expect.arrayContaining([
+              expect.objectContaining({
+                complete: false,
+                source: "operational_work_item",
+              }),
+            ]),
+          },
         },
       },
     });
+    if (automationResult.kind !== "ok") {
+      throw new Error("Expected automation close");
+    }
+    expect(automationResult.data.dailyClose.readiness.carryForwardCount).toBe(
+      500,
+    );
+    expect(
+      automationResult.data.dailyClose.reportSnapshot?.summary
+        .carryForwardWorkItemCount,
+    ).toBe(500);
+    expect(
+      automationResult.data.dailyClose.reportSnapshot?.carryForwardItems,
+    ).toHaveLength(500);
+    expect(
+      automationResult.data.dailyClose.reportSnapshot?.carryForwardGroups,
+    ).toHaveLength(500);
+    expect(
+      automationResult.data.dailyClose.carryForwardWorkItemIds,
+    ).toHaveLength(500);
   });
 
-  it("fails human and automation completion closed when an active-repair lane has a 201st row", async () => {
+  it("fails human and automation completion when another source is incomplete alongside operational work", async () => {
     const repairs = Array.from({ length: 201 }, (_, index) => ({
       _id: `repair-cap-${index + 1}`,
       groupKey: `synced_sale_inventory_review:store-1:sku-${index + 1}`,
@@ -5418,6 +5528,7 @@ describe("end-of-day review backend foundation", () => {
       storeId: "store-1",
     }));
     const humanDb = createDb({
+      operationalWorkItem: openOperationalWorkItems(501, "open"),
       oversizedOperationalWorkRepair: repairs,
       store: [store],
     });
@@ -5448,6 +5559,7 @@ describe("end-of-day review backend foundation", () => {
     });
 
     const automationDb = createDb({
+      operationalWorkItem: openOperationalWorkItems(501, "in_progress"),
       oversizedOperationalWorkRepair: repairs,
       store: [store],
     });

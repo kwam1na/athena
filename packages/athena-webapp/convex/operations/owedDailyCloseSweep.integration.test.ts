@@ -117,7 +117,6 @@ describe("owed daily close sweep", () => {
     expect(candidates[0]).toMatchObject({
       asOfOperatingDate: "2026-07-25",
       owed: ["2026-07-24"],
-      attempt: ["2026-07-24"],
       stale: [],
     });
   });
@@ -201,7 +200,6 @@ describe("owed daily close sweep", () => {
     expect(result.scannedStoreCount).toBe(1);
 
     const events = await t.run(async (ctx) =>
-      // eslint-disable-next-line @convex-dev/no-collect-in-query -- test fixture
       ctx.db
         .query("operationalEvent")
         .withIndex("by_storeId_subject", (q) =>
@@ -210,7 +208,7 @@ describe("owed daily close sweep", () => {
             .eq("subjectType", "daily_close")
             .eq("subjectId", "2026-07-21"),
         )
-        .collect(),
+        .take(2),
     );
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
@@ -219,6 +217,26 @@ describe("owed daily close sweep", () => {
       reason: "daily_close_owed_stale",
     });
     expect(events[0]?.metadata).toMatchObject({ ageInDays: 4 });
+
+    const intents = await t.run(async (ctx) =>
+      ctx.db
+        .query("notificationIntent")
+        .withIndex("by_dedupeKey", (q) =>
+          q.eq("dedupeKey", `eod.stale_daily_close:${storeId}:2026-07-21`),
+        )
+        .take(2),
+    );
+    expect(intents).toHaveLength(1);
+    expect(intents[0]).toMatchObject({
+      category: "eod",
+      kind: "eod.stale_daily_close",
+      payload: {
+        ageInDays: 4,
+        operatingDate: "2026-07-21",
+        storeId,
+      },
+      status: "pending",
+    });
   });
 
   it("escalates a stuck day only once across repeated sweeps", async () => {
@@ -238,7 +256,6 @@ describe("owed daily close sweep", () => {
     );
 
     const events = await t.run(async (ctx) =>
-      // eslint-disable-next-line @convex-dev/no-collect-in-query -- test fixture
       ctx.db
         .query("operationalEvent")
         .withIndex("by_storeId_subject", (q) =>
@@ -247,9 +264,19 @@ describe("owed daily close sweep", () => {
             .eq("subjectType", "daily_close")
             .eq("subjectId", "2026-07-21"),
         )
-        .collect(),
+        .take(2),
     );
     expect(events).toHaveLength(1);
+
+    const intents = await t.run(async (ctx) =>
+      ctx.db
+        .query("notificationIntent")
+        .withIndex("by_dedupeKey", (q) =>
+          q.eq("dedupeKey", `eod.stale_daily_close:${storeId}:2026-07-21`),
+        )
+        .take(2),
+    );
+    expect(intents).toHaveLength(1);
   });
 
   it("does not escalate a recently owed day", async () => {
@@ -271,4 +298,158 @@ describe("owed daily close sweep", () => {
     );
     expect(events).toEqual([]);
   });
+
+  it("does not consume stale intents for backlog dates it did not attempt", async () => {
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t);
+    const sweepNow = Date.parse("2026-07-25T00:30:00.000Z");
+
+    const first = await t.action(
+      internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
+      { mode: "apply", now: sweepNow },
+    );
+    expect(first.escalations.map((entry) => entry.operatingDate)).toEqual([
+      "2026-07-18",
+      "2026-07-19",
+      "2026-07-20",
+    ]);
+
+    for (const operatingDate of first.escalations.map(
+      (entry) => entry.operatingDate,
+    )) {
+      await seedCompletedClose(t, { operatingDate, organizationId, storeId });
+    }
+
+    const second = await t.action(
+      internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
+      { mode: "apply", now: sweepNow },
+    );
+    expect(second.escalations.map((entry) => entry.operatingDate)).toEqual([
+      "2026-07-21",
+      "2026-07-22",
+      "2026-07-23",
+    ]);
+  });
+
+  it("rotates past permanently blocked oldest dates so later stale dates alert", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const alerted = new Set<string>();
+    const sweepNow = Date.parse("2026-07-25T00:30:00.000Z");
+
+    for (let slot = 0; slot < 7; slot += 1) {
+      const result = await t.action(
+        internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
+        { mode: "apply", now: sweepNow + slot * 60 * 60_000 },
+      );
+      for (const escalation of result.escalations) {
+        alerted.add(escalation.operatingDate);
+      }
+      expect(result.results).toHaveLength(3);
+    }
+
+    expect([...alerted].sort()).toEqual(WINDOW.slice(0, 6));
+    const intents = await t.run((ctx) =>
+      ctx.db
+        .query("notificationIntent")
+        .withIndex("by_storeId_and_emittedAt", (q) => q.eq("storeId", storeId))
+        .take(10),
+    );
+    expect(
+      intents
+        .filter((intent) => intent.category === "eod")
+        .map((intent) => intent.payload.operatingDate)
+        .sort(),
+    ).toEqual(WINDOW.slice(0, 6));
+  });
+
+  it("rechecks a completed active close before recording escalation", async () => {
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t);
+    await seedCompletedClose(t, {
+      operatingDate: "2026-07-21",
+      organizationId,
+      storeId,
+    });
+
+    expect(
+      await t.mutation(
+        internal.operations.owedDailyCloseSweep
+          .recordOwedDailyCloseStaleEscalation,
+        {
+          ageInDays: 4,
+          operatingDate: "2026-07-21",
+          organizationId,
+          storeId,
+        },
+      ),
+    ).toBe(false);
+    const events = await t.run((ctx) =>
+      ctx.db
+        .query("operationalEvent")
+        .withIndex("by_storeId_subject", (q) =>
+          q
+            .eq("storeId", storeId)
+            .eq("subjectType", "daily_close")
+            .eq("subjectId", "2026-07-21"),
+        )
+        .take(1),
+    );
+    expect(events).toEqual([]);
+  });
+
+  it("continues past 50 enabled policies and escalates the tail store", async () => {
+    const t = convexTest(schema, modules);
+    const stores = [];
+    for (let index = 0; index < 51; index += 1) {
+      stores.push(await seedStore(t));
+    }
+    const tail = stores[50]!;
+    const firstPage = await t.query(
+      internal.operations.owedDailyCloseSweep.listOwedDailyCloseCandidatePage,
+      { now: NOW },
+    );
+    expect(firstPage.isDone).toBe(false);
+    expect(firstPage.candidates).toHaveLength(50);
+
+    await t.action(
+      internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
+      { mode: "apply", now: NOW },
+    );
+    const scheduled = await t.run((ctx) =>
+      ctx.db.system.query("_scheduled_functions").take(500),
+    );
+    expect(
+      scheduled.some(
+        (entry) =>
+          entry.args[0]?.cursor === firstPage.continueCursor,
+      ),
+    ).toBe(true);
+
+    const tailPage = await t.action(
+      internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
+      {
+        cursor: firstPage.continueCursor,
+        mode: "apply",
+        now: NOW,
+      },
+    );
+    expect(tailPage.scannedStoreCount).toBe(1);
+    expect(tailPage.results).toHaveLength(3);
+    expect(tailPage.results.every((result) => result.storeId === tail.storeId)).toBe(
+      true,
+    );
+    const tailIntents = await t.run((ctx) =>
+      ctx.db
+        .query("notificationIntent")
+        .withIndex("by_storeId_and_emittedAt", (q) =>
+          q.eq("storeId", tail.storeId),
+        )
+        .take(10),
+    );
+    expect(tailIntents).toHaveLength(3);
+    expect(
+      tailIntents.every((intent) => intent.kind === "eod.stale_daily_close"),
+    ).toBe(true);
+  }, 20_000);
 });
