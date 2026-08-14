@@ -42,6 +42,10 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { runCommand } from "@/lib/errors/runCommand";
 import { getOrigin } from "@/lib/navigationUtils";
 import {
+  POS_LOCAL_LEDGER_CRITICAL_EVENT_COUNT,
+  POS_LOCAL_LEDGER_WARNING_EVENT_COUNT,
+} from "@/lib/pos/infrastructure/local/posLocalStorageHealth";
+import {
   readRuntimeBuildMetadata,
   type AthenaWebappRuntimeBuildMetadata,
 } from "@/lib/runtimeBuildMetadata";
@@ -667,7 +671,8 @@ function TerminalHealthBadge({
 }) {
   const [storageDetailOpen, setStorageDetailOpen] = useState(false);
   const localStore = runtimeStatus?.localStore;
-  const showsStorageDetail = classification.label === "Storage needs attention";
+  const showsStorageDetail =
+    classification.label === "Local data needs attention";
 
   const badge = (
     <Badge className={classification.toneClassName} variant="outline">
@@ -706,27 +711,37 @@ function TerminalHealthBadge({
           </button>
         </TooltipTrigger>
         <TooltipContent className="w-72 p-layout-sm">
-          <p className="text-xs font-medium">Why storage needs attention</p>
+          <p className="text-xs font-medium">Why local data needs attention</p>
           <div className="mt-layout-2xs space-y-1 text-xs text-warning">
             {attentionReasons.map((reason) => (
               <p key={reason}>{reason}</p>
             ))}
           </div>
           <dl className="mt-layout-sm divide-y divide-border/70 border-t border-border/70 text-xs">
-            <StorageDiagnosticRow label="Local events" value={eventCount} />
             <StorageDiagnosticRow
-              label="Storage used"
+              label="Athena browser storage"
               value={storageUsage ?? "Not reported"}
             />
             <StorageDiagnosticRow
-              label="Ledger pressure"
+              label="Browser storage status"
+              value={formatStatusLabel(localStore.pressure ?? "unknown")}
+            />
+            <StorageDiagnosticRow label="Local event ledger" value={eventCount} />
+            <StorageDiagnosticRow
+              label="Ledger maintenance"
               value={formatStatusLabel(localStore.ledgerPressure ?? "unknown")}
             />
             <StorageDiagnosticRow
-              label="Persistence"
+              label="Browser persistence"
               value={formatStatusLabel(localStore.persistence ?? "unknown")}
             />
           </dl>
+          {isElevatedStoragePressure(localStore.ledgerPressure) ? (
+            <p className="mt-layout-sm text-xs text-muted-foreground">
+              Keep this terminal online. Athena cleans up eligible events when
+              no cashier is signed in.
+            </p>
+          ) : null}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -754,18 +769,58 @@ function getStorageAttentionReasons(
   const reasons: string[] = [];
 
   if (localStore.pressure === "critical") {
-    reasons.push("Available browser storage is critically low.");
+    reasons.push("Available Athena browser storage is critically low.");
   } else if (localStore.pressure === "warning") {
-    reasons.push("Browser storage usage is high.");
+    reasons.push("Athena browser storage usage is high.");
   }
 
   if (localStore.ledgerPressure === "critical") {
-    reasons.push("The local event ledger needs support.");
+    reasons.push(
+      getLedgerPressureReason(
+        localStore.ledgerEventCount,
+        POS_LOCAL_LEDGER_CRITICAL_EVENT_COUNT,
+        90,
+      ),
+    );
   } else if (localStore.ledgerPressure === "warning") {
-    reasons.push("The local event ledger is above its maintenance threshold.");
+    reasons.push(
+      getLedgerPressureReason(
+        localStore.ledgerEventCount,
+        POS_LOCAL_LEDGER_WARNING_EVENT_COUNT,
+        30,
+      ),
+    );
   }
 
   return reasons;
+}
+
+function getLedgerPressureReason(
+  eventCount: number | undefined,
+  eventThreshold: number,
+  ageThresholdDays: number,
+) {
+  if (
+    typeof eventCount === "number" &&
+    Number.isSafeInteger(eventCount) &&
+    eventCount >= eventThreshold
+  ) {
+    return `The local event ledger contains at least ${new Intl.NumberFormat("en-US").format(eventThreshold)} events.`;
+  }
+  if (
+    typeof eventCount === "number" &&
+    Number.isSafeInteger(eventCount) &&
+    eventCount >= 0
+  ) {
+    return `The oldest retained local event is at least ${ageThresholdDays} days old.`;
+  }
+  return "The local event ledger is above its maintenance threshold.";
+}
+
+function isElevatedStoragePressure(
+  pressure: NonNullable<TerminalRuntimeStatus["localStore"]>["ledgerPressure"],
+) {
+  return pressure === "warning" || pressure === "critical";
 }
 
 function formatStorageUsage(usageBytes?: number, quotaBytes?: number) {

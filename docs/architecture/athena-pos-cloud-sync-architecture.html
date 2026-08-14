@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en" data-diagram-profile="athena" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Athena POS local-first execution and cloud synchronization architecture">
+  <title>Athena POS and Cloud Sync Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+  <link href="./diagram-theme.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      padding: 48px 32px 64px;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+
+    main {
+      width: min(100%, 1360px);
+      margin: 0 auto;
+    }
+
+    .eyebrow,
+    .section-index {
+      color: var(--muted);
+      font: 500 8px/1.5 var(--mono);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow { margin-bottom: 8px; }
+
+    h1 {
+      margin-bottom: 8px;
+      font: 400 32px/1.04 var(--serif);
+      letter-spacing: -0.024em;
+    }
+
+    .subtitle {
+      max-width: 840px;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    .section {
+      margin-top: 48px;
+    }
+
+    .section-header {
+      display: grid;
+      grid-template-columns: 1fr minmax(320px, 0.72fr);
+      gap: 32px;
+      align-items: end;
+      margin-bottom: 20px;
+    }
+
+    .section-index { margin-bottom: 6px; }
+
+    h2 {
+      font: 400 24px/1.08 var(--serif);
+      letter-spacing: -0.016em;
+    }
+
+    .section-summary {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .diagram { overflow-x: auto; }
+
+    svg {
+      display: block;
+      width: 100%;
+      min-width: 960px;
+      height: auto;
+    }
+
+    .caption {
+      display: grid;
+      grid-template-columns: 1.2fr 0.95fr 0.75fr;
+      gap: 24px;
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid var(--rule);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .caption strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .caption code {
+      color: var(--link);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    @media (max-width: 760px) {
+      body { padding: 32px 20px 48px; }
+      .section-header,
+      .caption { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">Architecture · POS · Local-first Sync</p>
+      <h1>Athena keeps the register local and the business state shared</h1>
+      <p class="subtitle">Two views separate the system boundary from the terminal mechanics. Start with the cloud-sync overview; use the second diagram to see exactly how a cashier action becomes a durable local event and later converges with Athena Cloud.</p>
+    </header>
+
+    <section class="section" aria-labelledby="overview-heading">
+      <div class="section-header">
+        <div>
+          <p class="section-index">01 · System overview</p>
+          <h2 id="overview-heading">POS executes locally, then converges through one ordered sync boundary</h2>
+        </div>
+        <p class="section-summary">The register does not wait on Convex to complete a cashier command. The cloud accepts terminal events in sequence, projects canonical records, and returns reconciliation evidence to the same durable local state the UI reads.</p>
+      </div>
+
+      <div class="diagram">
+        <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="pos-cloud-overview-title pos-cloud-overview-desc">
+          <title id="pos-cloud-overview-title">Athena POS and cloud sync overview</title>
+          <desc id="pos-cloud-overview-desc">The POS application commits cashier actions to durable local state, a sync runtime uploads ordered events through authenticated ingestion, projection policy creates canonical Athena Cloud records and reconciliation work, and mappings, cursor outcomes, reviews, and lifecycle authority return to the terminal.</desc>
+          <defs>
+            <marker id="overview-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="var(--muted)"/>
+            </marker>
+            <marker id="overview-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="var(--accent)"/>
+            </marker>
+          </defs>
+
+          <rect width="1280" height="720" fill="var(--paper)"/>
+
+          <!-- Zones -->
+          <rect x="40" y="72" width="384" height="520" rx="8" fill="var(--zone-fill)" stroke="var(--rule-soft)" stroke-width="0.8"/>
+          <rect x="52" y="76" width="120" height="16" rx="4" fill="var(--paper)"/>
+          <text x="112" y="88" fill="var(--soft)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.14em">POS TERMINAL</text>
+
+          <rect x="456" y="72" width="336" height="520" rx="8" fill="var(--zone-fill)" stroke="var(--rule-soft)" stroke-width="0.8"/>
+          <rect x="468" y="76" width="136" height="16" rx="4" fill="var(--paper)"/>
+          <text x="536" y="88" fill="var(--soft)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.14em">SYNC BOUNDARY</text>
+
+          <rect x="824" y="72" width="416" height="520" rx="8" fill="var(--zone-fill)" stroke="var(--rule-soft)" stroke-width="0.8"/>
+          <rect x="836" y="76" width="128" height="16" rx="4" fill="var(--paper)"/>
+          <text x="900" y="88" fill="var(--soft)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.14em">ATHENA CLOUD</text>
+
+          <!-- Connectors: drawn before nodes -->
+          <line x1="160" y1="232" x2="160" y2="336" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#overview-arrow-accent)"/>
+          <rect x="96" y="268" width="128" height="16" rx="4" fill="var(--paper)"/>
+          <text x="160" y="280" fill="var(--accent)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">COMMIT BEFORE SUCCESS</text>
+
+          <line x1="304" y1="336" x2="304" y2="232" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#overview-arrow)"/>
+          <rect x="248" y="288" width="112" height="16" rx="4" fill="var(--paper)"/>
+          <text x="304" y="300" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">LOCAL READ MODEL</text>
+
+          <path d="M392 392 H440 Q448 392 448 384 V184 Q448 176 456 176 H488" fill="none" stroke="var(--link)" stroke-width="1.2" marker-end="url(#overview-arrow-accent)"/>
+          <rect x="404" y="272" width="88" height="16" rx="4" fill="var(--paper)"/>
+          <text x="448" y="284" fill="var(--link)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">PENDING EVENTS</text>
+
+          <line x1="624" y1="232" x2="624" y2="336" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#overview-arrow)"/>
+          <rect x="568" y="268" width="112" height="16" rx="4" fill="var(--paper)"/>
+          <text x="624" y="280" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">ORDERED BATCH</text>
+
+          <path d="M760 392 H808 Q816 392 816 384 V184 Q816 176 824 176 H856" fill="none" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#overview-arrow)"/>
+          <rect x="772" y="272" width="88" height="16" rx="4" fill="var(--paper)"/>
+          <text x="816" y="284" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">ACCEPT IN ORDER</text>
+
+          <line x1="1032" y1="232" x2="1032" y2="296" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#overview-arrow-accent)"/>
+          <rect x="984" y="244" width="96" height="16" rx="4" fill="var(--paper)"/>
+          <text x="1032" y="256" fill="var(--accent)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">PROJECT ONCE</text>
+
+          <line x1="1032" y1="448" x2="1032" y2="488" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#overview-arrow)"/>
+
+          <path d="M856 524 H824 Q816 524 816 532 V560 Q816 568 808 568 H448 Q440 568 440 560 V464 Q440 456 432 456 H392" fill="none" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#overview-arrow-accent)"/>
+          <rect x="528" y="548" width="208" height="16" rx="4" fill="var(--paper)"/>
+          <text x="632" y="560" fill="var(--accent)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">MAPPINGS · CURSOR · REVIEWS · AUTHORITY</text>
+
+          <!-- Nodes -->
+          <rect x="72" y="120" width="320" height="112" rx="8" fill="var(--surface)" stroke="var(--ink)" stroke-width="1"/>
+          <rect x="84" y="132" width="72" height="16" rx="4" fill="transparent" stroke="var(--ink-40)" stroke-width="0.8"/>
+          <text x="120" y="144" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">REGISTER</text>
+          <text x="232" y="176" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">POS Application</text>
+          <text x="232" y="200" fill="var(--muted)" font-size="12" font-family="var(--sans)" text-anchor="middle">cashier actions · cart · drawer · receipt</text>
+
+          <rect x="72" y="336" width="320" height="152" rx="8" fill="var(--accent-tint)" stroke="var(--accent)" stroke-width="1.2"/>
+          <rect x="84" y="348" width="96" height="16" rx="4" fill="transparent" stroke="var(--accent-45)" stroke-width="0.8"/>
+          <text x="132" y="360" fill="var(--accent)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">LOCAL AUTHORITY</text>
+          <text x="232" y="392" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Durable Local State</text>
+          <line x1="96" y1="412" x2="368" y2="412" stroke="var(--rule)" stroke-width="0.8"/>
+          <text x="232" y="436" fill="var(--muted)" font-size="12" font-family="var(--sans)" text-anchor="middle">event log · projections · mappings · authority</text>
+          <text x="232" y="460" fill="var(--link)" font-size="8" font-family="var(--mono)" text-anchor="middle">INDEXEDDB · SURVIVES RELOAD · WORKS OFFLINE</text>
+
+          <rect x="488" y="120" width="272" height="112" rx="8" fill="var(--surface)" stroke="var(--ink)" stroke-width="1"/>
+          <rect x="500" y="132" width="64" height="16" rx="4" fill="transparent" stroke="var(--ink-40)" stroke-width="0.8"/>
+          <text x="532" y="144" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">RUNTIME</text>
+          <text x="624" y="176" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Sync Runtime</text>
+          <text x="624" y="200" fill="var(--muted)" font-size="12" font-family="var(--sans)" text-anchor="middle">online trigger · retry · backoff · batching</text>
+
+          <rect x="488" y="336" width="272" height="152" rx="8" fill="var(--surface)" stroke="var(--ink)" stroke-width="1"/>
+          <rect x="500" y="348" width="56" height="16" rx="4" fill="transparent" stroke="var(--ink-40)" stroke-width="0.8"/>
+          <text x="528" y="360" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">INGEST</text>
+          <text x="624" y="392" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Authenticated Event Admission</text>
+          <line x1="512" y1="412" x2="736" y2="412" stroke="var(--rule)" stroke-width="0.8"/>
+          <text x="624" y="436" fill="var(--muted)" font-size="12" font-family="var(--sans)" text-anchor="middle">terminal identity · shared contract</text>
+          <text x="624" y="460" fill="var(--muted)" font-size="12" font-family="var(--sans)" text-anchor="middle">dedupe · sequence cursor · hold / reject</text>
+
+          <rect x="856" y="120" width="352" height="112" rx="8" fill="var(--surface)" stroke="var(--ink)" stroke-width="1"/>
+          <rect x="868" y="132" width="64" height="16" rx="4" fill="transparent" stroke="var(--ink-40)" stroke-width="0.8"/>
+          <text x="900" y="144" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">POLICY</text>
+          <text x="1032" y="176" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Projection &amp; Reconciliation Policy</text>
+          <text x="1032" y="200" fill="var(--muted)" font-size="12" font-family="var(--sans)" text-anchor="middle">permissions · payments · inventory · closeout</text>
+
+          <rect x="856" y="296" width="352" height="152" rx="8" fill="var(--accent-tint)" stroke="var(--accent)" stroke-width="1.2"/>
+          <rect x="868" y="308" width="96" height="16" rx="4" fill="transparent" stroke="var(--accent-45)" stroke-width="0.8"/>
+          <text x="916" y="320" fill="var(--accent)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">SHARED AUTHORITY</text>
+          <text x="1032" y="352" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Canonical Athena Records</text>
+          <line x1="880" y1="372" x2="1184" y2="372" stroke="var(--rule)" stroke-width="0.8"/>
+          <text x="1032" y="396" fill="var(--muted)" font-size="12" font-family="var(--sans)" text-anchor="middle">register + POS sessions · transactions · payments</text>
+          <text x="1032" y="420" fill="var(--muted)" font-size="12" font-family="var(--sans)" text-anchor="middle">inventory · cash controls · operational traces</text>
+
+          <rect x="856" y="488" width="352" height="72" rx="8" fill="var(--subtle-fill)" stroke="var(--muted)" stroke-width="1"/>
+          <rect x="868" y="500" width="64" height="16" rx="4" fill="transparent" stroke="var(--muted-45)" stroke-width="0.8"/>
+          <text x="900" y="512" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">OUTCOME</text>
+          <text x="1032" y="536" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Review Work &amp; Lifecycle Authority</text>
+
+          <!-- Legend -->
+          <line x1="40" y1="640" x2="1240" y2="640" stroke="var(--rule)" stroke-width="0.8"/>
+          <text x="40" y="668" fill="var(--muted)" font-size="8" font-family="var(--mono)" letter-spacing="0.14em">READING KEY</text>
+          <line x1="152" y1="664" x2="188" y2="664" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#overview-arrow-accent)"/>
+          <text x="200" y="668" fill="var(--muted)" font-size="8" font-family="var(--mono)">AUTHORITY / CONVERGENCE</text>
+          <line x1="396" y1="664" x2="432" y2="664" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#overview-arrow)"/>
+          <text x="444" y="668" fill="var(--muted)" font-size="8" font-family="var(--mono)">PROCESS FLOW</text>
+          <rect x="604" y="652" width="24" height="24" rx="4" fill="var(--accent-tint)" stroke="var(--accent)" stroke-width="1.2"/>
+          <text x="640" y="668" fill="var(--muted)" font-size="8" font-family="var(--mono)">SOURCE OF TRUTH BY SCOPE</text>
+          <text x="1240" y="668" fill="var(--soft)" font-size="8" font-family="var(--mono)" text-anchor="end">OVERVIEW · LOCAL-FIRST · EVENT SYNC</text>
+        </svg>
+      </div>
+
+      <div class="caption">
+        <p><strong>Immediate authority:</strong> the terminal is authoritative for whether a cashier command was durably recorded. A healthy local store can keep selling without the network.</p>
+        <p><strong>Shared authority:</strong> Athena Cloud becomes canonical after ordered admission and policy-aware projection. Completed local history is preserved when reconciliation is needed.</p>
+        <p><strong>Not pictured:</strong> catalog transport, provisioning, and diagnostics are supporting lanes, not part of the sale-to-cloud authority path.</p>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="mechanics-heading">
+      <div class="section-header">
+        <div>
+          <p class="section-index">02 · POS mechanics</p>
+          <h2 id="mechanics-heading">Inside the terminal, every cashier decision returns to one durable local projection</h2>
+        </div>
+        <p class="section-summary">The command gateway validates against local policy inputs, appends the event before reporting success, and refreshes the read model. Outbound upload and inbound register authority remain separate background lanes.</p>
+      </div>
+
+      <div class="diagram">
+        <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="pos-mechanics-title pos-mechanics-desc">
+          <title id="pos-mechanics-title">Athena POS local mechanics</title>
+          <desc id="pos-mechanics-desc">A cashier command moves from the register UI through the local command gateway, which validates local policy and commits an event to IndexedDB before success. The durable event updates a local read model. A scheduler uploads pending events and settles outcomes, while a separate lifecycle authority runtime applies exact server authority snapshots to the same local store.</desc>
+          <defs>
+            <marker id="mechanics-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="var(--muted)"/>
+            </marker>
+            <marker id="mechanics-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="var(--accent)"/>
+            </marker>
+          </defs>
+
+          <rect width="1280" height="720" fill="var(--paper)"/>
+
+          <!-- Zones -->
+          <rect x="40" y="72" width="288" height="544" rx="8" fill="var(--zone-fill)" stroke="var(--rule-soft)" stroke-width="0.8"/>
+          <rect x="52" y="76" width="144" height="16" rx="4" fill="var(--paper)"/>
+          <text x="124" y="88" fill="var(--soft)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.14em">CASHIER SURFACE</text>
+
+          <rect x="360" y="72" width="520" height="544" rx="8" fill="var(--zone-fill)" stroke="var(--rule-soft)" stroke-width="0.8"/>
+          <rect x="372" y="76" width="136" height="16" rx="4" fill="var(--paper)"/>
+          <text x="440" y="88" fill="var(--soft)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.14em">POS LOCAL CORE</text>
+
+          <rect x="912" y="72" width="328" height="544" rx="8" fill="var(--zone-fill)" stroke="var(--rule-soft)" stroke-width="0.8"/>
+          <rect x="924" y="76" width="128" height="16" rx="4" fill="var(--paper)"/>
+          <text x="988" y="88" fill="var(--soft)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.14em">CLOUD EDGE</text>
+
+          <!-- Connectors: drawn before nodes -->
+          <line x1="296" y1="176" x2="392" y2="176" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#mechanics-arrow-accent)"/>
+          <rect x="316" y="148" width="56" height="16" rx="4" fill="var(--paper)"/>
+          <text x="344" y="160" fill="var(--accent)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">COMMAND</text>
+
+          <line x1="640" y1="176" x2="608" y2="176" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#mechanics-arrow)"/>
+          <line x1="500" y1="232" x2="500" y2="320" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#mechanics-arrow-accent)"/>
+          <rect x="440" y="260" width="120" height="16" rx="4" fill="var(--paper)"/>
+          <text x="500" y="272" fill="var(--accent)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">DURABLE APPEND</text>
+
+          <line x1="392" y1="404" x2="296" y2="404" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#mechanics-arrow)"/>
+          <rect x="316" y="376" width="56" height="16" rx="4" fill="var(--paper)"/>
+          <text x="344" y="388" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">REDUCE</text>
+
+          <line x1="184" y1="336" x2="184" y2="232" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#mechanics-arrow)"/>
+          <rect x="128" y="276" width="112" height="16" rx="4" fill="var(--paper)"/>
+          <text x="184" y="288" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">RENDER + RECEIPT</text>
+
+          <line x1="440" y1="488" x2="440" y2="516" stroke="var(--link)" stroke-width="1.2" marker-end="url(#mechanics-arrow-accent)"/>
+          <rect x="452" y="492" width="64" height="16" rx="4" fill="var(--paper)"/>
+          <text x="484" y="504" fill="var(--link)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">PENDING</text>
+
+          <line x1="560" y1="516" x2="560" y2="488" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#mechanics-arrow)"/>
+          <rect x="572" y="492" width="80" height="16" rx="4" fill="var(--paper)"/>
+          <text x="612" y="504" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">SETTLE + MAP</text>
+
+          <path d="M608 548 V592 Q608 600 616 600 H888 Q896 600 896 592 V220 Q896 212 904 212 H944" fill="none" stroke="var(--link)" stroke-width="1.2" marker-end="url(#mechanics-arrow-accent)"/>
+          <rect x="724" y="580" width="96" height="16" rx="4" fill="var(--paper)"/>
+          <text x="772" y="592" fill="var(--link)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">ORDERED UPLOAD</text>
+
+          <path d="M944 260 H920 Q912 260 912 268 V604 Q912 612 904 612 H536 Q528 612 528 604 V580" fill="none" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#mechanics-arrow)"/>
+          <rect x="828" y="592" width="72" height="16" rx="4" fill="var(--paper)"/>
+          <text x="864" y="604" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">OUTCOMES</text>
+
+          <path d="M944 448 H880 Q872 448 872 456 V548 Q872 556 864 556 H848" fill="none" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#mechanics-arrow)"/>
+          <rect x="832" y="476" width="104" height="16" rx="4" fill="var(--paper)"/>
+          <text x="884" y="488" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">AUTHORITY SNAPSHOT</text>
+
+          <line x1="744" y1="516" x2="744" y2="488" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#mechanics-arrow-accent)"/>
+          <rect x="756" y="492" width="84" height="16" rx="4" fill="var(--paper)"/>
+          <text x="798" y="504" fill="var(--accent)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">ATOMIC APPLY</text>
+
+          <!-- Nodes -->
+          <rect x="72" y="120" width="224" height="112" rx="8" fill="var(--surface)" stroke="var(--ink)" stroke-width="1"/>
+          <rect x="84" y="132" width="48" height="16" rx="4" fill="transparent" stroke="var(--ink-40)" stroke-width="0.8"/>
+          <text x="108" y="144" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">VIEW</text>
+          <text x="184" y="176" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Register UI</text>
+          <text x="184" y="200" fill="var(--muted)" font-size="12" font-family="var(--sans)" text-anchor="middle">cart · payment · drawer · closeout</text>
+
+          <rect x="72" y="336" width="224" height="136" rx="8" fill="var(--subtle-fill)" stroke="var(--muted)" stroke-width="1"/>
+          <rect x="84" y="348" width="80" height="16" rx="4" fill="transparent" stroke="var(--muted-45)" stroke-width="0.8"/>
+          <text x="124" y="360" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">PROJECTION</text>
+          <text x="184" y="392" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Local Read Model</text>
+          <line x1="96" y1="412" x2="272" y2="412" stroke="var(--rule)" stroke-width="0.8"/>
+          <text x="184" y="436" fill="var(--muted)" font-size="12" font-family="var(--sans)" text-anchor="middle">cashier-visible truth</text>
+          <text x="184" y="456" fill="var(--link)" font-size="8" font-family="var(--mono)" text-anchor="middle">SAME SOURCE FOR UI + COMMANDS</text>
+
+          <rect x="392" y="120" width="216" height="112" rx="8" fill="var(--surface)" stroke="var(--ink)" stroke-width="1"/>
+          <rect x="404" y="132" width="72" height="16" rx="4" fill="transparent" stroke="var(--ink-40)" stroke-width="0.8"/>
+          <text x="440" y="144" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">COMMAND</text>
+          <text x="500" y="176" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Local Command Gateway</text>
+          <text x="500" y="200" fill="var(--muted)" font-size="12" font-family="var(--sans)" text-anchor="middle">validate · shape · append</text>
+
+          <rect x="640" y="120" width="208" height="112" rx="8" fill="var(--surface)" stroke="var(--ink)" stroke-width="1"/>
+          <rect x="652" y="132" width="64" height="16" rx="4" fill="transparent" stroke="var(--ink-40)" stroke-width="0.8"/>
+          <text x="684" y="144" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">POLICY</text>
+          <text x="744" y="176" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Local Policy Inputs</text>
+          <text x="744" y="200" fill="var(--muted)" font-size="12" font-family="var(--sans)" text-anchor="middle">catalog · staff · session · authority</text>
+
+          <rect x="392" y="320" width="456" height="168" rx="8" fill="var(--accent-tint)" stroke="var(--accent)" stroke-width="1.2"/>
+          <rect x="404" y="332" width="96" height="16" rx="4" fill="transparent" stroke="var(--accent-45)" stroke-width="0.8"/>
+          <text x="452" y="344" fill="var(--accent)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">DURABLE CORE</text>
+          <text x="620" y="376" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">IndexedDB POS Store</text>
+          <line x1="416" y1="396" x2="824" y2="396" stroke="var(--rule)" stroke-width="0.8"/>
+          <text x="620" y="420" fill="var(--muted)" font-size="12" font-family="var(--sans)" text-anchor="middle">append-only event ledger · catalog + register state</text>
+          <text x="620" y="444" fill="var(--muted)" font-size="12" font-family="var(--sans)" text-anchor="middle">local↔cloud mappings · cursor/status · review authority</text>
+          <text x="620" y="468" fill="var(--link)" font-size="8" font-family="var(--mono)" text-anchor="middle">ONE SELECTED ENGINE · EXACT TRANSITIONS · BOUNDED READS</text>
+
+          <rect x="392" y="516" width="216" height="64" rx="8" fill="var(--surface)" stroke="var(--ink)" stroke-width="1"/>
+          <rect x="404" y="528" width="72" height="16" rx="4" fill="transparent" stroke="var(--ink-40)" stroke-width="0.8"/>
+          <text x="440" y="540" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">OUTBOUND</text>
+          <text x="500" y="564" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Sync Scheduler</text>
+
+          <rect x="640" y="516" width="208" height="64" rx="8" fill="var(--surface)" stroke="var(--ink)" stroke-width="1"/>
+          <rect x="652" y="528" width="64" height="16" rx="4" fill="transparent" stroke="var(--ink-40)" stroke-width="0.8"/>
+          <text x="684" y="540" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">INBOUND</text>
+          <text x="744" y="564" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Authority Replicator</text>
+
+          <rect x="944" y="152" width="264" height="136" rx="8" fill="var(--surface)" stroke="var(--ink)" stroke-width="1"/>
+          <rect x="956" y="164" width="72" height="16" rx="4" fill="transparent" stroke="var(--ink-40)" stroke-width="0.8"/>
+          <text x="992" y="176" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">SYNC API</text>
+          <text x="1076" y="208" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Event Ingest Boundary</text>
+          <line x1="968" y1="228" x2="1184" y2="228" stroke="var(--rule)" stroke-width="0.8"/>
+          <text x="1076" y="252" fill="var(--muted)" font-size="12" font-family="var(--sans)" text-anchor="middle">idempotency · sequence · outcomes</text>
+          <text x="1076" y="272" fill="var(--link)" font-size="8" font-family="var(--mono)" text-anchor="middle">ingestLocalEvents</text>
+
+          <rect x="944" y="392" width="264" height="112" rx="8" fill="var(--subtle-fill)" stroke="var(--muted)" stroke-width="1"/>
+          <rect x="956" y="404" width="88" height="16" rx="4" fill="transparent" stroke="var(--muted-45)" stroke-width="0.8"/>
+          <text x="1000" y="416" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">AUTHORITY API</text>
+          <text x="1076" y="448" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Register Lifecycle Snapshot</text>
+          <text x="1076" y="472" fill="var(--muted)" font-size="12" font-family="var(--sans)" text-anchor="middle">mapping revision · lifecycle revision</text>
+
+          <!-- Legend -->
+          <line x1="40" y1="648" x2="1240" y2="648" stroke="var(--rule)" stroke-width="0.8"/>
+          <text x="40" y="676" fill="var(--muted)" font-size="8" font-family="var(--mono)" letter-spacing="0.14em">READING KEY</text>
+          <line x1="152" y1="672" x2="188" y2="672" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#mechanics-arrow-accent)"/>
+          <text x="200" y="676" fill="var(--muted)" font-size="8" font-family="var(--mono)">CORRECTNESS-BEARING PATH</text>
+          <line x1="404" y1="672" x2="440" y2="672" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#mechanics-arrow)"/>
+          <text x="452" y="676" fill="var(--muted)" font-size="8" font-family="var(--mono)">DERIVED / FEEDBACK PATH</text>
+          <text x="1240" y="676" fill="var(--soft)" font-size="8" font-family="var(--mono)" text-anchor="end">DRILL-DOWN · TERMINAL MECHANICS</text>
+        </svg>
+      </div>
+
+      <div class="caption">
+        <p><strong>Cashier contract:</strong> a command succeeds only after non-reconstructable facts survive reload. The UI then renders the refreshed local projection rather than waiting for cloud confirmation.</p>
+        <p><strong>Outbound lane:</strong> the scheduler drains stable ordered pages, retries safely, and writes returned mappings and outcomes back to IndexedDB.</p>
+        <p><strong>Inbound lane:</strong> lifecycle authority applies independently of upload and heartbeat; it informs the next local command but never invents a financial event.</p>
+      </div>
+    </section>
+
+    <div class="caption" aria-label="Architecture sources">
+      <p><strong>Primary implementation boundaries:</strong> <code>localCommandGateway.ts</code>, <code>posLocalStore.ts</code>, <code>syncScheduler.ts</code>, <code>usePosLocalSyncRuntime.ts</code>, and <code>useRegisterLifecycleAuthorityRuntime.ts</code>.</p>
+      <p><strong>Cloud boundary:</strong> <code>public/sync.ts</code>, <code>ingestLocalEvents.ts</code>, <code>projectLocalEvents.ts</code>, and <code>public/terminals.ts</code>.</p>
+      <p><strong>Contract:</strong> <code>shared/posLocalSyncContract.ts</code>.</p>
+    </div>
+  </main>
+</body>
+</html>

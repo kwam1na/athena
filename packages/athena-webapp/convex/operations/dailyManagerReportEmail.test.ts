@@ -13,6 +13,7 @@ import {
   buildPaymentTotals,
   buildPreparedBlockers,
   buildSummaryMetrics,
+  formatCompletedAt,
   resolveAppUrl,
 } from "./dailyManagerReportEmail";
 
@@ -32,6 +33,28 @@ const originalEnv = {
   SITE_URL: process.env.SITE_URL,
   STAGE: process.env.STAGE,
 };
+
+describe("daily manager report completion timestamp", () => {
+  it("keeps same-day closes time-only", () => {
+    expect(
+      formatCompletedAt(
+        Date.parse("2026-08-08T20:47:00.000Z"),
+        "Africa/Accra",
+        "2026-08-08",
+      ),
+    ).toBe("8:47 PM");
+  });
+
+  it("includes the short completion date when a stale operating day closes later", () => {
+    expect(
+      formatCompletedAt(
+        Date.parse("2026-08-12T20:47:00.000Z"),
+        "Africa/Accra",
+        "2026-08-08",
+      ),
+    ).toBe("Aug 12, 8:47 PM");
+  });
+});
 
 describe("daily manager report email URLs", () => {
   afterEach(() => {

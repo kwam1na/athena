@@ -7,6 +7,7 @@ import {
 import {
   evaluateGateObligations,
   type CandidateBinding,
+  type AttestedWaiverRecord,
   type EvaluateGateObligationsInput,
   type EvidenceRecord,
 } from "./harness-gate-obligations";
@@ -84,6 +85,56 @@ function resolution(
 }
 
 describe("evaluateGateObligations", () => {
+  it("honors an attested documentation waiver in repository CI", () => {
+    const waiver: AttestedWaiverRecord = {
+      schemaVersion: 1,
+      kind: "attested_waiver",
+      recordId: "github-check:123",
+      gateId: ATHENA_PR_VALIDATION_GATE_ID,
+      obligationId: "documentation.current",
+      candidate,
+      approvedBy: "human-reviewer",
+      attestationUrl: "https://github.com/v26-labs/athena/actions/runs/456",
+    };
+    const decision = evaluateGateObligations(
+      input({
+        executionContext: {
+          kind: "repository_ci",
+          policyId: "athena-pr-tests",
+        },
+        liveProviderResults: [
+          {
+            providerId: "delivery-documentation-check",
+            runId: "docs-blocked",
+            status: "failed",
+            findings: [
+              {
+                code: "compound-solution",
+                message: "Solution note is missing",
+                remediation: "Write the solution note",
+              },
+            ],
+          },
+          {
+            providerId: "delivery-run-telemetry-check",
+            runId: "telemetry-green",
+            status: "green",
+            findings: [],
+          },
+        ],
+        records: [waiver],
+      }),
+    );
+
+    expect(decision.admitted).toBe(true);
+    expect(resolution(decision, "documentation.current")).toMatchObject({
+      kind: "waived",
+      waiverRecordId: "github-check:123",
+      approvedBy: "human-reviewer",
+      attestationUrl: "https://github.com/v26-labs/athena/actions/runs/456",
+    });
+  });
+
   it.each(["ce-code-review", "execute"] as const)(
     "accepts fresh final-green evidence from approved provider %s",
     (providerId) => {

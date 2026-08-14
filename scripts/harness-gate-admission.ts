@@ -12,7 +12,14 @@ import {
   type HarnessCandidate,
   type ReviewSensitiveScenario,
 } from "./harness-candidate";
-import { evaluateDeliveryDocumentationCheck } from "./delivery-documentation-check";
+import {
+  evaluateDeliveryDocumentationCheck,
+  type DeliveryDocumentationFinding,
+} from "./delivery-documentation-check";
+import {
+  discoverCurrentDocumentationWaiver,
+} from "./delivery-documentation-admission";
+import type { DiscoveredDocumentationWaiver } from "./documentation-waiver-attestation";
 import {
   evaluateDeliveryRunTelemetryCheck,
   type DeliveryRunTelemetryFindingCode,
@@ -88,6 +95,10 @@ type AdmissionOptions = {
   classifyContext?: () => ClassifiedExecutionContext;
   discoverRecords?: typeof discoverHarnessObligationRecords;
   evaluateDocumentation?: (rootDir: string) => DocumentationEvaluation;
+  discoverDocumentationWaiver?: (
+    candidate: HarnessCandidate,
+    documentation: DocumentationEvaluation,
+  ) => Promise<DiscoveredDocumentationWaiver | undefined>;
   evaluateTelemetry?: (rootDir: string) => TelemetryEvaluation;
   resolveWorktreeId?: (rootDir: string) => Promise<string>;
   captureCandidate?: typeof captureStableHarnessCandidate;
@@ -241,6 +252,7 @@ function reviewProjection(projection: ActivationProjection) {
  */
 export const WAIVABLE_FINDING_CODES: {
   "review.green": readonly string[];
+  "documentation.current": readonly DeliveryDocumentationFinding["policy"][];
   // Typed against the provider's own code union: a misspelling here would
   // otherwise type-check and silently make the waiver unofferable forever.
   "telemetry.recorded": readonly DeliveryRunTelemetryFindingCode[];
@@ -251,6 +263,7 @@ export const WAIVABLE_FINDING_CODES: {
     "unknown_provider",
     "evidence_not_green",
   ],
+  "documentation.current": ["compound-solution", "landed-change-report"],
   "telemetry.recorded": ["telemetry_record_missing"],
 };
 
@@ -271,7 +284,9 @@ function waivableBlockedObligationIds(
     return (
       Boolean(obligation?.humanWaiverAllowed) &&
       allowedCodes !== undefined &&
-      resolution.findings.every((finding) => allowedCodes.includes(finding.code))
+      resolution.findings.every((finding) =>
+        (allowedCodes as readonly string[]).includes(finding.code),
+      )
     );
   });
   return waivable ? blocked.map((resolution) => resolution.obligationId) : [];
@@ -486,7 +501,7 @@ export async function runHarnessGateAdmission(
   const preparation = await (
     options.evaluatePreparation ?? evaluatePrAthenaPreparationReceipt
   )(rootDir);
-  if (!preparation.prepared) {
+  if (preparation.prepared === false) {
     throw new Error(
       `Harness gate admission blocked: ${preparation.reason}. Remediation: ${preparation.remediation}`,
     );
@@ -554,6 +569,30 @@ export async function runHarnessGateAdmission(
         Boolean(record),
       ),
   ];
+  const attestedDocumentationWaiver =
+    documentation.status === "fail"
+      ? await (
+          options.discoverDocumentationWaiver ??
+          ((currentCandidate, currentDocumentation) =>
+            discoverCurrentDocumentationWaiver(
+              rootDir,
+              currentCandidate,
+              currentDocumentation,
+            ))
+        )(preparation.candidate, documentation)
+      : undefined;
+  if (attestedDocumentationWaiver) {
+    records.push({
+      schemaVersion: 1,
+      kind: "attested_waiver",
+      recordId: attestedDocumentationWaiver.recordId,
+      gateId: ATHENA_PR_VALIDATION_GATE_ID,
+      obligationId: "documentation.current",
+      candidate: binding,
+      approvedBy: attestedDocumentationWaiver.approvedBy,
+      attestationUrl: attestedDocumentationWaiver.attestationUrl,
+    });
+  }
   const decisionInput = () => ({
     registry: HARNESS_GATE_REGISTRY,
     gateId: ATHENA_PR_VALIDATION_GATE_ID,

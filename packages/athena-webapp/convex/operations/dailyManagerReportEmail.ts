@@ -622,6 +622,7 @@ function buildDailyManagerReportPayload(args: {
     completedAt: formatCompletedAt(
       snapshot.closeMetadata.completedAt,
       args.completedTimezone,
+      operatingDate,
     ),
     completedBy: args.completedBy,
     storeCurrency,
@@ -1233,8 +1234,27 @@ async function resolveStoreScheduleTimezoneForAt(
   return context.kind === "resolved" ? context.timezone : "UTC";
 }
 
-function formatCompletedAt(completedAt: number, timezone: string) {
-  return new Date(completedAt).toLocaleTimeString("en-US", {
+export function formatCompletedAt(
+  completedAt: number,
+  timezone: string,
+  operatingDate?: string,
+) {
+  const completed = new Date(completedAt);
+  const completedDateParts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: timezone,
+    year: "numeric",
+  }).formatToParts(completed);
+  const completedDate = Object.fromEntries(
+    completedDateParts.map((part) => [part.type, part.value]),
+  );
+  const completedOperatingDate = `${completedDate.year}-${completedDate.month}-${completedDate.day}`;
+  const includeDate =
+    operatingDate !== undefined && completedOperatingDate !== operatingDate;
+
+  return completed.toLocaleString("en-US", {
+    ...(includeDate ? { day: "numeric" as const, month: "short" as const } : {}),
     hour: "numeric",
     minute: "2-digit",
     timeZone: timezone,

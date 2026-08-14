@@ -68,6 +68,15 @@ flowchart TB
     DOM --> EVID
 ```
 
+### POS local-first and cloud sync
+
+[![Athena POS and cloud sync architecture](./docs/architecture/assets/pos-cloud-sync-overview.png)](./docs/architecture/pos-cloud-sync.md)
+
+The POS register records cashier actions locally before synchronizing ordered
+events into canonical cloud records. See the
+[POS and cloud-sync architecture](./docs/architecture/pos-cloud-sync.md) for the system
+boundary, terminal mechanics, and authority model.
+
 ### The transactional spine
 
 The load-bearing design decision is that a business action commits everything
@@ -160,6 +169,9 @@ tracked hooks in `.husky/`. Those hooks run the delivery gates described under
 | Doc | Covers |
 | --- | --- |
 | [Athena webapp architecture](./packages/athena-webapp/docs/agent/architecture.md) | The real architecture reference: routing, the Convex HTTP boundary, command-result and approval contracts, money handling, reporting, POS local-first boundaries |
+| [POS and cloud sync](./docs/architecture/pos-cloud-sync.md) | Visual overview of local-first cashier execution, ordered event ingestion, cloud projection, reconciliation, and register lifecycle authority |
+| [Harness architecture](./docs/architecture/harness.md) | Visual overview of candidate preparation, orchestration, gate ownership, validation, and reusable evidence |
+| [Diagram rendering](./docs/architecture/README.md) | Shared typography and light/dark visual profiles, PNG export, and portable bundle manifests |
 | [Packages agent router](./packages/AGENTS.md) | Per-package `AGENTS.md` and `docs/agent/*` — the operational source of truth for edits and validation |
 | [Repo harness and sensors](./docs/harness.md) | The delivery safety system, plus the full command, artifact, and CI reference |
 | [Graphify](./docs/graphify.md) | The repo knowledge graph, its freshness gate, artifacts, and Python runtime |

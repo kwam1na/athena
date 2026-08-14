@@ -25,6 +25,11 @@ The main idea is simple:
 5. Repair commands refresh generated artifacts, then stop so people can review
    and commit the repaired files intentionally.
 
+For the component and control-flow view, see the
+[harness architecture overview](./architecture/harness.md). This document
+remains the source of truth for commands, gate semantics, artifacts, CI wiring,
+and failure handling.
+
 ## What The Harness Protects
 
 The harness protects four kinds of trust.
@@ -327,8 +332,39 @@ relevant binary change, or an explicitly review-sensitive validation scenario.
 Recognized agents must present final-green evidence from `ce-code-review` or
 `execute`; a PTY does not make an agent human. Interactive humans may deliberately
 waive review for the exact worktree/candidate/base, while CI delegation requires
-the allowlisted `athena-pr-tests` workflow/job/event policy. Documentation
-currentness is an always-on live fact and cannot be waived.
+the allowlisted `athena-pr-tests` workflow/job/event policy. The
+`documentation.current` obligation remains an always-on live fact, but an
+interactive human may deliberately waive both of its delivery-documentation
+policies — the solution note and landed-change report — for the current
+invocation. That waiver is recorded in the gate decision event and is evaluated
+again on the next run; agents and CI cannot use it.
+
+To carry the same deliberate human decision into CI, commit and push the exact
+candidate, rerun preparation against that clean commit, then request a
+candidate-bound waiver. A human or agent may dispatch the request; dispatch is
+not approval. A distinct authorized human must approve the protected GitHub
+Environment deployment. If preparation repairs or stages anything, commit and
+push those changes and prepare again before requesting the waiver:
+
+```sh
+bun run pr:athena:prepare
+bun run harness:waive-documentation --pr <number> --reason "<why this exception is acceptable>"
+```
+
+The request dispatches the default-branch `Athena Documentation Waiver`
+workflow. Its `athena-documentation-waiver` environment must be configured with
+required human reviewers and self-review prevention. After approval, the
+workflow reads GitHub's environment review history, requires an authorized
+human approver distinct from the dispatcher, rechecks the live pull-request
+head and base, and publishes both a check run and an immutable workflow artifact
+that record both identities and bind the waived finding codes to the PR head, base tip, merge base, and
+deliverable-tree identity. CI downloads the artifact from that verified
+default-branch workflow run before resolving `documentation.current` as
+`waived`; it never trusts branch-authored JSON or check output by itself. A new
+commit, a moved base, an uncovered documentation finding, an unauthorized actor,
+or missing workflow provenance makes the waiver stale and CI fails closed. The
+local invocation waiver remains available before a PR exists, but only the
+GitHub-backed attestation crosses the CI boundary.
 
 The `telemetry.recorded` obligation asks a different question: did this delivery
 leave a durable record of how it ran? It is satisfied by a tracked

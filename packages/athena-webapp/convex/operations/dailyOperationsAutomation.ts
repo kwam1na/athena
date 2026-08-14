@@ -50,7 +50,10 @@ import {
   getStoreScheduleContextForStoreAtWithCtx,
   resolveStoreOperatingRangeForDateWithCtx,
 } from "../inventory/storeSchedule";
-import type { EmitNotificationResult } from "../notifications/emit";
+import {
+  emitNotificationWithCtx,
+  type EmitNotificationResult,
+} from "../notifications/emit";
 
 export const DAILY_OPERATIONS_AUTOMATION_DOMAIN = "daily_operations";
 const OPENING_AUTO_START_ACTION = "opening.auto_start";
@@ -66,6 +69,23 @@ const EOD_AUTO_COMPLETE_LOW_RISK_REVIEW_CATEGORIES = new Set([
   "voided_sale",
 ]);
 const MINUTE_MS = 60 * 1000;
+
+export function emitHistoricEodDailyManagerReportWithCtx(
+  ctx: MutationCtx,
+  args: { operatingDate: string; storeId: Id<"store"> },
+) {
+  return emitNotificationWithCtx(ctx, {
+    kind: "eod.daily_manager_report",
+    storeId: args.storeId,
+    subjectType: "dailyClose",
+    subjectId: `${args.storeId}:${args.operatingDate}`,
+    payload: {
+      operatingDate: args.operatingDate,
+      status: "applied",
+      storeId: args.storeId,
+    },
+  });
+}
 
 async function requireAutomationPolicyReadAccess(
   ctx: QueryCtx,
@@ -1070,6 +1090,7 @@ export async function runHistoricEodAutoCloseForDateWithCtx(
   args: {
     asOfOperatingDate: string;
     mode: HistoricEodAutoCloseMode;
+    notifyDailyManagerReport?: boolean;
     operatingDate: string;
     storeId: Id<"store">;
   },
@@ -1326,6 +1347,16 @@ export async function runHistoricEodAutoCloseForDateWithCtx(
       operatingDate: args.operatingDate,
       runId: run._id,
     };
+  }
+
+  if (
+    args.notifyDailyManagerReport === true &&
+    result.data.action === "completed"
+  ) {
+    await emitHistoricEodDailyManagerReportWithCtx(ctx, {
+      operatingDate: args.operatingDate,
+      storeId: args.storeId,
+    });
   }
 
   await patchAutomationRunOutcomeWithCtx(ctx, {
@@ -2230,6 +2261,7 @@ export const runHistoricEodAutoCloseForDate = internalMutation({
   args: {
     asOfOperatingDate: v.string(),
     mode: v.union(v.literal("dry_run"), v.literal("apply")),
+    notifyDailyManagerReport: v.optional(v.boolean()),
     operatingDate: v.string(),
     storeId: v.id("store"),
   },

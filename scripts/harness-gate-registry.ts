@@ -187,13 +187,14 @@ export const HARNESS_GATE_REGISTRY: HarnessGateRegistry = {
       providerIds: ["delivery-documentation-check"],
       providerPolicy: "all",
       freshness: { kind: "live" },
-      allowedResolutionKinds: ["satisfied_live_fact"],
-      humanWaiverAllowed: false,
+      allowedResolutionKinds: ["satisfied_live_fact", "waived"],
+      humanWaiverAllowed: true,
       ciDelegationPolicyIds: [],
       remediation: {
         machine:
           "Repair every delivery documentation finding and evaluate again.",
-        human: "Update the required delivery documentation and evaluate again.",
+        human:
+          "Update the required delivery documentation and evaluate again, or deliberately accept the offered documentation waiver.",
       },
     },
     "telemetry.recorded": {

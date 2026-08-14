@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Candidate-Bound Waivers and Operational Follow-through</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="003705c5e573e86af9ba1f3feaa0f3a6c439cd5a12b573d138aefdf25581db8d">
+  <header data-report-section="header">
+    <h1>Candidate-Bound Waivers and Operational Follow-through</h1>
+    <p>How the delivery harness, historic close reporting, terminal health copy, and architecture guidance changed together</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch codex/athena-waiver-ops-candidate</li>
+      <li>Environment configuration pending</li>
+      <li>Production deploy pending</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Status</dt><dd>Delivery candidate</dd>
+      <dt>Base</dt><dd>origin/main</dd>
+      <dt>Waiver environment</dt><dd>Not found; configure after merge</dd>
+      <dt>Deploy</dt><dd>Convex and Athena admin pending merge</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>This candidate adds a human documentation-waiver path that CI can verify without trusting an agent-controlled terminal. It also adds Daily Close reporting for successfully applied owed-close recovery, clarifies POS local-data health, and adds source-backed architecture diagrams.</p>
+      <p>The waiver request is not approval. A distinct authorized reviewer must approve a protected GitHub Environment; CI then verifies the immutable artifact, workflow provenance, approval history, exact PR-head identity, base, merge base, and live findings.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Problem and context</h2>
+      <p>The documentation gate had no durable exception path, while a prompt or PTY could not prove human intent. Historic owed closes could complete without the daily manager report intent, stale close reports displayed an ambiguous time, and terminal storage guidance mixed browser quota with retained ledger pressure.</p>
+      <p>This first waiver-workflow PR must bootstrap through ordinary documentation because the trusted workflow does not exist on the default branch until merge.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model</h2>
+      <p>Think of the command as an application and the GitHub Environment review as the signature. The artifact is the signed envelope, and its candidate fields are the address. CI accepts the envelope only when GitHub confirms the signer, workflow, address, and covered findings.</p>
+      <p>Operational changes follow the same authority rule: the owed-close sweep requests reporting, the close function emits only after a newly completed apply, and the notification rail remains the delivery authority.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <ul>
+        <li>Before: documentation findings always blocked CI; after: only the two registered documentation policies may be waived by a protected, candidate-bound attestation.</li>
+        <li>Before: dispatcher identity was at risk of being mistaken for approval; after: requestedBy and approvedBy are distinct and CI re-fetches environment review history.</li>
+        <li>Before: historic catch-up completion was silent; after: successful apply emits the idempotent daily-manager-report intent.</li>
+        <li>Before: completion time hid cross-date context; after: stale-day completion includes month and day in store time.</li>
+        <li>Before: terminal health used generic storage language; after: browser quota, ledger maintenance, persistence, counts, and cleanup guidance are separate.</li>
+      </ul>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what did not</h2>
+      <p>Review and telemetry obligations remain non-waivable. Live-current documentation still passes without GitHub access. Required CI still validates GitHub&#x27;s synthetic merge commit; only waiver identity is recomputed from the immutable PR head.</p>
+      <p>Store health measurements and severity remain unchanged; the UI presentation is clearer. Dry runs and non-completed historic close outcomes remain silent. Storefront and Valkey runtime behavior are untouched.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <ul>
+        <li>Missing approval history, self-approval, unauthorized reviewer, wrong workflow, non-green run, forged check payload, stale head/base/merge base, changed deliverable, or uncovered finding fails closed.</li>
+        <li>The success check is created only after the attestation artifact uploads, avoiding a check-before-artifact race.</li>
+        <li>The protected environment is external repository configuration and must have required reviewers plus self-review prevention before the path is relied upon.</li>
+        <li>The workflow must already be present on main, so this bootstrap PR uses normal documentation artifacts.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and delivery status</h2>
+      <p>Final focused runs passed: bun test scripts/delivery-documentation-admission.test.ts scripts/harness-gate-admission.test.ts, bun run workflow:check, and the Athena webapp Vitest run for dailyOperationsAutomation.test.ts plus owedDailyCloseSweep.test.ts (75 tests). An earlier pre-fix bun run test:coverage:scripts reached 974 passes, but is iteration evidence rather than final merge-grade proof.</p>
+      <p>Independent adversarial, testing, and project-standards reviews found approval-provenance, artifact-ordering, synthetic-merge identity, and integration-test gaps. Those findings were repaired and re-reviewed. The final exact-candidate pr:athena gate, merge, root alignment, CI, production deploy, and smoke checks remain pending at report generation time.</p>
+      <p>The production repository currently returns 404 for the athena-documentation-waiver environment. After this bootstrap workflow merges, configure that environment with required reviewers, self-review prevention, and no unsafe bypass before relying on waivers; this external configuration is a release follow-through item.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next-time guidance</h2>
+      <ul>
+        <li>Do not treat PTY interactivity, a local prompt, or the workflow dispatcher as human approval.</li>
+        <li>Prepare and push a clean candidate before requesting a waiver; any head or base movement requires a new request.</li>
+        <li>Keep merge-candidate CI intact and derive PR-head waiver identity separately with Git plumbing.</li>
+        <li>After merge, deploy only the Convex and Athena admin surfaces selected by the merged diff, then verify both production paths.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>.github/workflows/athena-documentation-waiver.yml</code></td><td>Collects protected-environment approval, writes the attestation, uploads it, then publishes the success check.</td></tr>
+        <tr><td><code>scripts/documentation-waiver-attestation.ts</code></td><td>Parses and verifies exact candidate, workflow, artifact, and environment-review provenance.</td></tr>
+        <tr><td><code>scripts/delivery-documentation-admission.ts</code></td><td>Lets CI accept live documentation or an exact trusted waiver while retaining synthetic-merge validation.</td></tr>
+        <tr><td><code>scripts/harness-gate-obligations.ts</code></td><td>Models attested documentation waivers as explicit obligation records.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/dailyOperationsAutomation.ts</code></td><td>Emits daily-manager-report intent only for newly completed historic apply runs.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts</code></td><td>Requests report notification for apply-mode owed-close recovery.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/dailyManagerReportEmail.ts</code></td><td>Adds calendar context when report completion falls on a different store-local date.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/pos/terminals/POSTerminalDetailView.tsx</code></td><td>Explains browser quota and local event-ledger maintenance separately.</td></tr>
+        <tr><td><code>docs/architecture/harness.md</code></td><td>Provides the source-backed harness architecture narrative and exported visual.</td></tr>
+        <tr><td><code>docs/architecture/pos-cloud-sync.md</code></td><td>Documents the POS cloud-sync boundary alongside local mechanics.</td></tr>
+        <tr><td><code>scripts/export-architecture-diagrams.ts</code></td><td>Exports the semantic architecture sources into the tracked PNG artifacts.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does the local waiver command establish?</p>
+        <ol data-quiz-options>
+          <li>Final human approval</li>
+          <li data-quiz-correct>A pending request bound to a prepared candidate</li>
+          <li>A reusable repository exemption</li>
+        </ol>
+        <p data-quiz-explanation>The command requests review; protected-environment approval supplies the independent human authority.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why must requestedBy and approvedBy differ?</p>
+        <ol data-quiz-options>
+          <li>To shorten the artifact</li>
+          <li data-quiz-correct>To stop a dispatcher or agent-held credential from self-attesting approval</li>
+          <li>To make GitHub checks run faster</li>
+        </ol>
+        <p data-quiz-explanation>A separate reviewer prevents the requester&#x27;s credential from being both request and approval evidence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which obligations can this waiver cover?</p>
+        <ol data-quiz-options>
+          <li>All harness findings</li>
+          <li>Review evidence only</li>
+          <li data-quiz-correct>The solution note and landed-change report findings</li>
+        </ol>
+        <p data-quiz-explanation>The allow-list is deliberately limited to the two documentation policies.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does required CI retain the synthetic merge checkout?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>To validate the combined PR and current-base candidate</li>
+          <li>To avoid downloading artifacts</li>
+          <li>To let agents approve environments</li>
+        </ol>
+        <p data-quiz-explanation>The merge result can fail even when an isolated PR head passes, so required CI must test the combined tree.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which identity is independently computed for waiver matching?</p>
+        <ol data-quiz-options>
+          <li>The local terminal session</li>
+          <li data-quiz-correct>The immutable PR head deliverable and its merge base</li>
+          <li>The latest workflow log text</li>
+        </ol>
+        <p data-quiz-explanation>Those values align local preparation with CI without weakening merge-result validation.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>When is the waiver success check published?</p>
+        <ol data-quiz-options>
+          <li>Before the artifact upload</li>
+          <li data-quiz-correct>After the artifact upload succeeds</li>
+          <li>Before environment approval</li>
+        </ol>
+        <p data-quiz-explanation>Publishing afterward prevents CI from observing success before the trusted artifact exists.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>When does historic close recovery emit a daily manager report intent?</p>
+        <ol data-quiz-options>
+          <li>Every dry run</li>
+          <li data-quiz-correct>Only after a newly completed apply when notification is requested</li>
+          <li>Every quarantined date</li>
+        </ol>
+        <p data-quiz-explanation>Dry-run and non-completed outcomes remain silent.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What changed in terminal health?</p>
+        <ol data-quiz-options>
+          <li>Health thresholds were removed</li>
+          <li>Only the severity color changed</li>
+          <li data-quiz-correct>Browser storage and ledger-maintenance explanations became distinct</li>
+        </ol>
+        <p data-quiz-explanation>Measurements and severity remain; operator-facing diagnosis is more precise.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why cannot this bootstrap PR use its new CI waiver?</p>
+        <ol data-quiz-options>
+          <li>Artifacts cannot contain JSON</li>
+          <li data-quiz-correct>The trusted workflow is not on main until this PR merges</li>
+          <li>GitHub cannot run manual workflows</li>
+        </ol>
+        <p data-quiz-explanation>The command dispatches the trusted default-branch workflow, so the introducing PR must satisfy documentation normally.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which production surfaces will this candidate require after merge?</p>
+        <ol data-quiz-options>
+          <li>Storefront and Valkey only</li>
+          <li data-quiz-correct>Convex and Athena admin</li>
+          <li>Every service regardless of diff</li>
+        </ol>
+        <p data-quiz-explanation>The Convex operations and Athena webapp/docs surface changed; storefront and proxy runtime code did not.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>session context</dt><dd>Recovered local-root provenance, prior candidate-identity lessons, reviewer-loop expectations, and the merged-PR plus production finish line.</dd>
+      <dt>delivered diff</dt><dd>Mapped harness, operations, POS, diagrams, tests, generated artifacts, deploy surfaces, and intentionally unchanged behavior.</dd>
+      <dt>independent reviewers</dt><dd>Adversarial, testing, and standards reviews surfaced and verified fixes for approval provenance, artifact ordering, merge-candidate identity, and historic-close coverage.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

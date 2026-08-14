@@ -211,10 +211,6 @@ describe("harness gate admission", () => {
   it("aggregates documentation and review blockers and does not prompt", async () => {
     const promptForWaiver = vi.fn(async () => true);
     const options = greenOptions({
-      classifyContext: () => ({
-        kind: "human" as const,
-        interactive: true as const,
-      }),
       projectActivation: async () => ({
         relevantLineCount: 50,
         relevantPaths: ["src/app.ts"],
@@ -247,6 +243,80 @@ describe("harness gate admission", () => {
     ]);
     expect(promptForWaiver).not.toHaveBeenCalled();
     expect(options._spies.spawnHeavy).not.toHaveBeenCalled();
+  });
+
+  it("lets an interactive human waive both delivery documentation requirements", async () => {
+    const promptForWaiver = vi.fn(async () => true);
+    const publishWaiver = vi.fn(async () => undefined);
+    const options = greenOptions({
+      classifyContext: () => ({
+        kind: "human" as const,
+        interactive: true as const,
+      }),
+      evaluateDocumentation: () => ({
+        status: "fail" as const,
+        findings: [
+          {
+            policy: "compound-solution" as const,
+            label: "Solution notes" as const,
+            message: "A current solution note is required.",
+          },
+          {
+            policy: "landed-change-report" as const,
+            label: "Landed-change reports" as const,
+            message: "A current changed report is required.",
+          },
+        ],
+      }),
+      promptForWaiver,
+      publishWaiver,
+    });
+
+    const result = await runHarnessGateAdmission("/repo", options as never);
+
+    expect(result.status).toBe("passed");
+    expect(promptForWaiver).toHaveBeenCalledWith(
+      expect.anything(),
+      ["documentation.current"],
+    );
+    expect(publishWaiver).not.toHaveBeenCalled();
+  });
+
+  it("admits a trusted candidate-bound documentation waiver in repository CI", async () => {
+    const options = greenOptions({
+      classifyContext: () => ({
+        kind: "ci" as const,
+        policyId: "athena-pr-tests" as const,
+      }),
+      evaluateDocumentation: () => ({
+        status: "fail" as const,
+        findings: [
+          {
+            policy: "compound-solution" as const,
+            label: "Solution notes" as const,
+            message: "missing",
+          },
+        ],
+      }),
+      discoverDocumentationWaiver: async () => ({
+        recordId: "github-check:789",
+        approvedBy: "human-reviewer",
+        attestationUrl: "https://github.com/v26-labs/athena/actions/runs/456",
+        attestation: {} as never,
+      }),
+    });
+
+    const result = await runHarnessGateAdmission("/repo", options as never);
+
+    expect(result.status).toBe("passed");
+    expect(
+      result.decision.resolutions.find(
+        (resolution) => resolution.obligationId === "documentation.current",
+      ),
+    ).toMatchObject({
+      kind: "waived",
+      waiverRecordId: "github-check:789",
+    });
   });
 
   const missingTelemetry = () => ({
@@ -361,13 +431,9 @@ describe("harness gate admission", () => {
     expect(publishWaiver.mock.calls[0]?.[2]).toBe("review.green");
   });
 
-  it("does not offer a waiver when a blocked obligation carries a non-waivable finding", async () => {
+  it("does not offer a documentation waiver to an agent", async () => {
     const promptForWaiver = vi.fn(async () => true);
     const options = greenOptions({
-      classifyContext: () => ({
-        kind: "human" as const,
-        interactive: true as const,
-      }),
       evaluateDocumentation: () => ({
         status: "fail" as const,
         findings: [
