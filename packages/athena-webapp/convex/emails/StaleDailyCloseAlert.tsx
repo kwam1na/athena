@@ -38,13 +38,12 @@ export function StaleDailyCloseAlert({
   storeName,
 }: StaleDailyCloseAlertProps) {
   const dayLabel = ageInDays === 1 ? "day" : "days";
+  const previewText = `This operating day has remained open for ${ageInDays} ${dayLabel}.`;
 
   return (
     <Html>
       <Head />
-      <Preview>
-        This operating day has remained open for {ageInDays} {dayLabel}.
-      </Preview>
+      <Preview>{previewText}</Preview>
       <Body style={styles.body}>
         <Container style={styles.shell}>
           <Section style={styles.header}>

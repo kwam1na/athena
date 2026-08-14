@@ -201,7 +201,6 @@ describe("owed daily close sweep", () => {
     expect(result.scannedStoreCount).toBe(1);
 
     const events = await t.run(async (ctx) =>
-      // eslint-disable-next-line @convex-dev/no-collect-in-query -- test fixture
       ctx.db
         .query("operationalEvent")
         .withIndex("by_storeId_subject", (q) =>
@@ -210,7 +209,7 @@ describe("owed daily close sweep", () => {
             .eq("subjectType", "daily_close")
             .eq("subjectId", "2026-07-21"),
         )
-        .collect(),
+        .take(2),
     );
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
@@ -226,7 +225,7 @@ describe("owed daily close sweep", () => {
         .withIndex("by_dedupeKey", (q) =>
           q.eq("dedupeKey", `eod.stale_daily_close:${storeId}:2026-07-21`),
         )
-        .collect(),
+        .take(2),
     );
     expect(intents).toHaveLength(1);
     expect(intents[0]).toMatchObject({
@@ -258,7 +257,6 @@ describe("owed daily close sweep", () => {
     );
 
     const events = await t.run(async (ctx) =>
-      // eslint-disable-next-line @convex-dev/no-collect-in-query -- test fixture
       ctx.db
         .query("operationalEvent")
         .withIndex("by_storeId_subject", (q) =>
@@ -267,7 +265,7 @@ describe("owed daily close sweep", () => {
             .eq("subjectType", "daily_close")
             .eq("subjectId", "2026-07-21"),
         )
-        .collect(),
+        .take(2),
     );
     expect(events).toHaveLength(1);
 
@@ -277,7 +275,7 @@ describe("owed daily close sweep", () => {
         .withIndex("by_dedupeKey", (q) =>
           q.eq("dedupeKey", `eod.stale_daily_close:${storeId}:2026-07-21`),
         )
-        .collect(),
+        .take(2),
     );
     expect(intents).toHaveLength(1);
   });
