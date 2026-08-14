@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 12252 nodes · 15085 edges · 2807 communities detected
+- 12252 nodes · 15083 edges · 2807 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -3006,7 +3006,7 @@ Nodes (20): cleanMetadataValue(), inclusiveDaySpan(), inventoryAttentionProjecti
 
 ### Community 40 - "Community 40"
 Cohesion: 0.15
-Nodes (28): applyTheme(), dayOfYear(), degreesToRadians(), emitThemeChange(), getStorage(), getStoredDarkThemeVariant(), getStoredSunCycleLocation(), getStoredSunCycleThemeState() (+20 more)
+Nodes (27): applyTheme(), dayOfYear(), degreesToRadians(), emitThemeChange(), getStorage(), getStoredDarkThemeVariant(), getStoredSunCycleLocation(), getStoredSunCycleThemeState() (+19 more)
 
 ### Community 41 - "Community 41"
 Cohesion: 0.12
@@ -4117,24 +4117,24 @@ Cohesion: 0.25
 Nodes (2): enableLocalExpenseEventReplay(), seedActiveExpenseCart()
 
 ### Community 318 - "Community 318"
+Cohesion: 0.31
+Nodes (5): getPreferredSku(), getProductName(), sortProduct(), sortSkusByAvailabilityThenLength(), sortSkusByLength()
+
+### Community 319 - "Community 319"
 Cohesion: 0.42
 Nodes (8): applyAcceptedControlResult(), applyKeyEvent(), applyPointerEvent(), applyRemoteAssistControlIntent(), getRecentControlResult(), getRemoteAssistControlTarget(), prepareRemoteAssistControlIntent(), rememberControlResult()
 
-### Community 319 - "Community 319"
+### Community 320 - "Community 320"
 Cohesion: 0.36
 Nodes (7): buildPosOfflineReadinessSummary(), buildSignal(), formatAge(), getSignalDescription(), getSignalStatus(), getSummaryDescription(), getSummaryTitle()
 
-### Community 320 - "Community 320"
+### Community 321 - "Community 321"
 Cohesion: 0.22
 Nodes (0):
 
-### Community 321 - "Community 321"
-Cohesion: 0.31
-Nodes (5): createVersionChecker(), getInitialDeployBuildId(), readDocumentScriptSources(), readEntryHtmlScripts(), readScriptSources()
-
 ### Community 322 - "Community 322"
 Cohesion: 0.31
-Nodes (5): getPreferredSku(), getProductName(), sortProduct(), sortSkusByAvailabilityThenLength(), sortSkusByLength()
+Nodes (5): createVersionChecker(), getInitialDeployBuildId(), readDocumentScriptSources(), readEntryHtmlScripts(), readScriptSources()
 
 ### Community 323 - "Community 323"
 Cohesion: 0.39
@@ -5625,40 +5625,40 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 695 - "Community 695"
-Cohesion: 0.83
-Nodes (3): mapOpenDrawerUserError(), normalizeRegisterNumber(), openDrawer()
+Cohesion: 0.5
+Nodes (1): buildCtx()
 
 ### Community 696 - "Community 696"
 Cohesion: 0.83
-Nodes (3): createDbGetMock(), createDbMock(), createDbQueryMock()
+Nodes (3): mapOpenDrawerUserError(), normalizeRegisterNumber(), openDrawer()
 
 ### Community 697 - "Community 697"
 Cohesion: 0.83
-Nodes (3): buildRegisterState(), getActiveSessionConflictForRegisterState(), getRegisterState()
+Nodes (3): createDbGetMock(), createDbMock(), createDbQueryMock()
 
 ### Community 698 - "Community 698"
+Cohesion: 0.83
+Nodes (3): buildRegisterState(), getActiveSessionConflictForRegisterState(), getRegisterState()
+
+### Community 699 - "Community 699"
 Cohesion: 0.5
 Nodes (0):
 
-### Community 699 - "Community 699"
+### Community 700 - "Community 700"
 Cohesion: 0.67
 Nodes (2): buildActivity(), buildReport()
 
-### Community 700 - "Community 700"
+### Community 701 - "Community 701"
 Cohesion: 0.83
 Nodes (3): advanceRegisterCatalogRevision(), readRegisterCatalogRevision(), readRegisterCatalogRevisionRow()
 
-### Community 701 - "Community 701"
+### Community 702 - "Community 702"
 Cohesion: 0.5
 Nodes (0):
-
-### Community 702 - "Community 702"
-Cohesion: 0.83
-Nodes (3): createPosLocalStaffProofToken(), hashPosLocalStaffProofToken(), toHex()
 
 ### Community 703 - "Community 703"
-Cohesion: 0.5
-Nodes (0):
+Cohesion: 0.83
+Nodes (3): createPosLocalStaffProofToken(), hashPosLocalStaffProofToken(), toHex()
 
 ### Community 704 - "Community 704"
 Cohesion: 0.5
@@ -5670,7 +5670,7 @@ Nodes (0):
 
 ### Community 706 - "Community 706"
 Cohesion: 0.5
-Nodes (1): buildCtx()
+Nodes (0):
 
 ### Community 707 - "Community 707"
 Cohesion: 0.5

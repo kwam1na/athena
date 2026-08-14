@@ -214,33 +214,22 @@ function solarEventAt(
   const localMeanTime =
     hourAngle + rightAscension - 0.06571 * approximateTime - 6.622;
   const utcHour = normalizeDegrees((localMeanTime - longitudeHour) * 15) / 15;
-  const utcDate = Date.UTC(year, month, day) + utcHour * 60 * 60 * 1000;
-
-  for (const dayOffset of [-1, 0, 1]) {
-    const candidate = new Date(utcDate + dayOffset * 86_400_000);
-    if (
-      candidate.getFullYear() === year &&
-      candidate.getMonth() === month &&
-      candidate.getDate() === day
-    ) {
-      return candidate.getTime();
-    }
-  }
-
-  return utcDate;
+  return Date.UTC(year, month, day) + utcHour * 60 * 60 * 1000;
 }
 
-function localCalendarDate(date: Date, dayOffset = 0) {
-  const localNoon = new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate() + dayOffset,
-    12,
+function utcCalendarDate(date: Date, dayOffset: number) {
+  const utcNoon = new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate() + dayOffset,
+      12,
+    ),
   );
   return {
-    year: localNoon.getFullYear(),
-    month: localNoon.getMonth(),
-    day: localNoon.getDate(),
+    year: utcNoon.getUTCFullYear(),
+    month: utcNoon.getUTCMonth(),
+    day: utcNoon.getUTCDate(),
   };
 }
 
@@ -248,57 +237,43 @@ export function getSunCycleThemeState(
   now: Date,
   location: SunCycleLocation,
 ): SunCycleThemeState | null {
-  const today = localCalendarDate(now);
-  const sunrise = solarEventAt(
-    today.year,
-    today.month,
-    today.day,
-    location,
-    "sunrise",
-  );
-  const sunset = solarEventAt(
-    today.year,
-    today.month,
-    today.day,
-    location,
-    "sunset",
-  );
+  const transitions = [-2, -1, 0, 1, 2]
+    .flatMap((dayOffset) => {
+      const date = utcCalendarDate(now, dayOffset);
+      return (["sunrise", "sunset"] as const).flatMap((event) => {
+        const at = solarEventAt(
+          date.year,
+          date.month,
+          date.day,
+          location,
+          event,
+        );
+        return at === null ? [] : [{ at, event }];
+      });
+    })
+    .sort((left, right) => left.at - right.at);
 
-  if (sunrise === null || sunset === null) {
+  if (transitions.length === 0) {
     return null;
   }
 
   const nowTimestamp = now.getTime();
-  if (nowTimestamp < sunrise) {
-    return {
-      resolvedTheme: "dark",
-      nextResolvedTheme: "light",
-      nextTransitionAt: sunrise,
-    };
-  }
-  if (nowTimestamp < sunset) {
-    return {
-      resolvedTheme: "light",
-      nextResolvedTheme: "dark",
-      nextTransitionAt: sunset,
-    };
+  const previousTransition = transitions.findLast(
+    (transition) => transition.at <= nowTimestamp,
+  );
+  const nextTransition = transitions.find(
+    (transition) => transition.at > nowTimestamp,
+  );
+
+  if (!previousTransition || !nextTransition) {
+    return null;
   }
 
-  const tomorrow = localCalendarDate(now, 1);
-  const nextSunrise = solarEventAt(
-    tomorrow.year,
-    tomorrow.month,
-    tomorrow.day,
-    location,
-    "sunrise",
-  );
-  return nextSunrise === null
-    ? null
-    : {
-        resolvedTheme: "dark",
-        nextResolvedTheme: "light",
-        nextTransitionAt: nextSunrise,
-      };
+  return {
+    resolvedTheme: previousTransition.event === "sunrise" ? "light" : "dark",
+    nextResolvedTheme: nextTransition.event === "sunrise" ? "light" : "dark",
+    nextTransitionAt: nextTransition.at,
+  };
 }
 
 function getStoredSunCycleThemeState(now = new Date()) {
@@ -486,11 +461,21 @@ export async function requestAthenaSunCycleMode(
     return { ok: false, reason: "unavailable" };
   }
 
-  getStorage()?.setItem(
-    ATHENA_SUN_CYCLE_LOCATION_STORAGE_KEY,
-    JSON.stringify(result.location),
-  );
-  setAthenaThemeModeWithTransition("sun-cycle");
+  const storage = getStorage();
+  try {
+    storage?.setItem(
+      ATHENA_SUN_CYCLE_LOCATION_STORAGE_KEY,
+      JSON.stringify(result.location),
+    );
+    setAthenaThemeModeWithTransition("sun-cycle");
+  } catch {
+    try {
+      storage?.removeItem(ATHENA_SUN_CYCLE_LOCATION_STORAGE_KEY);
+    } catch {
+      // Storage can remain unavailable; the prior appearance is still active.
+    }
+    return { ok: false, reason: "unavailable" };
+  }
   return { ok: true };
 }
 

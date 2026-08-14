@@ -226,6 +226,56 @@ describe("Athena theme runtime", () => {
     );
   });
 
+  it("uses the granted location even when the browser calendar day differs", () => {
+    const state = getSunCycleThemeState(new Date("2026-08-14T03:00:00.000Z"), {
+      latitude: 35.68,
+      longitude: 139.69,
+    });
+
+    expect(state?.resolvedTheme).toBe("light");
+    expect(state?.nextResolvedTheme).toBe("dark");
+    expect(state?.nextTransitionAt).toBeGreaterThan(
+      new Date("2026-08-14T08:00:00.000Z").getTime(),
+    );
+    expect(state?.nextTransitionAt).toBeLessThan(
+      new Date("2026-08-14T11:00:00.000Z").getTime(),
+    );
+  });
+
+  it("recalculates the appearance when focus resumes after a solar transition", () => {
+    vi.useFakeTimers();
+    try {
+      const now = new Date("2026-08-13T12:00:00.000Z");
+      vi.setSystemTime(now);
+      installMatchMedia(false);
+      window.localStorage.setItem(
+        ATHENA_SUN_CYCLE_LOCATION_STORAGE_KEY,
+        JSON.stringify({ latitude: 0, longitude: 0 }),
+      );
+      vi.mocked(window.localStorage.getItem).mockImplementation((key) => {
+        if (key === ATHENA_THEME_STORAGE_KEY) return "sun-cycle";
+        if (key === ATHENA_SUN_CYCLE_LOCATION_STORAGE_KEY) {
+          return JSON.stringify({ latitude: 0, longitude: 0 });
+        }
+        return null;
+      });
+
+      initializeAthenaTheme();
+      const state = getSunCycleThemeState(now, {
+        latitude: 0,
+        longitude: 0,
+      });
+
+      expect(document.documentElement.dataset.theme).toBe("light");
+      expect(state).not.toBeNull();
+      vi.setSystemTime(state!.nextTransitionAt + 100);
+      window.dispatchEvent(new Event("focus"));
+      expect(document.documentElement.dataset.theme).toBe("dark");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("requests location at selection time and stores only coarse coordinates", async () => {
     installMatchMedia(false);
     const getCurrentPosition = vi.fn((success: PositionCallback) => {
@@ -274,5 +324,28 @@ describe("Athena theme runtime", () => {
       "sun-cycle",
     );
     expect(document.documentElement).toHaveClass("dark");
+  });
+
+  it("keeps the current appearance when local storage is unavailable", async () => {
+    installMatchMedia(false);
+    setAthenaThemeMode("light");
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: {
+        getCurrentPosition: (success: PositionCallback) =>
+          success({
+            coords: { latitude: 5.6, longitude: -0.19 },
+          } as GeolocationPosition),
+      },
+    });
+    vi.mocked(window.localStorage.setItem).mockImplementationOnce(() => {
+      throw new DOMException("Storage unavailable", "QuotaExceededError");
+    });
+
+    await expect(requestAthenaSunCycleMode()).resolves.toEqual({
+      ok: false,
+      reason: "unavailable",
+    });
+    expect(document.documentElement.dataset.themeMode).toBe("light");
   });
 });
