@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Adaptive Appearance and Truthful Operating Windows</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="1857b1564f1e9d690cbe716665ad888f282a0b34b298ae4ca3d6a634655940a9">
+  <header data-report-section="header">
+    <h1>Adaptive Appearance and Truthful Operating Windows</h1>
+    <p>A delivery-candidate guide to four operator-facing refinements</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch codex/device-appearance-register-lifecycle</li>
+      <li>Merge validation pending</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Source</dt><dd>e2ddb133</dd>
+      <dt>Status</dt><dd>Review pending</dd>
+      <dt>Deploy</dt><dd>Pending after merge</dd>
+      <dt>Root alignment</dt><dd>Pending after merge</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>This candidate makes four operator-facing views tell the truth about time and state. Athena can follow local sunrise and sunset, register transaction history follows the full session lifecycle, historical Daily Operations keeps open-register evidence with close status, and report summaries name their exact date range.</p>
+      <p>The changes share one principle: compact controls select intent, while the browser resolves solar boundaries and the backend resolves register closure.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why this mattered</h2>
+      <p>A register opened across multiple operating dates could show only transactions from its opening day in Completed Transactions. Historical close evidence and open registers could split into separate bands, report tabs hid their actual dates, and appearance schedules depended on manual or operating-system choices rather than local daylight.</p>
+      <ul>
+        <li>The previous register handoff treated an opening date as a one-day filter.</li>
+        <li>Historical status composition did not match the current-day workspace.</li>
+        <li>Compact report period names lacked an exact range in the status context.</li>
+        <li>Theme state had no contextual, browser-local sunrise/sunset mode.</li>
+      </ul>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model</h2>
+      <p>Treat identity, time, and presentation as separate rails. Identity stays invariant: a register-session filter remains attached in every segment. Time is resolved by the layer with authority: the server knows session closure, while the browser knows local solar context. Presentation states the resolved result without overloading navigation labels.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>Before: a register opening date became both lower and upper operating-day bounds; historical evidence occupied parallel surfaces; report periods were named but not dated; theme resolution understood only explicit and system choices.</p>
+      <p>After: the default register view starts at the opening-day boundary and ends at recorded closure only for closed sessions; All Time remains an identity-only audit view. Historical evidence shares one Store day status workspace. Report status metadata includes the formatted interval. Sun cycle requests coarse location on selection, calculates the current solar period locally, and schedules the next transition.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <p>A denied or unavailable location request preserves the current mode and shows recovery guidance; cancellation preserves it without showing an error. The AbortSignal does not cancel the browser request itself—it prevents applying a late successful callback. If Sun cycle is already stored but its coordinates are missing or corrupt, effective appearance falls back to the system preference. Polar day or night currently makes activation unavailable rather than maintaining continuous daylight or darkness.</p>
+      <p>A lifecycle start-only query is accepted only with a register session, and missing or cross-store sessions return no rows. Closed sessions exclude post-closure records only when status is closed and closedAt is numeric; an inconsistent closed session without closedAt remains unbounded. All Time deliberately exposes post-closure records for audit.</p>
+      <ul>
+        <li>Today still intersects today with the register identity.</li>
+        <li>Non-register queries still require paired start and end dates.</li>
+        <li>No anomalous transactions are repaired or deleted.</li>
+        <li>No location is stored on the server or synchronized across devices.</li>
+      </ul>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what did not</h2>
+      <p>The branch adds runtime, component, query, and regression coverage for the four refinements. Existing explicit appearance choices, saved dark palette behavior, closeout policy, Cash Controls linked-sales semantics, standalone transaction history, and report comparison calculations remain unchanged.</p>
+      <ul>
+        <li>Sun-cycle coordinates are rounded to 0.01 degrees and remain in localStorage.</li>
+        <li>Automatic theme changes avoid attention-grabbing manual transition effects.</li>
+        <li>Review-only sessions opened before the selected range now contribute to carried-over session evidence and cash without entering active or closed totals.</li>
+        <li>The report range is quiet metadata beside reconciliation status, not a longer segmented-control label.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and finish line</h2>
+      <p>The generated-artifact hook verified Convex generated API coverage and rebuilt Graphify. The first pr:athena run passed Bun parity, dependency parity, generated artifacts, architecture lint, changed frontend lint with one non-blocking hook-dependency warning, changed Convex lint, and TypeScript preparation. It then stopped before expensive checks because final-green review evidence and this delivery documentation were required.</p>
+      <p>Review, the complete merge gate, PR checks, merge, root fast-forward, and the required Convex/admin production deploys remain pending. This report does not claim those events have happened.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Guidance for future changes</h2>
+      <p>Keep entity identity orthogonal to time-window selection. Put lifecycle cutoffs on the server that owns status and closure facts. Keep verbose temporal context in quiet metadata. For adaptive browser preferences, request sensitive context only when selected, minimize what is retained, schedule the next boundary, and recalculate after sleep or focus.</p>
+      <ul>
+        <li>Test active, closing, closed, missing-closedAt, Today, lifecycle, and All Time paths separately.</li>
+        <li>Reconcile UTC-normalized solar events to the device&#x27;s local calendar day, with DST, date-line, and high-latitude fixtures.</li>
+        <li>Use one shared status composition rather than parallel historical notification bands.</li>
+        <li>Regenerate Graphify after code edits and refresh report/solution fingerprints after final behavior changes.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/src/lib/theme.ts</code></td><td>Owns local appearance state, solar calculation, scheduling, fallback, and subscriptions.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/app-settings/AppSettingsView.tsx</code></td><td>Requests location context and presents active and next appearance metadata.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/application/queries/getTransactions.ts</code></td><td>Resolves server-authoritative lifecycle bounds and store ownership.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/pos/transactions/TransactionsView.tsx</code></td><td>Keeps register identity while sending truthful Today, lifecycle, and All Time segments.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/dailyClose.ts</code></td><td>Includes review-only carried-over sessions in close continuity.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/operations/DailyOperationsView.tsx</code></td><td>Composes historical close, automation, and open-register evidence together.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/reports/ReportsOverviewView.tsx</code></td><td>Formats the selected report interval for status metadata.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>When may the backend accept startDate without endDate?</p>
+        <ol data-quiz-options>
+          <li>For every report period</li>
+          <li data-quiz-correct>Only for a register-scoped lifecycle query</li>
+          <li>Whenever the page-size limit is present</li>
+          <li>Only for All Time</li>
+        </ol>
+        <p data-quiz-explanation>The ordinary date contract stays paired; the start-only exception requires register-session identity and represents the lifecycle lower bound.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where is a closed register session&#x27;s upper transaction bound decided?</p>
+        <ol data-quiz-options>
+          <li>In the segmented control</li>
+          <li>In localStorage</li>
+          <li data-quiz-correct>On the backend from authoritative closedAt state</li>
+          <li>By the report formatter</li>
+        </ol>
+        <p data-quiz-explanation>The server owns lifecycle status and closure facts, avoiding client timing and authority gaps.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does All Time intentionally ignore the lifecycle cutoff?</p>
+        <ol data-quiz-options>
+          <li>To improve pagination speed</li>
+          <li data-quiz-correct>To expose anomalous session-linked records for audit</li>
+          <li>To include other stores</li>
+          <li>To hide the selected segment</li>
+        </ol>
+        <p data-quiz-explanation>All Time retains identity while providing an audit escape hatch for records after closure.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>When does Athena ask for device location for Sun cycle?</p>
+        <ol data-quiz-options>
+          <li>On every startup</li>
+          <li>When the store is created</li>
+          <li data-quiz-correct>Only when the operator selects Sun cycle</li>
+          <li>At every sunrise</li>
+        </ol>
+        <p data-quiz-explanation>Permission is contextual and opt-in rather than part of application startup.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens when a new Sun cycle location request is denied or unavailable?</p>
+        <ol data-quiz-options>
+          <li>Athena forces dark mode</li>
+          <li>Athena uploads the error</li>
+          <li data-quiz-correct>The prior appearance remains and recovery guidance is shown</li>
+          <li>The app stops rendering</li>
+        </ol>
+        <p data-quiz-explanation>Denied or unavailable selection preserves the current choice and explains recovery. Cancellation also preserves it but intentionally shows no error.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does Athena recalculate solar state on focus or visibility resume?</p>
+        <ol data-quiz-options>
+          <li>To request precise GPS</li>
+          <li data-quiz-correct>To recover after sleep crosses a solar boundary</li>
+          <li>To synchronize store settings</li>
+          <li>To animate the settings card</li>
+        </ol>
+        <p data-quiz-explanation>Timers may not fire while suspended, so resume recalculation prevents a stale appearance.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where are exact report dates shown?</p>
+        <ol data-quiz-options>
+          <li>Inside every segmented-control label</li>
+          <li data-quiz-correct>In quiet status metadata beside reconciliation context</li>
+          <li>Only in the URL</li>
+          <li>Only in transaction rows</li>
+        </ol>
+        <p data-quiz-explanation>Compact navigation remains readable while the status rail communicates the exact selected interval.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How are historical open registers presented after this change?</p>
+        <ol data-quiz-options>
+          <li>In a separate alert band</li>
+          <li>Hidden after automation completes</li>
+          <li data-quiz-correct>Inside the shared Store day status workspace</li>
+          <li>Only in Completed Transactions</li>
+        </ol>
+        <p data-quiz-explanation>Close workflow, automation completion, and open-register evidence now share one composition.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which scope is retained by Today, From opening date, and All Time?</p>
+        <ol data-quiz-options>
+          <li>The report comparison period</li>
+          <li data-quiz-correct>The register-session identity</li>
+          <li>The browser location</li>
+          <li>The current operating date</li>
+        </ol>
+        <p data-quiz-explanation>Every segment keeps the session identity while changing only its time bounds.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the delivery status represented by this report?</p>
+        <ol data-quiz-options>
+          <li>Merged and deployed</li>
+          <li>PR checks complete</li>
+          <li data-quiz-correct>Delivery candidate with review, merge, and deploy pending</li>
+          <li>Abandoned prototype</li>
+        </ol>
+        <p data-quiz-explanation>The report is committed before merge and must not predict pending review, root alignment, or deployment events.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>session context historian</dt><dd>Recovered rejected intermediate UX choices, the final authority decisions, prior test feedback, and finish-line state from two Aug 13 sessions.</dd>
+      <dt>delivered diff explorer</dt><dd>Mapped all behavior layers, before/after flow, failure boundaries, risks, coverage, generated outputs, and preserved behavior.</dd>
+      <dt>related docs explorer</dt><dd>Scored solution overlap, confirmed the existing theme note should be updated, and identified stale three-mode wording.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

@@ -2331,7 +2331,7 @@ describe("end-of-day review backend foundation", () => {
     );
   });
 
-  it("surfaces review-only closeouts as blockers without active or closed totals", async () => {
+  it("preserves carried-over cash for review-only closeouts without active or closed totals", async () => {
     const { db } = createDb({
       approvalRequest: [
         {
@@ -2369,7 +2369,7 @@ describe("end-of-day review backend foundation", () => {
           countedCash: 9200,
           expectedCash: 10000,
           managerApprovalRequestId: "approval-submitted",
-          openedAt: Date.UTC(2026, 4, 7, 10),
+          openedAt: Date.UTC(2026, 4, 6, 10),
           openingFloat: 10000,
           registerNumber: "A2",
           status: "closing",
@@ -2427,6 +2427,8 @@ describe("end-of-day review backend foundation", () => {
       title: "Register closeout variance needs review",
     });
     expect(snapshot.summary).toMatchObject({
+      carriedOverCashTotal: 10000,
+      carriedOverRegisterCount: 1,
       closedRegisterSessionCount: 0,
       expectedCashTotal: 0,
       netCashVariance: 0,

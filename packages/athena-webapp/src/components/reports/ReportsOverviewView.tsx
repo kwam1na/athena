@@ -15,6 +15,7 @@ import {
   ReportSegmentedTabsTrigger,
 } from "./ReportSegmentedTabs";
 import { ReportFreshness } from "./ReportFreshness";
+import { formatReportDateRange } from "./reportFormat";
 import { ReportTrendChart } from "./ReportTrendChart";
 import { ReportTrustStrip } from "./ReportTrustStrip";
 import {
@@ -128,6 +129,13 @@ export function ReportsOverviewView({
   const transactionsRange = anchorOperatingDate
     ? dateRangeForOverviewWindow(selectedWindow, anchorOperatingDate)
     : undefined;
+  const selectedRangeLabel = transactionsRange
+    ? formatReportDateRange(
+        transactionsRange.startDate,
+        transactionsRange.endDate,
+        { includeWeekday: true },
+      )
+    : undefined;
   return (
     <FadeIn>
       <section
@@ -203,6 +211,7 @@ export function ReportsOverviewView({
                 : undefined
             }
             periodLabel={REPORT_OVERVIEW_WINDOW_LABELS[selectedWindow]}
+            periodRangeLabel={selectedRangeLabel}
             priorWindowLabel={comparison?.priorWindowLabel ?? "prior period"}
             snapshot={overview[selectedWindow]}
             transactionsLink={

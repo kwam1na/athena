@@ -367,31 +367,61 @@ export async function getCompletedTransactions(
     limit?: number;
   },
 ) {
-  if (Boolean(args.startDate) !== Boolean(args.endDate)) {
+  const isRegisterLifecycleRange = Boolean(
+    args.registerSessionId && args.startDate && !args.endDate,
+  );
+  if (
+    Boolean(args.startDate) !== Boolean(args.endDate) &&
+    !isRegisterLifecycleRange
+  ) {
     throw new Error("Start and end operating dates must be provided together.");
   }
 
-  const range =
-    args.startDate && args.endDate
-      ? await Promise.all([
-          resolveReportingCalendarDateRangeWithCtx(ctx, {
-            reportingDate: args.startDate,
-            storeId: args.storeId,
-          }),
-          resolveReportingCalendarDateRangeWithCtx(ctx, {
-            reportingDate: args.endDate,
-            storeId: args.storeId,
-          }),
-        ])
-      : null;
-  if (range?.some((boundary) => boundary.kind !== "resolved")) {
+  const [startBoundary, endBoundary] = await Promise.all([
+    args.startDate
+      ? resolveReportingCalendarDateRangeWithCtx(ctx, {
+          reportingDate: args.startDate,
+          storeId: args.storeId,
+        })
+      : null,
+    args.endDate
+      ? resolveReportingCalendarDateRangeWithCtx(ctx, {
+          reportingDate: args.endDate,
+          storeId: args.storeId,
+        })
+      : null,
+  ]);
+  if (
+    (startBoundary && startBoundary.kind !== "resolved") ||
+    (endBoundary && endBoundary.kind !== "resolved")
+  ) {
     return [];
   }
 
+  const registerSession = isRegisterLifecycleRange
+    ? await getRegisterSessionById(ctx, args.registerSessionId!)
+    : null;
+  if (
+    isRegisterLifecycleRange &&
+    (!registerSession || registerSession.storeId !== args.storeId)
+  ) {
+    return [];
+  }
+  const lifecycleCompletedTo =
+    registerSession?.status === "closed" &&
+    typeof registerSession.closedAt === "number"
+      ? registerSession.closedAt
+      : undefined;
+
   const transactions = await listCompletedTransactions(ctx, {
     completedFrom:
-      range?.[0]?.kind === "resolved" ? range[0].startAt : args.completedFrom,
-    completedTo: range?.[1]?.kind === "resolved" ? range[1].endAt : undefined,
+      startBoundary?.kind === "resolved"
+        ? startBoundary.startAt
+        : args.completedFrom,
+    completedTo:
+      endBoundary?.kind === "resolved"
+        ? endBoundary.endAt
+        : lifecycleCompletedTo,
     limit: args.limit,
     order: args.order,
     registerSessionId: args.registerSessionId,

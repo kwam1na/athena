@@ -45,6 +45,22 @@ function formatPaymentMethod(method: string | null) {
   return capitalizeWords(method.replace(/_/g, " "));
 }
 
+function getRegisterSessionStatusPresentation(status?: string) {
+  switch (status) {
+    case "active":
+    case "open":
+      return { dotClassName: "bg-success", label: "Active" };
+    case "closing":
+      return { dotClassName: "bg-warning", label: "Closing" };
+    case "closeout_rejected":
+      return { dotClassName: "bg-danger", label: "Closeout rejected" };
+    case "closed":
+      return { dotClassName: "bg-muted-foreground/60", label: "Closed" };
+    default:
+      return null;
+  }
+}
+
 function formatRegisterFilterLabel(
   registerNumber?: string | null,
   terminalName?: string | null,
@@ -465,10 +481,12 @@ export function TransactionsView() {
             : {}),
           ...(completedFrom !== undefined ? { completedFrom } : {}),
           ...(isOperatingDateFilterActive && hasValidOperatingDateRange
-            ? {
-                endDate: rangeEndDate!,
-                startDate: rangeStartDate!,
-              }
+            ? registerSessionId
+              ? { startDate: rangeStartDate! }
+              : {
+                  endDate: rangeEndDate!,
+                  startDate: rangeStartDate!,
+                }
             : {}),
           ...(transactionOrder ? { order: transactionOrder } : {}),
         }
@@ -492,6 +510,9 @@ export function TransactionsView() {
     registerSessionSnapshot?.registerSession?.registerNumber,
     registerSessionSnapshot?.registerSession?.terminalName,
     registerSessionId,
+  );
+  const registerSessionStatus = getRegisterSessionStatusPresentation(
+    registerSessionSnapshot?.registerSession?.status,
   );
   const isTransactionBatchFull = (transactions?.length ?? 0) >= loadedLimit;
   const activeFilterSummary = registerSessionId
@@ -687,8 +708,23 @@ export function TransactionsView() {
 
           <section className="space-y-layout-md">
             {activeFilterSummary ? (
-              <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                Showing {activeFilterSummary}
+              <div
+                className="inline-flex w-fit max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground"
+                data-testid="register-session-context"
+              >
+                <span>Showing {activeFilterSummary}</span>
+                {registerSessionStatus ? (
+                  <span
+                    aria-label={`Register session status: ${registerSessionStatus.label}`}
+                    className="inline-flex shrink-0 items-center gap-1.5 border-l border-border/70 pl-2 font-medium text-foreground/75"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`h-1.5 w-1.5 rounded-full ${registerSessionStatus.dotClassName}`}
+                    />
+                    {registerSessionStatus.label}
+                  </span>
+                ) : null}
               </div>
             ) : null}
             {!isLoadingTransactions && isTransactionBatchFull ? (

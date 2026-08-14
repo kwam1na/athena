@@ -37,6 +37,7 @@ export function ReportPeriodMetrics({
   comparisonKey,
   dailyOperationsLink,
   periodLabel,
+  periodRangeLabel,
   priorWindowLabel,
   eodReviewLink,
   transactionsLink,
@@ -57,6 +58,7 @@ export function ReportPeriodMetrics({
     storeUrlSlug: string;
   };
   periodLabel: string;
+  periodRangeLabel?: string;
   priorWindowLabel: string;
   transactionsLink?: {
     orgUrlSlug: string;
@@ -89,7 +91,9 @@ export function ReportPeriodMetrics({
           : `${snapshot.unsettledDayCount.toLocaleString()} of ${snapshot.dayCount.toLocaleString()} reported ${
               snapshot.dayCount === 1 ? "day" : "days"
             } awaiting reconciliation`;
-  const showPeriodStatus = Boolean(periodStatus || statusLink);
+  const showPeriodStatus = Boolean(
+    periodStatus || periodRangeLabel || statusLink,
+  );
   const comparisonHelper = (
     currentValue: number | null | undefined,
     priorValue: number | null | undefined,
@@ -188,9 +192,15 @@ export function ReportPeriodMetrics({
                 data-testid="report-period-status"
               >
                 {periodStatus ? <span>{periodStatus}</span> : null}
+                {periodStatus && periodRangeLabel ? (
+                  <span aria-hidden="true">·</span>
+                ) : null}
+                {periodRangeLabel ? <span>{periodRangeLabel}</span> : null}
                 {statusLink ? (
                   <>
-                    <span aria-hidden="true">·</span>
+                    {periodStatus || periodRangeLabel ? (
+                      <span aria-hidden="true">·</span>
+                    ) : null}
                     <Link
                       className="inline-flex items-center gap-1 rounded-sm font-medium text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       params={{

@@ -2934,9 +2934,10 @@ export async function buildDailyCloseSnapshotWithCtx(
     ...activeRegisterSessions,
     ...closedRegisterSessions,
   ];
-  const carriedOverRegisterSessions = relevantRegisterSessions.filter(
-    (session) => session.openedAt < range.startAt,
-  );
+  const carriedOverRegisterSessions = [
+    ...relevantRegisterSessions,
+    ...reviewOnlyRegisterCloseoutSessions,
+  ].filter((session) => session.openedAt < range.startAt);
   const cashCollectedTodayByRegisterSessionId = cashDeltasByRegisterSessionId(
     completedTransactions,
   );
