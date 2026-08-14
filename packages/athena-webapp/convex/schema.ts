@@ -213,9 +213,24 @@ import {
   sharedDemoRestoreStateSchema,
 } from "./schemas/sharedDemo";
 import { staffMessageSchema } from "./schemas/staffMessages";
+import {
+  harnessWaiverApprovalSchema,
+  harnessWaiverPasskeySchema,
+  harnessWaiverRegistrationSchema,
+} from "./schemas/harnessWaiver";
 
 const schema = defineSchema({
   ...authTables,
+  harnessWaiverPasskey: defineTable(harnessWaiverPasskeySchema).index(
+    "by_credentialId",
+    ["credentialId"],
+  ),
+  harnessWaiverRegistration: defineTable(harnessWaiverRegistrationSchema)
+    .index("by_challenge", ["challenge"])
+    .index("by_expiresAt", ["expiresAt"]),
+  harnessWaiverApproval: defineTable(harnessWaiverApprovalSchema)
+    .index("by_publicTokenHash", ["publicTokenHash"])
+    .index("by_expiresAt", ["expiresAt"]),
   sharedDemoRestoreState: defineTable(sharedDemoRestoreStateSchema).index(
     "by_storeId",
     ["storeId"],

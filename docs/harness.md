@@ -341,10 +341,24 @@ again on the next run; agents and CI cannot use it.
 
 To carry the same deliberate human decision into CI, commit and push the exact
 candidate, rerun preparation against that clean commit, then request a
-candidate-bound waiver. A human or agent may dispatch the request; dispatch is
-not approval. A distinct authorized human must approve the protected GitHub
-Environment deployment. If preparation repairs or stages anything, commit and
-push those changes and prepare again before requesting the waiver:
+candidate-bound waiver. A human or agent may dispatch the unprivileged request
+workflow; dispatch is not approval. That default-branch relay uses its
+job-scoped `GITHUB_TOKEN` to start the protected issuer as
+`github-actions[bot]`. Before it can dispatch the issuer, the relay asks Athena
+for a single-use, 15-minute WebAuthn challenge and waits for the enrolled iPhone
+passkey to approve the exact candidate with user verification. No App private
+key, installation token, broker secret, or other Actions-write credential
+enters the requesting process. The relay uploads the typed request and passkey
+approval identifier as an immutable run artifact; the issuer consumes that
+approval exactly once and verifies it against the relay artifact and exact
+successful default-branch run. The protected GitHub Environment remains a
+second defense-in-depth review. If preparation repairs or stages anything,
+commit and push those changes and prepare again before requesting the waiver:
+
+Successful passkey verification closes the authentication window and opens a
+separate 10-minute consumption window for the protected issuer, so a valid
+Face ID approval near minute fifteen is not already stale while GitHub waits
+for the defense-in-depth environment review.
 
 ```sh
 bun run pr:athena:prepare
@@ -353,16 +367,38 @@ bun run harness:waive-documentation --pr <number> --reason "<why this exception 
 
 The request dispatches the default-branch `Athena Documentation Waiver`
 workflow. Its `athena-documentation-waiver` environment must be configured with
-required human reviewers and self-review prevention. After approval, the
-workflow reads GitHub's environment review history, requires an authorized
-human approver distinct from the dispatcher, rechecks the live pull-request
+`kwam1na` as a required reviewer, self-review prevention, and administrator
+bypass disabled. The request relay alone receives job-scoped Actions write
+permission and the broker secret. Configure `ATHENA_WAIVER_API_URL` as a
+repository variable and the matching `ATHENA_WAIVER_BROKER_SECRET` as both a
+GitHub Actions secret and Convex production environment secret. Convex also
+requires `ATHENA_WAIVER_REVIEWER_EMAIL`, `ATHENA_WAIVER_RP_ID=athena-os.app`,
+`ATHENA_WAIVER_ORIGIN=https://athena-os.app`. Initial enrollment temporarily
+requires `ATHENA_WAIVER_ENROLLMENT_TOKEN_HASH`, the lowercase SHA-256 digest of a
+one-time bootstrap secret chosen and configured by the reviewer outside any
+agent runtime. The reviewer opens `/<org>/settings/waiver-passkey` on the
+iPhone, enters that secret, and enrolls once; enrollment is locked after the
+first credential. Remove the enrollment-token hash from production after the
+trusted enrollment succeeds. WebAuthn verifies a platform authenticator and
+user verification, but does not attest the device make; the iPhone is an
+operational enrollment requirement.
+
+After passkey and environment approval, the issuer downloads the relay artifact,
+verifies its workflow path, run, branch, conclusion, requester, exact inputs,
+pull-request freshness, and environment approval, then consumes the passkey
+approval and immediately finalizes the attestation. Consumption is idempotent
+only for the same exact candidate so a transient artifact/check publication
+failure can safely retry without authorizing different work. It requires the
+dispatcher to be the exact `github-actions[bot]` identity and the approver to be
+an authorized GitHub user distinct from that bot, rechecks the live pull-request
 head and base, and publishes both a check run and an immutable workflow artifact
-that record both identities and bind the waived finding codes to the PR head, base tip, merge base, and
+that record both GitHub identities and the passkey credential identifier, and
+bind the waived finding codes to the PR head, base tip, merge base, and
 deliverable-tree identity. CI downloads the artifact from that verified
 default-branch workflow run before resolving `documentation.current` as
 `waived`; it never trusts branch-authored JSON or check output by itself. A new
 commit, a moved base, an uncovered documentation finding, an unauthorized actor,
-or missing workflow provenance makes the waiver stale and CI fails closed. The
+or missing workflow, relay, or WebAuthn provenance makes the waiver stale and CI fails closed. The
 local invocation waiver remains available before a PR exists, but only the
 GitHub-backed attestation crosses the CI boundary.
 

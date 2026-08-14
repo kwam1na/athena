@@ -409,12 +409,13 @@ describe("github-pr-merge", () => {
 
   it("keeps the execute workflow pointed at the worktree-safe merge helper", async () => {
     const rootDir = path.resolve(import.meta.dirname, "..");
-    const [executeSkill, reportSkill, packageJson] = await Promise.all([
+    const [executeSkill, reportSkill, compoundSkill, packageJson] = await Promise.all([
       readFile(path.join(rootDir, ".agents/skills/execute/SKILL.md"), "utf8"),
       readFile(
         path.join(rootDir, ".agents/skills/ce-landed-change-report/SKILL.md"),
         "utf8"
       ),
+      readFile(path.join(rootDir, ".agents/skills/ce-compound/SKILL.md"), "utf8"),
       readFile(path.join(rootDir, "package.json"), "utf8"),
     ]);
 
@@ -480,6 +481,18 @@ describe("github-pr-merge", () => {
     );
     expect(reportSkill).toContain(
       "do not generate or refresh it after merge"
+    );
+    expect(reportSkill).toContain(
+      "return the production Athena URL"
+    );
+    expect(reportSkill).toContain(
+      "never return a localhost or filesystem link"
+    );
+    expect(compoundSkill).toContain(
+      "return the production Athena URL"
+    );
+    expect(compoundSkill).toContain(
+      "never return a localhost or filesystem link"
     );
   });
 

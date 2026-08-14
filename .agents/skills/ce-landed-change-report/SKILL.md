@@ -238,11 +238,13 @@ If code files changed as part of creating or updating this skill, follow repo ru
 
 ## Output
 
+When handing the report to the user after a production deployment, return the production Athena URL, `https://athena-os.app/docs/reports/<slug>`, and never return a localhost or filesystem link in that handoff. A local path may still appear in validation evidence before deployment, but it is not the final user-facing link.
+
 Return:
 
 ```text
 === Landed Change Report Complete ===
-Path: docs/reports/<report>.html
+Production URL: https://athena-os.app/docs/reports/<slug>
 Source: <candidate PR/head or merged PR/merge SHA/Linear issue>
 Subagents: <names/roles used>
 Quiz: <N questions, pass threshold>

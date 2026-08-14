@@ -4,7 +4,11 @@ import {
   type HarnessReviewIdentityVersion,
 } from "./harness-review-identity";
 
-export const DOCUMENTATION_WAIVER_SCHEMA_VERSION = 1 as const;
+export const DOCUMENTATION_WAIVER_SCHEMA_VERSION = 4 as const;
+export const DOCUMENTATION_WAIVER_DISPATCHER =
+  "github-actions[bot]" as const;
+export const DOCUMENTATION_WAIVER_REQUEST_WORKFLOW_PATH =
+  ".github/workflows/athena-documentation-waiver-request.yml" as const;
 export const DOCUMENTATION_WAIVER_CHECK_NAME =
   "athena/documentation-waiver" as const;
 export const DOCUMENTATION_WAIVER_WORKFLOW_PATH =
@@ -33,6 +37,12 @@ export type DocumentationWaiverAttestation =
     obligationId: "documentation.current";
     waivedFindingCodes: DocumentationWaiverFindingCode[];
     requestedBy: string;
+    requestedByType: "User";
+    relayedBy: typeof DOCUMENTATION_WAIVER_DISPATCHER;
+    relayWorkflowRunId: number;
+    passkeyApprovalId: string;
+    passkeyCredentialId: string;
+    passkeyApprovedAt: number;
     approvedBy: string;
     approvalEnvironment: "athena-documentation-waiver";
     reason: string;
@@ -47,6 +57,16 @@ export type DocumentationWaiverWorkflowRun = {
   headBranch: string;
   conclusion: string | null;
   actor: string;
+  actorType: string;
+  relay: {
+    id: number;
+    event: string;
+    path: string;
+    headBranch: string;
+    conclusion: string | null;
+    actor: string;
+    actorType: string;
+  };
   approvals: Array<{
     state: string;
     user: string;
@@ -92,6 +112,10 @@ export function parseDocumentationWaiverAttestation(
     (record.prNumber as number) < 1 ||
     !Number.isInteger(record.workflowRunId) ||
     (record.workflowRunId as number) < 1 ||
+    !Number.isInteger(record.relayWorkflowRunId) ||
+    (record.relayWorkflowRunId as number) < 1 ||
+    !Number.isFinite(record.passkeyApprovedAt) ||
+    (record.passkeyApprovedAt as number) <= 0 ||
     !nonEmpty(record.repository) ||
     !nonEmpty(record.headSha) ||
     !nonEmpty(record.deliverableTreeSha) ||
@@ -100,6 +124,10 @@ export function parseDocumentationWaiverAttestation(
     !nonEmpty(record.diffBaseSha) ||
     !nonEmpty(record.approvedBy) ||
     !nonEmpty(record.requestedBy) ||
+    record.requestedByType !== "User" ||
+    record.relayedBy !== DOCUMENTATION_WAIVER_DISPATCHER ||
+    !nonEmpty(record.passkeyApprovalId) ||
+    !nonEmpty(record.passkeyCredentialId) ||
     record.approvalEnvironment !== "athena-documentation-waiver" ||
     !nonEmpty(record.reason) ||
     !nonEmpty(record.createdAt) ||
@@ -158,14 +186,23 @@ export function verifyDocumentationWaiverAttestation(input: {
   }
 
   const workflow = input.workflowRun;
+  const relay = workflow.relay;
   if (
     workflow.id !== attestation.workflowRunId ||
     workflow.event !== "workflow_dispatch" ||
     workflow.path !== DOCUMENTATION_WAIVER_WORKFLOW_PATH ||
     workflow.headBranch !== "main" ||
     workflow.conclusion !== "success" ||
-    workflow.actor !== attestation.requestedBy ||
-    workflow.actor === attestation.approvedBy ||
+    workflow.actor !== DOCUMENTATION_WAIVER_DISPATCHER ||
+    workflow.actorType !== "Bot" ||
+    attestation.relayedBy !== workflow.actor ||
+    relay.id !== attestation.relayWorkflowRunId ||
+    relay.event !== "workflow_dispatch" ||
+    relay.path !== DOCUMENTATION_WAIVER_REQUEST_WORKFLOW_PATH ||
+    relay.headBranch !== "main" ||
+    relay.conclusion !== "success" ||
+    relay.actor !== attestation.requestedBy ||
+    relay.actorType !== attestation.requestedByType ||
     !workflow.approvals.some(
       (approval) =>
         approval.state === "approved" &&
@@ -259,6 +296,12 @@ export async function discoverDocumentationWaiverAttestation(input: {
             : [];
         })
       : [];
+    const relayRun = asObject(
+      await input.requestJson(
+        `/repos/${input.expected.repository}/actions/runs/${parsed.relayWorkflowRunId}`,
+      ),
+    );
+    const relayActor = asObject(relayRun?.actor);
     const verification = verifyDocumentationWaiverAttestation({
       attestation: parsed,
       expected: input.expected,
@@ -272,6 +315,24 @@ export async function discoverDocumentationWaiverAttestation(input: {
         conclusion:
           typeof run?.conclusion === "string" ? run.conclusion : null,
         actor: typeof actor?.login === "string" ? actor.login : "",
+        actorType: typeof actor?.type === "string" ? actor.type : "",
+        relay: {
+          id: typeof relayRun?.id === "number" ? relayRun.id : -1,
+          event: typeof relayRun?.event === "string" ? relayRun.event : "",
+          path: typeof relayRun?.path === "string" ? relayRun.path : "",
+          headBranch:
+            typeof relayRun?.head_branch === "string"
+              ? relayRun.head_branch
+              : "",
+          conclusion:
+            typeof relayRun?.conclusion === "string"
+              ? relayRun.conclusion
+              : null,
+          actor:
+            typeof relayActor?.login === "string" ? relayActor.login : "",
+          actorType:
+            typeof relayActor?.type === "string" ? relayActor.type : "",
+        },
         approvals,
       },
     });

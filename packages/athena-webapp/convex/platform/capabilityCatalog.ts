@@ -218,6 +218,7 @@ const PUBLIC_WRITE_MODULE_CAPABILITIES = {
   "contextTracking/sharedDemoEvents": "workspace.telemetry.write",
   "customerMessaging/public": "customer.messaging.send",
   devPatchBadTransaction: "administration.maintenance",
+  "harnessWaiver/passkeys": "administration.maintenance",
   "intelligence/capabilities/actions": "intelligence.generate",
   "intelligence/runs": "intelligence.manage",
   "inventory/auth": "identity.authenticate",

@@ -95,11 +95,31 @@ async function runGh(args: string[]) {
   return stdout.trim();
 }
 
+export function buildDocumentationWaiverDispatchArgs(
+  inputs: DocumentationWaiverWorkflowInputs,
+) {
+  const fields = Object.entries(inputs).flatMap(([key, value]) => [
+    "-f",
+    `${key}=${value}`,
+  ]);
+  return [
+    "workflow",
+    "run",
+    "athena-documentation-waiver-request.yml",
+    "--ref",
+    "main",
+    ...fields,
+  ];
+}
+
 async function ghJson(args: string[]) {
   return JSON.parse(await runGh(args)) as Record<string, unknown>;
 }
 
 export function parseDocumentationWaiverArgs(argv: string[]) {
+  if (argv.length === 1 && ["--help", "-h"].includes(argv[0])) {
+    return { help: true } as const;
+  }
   let pr: string | undefined;
   let reason = "";
   const readValue = (flag: string, index: number) => {
@@ -117,7 +137,19 @@ export function parseDocumentationWaiverArgs(argv: string[]) {
     else throw new Error(`Unknown argument: ${argv[index]}`);
   }
   if (!reason.trim()) throw new Error("Pass a non-empty --reason.");
-  return { pr, reason };
+  return { help: false as const, pr, reason };
+}
+
+export function buildDocumentationWaiverRequestReceipt(
+  input: Pick<DocumentationWaiverWorkflowInputs, "repository" | "pr_number" | "head_sha">,
+) {
+  return {
+    status: "requested" as const,
+    workflow: "athena-documentation-waiver-request.yml" as const,
+    repository: input.repository,
+    prNumber: Number(input.pr_number),
+    headSha: input.head_sha,
+  };
 }
 
 function documentationFindingCodes(findings: DeliveryDocumentationFinding[]) {
@@ -126,6 +158,12 @@ function documentationFindingCodes(findings: DeliveryDocumentationFinding[]) {
 
 async function main() {
   const args = parseDocumentationWaiverArgs(process.argv.slice(2));
+  if (args.help) {
+    console.log(
+      "Usage: bun run harness:waive-documentation [--pr <number>] --reason <text>",
+    );
+    return;
+  }
   const rootDir = process.cwd();
   const prepared = await evaluatePrAthenaPreparationReceipt(rootDir);
   if (prepared.prepared === false) {
@@ -158,21 +196,8 @@ async function main() {
     reason: args.reason,
   });
 
-  const fields = Object.entries(inputs).flatMap(([key, value]) => [
-    "-f",
-    `${key}=${value}`,
-  ]);
-  await runGh([
-    "workflow",
-    "run",
-    "athena-documentation-waiver.yml",
-    "--ref",
-    "main",
-    ...fields,
-  ]);
-  console.log(
-    `Requested documentation waiver for PR #${inputs.pr_number} at ${inputs.head_sha}. Approve the athena-documentation-waiver environment deployment in GitHub to publish it.`,
-  );
+  await runGh(buildDocumentationWaiverDispatchArgs(inputs));
+  console.log(JSON.stringify(buildDocumentationWaiverRequestReceipt(inputs)));
 }
 
 if (import.meta.main) {

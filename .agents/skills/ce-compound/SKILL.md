@@ -455,6 +455,8 @@ Knowledge track:
 
 ## Success Output
 
+When handing a solution note to the user after a production deployment, return the production Athena URL, `https://athena-os.app/docs/solutions/<category>/<slug>`, and never return a localhost or filesystem link in that handoff. A repository path may still appear in validation evidence before deployment, but it is not the final user-facing link.
+
 ```
 ✓ Documentation complete
 
