@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-14T21:56:16.394Z",
+  "branch": "codex/waiver-app-dispatch",
+  "headSha": "225189eda33b4d60f8ff78e28ebfe307b4beb1df",
+  "deliverableDiffFingerprint": "4c21a0f5abedebcf481e373fab2f332fe7eb0bd5bf0f5d744997cbda834393f0",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 5,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 652305.371542
+  },
+  "reviewLoop": {
+    "providerId": "ce-code-review",
+    "runId": "athena-passkey-final-20260814",
+    "finalPassId": "pass-9f4eaa39",
+    "recordedAt": "2026-08-14T21:45:20.484Z",
+    "iterationCount": 9,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}
