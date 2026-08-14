@@ -15,6 +15,7 @@ import {
   ATHENA_PR_VALIDATION_GATE_ID,
   HARNESS_GATE_REGISTRY,
 } from "./harness-gate-registry";
+import { withoutGitRepositoryContext } from "./git-environment";
 import * as prePushReview from "./pre-push-review";
 
 const ROOT_DIR = path.resolve(import.meta.dirname, "..");
@@ -950,6 +951,10 @@ describe("pre-push review wiring", () => {
       await mkdir(fixtureTmp, { recursive: true });
       await writeFile(path.join(fixtureRoot, ".husky/pre-push"), hookContents);
       await writeFile(
+        path.join(fixtureRoot, ".husky/scrub-git-env.sh"),
+        await readFile(path.join(ROOT_DIR, ".husky/scrub-git-env.sh"), "utf8"),
+      );
+      await writeFile(
         path.join(fixtureBin, "bun"),
         [
           "#!/bin/sh",
@@ -967,7 +972,10 @@ describe("pre-push review wiring", () => {
       await chmod(path.join(fixtureBin, "bun"), 0o755);
 
       expect(
-        Bun.spawnSync(["git", "init", "-q"], { cwd: fixtureRoot }).exitCode,
+        Bun.spawnSync(["git", "init", "-q"], {
+          cwd: fixtureRoot,
+          env: withoutGitRepositoryContext(),
+        }).exitCode,
       ).toBe(0);
 
       const startedAt = Date.now();

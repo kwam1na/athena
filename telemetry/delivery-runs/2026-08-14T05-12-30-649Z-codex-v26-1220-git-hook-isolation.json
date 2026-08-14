@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-14T05:12:30.649Z",
+  "branch": "codex/v26-1220-git-hook-isolation",
+  "headSha": "b271119c6b55b870d968404f18100f0bedb4e2e8",
+  "deliverableDiffFingerprint": "8cbd008877cdbe118f1dac8b52f478905e33c3ce4ace7938ad506c3944fc9826",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 0,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 561543.5022509999
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "v26-1220-review-20260814",
+    "finalPassId": "pass-2",
+    "recordedAt": "2026-08-14T05:03:05.687Z",
+    "iterationCount": 2,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 1,
+      "P2": 0,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

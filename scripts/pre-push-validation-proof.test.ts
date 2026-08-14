@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  assertPostGateTelemetryChanges,
   assertPrAthenaProofReady,
   evaluatePrePushValidationProof,
   recordPrePushValidationProof,
@@ -70,6 +71,9 @@ function createSpawn(outputs: {
   unstagedDiffExitCode?: number;
   unstagedFiles?: string;
   bunVersion?: string;
+  changedTreeFiles?: string[];
+  changedTreeEntries?: Array<{ status: string; path: string }>;
+  treeContents?: Record<string, string>;
 }) {
   const next = {
     headSha: "head-a",
@@ -81,6 +85,9 @@ function createSpawn(outputs: {
     unstagedDiffExitCode: 0,
     unstagedFiles: "",
     bunVersion: "1.1.29",
+    changedTreeFiles: [],
+    changedTreeEntries: undefined,
+    treeContents: {},
     ...outputs,
   };
 
@@ -120,16 +127,28 @@ function createSpawn(outputs: {
     } else if (command.join(" ") === "bun --version") {
       output = next.bunVersion;
     } else if (command[0] === "git" && command[1] === "ls-tree") {
-      // The candidate identity reads the prepared tree; contents are irrelevant
-      // to proof reuse, which still binds to the raw tree SHA.
-      output = `100644 blob blob-a\tsrc/app.ts`;
+      const treeSha = command.at(-1) ?? "";
+      output =
+        next.treeContents[treeSha] ?? `100644 blob blob-a\tsrc/app.ts`;
+    } else if (
+      command[0] === "git" &&
+      command[1] === "diff" &&
+      command.includes("--name-status") &&
+      command.includes("-z")
+    ) {
+      const entries =
+        next.changedTreeEntries ??
+        next.changedTreeFiles.map((path) => ({ status: "A", path }));
+      output = entries.map((entry) => `${entry.status}\0${entry.path}\0`).join("");
     } else {
       throw new Error(`unexpected command: ${command.join(" ")}`);
     }
 
     return {
       exited: Promise.resolve(0),
-      stdout: new Response(`${output}\n`).body,
+      stdout: new Response(
+        command.includes("-z") ? output : `${output}\n`,
+      ).body,
       stderr: new Response("").body,
     };
   };
@@ -142,6 +161,19 @@ afterEach(async () => {
 });
 
 describe("pre-push validation proof", () => {
+  it("strictly validates post-gate telemetry even without a matching local ledger", () => {
+    let observedRoot = "";
+    let observedOptions: { ciMode?: boolean } | undefined;
+
+    assertPostGateTelemetryChanges("/repo", (rootDir, options) => {
+      observedRoot = rootDir;
+      observedOptions = options;
+    });
+
+    expect(observedRoot).toBe("/repo");
+    expect(observedOptions).toEqual({ ciMode: true });
+  });
+
   it("prepares a clean tree for pr:athena proof recording", async () => {
     const rootDir = await createFixtureRoot();
     const logs: string[] = [];
@@ -279,6 +311,109 @@ describe("pre-push validation proof", () => {
     });
   });
 
+  it("reuses proof after the canonical post-gate telemetry record is committed", async () => {
+    const rootDir = await createFixtureRoot();
+    await recordPrePushValidationProof(rootDir, {
+      spawn: createSpawn({
+        headSha: "head-before",
+        headTreeSha: "tree-before",
+        indexTreeSha: "tree-validated",
+        status: "A  telemetry/delivery-runs/run.json",
+      }),
+      logger: { log() {}, warn() {} },
+    });
+    let telemetryChecked = false;
+
+    await expect(
+      evaluatePrePushValidationProof(rootDir, {
+        spawn: createSpawn({
+          headSha: "head-after",
+          headTreeSha: "tree-with-telemetry",
+          indexTreeSha: "tree-with-telemetry",
+          changedTreeFiles: ["telemetry/delivery-runs/run.json"],
+        }),
+        validatePostGateNeutralChanges: async () => {
+          telemetryChecked = true;
+        },
+      }),
+    ).resolves.toMatchObject({ reusable: true, status: "reusable" });
+    expect(telemetryChecked).toBe(true);
+  });
+
+  it("does not reuse proof for other review-neutral documentation changes", async () => {
+    const rootDir = await createFixtureRoot();
+    await recordPrePushValidationProof(rootDir, {
+      spawn: createSpawn({}),
+      logger: { log() {}, warn() {} },
+    });
+
+    await expect(
+      evaluatePrePushValidationProof(rootDir, {
+        spawn: createSpawn({
+          headTreeSha: "tree-with-report",
+          indexTreeSha: "tree-with-report",
+          changedTreeFiles: ["docs/reports/changed.html"],
+        }),
+      }),
+    ).resolves.toMatchObject({
+      reusable: false,
+      status: "stale",
+      reason: "HEAD tree changed outside post-gate validation-neutral paths",
+    });
+  });
+
+  it("fails closed when committed post-gate telemetry is invalid", async () => {
+    const rootDir = await createFixtureRoot();
+    await recordPrePushValidationProof(rootDir, {
+      spawn: createSpawn({}),
+      logger: { log() {}, warn() {} },
+    });
+
+    await expect(
+      evaluatePrePushValidationProof(rootDir, {
+        spawn: createSpawn({
+          headTreeSha: "tree-with-telemetry",
+          indexTreeSha: "tree-with-telemetry",
+          changedTreeFiles: ["telemetry/delivery-runs/run.json"],
+        }),
+        validatePostGateNeutralChanges: async () => {
+          throw new Error("telemetry record is stale");
+        },
+      }),
+    ).resolves.toMatchObject({
+      reusable: false,
+      status: "stale",
+      reason: "post-gate telemetry validation failed: telemetry record is stale",
+    });
+  });
+
+  it("does not reuse proof for telemetry edits or path-prefix lookalikes", async () => {
+    const rootDir = await createFixtureRoot();
+    await recordPrePushValidationProof(rootDir, {
+      spawn: createSpawn({}),
+      logger: { log() {}, warn() {} },
+    });
+
+    for (const changedTreeEntries of [
+      [{ status: "M", path: "telemetry/delivery-runs/run.json" }],
+      [{ status: "A", path: " telemetry/delivery-runs/run.json" }],
+    ]) {
+      await expect(
+        evaluatePrePushValidationProof(rootDir, {
+          spawn: createSpawn({
+            headTreeSha: "tree-with-unsafe-delta",
+            indexTreeSha: "tree-with-unsafe-delta",
+            changedTreeEntries,
+          }),
+        }),
+      ).resolves.toMatchObject({
+        reusable: false,
+        status: "stale",
+        reason: "HEAD tree changed outside post-gate validation-neutral paths",
+      });
+    }
+  });
+
   it("does not record staged proof when unstaged files are also present", async () => {
     const rootDir = await createFixtureRoot();
 
@@ -369,12 +504,16 @@ describe("pre-push validation proof", () => {
           headSha: "head-after",
           headTreeSha: "tree-other",
           indexTreeSha: "tree-other",
+          changedTreeFiles: ["src/app.ts"],
+          treeContents: {
+            "tree-other": "100644 blob blob-b\tsrc/app.ts",
+          },
         }),
       }),
     ).resolves.toMatchObject({
       reusable: false,
       status: "stale",
-      reason: "HEAD tree changed since pr:athena recorded its proof",
+      reason: "HEAD tree changed outside post-gate validation-neutral paths",
     });
   });
 

@@ -11,6 +11,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { withoutGitRepositoryContext } from "./git-environment";
+
 const ROOT_DIR = path.resolve(import.meta.dirname, "..");
 const decoder = new TextDecoder();
 const fixtureRoots: string[] = [];
@@ -31,6 +33,14 @@ async function createHookFixture(fakeBunSource: string) {
     await readFile(path.join(ROOT_DIR, ".husky/pre-push"), "utf8"),
   );
   await writeFile(
+    path.join(fixtureRoot, ".husky/pre-commit"),
+    await readFile(path.join(ROOT_DIR, ".husky/pre-commit"), "utf8"),
+  );
+  await writeFile(
+    path.join(fixtureRoot, ".husky/scrub-git-env.sh"),
+    await readFile(path.join(ROOT_DIR, ".husky/scrub-git-env.sh"), "utf8"),
+  );
+  await writeFile(
     path.join(fixtureBin, "bun"),
     [
       "#!/bin/sh",
@@ -41,7 +51,10 @@ async function createHookFixture(fakeBunSource: string) {
   await chmod(path.join(fixtureBin, "bun"), 0o755);
 
   expect(
-    Bun.spawnSync(["git", "init", "-q"], { cwd: fixtureRoot }).exitCode,
+    Bun.spawnSync(["git", "init", "-q"], {
+      cwd: fixtureRoot,
+      env: withoutGitRepositoryContext(),
+    }).exitCode,
   ).toBe(0);
 
   return {
@@ -93,6 +106,50 @@ afterEach(async () => {
 });
 
 describe("bounded pre-push hook", () => {
+  it.each(["pre-push", "pre-commit"])(
+    "scrubs inherited Git context before %s validation commands",
+    async (hookName) => {
+      const fixture = await createHookFixture(
+        [
+          "#!/bin/sh",
+          'env > "$ATHENA_TEST_VALIDATOR_ENV_FILE"',
+          "exit 0",
+        ].join("\n"),
+      );
+      const validatorEnvFile = path.join(
+        fixture.fixtureRoot,
+        `${hookName}-validator.env`,
+      );
+
+      const result = Bun.spawnSync(["sh", `.husky/${hookName}`], {
+        cwd: fixture.fixtureRoot,
+        env: {
+          ...fixture.env,
+          ATHENA_TEST_VALIDATOR_ENV_FILE: validatorEnvFile,
+          GIT_COMMON_DIR: path.join(fixture.fixtureRoot, ".git"),
+          GIT_DIR: path.join(fixture.fixtureRoot, ".git"),
+          GIT_INDEX_FILE: path.join(fixture.fixtureRoot, ".git", "index"),
+          GIT_OBJECT_DIRECTORY: path.join(fixture.fixtureRoot, ".git", "objects"),
+          GIT_PREFIX: "scripts/",
+          GIT_WORK_TREE: fixture.fixtureRoot,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+      expect(result.exitCode, decoder.decode(result.stderr)).toBe(0);
+      const validatorEnvironment = await readFile(validatorEnvFile, "utf8");
+      expect(
+        validatorEnvironment
+          .split("\n")
+          .filter((line) => line.startsWith("GIT_")),
+      ).toEqual([]);
+      expect(validatorEnvironment).toContain(
+        `ATHENA_TEST_VALIDATOR_ENV_FILE=${validatorEnvFile}`,
+      );
+    },
+  );
+
   it("propagates failure status while byte-bounding diagnostics and retaining the full log", async () => {
     const fixture = await createHookFixture(
       [

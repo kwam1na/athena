@@ -3,6 +3,9 @@ import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { captureStableHarnessCandidate } from "./harness-candidate";
+import { assertDeliveryRunTelemetryCheck } from "./delivery-run-telemetry";
+import type { DeliveryRunTelemetryCheckOptions } from "./delivery-run-telemetry";
+import { isPostGateValidationNeutralPath } from "./harness-review-identity";
 
 export const PRE_PUSH_VALIDATION_PROOF_SCHEMA_VERSION = 2;
 export const PR_ATHENA_PROOF_BASE_REF = "origin/main";
@@ -67,9 +70,22 @@ type ProofRuntimeOptions = {
   spawn?: CommandRunner;
   readFile?: typeof readFile;
   readdir?: typeof readdir;
+  validatePostGateNeutralChanges?: (rootDir: string) => void | Promise<void>;
 };
 
 type ProofSnapshotMode = "evaluate" | "record";
+
+type DeliveryTelemetryCheck = (
+  rootDir: string,
+  options?: DeliveryRunTelemetryCheckOptions,
+) => void;
+
+export function assertPostGateTelemetryChanges(
+  rootDir: string,
+  check: DeliveryTelemetryCheck = assertDeliveryRunTelemetryCheck,
+) {
+  check(rootDir, { ciMode: true });
+}
 
 function normalizeRepoPath(repoPath: string) {
   return repoPath.replaceAll("\\", "/").replace(/^\.\//, "");
@@ -117,6 +133,45 @@ function parsePorcelainPaths(status: string) {
 
 function formatPathList(paths: string[]) {
   return paths.map((repoPath) => `  - ${repoPath}`).join("\n");
+}
+
+async function collectTreeChangedPaths(
+  rootDir: string,
+  beforeTreeSha: string,
+  afterTreeSha: string,
+  spawn: CommandRunner,
+) {
+  const proc = spawn(
+    [
+      "git",
+      "diff",
+      "--name-status",
+      "-z",
+      "--no-renames",
+      beforeTreeSha,
+      afterTreeSha,
+    ],
+    { cwd: rootDir, stdout: "pipe", stderr: "pipe" },
+  );
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  if (exitCode !== 0) {
+    throw new Error(stderr || "git diff could not compare validation trees");
+  }
+  const records = stdout.split("\0");
+  const changes: Array<{ status: string; path: string }> = [];
+  for (let index = 0; index < records.length - 1; index += 2) {
+    const status = records[index];
+    const repoPath = records[index + 1];
+    if (!status || !repoPath) {
+      throw new Error("git diff returned malformed NUL-delimited status output");
+    }
+    changes.push({ status, path: repoPath });
+  }
+  return changes;
 }
 
 async function collectUnstagedFiles(
@@ -441,6 +496,55 @@ export async function evaluatePrePushValidationProof(
     };
   }
 
+  if (proof.validatedTreeSha !== snapshot.validatedTreeSha) {
+    let changes: Array<{ status: string; path: string }>;
+    try {
+      changes = await collectTreeChangedPaths(
+        rootDir,
+        proof.validatedTreeSha,
+        snapshot.validatedTreeSha,
+        options.spawn ?? Bun.spawn,
+      );
+    } catch (error) {
+      return {
+        reusable: false,
+        status: "stale",
+        reason: `could not verify post-gate tree delta: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        proofPath: snapshot.proofPath,
+      };
+    }
+    if (
+      changes.length === 0 ||
+      changes.some(
+        (change) =>
+          change.status !== "A" ||
+          !isPostGateValidationNeutralPath(change.path),
+      )
+    ) {
+      return {
+        reusable: false,
+        status: "stale",
+        reason: "HEAD tree changed outside post-gate validation-neutral paths",
+        proofPath: snapshot.proofPath,
+      };
+    }
+    try {
+      await (options.validatePostGateNeutralChanges ??
+        assertPostGateTelemetryChanges)(rootDir);
+    } catch (error) {
+      return {
+        reusable: false,
+        status: "stale",
+        reason: `post-gate telemetry validation failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        proofPath: snapshot.proofPath,
+      };
+    }
+  }
+
   const comparisons: Array<
     [
       keyof PrePushValidationProof,
@@ -448,11 +552,6 @@ export async function evaluatePrePushValidationProof(
       string,
     ]
   > = [
-    [
-      "validatedTreeSha",
-      "stale",
-      "HEAD tree changed since pr:athena recorded its proof",
-    ],
     [
       "baseSha",
       "base_changed",

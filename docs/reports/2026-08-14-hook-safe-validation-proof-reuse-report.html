@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hook-Safe Validation and Telemetry Proof Reuse</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="dc7e06e5e32d6f2caa9c5a18ec2eba5bfc20aab09586e7d0f69208f467c9bf50">
+  <header data-report-section="header">
+    <h1>Hook-Safe Validation and Telemetry Proof Reuse</h1>
+    <p>V26-1201 and V26-1221 delivery candidate</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>V26-1201 + V26-1221</li>
+      <li>Hook and harness workflow</li>
+      <li>945 harness tests green</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Linear</dt><dd>V26-1201 and V26-1221</dd>
+      <dt>Branch</dt><dd>codex/v26-1220-git-hook-isolation</dd>
+      <dt>Reviewed code head</dt><dd>c5aaad05093b0d8dafa8627241a2fb1044c6baf9</dd>
+      <dt>Base</dt><dd>origin/main at b271119c6b55b870d968404f18100f0bedb4e2e8</dd>
+      <dt>PR</dt><dd>Pending</dd>
+      <dt>Status</dt><dd>In review preparation</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>This delivery closes two finish-line gaps. V26-1201 prevents Git hook repository pointers from leaking into validators and their disposable Git fixtures. V26-1221 lets pre-push reuse a completed pr:athena proof after the required canonical delivery telemetry record is added, without treating documentation or arbitrary post-gate edits as safe.</p>
+      <p>The result is a safer real push path: nested tests cannot silently target the parent repository, and a valid merge-grade run is not repeated solely because its own validated telemetry record was committed afterward. Both boundaries remain fail-closed.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why this mattered</h2>
+      <p>The gap appeared while finishing V26-1219. Git exported hook-scoped GIT_* variables, and nested fixture commands inherited them. A fixture that believed it was changing a temporary repository could instead address the outer checkout, causing false failures and risking mutations to shared config, refs, or index state. The immediate V26-1220 harness fix proved the issue, but the failure recurred in another validator, showing that the production boundary belonged in both hook wrappers.</p>
+      <p>A second loop appeared after merge-grade validation. pr:athena proved one tree, then the required telemetry command wrote a JSON record describing that run. Committing the record changed the raw tree, so pre-push discarded otherwise-current proof and wanted to repeat the expensive gate.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model: an airlock and a sealed receipt</h2>
+      <p>Treat each hook as an airlock. It first uses Git&#x27;s ambient context to confirm the worktree and enter the repository. It then removes every inherited GIT_* pointer before opening the door to validation. Independently executable fixture helpers keep their own smaller airlocks because they may run outside the hook.</p>
+      <p>Treat the pr:athena proof as a seal on the validated tree. The only item allowed to accompany that seal afterward is a newly added canonical telemetry JSON receipt, and the receipt must validate. Source, generated files, documentation, telemetry edits, deletions, and lookalike paths break the seal and require validation again.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>Before: worktree bootstrap ran, validators inherited hook-owned repository pointers, and nested Git fixtures could escape their temporary repositories. After a successful pr:athena run, committing its telemetry record also made the proof look stale.</p>
+      <p>After: bootstrap and root discovery still run first. Both tracked hooks then source one scrubber before validation. The harness test runner and independent fixture helpers also sanitize owned subprocesses. Proof evaluation separately permits only additive telemetry/delivery-runs/*.json deltas, validates the telemetry corpus, and retains every existing base, runtime, command, wiring, and clean-tree check.</p>
+  </section>
+  <section data-report-section="mechanics">
+    <h2>How the boundaries work</h2>
+      <p>The shell helper discovers variable names from env and unsets every name beginning with GIT_. The TypeScript helper returns a copied environment without those keys, leaving the caller&#x27;s process environment unchanged. Hook tests inject GIT_COMMON_DIR, GIT_DIR, GIT_INDEX_FILE, GIT_OBJECT_DIRECTORY, GIT_PREFIX, and GIT_WORK_TREE and prove ordinary Athena variables still arrive.</p>
+    <p>For proof reuse, the evaluator compares the validated and current tree with NUL-delimited git diff --name-status --no-renames. Every entry must be an addition under telemetry/delivery-runs/ ending in .json. The telemetry check runs in strict CI mode so a missing or mismatched private ledger cannot suppress current-record enforcement. Any malformed comparison, unsafe status or path, or failed delivery telemetry check returns a named stale reason instead of reusing proof.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <ul>
+        <li>The bootstrap check is intentionally before scrubbing; it needs the hook&#x27;s repository context to identify the worktree.</li>
+        <li>Modified or deleted telemetry, reports, solution notes, source, generated artifacts, and prefix lookalikes invalidate proof.</li>
+        <li>A canonical telemetry filename is not sufficient: delivery:telemetry-check must accept the current tracked record.</li>
+        <li>Changes to origin/main, Bun, the pr:athena command, or validation wiring still invalidate proof.</li>
+        <li>No hook validation command is removed, bypassed, or weakened; a non-reusable proof falls back to the normal validation path.</li>
+      </ul>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what did not</h2>
+      <p>V26-1220&#x27;s owned harness subprocess isolation was retained as a defense for direct harness execution and consolidated into V26-1201&#x27;s broader hook-wrapper boundary. V26-1221 adds a distinct, narrower proof-lifecycle rule rather than widening the existing review-neutral policy.</p>
+      <p>Intentionally unchanged: worktree bootstrap remains first; non-Git environment values remain available; reports and solution notes still require their validators; raw-tree identity still protects preparation and race checks; all noncanonical post-gate changes still force the merge-grade path. Graphify was regenerated only to keep repository navigation current.</p>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and finish-line status</h2>
+    <p>Completed locally: 134 focused tests passed across the combined hook, identity, proof, and integration surfaces, including strict post-gate telemetry validation without a matching local ledger. The complete bun run harness:test suite passed 945 tests across 59 files with zero failures. The compound solution gate passed after refreshing the combined delivery fingerprint.</p>
+      <p>The real merge-grade pr:athena run, independent exact-candidate review, normal pre-push execution, GitHub CI, merge, root alignment, and Linear completion are still pending for this delivery candidate. Runtime deployment is not claimed here; its applicability will be decided from the final committed surface at closeout.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next-time guidance</h2>
+      <ul>
+        <li>Consume any legitimately required Git hook pointer before the scrub boundary; never let ambient repository authority flow into general validators.</li>
+        <li>Sanitize at the highest child-process boundary that exclusively owns nested repository work, while retaining lower-level protection for independently callable helpers.</li>
+        <li>Test hook behavior with representative GIT_* values and compare parent config, refs, and index before and after real nested operations.</li>
+        <li>Keep post-gate exemptions narrower than review-neutral narration. Expanding the telemetry allowlist requires an equally narrow validator and fail-closed regression tests.</li>
+        <li>When pre-push rejects proof, use its named invalidation reason to decide whether the tree, base, runtime, wiring, or telemetry contract changed.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>.husky/pre-commit and .husky/pre-push</code></td><td>Preserve bootstrap/root discovery ordering and scrub Git context before validation.</td></tr>
+        <tr><td><code>.husky/scrub-git-env.sh</code></td><td>Shared production shell boundary that removes every inherited GIT_* variable.</td></tr>
+        <tr><td><code>scripts/git-environment.ts</code></td><td>Returns a copied environment without Git repository context for owned child processes.</td></tr>
+        <tr><td><code>scripts/harness-test.ts</code></td><td>Applies TypeScript isolation to the complete root bun test subprocess.</td></tr>
+        <tr><td><code>scripts/harness-test.test.ts</code></td><td>Proves nested fixture mutations stay local and parent config, refs, and index remain unchanged.</td></tr>
+        <tr><td><code>scripts/pre-push-hook.test.ts</code></td><td>Executes both shell hooks under representative Git context and checks downstream environments.</td></tr>
+        <tr><td><code>scripts/harness-review-identity.ts</code></td><td>Separates broad review neutrality from narrow post-gate validation neutrality.</td></tr>
+        <tr><td><code>scripts/pre-push-validation-proof.ts</code></td><td>Compares tree deltas and validates canonical telemetry before proof reuse.</td></tr>
+        <tr><td><code>scripts/pre-push-validation-proof.test.ts</code></td><td>Covers valid receipt addition and fail-closed edits, lookalikes, docs, and invalid telemetry.</td></tr>
+        <tr><td><code>docs/solutions/harness/daily-operations-hydration-and-hook-env-2026-06-30.md</code></td><td>Captures the reusable boundary and proof-lifecycle lessons.</td></tr>
+        <tr><td><code>telemetry/delivery-runs/2026-08-14T05-12-30-649Z-codex-v26-1220-git-hook-isolation.json</code></td><td>Existing tracked evidence from the earlier passing merge-grade run; final proof remains pending.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the hook scrub Git variables only after bootstrap and root discovery?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>The bootstrap needs repository context to identify the worktree</li>
+          <li>The scrubber cannot run in POSIX shell</li>
+          <li>Telemetry must be written first</li>
+          <li>Graphify supplies the variables</li>
+        </ol>
+        <p data-quiz-explanation>The initial hook steps legitimately need Git&#x27;s ambient pointers; general validation does not.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the main risk of leaking hook-provided GIT_* variables into fixture commands?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Fixtures may target and mutate the parent repository</li>
+          <li>Bun automatically upgrades Convex</li>
+          <li>The hook loses network access</li>
+          <li>Reports gain embedded styling</li>
+        </ol>
+        <p data-quiz-explanation>Repository pointers can redirect nested Git commands away from their disposable fixture.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why keep TypeScript subprocess sanitization after adding hook-wide scrubbing?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>The harness and fixture helpers can run independently of hooks</li>
+          <li>It speeds up every Vitest assertion</li>
+          <li>It preserves GIT_INDEX_FILE for children</li>
+          <li>It replaces worktree bootstrap</li>
+        </ol>
+        <p data-quiz-explanation>Defense at owned child boundaries protects direct invocation and future callers outside the shell hooks.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which post-gate delta may preserve a current pr:athena proof?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>A newly added valid telemetry/delivery-runs/*.json record</li>
+          <li>An edited solution note</li>
+          <li>A regenerated graph file</li>
+          <li>A modified telemetry JSON record</li>
+        </ol>
+        <p data-quiz-explanation>The exception is additive, canonical telemetry only, followed by telemetry validation.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens if delivery:telemetry-check rejects the added record?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>The proof becomes stale and normal validation is required</li>
+          <li>The hook silently ignores the record</li>
+          <li>The record becomes review-neutral</li>
+          <li>The base SHA check is skipped</li>
+        </ol>
+        <p data-quiz-explanation>Path eligibility never overrides the semantic telemetry contract; failure is closed.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Are reports and solution notes post-gate-validation-neutral?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>No; they still require their own validation</li>
+          <li>Yes; all review-neutral paths qualify</li>
+          <li>Only reports qualify</li>
+          <li>Only solution notes qualify</li>
+        </ol>
+        <p data-quiz-explanation>Review neutrality is deliberately broader than permission to reuse merge-grade proof.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which existing proof checks remain required?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Base SHA, Bun version, command, validation wiring, and clean tree</li>
+          <li>Only the branch name</li>
+          <li>Only the telemetry filename</li>
+          <li>Only the commit message ticket ID</li>
+        </ol>
+        <p data-quiz-explanation>Telemetry-only reuse is one additional tree-delta rule, not a replacement for existing freshness checks.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does the real-repository integration sensor prove?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Nested fixture changes are local while parent config, refs, and index stay unchanged</li>
+          <li>Every Git command in the operating system is scrubbed</li>
+          <li>Pre-push never runs merge-grade validation</li>
+          <li>Convex DNS always resolves</li>
+        </ol>
+        <p data-quiz-explanation>The sensor exercises representative hook context and observes both fixture mutation and parent integrity.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What should a future legitimate consumer of a Git hook pointer do?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Consume it before scrubbing or reconstruct an explicit safe value</li>
+          <li>Widen the telemetry allowlist</li>
+          <li>Disable the hook</li>
+          <li>Put the pointer in a report</li>
+        </ol>
+        <p data-quiz-explanation>Ambient Git authority should not cross into general validation; explicit, scoped use belongs before or beyond that boundary.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the current finish-line state of this report?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>It documents a delivery candidate with merge-grade validation and merge still pending</li>
+          <li>The changes are merged and deployed</li>
+          <li>Both Linear tickets are Done</li>
+          <li>The root checkout is already aligned to the merge</li>
+        </ol>
+        <p data-quiz-explanation>The report is committed before the shared PR and must not predict pending merge, deployment, or root-alignment events.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>Ramanujan — session context</dt><dd>Reconstructed the V26-1219 hook failure, V26-1220 precursor, V26-1201 consolidation, and V26-1221 finish-line addition from commits and repository evidence.</dd>
+      <dt>Turing — delivered diff</dt><dd>Mapped the implementation, safety boundaries, key files, tests, intentionally unchanged behavior, and residual risks from origin/main...HEAD.</dd>
+      <dt>Helmholtz — report reviewer</dt><dd>Defined the report contract checklist and verified the precise hook ordering, isolation layers, telemetry-only eligibility, and candidate-status claims to audit in the final draft.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

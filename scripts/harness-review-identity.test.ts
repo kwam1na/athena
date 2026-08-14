@@ -7,6 +7,7 @@ import {
   HARNESS_REVIEW_IDENTITY_VERSION,
   computeDeliverableTreeIdentity,
   digestDeliverableEntries,
+  isPostGateValidationNeutralPath,
   isReviewNeutralPath,
   parseTreeEntries,
 } from "./harness-review-identity";
@@ -68,6 +69,21 @@ describe("review-neutral path policy", () => {
     // deliverable.
     expect(isReviewNeutralPath("telemetry/some-future-record.json")).toBe(false);
     expect(isReviewNeutralPath("telemetry/scripts/run.ts")).toBe(false);
+  });
+
+  it("keeps post-gate validation neutrality narrower than review neutrality", () => {
+    expect(
+      isPostGateValidationNeutralPath("telemetry/delivery-runs/run.json"),
+    ).toBe(true);
+    expect(isPostGateValidationNeutralPath("telemetry/delivery-runs/README.md")).toBe(
+      false,
+    );
+    expect(isPostGateValidationNeutralPath("docs/reports/changed.html")).toBe(
+      false,
+    );
+    expect(isPostGateValidationNeutralPath("docs/solutions/changed.md")).toBe(
+      false,
+    );
   });
 
   it.each([

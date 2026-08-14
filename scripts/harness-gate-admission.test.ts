@@ -17,6 +17,7 @@ import {
   ATHENA_PR_VALIDATION_GATE_ID,
   HARNESS_GATE_REGISTRY,
 } from "./harness-gate-registry";
+import { withoutGitRepositoryContext } from "./git-environment";
 import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
 
 const HEAVY_PROVIDER_COMMANDS =
@@ -585,7 +586,10 @@ describe("harness gate admission", () => {
   it("writes events inside the Git-private directory without overwriting", async () => {
     const rootDir = await mkdtemp(path.join(tmpdir(), "athena-admission-"));
     temporaryDirectories.push(rootDir);
-    await execFileAsync("git", ["init", "--quiet"], { cwd: rootDir });
+    await execFileAsync("git", ["init", "--quiet"], {
+      cwd: rootDir,
+      env: withoutGitRepositoryContext(),
+    });
     const options = greenOptions();
     await runHarnessGateAdmission("/repo", options as never);
     const event = options._spies.writeDecisionEvent.mock.calls[0][1];

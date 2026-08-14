@@ -1,6 +1,8 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
+import { withoutGitRepositoryContext } from "./git-environment";
+
 const ROOT_TEST_DIRECTORY = "scripts";
 const TEST_FILE_SUFFIX = ".test.ts";
 
@@ -11,7 +13,12 @@ type SpawnedProcess = {
 type HarnessTestOptions = {
   spawn?: (
     command: string[],
-    options: { cwd: string; stdout: "inherit"; stderr: "inherit" }
+    options: {
+      cwd: string;
+      env: NodeJS.ProcessEnv;
+      stdout: "inherit";
+      stderr: "inherit";
+    }
   ) => SpawnedProcess;
   passthroughArgs?: string[];
   dryRun?: boolean;
@@ -59,6 +66,7 @@ export async function runHarnessTest(
 
   const proc = spawn(["bun", "test", ...targets, ...passthroughArgs], {
     cwd: rootDir,
+    env: withoutGitRepositoryContext(),
     stdout: "inherit",
     stderr: "inherit",
   });

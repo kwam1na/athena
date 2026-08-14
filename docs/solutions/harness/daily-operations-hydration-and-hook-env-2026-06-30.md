@@ -1,6 +1,7 @@
 ---
 title: Daily Operations Hydration Should Be Split From Hook-Safe Delivery Checks
 date: 2026-06-30
+last_updated: 2026-08-14
 category: harness
 module: athena-webapp
 problem_type: performance_regression
@@ -12,6 +13,7 @@ symptoms:
 root_cause: boundary_mismatch
 resolution_type: architecture
 severity: medium
+delivery_diff_fingerprint: dc7e06e5e32d6f2caa9c5a18ec2eba5bfc20aab09586e7d0f69208f467c9bf50
 tags:
   - daily-operations
   - store-pulse
@@ -55,6 +57,23 @@ Git hook should use a sanitized environment that removes inherited `GIT_*`
 variables. This is production harness behavior, not only test fixture behavior,
 because pre-push and pre-commit hooks routinely execute nested Git commands.
 
+When a parent command owns a complete test subprocess, sanitize once at that
+boundary. `scripts/harness-test.ts` now launches `bun test` with
+`withoutGitRepositoryContext(process.env)`, which removes every `GIT_*` entry
+while preserving ordinary environment variables such as `PATH`. This protects
+all real-repository fixtures selected by `harness:test`, including future ones,
+without mutating the hook process or relying on every test helper to remember
+the cleanup independently.
+
+Validation freshness has a related but narrower boundary. Exact raw-tree
+identity remains authoritative while preparing a candidate and guarding against
+races. Review evidence uses the shared deliverable identity so narration written
+about already-reviewed code does not force another review. Pre-push proof reuse
+allows only the canonical `telemetry/delivery-runs/*.json` record to appear after
+the merge-grade gate, and it runs `delivery:telemetry-check` before accepting
+that delta. Reports and solution notes are review-neutral but are not
+post-gate-validation-neutral because their own validators still need to run.
+
 ## Prevention
 
 - Do not add heavyweight analytics to `getDailyOperationsSnapshot` just because
@@ -65,6 +84,16 @@ because pre-push and pre-commit hooks routinely execute nested Git commands.
 - For nested fixture repos or provider-evidence writers, sanitize `GIT_*` before
   invoking Git. This includes `GIT_DIR`, `GIT_WORK_TREE`, and `GIT_INDEX_FILE`,
   plus any future hook-scoped Git variables.
+- Prefer the highest shared child-process boundary that exclusively owns nested
+  fixture work. Keep lower-level sanitization where commands can also run
+  independently of that boundary.
 - Validate hook-safe changes with both focused tests and the full root harness:
   `bun test scripts/harness-inferential-review.test.ts scripts/pr-athena-delivery-run.test.ts`
   and `bun run harness:test`.
+- Simulate the hook environment by setting representative `GIT_DIR`,
+  `GIT_WORK_TREE`, `GIT_INDEX_FILE`, and `GIT_PREFIX` values. Hash the parent
+  repository's local config, refs, and index before and after the run; all three
+  must remain byte-for-byte unchanged.
+- Keep identity exemptions tied to the sensor they protect. A path may be
+  review-neutral without being validation-neutral; do not reuse the broader
+  review-neutral allowlist to skip merge-grade validation.

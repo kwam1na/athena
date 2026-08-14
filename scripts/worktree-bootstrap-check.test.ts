@@ -7,12 +7,14 @@ import {
   WORKTREE_BOOTSTRAP_MARKER_PATH,
   validateWorktreeBootstrap,
 } from "./worktree-bootstrap-check";
+import { withoutGitRepositoryContext } from "./git-environment";
 
 const tempRoots: string[] = [];
 
 async function runGit(cwd: string, ...args: string[]) {
   const result = Bun.spawnSync(["git", ...args], {
     cwd,
+    env: withoutGitRepositoryContext(),
     stderr: "pipe",
     stdout: "pipe",
   });
