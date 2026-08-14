@@ -261,23 +261,37 @@ export function getSunCycleThemeState(
   }
 
   const nowTimestamp = now.getTime();
-  const previousTransition = transitions.findLast(
-    (transition) => transition.at <= nowTimestamp,
+  const daylightIntervals = transitions.flatMap((transition, index) => {
+    if (transition.event !== "sunrise") {
+      return [];
+    }
+    const sunset = transitions
+      .slice(index + 1)
+      .find((candidate) => candidate.event === "sunset");
+    return sunset ? [{ sunrise: transition.at, sunset: sunset.at }] : [];
+  });
+  const activeDaylight = daylightIntervals.find(
+    ({ sunrise, sunset }) => sunrise <= nowTimestamp && nowTimestamp < sunset,
   );
-  const nextTransition = transitions.find(
-    (transition) =>
-      transition.at > nowTimestamp &&
-      transition.event !== previousTransition?.event,
-  );
+  if (activeDaylight) {
+    return {
+      resolvedTheme: "light",
+      nextResolvedTheme: "dark",
+      nextTransitionAt: activeDaylight.sunset,
+    };
+  }
 
-  if (!previousTransition || !nextTransition) {
+  const nextDaylight = daylightIntervals.find(
+    ({ sunrise }) => sunrise > nowTimestamp,
+  );
+  if (!nextDaylight) {
     return null;
   }
 
   return {
-    resolvedTheme: previousTransition.event === "sunrise" ? "light" : "dark",
-    nextResolvedTheme: nextTransition.event === "sunrise" ? "light" : "dark",
-    nextTransitionAt: nextTransition.at,
+    resolvedTheme: "dark",
+    nextResolvedTheme: "light",
+    nextTransitionAt: nextDaylight.sunrise,
   };
 }
 
