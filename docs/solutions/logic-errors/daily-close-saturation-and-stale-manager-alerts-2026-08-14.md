@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: high
 tags: [daily-close, automation, notifications, source-completeness, deduplication]
-delivery_diff_fingerprint: f1b03948f9d7115a7bfde4ec846014cb7d8f6489a9d470237b7faa260034ef1e
+delivery_diff_fingerprint: d3ad655637832fae3c74d18ced92c32374c03d73a6ef086a394873cee5946b86
 ---
 
 # Daily Close saturation must preserve evidence and alert once
@@ -60,8 +60,10 @@ Enabled policies are read in 50-row indexed pages. Each action schedules the
 next cursor before processing any store on its page, so a throwing first-page
 store cannot strand the 51st store and beyond. Continuations carry the one
 timestamp derived by the root action, keeping operating-date and rotation
-decisions consistent across the sweep without turning one action into an
-unbounded cross-store job.
+decisions consistent across the sweep. The root candidate query receives that
+same derived timestamp too, so even the first page cannot observe a different
+operating-date boundary from rotation or its continuations. This avoids
+turning one action into an unbounded cross-store job.
 
 If a stale intent initially finds no EOD subscribers, a later owed-date retry
 re-arms that same suppressed intent after subscription setup. The intent and

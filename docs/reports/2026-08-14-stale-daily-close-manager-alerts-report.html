@@ -5,7 +5,7 @@
   <title>Stale Daily Close Manager Alerts</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="f1b03948f9d7115a7bfde4ec846014cb7d8f6489a9d470237b7faa260034ef1e">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="d3ad655637832fae3c74d18ced92c32374c03d73a6ef086a394873cee5946b86">
   <header data-report-section="header">
     <h1>Stale Daily Close Manager Alerts</h1>
     <p>How bounded close evidence now remains actionable without creating duplicate manager email</p>
@@ -56,7 +56,7 @@
         <li>If the close completes, preparation returns no email; later dry-run rows do not hide an earlier qualifying skipped or failed run while the close remains open.</li>
         <li>Every other incomplete source continues to block or quarantine completion.</li>
         <li>The stale operational event and notification intent share one Convex mutation, avoiding partial durable state.</li>
-        <li>A throwing store can fail its current page loudly, but cannot erase the already-persisted continuation for later policy pages; every page carries the root sweep timestamp.</li>
+        <li>A throwing store can fail its current page loudly, but cannot erase the already-persisted continuation for later policy pages; candidate discovery, rotation, store work, and every continuation share one root-derived timestamp.</li>
       </ul>
   </section>
   <section data-report-section="validation">

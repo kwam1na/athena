@@ -28,21 +28,25 @@ describe("owed daily close selection", () => {
   it("persists continuation with one derived now before a store failure", async () => {
     const derivedNow = Date.parse("2026-07-25T00:30:00.000Z");
     vi.spyOn(Date, "now").mockReturnValue(derivedNow);
+    const queryArgs: Array<Record<string, unknown>> = [];
     const scheduled: Array<Record<string, unknown>> = [];
     const ctx = {
-      runQuery: async () => ({
-        candidates: [
-          {
-            asOfOperatingDate: AS_OF,
-            attempt: ["2026-07-21"],
-            owed: ["2026-07-21"],
-            stale: ["2026-07-21"],
-            storeId: "store-first",
-          },
-        ],
-        continueCursor: "tail-cursor",
-        isDone: false,
-      }),
+      runQuery: async (_reference: unknown, args: unknown) => {
+        queryArgs.push(args as Record<string, unknown>);
+        return {
+          candidates: [
+            {
+              asOfOperatingDate: AS_OF,
+              attempt: ["2026-07-21"],
+              owed: ["2026-07-21"],
+              stale: ["2026-07-21"],
+              storeId: "store-first",
+            },
+          ],
+          continueCursor: "tail-cursor",
+          isDone: false,
+        };
+      },
       runMutation: async () => {
         throw new Error("first store failed");
       },
@@ -57,6 +61,7 @@ describe("owed daily close selection", () => {
     await expect(
       runOwedDailyCloseSweepWithCtx(ctx as never, { mode: "apply" }),
     ).rejects.toThrow("first store failed");
+    expect(queryArgs).toEqual([{ now: derivedNow }]);
     expect(scheduled).toEqual([
       {
         cursor: "tail-cursor",

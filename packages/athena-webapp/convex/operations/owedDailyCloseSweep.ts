@@ -375,7 +375,7 @@ export async function runOwedDailyCloseSweepWithCtx(
       internal.operations.owedDailyCloseSweep.listOwedDailyCloseCandidatePage,
       {
         ...(args.cursor ? { cursor: args.cursor } : {}),
-        ...(args.now === undefined ? {} : { now: args.now }),
+        now,
       },
     );
     const candidates = page.candidates;
