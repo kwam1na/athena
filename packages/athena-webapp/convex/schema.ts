@@ -216,6 +216,7 @@ import { staffMessageSchema } from "./schemas/staffMessages";
 import {
   harnessWaiverApprovalSchema,
   harnessWaiverPasskeySchema,
+  harnessWaiverRegistrationAuthorizationSchema,
   harnessWaiverRegistrationSchema,
 } from "./schemas/harnessWaiver";
 
@@ -225,6 +226,11 @@ const schema = defineSchema({
     "by_credentialId",
     ["credentialId"],
   ),
+  harnessWaiverRegistrationAuthorization: defineTable(
+    harnessWaiverRegistrationAuthorizationSchema,
+  )
+    .index("by_tokenHash", ["tokenHash"])
+    .index("by_expiresAt", ["expiresAt"]),
   harnessWaiverRegistration: defineTable(harnessWaiverRegistrationSchema)
     .index("by_challenge", ["challenge"])
     .index("by_expiresAt", ["expiresAt"]),

@@ -17,8 +17,6 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { waiverCandidateSchema } from "../schemas/harnessWaiver";
 import { waiverPasskeyConfig } from "./config";
 import {
-  requireEnrollmentBootstrap,
-  requireConfiguredReviewer,
   type WaiverCandidate,
 } from "./passkeyPolicy";
 
@@ -33,12 +31,6 @@ function randomToken(bytes = 32) {
 async function sha256(value: string) {
   return Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))
     .toString("hex");
-}
-
-async function requireReviewerIdentity(ctx: { auth: { getUserIdentity(): Promise<{ email?: string } | null> } }) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity?.email) throw new Error("Sign in before enrolling the waiver passkey.");
-  return requireConfiguredReviewer(identity.email, waiverPasskeyConfig().reviewerEmail);
 }
 
 export function registrationCeremonyPolicy(reviewerEmail: string, rpId: string) {
@@ -67,13 +59,16 @@ export function verificationPolicy(challenge: string, origin: string, rpId: stri
 }
 
 export const beginRegistration = action({
-  args: { bootstrapSecret: v.string() },
+  args: { authorizationToken: v.string() },
   handler: async (ctx, args) => {
-    const reviewerEmail = await requireReviewerIdentity(ctx);
+    const authorization = await ctx.runMutation(
+      internal.harnessWaiver.storage.consumeRegistrationAuthorization,
+      { tokenHash: await sha256(args.authorizationToken), now: Date.now() },
+    );
+    const reviewerEmail = authorization.reviewerEmail;
     const existing = await ctx.runQuery(internal.harnessWaiver.storage.getPasskey, {});
     if (existing) throw new Error("A waiver passkey is already enrolled.");
     const config = waiverPasskeyConfig();
-    await requireEnrollmentBootstrap(args.bootstrapSecret, config.enrollmentTokenHash);
     const options = await generateRegistrationOptions(
       registrationCeremonyPolicy(reviewerEmail, config.rpId),
     );
@@ -89,7 +84,6 @@ export const beginRegistration = action({
 export const completeRegistration = action({
   args: { challenge: v.string(), response: v.any() },
   handler: async (ctx, args) => {
-    const reviewerEmail = await requireReviewerIdentity(ctx);
     const response = args.response as RegistrationResponseJSON;
     const registration = await ctx.runQuery(
       internal.harnessWaiver.storage.getRegistrationChallenge,
@@ -98,6 +92,7 @@ export const completeRegistration = action({
     if (!registration || registration.expiresAt <= Date.now() || registration.consumedAt) {
       throw new Error("Registration challenge is unavailable.");
     }
+    const reviewerEmail = registration.reviewerEmail;
     const config = waiverPasskeyConfig();
     const verification = await verifyRegistrationResponse({
       response,

@@ -56,6 +56,7 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     reason: LEGACY_REASON,
     functions: [
       "devPatchBadTransaction:patchBadTransaction",
+      "harnessWaiver/registrationAuthorization:authorizeRegistration",
       "inventory/productSku:nukeProblematicImages",
       "inventory/skuSearch:removeStaleProductSkuSearchPage",
       "inventory/skuSearch:repairProductSkuSearchPage",

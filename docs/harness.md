@@ -377,8 +377,12 @@ requires `ATHENA_WAIVER_REVIEWER_EMAIL`, `ATHENA_WAIVER_RP_ID=athena-os.app`,
 requires `ATHENA_WAIVER_ENROLLMENT_TOKEN_HASH`, the lowercase SHA-256 digest of a
 one-time bootstrap secret chosen and configured by the reviewer outside any
 agent runtime. The reviewer opens `/<org>/settings/waiver-passkey` on the
-iPhone, enters that secret, and enrolls once; enrollment is locked after the
-first credential. Remove the enrollment-token hash from production after the
+iPhone while signed into the authenticated Athena shell, enters that secret,
+and enrolls once. The shell's authenticated Convex mutation issues a
+one-minute, single-use authorization ticket to the Node/WebAuthn ceremony; the
+action does not infer identity from the visible shell or accept a caller-supplied
+reviewer email. Enrollment is locked after the first credential. Remove the
+enrollment-token hash from production after the
 trusted enrollment succeeds. WebAuthn verifies a platform authenticator and
 user verification, but does not attest the device make; the iPhone is an
 operational enrollment requirement.

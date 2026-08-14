@@ -1,6 +1,6 @@
 import { startRegistration } from "@simplewebauthn/browser";
 import { createFileRoute } from "@tanstack/react-router";
-import { useAction } from "convex/react";
+import { useAction, useConvexAuth, useMutation } from "convex/react";
 import { useState } from "react";
 
 import { api } from "~/convex/_generated/api";
@@ -11,7 +11,11 @@ export const Route = createFileRoute("/_authed/$orgUrlSlug/settings/waiver-passk
   component: WaiverPasskeySettings,
 });
 
-function WaiverPasskeySettings() {
+export function WaiverPasskeySettings() {
+  const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
+  const authorizeRegistration = useMutation(
+    api.harnessWaiver.registrationAuthorization.authorizeRegistration,
+  );
   const beginRegistration = useAction(api.harnessWaiver.passkeys.beginRegistration);
   const completeRegistration = useAction(api.harnessWaiver.passkeys.completeRegistration);
   const [bootstrapSecret, setBootstrapSecret] = useState("");
@@ -20,7 +24,13 @@ function WaiverPasskeySettings() {
   async function enroll() {
     setStatus("working");
     try {
-      const options = await beginRegistration({ bootstrapSecret });
+      const authorizationToken = crypto.randomUUID();
+      const tokenHash = Array.from(new Uint8Array(await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(authorizationToken),
+      )), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      await authorizeRegistration({ bootstrapSecret, tokenHash });
+      const options = await beginRegistration({ authorizationToken });
       const response = await startRegistration({ optionsJSON: options });
       await completeRegistration({ challenge: options.challenge, response });
       setStatus("enrolled");
@@ -38,7 +48,16 @@ function WaiverPasskeySettings() {
           Enroll the iPhone passkey used to approve candidate-bound documentation waivers. Athena accepts one reviewer credential and does not provide an agent-accessible fallback.
         </p>
         <div className="mt-6">
-          {status === "enrolled" ? (
+          {isAuthLoading ? (
+            <p className="text-sm text-muted-foreground">Confirming your Athena session…</p>
+          ) : !isAuthenticated ? (
+            <div className="grid gap-3 text-sm">
+              <p className="text-destructive">Your Athena session is not available for passkey enrollment.</p>
+              <a className="font-medium text-primary underline underline-offset-4" href="/login">
+                Sign in again
+              </a>
+            </div>
+          ) : status === "enrolled" ? (
             <p className="text-sm font-medium text-emerald-700">Passkey enrolled.</p>
           ) : (
             <div className="grid gap-3">
