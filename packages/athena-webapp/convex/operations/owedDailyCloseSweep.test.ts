@@ -24,7 +24,7 @@ function fullWindow() {
 }
 
 describe("owed daily close selection", () => {
-  it("persists continuation with one derived now before a store failure", async () => {
+  it("persists continuation and attempts the next same-page store after a store failure", async () => {
     const derivedNow = Date.parse("2026-07-25T00:30:00.000Z");
     vi.spyOn(Date, "now").mockReturnValue(derivedNow);
     const queryArgs: Array<Record<string, unknown>> = [];
@@ -40,13 +40,23 @@ describe("owed daily close selection", () => {
               stale: ["2026-07-21"],
               storeId: "store-first",
             },
+            {
+              asOfOperatingDate: AS_OF,
+              owed: ["2026-07-22"],
+              stale: [],
+              storeId: "store-second",
+            },
           ],
           continueCursor: "tail-cursor",
           isDone: false,
         };
       },
-      runMutation: async () => {
-        throw new Error("first store failed");
+      runMutation: async (_reference: unknown, args: unknown) => {
+        const mutationArgs = args as { storeId: string };
+        if (mutationArgs.storeId === "store-first") {
+          throw new Error("first store failed");
+        }
+        return { action: "applied", classification: "completed" };
       },
       scheduler: {
         runAfter: async (_delay: number, _reference: unknown, args: unknown) => {
@@ -56,15 +66,30 @@ describe("owed daily close selection", () => {
       },
     };
 
-    await expect(
-      runOwedDailyCloseSweepWithCtx(ctx as never, { mode: "apply" }),
-    ).rejects.toThrow("first store failed");
+    const result = await runOwedDailyCloseSweepWithCtx(ctx as never, {
+      mode: "apply",
+    });
     expect(queryArgs).toEqual([{ now: derivedNow }]);
     expect(scheduled).toEqual([
       {
         cursor: "tail-cursor",
         mode: "apply",
         now: derivedNow,
+      },
+    ]);
+    expect(result.results).toEqual([
+      {
+        action: "failed",
+        classification: "owed_daily_close_candidate_failed",
+        error: "first store failed",
+        operatingDate: "2026-07-21",
+        storeId: "store-first",
+      },
+      {
+        action: "applied",
+        classification: "completed",
+        operatingDate: "2026-07-22",
+        storeId: "store-second",
       },
     ]);
     vi.restoreAllMocks();

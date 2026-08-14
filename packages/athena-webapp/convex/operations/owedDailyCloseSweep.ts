@@ -338,6 +338,7 @@ type OwedDailyCloseSweepResult = {
   results: Array<{
     action: string;
     classification: string;
+    error?: string;
     operatingDate: string;
     storeId: Id<"store">;
   }>;
@@ -398,70 +399,83 @@ export async function runOwedDailyCloseSweepWithCtx(
       [];
 
     for (const candidate of candidates) {
-      const attempt = selectRotatingOwedDailyCloseAttempt({
-        asOfOperatingDate: candidate.asOfOperatingDate,
-        now,
-        owed: candidate.owed,
-      });
-      for (const operatingDate of attempt) {
-        const result = await ctx.runMutation(
-          internal.operations.dailyOperationsAutomation
-            .runHistoricEodAutoCloseForDate,
-          {
-            asOfOperatingDate: candidate.asOfOperatingDate,
-            mode,
+      let activeOperatingDate = candidate.owed[0] ?? candidate.asOfOperatingDate;
+      try {
+        const attempt = selectRotatingOwedDailyCloseAttempt({
+          asOfOperatingDate: candidate.asOfOperatingDate,
+          now,
+          owed: candidate.owed,
+        });
+        for (const operatingDate of attempt) {
+          activeOperatingDate = operatingDate;
+          const result = await ctx.runMutation(
+            internal.operations.dailyOperationsAutomation
+              .runHistoricEodAutoCloseForDate,
+            {
+              asOfOperatingDate: candidate.asOfOperatingDate,
+              mode,
+              operatingDate,
+              storeId: candidate.storeId,
+            },
+          );
+
+          results.push({
+            action: result.action,
+            classification: result.classification ?? "unknown",
             operatingDate,
             storeId: candidate.storeId,
-          },
-        );
-
-        results.push({
-          action: result.action,
-          classification: result.classification ?? "unknown",
-          operatingDate,
-          storeId: candidate.storeId,
-        });
-      }
+          });
+        }
 
       // Escalate only what this sweep could not settle, so a day that just
       // closed above never raises a stale alert on its way out.
-      const closedThisSweep = new Set(
-        results
-          .filter(
-            (result) =>
-              result.storeId === candidate.storeId &&
-              dailyCloseSweepResultSettled(result),
-          )
-          .map((result) => result.operatingDate),
-      );
-
-      const attemptedDates = new Set(attempt);
-      for (const operatingDate of candidate.stale) {
-        if (!attemptedDates.has(operatingDate)) continue;
-        if (closedThisSweep.has(operatingDate)) continue;
-        if (mode === "dry_run") {
-          escalations.push({ operatingDate, storeId: candidate.storeId });
-          continue;
-        }
-
-        const recorded = await ctx.runMutation(
-          internal.operations.owedDailyCloseSweep
-            .recordOwedDailyCloseStaleEscalation,
-          {
-            ageInDays: daysBetweenOperatingDates(
-              operatingDate,
-              candidate.asOfOperatingDate,
-            ),
-            operatingDate,
-            ...(candidate.organizationId
-              ? { organizationId: candidate.organizationId }
-              : {}),
-            storeId: candidate.storeId,
-          },
+        const closedThisSweep = new Set(
+          results
+            .filter(
+              (result) =>
+                result.storeId === candidate.storeId &&
+                dailyCloseSweepResultSettled(result),
+            )
+            .map((result) => result.operatingDate),
         );
-        if (recorded) {
-          escalations.push({ operatingDate, storeId: candidate.storeId });
+
+        const attemptedDates = new Set(attempt);
+        for (const operatingDate of candidate.stale) {
+          if (!attemptedDates.has(operatingDate)) continue;
+          if (closedThisSweep.has(operatingDate)) continue;
+          if (mode === "dry_run") {
+            escalations.push({ operatingDate, storeId: candidate.storeId });
+            continue;
+          }
+
+          activeOperatingDate = operatingDate;
+          const recorded = await ctx.runMutation(
+            internal.operations.owedDailyCloseSweep
+              .recordOwedDailyCloseStaleEscalation,
+            {
+              ageInDays: daysBetweenOperatingDates(
+                operatingDate,
+                candidate.asOfOperatingDate,
+              ),
+              operatingDate,
+              ...(candidate.organizationId
+                ? { organizationId: candidate.organizationId }
+                : {}),
+              storeId: candidate.storeId,
+            },
+          );
+          if (recorded) {
+            escalations.push({ operatingDate, storeId: candidate.storeId });
+          }
         }
+      } catch (error) {
+        results.push({
+          action: "failed",
+          classification: "owed_daily_close_candidate_failed",
+          error: error instanceof Error ? error.message : String(error),
+          operatingDate: activeOperatingDate,
+          storeId: candidate.storeId,
+        });
       }
     }
 

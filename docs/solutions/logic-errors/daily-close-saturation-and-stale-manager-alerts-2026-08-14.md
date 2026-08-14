@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: high
 tags: [daily-close, automation, notifications, source-completeness, deduplication]
-delivery_diff_fingerprint: 2c25684535c7544f78b0b51a26acc39c8eb0eeaea0d56cf5dc65081ea0c341d5
+delivery_diff_fingerprint: ae53a0e83dda3f8c3ebcafe871cce5babefc5f2fb3486c990ce6b5afc13cbc29
 ---
 
 # Daily Close saturation must preserve evidence and alert once
@@ -46,7 +46,7 @@ Emit `eod.stale_daily_close` through the notification registry from the existing
 eod.stale_daily_close:<storeId>:<operatingDate>
 ```
 
-The notification prepares its email only while the close is still open and the latest EOD automation run is skipped or failed. It reuses the Daily Manager Report payload builder for store schedule, blocker, cash-position, and EOD Review URL semantics rather than reconstructing those rules in the sweep.
+The notification prepares its email only while the close is still open and the latest qualifying skipped or failed EOD automation run still supports the alert. It reuses the Daily Manager Report payload builder for store schedule, blocker, cash-position, and EOD Review URL semantics rather than reconstructing those rules in the sweep.
 
 The sweep escalates only dates it actually attempted in that invocation. Its
 three-date attempt window rotates by UTC hour. That advances one position at
@@ -69,6 +69,10 @@ decisions consistent across the sweep. The root candidate query receives that
 same derived timestamp too, so even the first page cannot observe a different
 operating-date boundary from rotation or its continuations. This avoids
 turning one action into an unbounded cross-store job.
+Each candidate's automation and escalation mutations also have a store-level
+error boundary: failures are returned with store/date diagnostics while later
+candidates on the same page continue. Page reads and continuation scheduling
+remain outside that boundary so infrastructure failures stay visible.
 
 If a stale intent initially finds no EOD subscribers, a later owed-date retry
 re-arms that same suppressed intent after subscription setup. The intent and
