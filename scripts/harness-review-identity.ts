@@ -36,6 +36,8 @@ export const REVIEW_NEUTRAL_PATH_PREFIXES = [
   "telemetry/delivery-runs/",
 ] as const;
 
+const POST_GATE_VALIDATION_NEUTRAL_PATH_PREFIX = "telemetry/delivery-runs/";
+
 export const HARNESS_REVIEW_IDENTITY_VERSION = "deliverable-tree/v1" as const;
 
 export type HarnessReviewIdentityVersion =
@@ -75,6 +77,21 @@ export function isReviewNeutralPath(repoPath: string) {
   const normalizedPath = normalizeRepoPath(repoPath);
   return REVIEW_NEUTRAL_PATH_PREFIXES.some((prefix) =>
     normalizedPath.startsWith(prefix),
+  );
+}
+
+/**
+ * Paths that may be written after a successful merge-grade gate without
+ * invalidating its reusable pre-push proof. This is intentionally narrower
+ * than review neutrality: reports and solution notes still need their own
+ * validation, while the canonical telemetry record describes the gate that
+ * just completed and is checked by delivery:telemetry-check.
+ */
+export function isPostGateValidationNeutralPath(repoPath: string) {
+  const normalizedPath = normalizeRepoPath(repoPath);
+  return (
+    normalizedPath.startsWith(POST_GATE_VALIDATION_NEUTRAL_PATH_PREFIX) &&
+    normalizedPath.endsWith(".json")
   );
 }
 

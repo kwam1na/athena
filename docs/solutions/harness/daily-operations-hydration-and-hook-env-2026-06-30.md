@@ -13,7 +13,7 @@ symptoms:
 root_cause: boundary_mismatch
 resolution_type: architecture
 severity: medium
-delivery_diff_fingerprint: 8cbd008877cdbe118f1dac8b52f478905e33c3ce4ace7938ad506c3944fc9826
+delivery_diff_fingerprint: f728a5c3a53e46b3c4a3d94792cf84343eb14f6f3742f3a62f7e849feb8b4417
 tags:
   - daily-operations
   - store-pulse
@@ -65,6 +65,15 @@ all real-repository fixtures selected by `harness:test`, including future ones,
 without mutating the hook process or relying on every test helper to remember
 the cleanup independently.
 
+Validation freshness has a related but narrower boundary. Exact raw-tree
+identity remains authoritative while preparing a candidate and guarding against
+races. Review evidence uses the shared deliverable identity so narration written
+about already-reviewed code does not force another review. Pre-push proof reuse
+allows only the canonical `telemetry/delivery-runs/*.json` record to appear after
+the merge-grade gate, and it runs `delivery:telemetry-check` before accepting
+that delta. Reports and solution notes are review-neutral but are not
+post-gate-validation-neutral because their own validators still need to run.
+
 ## Prevention
 
 - Do not add heavyweight analytics to `getDailyOperationsSnapshot` just because
@@ -85,3 +94,6 @@ the cleanup independently.
   `GIT_WORK_TREE`, `GIT_INDEX_FILE`, and `GIT_PREFIX` values. Hash the parent
   repository's local config, refs, and index before and after the run; all three
   must remain byte-for-byte unchanged.
+- Keep identity exemptions tied to the sensor they protect. A path may be
+  review-neutral without being validation-neutral; do not reuse the broader
+  review-neutral allowlist to skip merge-grade validation.
