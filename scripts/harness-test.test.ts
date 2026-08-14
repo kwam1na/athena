@@ -8,6 +8,7 @@ import {
   parseHarnessTestCliArgs,
   runHarnessTest,
 } from "./harness-test";
+import { withoutGitRepositoryContext } from "./git-environment";
 import { collectRootScriptTestFiles } from "./root-scripts-coverage";
 
 const tempRoots: string[] = [];
@@ -27,6 +28,7 @@ async function createFixtureRoot() {
 function runGit(rootDir: string, ...args: string[]) {
   const result = Bun.spawnSync(["git", ...args], {
     cwd: rootDir,
+    env: withoutGitRepositoryContext(),
     stdout: "pipe",
     stderr: "pipe",
   });

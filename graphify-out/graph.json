@@ -20795,7 +20795,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_test_greenoptions",
       "source_file": "scripts/harness-gate-admission.test.ts",
-      "source_location": "L78",
+      "source_location": "L79",
       "target": "harness_gate_admission_test_humanwaiveroptions",
       "weight": 1
     },
@@ -155351,7 +155351,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_test_ts",
       "source_file": "scripts/harness-gate-admission.test.ts",
-      "source_location": "L40",
+      "source_location": "L41",
       "target": "harness_gate_admission_test_greenoptions",
       "weight": 1
     },
@@ -155363,7 +155363,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_test_ts",
       "source_file": "scripts/harness-gate-admission.test.ts",
-      "source_location": "L77",
+      "source_location": "L78",
       "target": "harness_gate_admission_test_humanwaiveroptions",
       "weight": 1
     },
@@ -155375,7 +155375,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_test_ts",
       "source_file": "scripts/harness-gate-admission.test.ts",
-      "source_location": "L251",
+      "source_location": "L252",
       "target": "harness_gate_admission_test_missingtelemetry",
       "weight": 1
     },
@@ -159743,7 +159743,7 @@
       "relation": "contains",
       "source": "scripts_harness_test_test_ts",
       "source_file": "scripts/harness-test.test.ts",
-      "source_location": "L21",
+      "source_location": "L22",
       "target": "harness_test_test_createfixtureroot",
       "weight": 1
     },
@@ -159755,7 +159755,7 @@
       "relation": "contains",
       "source": "scripts_harness_test_test_ts",
       "source_file": "scripts/harness-test.test.ts",
-      "source_location": "L27",
+      "source_location": "L28",
       "target": "harness_test_test_rungit",
       "weight": 1
     },
@@ -159767,7 +159767,7 @@
       "relation": "contains",
       "source": "scripts_harness_test_test_ts",
       "source_file": "scripts/harness-test.test.ts",
-      "source_location": "L15",
+      "source_location": "L16",
       "target": "harness_test_test_write",
       "weight": 1
     },
@@ -160907,7 +160907,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_hook_test_ts",
       "source_file": "scripts/pre-push-hook.test.ts",
-      "source_location": "L18",
+      "source_location": "L20",
       "target": "pre_push_hook_test_createhookfixture",
       "weight": 1
     },
@@ -160919,7 +160919,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_hook_test_ts",
       "source_file": "scripts/pre-push-hook.test.ts",
-      "source_location": "L80",
+      "source_location": "L93",
       "target": "pre_push_hook_test_isprocessalive",
       "weight": 1
     },
@@ -160931,7 +160931,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_hook_test_ts",
       "source_file": "scripts/pre-push-hook.test.ts",
-      "source_location": "L72",
+      "source_location": "L85",
       "target": "pre_push_hook_test_retainedlogpath",
       "weight": 1
     },
@@ -160943,7 +160943,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_hook_test_ts",
       "source_file": "scripts/pre-push-hook.test.ts",
-      "source_location": "L59",
+      "source_location": "L72",
       "target": "pre_push_hook_test_waitforfile",
       "weight": 1
     },
@@ -160955,7 +160955,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_test_ts",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L35",
+      "source_location": "L36",
       "target": "pre_push_review_test_createblockedpublicgatefixture",
       "weight": 1
     },
@@ -160967,7 +160967,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_test_ts",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L920",
+      "source_location": "L921",
       "target": "pre_push_review_test_error",
       "weight": 1
     },
@@ -160979,7 +160979,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_test_ts",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L918",
+      "source_location": "L919",
       "target": "pre_push_review_test_log",
       "weight": 1
     },
@@ -160991,7 +160991,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_test_ts",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L919",
+      "source_location": "L920",
       "target": "pre_push_review_test_warn",
       "weight": 1
     },
@@ -161951,7 +161951,7 @@
       "relation": "contains",
       "source": "scripts_worktree_bootstrap_check_test_ts",
       "source_file": "scripts/worktree-bootstrap-check.test.ts",
-      "source_location": "L27",
+      "source_location": "L29",
       "target": "worktree_bootstrap_check_test_createfixturerepo",
       "weight": 1
     },
@@ -161963,7 +161963,7 @@
       "relation": "contains",
       "source": "scripts_worktree_bootstrap_check_test_ts",
       "source_file": "scripts/worktree-bootstrap-check.test.ts",
-      "source_location": "L13",
+      "source_location": "L14",
       "target": "worktree_bootstrap_check_test_rungit",
       "weight": 1
     },
@@ -181127,7 +181127,7 @@
       "relation": "calls",
       "source": "worktree_bootstrap_check_test_rungit",
       "source_file": "scripts/worktree-bootstrap-check.test.ts",
-      "source_location": "L32",
+      "source_location": "L34",
       "target": "worktree_bootstrap_check_test_createfixturerepo",
       "weight": 1
     },
@@ -189382,7 +189382,7 @@
       "label": "createFixtureRepo()",
       "norm_label": "createfixturerepo()",
       "source_file": "scripts/worktree-bootstrap-check.test.ts",
-      "source_location": "L27"
+      "source_location": "L29"
     },
     {
       "community": 1122,
@@ -189391,7 +189391,7 @@
       "label": "runGit()",
       "norm_label": "rungit()",
       "source_file": "scripts/worktree-bootstrap-check.test.ts",
-      "source_location": "L13"
+      "source_location": "L14"
     },
     {
       "community": 1123,
@@ -271426,7 +271426,7 @@
       "label": "createHookFixture()",
       "norm_label": "createhookfixture()",
       "source_file": "scripts/pre-push-hook.test.ts",
-      "source_location": "L18"
+      "source_location": "L20"
     },
     {
       "community": 647,
@@ -271435,7 +271435,7 @@
       "label": "isProcessAlive()",
       "norm_label": "isprocessalive()",
       "source_file": "scripts/pre-push-hook.test.ts",
-      "source_location": "L80"
+      "source_location": "L93"
     },
     {
       "community": 647,
@@ -271444,7 +271444,7 @@
       "label": "retainedLogPath()",
       "norm_label": "retainedlogpath()",
       "source_file": "scripts/pre-push-hook.test.ts",
-      "source_location": "L72"
+      "source_location": "L85"
     },
     {
       "community": 647,
@@ -271453,7 +271453,7 @@
       "label": "waitForFile()",
       "norm_label": "waitforfile()",
       "source_file": "scripts/pre-push-hook.test.ts",
-      "source_location": "L59"
+      "source_location": "L72"
     },
     {
       "community": 647,
@@ -271471,7 +271471,7 @@
       "label": "createBlockedPublicGateFixture()",
       "norm_label": "createblockedpublicgatefixture()",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L35"
+      "source_location": "L36"
     },
     {
       "community": 648,
@@ -271480,7 +271480,7 @@
       "label": "error()",
       "norm_label": "error()",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L208"
+      "source_location": "L209"
     },
     {
       "community": 648,
@@ -271489,7 +271489,7 @@
       "label": "log()",
       "norm_label": "log()",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L206"
+      "source_location": "L207"
     },
     {
       "community": 648,
@@ -271498,7 +271498,7 @@
       "label": "warn()",
       "norm_label": "warn()",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L207"
+      "source_location": "L208"
     },
     {
       "community": 648,
@@ -283495,7 +283495,7 @@
       "label": "greenOptions()",
       "norm_label": "greenoptions()",
       "source_file": "scripts/harness-gate-admission.test.ts",
-      "source_location": "L40"
+      "source_location": "L41"
     },
     {
       "community": 836,
@@ -283504,7 +283504,7 @@
       "label": "humanWaiverOptions()",
       "norm_label": "humanwaiveroptions()",
       "source_file": "scripts/harness-gate-admission.test.ts",
-      "source_location": "L77"
+      "source_location": "L78"
     },
     {
       "community": 836,
@@ -283513,7 +283513,7 @@
       "label": "missingTelemetry()",
       "norm_label": "missingtelemetry()",
       "source_file": "scripts/harness-gate-admission.test.ts",
-      "source_location": "L251"
+      "source_location": "L252"
     },
     {
       "community": 836,
@@ -283603,7 +283603,7 @@
       "label": "createFixtureRoot()",
       "norm_label": "createfixtureroot()",
       "source_file": "scripts/harness-test.test.ts",
-      "source_location": "L21"
+      "source_location": "L22"
     },
     {
       "community": 839,
@@ -283612,7 +283612,7 @@
       "label": "runGit()",
       "norm_label": "rungit()",
       "source_file": "scripts/harness-test.test.ts",
-      "source_location": "L27"
+      "source_location": "L28"
     },
     {
       "community": 839,
@@ -283621,7 +283621,7 @@
       "label": "write()",
       "norm_label": "write()",
       "source_file": "scripts/harness-test.test.ts",
-      "source_location": "L15"
+      "source_location": "L16"
     },
     {
       "community": 839,
