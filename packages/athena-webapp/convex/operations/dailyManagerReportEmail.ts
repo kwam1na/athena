@@ -354,18 +354,27 @@ export const getStaleDailyManagerReportPayloadForDate = internalQuery({
       .first();
     if (completedClose?.status === "completed") return null;
 
-    const run = await ctx.db
-      .query("automationRun")
-      .withIndex("by_storeId_operatingDate_domain_action", (q) =>
-        q
-          .eq("storeId", args.storeId)
-          .eq("operatingDate", args.operatingDate)
-          .eq("domain", "daily_operations")
-          .eq("action", "eod.auto_complete"),
-      )
-      .order("desc")
-      .first();
-
+    const qualifyingRuns = await Promise.all(
+      (["skipped", "failed"] as const).map((outcome) =>
+        ctx.db
+          .query("automationRun")
+          .withIndex(
+            "by_storeId_operatingDate_domain_action_outcome",
+            (q) =>
+              q
+                .eq("storeId", args.storeId)
+                .eq("operatingDate", args.operatingDate)
+                .eq("domain", "daily_operations")
+                .eq("action", "eod.auto_complete")
+                .eq("outcome", outcome),
+          )
+          .order("desc")
+          .first(),
+      ),
+    );
+    const run = qualifyingRuns
+      .filter((candidate) => candidate !== null)
+      .sort((a, b) => b.updatedAt - a.updatedAt)[0];
     if (!run || (run.outcome !== "skipped" && run.outcome !== "failed")) {
       return null;
     }

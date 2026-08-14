@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   OWED_DAILY_CLOSE_LOOKBACK_DAYS,
   OWED_DAILY_CLOSE_MAX_PER_SWEEP,
+  dailyCloseSweepResultSettled,
   selectOwedDailyCloseDates,
 } from "./owedDailyCloseSweep";
 
@@ -22,6 +23,13 @@ function fullWindow() {
 }
 
 describe("owed daily close selection", () => {
+  it("treats an applied historic close as settled in the same sweep", () => {
+    expect(dailyCloseSweepResultSettled({ action: "applied" })).toBe(true);
+    expect(dailyCloseSweepResultSettled({ action: "already_completed" })).toBe(
+      true,
+    );
+    expect(dailyCloseSweepResultSettled({ action: "quarantined" })).toBe(false);
+  });
   it("owes nothing when every day in the window is closed", () => {
     expect(
       selectOwedDailyCloseDates({

@@ -47,6 +47,25 @@ export async function emitNotificationWithCtx(
     .withIndex("by_dedupeKey", (q) => q.eq("dedupeKey", dedupeKey))
     .unique();
   if (existing) {
+    // A stale-close alert remains true until the close completes. If its first
+    // dispatch found no EOD audience, let a later sweep re-arm the same intent
+    // after subscriptions are configured. The permanent dedupe key and
+    // recipient delivery keys still prevent duplicate sends.
+    if (
+      args.kind === "eod.stale_daily_close" &&
+      existing.status === "suppressed" &&
+      existing.suppressedReason === "no_recipients"
+    ) {
+      await ctx.db.patch("notificationIntent", existing._id, {
+        status: "pending",
+        suppressedReason: undefined,
+      });
+      await ctx.scheduler.runAfter(
+        0,
+        internal.notifications.dispatch.dispatchIntent,
+        { intentId: existing._id },
+      );
+    }
     return { intentId: existing._id, created: false };
   }
 

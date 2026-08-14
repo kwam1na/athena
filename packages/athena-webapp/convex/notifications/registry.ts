@@ -85,6 +85,28 @@ type StaleDailyClosePayload = {
   storeId: Id<"store">;
 };
 
+function isStaleDailyClosePayload(
+  payload: NotificationPayload,
+): payload is StaleDailyClosePayload {
+  return (
+    typeof payload.storeId === "string" &&
+    typeof payload.operatingDate === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(payload.operatingDate) &&
+    typeof payload.ageInDays === "number" &&
+    Number.isFinite(payload.ageInDays) &&
+    payload.ageInDays >= 0
+  );
+}
+
+function requireStaleDailyClosePayload(
+  payload: NotificationPayload,
+): StaleDailyClosePayload {
+  if (!isStaleDailyClosePayload(payload)) {
+    throw new Error("Invalid eod.stale_daily_close payload");
+  }
+  return payload;
+}
+
 // Refs only. `fingerprint` identifies the unexplained difference set,
 // `reArmEpoch` the run row's re-arm generation, and `alertSeq` the subject's
 // monotonic alert count. All three are dedupe components; the first two are
@@ -331,7 +353,7 @@ const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
     category: "eod",
     channels: ["email"],
     dedupeKey: (payload) => {
-      const p = payload as StaleDailyClosePayload;
+      const p = requireStaleDailyClosePayload(payload);
       return joinKeyComponents([
         "eod.stale_daily_close",
         String(p.storeId),
@@ -339,7 +361,10 @@ const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
       ]);
     },
     prepareEmail: async (ctx, payload) => {
-      const p = payload as StaleDailyClosePayload;
+      // Persisted notification payloads predate this registry entry's static
+      // type, so validate the durable boundary before issuing fresh reads.
+      if (!isStaleDailyClosePayload(payload)) return null;
+      const p = payload;
       const report = await ctx.runQuery(
         internal.operations.dailyManagerReportEmail
           .getStaleDailyManagerReportPayloadForDate,

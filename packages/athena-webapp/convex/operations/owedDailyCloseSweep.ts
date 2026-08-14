@@ -75,6 +75,10 @@ export type OwedDailyCloseSelection = {
   stale: string[];
 };
 
+export function dailyCloseSweepResultSettled(result: { action: string }) {
+  return result.action === "applied" || result.action === "already_completed";
+}
+
 /**
  * Pure selection of which store days are still owed a close.
  *
@@ -228,6 +232,17 @@ export const recordOwedDailyCloseStaleEscalation = internalMutation({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    const completedClose = await ctx.db
+      .query("dailyClose")
+      .withIndex("by_storeId_operatingDate_lifecycleStatus", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("operatingDate", args.operatingDate)
+          .eq("lifecycleStatus", "active"),
+      )
+      .first();
+    if (completedClose?.status === "completed") return false;
+
     // Dedupes on (store, subject, event type), so a day that stays stuck
     // escalates once rather than every sweep.
     await recordOperationalEventWithCtx(ctx, {
@@ -258,6 +273,7 @@ export const recordOwedDailyCloseStaleEscalation = internalMutation({
         storeId: args.storeId,
       },
     });
+    return true;
   },
 });
 
@@ -325,20 +341,21 @@ export const runOwedDailyCloseSweep = internalAction({
           .filter(
             (result) =>
               result.storeId === candidate.storeId &&
-              (result.action === "completed" ||
-                result.action === "already_completed"),
+              dailyCloseSweepResultSettled(result),
           )
           .map((result) => result.operatingDate),
       );
 
+      const attemptedDates = new Set(candidate.attempt);
       for (const operatingDate of candidate.stale) {
+        if (!attemptedDates.has(operatingDate)) continue;
         if (closedThisSweep.has(operatingDate)) continue;
         if (mode === "dry_run") {
           escalations.push({ operatingDate, storeId: candidate.storeId });
           continue;
         }
 
-        await ctx.runMutation(
+        const recorded = await ctx.runMutation(
           internal.operations.owedDailyCloseSweep
             .recordOwedDailyCloseStaleEscalation,
           {
@@ -353,7 +370,9 @@ export const runOwedDailyCloseSweep = internalAction({
             storeId: candidate.storeId,
           },
         );
-        escalations.push({ operatingDate, storeId: candidate.storeId });
+        if (recorded) {
+          escalations.push({ operatingDate, storeId: candidate.storeId });
+        }
       }
     }
 

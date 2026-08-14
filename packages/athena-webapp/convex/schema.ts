@@ -359,6 +359,13 @@ const schema = defineSchema({
       "domain",
       "action",
     ])
+    .index("by_storeId_operatingDate_domain_action_outcome", [
+      "storeId",
+      "operatingDate",
+      "domain",
+      "action",
+      "outcome",
+    ])
     .index("by_storeId_domain_action_outcome", [
       "storeId",
       "domain",

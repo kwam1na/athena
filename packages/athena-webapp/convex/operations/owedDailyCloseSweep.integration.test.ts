@@ -299,4 +299,70 @@ describe("owed daily close sweep", () => {
     );
     expect(events).toEqual([]);
   });
+
+  it("does not consume stale intents for backlog dates it did not attempt", async () => {
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t);
+
+    const first = await t.action(
+      internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
+      { mode: "apply", now: NOW },
+    );
+    expect(first.escalations.map((entry) => entry.operatingDate)).toEqual([
+      "2026-07-18",
+      "2026-07-19",
+      "2026-07-20",
+    ]);
+
+    for (const operatingDate of first.escalations.map(
+      (entry) => entry.operatingDate,
+    )) {
+      await seedCompletedClose(t, { operatingDate, organizationId, storeId });
+    }
+
+    const second = await t.action(
+      internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
+      { mode: "apply", now: NOW },
+    );
+    expect(second.escalations.map((entry) => entry.operatingDate)).toEqual([
+      "2026-07-21",
+      "2026-07-22",
+      "2026-07-23",
+    ]);
+  });
+
+  it("rechecks a completed active close before recording escalation", async () => {
+    const t = convexTest(schema, modules);
+    const { organizationId, storeId } = await seedStore(t);
+    await seedCompletedClose(t, {
+      operatingDate: "2026-07-21",
+      organizationId,
+      storeId,
+    });
+
+    expect(
+      await t.mutation(
+        internal.operations.owedDailyCloseSweep
+          .recordOwedDailyCloseStaleEscalation,
+        {
+          ageInDays: 4,
+          operatingDate: "2026-07-21",
+          organizationId,
+          storeId,
+        },
+      ),
+    ).toBe(false);
+    const events = await t.run((ctx) =>
+      ctx.db
+        .query("operationalEvent")
+        .withIndex("by_storeId_subject", (q) =>
+          q
+            .eq("storeId", storeId)
+            .eq("subjectType", "daily_close")
+            .eq("subjectId", "2026-07-21"),
+        )
+        .take(1),
+    );
+    expect(events).toEqual([]);
+  });
 });

@@ -394,6 +394,68 @@ describe("reserveIntentDeliveries", () => {
     });
   });
 
+  it("re-arms a stale-close intent after an EOD subscriber is added", async () => {
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    await t.run((ctx) =>
+      ctx.db.insert("notificationSubscription", {
+        organizationId: fixture.organizationId,
+        category: "eod",
+        channel: "email",
+        recipientEmail: "disabled@example.com",
+        enabled: false,
+        createdAt: NOW,
+        updatedAt: NOW,
+      }),
+    );
+    const notification = {
+      kind: "eod.stale_daily_close",
+      organizationId: fixture.organizationId,
+      storeId: fixture.storeId,
+      subjectType: "dailyClose",
+      subjectId: `${fixture.storeId}:2026-07-21`,
+      payload: {
+        ageInDays: 4,
+        operatingDate: "2026-07-21",
+        storeId: fixture.storeId,
+      },
+    };
+    const emitted = await t.mutation(
+      internal.notifications.emit.emitNotification,
+      notification,
+    );
+    expect(
+      await t.mutation(
+        internal.notifications.dispatch.reserveIntentDeliveries,
+        { intentId: emitted.intentId },
+      ),
+    ).toBeNull();
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("notificationSubscription", {
+        organizationId: fixture.organizationId,
+        category: "eod",
+        channel: "email",
+        recipientEmail: "manager@example.com",
+        enabled: true,
+        createdAt: NOW + 1,
+        updatedAt: NOW + 1,
+      });
+    });
+    const replay = await t.mutation(
+      internal.notifications.emit.emitNotification,
+      notification,
+    );
+    expect(replay).toEqual({ intentId: emitted.intentId, created: false });
+    const reserved = await t.mutation(
+      internal.notifications.dispatch.reserveIntentDeliveries,
+      { intentId: emitted.intentId },
+    );
+    expect(reserved?.leased.map((lease) => lease.recipientEmail)).toEqual([
+      "manager@example.com",
+    ]);
+  });
+
   it("does not fall back to ADMIN_EMAILS when rows exist but are scoped to another store", async () => {
     const t = convexTest(schema, modules);
     const fixture = await t.run(seedOrgStore);

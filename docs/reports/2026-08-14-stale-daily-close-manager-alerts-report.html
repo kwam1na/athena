@@ -5,7 +5,7 @@
   <title>Stale Daily Close Manager Alerts</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="6913199099f2cb022d01367b82ea272f2f18bdc67a89ab107138aff295325c59">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="c27cb5ba912519fd6459c6f6770a61115315eba8108e292891646d3ff2c608a3">
   <header data-report-section="header">
     <h1>Stale Daily Close Manager Alerts</h1>
     <p>How bounded close evidence now remains actionable without creating duplicate manager email</p>
@@ -26,7 +26,7 @@
   <section data-report-section="summary">
     <h2>Executive summary</h2>
       <p>This candidate lets Daily Close proceed conservatively when only the open-operational-work membership read is capped, while retaining explicit incomplete evidence and the observed carry-forward count. A day that remains owed for two days now emits one manager-facing EOD alert through Athena&#x27;s existing notification rail.</p>
-      <p>The alert is deduplicated by store and operating date, rebuilds blocker context at send time, and suppresses itself if the close is no longer open or the latest automation run no longer requires attention.</p>
+      <p>The alert is deduplicated by store and operating date, rebuilds blocker context from the latest qualifying skipped or failed run, and suppresses itself if the close is no longer open. A no-audience dispatch remains re-armable so adding an EOD subscriber does not permanently consume the alert.</p>
   </section>
   <section data-report-section="problem">
     <h2>Problem and context</h2>
@@ -45,22 +45,22 @@
   </section>
   <section data-report-section="changes">
     <h2>What changed and what did not</h2>
-      <p>Changed: human, scheduled, and historic close paths share the source-specific completeness rule; persisted carry-forward counts remain meaningful under saturation; the notification registry owns a new email-only eod.stale_daily_close kind; and configured EOD subscribers receive calm manager-facing copy with one EOD Review action.</p>
+      <p>Changed: human, scheduled, and historic close paths share the source-specific completeness rule; persisted carry-forward counts remain meaningful under saturation; the notification registry owns a new email-only eod.stale_daily_close kind; only dates attempted in the current sweep escalate; and configured EOD subscribers receive calm manager-facing copy with one EOD Review action.</p>
       <p>Unchanged: the seven-day owed lookback, maximum three owed dates per store per sweep, two-day stale threshold, operational stale event, recipient subscriptions, delivery retries, and all true financial or transactional blockers. There is no schema migration, browser route, or direct email send from the sweep.</p>
   </section>
   <section data-report-section="failure-boundaries">
     <h2>Failure boundaries</h2>
       <ul>
         <li>When either open-work status returns a 501st row, Athena records incomplete membership and an observed logical count but cannot enumerate every member; downstream readers must honor the completeness metadata.</li>
-        <li>The store/date dedupe key deliberately sends one stale alert, not a daily reminder or re-armed sequence.</li>
-        <li>If the close completes or the latest EOD automation run is no longer skipped or failed, preparation returns no email.</li>
+        <li>The store/date dedupe key deliberately sends one stale alert, not a daily reminder sequence; only a prior no-audience suppression may re-arm the same intent after subscription setup.</li>
+        <li>If the close completes, preparation returns no email; later dry-run rows do not hide an earlier qualifying skipped or failed run while the close remains open.</li>
         <li>Every other incomplete source continues to block or quarantine completion.</li>
         <li>The stale operational event and notification intent share one Convex mutation, avoiding partial durable state.</li>
       </ul>
   </section>
   <section data-report-section="validation">
     <h2>Validation and delivery status</h2>
-      <p>Focused Vitest coverage passed 204 of 204 tests across the notification registry, Daily Close, Daily Operations automation, owed-close integration, and React Email template. Mechanical preparation passed changed-Convex lint and TypeScript after replacing unbounded test reads with take(2) and constructing the preview text as one string.</p>
+      <p>Focused Vitest coverage first passed 204 of 204 tests across the notification registry, Daily Close, Daily Operations automation, owed-close integration, and React Email template. After review fixes, a focused 143-test regression slice passed alongside changed-Convex lint, TypeScript, Graphify rebuild, and git diff validation.</p>
       <p>The repository merge gate has not yet completed its broad test and final-green review stages. The PR, CI, merge, root fast-forward, and production Convex deploy are pending and must not be inferred from this candidate report.</p>
   </section>
   <section data-report-section="guidance">
