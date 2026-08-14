@@ -5,18 +5,18 @@
   <title>Stale Daily Close Manager Alerts</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="8035c815d7ad5629114e446ee7a7fcd14aa72e24052839bf8c55e4f06ad354bf">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="ae53a0e83dda3f8c3ebcafe871cce5babefc5f2fb3486c990ce6b5afc13cbc29">
   <header data-report-section="header">
     <h1>Stale Daily Close Manager Alerts</h1>
     <p>How bounded close evidence now remains actionable without creating duplicate manager email</p>
     <ul data-report-pills>
       <li>Delivery candidate</li>
       <li>Branch codex/stale-eod-manager-email</li>
-      <li>Focused tests 204/204 green</li>
+      <li>Expanded focused regression suites green</li>
       <li>Merge and Convex production deploy pending</li>
     </ul>
     <dl data-report-meta>
-      <dt>Candidate head</dt><dd>42fe22f9</dd>
+      <dt>Candidate head</dt><dd>ed544ebc</dd>
       <dt>Base</dt><dd>origin/main at 2864580c</dd>
       <dt>PR</dt><dd>Pending creation</dd>
       <dt>Production</dt><dd>Pending Convex deploy</dd>
@@ -56,13 +56,13 @@
         <li>If the close completes, preparation returns no email; later dry-run rows do not hide an earlier qualifying skipped or failed run while the close remains open.</li>
         <li>Every other incomplete source continues to block or quarantine completion.</li>
         <li>The stale operational event and notification intent share one Convex mutation, avoiding partial durable state.</li>
-        <li>A throwing store can fail its current page loudly, but cannot erase the already-persisted continuation for later policy pages; candidate discovery, rotation, store work, and every continuation share one root-derived timestamp.</li>
+        <li>A throwing store is recorded as a failed candidate without starving later stores on the same page, and cannot erase the already-persisted continuation for later policy pages; candidate discovery, rotation, store work, and every continuation share one root-derived timestamp.</li>
       </ul>
   </section>
   <section data-report-section="validation">
     <h2>Validation and delivery status</h2>
-      <p>Focused Vitest coverage first passed 204 of 204 tests across the notification registry, Daily Close, Daily Operations automation, owed-close integration, and React Email template. After two review-fix rounds, the expanded focused regression slice passed 306 tests alongside changed-Convex lint, TypeScript, Graphify rebuild, solution/report checks, and git diff validation.</p>
-      <p>The repository merge gate has not yet completed its broad test and final-green review stages. The PR, CI, merge, root fast-forward, and production Convex deploy are pending and must not be inferred from this candidate report.</p>
+      <p>Focused Vitest coverage spans the notification registry and rail, Daily Close, Daily Operations automation, owed-close unit and integration behavior, and the React Email template. The expanded regression slices passed alongside changed-Convex lint, TypeScript, Graphify rebuild, solution/report checks, and git diff validation.</p>
+      <p>The final required reviewer set is green. The repository merge gate, PR CI, merge, root fast-forward, and production Convex deploy remain pending and must not be inferred from this candidate report.</p>
   </section>
   <section data-report-section="guidance">
     <h2>Next-time guidance</h2>
