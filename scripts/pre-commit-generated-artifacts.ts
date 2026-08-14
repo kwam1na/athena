@@ -1,4 +1,5 @@
 import { readdir, readFile } from "node:fs/promises";
+import { lookup } from "node:dns/promises";
 import path from "node:path";
 
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
@@ -46,9 +47,14 @@ const CONVEX_API_MODULE_EXCEPTIONS = new Set([
 ]);
 const CONVEX_NODE_BIN_ENV = "ATHENA_CONVEX_NODE_BIN";
 const SUPPORTED_CONVEX_NODE_MAJORS = new Set([18, 20, 22, 24]);
+const CONVEX_DNS_RETRY_DELAY_MS = 1_000;
+const CONVEX_DNS_LOOKUP_TIMEOUT_MS = 5_000;
+const CONVEX_ATTEMPT_TIMEOUT_MS = 120_000;
+const CONVEX_TERMINATION_GRACE_MS = 5_000;
 
 type SpawnedProcess = {
   exited: Promise<number>;
+  kill?: (signal?: string) => void;
   stdout?: ReadableStream | null;
   stderr?: ReadableStream | null;
 };
@@ -71,6 +77,11 @@ type PreCommitGeneratedArtifactsOptions = {
     }
   ) => SpawnedProcess;
   logger?: PreCommitGeneratedArtifactsLogger;
+  resolveHostname?: (hostname: string) => Promise<unknown>;
+  resolverTimeoutMs?: number;
+  convexAttemptTimeoutMs?: number;
+  convexTerminationGraceMs?: number;
+  retryDelay?: (milliseconds: number) => Promise<void>;
 };
 
 async function stageTrackedGeneratedArtifacts(
@@ -158,7 +169,16 @@ async function hasAthenaConvexSourceChanges(
 
 async function refreshAthenaConvexGeneratedApi(
   rootDir: string,
-  spawn: NonNullable<PreCommitGeneratedArtifactsOptions["spawn"]>
+  spawn: NonNullable<PreCommitGeneratedArtifactsOptions["spawn"]>,
+  options: Pick<
+    PreCommitGeneratedArtifactsOptions,
+    | "logger"
+    | "resolveHostname"
+    | "resolverTimeoutMs"
+    | "convexAttemptTimeoutMs"
+    | "convexTerminationGraceMs"
+    | "retryDelay"
+  > = {}
 ) {
   const command = ["bunx", "convex", "dev", "--once"];
   const nodeBin = await resolveSupportedConvexNodeBin(rootDir, spawn);
@@ -168,25 +188,221 @@ async function refreshAthenaConvexGeneratedApi(
         PATH: `${path.dirname(nodeBin)}${path.delimiter}${process.env.PATH ?? ""}`,
       }
     : undefined;
-  const proc = spawn(command, {
-    cwd: path.join(rootDir, "packages", "athena-webapp"),
-    stdout: "inherit",
-    stderr: "pipe",
-    env,
-  });
-  const exitCode = await proc.exited;
+  const runConvex = async () => {
+    const proc = spawn(command, {
+      cwd: path.join(rootDir, "packages", "athena-webapp"),
+      stdout: "inherit",
+      stderr: "pipe",
+      env,
+    });
+    const exitResult = await waitForProcessExit(
+      proc,
+      options.convexAttemptTimeoutMs ?? CONVEX_ATTEMPT_TIMEOUT_MS,
+      options.convexTerminationGraceMs ?? CONVEX_TERMINATION_GRACE_MS
+    );
+    if (exitResult.terminationFailed) {
+      return {
+        exitCode: null,
+        stderr: "",
+        timedOut: true,
+        terminationFailed: true,
+      } as const;
+    }
+    if (exitResult.timedOut) {
+      return {
+        exitCode: null,
+        stderr: "",
+        timedOut: true,
+        terminationFailed: false,
+      } as const;
+    }
+    const stderr = proc.stderr
+      ? (await new Response(proc.stderr).text()).trim()
+      : "";
+    return {
+      exitCode: exitResult.exitCode,
+      stderr,
+      timedOut: false,
+      terminationFailed: false,
+    } as const;
+  };
 
-  if (exitCode === 0) {
-    return;
+  const firstAttempt = await runConvex();
+  if (firstAttempt.exitCode === 0) return;
+  if (firstAttempt.terminationFailed) {
+    throw new Error(formatConvexTerminationFailure());
   }
 
-  const stderr = proc.stderr
-    ? (await new Response(proc.stderr).text()).trim()
-    : "";
-  throw new Error(
-    stderr ||
-      `Failed to refresh Convex generated API (exit ${exitCode}): ${command.join(" ")}`
+  const failureMessage =
+    firstAttempt.stderr ||
+    `Failed to refresh Convex generated API (exit ${firstAttempt.exitCode}): ${command.join(" ")}`;
+  if (!firstAttempt.timedOut && !isGenericFetchFailure(firstAttempt.stderr)) {
+    throw new Error(failureMessage);
+  }
+
+  const hostname = await resolveConvexDeploymentHostname(rootDir);
+  if (!hostname) {
+    throw new Error(failureMessage);
+  }
+
+  const resolveHostname = options.resolveHostname ?? lookup;
+  let resolverError: unknown;
+  try {
+    await resolveHostnameWithTimeout(
+      resolveHostname,
+      hostname,
+      options.resolverTimeoutMs ?? CONVEX_DNS_LOOKUP_TIMEOUT_MS
+    );
+  } catch (error) {
+    resolverError = error;
+  }
+  if (!resolverError) {
+    throw new Error(
+      firstAttempt.timedOut
+        ? `Convex generated API refresh timed out after ${options.convexAttemptTimeoutMs ?? CONVEX_ATTEMPT_TIMEOUT_MS}ms while DNS for ${hostname} resolved successfully.`
+        : failureMessage
+    );
+  }
+
+  options.logger?.log(
+    `[pre-commit] Convex deployment DNS lookup failed for ${hostname}; retrying once after ${CONVEX_DNS_RETRY_DELAY_MS}ms...`
   );
+  await (options.retryDelay ?? delay)(CONVEX_DNS_RETRY_DELAY_MS);
+  const retryAttempt = await runConvex();
+  if (retryAttempt.exitCode === 0) return;
+  if (retryAttempt.terminationFailed) {
+    throw new Error(formatConvexTerminationFailure());
+  }
+  if (!retryAttempt.timedOut && !isGenericFetchFailure(retryAttempt.stderr)) {
+    throw new Error(
+      retryAttempt.stderr ||
+        `Failed to refresh Convex generated API (exit ${retryAttempt.exitCode}): ${command.join(" ")}`
+    );
+  }
+
+  throw new Error(formatConvexDnsFailure(hostname, resolverError));
+}
+
+async function waitForProcessExit(
+  proc: SpawnedProcess,
+  timeoutMs: number,
+  terminationGraceMs: number
+) {
+  const initialExit = await waitForExitWithin(proc.exited, timeoutMs);
+  if (initialExit !== null) {
+    return {
+      timedOut: false,
+      terminationFailed: false,
+      exitCode: initialExit,
+    } as const;
+  }
+
+  proc.kill?.("SIGTERM");
+  const terminatedExit = await waitForExitWithin(proc.exited, terminationGraceMs);
+  if (terminatedExit !== null) {
+    return { timedOut: true, terminationFailed: false, exitCode: null } as const;
+  }
+
+  proc.kill?.("SIGKILL");
+  const killedExit = await waitForExitWithin(proc.exited, terminationGraceMs);
+  return {
+    timedOut: true,
+    terminationFailed: killedExit === null,
+    exitCode: null,
+  } as const;
+}
+
+function waitForExitWithin(exited: Promise<number>, timeoutMs: number) {
+  return new Promise<number | null>((resolve) => {
+    const timer = setTimeout(() => resolve(null), timeoutMs);
+    exited.then((exitCode) => {
+      clearTimeout(timer);
+      resolve(exitCode);
+    });
+  });
+}
+
+function formatConvexTerminationFailure() {
+  return "Convex generated API refresh timed out and the child process did not exit after SIGTERM and SIGKILL. No retry or artifact verification was started; stop the remaining Convex process before rerunning.";
+}
+
+function resolveHostnameWithTimeout(
+  resolveHostname: (hostname: string) => Promise<unknown>,
+  hostname: string,
+  timeoutMs: number
+) {
+  return new Promise<unknown>((resolve, reject) => {
+    const timer = setTimeout(
+      () =>
+        reject(
+          Object.assign(new Error(`DNS lookup timed out after ${timeoutMs}ms`), {
+            code: "ETIMEDOUT",
+          })
+        ),
+      timeoutMs
+    );
+    resolveHostname(hostname).then(
+      (result) => {
+        clearTimeout(timer);
+        resolve(result);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
+function isGenericFetchFailure(stderr: string) {
+  return /(?:TypeError:\s*)?fetch failed/i.test(stderr);
+}
+
+async function resolveConvexDeploymentHostname(rootDir: string) {
+  const webappDir = path.join(rootDir, "packages", "athena-webapp");
+  const envValues: Record<string, string> = {};
+  try {
+    const source = await readFile(path.join(webappDir, ".env.local"), "utf8");
+    for (const line of source.split("\n")) {
+      const match = line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*["']?([^"'\s#]+)["']?/);
+      if (match) envValues[match[1]] = match[2];
+    }
+  } catch {
+    // The Convex CLI may be configured entirely through the process environment.
+  }
+
+  const deploymentUrl =
+    process.env.CONVEX_URL ??
+    process.env.VITE_CONVEX_URL ??
+    envValues.CONVEX_URL ??
+    envValues.VITE_CONVEX_URL;
+  if (deploymentUrl) {
+    try {
+      return new URL(deploymentUrl).hostname;
+    } catch {
+      return null;
+    }
+  }
+
+  const deployment = process.env.CONVEX_DEPLOYMENT ?? envValues.CONVEX_DEPLOYMENT;
+  const deploymentName = deployment?.split(":").at(-1);
+  return deploymentName ? `${deploymentName}.convex.cloud` : null;
+}
+
+function formatConvexDnsFailure(hostname: string, error: unknown) {
+  const code =
+    typeof error === "object" && error && "code" in error
+      ? String(error.code)
+      : "unknown resolver error";
+  return [
+    `DNS resolution failed for ${hostname} through the system resolver (${code}).`,
+    "The harness retried `bunx convex dev --once` once and the deployment remained unreachable.",
+    "This harness does not change system DNS. Check VPN/network DNS, verify the hostname with your platform's resolver tools, then rerun `bun run pre-commit:generated-artifacts`.",
+  ].join("\n");
+}
+
+function delay(milliseconds: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function stringProcessEnv() {
@@ -376,7 +592,15 @@ export async function runPreCommitGeneratedArtifacts(
     ((sourceRootDir) => hasAthenaConvexSourceChanges(sourceRootDir, spawn));
   const refreshConvexGeneratedApi =
     options.refreshConvexGeneratedApi ??
-    ((refreshRootDir) => refreshAthenaConvexGeneratedApi(refreshRootDir, spawn));
+    ((refreshRootDir) =>
+      refreshAthenaConvexGeneratedApi(refreshRootDir, spawn, {
+        logger,
+        resolveHostname: options.resolveHostname,
+        resolverTimeoutMs: options.resolverTimeoutMs,
+        convexAttemptTimeoutMs: options.convexAttemptTimeoutMs,
+        convexTerminationGraceMs: options.convexTerminationGraceMs,
+        retryDelay: options.retryDelay,
+      }));
   const verifyConvexGeneratedApi =
     options.verifyConvexGeneratedApi ?? verifyAthenaConvexGeneratedApi;
 

@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-14T04:15:19.308Z",
+  "branch": "codex/v26-1219-convex-dns-diagnostics",
+  "headSha": "618fc0d2ab08ddb05958087e92c4cf58680c3586",
+  "deliverableDiffFingerprint": "89ddc085b3d9cc00b513558d7970e46c854b684de56ecd79d68fede66f7fc418",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 0,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 584010.609624
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "v26-1219-review-20260813",
+    "finalPassId": "pass-3",
+    "recordedAt": "2026-08-14T03:48:39.115Z",
+    "iterationCount": 3,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 2,
+      "P2": 2,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

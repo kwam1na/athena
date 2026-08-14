@@ -43,6 +43,10 @@ async function writeConvexApiFixture(
     "export {};\n"
   );
   await writeFile(path.join(convexDir, "_generated", "api.d.ts"), apiSource);
+  await writeFile(
+    path.join(repoDir, "packages", "athena-webapp", ".env.local"),
+    "VITE_CONVEX_URL=https://jovial-wildebeest-179.convex.cloud\n"
+  );
 }
 
 describe("runPreCommitGeneratedArtifacts", () => {
@@ -357,6 +361,450 @@ describe("runPreCommitGeneratedArtifacts", () => {
           (entry) => entry.command.join(" ") === "bunx convex dev --once"
         )?.env?.PATH.startsWith(path.dirname(supportedNode))
       ).toBe(true);
+    });
+  });
+
+  it("classifies a persistent deployment-host DNS failure with recovery guidance", async () => {
+    await withTempRepo(async (repoDir) => {
+      await writeConvexApiFixture(repoDir);
+
+      await expect(
+        runPreCommitGeneratedArtifacts(repoDir, {
+          runHarnessGenerate: async () => {},
+          runGraphifyRebuild: async () => {},
+          resolveHostname: async () => {
+            throw Object.assign(new Error("query timed out"), { code: "EAI_AGAIN" });
+          },
+          retryDelay: async () => {},
+          spawn(command) {
+            if (command[0] === "git" && command[1] === "status") {
+              return {
+                exited: Promise.resolve(0),
+                stdout: new Response(
+                  " M packages/athena-webapp/convex/catalog/items.ts\n"
+                ).body,
+                stderr: new Response("").body,
+              };
+            }
+            if (command.at(-1) === "-v") {
+              return {
+                exited: Promise.resolve(0),
+                stdout: new Response("v24.14.0\n").body,
+                stderr: new Response("").body,
+              };
+            }
+            if (command.join(" ") === "bunx convex dev --once") {
+              return {
+                exited: Promise.resolve(1),
+                stdout: new Response("").body,
+                stderr: new Response("TypeError: fetch failed").body,
+              };
+            }
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response("").body,
+              stderr: new Response("").body,
+            };
+          },
+          logger: { log() {} },
+        })
+      ).rejects.toThrow(
+        /DNS resolution failed for jovial-wildebeest-179\.convex\.cloud[\s\S]+EAI_AGAIN[\s\S]+does not change system DNS/
+      );
+    });
+  });
+
+  it("bounds a hanging system-resolver lookup", async () => {
+    await withTempRepo(async (repoDir) => {
+      await writeConvexApiFixture(repoDir);
+
+      await expect(
+        runPreCommitGeneratedArtifacts(repoDir, {
+          runHarnessGenerate: async () => {},
+          runGraphifyRebuild: async () => {},
+          resolveHostname: async () => new Promise(() => {}),
+          resolverTimeoutMs: 1,
+          retryDelay: async () => {},
+          spawn(command) {
+            if (command[0] === "git" && command[1] === "status") {
+              return {
+                exited: Promise.resolve(0),
+                stdout: new Response(
+                  " M packages/athena-webapp/convex/catalog/items.ts\n"
+                ).body,
+                stderr: new Response("").body,
+              };
+            }
+            if (command.at(-1) === "-v") {
+              return {
+                exited: Promise.resolve(0),
+                stdout: new Response("v24.14.0\n").body,
+                stderr: new Response("").body,
+              };
+            }
+            if (command.join(" ") === "bunx convex dev --once") {
+              return {
+                exited: Promise.resolve(1),
+                stdout: new Response("").body,
+                stderr: new Response("TypeError: fetch failed").body,
+              };
+            }
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response("").body,
+              stderr: new Response("").body,
+            };
+          },
+          logger: { log() {} },
+        })
+      ).rejects.toThrow(/DNS resolution failed[\s\S]+ETIMEDOUT/);
+    });
+  });
+
+  it("terminates a hanging Convex attempt before diagnosing DNS", async () => {
+    await withTempRepo(async (repoDir) => {
+      await writeConvexApiFixture(repoDir);
+      let convexAttempts = 0;
+      let killedAttempts = 0;
+      let resolveHungAttempt: ((exitCode: number) => void) | undefined;
+
+      await expect(
+        runPreCommitGeneratedArtifacts(repoDir, {
+          runHarnessGenerate: async () => {},
+          runGraphifyRebuild: async () => {},
+          convexAttemptTimeoutMs: 1,
+          convexTerminationGraceMs: 1,
+          resolveHostname: async () => {
+            throw Object.assign(new Error("temporary resolver failure"), {
+              code: "EAI_AGAIN",
+            });
+          },
+          retryDelay: async () => {},
+          spawn(command) {
+            if (command[0] === "git" && command[1] === "status") {
+              return {
+                exited: Promise.resolve(0),
+                stdout: new Response(
+                  " M packages/athena-webapp/convex/catalog/items.ts\n"
+                ).body,
+                stderr: new Response("").body,
+              };
+            }
+            if (command.at(-1) === "-v") {
+              return {
+                exited: Promise.resolve(0),
+                stdout: new Response("v24.14.0\n").body,
+                stderr: new Response("").body,
+              };
+            }
+            if (command.join(" ") === "bunx convex dev --once") {
+              convexAttempts += 1;
+              return {
+                exited:
+                  convexAttempts === 1
+                    ? new Promise<number>((resolve) => {
+                        resolveHungAttempt = resolve;
+                      })
+                    : Promise.resolve(1),
+                kill() {
+                  killedAttempts += 1;
+                  resolveHungAttempt?.(143);
+                },
+                stderr: new Response("TypeError: fetch failed").body,
+              };
+            }
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response("").body,
+              stderr: new Response("").body,
+            };
+          },
+          logger: { log() {} },
+        })
+      ).rejects.toThrow(/DNS resolution failed/);
+
+      expect(convexAttempts).toBe(2);
+      expect(killedAttempts).toBe(1);
+    });
+  });
+
+  it("does not retry when a timed-out Convex process cannot be terminated", async () => {
+    await withTempRepo(async (repoDir) => {
+      await writeConvexApiFixture(repoDir);
+      let convexAttempts = 0;
+      let killSignals: string[] = [];
+
+      await expect(
+        runPreCommitGeneratedArtifacts(repoDir, {
+          runHarnessGenerate: async () => {},
+          runGraphifyRebuild: async () => {},
+          convexAttemptTimeoutMs: 1,
+          convexTerminationGraceMs: 1,
+          resolveHostname: async () => {
+            throw new Error("must not diagnose while the child is alive");
+          },
+          retryDelay: async () => {},
+          spawn(command) {
+            if (command[0] === "git" && command[1] === "status") {
+              return {
+                exited: Promise.resolve(0),
+                stdout: new Response(
+                  " M packages/athena-webapp/convex/catalog/items.ts\n"
+                ).body,
+                stderr: new Response("").body,
+              };
+            }
+            if (command.at(-1) === "-v") {
+              return {
+                exited: Promise.resolve(0),
+                stdout: new Response("v24.14.0\n").body,
+                stderr: new Response("").body,
+              };
+            }
+            if (command.join(" ") === "bunx convex dev --once") {
+              convexAttempts += 1;
+              return {
+                exited: new Promise<number>(() => {}),
+                kill(signal) {
+                  killSignals.push(signal ?? "");
+                },
+                stderr: new Response("").body,
+              };
+            }
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response("").body,
+              stderr: new Response("").body,
+            };
+          },
+          logger: { log() {} },
+        })
+      ).rejects.toThrow(/did not exit after SIGTERM and SIGKILL/);
+
+      expect(convexAttempts).toBe(1);
+      expect(killSignals).toEqual(["SIGTERM", "SIGKILL"]);
+    });
+  });
+
+  it("keeps a Convex attempt timeout distinct when DNS resolves", async () => {
+    await withTempRepo(async (repoDir) => {
+      await writeConvexApiFixture(repoDir);
+      let convexAttempts = 0;
+      let resolveHungAttempt: ((exitCode: number) => void) | undefined;
+
+      await expect(
+        runPreCommitGeneratedArtifacts(repoDir, {
+          runHarnessGenerate: async () => {},
+          runGraphifyRebuild: async () => {},
+          convexAttemptTimeoutMs: 1,
+          convexTerminationGraceMs: 1,
+          resolveHostname: async () => [{ address: "203.0.113.1" }],
+          spawn(command) {
+            if (command[0] === "git" && command[1] === "status") {
+              return {
+                exited: Promise.resolve(0),
+                stdout: new Response(
+                  " M packages/athena-webapp/convex/catalog/items.ts\n"
+                ).body,
+                stderr: new Response("").body,
+              };
+            }
+            if (command.at(-1) === "-v") {
+              return {
+                exited: Promise.resolve(0),
+                stdout: new Response("v24.14.0\n").body,
+                stderr: new Response("").body,
+              };
+            }
+            if (command.join(" ") === "bunx convex dev --once") {
+              convexAttempts += 1;
+              return {
+                exited: new Promise<number>((resolve) => {
+                  resolveHungAttempt = resolve;
+                }),
+                kill() {
+                  resolveHungAttempt?.(143);
+                },
+                stderr: new Response("").body,
+              };
+            }
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response("").body,
+              stderr: new Response("").body,
+            };
+          },
+          logger: { log() {} },
+        })
+      ).rejects.toThrow(/timed out[\s\S]+DNS[\s\S]+resolved successfully/);
+
+      expect(convexAttempts).toBe(1);
+    });
+  });
+
+  it("retries once after a confirmed temporary DNS failure", async () => {
+    await withTempRepo(async (repoDir) => {
+      await writeConvexApiFixture(repoDir);
+      let convexAttempts = 0;
+
+      await runPreCommitGeneratedArtifacts(repoDir, {
+        runHarnessGenerate: async () => {},
+        runGraphifyRebuild: async () => {},
+        resolveHostname: async () => {
+          throw Object.assign(new Error("temporary resolver failure"), {
+            code: "EAI_AGAIN",
+          });
+        },
+        retryDelay: async () => {},
+        spawn(command) {
+          if (command[0] === "git" && command[1] === "status") {
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response(
+                " M packages/athena-webapp/convex/catalog/items.ts\n"
+              ).body,
+              stderr: new Response("").body,
+            };
+          }
+          if (command.at(-1) === "-v") {
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response("v24.14.0\n").body,
+              stderr: new Response("").body,
+            };
+          }
+          if (command.join(" ") === "bunx convex dev --once") {
+            convexAttempts += 1;
+            return {
+              exited: Promise.resolve(convexAttempts === 1 ? 1 : 0),
+              stdout: new Response("").body,
+              stderr: new Response(
+                convexAttempts === 1 ? "TypeError: fetch failed" : ""
+              ).body,
+            };
+          }
+          return {
+            exited: Promise.resolve(0),
+            stdout: new Response("").body,
+            stderr: new Response("").body,
+          };
+        },
+        logger: { log() {} },
+      });
+
+      expect(convexAttempts).toBe(2);
+    });
+  });
+
+  it.each([
+    "Error: Not authorized: invalid deployment credentials",
+    "Error: TypeScript source failed to compile",
+  ])("preserves non-DNS Convex failures: %s", async (stderr) => {
+    await withTempRepo(async (repoDir) => {
+      await writeConvexApiFixture(repoDir);
+      let resolverCalls = 0;
+
+      await expect(
+        runPreCommitGeneratedArtifacts(repoDir, {
+          runHarnessGenerate: async () => {},
+          runGraphifyRebuild: async () => {},
+          resolveHostname: async () => {
+            resolverCalls += 1;
+          },
+          spawn(command) {
+            if (command[0] === "git" && command[1] === "status") {
+              return {
+                exited: Promise.resolve(0),
+                stdout: new Response(
+                  " M packages/athena-webapp/convex/catalog/items.ts\n"
+                ).body,
+                stderr: new Response("").body,
+              };
+            }
+            if (command.at(-1) === "-v") {
+              return {
+                exited: Promise.resolve(0),
+                stdout: new Response("v24.14.0\n").body,
+                stderr: new Response("").body,
+              };
+            }
+            if (command.join(" ") === "bunx convex dev --once") {
+              return {
+                exited: Promise.resolve(1),
+                stdout: new Response("").body,
+                stderr: new Response(stderr).body,
+              };
+            }
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response("").body,
+              stderr: new Response("").body,
+            };
+          },
+          logger: { log() {} },
+        })
+      ).rejects.toThrow(stderr);
+
+      expect(resolverCalls).toBe(0);
+    });
+  });
+
+  it.each([
+    "Error: Not authorized: invalid deployment credentials",
+    "Error: TypeScript source failed to compile",
+  ])("preserves a non-DNS Convex failure after the DNS retry: %s", async (stderr) => {
+    await withTempRepo(async (repoDir) => {
+      await writeConvexApiFixture(repoDir);
+      let convexAttempts = 0;
+
+      await expect(
+        runPreCommitGeneratedArtifacts(repoDir, {
+          runHarnessGenerate: async () => {},
+          runGraphifyRebuild: async () => {},
+          resolveHostname: async () => {
+            throw Object.assign(new Error("temporary resolver failure"), {
+              code: "EAI_AGAIN",
+            });
+          },
+          retryDelay: async () => {},
+          spawn(command) {
+            if (command[0] === "git" && command[1] === "status") {
+              return {
+                exited: Promise.resolve(0),
+                stdout: new Response(
+                  " M packages/athena-webapp/convex/catalog/items.ts\n"
+                ).body,
+                stderr: new Response("").body,
+              };
+            }
+            if (command.at(-1) === "-v") {
+              return {
+                exited: Promise.resolve(0),
+                stdout: new Response("v24.14.0\n").body,
+                stderr: new Response("").body,
+              };
+            }
+            if (command.join(" ") === "bunx convex dev --once") {
+              convexAttempts += 1;
+              return {
+                exited: Promise.resolve(1),
+                stdout: new Response("").body,
+                stderr: new Response(
+                  convexAttempts === 1 ? "TypeError: fetch failed" : stderr
+                ).body,
+              };
+            }
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response("").body,
+              stderr: new Response("").body,
+            };
+          },
+          logger: { log() {} },
+        })
+      ).rejects.toThrow(stderr);
+
+      expect(convexAttempts).toBe(2);
     });
   });
 
