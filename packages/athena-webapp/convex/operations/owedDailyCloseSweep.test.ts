@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   OWED_DAILY_CLOSE_LOOKBACK_DAYS,
-  OWED_DAILY_CLOSE_MAX_PER_SWEEP,
   dailyCloseSweepResultSettled,
   selectRotatingOwedDailyCloseAttempt,
   runOwedDailyCloseSweepWithCtx,
@@ -37,7 +36,6 @@ describe("owed daily close selection", () => {
           candidates: [
             {
               asOfOperatingDate: AS_OF,
-              attempt: ["2026-07-21"],
               owed: ["2026-07-21"],
               stale: ["2026-07-21"],
               storeId: "store-first",
@@ -108,7 +106,7 @@ describe("owed daily close selection", () => {
         asOfOperatingDate: AS_OF,
         completedOperatingDates: fullWindow(),
       }),
-    ).toEqual({ owed: [], attempt: [], stale: [] });
+    ).toEqual({ owed: [], stale: [] });
   });
 
   it("finds the one day that missed its window", () => {
@@ -122,7 +120,6 @@ describe("owed daily close selection", () => {
     });
 
     expect(result.owed).toEqual(["2026-07-24"]);
-    expect(result.attempt).toEqual(["2026-07-24"]);
     // One day old is well inside the transient-blocker band.
     expect(result.stale).toEqual([]);
   });
@@ -147,20 +144,6 @@ describe("owed daily close selection", () => {
     });
 
     expect(result.owed).not.toContain("2026-07-17");
-  });
-
-  it("drains a backlog oldest-first in bounded slices", () => {
-    const result = selectOwedDailyCloseDates({
-      asOfOperatingDate: AS_OF,
-      completedOperatingDates: [],
-    });
-
-    expect(result.attempt).toHaveLength(OWED_DAILY_CLOSE_MAX_PER_SWEEP);
-    expect(result.attempt).toEqual([
-      "2026-07-18",
-      "2026-07-19",
-      "2026-07-20",
-    ]);
   });
 
   it("escalates only the days past the staleness threshold", () => {
@@ -188,16 +171,14 @@ describe("owed daily close selection", () => {
     expect(result.stale).not.toContain("2026-07-24");
   });
 
-  it("honors explicit bounds", () => {
+  it("honors an explicit lookback bound", () => {
     const result = selectOwedDailyCloseDates({
       asOfOperatingDate: AS_OF,
       completedOperatingDates: [],
       lookbackDays: 2,
-      maxPerSweep: 1,
     });
 
     expect(result.owed).toEqual(["2026-07-23", "2026-07-24"]);
-    expect(result.attempt).toEqual(["2026-07-23"]);
   });
 
   it("selects nothing for a malformed operating date", () => {
@@ -206,7 +187,7 @@ describe("owed daily close selection", () => {
         asOfOperatingDate: "not-a-date",
         completedOperatingDates: [],
       }),
-    ).toEqual({ owed: [], attempt: [], stale: [] });
+    ).toEqual({ owed: [], stale: [] });
   });
 
   it("selects nothing when bounds are degenerate", () => {
@@ -216,7 +197,7 @@ describe("owed daily close selection", () => {
         completedOperatingDates: [],
         lookbackDays: 0,
       }),
-    ).toEqual({ owed: [], attempt: [], stale: [] });
+    ).toEqual({ owed: [], stale: [] });
   });
 
   it("crosses a month boundary correctly", () => {

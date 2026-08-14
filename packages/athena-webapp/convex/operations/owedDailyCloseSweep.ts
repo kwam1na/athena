@@ -70,8 +70,6 @@ const OWED_DAILY_CLOSE_STALE_EVENT_TYPE = "daily_close.owed_stale";
 export type OwedDailyCloseSelection = {
   /** Every unclosed date inside the lookback window, oldest first. */
   owed: string[];
-  /** The bounded slice this sweep will act on, oldest first. */
-  attempt: string[];
   /** Owed dates past the staleness threshold; these need a human. */
   stale: string[];
 };
@@ -118,21 +116,19 @@ export function selectOwedDailyCloseDates(input: {
   asOfOperatingDate: string;
   completedOperatingDates: string[];
   lookbackDays?: number;
-  maxPerSweep?: number;
   staleAfterDays?: number;
 }): OwedDailyCloseSelection {
-  const empty: OwedDailyCloseSelection = { owed: [], attempt: [], stale: [] };
+  const empty: OwedDailyCloseSelection = { owed: [], stale: [] };
 
   if (!isValidOperatingDate(input.asOfOperatingDate)) {
     return empty;
   }
 
   const lookbackDays = input.lookbackDays ?? OWED_DAILY_CLOSE_LOOKBACK_DAYS;
-  const maxPerSweep = input.maxPerSweep ?? OWED_DAILY_CLOSE_MAX_PER_SWEEP;
   const staleAfterDays =
     input.staleAfterDays ?? OWED_DAILY_CLOSE_STALE_AFTER_DAYS;
 
-  if (lookbackDays < 1 || maxPerSweep < 1) {
+  if (lookbackDays < 1) {
     return empty;
   }
 
@@ -155,7 +151,6 @@ export function selectOwedDailyCloseDates(input: {
 
   return {
     owed,
-    attempt: owed.slice(0, maxPerSweep),
     stale: owed.filter((operatingDate) => operatingDate <= staleOnOrBefore),
   };
 }

@@ -117,7 +117,6 @@ describe("owed daily close sweep", () => {
     expect(candidates[0]).toMatchObject({
       asOfOperatingDate: "2026-07-25",
       owed: ["2026-07-24"],
-      attempt: ["2026-07-24"],
       stale: [],
     });
   });

@@ -35,6 +35,7 @@ import {
 import {
   buildDailyCloseSnapshotWithCtx,
   completeDailyCloseForAutomationWithCtx,
+  isToleratedIncompleteDailyCloseCompletionSource,
 } from "./dailyClose";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
 import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
@@ -1186,7 +1187,9 @@ export async function runHistoricEodAutoCloseForDateWithCtx(
 
   const completionBlockingIncompleteSources =
     snapshot.sourceCompleteness.entries.filter(
-      (entry) => !entry.complete && entry.source !== "operational_work_item",
+      (entry) =>
+        !entry.complete &&
+        !isToleratedIncompleteDailyCloseCompletionSource(entry),
     );
 
   if (completionBlockingIncompleteSources.length > 0) {

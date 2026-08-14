@@ -2408,15 +2408,22 @@ function incompleteSourceCompletenessEntries(snapshot: DailyCloseSnapshot) {
   return snapshot.sourceCompleteness.entries.filter((entry) => !entry.complete);
 }
 
+export function isToleratedIncompleteDailyCloseCompletionSource(entry: {
+  complete: boolean;
+  source: string;
+}) {
+  return !entry.complete && entry.source === "operational_work_item";
+}
+
 function completionBlockingIncompleteSources(snapshot: DailyCloseSnapshot) {
   return incompleteSourceCompletenessEntries(snapshot).filter(
-    (entry) => entry.source !== "operational_work_item",
+    (entry) => !isToleratedIncompleteDailyCloseCompletionSource(entry),
   );
 }
 
 function hasIncompleteOperationalWork(snapshot: DailyCloseSnapshot) {
-  return incompleteSourceCompletenessEntries(snapshot).some(
-    (entry) => entry.source === "operational_work_item",
+  return snapshot.sourceCompleteness.entries.some(
+    isToleratedIncompleteDailyCloseCompletionSource,
   );
 }
 

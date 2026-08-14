@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: high
 tags: [daily-close, automation, notifications, source-completeness, deduplication]
-delivery_diff_fingerprint: a84960b776e6117a6f9dba10e4efc48a3749876958e6c4fd4e6e4260c6d4a56a
+delivery_diff_fingerprint: 2c25684535c7544f78b0b51a26acc39c8eb0eeaea0d56cf5dc65081ea0c341d5
 ---
 
 # Daily Close saturation must preserve evidence and alert once
@@ -36,6 +36,9 @@ Daily Close treated every incomplete source read as a completion blocker. That w
 ## Solution
 
 Classify incomplete source reads by whether they block completion. Daily Close still blocks on incomplete financial or transactional sources, while an incomplete `operational_work_item` source preserves all observed carry-forward items and records the observed logical count. Historic automation applies the same classification.
+Direct, normal automation, and historic automation all consume the same
+exported predicate for that exception so the tolerated-source policy cannot
+drift between completion paths.
 
 Emit `eod.stale_daily_close` through the notification registry from the existing stale-escalation mutation. Its dedupe key is stable for one store and operating date:
 
@@ -55,6 +58,8 @@ bounded. This keeps an unattempted eligible close from consuming
 its permanent store/date intent. A successful historic close reports `applied`
 and is excluded from escalation. The escalation mutation also rechecks the
 active completed close inside its transaction.
+Owed-date discovery returns only owed and stale evidence; the separate
+rotation selector exclusively owns the bounded attempt set used by production.
 
 Enabled policies are read in 50-row indexed pages. Each action schedules the
 next cursor before processing any store on its page, so a throwing first-page
