@@ -18,7 +18,7 @@
     <dl data-report-meta>
       <dt>Linear</dt><dd>V26-1201 and V26-1221</dd>
       <dt>Branch</dt><dd>codex/v26-1220-git-hook-isolation</dd>
-      <dt>Candidate head</dt><dd>4dcae61eb1f324f64b8ca42a06c85df35ae719c9</dd>
+      <dt>Reviewed code head</dt><dd>c5aaad05093b0d8dafa8627241a2fb1044c6baf9</dd>
       <dt>Base</dt><dd>origin/main at b271119c6b55b870d968404f18100f0bedb4e2e8</dd>
       <dt>PR</dt><dd>Pending</dd>
       <dt>Status</dt><dd>In review preparation</dd>
@@ -47,7 +47,7 @@
   <section data-report-section="mechanics">
     <h2>How the boundaries work</h2>
       <p>The shell helper discovers variable names from env and unsets every name beginning with GIT_. The TypeScript helper returns a copied environment without those keys, leaving the caller&#x27;s process environment unchanged. Hook tests inject GIT_COMMON_DIR, GIT_DIR, GIT_INDEX_FILE, GIT_OBJECT_DIRECTORY, GIT_PREFIX, and GIT_WORK_TREE and prove ordinary Athena variables still arrive.</p>
-      <p>For proof reuse, the evaluator compares the validated and current tree with NUL-delimited git diff --name-status --no-renames. Every entry must be an addition under telemetry/delivery-runs/ ending in .json. Any malformed comparison, unsafe status or path, or failed delivery telemetry check returns a named stale reason instead of reusing proof.</p>
+    <p>For proof reuse, the evaluator compares the validated and current tree with NUL-delimited git diff --name-status --no-renames. Every entry must be an addition under telemetry/delivery-runs/ ending in .json. The telemetry check runs in strict CI mode so a missing or mismatched private ledger cannot suppress current-record enforcement. Any malformed comparison, unsafe status or path, or failed delivery telemetry check returns a named stale reason instead of reusing proof.</p>
   </section>
   <section data-report-section="failure-boundaries">
     <h2>Failure boundaries</h2>
@@ -66,7 +66,7 @@
   </section>
   <section data-report-section="validation">
     <h2>Validation and finish-line status</h2>
-      <p>Completed locally: 133 focused tests passed across the combined hook, identity, proof, and integration surfaces. The complete bun run harness:test suite passed 945 tests across 59 files with zero failures. The compound solution gate passed after refreshing the combined delivery fingerprint.</p>
+    <p>Completed locally: 134 focused tests passed across the combined hook, identity, proof, and integration surfaces, including strict post-gate telemetry validation without a matching local ledger. The complete bun run harness:test suite passed 945 tests across 59 files with zero failures. The compound solution gate passed after refreshing the combined delivery fingerprint.</p>
       <p>The real merge-grade pr:athena run, independent exact-candidate review, normal pre-push execution, GitHub CI, merge, root alignment, and Linear completion are still pending for this delivery candidate. Runtime deployment is not claimed here; its applicability will be decided from the final committed surface at closeout.</p>
   </section>
   <section data-report-section="guidance">
