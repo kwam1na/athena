@@ -475,6 +475,38 @@ describe("eod.daily_manager_report payload branching", () => {
 });
 
 describe("eod.stale_daily_close preparation", () => {
+  it.each([
+    ["missing store", { ageInDays: 2, operatingDate: "2026-07-28" }],
+    [
+      "malformed date",
+      { ageInDays: 2, operatingDate: "July 28", storeId: STORE_ID },
+    ],
+    [
+      "negative age",
+      { ageInDays: -1, operatingDate: "2026-07-28", storeId: STORE_ID },
+    ],
+    [
+      "non-numeric age",
+      {
+        ageInDays: "2",
+        operatingDate: "2026-07-28",
+        storeId: STORE_ID,
+      },
+    ],
+  ])("rejects and suppresses invalid durable payload: %s", async (_, payload) => {
+    const definition = getNotificationKind("eod.stale_daily_close");
+    expect(() => definition.dedupeKey(payload)).toThrow(
+      "Invalid eod.stale_daily_close payload",
+    );
+    const { prepared, calls } = await prepare(
+      "eod.stale_daily_close",
+      payload,
+      [dailyReport],
+    );
+    expect(prepared).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
   it("builds the aligned still-open email from a fresh daily-close read", async () => {
     const { prepared, calls, callArgs } = await prepare(
       "eod.stale_daily_close",

@@ -3,6 +3,7 @@ import { internal } from "../_generated/api";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { getNotificationKind } from "./registry";
+import { SUBSCRIPTION_RESOLUTION_CAP } from "./deliveryPolicy";
 
 export type EmitNotificationArgs = {
   kind: string;
@@ -56,6 +57,26 @@ export async function emitNotificationWithCtx(
       existing.status === "suppressed" &&
       existing.suppressedReason === "no_recipients"
     ) {
+      const deliveries = await ctx.db
+        .query("notificationDelivery")
+        .withIndex("by_intentId", (q) => q.eq("intentId", existing._id))
+        .take(SUBSCRIPTION_RESOLUTION_CAP);
+      const now = Date.now();
+      for (const delivery of deliveries) {
+        if (
+          delivery.status !== "suppressed" ||
+          delivery.errorCode !== "no_recipients"
+        ) {
+          continue;
+        }
+        await ctx.db.patch("notificationDelivery", delivery._id, {
+          status: "retryable_failure",
+          errorCode: undefined,
+          nextAttemptAt: now,
+          terminalAt: undefined,
+          updatedAt: now,
+        });
+      }
       await ctx.db.patch("notificationIntent", existing._id, {
         status: "pending",
         suppressedReason: undefined,

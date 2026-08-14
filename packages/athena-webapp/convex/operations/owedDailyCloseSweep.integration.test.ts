@@ -322,13 +322,44 @@ describe("owed daily close sweep", () => {
 
     const second = await t.action(
       internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
-      { mode: "apply", now: NOW },
+      { mode: "apply", now: NOW + 30 * 60_000 },
     );
     expect(second.escalations.map((entry) => entry.operatingDate)).toEqual([
       "2026-07-21",
       "2026-07-22",
       "2026-07-23",
     ]);
+  });
+
+  it("rotates past permanently blocked oldest dates so later stale dates alert", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const alerted = new Set<string>();
+
+    for (let slot = 0; slot < 7; slot += 1) {
+      const result = await t.action(
+        internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
+        { mode: "apply", now: NOW + slot * 15 * 60_000 },
+      );
+      for (const escalation of result.escalations) {
+        alerted.add(escalation.operatingDate);
+      }
+      expect(result.results).toHaveLength(3);
+    }
+
+    expect([...alerted].sort()).toEqual(WINDOW.slice(0, 6));
+    const intents = await t.run((ctx) =>
+      ctx.db
+        .query("notificationIntent")
+        .withIndex("by_storeId_and_emittedAt", (q) => q.eq("storeId", storeId))
+        .take(10),
+    );
+    expect(
+      intents
+        .filter((intent) => intent.category === "eod")
+        .map((intent) => intent.payload.operatingDate)
+        .sort(),
+    ).toEqual(WINDOW.slice(0, 6));
   });
 
   it("rechecks a completed active close before recording escalation", async () => {

@@ -2802,6 +2802,17 @@ describe("daily operations automation adapter", () => {
       inserts.find((insert) => insert.table === "dailyClose")?.value,
     ).toMatchObject({
       actorType: "automation",
+      carryForwardWorkItemIds: [],
+      readiness: { carryForwardCount: 500 },
+      reportSnapshot: {
+        carryForwardGroups: [],
+        carryForwardItems: [],
+        openWorkMembership: {
+          completeness: "incomplete",
+          observedLogicalCount: 500,
+        },
+        summary: { carryForwardWorkItemCount: 500 },
+      },
       sourceCompleteness: {
         complete: false,
         entries: expect.arrayContaining([

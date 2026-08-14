@@ -5,7 +5,7 @@
   <title>Stale Daily Close Manager Alerts</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="c27cb5ba912519fd6459c6f6770a61115315eba8108e292891646d3ff2c608a3">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="f1183a3dceb9d4ea172fbc5291134360b910016d3756ca78b7b9516729f02f7c">
   <header data-report-section="header">
     <h1>Stale Daily Close Manager Alerts</h1>
     <p>How bounded close evidence now remains actionable without creating duplicate manager email</p>
@@ -45,13 +45,13 @@
   </section>
   <section data-report-section="changes">
     <h2>What changed and what did not</h2>
-      <p>Changed: human, scheduled, and historic close paths share the source-specific completeness rule; persisted carry-forward counts remain meaningful under saturation; the notification registry owns a new email-only eod.stale_daily_close kind; only dates attempted in the current sweep escalate; and configured EOD subscribers receive calm manager-facing copy with one EOD Review action.</p>
-      <p>Unchanged: the seven-day owed lookback, maximum three owed dates per store per sweep, two-day stale threshold, operational stale event, recipient subscriptions, delivery retries, and all true financial or transactional blockers. There is no schema migration, browser route, or direct email send from the sweep.</p>
+      <p>Changed: human, scheduled, and historic close paths share the source-specific completeness rule; persisted carry-forward counts remain meaningful under saturation; the notification registry owns a new email-only eod.stale_daily_close kind; the bounded three-date attempt window rotates by scheduled sweep slot so later dates cannot starve; only attempted dates escalate; and configured EOD subscribers receive calm manager-facing copy with one EOD Review action.</p>
+      <p>Unchanged: the seven-day owed lookback, maximum three owed dates per store per sweep, two-day stale threshold, operational stale event, recipient subscriptions, delivery retries, and all true financial or transactional blockers. There is no browser route or direct email send from the sweep.</p>
   </section>
   <section data-report-section="failure-boundaries">
     <h2>Failure boundaries</h2>
       <ul>
-        <li>When either open-work status returns a 501st row, Athena records incomplete membership and an observed logical count but cannot enumerate every member; downstream readers must honor the completeness metadata.</li>
+        <li>When either open-work status returns a 501st row, Athena records incomplete membership and an observed logical count but cannot enumerate every member; persisted incomplete group arrays remain empty and downstream readers must honor the completeness metadata.</li>
         <li>The store/date dedupe key deliberately sends one stale alert, not a daily reminder sequence; only a prior no-audience suppression may re-arm the same intent after subscription setup.</li>
         <li>If the close completes, preparation returns no email; later dry-run rows do not hide an earlier qualifying skipped or failed run while the close remains open.</li>
         <li>Every other incomplete source continues to block or quarantine completion.</li>
@@ -60,7 +60,7 @@
   </section>
   <section data-report-section="validation">
     <h2>Validation and delivery status</h2>
-      <p>Focused Vitest coverage first passed 204 of 204 tests across the notification registry, Daily Close, Daily Operations automation, owed-close integration, and React Email template. After review fixes, a focused 143-test regression slice passed alongside changed-Convex lint, TypeScript, Graphify rebuild, and git diff validation.</p>
+      <p>Focused Vitest coverage first passed 204 of 204 tests across the notification registry, Daily Close, Daily Operations automation, owed-close integration, and React Email template. After two review-fix rounds, the expanded focused regression slice passed 306 tests alongside changed-Convex lint, TypeScript, Graphify rebuild, solution/report checks, and git diff validation.</p>
       <p>The repository merge gate has not yet completed its broad test and final-green review stages. The PR, CI, merge, root fast-forward, and production Convex deploy are pending and must not be inferred from this candidate report.</p>
   </section>
   <section data-report-section="guidance">

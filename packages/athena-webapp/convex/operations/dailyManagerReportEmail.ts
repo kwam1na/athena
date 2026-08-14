@@ -359,7 +359,7 @@ export const getStaleDailyManagerReportPayloadForDate = internalQuery({
         ctx.db
           .query("automationRun")
           .withIndex(
-            "by_storeId_operatingDate_domain_action_outcome",
+            "by_storeId_operatingDate_domain_action_outcome_updatedAt",
             (q) =>
               q
                 .eq("storeId", args.storeId)

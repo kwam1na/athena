@@ -5388,6 +5388,18 @@ describe("end-of-day review backend foundation", () => {
         },
       },
     });
+    if (humanResult.kind !== "ok") throw new Error("Expected human close");
+    expect(humanResult.data.dailyClose.readiness.carryForwardCount).toBe(500);
+    expect(
+      humanResult.data.dailyClose.reportSnapshot?.summary
+        .carryForwardWorkItemCount,
+    ).toBe(500);
+    expect(
+      humanResult.data.dailyClose.reportSnapshot?.carryForwardItems,
+    ).toEqual([]);
+    expect(
+      humanResult.data.dailyClose.reportSnapshot?.carryForwardGroups,
+    ).toEqual([]);
 
     const automationDb = createDb({
       operationalWorkItem: openOperationalWorkItems(501, "in_progress"),
@@ -5429,6 +5441,22 @@ describe("end-of-day review backend foundation", () => {
         },
       },
     });
+    if (automationResult.kind !== "ok") {
+      throw new Error("Expected automation close");
+    }
+    expect(automationResult.data.dailyClose.readiness.carryForwardCount).toBe(
+      500,
+    );
+    expect(
+      automationResult.data.dailyClose.reportSnapshot?.summary
+        .carryForwardWorkItemCount,
+    ).toBe(500);
+    expect(
+      automationResult.data.dailyClose.reportSnapshot?.carryForwardItems,
+    ).toEqual([]);
+    expect(
+      automationResult.data.dailyClose.reportSnapshot?.carryForwardGroups,
+    ).toEqual([]);
   });
 
   it("fails human and automation completion when another source is incomplete alongside operational work", async () => {

@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: high
 tags: [daily-close, automation, notifications, source-completeness, deduplication]
-delivery_diff_fingerprint: c27cb5ba912519fd6459c6f6770a61115315eba8108e292891646d3ff2c608a3
+delivery_diff_fingerprint: f1183a3dceb9d4ea172fbc5291134360b910016d3756ca78b7b9516729f02f7c
 ---
 
 # Daily Close saturation must preserve evidence and alert once
@@ -45,16 +45,23 @@ eod.stale_daily_close:<storeId>:<operatingDate>
 
 The notification prepares its email only while the close is still open and the latest EOD automation run is skipped or failed. It reuses the Daily Manager Report payload builder for store schedule, blocker, cash-position, and EOD Review URL semantics rather than reconstructing those rules in the sweep.
 
-The sweep escalates only dates it actually attempted in that invocation. This
-keeps dates beyond the three-date work bound from consuming their permanent
-store/date intent before the backlog reaches them. A successful historic
-close reports `applied` and is excluded from escalation. The escalation
-mutation also rechecks the active completed close inside its transaction.
+The sweep escalates only dates it actually attempted in that invocation. Its
+three-date attempt window rotates by scheduled sweep slot, so permanently
+blocked oldest dates cannot starve later stale dates while the close-attempt
+budget stays bounded. This keeps an unattempted eligible close from consuming
+its permanent store/date intent. A successful historic close reports `applied`
+and is excluded from escalation. The escalation mutation also rechecks the
+active completed close inside its transaction.
 
 If a stale intent initially finds no EOD subscribers, a later owed-date retry
 re-arms that same suppressed intent after subscription setup. The intent and
 recipient dedupe keys remain unchanged, so recovery does not weaken duplicate
 delivery protection.
+
+When operational-work membership is incomplete, the completed close persists
+the incomplete membership marker and observed logical count, but not the
+probe's synthetic incomplete groups. Those groups cannot truthfully identify
+members; the count remains evidence while the item/group arrays stay empty.
 
 ## Why This Works
 

@@ -2264,7 +2264,7 @@ function buildDailyCloseReportSnapshot(args: {
 }): DailyCloseReportSnapshot {
   const selectedWorkItemIds = new Set(args.carryForwardWorkItemIds);
   const selectedSnapshotItems = hasIncompleteOperationalWork(args.snapshot)
-    ? args.snapshot.carryForwardItems
+    ? []
     : args.snapshot.carryForwardItems.filter((item) => {
       const memberIds =
         item.carryForwardWorkItemIds ??

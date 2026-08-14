@@ -486,10 +486,11 @@ describe("getStaleDailyManagerReportPayloadForDate", () => {
     seeded: Awaited<ReturnType<typeof seedStore>>,
     outcome: "dry_run" | "skipped" | "failed",
     updatedAt: number,
+    createdAt = updatedAt,
   ) {
     return ctx.db.insert("automationRun", {
       action: "eod.auto_complete",
-      createdAt: updatedAt,
+      createdAt,
       domain: "daily_operations",
       eventIds: [],
       idempotencyKey: `stale:${outcome}:${updatedAt}`,
@@ -542,6 +543,18 @@ describe("getStaleDailyManagerReportPayloadForDate", () => {
       await insertRun(ctx, seeded, "dry_run", 3);
     });
     expect(await ask(t, seeded.storeId)).toMatchObject({ status: "failed" });
+  });
+
+  it("selects qualifying runs by updated time rather than creation time", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(seedStore);
+    await t.run(async (ctx) => {
+      await insertRun(ctx, seeded, "failed", 10, 1);
+      await insertRun(ctx, seeded, "skipped", 5, 2);
+    });
+    expect(await ask(t, seeded.storeId)).toMatchObject({
+      status: "failed",
+    });
   });
 
   it("suppresses when an active completed close exists", async () => {

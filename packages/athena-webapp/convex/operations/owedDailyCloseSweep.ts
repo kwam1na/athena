@@ -79,6 +79,28 @@ export function dailyCloseSweepResultSettled(result: { action: string }) {
   return result.action === "applied" || result.action === "already_completed";
 }
 
+const OWED_DAILY_CLOSE_ROTATION_MS = 15 * 60_000;
+
+export function selectRotatingOwedDailyCloseAttempt(input: {
+  asOfOperatingDate: string;
+  now: number;
+  owed: string[];
+  maxPerSweep?: number;
+}) {
+  if (input.owed.length === 0) return [];
+  const maxPerSweep = input.maxPerSweep ?? OWED_DAILY_CLOSE_MAX_PER_SWEEP;
+  const dayStart = Date.parse(`${input.asOfOperatingDate}T00:00:00.000Z`);
+  const slot = Math.max(
+    0,
+    Math.floor((input.now - dayStart) / OWED_DAILY_CLOSE_ROTATION_MS),
+  );
+  const start = slot % input.owed.length;
+  return Array.from(
+    { length: Math.min(maxPerSweep, input.owed.length) },
+    (_, offset) => input.owed[(start + offset) % input.owed.length],
+  );
+}
+
 /**
  * Pure selection of which store days are still owed a close.
  *
@@ -304,6 +326,7 @@ export const runOwedDailyCloseSweep = internalAction({
   },
   handler: async (ctx, args): Promise<OwedDailyCloseSweepResult> => {
     const mode = args.mode ?? "apply";
+    const now = args.now ?? Date.now();
     const candidates: OwedDailyCloseStoreCandidate[] = await ctx.runQuery(
       internal.operations.owedDailyCloseSweep.listOwedDailyCloseCandidates,
       args.now === undefined ? {} : { now: args.now },
@@ -314,7 +337,12 @@ export const runOwedDailyCloseSweep = internalAction({
       [];
 
     for (const candidate of candidates) {
-      for (const operatingDate of candidate.attempt) {
+      const attempt = selectRotatingOwedDailyCloseAttempt({
+        asOfOperatingDate: candidate.asOfOperatingDate,
+        now,
+        owed: candidate.owed,
+      });
+      for (const operatingDate of attempt) {
         const result = await ctx.runMutation(
           internal.operations.dailyOperationsAutomation
             .runHistoricEodAutoCloseForDate,
@@ -346,7 +374,7 @@ export const runOwedDailyCloseSweep = internalAction({
           .map((result) => result.operatingDate),
       );
 
-      const attemptedDates = new Set(candidate.attempt);
+      const attemptedDates = new Set(attempt);
       for (const operatingDate of candidate.stale) {
         if (!attemptedDates.has(operatingDate)) continue;
         if (closedThisSweep.has(operatingDate)) continue;
