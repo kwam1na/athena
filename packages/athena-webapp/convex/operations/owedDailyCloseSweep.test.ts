@@ -24,23 +24,30 @@ function fullWindow() {
 }
 
 describe("owed daily close selection", () => {
-  it("rotates the bounded attempt window across repeated sweep slots", () => {
-    const owed = fullWindow();
-    expect(
-      selectRotatingOwedDailyCloseAttempt({
-        asOfOperatingDate: AS_OF,
-        now: Date.parse(`${AS_OF}T03:30:00.000Z`),
-        owed,
-      }),
-    ).toEqual(owed.slice(0, 3));
-    expect(
-      selectRotatingOwedDailyCloseAttempt({
-        asOfOperatingDate: AS_OF,
-        now: Date.parse(`${AS_OF}T04:15:00.000Z`),
-        owed,
-      }),
-    ).toEqual(["2026-07-21", "2026-07-22", "2026-07-23"]);
-  });
+  it.each([
+    ["hourly", 1],
+    ["two-hourly", 2],
+  ] as const)(
+    "covers backlog lengths 4-7 at the real %s cadence",
+    (_, cadenceHours) => {
+      for (let backlogLength = 4; backlogLength <= 7; backlogLength += 1) {
+        const owed = fullWindow().slice(0, backlogLength);
+        const attempted = new Set<string>();
+        for (let run = 0; run < backlogLength; run += 1) {
+          for (const date of selectRotatingOwedDailyCloseAttempt({
+            asOfOperatingDate: AS_OF,
+            now:
+              Date.parse(`${AS_OF}T00:30:00.000Z`) +
+              run * cadenceHours * 60 * 60_000,
+            owed,
+          })) {
+            attempted.add(date);
+          }
+        }
+        expect([...attempted].sort()).toEqual(owed);
+      }
+    },
+  );
   it("treats an applied historic close as settled in the same sweep", () => {
     expect(dailyCloseSweepResultSettled({ action: "applied" })).toBe(true);
     expect(dailyCloseSweepResultSettled({ action: "already_completed" })).toBe(

@@ -5,7 +5,7 @@
   <title>Stale Daily Close Manager Alerts</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="f1183a3dceb9d4ea172fbc5291134360b910016d3756ca78b7b9516729f02f7c">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="3d160abf4ea34d91f563030a38c71162137fb2632d5764fbe517e00f918c049b">
   <header data-report-section="header">
     <h1>Stale Daily Close Manager Alerts</h1>
     <p>How bounded close evidence now remains actionable without creating duplicate manager email</p>
@@ -45,7 +45,7 @@
   </section>
   <section data-report-section="changes">
     <h2>What changed and what did not</h2>
-      <p>Changed: human, scheduled, and historic close paths share the source-specific completeness rule; persisted carry-forward counts remain meaningful under saturation; the notification registry owns a new email-only eod.stale_daily_close kind; the bounded three-date attempt window rotates by scheduled sweep slot so later dates cannot starve; only attempted dates escalate; and configured EOD subscribers receive calm manager-facing copy with one EOD Review action.</p>
+      <p>Changed: human, scheduled, and historic close paths share the source-specific completeness rule; persisted carry-forward counts remain meaningful under saturation; the notification registry owns a new email-only eod.stale_daily_close kind; the bounded three-date attempt window rotates by UTC hour so both hourly and two-hourly schedules cover every four-to-seven-day backlog; only attempted dates escalate; and configured EOD subscribers receive calm manager-facing copy with one EOD Review action.</p>
       <p>Unchanged: the seven-day owed lookback, maximum three owed dates per store per sweep, two-day stale threshold, operational stale event, recipient subscriptions, delivery retries, and all true financial or transactional blockers. There is no browser route or direct email send from the sweep.</p>
   </section>
   <section data-report-section="failure-boundaries">

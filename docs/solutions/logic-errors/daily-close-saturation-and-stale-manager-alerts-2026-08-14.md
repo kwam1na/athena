@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: high
 tags: [daily-close, automation, notifications, source-completeness, deduplication]
-delivery_diff_fingerprint: f1183a3dceb9d4ea172fbc5291134360b910016d3756ca78b7b9516729f02f7c
+delivery_diff_fingerprint: 3d160abf4ea34d91f563030a38c71162137fb2632d5764fbe517e00f918c049b
 ---
 
 # Daily Close saturation must preserve evidence and alert once
@@ -46,9 +46,12 @@ eod.stale_daily_close:<storeId>:<operatingDate>
 The notification prepares its email only while the close is still open and the latest EOD automation run is skipped or failed. It reuses the Daily Manager Report payload builder for store schedule, blocker, cash-position, and EOD Review URL semantics rather than reconstructing those rules in the sweep.
 
 The sweep escalates only dates it actually attempted in that invocation. Its
-three-date attempt window rotates by scheduled sweep slot, so permanently
-blocked oldest dates cannot starve later stale dates while the close-attempt
-budget stays bounded. This keeps an unattempted eligible close from consuming
+three-date attempt window rotates by UTC hour. That advances one position at
+the production hourly cadence and two positions at the non-production
+two-hour cadence; the three-date window covers every backlog length from four
+through the seven-day cap under either stride. Permanently blocked oldest dates
+therefore cannot starve later stale dates while the close-attempt budget stays
+bounded. This keeps an unattempted eligible close from consuming
 its permanent store/date intent. A successful historic close reports `applied`
 and is excluded from escalation. The escalation mutation also rechecks the
 active completed close inside its transaction.

@@ -94,6 +94,7 @@ function isStaleDailyClosePayload(
     /^\d{4}-\d{2}-\d{2}$/.test(payload.operatingDate) &&
     typeof payload.ageInDays === "number" &&
     Number.isFinite(payload.ageInDays) &&
+    Number.isInteger(payload.ageInDays) &&
     payload.ageInDays >= 0
   );
 }

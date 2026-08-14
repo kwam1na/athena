@@ -493,6 +493,30 @@ describe("eod.stale_daily_close preparation", () => {
         storeId: STORE_ID,
       },
     ],
+    [
+      "NaN age",
+      { ageInDays: Number.NaN, operatingDate: "2026-07-28", storeId: STORE_ID },
+    ],
+    [
+      "infinite age",
+      {
+        ageInDays: Number.POSITIVE_INFINITY,
+        operatingDate: "2026-07-28",
+        storeId: STORE_ID,
+      },
+    ],
+    [
+      "negative infinite age",
+      {
+        ageInDays: Number.NEGATIVE_INFINITY,
+        operatingDate: "2026-07-28",
+        storeId: STORE_ID,
+      },
+    ],
+    [
+      "fractional age",
+      { ageInDays: 2.5, operatingDate: "2026-07-28", storeId: STORE_ID },
+    ],
   ])("rejects and suppresses invalid durable payload: %s", async (_, payload) => {
     const definition = getNotificationKind("eod.stale_daily_close");
     expect(() => definition.dedupeKey(payload)).toThrow(

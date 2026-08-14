@@ -303,10 +303,11 @@ describe("owed daily close sweep", () => {
   it("does not consume stale intents for backlog dates it did not attempt", async () => {
     const t = convexTest(schema, modules);
     const { organizationId, storeId } = await seedStore(t);
+    const sweepNow = Date.parse("2026-07-25T00:30:00.000Z");
 
     const first = await t.action(
       internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
-      { mode: "apply", now: NOW },
+      { mode: "apply", now: sweepNow },
     );
     expect(first.escalations.map((entry) => entry.operatingDate)).toEqual([
       "2026-07-18",
@@ -322,7 +323,7 @@ describe("owed daily close sweep", () => {
 
     const second = await t.action(
       internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
-      { mode: "apply", now: NOW + 30 * 60_000 },
+      { mode: "apply", now: sweepNow },
     );
     expect(second.escalations.map((entry) => entry.operatingDate)).toEqual([
       "2026-07-21",
@@ -335,11 +336,12 @@ describe("owed daily close sweep", () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
     const alerted = new Set<string>();
+    const sweepNow = Date.parse("2026-07-25T00:30:00.000Z");
 
     for (let slot = 0; slot < 7; slot += 1) {
       const result = await t.action(
         internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
-        { mode: "apply", now: NOW + slot * 15 * 60_000 },
+        { mode: "apply", now: sweepNow + slot * 60 * 60_000 },
       );
       for (const escalation of result.escalations) {
         alerted.add(escalation.operatingDate);

@@ -47615,7 +47615,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_registry_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/registry.test.ts",
-      "source_location": "L641",
+      "source_location": "L665",
       "target": "registry_test_dedupekey",
       "weight": 1
     },
@@ -47627,7 +47627,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_registry_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/registry.test.ts",
-      "source_location": "L826",
+      "source_location": "L850",
       "target": "registry_test_keyfor",
       "weight": 1
     },
@@ -47663,7 +47663,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_registry_ts",
       "source_file": "packages/athena-webapp/convex/notifications/registry.ts",
-      "source_location": "L420",
+      "source_location": "L421",
       "target": "registry_findnotificationkind",
       "weight": 1
     },
@@ -47675,7 +47675,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_registry_ts",
       "source_file": "packages/athena-webapp/convex/notifications/registry.ts",
-      "source_location": "L430",
+      "source_location": "L431",
       "target": "registry_getnotificationkind",
       "weight": 1
     },
@@ -47699,7 +47699,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_registry_ts",
       "source_file": "packages/athena-webapp/convex/notifications/registry.ts",
-      "source_location": "L438",
+      "source_location": "L439",
       "target": "registry_listnotificationkinds",
       "weight": 1
     },
@@ -47711,7 +47711,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_registry_ts",
       "source_file": "packages/athena-webapp/convex/notifications/registry.ts",
-      "source_location": "L101",
+      "source_location": "L102",
       "target": "registry_requirestaledailyclosepayload",
       "weight": 1
     },
@@ -55343,7 +55343,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_operations_oweddailyclosesweep_ts",
       "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
-      "source_location": "L177",
+      "source_location": "L182",
       "target": "oweddailyclosesweep_completedoperatingdatesforstore",
       "weight": 1
     },
@@ -55367,7 +55367,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_operations_oweddailyclosesweep_ts",
       "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
-      "source_location": "L416",
+      "source_location": "L421",
       "target": "oweddailyclosesweep_daysbetweenoperatingdates",
       "weight": 1
     },
@@ -55379,7 +55379,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_operations_oweddailyclosesweep_ts",
       "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
-      "source_location": "L163",
+      "source_location": "L168",
       "target": "oweddailyclosesweep_listenabledeodpolicies",
       "weight": 1
     },
@@ -55391,7 +55391,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_operations_oweddailyclosesweep_ts",
       "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
-      "source_location": "L111",
+      "source_location": "L116",
       "target": "oweddailyclosesweep_selectoweddailyclosedates",
       "weight": 1
     },
@@ -55403,7 +55403,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_operations_oweddailyclosesweep_ts",
       "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
-      "source_location": "L84",
+      "source_location": "L89",
       "target": "oweddailyclosesweep_selectrotatingoweddailycloseattempt",
       "weight": 1
     },
@@ -147467,7 +147467,7 @@
       "relation": "calls",
       "source": "registry_findnotificationkind",
       "source_file": "packages/athena-webapp/convex/notifications/registry.ts",
-      "source_location": "L431",
+      "source_location": "L432",
       "target": "registry_getnotificationkind",
       "weight": 1
     },
@@ -147539,7 +147539,7 @@
       "relation": "calls",
       "source": "registry_isstaledailyclosepayload",
       "source_file": "packages/athena-webapp/convex/notifications/registry.ts",
-      "source_location": "L104",
+      "source_location": "L105",
       "target": "registry_requirestaledailyclosepayload",
       "weight": 1
     },
@@ -147551,7 +147551,7 @@
       "relation": "calls",
       "source": "registry_test_dedupekey",
       "source_file": "packages/athena-webapp/convex/notifications/registry.test.ts",
-      "source_location": "L827",
+      "source_location": "L851",
       "target": "registry_test_keyfor",
       "weight": 1
     },
@@ -249367,7 +249367,7 @@
       "label": "completedOperatingDatesForStore()",
       "norm_label": "completedoperatingdatesforstore()",
       "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
-      "source_location": "L177"
+      "source_location": "L182"
     },
     {
       "community": 386,
@@ -249385,7 +249385,7 @@
       "label": "daysBetweenOperatingDates()",
       "norm_label": "daysbetweenoperatingdates()",
       "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
-      "source_location": "L416"
+      "source_location": "L421"
     },
     {
       "community": 386,
@@ -249394,7 +249394,7 @@
       "label": "listEnabledEodPolicies()",
       "norm_label": "listenabledeodpolicies()",
       "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
-      "source_location": "L163"
+      "source_location": "L168"
     },
     {
       "community": 386,
@@ -249403,7 +249403,7 @@
       "label": "selectOwedDailyCloseDates()",
       "norm_label": "selectoweddailyclosedates()",
       "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
-      "source_location": "L111"
+      "source_location": "L116"
     },
     {
       "community": 386,
@@ -249412,7 +249412,7 @@
       "label": "selectRotatingOwedDailyCloseAttempt()",
       "norm_label": "selectrotatingoweddailycloseattempt()",
       "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
-      "source_location": "L84"
+      "source_location": "L89"
     },
     {
       "community": 386,
@@ -256036,7 +256036,7 @@
       "label": "findNotificationKind()",
       "norm_label": "findnotificationkind()",
       "source_file": "packages/athena-webapp/convex/notifications/registry.ts",
-      "source_location": "L420"
+      "source_location": "L421"
     },
     {
       "community": 451,
@@ -256045,7 +256045,7 @@
       "label": "getNotificationKind()",
       "norm_label": "getnotificationkind()",
       "source_file": "packages/athena-webapp/convex/notifications/registry.ts",
-      "source_location": "L430"
+      "source_location": "L431"
     },
     {
       "community": 451,
@@ -256063,7 +256063,7 @@
       "label": "listNotificationKinds()",
       "norm_label": "listnotificationkinds()",
       "source_file": "packages/athena-webapp/convex/notifications/registry.ts",
-      "source_location": "L438"
+      "source_location": "L439"
     },
     {
       "community": 451,
@@ -256072,7 +256072,7 @@
       "label": "requireStaleDailyClosePayload()",
       "norm_label": "requirestaledailyclosepayload()",
       "source_file": "packages/athena-webapp/convex/notifications/registry.ts",
-      "source_location": "L101"
+      "source_location": "L102"
     },
     {
       "community": 452,
@@ -265468,7 +265468,7 @@
       "label": "dedupeKey()",
       "norm_label": "dedupekey()",
       "source_file": "packages/athena-webapp/convex/notifications/registry.test.ts",
-      "source_location": "L641"
+      "source_location": "L665"
     },
     {
       "community": 563,
@@ -265477,7 +265477,7 @@
       "label": "keyFor()",
       "norm_label": "keyfor()",
       "source_file": "packages/athena-webapp/convex/notifications/registry.test.ts",
-      "source_location": "L826"
+      "source_location": "L850"
     },
     {
       "community": 563,

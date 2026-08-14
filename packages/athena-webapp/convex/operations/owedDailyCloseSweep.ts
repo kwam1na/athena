@@ -79,7 +79,12 @@ export function dailyCloseSweepResultSettled(result: { action: string }) {
   return result.action === "applied" || result.action === "already_completed";
 }
 
-const OWED_DAILY_CLOSE_ROTATION_MS = 15 * 60_000;
+// Production runs hourly and non-production every two hours. An hour-based
+// slot advances the start by one in prod and two in non-prod; with a
+// three-date attempt window both cadences cover every backlog length allowed
+// by the seven-day lookback (including even lengths where a point cursor with
+// a two-step stride would otherwise starve one parity).
+const OWED_DAILY_CLOSE_ROTATION_MS = 60 * 60_000;
 
 export function selectRotatingOwedDailyCloseAttempt(input: {
   asOfOperatingDate: string;
