@@ -58,6 +58,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/emails/PosTerminalHealthAlert.test.tsx`](../../convex/emails/PosTerminalHealthAlert.test.tsx)
 - [`convex/emails/RegisterCloseoutVarianceAlert.test.tsx`](../../convex/emails/RegisterCloseoutVarianceAlert.test.tsx)
 - [`convex/emails/ReportVerificationAlert.test.tsx`](../../convex/emails/ReportVerificationAlert.test.tsx)
+- [`convex/emails/StaleDailyCloseAlert.test.tsx`](../../convex/emails/StaleDailyCloseAlert.test.tsx)
 - [`convex/emails/WalkthroughRequestNotification.test.tsx`](../../convex/emails/WalkthroughRequestNotification.test.tsx)
 - [`convex/emails/WeeklyManagerReport.test.tsx`](../../convex/emails/WeeklyManagerReport.test.tsx)
 - [`convex/http/domains/core/routes/bannerMessage.test.ts`](../../convex/http/domains/core/routes/bannerMessage.test.ts)

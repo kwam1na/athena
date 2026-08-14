@@ -1184,7 +1184,12 @@ export async function runHistoricEodAutoCloseForDateWithCtx(
     storeId: args.storeId,
   });
 
-  if (!snapshot.sourceCompleteness.complete) {
+  const completionBlockingIncompleteSources =
+    snapshot.sourceCompleteness.entries.filter(
+      (entry) => !entry.complete && entry.source !== "operational_work_item",
+    );
+
+  if (completionBlockingIncompleteSources.length > 0) {
     return recordHistoricEodQuarantineWithCtx(ctx, {
       classification: "quarantine_incomplete_source_reads",
       decisionReason:

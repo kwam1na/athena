@@ -337,6 +337,65 @@ export const getActionRequiredDailyManagerReportPayloadForRun = internalQuery({
   },
 });
 
+export const getStaleDailyManagerReportPayloadForDate = internalQuery({
+  args: {
+    operatingDate: v.string(),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args): Promise<DailyManagerReportPayload | null> => {
+    const completedClose = await ctx.db
+      .query("dailyClose")
+      .withIndex("by_storeId_operatingDate_lifecycleStatus", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("operatingDate", args.operatingDate)
+          .eq("lifecycleStatus", "active"),
+      )
+      .first();
+    if (completedClose?.status === "completed") return null;
+
+    const run = await ctx.db
+      .query("automationRun")
+      .withIndex("by_storeId_operatingDate_domain_action", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("operatingDate", args.operatingDate)
+          .eq("domain", "daily_operations")
+          .eq("action", "eod.auto_complete"),
+      )
+      .order("desc")
+      .first();
+
+    if (!run || (run.outcome !== "skipped" && run.outcome !== "failed")) {
+      return null;
+    }
+
+    const store = await resolveStore(ctx, { storeId: run.storeId });
+    const snapshot = await buildDailyCloseSnapshotWithCtx(ctx, {
+      operatingDate: run.operatingDate,
+      storeId: run.storeId,
+    });
+    const cashPositionSummary = await buildRegisterCashPositionSummary(ctx, {
+      endAt: snapshot.endAt,
+      operatingDate: snapshot.operatingDate,
+      startAt: snapshot.startAt,
+      storeId: store._id,
+    });
+
+    return buildOpenDailyManagerReportPayload({
+      cashPositionSummary,
+      completedTimezone: await resolveStoreScheduleTimezoneForAt(ctx, {
+        at: run.updatedAt,
+        storeId: store._id,
+      }),
+      snapshot,
+      status: run.outcome,
+      statusAt: run.updatedAt,
+      store,
+    });
+  },
+});
+
 export const sendMostRecentDailyManagerReport = action({
   args: {
     recipientEmail: v.string(),

@@ -13,12 +13,10 @@ import { WeeklyManagerReport } from "../emails/WeeklyManagerReport";
 import { PosTerminalHealthAlert } from "../emails/PosTerminalHealthAlert";
 import { RegisterCloseoutVarianceAlert } from "../emails/RegisterCloseoutVarianceAlert";
 import { ReportVerificationAlert } from "../emails/ReportVerificationAlert";
+import { StaleDailyCloseAlert } from "../emails/StaleDailyCloseAlert";
 
 export type NotificationCategory =
-  | "cash_controls"
-  | "eod"
-  | "system_health"
-  | "approvals";
+  "cash_controls" | "eod" | "system_health" | "approvals";
 export type NotificationChannel = "email" | "in_app";
 export type NotificationPayload = Record<string, unknown>;
 export type PreparedNotificationEmail = { subject: string; html: string };
@@ -67,10 +65,7 @@ type CloseoutMatchPayload = {
 };
 
 export type DailyManagerReportSendStatus =
-  | "applied"
-  | "prepared"
-  | "skipped"
-  | "failed";
+  "applied" | "prepared" | "skipped" | "failed";
 
 type DailyManagerReportPayload = {
   storeId: Id<"store">;
@@ -82,6 +77,12 @@ type DailyManagerReportPayload = {
 
 type WeeklyManagerReportPayload = {
   acceptedWeekId: Id<"reportWeekAccepted">;
+};
+
+type StaleDailyClosePayload = {
+  ageInDays: number;
+  operatingDate: string;
+  storeId: Id<"store">;
 };
 
 // Refs only. `fingerprint` identifies the unexplained difference set,
@@ -326,6 +327,42 @@ const NOTIFICATION_KINDS: Record<string, NotificationKindDefinition> = {
       };
     },
   },
+  "eod.stale_daily_close": {
+    category: "eod",
+    channels: ["email"],
+    dedupeKey: (payload) => {
+      const p = payload as StaleDailyClosePayload;
+      return joinKeyComponents([
+        "eod.stale_daily_close",
+        String(p.storeId),
+        p.operatingDate,
+      ]);
+    },
+    prepareEmail: async (ctx, payload) => {
+      const p = payload as StaleDailyClosePayload;
+      const report = await ctx.runQuery(
+        internal.operations.dailyManagerReportEmail
+          .getStaleDailyManagerReportPayloadForDate,
+        { operatingDate: p.operatingDate, storeId: p.storeId },
+      );
+      if (!report) return null;
+
+      return {
+        subject: `Still open: ${report.storeName} EOD Review - ${report.operatingDate}`,
+        html: await render(
+          StaleDailyCloseAlert({
+            ageInDays: p.ageInDays,
+            blockerSummaries: (report.blockers ?? []).map(
+              (blocker) => `${blocker.title}. ${blocker.message}`,
+            ),
+            operatingDate: report.operatingDate,
+            reportUrl: report.reportUrl,
+            storeName: report.storeName,
+          }),
+        ),
+      };
+    },
+  },
   "eod.weekly_manager_report": {
     category: "eod",
     channels: ["email"],
@@ -389,7 +426,9 @@ export const weeklyReportCorrectionPreview = internalAction({
   handler: async (
     ctx,
     args,
-  ): Promise<(PreparedNotificationEmail & { contentDigest: string }) | null> => {
+  ): Promise<
+    (PreparedNotificationEmail & { contentDigest: string }) | null
+  > => {
     const report = await ctx.runQuery(
       internal.operations.weeklyManagerReportEmail
         .getCorrectedWeeklyManagerReportPayload,

@@ -47,6 +47,7 @@ import {
   operatingDateForPolicy,
 } from "./dailyOperationsAutomation";
 import { recordOperationalEventWithCtx } from "./operationalEvents";
+import { emitNotificationWithCtx } from "../notifications/emit";
 
 const DAILY_OPERATIONS_AUTOMATION_DOMAIN = "daily_operations";
 const EOD_AUTO_COMPLETE_ACTION = "eod.auto_complete";
@@ -96,7 +97,8 @@ export function selectOwedDailyCloseDates(input: {
 
   const lookbackDays = input.lookbackDays ?? OWED_DAILY_CLOSE_LOOKBACK_DAYS;
   const maxPerSweep = input.maxPerSweep ?? OWED_DAILY_CLOSE_MAX_PER_SWEEP;
-  const staleAfterDays = input.staleAfterDays ?? OWED_DAILY_CLOSE_STALE_AFTER_DAYS;
+  const staleAfterDays =
+    input.staleAfterDays ?? OWED_DAILY_CLOSE_STALE_AFTER_DAYS;
 
   if (lookbackDays < 1 || maxPerSweep < 1) {
     return empty;
@@ -242,6 +244,19 @@ export const recordOwedDailyCloseStaleEscalation = internalMutation({
       subjectLabel: `End of day review ${args.operatingDate}`,
       subjectType: "daily_close",
       ...(args.organizationId ? { organizationId: args.organizationId } : {}),
+    });
+
+    await emitNotificationWithCtx(ctx, {
+      kind: "eod.stale_daily_close",
+      storeId: args.storeId,
+      ...(args.organizationId ? { organizationId: args.organizationId } : {}),
+      subjectId: `${args.storeId}:${args.operatingDate}`,
+      subjectType: "dailyClose",
+      payload: {
+        ageInDays: args.ageInDays,
+        operatingDate: args.operatingDate,
+        storeId: args.storeId,
+      },
     });
   },
 });

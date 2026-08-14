@@ -219,6 +219,26 @@ describe("owed daily close sweep", () => {
       reason: "daily_close_owed_stale",
     });
     expect(events[0]?.metadata).toMatchObject({ ageInDays: 4 });
+
+    const intents = await t.run(async (ctx) =>
+      ctx.db
+        .query("notificationIntent")
+        .withIndex("by_dedupeKey", (q) =>
+          q.eq("dedupeKey", `eod.stale_daily_close:${storeId}:2026-07-21`),
+        )
+        .collect(),
+    );
+    expect(intents).toHaveLength(1);
+    expect(intents[0]).toMatchObject({
+      category: "eod",
+      kind: "eod.stale_daily_close",
+      payload: {
+        ageInDays: 4,
+        operatingDate: "2026-07-21",
+        storeId,
+      },
+      status: "pending",
+    });
   });
 
   it("escalates a stuck day only once across repeated sweeps", async () => {
@@ -250,6 +270,16 @@ describe("owed daily close sweep", () => {
         .collect(),
     );
     expect(events).toHaveLength(1);
+
+    const intents = await t.run(async (ctx) =>
+      ctx.db
+        .query("notificationIntent")
+        .withIndex("by_dedupeKey", (q) =>
+          q.eq("dedupeKey", `eod.stale_daily_close:${storeId}:2026-07-21`),
+        )
+        .collect(),
+    );
+    expect(intents).toHaveLength(1);
   });
 
   it("does not escalate a recently owed day", async () => {
