@@ -237,7 +237,10 @@ export function getSunCycleThemeState(
   now: Date,
   location: SunCycleLocation,
 ): SunCycleThemeState | null {
-  const transitions = [-2, -1, 0, 1, 2]
+  const transitions = Array.from(
+    { length: 741 },
+    (_, index) => index - 370,
+  )
     .flatMap((dayOffset) => {
       const date = utcCalendarDate(now, dayOffset);
       return (["sunrise", "sunset"] as const).flatMap((event) => {
@@ -462,15 +465,18 @@ export async function requestAthenaSunCycleMode(
   }
 
   const storage = getStorage();
+  if (!storage) {
+    return { ok: false, reason: "unavailable" };
+  }
   try {
-    storage?.setItem(
+    storage.setItem(
       ATHENA_SUN_CYCLE_LOCATION_STORAGE_KEY,
       JSON.stringify(result.location),
     );
     setAthenaThemeModeWithTransition("sun-cycle");
   } catch {
     try {
-      storage?.removeItem(ATHENA_SUN_CYCLE_LOCATION_STORAGE_KEY);
+      storage.removeItem(ATHENA_SUN_CYCLE_LOCATION_STORAGE_KEY);
     } catch {
       // Storage can remain unavailable; the prior appearance is still active.
     }

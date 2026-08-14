@@ -242,6 +242,21 @@ describe("Athena theme runtime", () => {
     );
   });
 
+  it("keeps a valid theme through polar day and polar night", () => {
+    expect(
+      getSunCycleThemeState(new Date("2026-06-21T12:00:00.000Z"), {
+        latitude: 69.65,
+        longitude: 18.96,
+      })?.resolvedTheme,
+    ).toBe("light");
+    expect(
+      getSunCycleThemeState(new Date("2026-12-21T12:00:00.000Z"), {
+        latitude: 69.65,
+        longitude: 18.96,
+      })?.resolvedTheme,
+    ).toBe("dark");
+  });
+
   it("recalculates the appearance when focus resumes after a solar transition", () => {
     vi.useFakeTimers();
     try {
@@ -270,6 +285,33 @@ describe("Athena theme runtime", () => {
       expect(state).not.toBeNull();
       vi.setSystemTime(state!.nextTransitionAt + 100);
       window.dispatchEvent(new Event("focus"));
+      expect(document.documentElement.dataset.theme).toBe("dark");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("recalculates the appearance when the scheduled solar transition fires", () => {
+    vi.useFakeTimers();
+    try {
+      const now = new Date("2026-08-13T12:00:00.000Z");
+      vi.setSystemTime(now);
+      installMatchMedia(false);
+      vi.mocked(window.localStorage.getItem).mockImplementation((key) => {
+        if (key === ATHENA_THEME_STORAGE_KEY) return "sun-cycle";
+        if (key === ATHENA_SUN_CYCLE_LOCATION_STORAGE_KEY) {
+          return JSON.stringify({ latitude: 0, longitude: 0 });
+        }
+        return null;
+      });
+      const state = getSunCycleThemeState(now, {
+        latitude: 0,
+        longitude: 0,
+      });
+
+      initializeAthenaTheme();
+      expect(document.documentElement.dataset.theme).toBe("light");
+      vi.advanceTimersByTime(state!.nextTransitionAt - now.getTime() + 100);
       expect(document.documentElement.dataset.theme).toBe("dark");
     } finally {
       vi.useRealTimers();

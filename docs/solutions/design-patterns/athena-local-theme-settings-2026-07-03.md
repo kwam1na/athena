@@ -22,7 +22,7 @@ tags:
   - sun-cycle
   - geolocation
   - lifecycle-scheduling
-delivery_diff_fingerprint: 9dbc928fa5f15f0877945a390f71cf1aa089db78f530048135ed97f2a17d5d21
+delivery_diff_fingerprint: 0c1d2eca0e33bfce59497103597c3a584844c49fa06ae1766fc3d3c86a8a8896
 ---
 
 # Athena Local Theme Settings Should Share One Runtime Contract
