@@ -219,6 +219,7 @@ const PUBLIC_WRITE_MODULE_CAPABILITIES = {
   "customerMessaging/public": "customer.messaging.send",
   devPatchBadTransaction: "administration.maintenance",
   "harnessWaiver/passkeys": "administration.maintenance",
+  "harnessWaiver/registrationAuthorization": "administration.maintenance",
   "intelligence/capabilities/actions": "intelligence.generate",
   "intelligence/runs": "intelligence.manage",
   "inventory/auth": "identity.authenticate",

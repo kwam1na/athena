@@ -32,6 +32,13 @@ export const harnessWaiverRegistrationSchema = v.object({
   consumedAt: v.optional(v.number()),
 });
 
+export const harnessWaiverRegistrationAuthorizationSchema = v.object({
+  tokenHash: v.string(),
+  reviewerEmail: v.string(),
+  expiresAt: v.number(),
+  consumedAt: v.optional(v.number()),
+});
+
 export const harnessWaiverApprovalSchema = v.object({
   publicTokenHash: v.string(),
   challenge: v.string(),

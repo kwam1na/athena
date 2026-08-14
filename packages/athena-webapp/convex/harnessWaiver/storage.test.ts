@@ -30,6 +30,42 @@ const candidate: WaiverCandidate = {
 };
 
 describe("harness waiver storage transitions", () => {
+  it("consumes a live registration authorization exactly once", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) => ctx.db.insert("harnessWaiverRegistrationAuthorization", {
+      tokenHash: "a".repeat(64),
+      reviewerEmail: "reviewer@example.com",
+      expiresAt: 2_000,
+    }));
+
+    await expect(t.mutation(
+      internal.harnessWaiver.storage.consumeRegistrationAuthorization,
+      { tokenHash: "a".repeat(64), now: 1_000 },
+    )).resolves.toEqual({ reviewerEmail: "reviewer@example.com" });
+    await expect(t.mutation(
+      internal.harnessWaiver.storage.consumeRegistrationAuthorization,
+      { tokenHash: "a".repeat(64), now: 1_001 },
+    )).rejects.toThrow("unavailable");
+  });
+
+  it("rejects an expired registration authorization without consuming it", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) => ctx.db.insert("harnessWaiverRegistrationAuthorization", {
+      tokenHash: "b".repeat(64),
+      reviewerEmail: "reviewer@example.com",
+      expiresAt: 2_000,
+    }));
+
+    await expect(t.mutation(
+      internal.harnessWaiver.storage.consumeRegistrationAuthorization,
+      { tokenHash: "b".repeat(64), now: 2_000 },
+    )).rejects.toThrow("unavailable");
+    const [authorization] = await t.run((ctx) =>
+      ctx.db.query("harnessWaiverRegistrationAuthorization").take(1),
+    );
+    expect(authorization.consumedAt).toBeUndefined();
+  });
+
   it("allows exactly one credential to complete one live registration challenge", async () => {
     const t = convexTest(schema, modules);
     const challenge = "registration-challenge";

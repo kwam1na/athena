@@ -13,6 +13,27 @@ export const getPasskey = internalQuery({
   handler: async (ctx) => await ctx.db.query("harnessWaiverPasskey").first(),
 });
 
+export const consumeRegistrationAuthorization = internalMutation({
+  args: { tokenHash: v.string(), now: v.number() },
+  handler: async (ctx, args) => {
+    const authorization = await ctx.db
+      .query("harnessWaiverRegistrationAuthorization")
+      .withIndex("by_tokenHash", (q) => q.eq("tokenHash", args.tokenHash))
+      .unique();
+    if (
+      !authorization ||
+      authorization.consumedAt !== undefined ||
+      authorization.expiresAt <= args.now
+    ) {
+      throw new Error("Registration authorization is unavailable.");
+    }
+    await ctx.db.patch("harnessWaiverRegistrationAuthorization", authorization._id, {
+      consumedAt: args.now,
+    });
+    return { reviewerEmail: authorization.reviewerEmail };
+  },
+});
+
 export const saveRegistrationChallenge = internalMutation({
   args: {
     challenge: v.string(),

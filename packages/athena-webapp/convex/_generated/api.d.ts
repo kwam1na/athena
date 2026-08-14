@@ -76,6 +76,7 @@ import type * as env from "../env.js";
 import type * as harnessWaiver_config from "../harnessWaiver/config.js";
 import type * as harnessWaiver_passkeyPolicy from "../harnessWaiver/passkeyPolicy.js";
 import type * as harnessWaiver_passkeys from "../harnessWaiver/passkeys.js";
+import type * as harnessWaiver_registrationAuthorization from "../harnessWaiver/registrationAuthorization.js";
 import type * as harnessWaiver_storage from "../harnessWaiver/storage.js";
 import type * as http from "../http.js";
 import type * as http_domains_core_routes_analytics from "../http/domains/core/routes/analytics.js";
@@ -695,6 +696,7 @@ declare const fullApi: ApiFromModules<{
   "harnessWaiver/config": typeof harnessWaiver_config;
   "harnessWaiver/passkeyPolicy": typeof harnessWaiver_passkeyPolicy;
   "harnessWaiver/passkeys": typeof harnessWaiver_passkeys;
+  "harnessWaiver/registrationAuthorization": typeof harnessWaiver_registrationAuthorization;
   "harnessWaiver/storage": typeof harnessWaiver_storage;
   http: typeof http;
   "http/domains/core/routes/analytics": typeof http_domains_core_routes_analytics;
