@@ -249,12 +249,18 @@ describe("Athena theme runtime", () => {
         longitude: 18.96,
       })?.resolvedTheme,
     ).toBe("light");
-    expect(
-      getSunCycleThemeState(new Date("2026-12-21T12:00:00.000Z"), {
+    const polarNight = getSunCycleThemeState(
+      new Date("2026-12-21T12:00:00.000Z"),
+      {
         latitude: 69.65,
         longitude: 18.96,
-      })?.resolvedTheme,
-    ).toBe("dark");
+      },
+    );
+    expect(polarNight?.resolvedTheme).toBe("dark");
+    expect(polarNight?.nextResolvedTheme).toBe("light");
+    expect(polarNight?.nextTransitionAt).toBeGreaterThan(
+      new Date("2027-01-01T00:00:00.000Z").getTime(),
+    );
   });
 
   it("recalculates the appearance when focus resumes after a solar transition", () => {

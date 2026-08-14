@@ -265,7 +265,9 @@ export function getSunCycleThemeState(
     (transition) => transition.at <= nowTimestamp,
   );
   const nextTransition = transitions.find(
-    (transition) => transition.at > nowTimestamp,
+    (transition) =>
+      transition.at > nowTimestamp &&
+      transition.event !== previousTransition?.event,
   );
 
   if (!previousTransition || !nextTransition) {
