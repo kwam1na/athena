@@ -1,6 +1,7 @@
 ---
 title: Athena Local Theme Settings Should Share One Runtime Contract
 date: 2026-07-03
+last_updated: 2026-08-13
 category: design-patterns
 module: athena-webapp
 problem_type: design_pattern
@@ -11,12 +12,17 @@ applies_when:
   - "Adding local browser preferences that affect the whole Athena shell"
   - "Adding theme variants without deleting older palettes that may be restored later"
   - "Exposing a header shortcut and a settings page for the same preference"
+  - "Adding an adaptive appearance mode driven by local device context"
 tags:
   - athena-webapp
   - theme-runtime
   - app-settings
   - dark-mode
   - design-system
+  - sun-cycle
+  - geolocation
+  - lifecycle-scheduling
+delivery_diff_fingerprint: 59125f92f9315fc7fa015f5f01cc791ac12bf060c220138074bd2081307fd88e
 ---
 
 # Athena Local Theme Settings Should Share One Runtime Contract
@@ -31,8 +37,8 @@ as separate UI states would let the header, settings page, and root CSS drift.
 
 Keep theme state in `src/lib/theme.ts` and make every surface use that runtime:
 
-- Persist the selected mode under one storage key with `system`, `light`, and
-  `dark` as the only modes.
+- Persist the selected mode under one storage key with `system`, `light`,
+  `dark`, and `sun-cycle` as the supported modes.
 - Persist dark-palette variants separately so a palette can change without
   changing whether the app follows system, light, or dark.
 - Apply `data-theme`, `data-theme-mode`, and dark-only `data-theme-variant`
@@ -48,7 +54,8 @@ Keep theme state in `src/lib/theme.ts` and make every surface use that runtime:
 - Keep the old dark palette in CSS under a named variant, even when the new
   palette becomes the default.
 
-The header shortcut should cycle through all three modes and be device-aware
+The header shortcut intentionally stays a quick three-mode control while App
+settings exposes the permission-bearing Sun cycle choice. It should be device-aware
 when the current mode is `system`: use a monitor icon on desktop and a phone
 icon on mobile, while explicit `light` and `dark` modes keep their sun and moon
 icons.
