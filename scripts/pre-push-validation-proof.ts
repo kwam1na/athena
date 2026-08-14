@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { captureStableHarnessCandidate } from "./harness-candidate";
 import { assertDeliveryRunTelemetryCheck } from "./delivery-run-telemetry";
+import type { DeliveryRunTelemetryCheckOptions } from "./delivery-run-telemetry";
 import { isPostGateValidationNeutralPath } from "./harness-review-identity";
 
 export const PRE_PUSH_VALIDATION_PROOF_SCHEMA_VERSION = 2;
@@ -73,6 +74,18 @@ type ProofRuntimeOptions = {
 };
 
 type ProofSnapshotMode = "evaluate" | "record";
+
+type DeliveryTelemetryCheck = (
+  rootDir: string,
+  options?: DeliveryRunTelemetryCheckOptions,
+) => void;
+
+export function assertPostGateTelemetryChanges(
+  rootDir: string,
+  check: DeliveryTelemetryCheck = assertDeliveryRunTelemetryCheck,
+) {
+  check(rootDir, { ciMode: true });
+}
 
 function normalizeRepoPath(repoPath: string) {
   return repoPath.replaceAll("\\", "/").replace(/^\.\//, "");
@@ -519,8 +532,7 @@ export async function evaluatePrePushValidationProof(
     }
     try {
       await (options.validatePostGateNeutralChanges ??
-        ((nextRootDir: string) =>
-          assertDeliveryRunTelemetryCheck(nextRootDir)))(rootDir);
+        assertPostGateTelemetryChanges)(rootDir);
     } catch (error) {
       return {
         reusable: false,

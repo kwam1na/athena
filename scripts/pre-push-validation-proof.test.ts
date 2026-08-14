@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  assertPostGateTelemetryChanges,
   assertPrAthenaProofReady,
   evaluatePrePushValidationProof,
   recordPrePushValidationProof,
@@ -160,6 +161,19 @@ afterEach(async () => {
 });
 
 describe("pre-push validation proof", () => {
+  it("strictly validates post-gate telemetry even without a matching local ledger", () => {
+    let observedRoot = "";
+    let observedOptions: { ciMode?: boolean } | undefined;
+
+    assertPostGateTelemetryChanges("/repo", (rootDir, options) => {
+      observedRoot = rootDir;
+      observedOptions = options;
+    });
+
+    expect(observedRoot).toBe("/repo");
+    expect(observedOptions).toEqual({ ciMode: true });
+  });
+
   it("prepares a clean tree for pr:athena proof recording", async () => {
     const rootDir = await createFixtureRoot();
     const logs: string[] = [];

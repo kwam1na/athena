@@ -139379,7 +139379,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_collectunstagedfiles",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L218",
+      "source_location": "L231",
       "target": "pre_push_validation_proof_assertprathenaproofready",
       "weight": 1
     },
@@ -139391,7 +139391,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_collectuntrackedfiles",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L219",
+      "source_location": "L232",
       "target": "pre_push_validation_proof_assertprathenaproofready",
       "weight": 1
     },
@@ -139403,7 +139403,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_formatpathlist",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L229",
+      "source_location": "L242",
       "target": "pre_push_validation_proof_assertprathenaproofready",
       "weight": 1
     },
@@ -139415,7 +139415,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_parseporcelainpaths",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L250",
+      "source_location": "L263",
       "target": "pre_push_validation_proof_assertprathenaproofready",
       "weight": 1
     },
@@ -139427,7 +139427,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_runcommand",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L213",
+      "source_location": "L226",
       "target": "pre_push_validation_proof_assertprathenaproofready",
       "weight": 1
     },
@@ -139439,7 +139439,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_normalizerepopath",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L284",
+      "source_location": "L297",
       "target": "pre_push_validation_proof_collectfilesunder",
       "weight": 1
     },
@@ -139451,7 +139451,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_hashvalidationwiring",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L384",
+      "source_location": "L397",
       "target": "pre_push_validation_proof_collectproofsnapshot",
       "weight": 1
     },
@@ -139463,7 +139463,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_readprathenascript",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L383",
+      "source_location": "L396",
       "target": "pre_push_validation_proof_collectproofsnapshot",
       "weight": 1
     },
@@ -139475,7 +139475,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_runcommand",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L377",
+      "source_location": "L390",
       "target": "pre_push_validation_proof_collectproofsnapshot",
       "weight": 1
     },
@@ -139487,7 +139487,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_runcommand",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L195",
+      "source_location": "L208",
       "target": "pre_push_validation_proof_collectuntrackedfiles",
       "weight": 1
     },
@@ -139499,7 +139499,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_collectfilesunder",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L319",
+      "source_location": "L332",
       "target": "pre_push_validation_proof_collectvalidationfingerprintpaths",
       "weight": 1
     },
@@ -139511,7 +139511,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_sortuniquepaths",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L303",
+      "source_location": "L316",
       "target": "pre_push_validation_proof_collectvalidationfingerprintpaths",
       "weight": 1
     },
@@ -139523,7 +139523,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_classifysnapshoterror",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L461",
+      "source_location": "L474",
       "target": "pre_push_validation_proof_evaluateprepushvalidationproof",
       "weight": 1
     },
@@ -139535,7 +139535,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_collectproofsnapshot",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L458",
+      "source_location": "L471",
       "target": "pre_push_validation_proof_evaluateprepushvalidationproof",
       "weight": 1
     },
@@ -139547,7 +139547,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_collecttreechangedpaths",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L489",
+      "source_location": "L502",
       "target": "pre_push_validation_proof_evaluateprepushvalidationproof",
       "weight": 1
     },
@@ -139559,7 +139559,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_validateproofshape",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L477",
+      "source_location": "L490",
       "target": "pre_push_validation_proof_evaluateprepushvalidationproof",
       "weight": 1
     },
@@ -139571,7 +139571,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_collectvalidationfingerprintpaths",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L335",
+      "source_location": "L348",
       "target": "pre_push_validation_proof_hashvalidationwiring",
       "weight": 1
     },
@@ -139583,7 +139583,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_collectproofsnapshot",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L591",
+      "source_location": "L603",
       "target": "pre_push_validation_proof_recordprepushvalidationproof",
       "weight": 1
     },
@@ -139595,7 +139595,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_runcommand",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L608",
+      "source_location": "L620",
       "target": "pre_push_validation_proof_recordprepushvalidationproof",
       "weight": 1
     },
@@ -139607,7 +139607,7 @@
       "relation": "calls",
       "source": "pre_push_validation_proof_test_write",
       "source_file": "scripts/pre-push-validation-proof.test.ts",
-      "source_location": "L24",
+      "source_location": "L25",
       "target": "pre_push_validation_proof_test_createfixtureroot",
       "weight": 1
     },
@@ -161183,7 +161183,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_test_ts",
       "source_file": "scripts/pre-push-validation-proof.test.ts",
-      "source_location": "L20",
+      "source_location": "L21",
       "target": "pre_push_validation_proof_test_createfixtureroot",
       "weight": 1
     },
@@ -161195,7 +161195,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_test_ts",
       "source_file": "scripts/pre-push-validation-proof.test.ts",
-      "source_location": "L63",
+      "source_location": "L64",
       "target": "pre_push_validation_proof_test_createspawn",
       "weight": 1
     },
@@ -161207,7 +161207,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_test_ts",
       "source_file": "scripts/pre-push-validation-proof.test.ts",
-      "source_location": "L582",
+      "source_location": "L596",
       "target": "pre_push_validation_proof_test_log",
       "weight": 1
     },
@@ -161219,7 +161219,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_test_ts",
       "source_file": "scripts/pre-push-validation-proof.test.ts",
-      "source_location": "L582",
+      "source_location": "L596",
       "target": "pre_push_validation_proof_test_warn",
       "weight": 1
     },
@@ -161231,8 +161231,20 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_test_ts",
       "source_file": "scripts/pre-push-validation-proof.test.ts",
-      "source_location": "L14",
+      "source_location": "L15",
       "target": "pre_push_validation_proof_test_write",
+      "weight": 1
+    },
+    {
+      "_src": "scripts_pre_push_validation_proof_ts",
+      "_tgt": "pre_push_validation_proof_assertpostgatetelemetrychanges",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "relation": "contains",
+      "source": "scripts_pre_push_validation_proof_ts",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L83",
+      "target": "pre_push_validation_proof_assertpostgatetelemetrychanges",
       "weight": 1
     },
     {
@@ -161243,7 +161255,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L207",
+      "source_location": "L220",
       "target": "pre_push_validation_proof_assertprathenaproofready",
       "weight": 1
     },
@@ -161255,7 +161267,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L439",
+      "source_location": "L452",
       "target": "pre_push_validation_proof_classifysnapshoterror",
       "weight": 1
     },
@@ -161267,7 +161279,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L263",
+      "source_location": "L276",
       "target": "pre_push_validation_proof_collectfilesunder",
       "weight": 1
     },
@@ -161279,7 +161291,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L369",
+      "source_location": "L382",
       "target": "pre_push_validation_proof_collectproofsnapshot",
       "weight": 1
     },
@@ -161291,7 +161303,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L125",
+      "source_location": "L138",
       "target": "pre_push_validation_proof_collecttreechangedpaths",
       "weight": 1
     },
@@ -161303,7 +161315,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L164",
+      "source_location": "L177",
       "target": "pre_push_validation_proof_collectunstagedfiles",
       "weight": 1
     },
@@ -161315,7 +161327,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L191",
+      "source_location": "L204",
       "target": "pre_push_validation_proof_collectuntrackedfiles",
       "weight": 1
     },
@@ -161327,7 +161339,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L299",
+      "source_location": "L312",
       "target": "pre_push_validation_proof_collectvalidationfingerprintpaths",
       "weight": 1
     },
@@ -161339,7 +161351,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L452",
+      "source_location": "L465",
       "target": "pre_push_validation_proof_evaluateprepushvalidationproof",
       "weight": 1
     },
@@ -161351,7 +161363,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L121",
+      "source_location": "L134",
       "target": "pre_push_validation_proof_formatpathlist",
       "weight": 1
     },
@@ -161363,7 +161375,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L328",
+      "source_location": "L341",
       "target": "pre_push_validation_proof_hashvalidationwiring",
       "weight": 1
     },
@@ -161375,7 +161387,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L77",
+      "source_location": "L90",
       "target": "pre_push_validation_proof_normalizerepopath",
       "weight": 1
     },
@@ -161387,7 +161399,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L112",
+      "source_location": "L125",
       "target": "pre_push_validation_proof_parseporcelainpaths",
       "weight": 1
     },
@@ -161399,7 +161411,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L352",
+      "source_location": "L365",
       "target": "pre_push_validation_proof_readprathenascript",
       "weight": 1
     },
@@ -161411,7 +161423,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L584",
+      "source_location": "L596",
       "target": "pre_push_validation_proof_recordprepushvalidationproof",
       "weight": 1
     },
@@ -161423,7 +161435,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L87",
+      "source_location": "L100",
       "target": "pre_push_validation_proof_runcommand",
       "weight": 1
     },
@@ -161435,7 +161447,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L81",
+      "source_location": "L94",
       "target": "pre_push_validation_proof_sortuniquepaths",
       "weight": 1
     },
@@ -161447,7 +161459,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_validation_proof_ts",
       "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L419",
+      "source_location": "L432",
       "target": "pre_push_validation_proof_validateproofshape",
       "weight": 1
     },
@@ -186123,181 +186135,181 @@
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_commandforport",
-      "label": "commandForPort()",
-      "norm_label": "commandforport()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L188"
+      "id": "pre_push_validation_proof_assertpostgatetelemetrychanges",
+      "label": "assertPostGateTelemetryChanges()",
+      "norm_label": "assertpostgatetelemetrychanges()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L83"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_defaultcommand",
-      "label": "defaultCommand()",
-      "norm_label": "defaultcommand()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L48"
+      "id": "pre_push_validation_proof_assertprathenaproofready",
+      "label": "assertPrAthenaProofReady()",
+      "norm_label": "assertprathenaproofready()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L220"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_findport",
-      "label": "findPort()",
-      "norm_label": "findport()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L166"
+      "id": "pre_push_validation_proof_classifysnapshoterror",
+      "label": "classifySnapshotError()",
+      "norm_label": "classifysnapshoterror()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L452"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_isprocessalive",
-      "label": "isProcessAlive()",
-      "norm_label": "isprocessalive()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L92"
+      "id": "pre_push_validation_proof_collectfilesunder",
+      "label": "collectFilesUnder()",
+      "norm_label": "collectfilesunder()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L276"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_isreachable",
-      "label": "isReachable()",
-      "norm_label": "isreachable()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L101"
+      "id": "pre_push_validation_proof_collectproofsnapshot",
+      "label": "collectProofSnapshot()",
+      "norm_label": "collectproofsnapshot()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L382"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_listpreviews",
-      "label": "listPreviews()",
-      "norm_label": "listpreviews()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L267"
+      "id": "pre_push_validation_proof_collecttreechangedpaths",
+      "label": "collectTreeChangedPaths()",
+      "norm_label": "collecttreechangedpaths()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L138"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_logpathfor",
-      "label": "logPathFor()",
-      "norm_label": "logpathfor()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L193"
+      "id": "pre_push_validation_proof_collectunstagedfiles",
+      "label": "collectUnstagedFiles()",
+      "norm_label": "collectunstagedfiles()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L177"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_optionsfromenv",
-      "label": "optionsFromEnv()",
-      "norm_label": "optionsfromenv()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L301"
+      "id": "pre_push_validation_proof_collectuntrackedfiles",
+      "label": "collectUntrackedFiles()",
+      "norm_label": "collectuntrackedfiles()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L204"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_prunestate",
-      "label": "pruneState()",
-      "norm_label": "prunestate()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L128"
+      "id": "pre_push_validation_proof_collectvalidationfingerprintpaths",
+      "label": "collectValidationFingerprintPaths()",
+      "norm_label": "collectvalidationfingerprintpaths()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L312"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_readstate",
-      "label": "readState()",
-      "norm_label": "readstate()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L79"
+      "id": "pre_push_validation_proof_evaluateprepushvalidationproof",
+      "label": "evaluatePrePushValidationProof()",
+      "norm_label": "evaluateprepushvalidationproof()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L465"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_resolvestatedir",
-      "label": "resolveStateDir()",
-      "norm_label": "resolvestatedir()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L67"
+      "id": "pre_push_validation_proof_formatpathlist",
+      "label": "formatPathList()",
+      "norm_label": "formatpathlist()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L134"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_resolveworktreeroot",
-      "label": "resolveWorktreeRoot()",
-      "norm_label": "resolveworktreeroot()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L63"
+      "id": "pre_push_validation_proof_hashvalidationwiring",
+      "label": "hashValidationWiring()",
+      "norm_label": "hashvalidationwiring()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L341"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_runpreviewcli",
-      "label": "runPreviewCli()",
-      "norm_label": "runpreviewcli()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L325"
+      "id": "pre_push_validation_proof_normalizerepopath",
+      "label": "normalizeRepoPath()",
+      "norm_label": "normalizerepopath()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L90"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_startpreview",
-      "label": "startPreview()",
-      "norm_label": "startpreview()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L198"
+      "id": "pre_push_validation_proof_parseporcelainpaths",
+      "label": "parsePorcelainPaths()",
+      "norm_label": "parseporcelainpaths()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L125"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_statepath",
-      "label": "statePath()",
-      "norm_label": "statepath()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L75"
+      "id": "pre_push_validation_proof_readprathenascript",
+      "label": "readPrAthenaScript()",
+      "norm_label": "readprathenascript()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L365"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_stoppreview",
-      "label": "stopPreview()",
-      "norm_label": "stoppreview()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L274"
+      "id": "pre_push_validation_proof_recordprepushvalidationproof",
+      "label": "recordPrePushValidationProof()",
+      "norm_label": "recordprepushvalidationproof()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L596"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_waitforreachable",
-      "label": "waitForReachable()",
-      "norm_label": "waitforreachable()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L110"
+      "id": "pre_push_validation_proof_runcommand",
+      "label": "runCommand()",
+      "norm_label": "runcommand()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L100"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_withlock",
-      "label": "withLock()",
-      "norm_label": "withlock()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L144"
+      "id": "pre_push_validation_proof_sortuniquepaths",
+      "label": "sortUniquePaths()",
+      "norm_label": "sortuniquepaths()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L94"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "preview_worktree_writestate",
-      "label": "writeState()",
-      "norm_label": "writestate()",
-      "source_file": "scripts/preview-worktree.ts",
-      "source_location": "L87"
+      "id": "pre_push_validation_proof_validateproofshape",
+      "label": "validateProofShape()",
+      "norm_label": "validateproofshape()",
+      "source_file": "scripts/pre-push-validation-proof.ts",
+      "source_location": "L432"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "scripts_preview_worktree_ts",
-      "label": "preview-worktree.ts",
-      "norm_label": "preview-worktree.ts",
-      "source_file": "scripts/preview-worktree.ts",
+      "id": "scripts_pre_push_validation_proof_ts",
+      "label": "pre-push-validation-proof.ts",
+      "norm_label": "pre-push-validation-proof.ts",
+      "source_file": "scripts/pre-push-validation-proof.ts",
       "source_location": "L1"
     },
     {
@@ -186573,173 +186585,182 @@
     {
       "community": 107,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_lib_returnvalidatorcontract_ts",
-      "label": "returnValidatorContract.ts",
-      "norm_label": "returnvalidatorcontract.ts",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "id": "preview_worktree_commandforport",
+      "label": "commandForPort()",
+      "norm_label": "commandforport()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L188"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_defaultcommand",
+      "label": "defaultCommand()",
+      "norm_label": "defaultcommand()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L48"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_findport",
+      "label": "findPort()",
+      "norm_label": "findport()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L166"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_isprocessalive",
+      "label": "isProcessAlive()",
+      "norm_label": "isprocessalive()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L92"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_isreachable",
+      "label": "isReachable()",
+      "norm_label": "isreachable()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L101"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_listpreviews",
+      "label": "listPreviews()",
+      "norm_label": "listpreviews()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L267"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_logpathfor",
+      "label": "logPathFor()",
+      "norm_label": "logpathfor()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L193"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_optionsfromenv",
+      "label": "optionsFromEnv()",
+      "norm_label": "optionsfromenv()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L301"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_prunestate",
+      "label": "pruneState()",
+      "norm_label": "prunestate()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L128"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_readstate",
+      "label": "readState()",
+      "norm_label": "readstate()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L79"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_resolvestatedir",
+      "label": "resolveStateDir()",
+      "norm_label": "resolvestatedir()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L67"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_resolveworktreeroot",
+      "label": "resolveWorktreeRoot()",
+      "norm_label": "resolveworktreeroot()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L63"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_runpreviewcli",
+      "label": "runPreviewCli()",
+      "norm_label": "runpreviewcli()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L325"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_startpreview",
+      "label": "startPreview()",
+      "norm_label": "startpreview()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L198"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_statepath",
+      "label": "statePath()",
+      "norm_label": "statepath()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L75"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_stoppreview",
+      "label": "stopPreview()",
+      "norm_label": "stoppreview()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L274"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_waitforreachable",
+      "label": "waitForReachable()",
+      "norm_label": "waitforreachable()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L110"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_withlock",
+      "label": "withLock()",
+      "norm_label": "withlock()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L144"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "preview_worktree_writestate",
+      "label": "writeState()",
+      "norm_label": "writestate()",
+      "source_file": "scripts/preview-worktree.ts",
+      "source_location": "L87"
+    },
+    {
+      "community": 107,
+      "file_type": "code",
+      "id": "scripts_preview_worktree_ts",
+      "label": "preview-worktree.ts",
+      "norm_label": "preview-worktree.ts",
+      "source_file": "scripts/preview-worktree.ts",
       "source_location": "L1"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_assertconformstoexportedreturns",
-      "label": "assertConformsToExportedReturns()",
-      "norm_label": "assertconformstoexportedreturns()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L59"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_collectreturnvalidatorissues",
-      "label": "collectReturnValidatorIssues()",
-      "norm_label": "collectreturnvalidatorissues()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L73"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_decodeserializedfloat64",
-      "label": "decodeSerializedFloat64()",
-      "norm_label": "decodeserializedfloat64()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L334"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_decodeserializedint64",
-      "label": "decodeSerializedInt64()",
-      "norm_label": "decodeserializedint64()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L324"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_decodeserializedliteralvalue",
-      "label": "decodeSerializedLiteralValue()",
-      "norm_label": "decodeserializedliteralvalue()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L306"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_describevalue",
-      "label": "describeValue()",
-      "norm_label": "describevalue()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L354"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_formatreturnvalidatorissues",
-      "label": "formatReturnValidatorIssues()",
-      "norm_label": "formatreturnvalidatorissues()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L367"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_isconvexvalue",
-      "label": "isConvexValue()",
-      "norm_label": "isconvexvalue()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L268"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_isint64",
-      "label": "isInt64()",
-      "norm_label": "isint64()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L302"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_isplainobject",
-      "label": "isPlainObject()",
-      "norm_label": "isplainobject()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L258"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_issue",
-      "label": "issue()",
-      "norm_label": "issue()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L344"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_joinpath",
-      "label": "joinPath()",
-      "norm_label": "joinpath()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L348"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_parseexportedreturnvalidator",
-      "label": "parseExportedReturnValidator()",
-      "norm_label": "parseexportedreturnvalidator()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L80"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_validatearray",
-      "label": "validateArray()",
-      "norm_label": "validatearray()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L163"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_validateobject",
-      "label": "validateObject()",
-      "norm_label": "validateobject()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L177"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_validaterecord",
-      "label": "validateRecord()",
-      "norm_label": "validaterecord()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L212"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_validateunion",
-      "label": "validateUnion()",
-      "norm_label": "validateunion()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L236"
-    },
-    {
-      "community": 107,
-      "file_type": "code",
-      "id": "returnvalidatorcontract_validatevalue",
-      "label": "validateValue()",
-      "norm_label": "validatevalue()",
-      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
-      "source_location": "L84"
     },
     {
       "community": 1070,
@@ -187014,173 +187035,173 @@
     {
       "community": 108,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_reports_verificationsweep_ts",
-      "label": "verificationSweep.ts",
-      "norm_label": "verificationsweep.ts",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "id": "packages_athena_webapp_convex_lib_returnvalidatorcontract_ts",
+      "label": "returnValidatorContract.ts",
+      "norm_label": "returnvalidatorcontract.ts",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
       "source_location": "L1"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_cycleframeof",
-      "label": "cycleFrameOf()",
-      "norm_label": "cycleframeof()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L1023"
+      "id": "returnvalidatorcontract_assertconformstoexportedreturns",
+      "label": "assertConformsToExportedReturns()",
+      "norm_label": "assertconformstoexportedreturns()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L59"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_haspendingdirtymark",
-      "label": "hasPendingDirtyMark()",
-      "norm_label": "haspendingdirtymark()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L609"
+      "id": "returnvalidatorcontract_collectreturnvalidatorissues",
+      "label": "collectReturnValidatorIssues()",
+      "norm_label": "collectreturnvalidatorissues()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L73"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_haspendingweeklydirtymarks",
-      "label": "hasPendingWeeklyDirtyMarks()",
-      "norm_label": "haspendingweeklydirtymarks()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L995"
+      "id": "returnvalidatorcontract_decodeserializedfloat64",
+      "label": "decodeSerializedFloat64()",
+      "norm_label": "decodeserializedfloat64()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L334"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_isreverifytick",
-      "label": "isReverifyTick()",
-      "norm_label": "isreverifytick()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L397"
+      "id": "returnvalidatorcontract_decodeserializedint64",
+      "label": "decodeSerializedInt64()",
+      "norm_label": "decodeserializedint64()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L324"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_isverificationalertemailenabled",
-      "label": "isVerificationAlertEmailEnabled()",
-      "norm_label": "isverificationalertemailenabled()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L359"
+      "id": "returnvalidatorcontract_decodeserializedliteralvalue",
+      "label": "decodeSerializedLiteralValue()",
+      "norm_label": "decodeserializedliteralvalue()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L306"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_loadrunrow",
-      "label": "loadRunRow()",
-      "norm_label": "loadrunrow()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L592"
+      "id": "returnvalidatorcontract_describevalue",
+      "label": "describeValue()",
+      "norm_label": "describevalue()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L354"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_logswallowed",
-      "label": "logSwallowed()",
-      "norm_label": "logswallowed()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L1543"
+      "id": "returnvalidatorcontract_formatreturnvalidatorissues",
+      "label": "formatReturnValidatorIssues()",
+      "norm_label": "formatreturnvalidatorissues()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L367"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_maybeemitverificationalert",
-      "label": "maybeEmitVerificationAlert()",
-      "norm_label": "maybeemitverificationalert()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L1201"
+      "id": "returnvalidatorcontract_isconvexvalue",
+      "label": "isConvexValue()",
+      "norm_label": "isconvexvalue()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L268"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_normalizemissingdayresult",
-      "label": "normalizeMissingDayResult()",
-      "norm_label": "normalizemissingdayresult()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L919"
+      "id": "returnvalidatorcontract_isint64",
+      "label": "isInt64()",
+      "norm_label": "isint64()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L302"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_recorderroroutcome",
-      "label": "recordErrorOutcome()",
-      "norm_label": "recorderroroutcome()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L1555"
+      "id": "returnvalidatorcontract_isplainobject",
+      "label": "isPlainObject()",
+      "norm_label": "isplainobject()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L258"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_runverificationsweepwithctx",
-      "label": "runVerificationSweepWithCtx()",
-      "norm_label": "runverificationsweepwithctx()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L1578"
+      "id": "returnvalidatorcontract_issue",
+      "label": "issue()",
+      "norm_label": "issue()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L344"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_shouldescalatewedge",
-      "label": "shouldEscalateWedge()",
-      "norm_label": "shouldescalatewedge()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L262"
+      "id": "returnvalidatorcontract_joinpath",
+      "label": "joinPath()",
+      "norm_label": "joinpath()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L348"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_streakstatefromrow",
-      "label": "streakStateFromRow()",
-      "norm_label": "streakstatefromrow()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L1236"
+      "id": "returnvalidatorcontract_parseexportedreturnvalidator",
+      "label": "parseExportedReturnValidator()",
+      "norm_label": "parseexportedreturnvalidator()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L80"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_summarizeclassification",
-      "label": "summarizeClassification()",
-      "norm_label": "summarizeclassification()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L464"
+      "id": "returnvalidatorcontract_validatearray",
+      "label": "validateArray()",
+      "norm_label": "validatearray()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L163"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_tosummary",
-      "label": "toSummary()",
-      "norm_label": "tosummary()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L448"
+      "id": "returnvalidatorcontract_validateobject",
+      "label": "validateObject()",
+      "norm_label": "validateobject()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L177"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_verificationtickindex",
-      "label": "verificationTickIndex()",
-      "norm_label": "verificationtickindex()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L115"
+      "id": "returnvalidatorcontract_validaterecord",
+      "label": "validateRecord()",
+      "norm_label": "validaterecord()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L212"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_verificationtickintervalms",
-      "label": "verificationTickIntervalMs()",
-      "norm_label": "verificationtickintervalms()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L99"
+      "id": "returnvalidatorcontract_validateunion",
+      "label": "validateUnion()",
+      "norm_label": "validateunion()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L236"
     },
     {
       "community": 108,
       "file_type": "code",
-      "id": "verificationsweep_weekmarkblockscycle",
-      "label": "weekMarkBlocksCycle()",
-      "norm_label": "weekmarkblockscycle()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
-      "source_location": "L976"
+      "id": "returnvalidatorcontract_validatevalue",
+      "label": "validateValue()",
+      "norm_label": "validatevalue()",
+      "source_file": "packages/athena-webapp/convex/lib/returnValidatorContract.ts",
+      "source_location": "L84"
     },
     {
       "community": 1080,
@@ -187455,173 +187476,173 @@
     {
       "community": 109,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_stockops_replenishment_ts",
-      "label": "replenishment.ts",
-      "norm_label": "replenishment.ts",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "id": "packages_athena_webapp_convex_reports_verificationsweep_ts",
+      "label": "verificationSweep.ts",
+      "norm_label": "verificationsweep.ts",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
       "source_location": "L1"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_buildguidance",
-      "label": "buildGuidance()",
-      "norm_label": "buildguidance()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L101"
+      "id": "verificationsweep_cycleframeof",
+      "label": "cycleFrameOf()",
+      "norm_label": "cycleframeof()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L1023"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_buildskucontinuitycontextbyid",
-      "label": "buildSkuContinuityContextById()",
-      "norm_label": "buildskucontinuitycontextbyid()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L292"
+      "id": "verificationsweep_haspendingdirtymark",
+      "label": "hasPendingDirtyMark()",
+      "norm_label": "haspendingdirtymark()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L609"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_derivecontinuitystatus",
-      "label": "deriveContinuityStatus()",
-      "norm_label": "derivecontinuitystatus()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L416"
+      "id": "verificationsweep_haspendingweeklydirtymarks",
+      "label": "hasPendingWeeklyDirtyMarks()",
+      "norm_label": "haspendingweeklydirtymarks()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L995"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_deriverecommendationstatus",
-      "label": "deriveRecommendationStatus()",
-      "norm_label": "deriverecommendationstatus()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L405"
+      "id": "verificationsweep_isreverifytick",
+      "label": "isReverifyTick()",
+      "norm_label": "isreverifytick()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L397"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_getcontinuitystatusrank",
-      "label": "getContinuityStatusRank()",
-      "norm_label": "getcontinuitystatusrank()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L76"
+      "id": "verificationsweep_isverificationalertemailenabled",
+      "label": "isVerificationAlertEmailEnabled()",
+      "norm_label": "isverificationalertemailenabled()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L359"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_getplannedactionat",
-      "label": "getPlannedActionAt()",
-      "norm_label": "getplannedactionat()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L224"
+      "id": "verificationsweep_loadrunrow",
+      "label": "loadRunRow()",
+      "norm_label": "loadrunrow()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L592"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_getstartofcurrentday",
-      "label": "getStartOfCurrentDay()",
-      "norm_label": "getstartofcurrentday()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L236"
+      "id": "verificationsweep_logswallowed",
+      "label": "logSwallowed()",
+      "norm_label": "logswallowed()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L1543"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_haslateinbound",
-      "label": "hasLateInbound()",
-      "norm_label": "haslateinbound()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L254"
+      "id": "verificationsweep_maybeemitverificationalert",
+      "label": "maybeEmitVerificationAlert()",
+      "norm_label": "maybeemitverificationalert()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L1201"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_hasrelatedpurchaseordercontext",
-      "label": "hasRelatedPurchaseOrderContext()",
-      "norm_label": "hasrelatedpurchaseordercontext()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L396"
+      "id": "verificationsweep_normalizemissingdayresult",
+      "label": "normalizeMissingDayResult()",
+      "norm_label": "normalizemissingdayresult()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L919"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_hasstaleplannedaction",
-      "label": "hasStalePlannedAction()",
-      "norm_label": "hasstaleplannedaction()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L246"
+      "id": "verificationsweep_recorderroroutcome",
+      "label": "recordErrorOutcome()",
+      "norm_label": "recorderroroutcome()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L1555"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_isinboundstatus",
-      "label": "isInboundStatus()",
-      "norm_label": "isinboundstatus()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L218"
+      "id": "verificationsweep_runverificationsweepwithctx",
+      "label": "runVerificationSweepWithCtx()",
+      "norm_label": "runverificationsweepwithctx()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L1578"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_isplannedstatus",
-      "label": "isPlannedStatus()",
-      "norm_label": "isplannedstatus()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L212"
+      "id": "verificationsweep_shouldescalatewedge",
+      "label": "shouldEscalateWedge()",
+      "norm_label": "shouldescalatewedge()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L262"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_listactivestorevendors",
-      "label": "listActiveStoreVendors()",
-      "norm_label": "listactivestorevendors()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L177"
+      "id": "verificationsweep_streakstatefromrow",
+      "label": "streakStateFromRow()",
+      "norm_label": "streakstatefromrow()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L1236"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_listpurchaseorderlineitems",
-      "label": "listPurchaseOrderLineItems()",
-      "norm_label": "listpurchaseorderlineitems()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L195"
+      "id": "verificationsweep_summarizeclassification",
+      "label": "summarizeClassification()",
+      "norm_label": "summarizeclassification()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L464"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_listreplenishmentrecommendationswithctx",
-      "label": "listReplenishmentRecommendationsWithCtx()",
-      "norm_label": "listreplenishmentrecommendationswithctx()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L473"
+      "id": "verificationsweep_tosummary",
+      "label": "toSummary()",
+      "norm_label": "tosummary()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L448"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_liststoreproductskus",
-      "label": "listStoreProductSkus()",
-      "norm_label": "liststoreproductskus()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L145"
+      "id": "verificationsweep_verificationtickindex",
+      "label": "verificationTickIndex()",
+      "norm_label": "verificationtickindex()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L115"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_liststorepurchaseordersbystatus",
-      "label": "listStorePurchaseOrdersByStatus()",
-      "norm_label": "liststorepurchaseordersbystatus()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L157"
+      "id": "verificationsweep_verificationtickintervalms",
+      "label": "verificationTickIntervalMs()",
+      "norm_label": "verificationtickintervalms()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L99"
     },
     {
       "community": 109,
       "file_type": "code",
-      "id": "replenishment_sortpurchaseordercontexts",
-      "label": "sortPurchaseOrderContexts()",
-      "norm_label": "sortpurchaseordercontexts()",
-      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
-      "source_location": "L265"
+      "id": "verificationsweep_weekmarkblockscycle",
+      "label": "weekMarkBlocksCycle()",
+      "norm_label": "weekmarkblockscycle()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationSweep.ts",
+      "source_location": "L976"
     },
     {
       "community": 1090,
@@ -188337,173 +188358,173 @@
     {
       "community": 110,
       "file_type": "code",
-      "id": "pre_push_validation_proof_assertprathenaproofready",
-      "label": "assertPrAthenaProofReady()",
-      "norm_label": "assertprathenaproofready()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L207"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_classifysnapshoterror",
-      "label": "classifySnapshotError()",
-      "norm_label": "classifysnapshoterror()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L439"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_collectfilesunder",
-      "label": "collectFilesUnder()",
-      "norm_label": "collectfilesunder()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L263"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_collectproofsnapshot",
-      "label": "collectProofSnapshot()",
-      "norm_label": "collectproofsnapshot()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L369"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_collecttreechangedpaths",
-      "label": "collectTreeChangedPaths()",
-      "norm_label": "collecttreechangedpaths()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L125"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_collectunstagedfiles",
-      "label": "collectUnstagedFiles()",
-      "norm_label": "collectunstagedfiles()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L164"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_collectuntrackedfiles",
-      "label": "collectUntrackedFiles()",
-      "norm_label": "collectuntrackedfiles()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L191"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_collectvalidationfingerprintpaths",
-      "label": "collectValidationFingerprintPaths()",
-      "norm_label": "collectvalidationfingerprintpaths()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L299"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_evaluateprepushvalidationproof",
-      "label": "evaluatePrePushValidationProof()",
-      "norm_label": "evaluateprepushvalidationproof()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L452"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_formatpathlist",
-      "label": "formatPathList()",
-      "norm_label": "formatpathlist()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L121"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_hashvalidationwiring",
-      "label": "hashValidationWiring()",
-      "norm_label": "hashvalidationwiring()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L328"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_normalizerepopath",
-      "label": "normalizeRepoPath()",
-      "norm_label": "normalizerepopath()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L77"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_parseporcelainpaths",
-      "label": "parsePorcelainPaths()",
-      "norm_label": "parseporcelainpaths()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L112"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_readprathenascript",
-      "label": "readPrAthenaScript()",
-      "norm_label": "readprathenascript()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L352"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_recordprepushvalidationproof",
-      "label": "recordPrePushValidationProof()",
-      "norm_label": "recordprepushvalidationproof()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L584"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_runcommand",
-      "label": "runCommand()",
-      "norm_label": "runcommand()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L87"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_sortuniquepaths",
-      "label": "sortUniquePaths()",
-      "norm_label": "sortuniquepaths()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L81"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "pre_push_validation_proof_validateproofshape",
-      "label": "validateProofShape()",
-      "norm_label": "validateproofshape()",
-      "source_file": "scripts/pre-push-validation-proof.ts",
-      "source_location": "L419"
-    },
-    {
-      "community": 110,
-      "file_type": "code",
-      "id": "scripts_pre_push_validation_proof_ts",
-      "label": "pre-push-validation-proof.ts",
-      "norm_label": "pre-push-validation-proof.ts",
-      "source_file": "scripts/pre-push-validation-proof.ts",
+      "id": "packages_athena_webapp_convex_stockops_replenishment_ts",
+      "label": "replenishment.ts",
+      "norm_label": "replenishment.ts",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
       "source_location": "L1"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_buildguidance",
+      "label": "buildGuidance()",
+      "norm_label": "buildguidance()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L101"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_buildskucontinuitycontextbyid",
+      "label": "buildSkuContinuityContextById()",
+      "norm_label": "buildskucontinuitycontextbyid()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L292"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_derivecontinuitystatus",
+      "label": "deriveContinuityStatus()",
+      "norm_label": "derivecontinuitystatus()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L416"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_deriverecommendationstatus",
+      "label": "deriveRecommendationStatus()",
+      "norm_label": "deriverecommendationstatus()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L405"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_getcontinuitystatusrank",
+      "label": "getContinuityStatusRank()",
+      "norm_label": "getcontinuitystatusrank()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L76"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_getplannedactionat",
+      "label": "getPlannedActionAt()",
+      "norm_label": "getplannedactionat()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L224"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_getstartofcurrentday",
+      "label": "getStartOfCurrentDay()",
+      "norm_label": "getstartofcurrentday()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L236"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_haslateinbound",
+      "label": "hasLateInbound()",
+      "norm_label": "haslateinbound()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L254"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_hasrelatedpurchaseordercontext",
+      "label": "hasRelatedPurchaseOrderContext()",
+      "norm_label": "hasrelatedpurchaseordercontext()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L396"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_hasstaleplannedaction",
+      "label": "hasStalePlannedAction()",
+      "norm_label": "hasstaleplannedaction()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L246"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_isinboundstatus",
+      "label": "isInboundStatus()",
+      "norm_label": "isinboundstatus()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L218"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_isplannedstatus",
+      "label": "isPlannedStatus()",
+      "norm_label": "isplannedstatus()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L212"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_listactivestorevendors",
+      "label": "listActiveStoreVendors()",
+      "norm_label": "listactivestorevendors()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L177"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_listpurchaseorderlineitems",
+      "label": "listPurchaseOrderLineItems()",
+      "norm_label": "listpurchaseorderlineitems()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L195"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_listreplenishmentrecommendationswithctx",
+      "label": "listReplenishmentRecommendationsWithCtx()",
+      "norm_label": "listreplenishmentrecommendationswithctx()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L473"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_liststoreproductskus",
+      "label": "listStoreProductSkus()",
+      "norm_label": "liststoreproductskus()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L145"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_liststorepurchaseordersbystatus",
+      "label": "listStorePurchaseOrdersByStatus()",
+      "norm_label": "liststorepurchaseordersbystatus()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L157"
+    },
+    {
+      "community": 110,
+      "file_type": "code",
+      "id": "replenishment_sortpurchaseordercontexts",
+      "label": "sortPurchaseOrderContexts()",
+      "norm_label": "sortpurchaseordercontexts()",
+      "source_file": "packages/athena-webapp/convex/stockOps/replenishment.ts",
+      "source_location": "L265"
     },
     {
       "community": 1100,
@@ -229980,92 +230001,92 @@
     {
       "community": 247,
       "file_type": "code",
-      "id": "index_resolveverificationcoderecipient",
-      "label": "resolveVerificationCodeRecipient()",
-      "norm_label": "resolveverificationcoderecipient()",
-      "source_file": "packages/athena-webapp/convex/mailersend/index.tsx",
-      "source_location": "L19"
-    },
-    {
-      "community": 247,
-      "file_type": "code",
-      "id": "index_senddailymanagerreportemail",
-      "label": "sendDailyManagerReportEmail()",
-      "norm_label": "senddailymanagerreportemail()",
-      "source_file": "packages/athena-webapp/convex/mailersend/index.tsx",
-      "source_location": "L373"
-    },
-    {
-      "community": 247,
-      "file_type": "code",
-      "id": "index_senddiscountcodeemail",
-      "label": "sendDiscountCodeEmail()",
-      "norm_label": "senddiscountcodeemail()",
-      "source_file": "packages/athena-webapp/convex/sendgrid/index.tsx",
-      "source_location": "L255"
-    },
-    {
-      "community": 247,
-      "file_type": "code",
-      "id": "index_senddiscountreminderemail",
-      "label": "sendDiscountReminderEmail()",
-      "norm_label": "senddiscountreminderemail()",
-      "source_file": "packages/athena-webapp/convex/sendgrid/index.tsx",
-      "source_location": "L334"
-    },
-    {
-      "community": 247,
-      "file_type": "code",
-      "id": "index_sendfeedbackrequestemail",
-      "label": "sendFeedbackRequestEmail()",
-      "norm_label": "sendfeedbackrequestemail()",
-      "source_file": "packages/athena-webapp/convex/sendgrid/index.tsx",
-      "source_location": "L167"
-    },
-    {
-      "community": 247,
-      "file_type": "code",
-      "id": "index_sendneworderemail",
-      "label": "sendNewOrderEmail()",
-      "norm_label": "sendneworderemail()",
-      "source_file": "packages/athena-webapp/convex/sendgrid/index.tsx",
-      "source_location": "L117"
-    },
-    {
-      "community": 247,
-      "file_type": "code",
-      "id": "index_sendorderemail",
-      "label": "sendOrderEmail()",
-      "norm_label": "sendorderemail()",
-      "source_file": "packages/athena-webapp/convex/sendgrid/index.tsx",
-      "source_location": "L43"
-    },
-    {
-      "community": 247,
-      "file_type": "code",
-      "id": "index_sendverificationcode",
-      "label": "sendVerificationCode()",
-      "norm_label": "sendverificationcode()",
-      "source_file": "packages/athena-webapp/convex/sendgrid/index.tsx",
-      "source_location": "L3"
-    },
-    {
-      "community": 247,
-      "file_type": "code",
-      "id": "packages_athena_webapp_convex_mailersend_index_tsx",
-      "label": "index.tsx",
-      "norm_label": "index.tsx",
-      "source_file": "packages/athena-webapp/convex/mailersend/index.tsx",
+      "id": "packages_athena_webapp_convex_marketing_walkthroughconfig_ts",
+      "label": "walkthroughConfig.ts",
+      "norm_label": "walkthroughconfig.ts",
+      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
       "source_location": "L1"
     },
     {
       "community": 247,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_sendgrid_index_tsx",
-      "label": "index.tsx",
-      "norm_label": "index.tsx",
-      "source_file": "packages/athena-webapp/convex/sendgrid/index.tsx",
-      "source_location": "L1"
+      "id": "walkthroughconfig_landingfunnelhourlylimit",
+      "label": "landingFunnelHourlyLimit()",
+      "norm_label": "landingfunnelhourlylimit()",
+      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
+      "source_location": "L85"
+    },
+    {
+      "community": 247,
+      "file_type": "code",
+      "id": "walkthroughconfig_parseboundedpositiveinteger",
+      "label": "parseBoundedPositiveInteger()",
+      "norm_label": "parseboundedpositiveinteger()",
+      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
+      "source_location": "L8"
+    },
+    {
+      "community": 247,
+      "file_type": "code",
+      "id": "walkthroughconfig_resolvewalkthroughallowedorigins",
+      "label": "resolveWalkthroughAllowedOrigins()",
+      "norm_label": "resolvewalkthroughallowedorigins()",
+      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
+      "source_location": "L26"
+    },
+    {
+      "community": 247,
+      "file_type": "code",
+      "id": "walkthroughconfig_walkthroughallowedorigins",
+      "label": "walkthroughAllowedOrigins()",
+      "norm_label": "walkthroughallowedorigins()",
+      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
+      "source_location": "L38"
+    },
+    {
+      "community": 247,
+      "file_type": "code",
+      "id": "walkthroughconfig_walkthroughdailyperemaillimit",
+      "label": "walkthroughDailyPerEmailLimit()",
+      "norm_label": "walkthroughdailyperemaillimit()",
+      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
+      "source_location": "L55"
+    },
+    {
+      "community": 247,
+      "file_type": "code",
+      "id": "walkthroughconfig_walkthroughhourlygloballimit",
+      "label": "walkthroughHourlyGlobalLimit()",
+      "norm_label": "walkthroughhourlygloballimit()",
+      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
+      "source_location": "L65"
+    },
+    {
+      "community": 247,
+      "file_type": "code",
+      "id": "walkthroughconfig_walkthroughhourlynotificationlimit",
+      "label": "walkthroughHourlyNotificationLimit()",
+      "norm_label": "walkthroughhourlynotificationlimit()",
+      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
+      "source_location": "L75"
+    },
+    {
+      "community": 247,
+      "file_type": "code",
+      "id": "walkthroughconfig_walkthroughmaxbodybytes",
+      "label": "walkthroughMaxBodyBytes()",
+      "norm_label": "walkthroughmaxbodybytes()",
+      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
+      "source_location": "L45"
+    },
+    {
+      "community": 247,
+      "file_type": "code",
+      "id": "walkthroughconfig_walkthroughprivacycontact",
+      "label": "walkthroughPrivacyContact()",
+      "norm_label": "walkthroughprivacycontact()",
+      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
+      "source_location": "L95"
     },
     {
       "community": 2470,
@@ -230160,92 +230181,92 @@
     {
       "community": 248,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_marketing_walkthroughconfig_ts",
-      "label": "walkthroughConfig.ts",
-      "norm_label": "walkthroughconfig.ts",
-      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
+      "id": "definitions_costoverlaystorewriteoperation",
+      "label": "costOverlayStoreWriteOperation()",
+      "norm_label": "costoverlaystorewriteoperation()",
+      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
+      "source_location": "L569"
+    },
+    {
+      "community": 248,
+      "file_type": "code",
+      "id": "definitions_cyclecountdraftstorewriteoperation",
+      "label": "cycleCountDraftStoreWriteOperation()",
+      "norm_label": "cyclecountdraftstorewriteoperation()",
+      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
+      "source_location": "L383"
+    },
+    {
+      "community": 248,
+      "file_type": "code",
+      "id": "definitions_defineoperation",
+      "label": "defineOperation()",
+      "norm_label": "defineoperation()",
+      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
+      "source_location": "L11"
+    },
+    {
+      "community": 248,
+      "file_type": "code",
+      "id": "definitions_inventoryimportreviewpayloadwriteoperation",
+      "label": "inventoryImportReviewPayloadWriteOperation()",
+      "norm_label": "inventoryimportreviewpayloadwriteoperation()",
+      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
+      "source_location": "L544"
+    },
+    {
+      "community": 248,
+      "file_type": "code",
+      "id": "definitions_notificationsubscriptionrowwriteoperation",
+      "label": "notificationSubscriptionRowWriteOperation()",
+      "norm_label": "notificationsubscriptionrowwriteoperation()",
+      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
+      "source_location": "L629"
+    },
+    {
+      "community": 248,
+      "file_type": "code",
+      "id": "definitions_orderstorewriteoperation",
+      "label": "orderStoreWriteOperation()",
+      "norm_label": "orderstorewriteoperation()",
+      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
+      "source_location": "L155"
+    },
+    {
+      "community": 248,
+      "file_type": "code",
+      "id": "definitions_storewriteoperation",
+      "label": "storeWriteOperation()",
+      "norm_label": "storewriteoperation()",
+      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
+      "source_location": "L108"
+    },
+    {
+      "community": 248,
+      "file_type": "code",
+      "id": "definitions_transactionstorewriteoperation",
+      "label": "transactionStoreWriteOperation()",
+      "norm_label": "transactionstorewriteoperation()",
+      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
+      "source_location": "L128"
+    },
+    {
+      "community": 248,
+      "file_type": "code",
+      "id": "definitions_validateoperationdefinition",
+      "label": "validateOperationDefinition()",
+      "norm_label": "validateoperationdefinition()",
+      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
+      "source_location": "L724"
+    },
+    {
+      "community": 248,
+      "file_type": "code",
+      "id": "packages_athena_webapp_convex_operationadmission_definitions_ts",
+      "label": "definitions.ts",
+      "norm_label": "definitions.ts",
+      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
       "source_location": "L1"
-    },
-    {
-      "community": 248,
-      "file_type": "code",
-      "id": "walkthroughconfig_landingfunnelhourlylimit",
-      "label": "landingFunnelHourlyLimit()",
-      "norm_label": "landingfunnelhourlylimit()",
-      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
-      "source_location": "L85"
-    },
-    {
-      "community": 248,
-      "file_type": "code",
-      "id": "walkthroughconfig_parseboundedpositiveinteger",
-      "label": "parseBoundedPositiveInteger()",
-      "norm_label": "parseboundedpositiveinteger()",
-      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
-      "source_location": "L8"
-    },
-    {
-      "community": 248,
-      "file_type": "code",
-      "id": "walkthroughconfig_resolvewalkthroughallowedorigins",
-      "label": "resolveWalkthroughAllowedOrigins()",
-      "norm_label": "resolvewalkthroughallowedorigins()",
-      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
-      "source_location": "L26"
-    },
-    {
-      "community": 248,
-      "file_type": "code",
-      "id": "walkthroughconfig_walkthroughallowedorigins",
-      "label": "walkthroughAllowedOrigins()",
-      "norm_label": "walkthroughallowedorigins()",
-      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
-      "source_location": "L38"
-    },
-    {
-      "community": 248,
-      "file_type": "code",
-      "id": "walkthroughconfig_walkthroughdailyperemaillimit",
-      "label": "walkthroughDailyPerEmailLimit()",
-      "norm_label": "walkthroughdailyperemaillimit()",
-      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
-      "source_location": "L55"
-    },
-    {
-      "community": 248,
-      "file_type": "code",
-      "id": "walkthroughconfig_walkthroughhourlygloballimit",
-      "label": "walkthroughHourlyGlobalLimit()",
-      "norm_label": "walkthroughhourlygloballimit()",
-      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
-      "source_location": "L65"
-    },
-    {
-      "community": 248,
-      "file_type": "code",
-      "id": "walkthroughconfig_walkthroughhourlynotificationlimit",
-      "label": "walkthroughHourlyNotificationLimit()",
-      "norm_label": "walkthroughhourlynotificationlimit()",
-      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
-      "source_location": "L75"
-    },
-    {
-      "community": 248,
-      "file_type": "code",
-      "id": "walkthroughconfig_walkthroughmaxbodybytes",
-      "label": "walkthroughMaxBodyBytes()",
-      "norm_label": "walkthroughmaxbodybytes()",
-      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
-      "source_location": "L45"
-    },
-    {
-      "community": 248,
-      "file_type": "code",
-      "id": "walkthroughconfig_walkthroughprivacycontact",
-      "label": "walkthroughPrivacyContact()",
-      "norm_label": "walkthroughprivacycontact()",
-      "source_file": "packages/athena-webapp/convex/marketing/walkthroughConfig.ts",
-      "source_location": "L95"
     },
     {
       "community": 2480,
@@ -230340,91 +230361,91 @@
     {
       "community": 249,
       "file_type": "code",
-      "id": "definitions_costoverlaystorewriteoperation",
-      "label": "costOverlayStoreWriteOperation()",
-      "norm_label": "costoverlaystorewriteoperation()",
-      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
-      "source_location": "L569"
+      "id": "adjustmentreports_adjustmentappliedat",
+      "label": "adjustmentAppliedAt()",
+      "norm_label": "adjustmentappliedat()",
+      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
+      "source_location": "L101"
     },
     {
       "community": 249,
       "file_type": "code",
-      "id": "definitions_cyclecountdraftstorewriteoperation",
-      "label": "cycleCountDraftStoreWriteOperation()",
-      "norm_label": "cyclecountdraftstorewriteoperation()",
-      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
-      "source_location": "L383"
+      "id": "adjustmentreports_adjustmentsalesdelta",
+      "label": "adjustmentSalesDelta()",
+      "norm_label": "adjustmentsalesdelta()",
+      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
+      "source_location": "L116"
     },
     {
       "community": 249,
       "file_type": "code",
-      "id": "definitions_defineoperation",
-      "label": "defineOperation()",
-      "norm_label": "defineoperation()",
-      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
-      "source_location": "L11"
+      "id": "adjustmentreports_adjustmentsettlementamount",
+      "label": "adjustmentSettlementAmount()",
+      "norm_label": "adjustmentsettlementamount()",
+      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
+      "source_location": "L143"
     },
     {
       "community": 249,
       "file_type": "code",
-      "id": "definitions_inventoryimportreviewpayloadwriteoperation",
-      "label": "inventoryImportReviewPayloadWriteOperation()",
-      "norm_label": "inventoryimportreviewpayloadwriteoperation()",
-      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
-      "source_location": "L544"
+      "id": "adjustmentreports_adjustmenttransactionid",
+      "label": "adjustmentTransactionId()",
+      "norm_label": "adjustmenttransactionid()",
+      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
+      "source_location": "L110"
     },
     {
       "community": 249,
       "file_type": "code",
-      "id": "definitions_notificationsubscriptionrowwriteoperation",
-      "label": "notificationSubscriptionRowWriteOperation()",
-      "norm_label": "notificationsubscriptionrowwriteoperation()",
-      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
-      "source_location": "L629"
+      "id": "adjustmentreports_buildadjustmentpaymenttotals",
+      "label": "buildAdjustmentPaymentTotals()",
+      "norm_label": "buildadjustmentpaymenttotals()",
+      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
+      "source_location": "L242"
     },
     {
       "community": 249,
       "file_type": "code",
-      "id": "definitions_orderstorewriteoperation",
-      "label": "orderStoreWriteOperation()",
-      "norm_label": "orderstorewriteoperation()",
-      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
-      "source_location": "L155"
+      "id": "adjustmentreports_buildadjustmentreporttotals",
+      "label": "buildAdjustmentReportTotals()",
+      "norm_label": "buildadjustmentreporttotals()",
+      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
+      "source_location": "L275"
     },
     {
       "community": 249,
       "file_type": "code",
-      "id": "definitions_storewriteoperation",
-      "label": "storeWriteOperation()",
-      "norm_label": "storewriteoperation()",
-      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
-      "source_location": "L108"
+      "id": "adjustmentreports_listappliedtransactionadjustmentsforday",
+      "label": "listAppliedTransactionAdjustmentsForDay()",
+      "norm_label": "listappliedtransactionadjustmentsforday()",
+      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
+      "source_location": "L229"
     },
     {
       "community": 249,
       "file_type": "code",
-      "id": "definitions_transactionstorewriteoperation",
-      "label": "transactionStoreWriteOperation()",
-      "norm_label": "transactionstorewriteoperation()",
-      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
-      "source_location": "L128"
+      "id": "adjustmentreports_readappliedtransactionadjustmentsforday",
+      "label": "readAppliedTransactionAdjustmentsForDay()",
+      "norm_label": "readappliedtransactionadjustmentsforday()",
+      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
+      "source_location": "L173"
     },
     {
       "community": 249,
       "file_type": "code",
-      "id": "definitions_validateoperationdefinition",
-      "label": "validateOperationDefinition()",
-      "norm_label": "validateoperationdefinition()",
-      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
-      "source_location": "L724"
+      "id": "adjustmentreports_sourcecompletenessentry",
+      "label": "sourceCompletenessEntry()",
+      "norm_label": "sourcecompletenessentry()",
+      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
+      "source_location": "L76"
     },
     {
       "community": 249,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_operationadmission_definitions_ts",
-      "label": "definitions.ts",
-      "norm_label": "definitions.ts",
-      "source_file": "packages/athena-webapp/convex/operationAdmission/definitions.ts",
+      "id": "packages_athena_webapp_convex_operations_dailyclose_adjustmentreports_ts",
+      "label": "adjustmentReports.ts",
+      "norm_label": "adjustmentreports.ts",
+      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
       "source_location": "L1"
     },
     {
@@ -230871,91 +230892,91 @@
     {
       "community": 250,
       "file_type": "code",
-      "id": "adjustmentreports_adjustmentappliedat",
-      "label": "adjustmentAppliedAt()",
-      "norm_label": "adjustmentappliedat()",
-      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
-      "source_location": "L101"
+      "id": "inventorymovements_assertnobusinesseventconflict",
+      "label": "assertNoBusinessEventConflict()",
+      "norm_label": "assertnobusinesseventconflict()",
+      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
+      "source_location": "L178"
     },
     {
       "community": 250,
       "file_type": "code",
-      "id": "adjustmentreports_adjustmentsalesdelta",
-      "label": "adjustmentSalesDelta()",
-      "norm_label": "adjustmentsalesdelta()",
-      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
-      "source_location": "L116"
+      "id": "inventorymovements_buildinventorymovement",
+      "label": "buildInventoryMovement()",
+      "norm_label": "buildinventorymovement()",
+      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
+      "source_location": "L124"
     },
     {
       "community": 250,
       "file_type": "code",
-      "id": "adjustmentreports_adjustmentsettlementamount",
-      "label": "adjustmentSettlementAmount()",
-      "norm_label": "adjustmentsettlementamount()",
-      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
-      "source_location": "L143"
+      "id": "inventorymovements_buildskuactivityforinventorymovement",
+      "label": "buildSkuActivityForInventoryMovement()",
+      "norm_label": "buildskuactivityforinventorymovement()",
+      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
+      "source_location": "L66"
     },
     {
       "community": 250,
       "file_type": "code",
-      "id": "adjustmentreports_adjustmenttransactionid",
-      "label": "adjustmentTransactionId()",
-      "norm_label": "adjustmenttransactionid()",
-      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
-      "source_location": "L110"
+      "id": "inventorymovements_getskuactivitytypeformovement",
+      "label": "getSkuActivityTypeForMovement()",
+      "norm_label": "getskuactivitytypeformovement()",
+      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
+      "source_location": "L49"
     },
     {
       "community": 250,
       "file_type": "code",
-      "id": "adjustmentreports_buildadjustmentpaymenttotals",
-      "label": "buildAdjustmentPaymentTotals()",
-      "norm_label": "buildadjustmentpaymenttotals()",
-      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
-      "source_location": "L242"
+      "id": "inventorymovements_matchesexistingmovement",
+      "label": "matchesExistingMovement()",
+      "norm_label": "matchesexistingmovement()",
+      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
+      "source_location": "L150"
     },
     {
       "community": 250,
       "file_type": "code",
-      "id": "adjustmentreports_buildadjustmentreporttotals",
-      "label": "buildAdjustmentReportTotals()",
-      "norm_label": "buildadjustmentreporttotals()",
-      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
-      "source_location": "L275"
+      "id": "inventorymovements_recordinventorymovementwithctx",
+      "label": "recordInventoryMovementWithCtx()",
+      "norm_label": "recordinventorymovementwithctx()",
+      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
+      "source_location": "L200"
     },
     {
       "community": 250,
       "file_type": "code",
-      "id": "adjustmentreports_listappliedtransactionadjustmentsforday",
-      "label": "listAppliedTransactionAdjustmentsForDay()",
-      "norm_label": "listappliedtransactionadjustmentsforday()",
-      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
-      "source_location": "L229"
+      "id": "inventorymovements_recordinventorymovementwithdispositionwithctx",
+      "label": "recordInventoryMovementWithDispositionWithCtx()",
+      "norm_label": "recordinventorymovementwithdispositionwithctx()",
+      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
+      "source_location": "L245"
     },
     {
       "community": 250,
       "file_type": "code",
-      "id": "adjustmentreports_readappliedtransactionadjustmentsforday",
-      "label": "readAppliedTransactionAdjustmentsForDay()",
-      "norm_label": "readappliedtransactionadjustmentsforday()",
-      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
-      "source_location": "L173"
+      "id": "inventorymovements_recordskuactivityforinventorymovementwithctx",
+      "label": "recordSkuActivityForInventoryMovementWithCtx()",
+      "norm_label": "recordskuactivityforinventorymovementwithctx()",
+      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
+      "source_location": "L111"
     },
     {
       "community": 250,
       "file_type": "code",
-      "id": "adjustmentreports_sourcecompletenessentry",
-      "label": "sourceCompletenessEntry()",
-      "norm_label": "sourcecompletenessentry()",
-      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
-      "source_location": "L76"
+      "id": "inventorymovements_summarizeinventorymovements",
+      "label": "summarizeInventoryMovements()",
+      "norm_label": "summarizeinventorymovements()",
+      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
+      "source_location": "L135"
     },
     {
       "community": 250,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_operations_dailyclose_adjustmentreports_ts",
-      "label": "adjustmentReports.ts",
-      "norm_label": "adjustmentreports.ts",
-      "source_file": "packages/athena-webapp/convex/operations/dailyClose/adjustmentReports.ts",
+      "id": "packages_athena_webapp_convex_operations_inventorymovements_ts",
+      "label": "inventoryMovements.ts",
+      "norm_label": "inventorymovements.ts",
+      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
       "source_location": "L1"
     },
     {
@@ -231051,91 +231072,91 @@
     {
       "community": 251,
       "file_type": "code",
-      "id": "inventorymovements_assertnobusinesseventconflict",
-      "label": "assertNoBusinessEventConflict()",
-      "norm_label": "assertnobusinesseventconflict()",
-      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
-      "source_location": "L178"
+      "id": "operationalevents_buildoperationalevent",
+      "label": "buildOperationalEvent()",
+      "norm_label": "buildoperationalevent()",
+      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
+      "source_location": "L43"
     },
     {
       "community": 251,
       "file_type": "code",
-      "id": "inventorymovements_buildinventorymovement",
-      "label": "buildInventoryMovement()",
-      "norm_label": "buildinventorymovement()",
-      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
-      "source_location": "L124"
+      "id": "operationalevents_buildtracemetadata",
+      "label": "buildTraceMetadata()",
+      "norm_label": "buildtracemetadata()",
+      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
+      "source_location": "L96"
     },
     {
       "community": 251,
       "file_type": "code",
-      "id": "inventorymovements_buildskuactivityforinventorymovement",
-      "label": "buildSkuActivityForInventoryMovement()",
-      "norm_label": "buildskuactivityforinventorymovement()",
-      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
-      "source_location": "L66"
+      "id": "operationalevents_isrecord",
+      "label": "isRecord()",
+      "norm_label": "isrecord()",
+      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
+      "source_location": "L145"
     },
     {
       "community": 251,
       "file_type": "code",
-      "id": "inventorymovements_getskuactivitytypeformovement",
-      "label": "getSkuActivityTypeForMovement()",
-      "norm_label": "getskuactivitytypeformovement()",
-      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
-      "source_location": "L49"
+      "id": "operationalevents_listproductoperationaltimelinewithctx",
+      "label": "listProductOperationalTimelineWithCtx()",
+      "norm_label": "listproductoperationaltimelinewithctx()",
+      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
+      "source_location": "L246"
     },
     {
       "community": 251,
       "file_type": "code",
-      "id": "inventorymovements_matchesexistingmovement",
-      "label": "matchesExistingMovement()",
-      "norm_label": "matchesexistingmovement()",
-      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
-      "source_location": "L150"
+      "id": "operationalevents_matchesexistingevent",
+      "label": "matchesExistingEvent()",
+      "norm_label": "matchesexistingevent()",
+      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
+      "source_location": "L149"
     },
     {
       "community": 251,
       "file_type": "code",
-      "id": "inventorymovements_recordinventorymovementwithctx",
-      "label": "recordInventoryMovementWithCtx()",
-      "norm_label": "recordinventorymovementwithctx()",
-      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
-      "source_location": "L200"
+      "id": "operationalevents_metadatadedupekeysmatch",
+      "label": "metadataDedupeKeysMatch()",
+      "norm_label": "metadatadedupekeysmatch()",
+      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
+      "source_location": "L205"
     },
     {
       "community": 251,
       "file_type": "code",
-      "id": "inventorymovements_recordinventorymovementwithdispositionwithctx",
-      "label": "recordInventoryMovementWithDispositionWithCtx()",
-      "norm_label": "recordinventorymovementwithdispositionwithctx()",
-      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
-      "source_location": "L245"
+      "id": "operationalevents_normalizeoperationaleventtracefields",
+      "label": "normalizeOperationalEventTraceFields()",
+      "norm_label": "normalizeoperationaleventtracefields()",
+      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
+      "source_location": "L60"
     },
     {
       "community": 251,
       "file_type": "code",
-      "id": "inventorymovements_recordskuactivityforinventorymovementwithctx",
-      "label": "recordSkuActivityForInventoryMovementWithCtx()",
-      "norm_label": "recordskuactivityforinventorymovementwithctx()",
-      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
-      "source_location": "L111"
+      "id": "operationalevents_recordoperationaleventwithctx",
+      "label": "recordOperationalEventWithCtx()",
+      "norm_label": "recordoperationaleventwithctx()",
+      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
+      "source_location": "L215"
     },
     {
       "community": 251,
       "file_type": "code",
-      "id": "inventorymovements_summarizeinventorymovements",
-      "label": "summarizeInventoryMovements()",
-      "norm_label": "summarizeinventorymovements()",
-      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
-      "source_location": "L135"
+      "id": "operationalevents_shouldnormalizepostrace",
+      "label": "shouldNormalizePosTrace()",
+      "norm_label": "shouldnormalizepostrace()",
+      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
+      "source_location": "L118"
     },
     {
       "community": 251,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_operations_inventorymovements_ts",
-      "label": "inventoryMovements.ts",
-      "norm_label": "inventorymovements.ts",
-      "source_file": "packages/athena-webapp/convex/operations/inventoryMovements.ts",
+      "id": "packages_athena_webapp_convex_operations_operationalevents_ts",
+      "label": "operationalEvents.ts",
+      "norm_label": "operationalevents.ts",
+      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
       "source_location": "L1"
     },
     {
@@ -231231,91 +231252,91 @@
     {
       "community": 252,
       "file_type": "code",
-      "id": "operationalevents_buildoperationalevent",
-      "label": "buildOperationalEvent()",
-      "norm_label": "buildoperationalevent()",
-      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
-      "source_location": "L43"
+      "id": "oversizedoperationalworkrepair_amendrepairwithctx",
+      "label": "amendRepairWithCtx()",
+      "norm_label": "amendrepairwithctx()",
+      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
+      "source_location": "L430"
     },
     {
       "community": 252,
       "file_type": "code",
-      "id": "operationalevents_buildtracemetadata",
-      "label": "buildTraceMetadata()",
-      "norm_label": "buildtracemetadata()",
-      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
-      "source_location": "L96"
+      "id": "oversizedoperationalworkrepair_createrepairwithctx",
+      "label": "createRepairWithCtx()",
+      "norm_label": "createrepairwithctx()",
+      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
+      "source_location": "L160"
     },
     {
       "community": 252,
       "file_type": "code",
-      "id": "operationalevents_isrecord",
-      "label": "isRecord()",
-      "norm_label": "isrecord()",
-      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
-      "source_location": "L145"
+      "id": "oversizedoperationalworkrepair_pauserepair",
+      "label": "pauseRepair()",
+      "norm_label": "pauserepair()",
+      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
+      "source_location": "L231"
     },
     {
       "community": 252,
       "file_type": "code",
-      "id": "operationalevents_listproductoperationaltimelinewithctx",
-      "label": "listProductOperationalTimelineWithCtx()",
-      "norm_label": "listproductoperationaltimelinewithctx()",
-      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
-      "source_location": "L246"
+      "id": "oversizedoperationalworkrepair_processrepairbatchwithctx",
+      "label": "processRepairBatchWithCtx()",
+      "norm_label": "processrepairbatchwithctx()",
+      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
+      "source_location": "L249"
     },
     {
       "community": 252,
       "file_type": "code",
-      "id": "operationalevents_matchesexistingevent",
-      "label": "matchesExistingEvent()",
-      "norm_label": "matchesexistingevent()",
-      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
-      "source_location": "L149"
+      "id": "oversizedoperationalworkrepair_readcurrentgroup",
+      "label": "readCurrentGroup()",
+      "norm_label": "readcurrentgroup()",
+      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
+      "source_location": "L49"
     },
     {
       "community": 252,
       "file_type": "code",
-      "id": "operationalevents_metadatadedupekeysmatch",
-      "label": "metadataDedupeKeysMatch()",
-      "norm_label": "metadatadedupekeysmatch()",
-      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
-      "source_location": "L205"
+      "id": "oversizedoperationalworkrepair_recordrepairauditevent",
+      "label": "recordRepairAuditEvent()",
+      "norm_label": "recordrepairauditevent()",
+      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
+      "source_location": "L85"
     },
     {
       "community": 252,
       "file_type": "code",
-      "id": "operationalevents_normalizeoperationaleventtracefields",
-      "label": "normalizeOperationalEventTraceFields()",
-      "norm_label": "normalizeoperationaleventtracefields()",
-      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
-      "source_location": "L60"
+      "id": "oversizedoperationalworkrepair_requireevidence",
+      "label": "requireEvidence()",
+      "norm_label": "requireevidence()",
+      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
+      "source_location": "L37"
     },
     {
       "community": 252,
       "file_type": "code",
-      "id": "operationalevents_recordoperationaleventwithctx",
-      "label": "recordOperationalEventWithCtx()",
-      "norm_label": "recordoperationaleventwithctx()",
-      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
-      "source_location": "L215"
+      "id": "oversizedoperationalworkrepair_resumerepairwithctx",
+      "label": "resumeRepairWithCtx()",
+      "norm_label": "resumerepairwithctx()",
+      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
+      "source_location": "L472"
     },
     {
       "community": 252,
       "file_type": "code",
-      "id": "operationalevents_shouldnormalizepostrace",
-      "label": "shouldNormalizePosTrace()",
-      "norm_label": "shouldnormalizepostrace()",
-      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
-      "source_location": "L118"
+      "id": "oversizedoperationalworkrepair_schedulenextbatch",
+      "label": "scheduleNextBatch()",
+      "norm_label": "schedulenextbatch()",
+      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
+      "source_location": "L153"
     },
     {
       "community": 252,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_operations_operationalevents_ts",
-      "label": "operationalEvents.ts",
-      "norm_label": "operationalevents.ts",
-      "source_file": "packages/athena-webapp/convex/operations/operationalEvents.ts",
+      "id": "packages_athena_webapp_convex_operations_oversizedoperationalworkrepair_ts",
+      "label": "oversizedOperationalWorkRepair.ts",
+      "norm_label": "oversizedoperationalworkrepair.ts",
+      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
       "source_location": "L1"
     },
     {
@@ -231411,92 +231432,92 @@
     {
       "community": 253,
       "file_type": "code",
-      "id": "oversizedoperationalworkrepair_amendrepairwithctx",
-      "label": "amendRepairWithCtx()",
-      "norm_label": "amendrepairwithctx()",
-      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
-      "source_location": "L430"
-    },
-    {
-      "community": 253,
-      "file_type": "code",
-      "id": "oversizedoperationalworkrepair_createrepairwithctx",
-      "label": "createRepairWithCtx()",
-      "norm_label": "createrepairwithctx()",
-      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
-      "source_location": "L160"
-    },
-    {
-      "community": 253,
-      "file_type": "code",
-      "id": "oversizedoperationalworkrepair_pauserepair",
-      "label": "pauseRepair()",
-      "norm_label": "pauserepair()",
-      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
-      "source_location": "L231"
-    },
-    {
-      "community": 253,
-      "file_type": "code",
-      "id": "oversizedoperationalworkrepair_processrepairbatchwithctx",
-      "label": "processRepairBatchWithCtx()",
-      "norm_label": "processrepairbatchwithctx()",
-      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
-      "source_location": "L249"
-    },
-    {
-      "community": 253,
-      "file_type": "code",
-      "id": "oversizedoperationalworkrepair_readcurrentgroup",
-      "label": "readCurrentGroup()",
-      "norm_label": "readcurrentgroup()",
-      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
-      "source_location": "L49"
-    },
-    {
-      "community": 253,
-      "file_type": "code",
-      "id": "oversizedoperationalworkrepair_recordrepairauditevent",
-      "label": "recordRepairAuditEvent()",
-      "norm_label": "recordrepairauditevent()",
-      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
-      "source_location": "L85"
-    },
-    {
-      "community": 253,
-      "file_type": "code",
-      "id": "oversizedoperationalworkrepair_requireevidence",
-      "label": "requireEvidence()",
-      "norm_label": "requireevidence()",
-      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
-      "source_location": "L37"
-    },
-    {
-      "community": 253,
-      "file_type": "code",
-      "id": "oversizedoperationalworkrepair_resumerepairwithctx",
-      "label": "resumeRepairWithCtx()",
-      "norm_label": "resumerepairwithctx()",
-      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
-      "source_location": "L472"
-    },
-    {
-      "community": 253,
-      "file_type": "code",
-      "id": "oversizedoperationalworkrepair_schedulenextbatch",
-      "label": "scheduleNextBatch()",
-      "norm_label": "schedulenextbatch()",
-      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
-      "source_location": "L153"
-    },
-    {
-      "community": 253,
-      "file_type": "code",
-      "id": "packages_athena_webapp_convex_operations_oversizedoperationalworkrepair_ts",
-      "label": "oversizedOperationalWorkRepair.ts",
-      "norm_label": "oversizedoperationalworkrepair.ts",
-      "source_file": "packages/athena-webapp/convex/operations/oversizedOperationalWorkRepair.ts",
+      "id": "packages_athena_webapp_convex_operations_registersessiontracing_ts",
+      "label": "registerSessionTracing.ts",
+      "norm_label": "registersessiontracing.ts",
+      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
       "source_location": "L1"
+    },
+    {
+      "community": 253,
+      "file_type": "code",
+      "id": "registersessiontracing_buildactorrefs",
+      "label": "buildActorRefs()",
+      "norm_label": "buildactorrefs()",
+      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
+      "source_location": "L101"
+    },
+    {
+      "community": 253,
+      "file_type": "code",
+      "id": "registersessiontracing_buildtraceevent",
+      "label": "buildTraceEvent()",
+      "norm_label": "buildtraceevent()",
+      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
+      "source_location": "L196"
+    },
+    {
+      "community": 253,
+      "file_type": "code",
+      "id": "registersessiontracing_buildtracerecord",
+      "label": "buildTraceRecord()",
+      "norm_label": "buildtracerecord()",
+      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
+      "source_location": "L161"
+    },
+    {
+      "community": 253,
+      "file_type": "code",
+      "id": "registersessiontracing_displaytraceamount",
+      "label": "displayTraceAmount()",
+      "norm_label": "displaytraceamount()",
+      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
+      "source_location": "L114"
+    },
+    {
+      "community": 253,
+      "file_type": "code",
+      "id": "registersessiontracing_formattransactionlabel",
+      "label": "formatTransactionLabel()",
+      "norm_label": "formattransactionlabel()",
+      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
+      "source_location": "L132"
+    },
+    {
+      "community": 253,
+      "file_type": "code",
+      "id": "registersessiontracing_recordregistersessiontracebesteffort",
+      "label": "recordRegisterSessionTraceBestEffort()",
+      "norm_label": "recordregistersessiontracebesteffort()",
+      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
+      "source_location": "L407"
+    },
+    {
+      "community": 253,
+      "file_type": "code",
+      "id": "registersessiontracing_resolveoccurredat",
+      "label": "resolveOccurredAt()",
+      "norm_label": "resolveoccurredat()",
+      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
+      "source_location": "L76"
+    },
+    {
+      "community": 253,
+      "file_type": "code",
+      "id": "registersessiontracing_resolvestorecurrency",
+      "label": "resolveStoreCurrency()",
+      "norm_label": "resolvestorecurrency()",
+      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
+      "source_location": "L146"
+    },
+    {
+      "community": 253,
+      "file_type": "code",
+      "id": "registersessiontracing_safetracewrite",
+      "label": "safeTraceWrite()",
+      "norm_label": "safetracewrite()",
+      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
+      "source_location": "L92"
     },
     {
       "community": 2530,
@@ -231591,92 +231612,92 @@
     {
       "community": 254,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_operations_registersessiontracing_ts",
-      "label": "registerSessionTracing.ts",
-      "norm_label": "registersessiontracing.ts",
-      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
+      "id": "finalizedlineageremediation_classifyfinalizedlineagerepairconflicts",
+      "label": "classifyFinalizedLineageRepairConflicts()",
+      "norm_label": "classifyfinalizedlineagerepairconflicts()",
+      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
+      "source_location": "L222"
+    },
+    {
+      "community": 254,
+      "file_type": "code",
+      "id": "finalizedlineageremediation_classifyrepaircandidate",
+      "label": "classifyRepairCandidate()",
+      "norm_label": "classifyrepaircandidate()",
+      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
+      "source_location": "L164"
+    },
+    {
+      "community": 254,
+      "file_type": "code",
+      "id": "finalizedlineageremediation_countrepairablefinalizedlineagelines",
+      "label": "countRepairableFinalizedLineageLines()",
+      "norm_label": "countrepairablefinalizedlineagelines()",
+      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
+      "source_location": "L284"
+    },
+    {
+      "community": 254,
+      "file_type": "code",
+      "id": "finalizedlineageremediation_getprovisionalimportsku",
+      "label": "getProvisionalImportSku()",
+      "norm_label": "getprovisionalimportsku()",
+      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
+      "source_location": "L318"
+    },
+    {
+      "community": 254,
+      "file_type": "code",
+      "id": "finalizedlineageremediation_isclosedregisterrepairreplayconflict",
+      "label": "isClosedRegisterRepairReplayConflict()",
+      "norm_label": "isclosedregisterrepairreplayconflict()",
+      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
+      "source_location": "L273"
+    },
+    {
+      "community": 254,
+      "file_type": "code",
+      "id": "finalizedlineageremediation_isfinalizedlineagerepairconflict",
+      "label": "isFinalizedLineageRepairConflict()",
+      "norm_label": "isfinalizedlineagerepairconflict()",
+      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
+      "source_location": "L258"
+    },
+    {
+      "community": 254,
+      "file_type": "code",
+      "id": "finalizedlineageremediation_isprovisionalrowchangedconflict",
+      "label": "isProvisionalRowChangedConflict()",
+      "norm_label": "isprovisionalrowchangedconflict()",
+      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
+      "source_location": "L265"
+    },
+    {
+      "community": 254,
+      "file_type": "code",
+      "id": "finalizedlineageremediation_recordfinalizedlineagerepairevent",
+      "label": "recordFinalizedLineageRepairEvent()",
+      "norm_label": "recordfinalizedlineagerepairevent()",
+      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
+      "source_location": "L358"
+    },
+    {
+      "community": 254,
+      "file_type": "code",
+      "id": "finalizedlineageremediation_skipped",
+      "label": "skipped()",
+      "norm_label": "skipped()",
+      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
+      "source_location": "L346"
+    },
+    {
+      "community": 254,
+      "file_type": "code",
+      "id": "packages_athena_webapp_convex_pos_application_sync_finalizedlineageremediation_ts",
+      "label": "finalizedLineageRemediation.ts",
+      "norm_label": "finalizedlineageremediation.ts",
+      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
       "source_location": "L1"
-    },
-    {
-      "community": 254,
-      "file_type": "code",
-      "id": "registersessiontracing_buildactorrefs",
-      "label": "buildActorRefs()",
-      "norm_label": "buildactorrefs()",
-      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L101"
-    },
-    {
-      "community": 254,
-      "file_type": "code",
-      "id": "registersessiontracing_buildtraceevent",
-      "label": "buildTraceEvent()",
-      "norm_label": "buildtraceevent()",
-      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L196"
-    },
-    {
-      "community": 254,
-      "file_type": "code",
-      "id": "registersessiontracing_buildtracerecord",
-      "label": "buildTraceRecord()",
-      "norm_label": "buildtracerecord()",
-      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L161"
-    },
-    {
-      "community": 254,
-      "file_type": "code",
-      "id": "registersessiontracing_displaytraceamount",
-      "label": "displayTraceAmount()",
-      "norm_label": "displaytraceamount()",
-      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L114"
-    },
-    {
-      "community": 254,
-      "file_type": "code",
-      "id": "registersessiontracing_formattransactionlabel",
-      "label": "formatTransactionLabel()",
-      "norm_label": "formattransactionlabel()",
-      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L132"
-    },
-    {
-      "community": 254,
-      "file_type": "code",
-      "id": "registersessiontracing_recordregistersessiontracebesteffort",
-      "label": "recordRegisterSessionTraceBestEffort()",
-      "norm_label": "recordregistersessiontracebesteffort()",
-      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L407"
-    },
-    {
-      "community": 254,
-      "file_type": "code",
-      "id": "registersessiontracing_resolveoccurredat",
-      "label": "resolveOccurredAt()",
-      "norm_label": "resolveoccurredat()",
-      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L76"
-    },
-    {
-      "community": 254,
-      "file_type": "code",
-      "id": "registersessiontracing_resolvestorecurrency",
-      "label": "resolveStoreCurrency()",
-      "norm_label": "resolvestorecurrency()",
-      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L146"
-    },
-    {
-      "community": 254,
-      "file_type": "code",
-      "id": "registersessiontracing_safetracewrite",
-      "label": "safeTraceWrite()",
-      "norm_label": "safetracewrite()",
-      "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L92"
     },
     {
       "community": 2540,
@@ -231771,92 +231792,92 @@
     {
       "community": 255,
       "file_type": "code",
-      "id": "finalizedlineageremediation_classifyfinalizedlineagerepairconflicts",
-      "label": "classifyFinalizedLineageRepairConflicts()",
-      "norm_label": "classifyfinalizedlineagerepairconflicts()",
-      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
+      "id": "packages_athena_webapp_convex_pos_infrastructure_repositories_terminalrecoveryrepository_ts",
+      "label": "terminalRecoveryRepository.ts",
+      "norm_label": "terminalrecoveryrepository.ts",
+      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 255,
+      "file_type": "code",
+      "id": "terminalrecoveryrepository_createterminalrecoverycommandreadrepository",
+      "label": "createTerminalRecoveryCommandReadRepository()",
+      "norm_label": "createterminalrecoverycommandreadrepository()",
+      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
+      "source_location": "L27"
+    },
+    {
+      "community": 255,
+      "file_type": "code",
+      "id": "terminalrecoveryrepository_createterminalrecoverycommandrepository",
+      "label": "createTerminalRecoveryCommandRepository()",
+      "norm_label": "createterminalrecoverycommandrepository()",
+      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
+      "source_location": "L127"
+    },
+    {
+      "community": 255,
+      "file_type": "code",
+      "id": "terminalrecoveryrepository_deduperecoverycommandsbyid",
+      "label": "dedupeRecoveryCommandsById()",
+      "norm_label": "deduperecoverycommandsbyid()",
+      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
+      "source_location": "L116"
+    },
+    {
+      "community": 255,
+      "file_type": "code",
+      "id": "terminalrecoveryrepository_deduperecoveryconflictsbyid",
+      "label": "dedupeRecoveryConflictsById()",
+      "norm_label": "deduperecoveryconflictsbyid()",
+      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
+      "source_location": "L193"
+    },
+    {
+      "community": 255,
+      "file_type": "code",
+      "id": "terminalrecoveryrepository_getterminalrecoverysourceevent",
+      "label": "getTerminalRecoverySourceEvent()",
+      "norm_label": "getterminalrecoverysourceevent()",
+      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
       "source_location": "L222"
     },
     {
       "community": 255,
       "file_type": "code",
-      "id": "finalizedlineageremediation_classifyrepaircandidate",
-      "label": "classifyRepairCandidate()",
-      "norm_label": "classifyrepaircandidate()",
-      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
-      "source_location": "L164"
+      "id": "terminalrecoveryrepository_iscurrentterminalrecoveryconflict",
+      "label": "isCurrentTerminalRecoveryConflict()",
+      "norm_label": "iscurrentterminalrecoveryconflict()",
+      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
+      "source_location": "L206"
     },
     {
       "community": 255,
       "file_type": "code",
-      "id": "finalizedlineageremediation_countrepairablefinalizedlineagelines",
-      "label": "countRepairableFinalizedLineageLines()",
-      "norm_label": "countrepairablefinalizedlineagelines()",
-      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
-      "source_location": "L284"
+      "id": "terminalrecoveryrepository_listterminalrecoveryconflictsforrepair",
+      "label": "listTerminalRecoveryConflictsForRepair()",
+      "norm_label": "listterminalrecoveryconflictsforrepair()",
+      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
+      "source_location": "L141"
     },
     {
       "community": 255,
       "file_type": "code",
-      "id": "finalizedlineageremediation_getprovisionalimportsku",
-      "label": "getProvisionalImportSku()",
-      "norm_label": "getprovisionalimportsku()",
-      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
-      "source_location": "L318"
+      "id": "terminalrecoveryrepository_listterminalrecoveryconflictsources",
+      "label": "listTerminalRecoveryConflictSources()",
+      "norm_label": "listterminalrecoveryconflictsources()",
+      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
+      "source_location": "L162"
     },
     {
       "community": 255,
       "file_type": "code",
-      "id": "finalizedlineageremediation_isclosedregisterrepairreplayconflict",
-      "label": "isClosedRegisterRepairReplayConflict()",
-      "norm_label": "isclosedregisterrepairreplayconflict()",
-      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
-      "source_location": "L273"
-    },
-    {
-      "community": 255,
-      "file_type": "code",
-      "id": "finalizedlineageremediation_isfinalizedlineagerepairconflict",
-      "label": "isFinalizedLineageRepairConflict()",
-      "norm_label": "isfinalizedlineagerepairconflict()",
-      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
-      "source_location": "L258"
-    },
-    {
-      "community": 255,
-      "file_type": "code",
-      "id": "finalizedlineageremediation_isprovisionalrowchangedconflict",
-      "label": "isProvisionalRowChangedConflict()",
-      "norm_label": "isprovisionalrowchangedconflict()",
-      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
-      "source_location": "L265"
-    },
-    {
-      "community": 255,
-      "file_type": "code",
-      "id": "finalizedlineageremediation_recordfinalizedlineagerepairevent",
-      "label": "recordFinalizedLineageRepairEvent()",
-      "norm_label": "recordfinalizedlineagerepairevent()",
-      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
-      "source_location": "L358"
-    },
-    {
-      "community": 255,
-      "file_type": "code",
-      "id": "finalizedlineageremediation_skipped",
-      "label": "skipped()",
-      "norm_label": "skipped()",
-      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
-      "source_location": "L346"
-    },
-    {
-      "community": 255,
-      "file_type": "code",
-      "id": "packages_athena_webapp_convex_pos_application_sync_finalizedlineageremediation_ts",
-      "label": "finalizedLineageRemediation.ts",
-      "norm_label": "finalizedlineageremediation.ts",
-      "source_file": "packages/athena-webapp/convex/pos/application/sync/finalizedLineageRemediation.ts",
-      "source_location": "L1"
+      "id": "terminalrecoveryrepository_patchterminalrecoveryconflict",
+      "label": "patchTerminalRecoveryConflict()",
+      "norm_label": "patchterminalrecoveryconflict()",
+      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
+      "source_location": "L241"
     },
     {
       "community": 2550,
@@ -231951,92 +231972,92 @@
     {
       "community": 256,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_pos_infrastructure_repositories_terminalrecoveryrepository_ts",
-      "label": "terminalRecoveryRepository.ts",
-      "norm_label": "terminalrecoveryrepository.ts",
-      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
+      "id": "contract_test_day",
+      "label": "day()",
+      "norm_label": "day()",
+      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
+      "source_location": "L1308"
+    },
+    {
+      "community": 256,
+      "file_type": "code",
+      "id": "contract_test_fieldsof",
+      "label": "fieldsOf()",
+      "norm_label": "fieldsof()",
+      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
+      "source_location": "L86"
+    },
+    {
+      "community": 256,
+      "file_type": "code",
+      "id": "contract_test_headerfor",
+      "label": "headerFor()",
+      "norm_label": "headerfor()",
+      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
+      "source_location": "L972"
+    },
+    {
+      "community": 256,
+      "file_type": "code",
+      "id": "contract_test_inclusivedays",
+      "label": "inclusiveDays()",
+      "norm_label": "inclusivedays()",
+      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
+      "source_location": "L1216"
+    },
+    {
+      "community": 256,
+      "file_type": "code",
+      "id": "contract_test_movementidentityargs",
+      "label": "movementIdentityArgs()",
+      "norm_label": "movementidentityargs()",
+      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
+      "source_location": "L602"
+    },
+    {
+      "community": 256,
+      "file_type": "code",
+      "id": "contract_test_probe",
+      "label": "probe()",
+      "norm_label": "probe()",
+      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
+      "source_location": "L1312"
+    },
+    {
+      "community": 256,
+      "file_type": "code",
+      "id": "contract_test_seedproductsku",
+      "label": "seedProductSku()",
+      "norm_label": "seedproductsku()",
+      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
+      "source_location": "L561"
+    },
+    {
+      "community": 256,
+      "file_type": "code",
+      "id": "contract_test_seedstore",
+      "label": "seedStore()",
+      "norm_label": "seedstore()",
+      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
+      "source_location": "L542"
+    },
+    {
+      "community": 256,
+      "file_type": "code",
+      "id": "contract_test_unionliterals",
+      "label": "unionLiterals()",
+      "norm_label": "unionliterals()",
+      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
+      "source_location": "L92"
+    },
+    {
+      "community": 256,
+      "file_type": "code",
+      "id": "packages_athena_webapp_convex_reports_contract_test_ts",
+      "label": "contract.test.ts",
+      "norm_label": "contract.test.ts",
+      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
       "source_location": "L1"
-    },
-    {
-      "community": 256,
-      "file_type": "code",
-      "id": "terminalrecoveryrepository_createterminalrecoverycommandreadrepository",
-      "label": "createTerminalRecoveryCommandReadRepository()",
-      "norm_label": "createterminalrecoverycommandreadrepository()",
-      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L27"
-    },
-    {
-      "community": 256,
-      "file_type": "code",
-      "id": "terminalrecoveryrepository_createterminalrecoverycommandrepository",
-      "label": "createTerminalRecoveryCommandRepository()",
-      "norm_label": "createterminalrecoverycommandrepository()",
-      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L127"
-    },
-    {
-      "community": 256,
-      "file_type": "code",
-      "id": "terminalrecoveryrepository_deduperecoverycommandsbyid",
-      "label": "dedupeRecoveryCommandsById()",
-      "norm_label": "deduperecoverycommandsbyid()",
-      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L116"
-    },
-    {
-      "community": 256,
-      "file_type": "code",
-      "id": "terminalrecoveryrepository_deduperecoveryconflictsbyid",
-      "label": "dedupeRecoveryConflictsById()",
-      "norm_label": "deduperecoveryconflictsbyid()",
-      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L193"
-    },
-    {
-      "community": 256,
-      "file_type": "code",
-      "id": "terminalrecoveryrepository_getterminalrecoverysourceevent",
-      "label": "getTerminalRecoverySourceEvent()",
-      "norm_label": "getterminalrecoverysourceevent()",
-      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L222"
-    },
-    {
-      "community": 256,
-      "file_type": "code",
-      "id": "terminalrecoveryrepository_iscurrentterminalrecoveryconflict",
-      "label": "isCurrentTerminalRecoveryConflict()",
-      "norm_label": "iscurrentterminalrecoveryconflict()",
-      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L206"
-    },
-    {
-      "community": 256,
-      "file_type": "code",
-      "id": "terminalrecoveryrepository_listterminalrecoveryconflictsforrepair",
-      "label": "listTerminalRecoveryConflictsForRepair()",
-      "norm_label": "listterminalrecoveryconflictsforrepair()",
-      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L141"
-    },
-    {
-      "community": 256,
-      "file_type": "code",
-      "id": "terminalrecoveryrepository_listterminalrecoveryconflictsources",
-      "label": "listTerminalRecoveryConflictSources()",
-      "norm_label": "listterminalrecoveryconflictsources()",
-      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L162"
-    },
-    {
-      "community": 256,
-      "file_type": "code",
-      "id": "terminalrecoveryrepository_patchterminalrecoveryconflict",
-      "label": "patchTerminalRecoveryConflict()",
-      "norm_label": "patchterminalrecoveryconflict()",
-      "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L241"
     },
     {
       "community": 2560,
@@ -232131,91 +232152,91 @@
     {
       "community": 257,
       "file_type": "code",
-      "id": "contract_test_day",
-      "label": "day()",
-      "norm_label": "day()",
-      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
-      "source_location": "L1308"
+      "id": "customrange_aggregateskudays",
+      "label": "aggregateSkuDays()",
+      "norm_label": "aggregateskudays()",
+      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
+      "source_location": "L217"
     },
     {
       "community": 257,
       "file_type": "code",
-      "id": "contract_test_fieldsof",
-      "label": "fieldsOf()",
-      "norm_label": "fieldsof()",
-      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
-      "source_location": "L86"
+      "id": "customrange_computerange",
+      "label": "computeRange()",
+      "norm_label": "computerange()",
+      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
+      "source_location": "L253"
     },
     {
       "community": 257,
       "file_type": "code",
-      "id": "contract_test_headerfor",
-      "label": "headerFor()",
-      "norm_label": "headerfor()",
-      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
-      "source_location": "L972"
+      "id": "customrange_computerequestkey",
+      "label": "computeRequestKey()",
+      "norm_label": "computerequestkey()",
+      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
+      "source_location": "L84"
     },
     {
       "community": 257,
       "file_type": "code",
-      "id": "contract_test_inclusivedays",
-      "label": "inclusiveDays()",
-      "norm_label": "inclusivedays()",
-      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
-      "source_location": "L1216"
+      "id": "customrange_inclusivedayspan",
+      "label": "inclusiveDaySpan()",
+      "norm_label": "inclusivedayspan()",
+      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
+      "source_location": "L52"
     },
     {
       "community": 257,
       "file_type": "code",
-      "id": "contract_test_movementidentityargs",
-      "label": "movementIdentityArgs()",
-      "norm_label": "movementidentityargs()",
-      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
-      "source_location": "L602"
+      "id": "customrange_isvalidoperatingdate",
+      "label": "isValidOperatingDate()",
+      "norm_label": "isvalidoperatingdate()",
+      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
+      "source_location": "L35"
     },
     {
       "community": 257,
       "file_type": "code",
-      "id": "contract_test_probe",
-      "label": "probe()",
-      "norm_label": "probe()",
-      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
-      "source_location": "L1312"
+      "id": "customrange_requestrangecore",
+      "label": "requestRangeCore()",
+      "norm_label": "requestrangecore()",
+      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
+      "source_location": "L112"
     },
     {
       "community": 257,
       "file_type": "code",
-      "id": "contract_test_seedproductsku",
-      "label": "seedProductSku()",
-      "norm_label": "seedproductsku()",
-      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
-      "source_location": "L561"
+      "id": "customrange_sumdays",
+      "label": "sumDays()",
+      "norm_label": "sumdays()",
+      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
+      "source_location": "L189"
     },
     {
       "community": 257,
       "file_type": "code",
-      "id": "contract_test_seedstore",
-      "label": "seedStore()",
-      "norm_label": "seedstore()",
-      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
-      "source_location": "L542"
+      "id": "customrange_utcmillisforlabel",
+      "label": "utcMillisForLabel()",
+      "norm_label": "utcmillisforlabel()",
+      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
+      "source_location": "L46"
     },
     {
       "community": 257,
       "file_type": "code",
-      "id": "contract_test_unionliterals",
-      "label": "unionLiterals()",
-      "norm_label": "unionliterals()",
-      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
-      "source_location": "L92"
+      "id": "customrange_validaterangeargs",
+      "label": "validateRangeArgs()",
+      "norm_label": "validaterangeargs()",
+      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
+      "source_location": "L58"
     },
     {
       "community": 257,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_reports_contract_test_ts",
-      "label": "contract.test.ts",
-      "norm_label": "contract.test.ts",
-      "source_file": "packages/athena-webapp/convex/reports/contract.test.ts",
+      "id": "packages_athena_webapp_convex_reports_customrange_ts",
+      "label": "customRange.ts",
+      "norm_label": "customrange.ts",
+      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
       "source_location": "L1"
     },
     {
@@ -232311,92 +232332,92 @@
     {
       "community": 258,
       "file_type": "code",
-      "id": "customrange_aggregateskudays",
-      "label": "aggregateSkuDays()",
-      "norm_label": "aggregateskudays()",
-      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
-      "source_location": "L217"
-    },
-    {
-      "community": 258,
-      "file_type": "code",
-      "id": "customrange_computerange",
-      "label": "computeRange()",
-      "norm_label": "computerange()",
-      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
-      "source_location": "L253"
-    },
-    {
-      "community": 258,
-      "file_type": "code",
-      "id": "customrange_computerequestkey",
-      "label": "computeRequestKey()",
-      "norm_label": "computerequestkey()",
-      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
-      "source_location": "L84"
-    },
-    {
-      "community": 258,
-      "file_type": "code",
-      "id": "customrange_inclusivedayspan",
-      "label": "inclusiveDaySpan()",
-      "norm_label": "inclusivedayspan()",
-      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
-      "source_location": "L52"
-    },
-    {
-      "community": 258,
-      "file_type": "code",
-      "id": "customrange_isvalidoperatingdate",
-      "label": "isValidOperatingDate()",
-      "norm_label": "isvalidoperatingdate()",
-      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
-      "source_location": "L35"
-    },
-    {
-      "community": 258,
-      "file_type": "code",
-      "id": "customrange_requestrangecore",
-      "label": "requestRangeCore()",
-      "norm_label": "requestrangecore()",
-      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
-      "source_location": "L112"
-    },
-    {
-      "community": 258,
-      "file_type": "code",
-      "id": "customrange_sumdays",
-      "label": "sumDays()",
-      "norm_label": "sumdays()",
-      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
-      "source_location": "L189"
-    },
-    {
-      "community": 258,
-      "file_type": "code",
-      "id": "customrange_utcmillisforlabel",
-      "label": "utcMillisForLabel()",
-      "norm_label": "utcmillisforlabel()",
-      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
-      "source_location": "L46"
-    },
-    {
-      "community": 258,
-      "file_type": "code",
-      "id": "customrange_validaterangeargs",
-      "label": "validateRangeArgs()",
-      "norm_label": "validaterangeargs()",
-      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
-      "source_location": "L58"
-    },
-    {
-      "community": 258,
-      "file_type": "code",
-      "id": "packages_athena_webapp_convex_reports_customrange_ts",
-      "label": "customRange.ts",
-      "norm_label": "customrange.ts",
-      "source_file": "packages/athena-webapp/convex/reports/customRange.ts",
+      "id": "packages_athena_webapp_convex_reports_rangesnapshotlifecycle_test_ts",
+      "label": "rangeSnapshotLifecycle.test.ts",
+      "norm_label": "rangesnapshotlifecycle.test.ts",
+      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
       "source_location": "L1"
+    },
+    {
+      "community": 258,
+      "file_type": "code",
+      "id": "rangesnapshotlifecycle_test_allow",
+      "label": "allow()",
+      "norm_label": "allow()",
+      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
+      "source_location": "L53"
+    },
+    {
+      "community": 258,
+      "file_type": "code",
+      "id": "rangesnapshotlifecycle_test_certifyday",
+      "label": "certifyDay()",
+      "norm_label": "certifyday()",
+      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
+      "source_location": "L109"
+    },
+    {
+      "community": 258,
+      "file_type": "code",
+      "id": "rangesnapshotlifecycle_test_consume",
+      "label": "consume()",
+      "norm_label": "consume()",
+      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
+      "source_location": "L296"
+    },
+    {
+      "community": 258,
+      "file_type": "code",
+      "id": "rangesnapshotlifecycle_test_drive",
+      "label": "drive()",
+      "norm_label": "drive()",
+      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
+      "source_location": "L247"
+    },
+    {
+      "community": 258,
+      "file_type": "code",
+      "id": "rangesnapshotlifecycle_test_ensuresynthetic",
+      "label": "ensureSynthetic()",
+      "norm_label": "ensuresynthetic()",
+      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
+      "source_location": "L208"
+    },
+    {
+      "community": 258,
+      "file_type": "code",
+      "id": "rangesnapshotlifecycle_test_headerbykey",
+      "label": "headerByKey()",
+      "norm_label": "headerbykey()",
+      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
+      "source_location": "L230"
+    },
+    {
+      "community": 258,
+      "file_type": "code",
+      "id": "rangesnapshotlifecycle_test_insertkindedheader",
+      "label": "insertKindedHeader()",
+      "norm_label": "insertkindedheader()",
+      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
+      "source_location": "L612"
+    },
+    {
+      "community": 258,
+      "file_type": "code",
+      "id": "rangesnapshotlifecycle_test_seedstore",
+      "label": "seedStore()",
+      "norm_label": "seedstore()",
+      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
+      "source_location": "L73"
+    },
+    {
+      "community": 258,
+      "file_type": "code",
+      "id": "rangesnapshotlifecycle_test_synthetickind",
+      "label": "syntheticKind()",
+      "norm_label": "synthetickind()",
+      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
+      "source_location": "L150"
     },
     {
       "community": 2580,
@@ -232491,92 +232512,92 @@
     {
       "community": 259,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_reports_rangesnapshotlifecycle_test_ts",
-      "label": "rangeSnapshotLifecycle.test.ts",
-      "norm_label": "rangesnapshotlifecycle.test.ts",
-      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
+      "id": "packages_athena_webapp_convex_reports_verificationclassify_ts",
+      "label": "verificationClassify.ts",
+      "norm_label": "verificationclassify.ts",
+      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
       "source_location": "L1"
     },
     {
       "community": 259,
       "file_type": "code",
-      "id": "rangesnapshotlifecycle_test_allow",
-      "label": "allow()",
-      "norm_label": "allow()",
-      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
-      "source_location": "L53"
+      "id": "verificationclassify_buildclassification",
+      "label": "buildClassification()",
+      "norm_label": "buildclassification()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
+      "source_location": "L448"
     },
     {
       "community": 259,
       "file_type": "code",
-      "id": "rangesnapshotlifecycle_test_certifyday",
-      "label": "certifyDay()",
-      "norm_label": "certifyday()",
-      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
-      "source_location": "L109"
+      "id": "verificationclassify_classifydayresult",
+      "label": "classifyDayResult()",
+      "norm_label": "classifydayresult()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
+      "source_location": "L481"
     },
     {
       "community": 259,
       "file_type": "code",
-      "id": "rangesnapshotlifecycle_test_consume",
-      "label": "consume()",
-      "norm_label": "consume()",
-      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
-      "source_location": "L296"
+      "id": "verificationclassify_classifyweekresult",
+      "label": "classifyWeekResult()",
+      "norm_label": "classifyweekresult()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
+      "source_location": "L562"
     },
     {
       "community": 259,
       "file_type": "code",
-      "id": "rangesnapshotlifecycle_test_drive",
-      "label": "drive()",
-      "norm_label": "drive()",
-      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
-      "source_location": "L247"
+      "id": "verificationclassify_confirmsclean",
+      "label": "confirmsClean()",
+      "norm_label": "confirmsclean()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
+      "source_location": "L681"
     },
     {
       "community": 259,
       "file_type": "code",
-      "id": "rangesnapshotlifecycle_test_ensuresynthetic",
-      "label": "ensureSynthetic()",
-      "norm_label": "ensuresynthetic()",
-      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
-      "source_location": "L208"
+      "id": "verificationclassify_explainmetricdifference",
+      "label": "explainMetricDifference()",
+      "norm_label": "explainmetricdifference()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
+      "source_location": "L378"
     },
     {
       "community": 259,
       "file_type": "code",
-      "id": "rangesnapshotlifecycle_test_headerbykey",
-      "label": "headerByKey()",
-      "norm_label": "headerbykey()",
-      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
-      "source_location": "L230"
+      "id": "verificationclassify_fingerprintdifferences",
+      "label": "fingerprintDifferences()",
+      "norm_label": "fingerprintdifferences()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
+      "source_location": "L354"
     },
     {
       "community": 259,
       "file_type": "code",
-      "id": "rangesnapshotlifecycle_test_insertkindedheader",
-      "label": "insertKindedHeader()",
-      "norm_label": "insertkindedheader()",
-      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
-      "source_location": "L612"
+      "id": "verificationclassify_initialstreakstate",
+      "label": "initialStreakState()",
+      "norm_label": "initialstreakstate()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
+      "source_location": "L658"
     },
     {
       "community": 259,
       "file_type": "code",
-      "id": "rangesnapshotlifecycle_test_seedstore",
-      "label": "seedStore()",
-      "norm_label": "seedstore()",
-      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
-      "source_location": "L73"
+      "id": "verificationclassify_nextstreakstate",
+      "label": "nextStreakState()",
+      "norm_label": "nextstreakstate()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
+      "source_location": "L707"
     },
     {
       "community": 259,
       "file_type": "code",
-      "id": "rangesnapshotlifecycle_test_synthetickind",
-      "label": "syntheticKind()",
-      "norm_label": "synthetickind()",
-      "source_file": "packages/athena-webapp/convex/reports/rangeSnapshotLifecycle.test.ts",
-      "source_location": "L150"
+      "id": "verificationclassify_partitiondifferences",
+      "label": "partitionDifferences()",
+      "norm_label": "partitiondifferences()",
+      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
+      "source_location": "L434"
     },
     {
       "community": 2590,
@@ -233013,92 +233034,92 @@
     {
       "community": 260,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_reports_verificationclassify_ts",
-      "label": "verificationClassify.ts",
-      "norm_label": "verificationclassify.ts",
-      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
+      "id": "index_resolveverificationcoderecipient",
+      "label": "resolveVerificationCodeRecipient()",
+      "norm_label": "resolveverificationcoderecipient()",
+      "source_file": "packages/athena-webapp/convex/mailersend/index.tsx",
+      "source_location": "L19"
+    },
+    {
+      "community": 260,
+      "file_type": "code",
+      "id": "index_senddailymanagerreportemail",
+      "label": "sendDailyManagerReportEmail()",
+      "norm_label": "senddailymanagerreportemail()",
+      "source_file": "packages/athena-webapp/convex/mailersend/index.tsx",
+      "source_location": "L373"
+    },
+    {
+      "community": 260,
+      "file_type": "code",
+      "id": "index_senddiscountcodeemail",
+      "label": "sendDiscountCodeEmail()",
+      "norm_label": "senddiscountcodeemail()",
+      "source_file": "packages/athena-webapp/convex/sendgrid/index.tsx",
+      "source_location": "L255"
+    },
+    {
+      "community": 260,
+      "file_type": "code",
+      "id": "index_senddiscountreminderemail",
+      "label": "sendDiscountReminderEmail()",
+      "norm_label": "senddiscountreminderemail()",
+      "source_file": "packages/athena-webapp/convex/sendgrid/index.tsx",
+      "source_location": "L334"
+    },
+    {
+      "community": 260,
+      "file_type": "code",
+      "id": "index_sendfeedbackrequestemail",
+      "label": "sendFeedbackRequestEmail()",
+      "norm_label": "sendfeedbackrequestemail()",
+      "source_file": "packages/athena-webapp/convex/sendgrid/index.tsx",
+      "source_location": "L167"
+    },
+    {
+      "community": 260,
+      "file_type": "code",
+      "id": "index_sendneworderemail",
+      "label": "sendNewOrderEmail()",
+      "norm_label": "sendneworderemail()",
+      "source_file": "packages/athena-webapp/convex/sendgrid/index.tsx",
+      "source_location": "L117"
+    },
+    {
+      "community": 260,
+      "file_type": "code",
+      "id": "index_sendorderemail",
+      "label": "sendOrderEmail()",
+      "norm_label": "sendorderemail()",
+      "source_file": "packages/athena-webapp/convex/sendgrid/index.tsx",
+      "source_location": "L43"
+    },
+    {
+      "community": 260,
+      "file_type": "code",
+      "id": "index_sendverificationcode",
+      "label": "sendVerificationCode()",
+      "norm_label": "sendverificationcode()",
+      "source_file": "packages/athena-webapp/convex/sendgrid/index.tsx",
+      "source_location": "L3"
+    },
+    {
+      "community": 260,
+      "file_type": "code",
+      "id": "packages_athena_webapp_convex_mailersend_index_tsx",
+      "label": "index.tsx",
+      "norm_label": "index.tsx",
+      "source_file": "packages/athena-webapp/convex/mailersend/index.tsx",
       "source_location": "L1"
     },
     {
       "community": 260,
       "file_type": "code",
-      "id": "verificationclassify_buildclassification",
-      "label": "buildClassification()",
-      "norm_label": "buildclassification()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
-      "source_location": "L448"
-    },
-    {
-      "community": 260,
-      "file_type": "code",
-      "id": "verificationclassify_classifydayresult",
-      "label": "classifyDayResult()",
-      "norm_label": "classifydayresult()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
-      "source_location": "L481"
-    },
-    {
-      "community": 260,
-      "file_type": "code",
-      "id": "verificationclassify_classifyweekresult",
-      "label": "classifyWeekResult()",
-      "norm_label": "classifyweekresult()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
-      "source_location": "L562"
-    },
-    {
-      "community": 260,
-      "file_type": "code",
-      "id": "verificationclassify_confirmsclean",
-      "label": "confirmsClean()",
-      "norm_label": "confirmsclean()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
-      "source_location": "L681"
-    },
-    {
-      "community": 260,
-      "file_type": "code",
-      "id": "verificationclassify_explainmetricdifference",
-      "label": "explainMetricDifference()",
-      "norm_label": "explainmetricdifference()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
-      "source_location": "L378"
-    },
-    {
-      "community": 260,
-      "file_type": "code",
-      "id": "verificationclassify_fingerprintdifferences",
-      "label": "fingerprintDifferences()",
-      "norm_label": "fingerprintdifferences()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
-      "source_location": "L354"
-    },
-    {
-      "community": 260,
-      "file_type": "code",
-      "id": "verificationclassify_initialstreakstate",
-      "label": "initialStreakState()",
-      "norm_label": "initialstreakstate()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
-      "source_location": "L658"
-    },
-    {
-      "community": 260,
-      "file_type": "code",
-      "id": "verificationclassify_nextstreakstate",
-      "label": "nextStreakState()",
-      "norm_label": "nextstreakstate()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
-      "source_location": "L707"
-    },
-    {
-      "community": 260,
-      "file_type": "code",
-      "id": "verificationclassify_partitiondifferences",
-      "label": "partitionDifferences()",
-      "norm_label": "partitiondifferences()",
-      "source_file": "packages/athena-webapp/convex/reports/verificationClassify.ts",
-      "source_location": "L434"
+      "id": "packages_athena_webapp_convex_sendgrid_index_tsx",
+      "label": "index.tsx",
+      "norm_label": "index.tsx",
+      "source_file": "packages/athena-webapp/convex/sendgrid/index.tsx",
+      "source_location": "L1"
     },
     {
       "community": 2600,
@@ -263806,7 +263827,7 @@
       "label": "createFixtureRoot()",
       "norm_label": "createfixtureroot()",
       "source_file": "scripts/pre-push-validation-proof.test.ts",
-      "source_location": "L20"
+      "source_location": "L21"
     },
     {
       "community": 543,
@@ -263815,7 +263836,7 @@
       "label": "createSpawn()",
       "norm_label": "createspawn()",
       "source_file": "scripts/pre-push-validation-proof.test.ts",
-      "source_location": "L63"
+      "source_location": "L64"
     },
     {
       "community": 543,
@@ -263824,7 +263845,7 @@
       "label": "log()",
       "norm_label": "log()",
       "source_file": "scripts/pre-push-validation-proof.test.ts",
-      "source_location": "L171"
+      "source_location": "L185"
     },
     {
       "community": 543,
@@ -263833,7 +263854,7 @@
       "label": "warn()",
       "norm_label": "warn()",
       "source_file": "scripts/pre-push-validation-proof.test.ts",
-      "source_location": "L309"
+      "source_location": "L323"
     },
     {
       "community": 543,
@@ -263842,7 +263863,7 @@
       "label": "write()",
       "norm_label": "write()",
       "source_file": "scripts/pre-push-validation-proof.test.ts",
-      "source_location": "L14"
+      "source_location": "L15"
     },
     {
       "community": 543,
