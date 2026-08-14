@@ -3,10 +3,30 @@ import { useEffect, useSyncExternalStore } from "react";
 export const ATHENA_THEME_STORAGE_KEY = "athena-theme-mode";
 export const ATHENA_DARK_THEME_VARIANT_STORAGE_KEY =
   "athena-dark-theme-variant";
+export const ATHENA_SUN_CYCLE_LOCATION_STORAGE_KEY =
+  "athena-sun-cycle-location";
 
-export type AthenaThemeMode = "system" | "light" | "dark";
+export type AthenaThemeMode = "system" | "light" | "dark" | "sun-cycle";
 export type AthenaResolvedTheme = "light" | "dark";
 export type AthenaDarkThemeVariant = "charcoal" | "classic";
+
+export type SunCycleLocation = {
+  latitude: number;
+  longitude: number;
+};
+
+export type SunCycleThemeState = {
+  resolvedTheme: AthenaResolvedTheme;
+  nextResolvedTheme: AthenaResolvedTheme;
+  nextTransitionAt: number;
+};
+
+export type SunCycleRequestResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: "cancelled" | "permission-denied" | "unavailable";
+    };
 
 type ThemeViewTransition = {
   finished?: Promise<void>;
@@ -16,7 +36,12 @@ type ThemeTransitionDocument = Document & {
   startViewTransition?: (callback: () => void) => ThemeViewTransition;
 };
 
-const THEME_MODES = new Set<AthenaThemeMode>(["system", "light", "dark"]);
+const THEME_MODES = new Set<AthenaThemeMode>([
+  "system",
+  "light",
+  "dark",
+  "sun-cycle",
+]);
 const DARK_THEME_VARIANTS = new Set<AthenaDarkThemeVariant>([
   "charcoal",
   "classic",
@@ -25,6 +50,11 @@ const THEME_CHANGE_EVENT = "athena-theme-change";
 const DARK_MEDIA_QUERY = "(prefers-color-scheme: dark)";
 const REDUCED_MOTION_MEDIA_QUERY = "(prefers-reduced-motion: reduce)";
 const DEFAULT_DARK_THEME_VARIANT: AthenaDarkThemeVariant = "charcoal";
+const SUNRISE_SUNSET_ZENITH_DEGREES = 90.833;
+const SUN_CYCLE_LOCATION_PRECISION = 100;
+const SUN_CYCLE_LOCATION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+let sunCycleTransitionTimer: ReturnType<typeof setTimeout> | undefined;
+let hasInstalledSunCycleLifecycleListeners = false;
 
 function isThemeMode(value: string | null): value is AthenaThemeMode {
   return Boolean(value && THEME_MODES.has(value as AthenaThemeMode));
@@ -67,6 +97,40 @@ function getStoredDarkThemeVariant(): AthenaDarkThemeVariant {
     : DEFAULT_DARK_THEME_VARIANT;
 }
 
+function isSunCycleLocation(value: unknown): value is SunCycleLocation {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<SunCycleLocation>;
+  return (
+    typeof candidate.latitude === "number" &&
+    Number.isFinite(candidate.latitude) &&
+    candidate.latitude >= -90 &&
+    candidate.latitude <= 90 &&
+    typeof candidate.longitude === "number" &&
+    Number.isFinite(candidate.longitude) &&
+    candidate.longitude >= -180 &&
+    candidate.longitude <= 180
+  );
+}
+
+function getStoredSunCycleLocation(): SunCycleLocation | null {
+  const storedValue = getStorage()?.getItem(
+    ATHENA_SUN_CYCLE_LOCATION_STORAGE_KEY,
+  );
+  if (!storedValue) {
+    return null;
+  }
+
+  try {
+    const parsedValue: unknown = JSON.parse(storedValue);
+    return isSunCycleLocation(parsedValue) ? parsedValue : null;
+  } catch {
+    return null;
+  }
+}
+
 function getSystemTheme(): AthenaResolvedTheme {
   if (
     typeof window !== "undefined" &&
@@ -81,12 +145,175 @@ function getSystemTheme(): AthenaResolvedTheme {
 function prefersReducedMotion() {
   return Boolean(
     typeof window !== "undefined" &&
-      window.matchMedia?.(REDUCED_MOTION_MEDIA_QUERY).matches,
+    window.matchMedia?.(REDUCED_MOTION_MEDIA_QUERY).matches,
   );
 }
 
+function normalizeDegrees(value: number) {
+  return ((value % 360) + 360) % 360;
+}
+
+function degreesToRadians(value: number) {
+  return (value * Math.PI) / 180;
+}
+
+function radiansToDegrees(value: number) {
+  return (value * 180) / Math.PI;
+}
+
+function dayOfYear(year: number, month: number, day: number) {
+  const startOfYear = Date.UTC(year, 0, 0);
+  const currentDay = Date.UTC(year, month, day);
+  return Math.floor((currentDay - startOfYear) / 86_400_000);
+}
+
+function solarEventAt(
+  year: number,
+  month: number,
+  day: number,
+  location: SunCycleLocation,
+  event: "sunrise" | "sunset",
+) {
+  const longitudeHour = location.longitude / 15;
+  const approximateTime =
+    dayOfYear(year, month, day) +
+    ((event === "sunrise" ? 6 : 18) - longitudeHour) / 24;
+  const meanAnomaly = 0.9856 * approximateTime - 3.289;
+  const trueLongitude = normalizeDegrees(
+    meanAnomaly +
+      1.916 * Math.sin(degreesToRadians(meanAnomaly)) +
+      0.02 * Math.sin(degreesToRadians(2 * meanAnomaly)) +
+      282.634,
+  );
+  let rightAscension = normalizeDegrees(
+    radiansToDegrees(
+      Math.atan(0.91764 * Math.tan(degreesToRadians(trueLongitude))),
+    ),
+  );
+  const longitudeQuadrant = Math.floor(trueLongitude / 90) * 90;
+  const rightAscensionQuadrant = Math.floor(rightAscension / 90) * 90;
+  rightAscension =
+    (rightAscension + longitudeQuadrant - rightAscensionQuadrant) / 15;
+
+  const sinDeclination = 0.39782 * Math.sin(degreesToRadians(trueLongitude));
+  const cosDeclination = Math.cos(Math.asin(sinDeclination));
+  const cosHourAngle =
+    (Math.cos(degreesToRadians(SUNRISE_SUNSET_ZENITH_DEGREES)) -
+      sinDeclination * Math.sin(degreesToRadians(location.latitude))) /
+    (cosDeclination * Math.cos(degreesToRadians(location.latitude)));
+
+  if (cosHourAngle < -1 || cosHourAngle > 1) {
+    return null;
+  }
+
+  const hourAngleDegrees =
+    event === "sunrise"
+      ? 360 - radiansToDegrees(Math.acos(cosHourAngle))
+      : radiansToDegrees(Math.acos(cosHourAngle));
+  const hourAngle = hourAngleDegrees / 15;
+  const localMeanTime =
+    hourAngle + rightAscension - 0.06571 * approximateTime - 6.622;
+  const utcHour = normalizeDegrees((localMeanTime - longitudeHour) * 15) / 15;
+  const utcDate = Date.UTC(year, month, day) + utcHour * 60 * 60 * 1000;
+
+  for (const dayOffset of [-1, 0, 1]) {
+    const candidate = new Date(utcDate + dayOffset * 86_400_000);
+    if (
+      candidate.getFullYear() === year &&
+      candidate.getMonth() === month &&
+      candidate.getDate() === day
+    ) {
+      return candidate.getTime();
+    }
+  }
+
+  return utcDate;
+}
+
+function localCalendarDate(date: Date, dayOffset = 0) {
+  const localNoon = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate() + dayOffset,
+    12,
+  );
+  return {
+    year: localNoon.getFullYear(),
+    month: localNoon.getMonth(),
+    day: localNoon.getDate(),
+  };
+}
+
+export function getSunCycleThemeState(
+  now: Date,
+  location: SunCycleLocation,
+): SunCycleThemeState | null {
+  const today = localCalendarDate(now);
+  const sunrise = solarEventAt(
+    today.year,
+    today.month,
+    today.day,
+    location,
+    "sunrise",
+  );
+  const sunset = solarEventAt(
+    today.year,
+    today.month,
+    today.day,
+    location,
+    "sunset",
+  );
+
+  if (sunrise === null || sunset === null) {
+    return null;
+  }
+
+  const nowTimestamp = now.getTime();
+  if (nowTimestamp < sunrise) {
+    return {
+      resolvedTheme: "dark",
+      nextResolvedTheme: "light",
+      nextTransitionAt: sunrise,
+    };
+  }
+  if (nowTimestamp < sunset) {
+    return {
+      resolvedTheme: "light",
+      nextResolvedTheme: "dark",
+      nextTransitionAt: sunset,
+    };
+  }
+
+  const tomorrow = localCalendarDate(now, 1);
+  const nextSunrise = solarEventAt(
+    tomorrow.year,
+    tomorrow.month,
+    tomorrow.day,
+    location,
+    "sunrise",
+  );
+  return nextSunrise === null
+    ? null
+    : {
+        resolvedTheme: "dark",
+        nextResolvedTheme: "light",
+        nextTransitionAt: nextSunrise,
+      };
+}
+
+function getStoredSunCycleThemeState(now = new Date()) {
+  const location = getStoredSunCycleLocation();
+  return location ? getSunCycleThemeState(now, location) : null;
+}
+
 function resolveTheme(mode: AthenaThemeMode): AthenaResolvedTheme {
-  return mode === "system" ? getSystemTheme() : mode;
+  if (mode === "system") {
+    return getSystemTheme();
+  }
+  if (mode === "sun-cycle") {
+    return getStoredSunCycleThemeState()?.resolvedTheme ?? getSystemTheme();
+  }
+  return mode;
 }
 
 function applyTheme(
@@ -119,8 +346,44 @@ function emitThemeChange() {
   window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
 }
 
+function scheduleSunCycleTransition() {
+  if (sunCycleTransitionTimer) {
+    clearTimeout(sunCycleTransitionTimer);
+    sunCycleTransitionTimer = undefined;
+  }
+
+  if (getStoredThemeMode() !== "sun-cycle") {
+    return;
+  }
+
+  const state = getStoredSunCycleThemeState();
+  if (!state) {
+    return;
+  }
+
+  const delay = Math.min(
+    Math.max(state.nextTransitionAt - Date.now() + 50, 0),
+    2_147_483_647,
+  );
+  sunCycleTransitionTimer = setTimeout(() => {
+    applyTheme("sun-cycle");
+    emitThemeChange();
+    scheduleSunCycleTransition();
+  }, delay);
+}
+
+function refreshSunCycleTheme() {
+  if (getStoredThemeMode() !== "sun-cycle") {
+    return;
+  }
+  applyTheme("sun-cycle");
+  emitThemeChange();
+  scheduleSunCycleTransition();
+}
+
 export function initializeAthenaTheme() {
   applyTheme(getStoredThemeMode());
+  scheduleSunCycleTransition();
 
   if (typeof window === "undefined") {
     return;
@@ -132,14 +395,28 @@ export function initializeAthenaTheme() {
   }
 
   const handleSystemThemeChange = () => {
-    if (getStoredThemeMode() === "system") {
-      applyTheme("system");
+    const mode = getStoredThemeMode();
+    if (
+      mode === "system" ||
+      (mode === "sun-cycle" && !getStoredSunCycleThemeState())
+    ) {
+      applyTheme(mode);
       emitThemeChange();
     }
   };
 
   mediaQuery.addEventListener?.("change", handleSystemThemeChange);
   mediaQuery.addListener?.(handleSystemThemeChange);
+
+  if (!hasInstalledSunCycleLifecycleListeners) {
+    window.addEventListener("focus", refreshSunCycleTheme);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        refreshSunCycleTheme();
+      }
+    });
+    hasInstalledSunCycleLifecycleListeners = true;
+  }
 }
 
 export function setAthenaThemeMode(mode: AthenaThemeMode) {
@@ -153,6 +430,68 @@ export function setAthenaThemeMode(mode: AthenaThemeMode) {
 
   applyTheme(mode);
   emitThemeChange();
+  scheduleSunCycleTransition();
+}
+
+function roundedCoordinate(value: number) {
+  const rounded =
+    Math.round(value * SUN_CYCLE_LOCATION_PRECISION) /
+    SUN_CYCLE_LOCATION_PRECISION;
+  return Object.is(rounded, -0) ? 0 : rounded;
+}
+
+export async function requestAthenaSunCycleMode(
+  signal?: AbortSignal,
+): Promise<SunCycleRequestResult> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) {
+    return { ok: false, reason: "unavailable" };
+  }
+
+  const result = await new Promise<
+    | { ok: true; location: SunCycleLocation }
+    | { ok: false; reason: "permission-denied" | "unavailable" }
+  >((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const location = {
+          latitude: roundedCoordinate(coords.latitude),
+          longitude: roundedCoordinate(coords.longitude),
+        };
+        resolve(
+          isSunCycleLocation(location)
+            ? { ok: true, location }
+            : { ok: false, reason: "unavailable" },
+        );
+      },
+      (error) =>
+        resolve({
+          ok: false,
+          reason: error.code === 1 ? "permission-denied" : "unavailable",
+        }),
+      {
+        enableHighAccuracy: false,
+        maximumAge: SUN_CYCLE_LOCATION_MAX_AGE_MS,
+        timeout: 10_000,
+      },
+    );
+  });
+
+  if (!result.ok) {
+    return result;
+  }
+  if (signal?.aborted) {
+    return { ok: false, reason: "cancelled" };
+  }
+  if (!getSunCycleThemeState(new Date(), result.location)) {
+    return { ok: false, reason: "unavailable" };
+  }
+
+  getStorage()?.setItem(
+    ATHENA_SUN_CYCLE_LOCATION_STORAGE_KEY,
+    JSON.stringify(result.location),
+  );
+  setAthenaThemeModeWithTransition("sun-cycle");
+  return { ok: true };
 }
 
 export function setAthenaDarkThemeVariant(variant: AthenaDarkThemeVariant) {
@@ -187,13 +526,23 @@ function subscribeToThemeStore(onStoreChange: () => void) {
     return () => {};
   }
 
+  const handleStorageChange = () => {
+    applyTheme(getStoredThemeMode());
+    scheduleSunCycleTransition();
+    onStoreChange();
+  };
+
   window.addEventListener(THEME_CHANGE_EVENT, onStoreChange);
-  window.addEventListener("storage", onStoreChange);
+  window.addEventListener("storage", handleStorageChange);
 
   const mediaQuery = window.matchMedia?.(DARK_MEDIA_QUERY);
   const handleSystemThemeChange = () => {
-    if (getStoredThemeMode() === "system") {
-      applyTheme("system");
+    const mode = getStoredThemeMode();
+    if (
+      mode === "system" ||
+      (mode === "sun-cycle" && !getStoredSunCycleThemeState())
+    ) {
+      applyTheme(mode);
       onStoreChange();
     }
   };
@@ -203,7 +552,7 @@ function subscribeToThemeStore(onStoreChange: () => void) {
 
   return () => {
     window.removeEventListener(THEME_CHANGE_EVENT, onStoreChange);
-    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener("storage", handleStorageChange);
     mediaQuery?.removeEventListener?.("change", handleSystemThemeChange);
     mediaQuery?.removeListener?.(handleSystemThemeChange);
   };
@@ -214,8 +563,9 @@ function getThemeSnapshot() {
   const resolvedTheme = resolveTheme(mode);
   const darkThemeVariant = getStoredDarkThemeVariant();
   const systemTheme = getSystemTheme();
+  const sunCycle = mode === "sun-cycle" ? getStoredSunCycleThemeState() : null;
 
-  return `${mode}:${resolvedTheme}:${darkThemeVariant}:${systemTheme}`;
+  return `${mode}:${resolvedTheme}:${darkThemeVariant}:${systemTheme}:${sunCycle?.nextResolvedTheme ?? ""}:${sunCycle?.nextTransitionAt ?? ""}`;
 }
 
 export function useAthenaTheme() {
@@ -224,13 +574,20 @@ export function useAthenaTheme() {
     getThemeSnapshot,
     getThemeSnapshot,
   );
-  const [mode, resolvedTheme, darkThemeVariant, systemTheme] = snapshot.split(
-    ":",
-  ) as [
+  const [
+    mode,
+    resolvedTheme,
+    darkThemeVariant,
+    systemTheme,
+    nextResolvedTheme,
+    nextTransitionAt,
+  ] = snapshot.split(":") as [
     AthenaThemeMode,
     AthenaResolvedTheme,
     AthenaDarkThemeVariant,
     AthenaResolvedTheme,
+    AthenaResolvedTheme | "",
+    string,
   ];
 
   useEffect(() => {
@@ -242,6 +599,13 @@ export function useAthenaTheme() {
     resolvedTheme,
     darkThemeVariant,
     systemTheme,
+    sunCycle:
+      mode === "sun-cycle" && nextResolvedTheme && nextTransitionAt
+        ? {
+            nextResolvedTheme,
+            nextTransitionAt: Number(nextTransitionAt),
+          }
+        : null,
     setThemeMode: setAthenaThemeMode,
     setDarkThemeVariant: setAthenaDarkThemeVariant,
   };

@@ -2,8 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ATHENA_DARK_THEME_VARIANT_STORAGE_KEY,
+  ATHENA_SUN_CYCLE_LOCATION_STORAGE_KEY,
   ATHENA_THEME_STORAGE_KEY,
+  getSunCycleThemeState,
   initializeAthenaTheme,
+  requestAthenaSunCycleMode,
   setAthenaDarkThemeVariant,
   setAthenaThemeMode,
   setAthenaThemeModeWithTransition,
@@ -188,6 +191,88 @@ describe("Athena theme runtime", () => {
     setAthenaThemeModeWithTransition("dark");
 
     expect(startViewTransition).not.toHaveBeenCalled();
+    expect(document.documentElement).toHaveClass("dark");
+  });
+
+  it("resolves daylight and the next sunset from a coarse device location", () => {
+    const state = getSunCycleThemeState(new Date("2026-08-13T12:00:00.000Z"), {
+      latitude: 0,
+      longitude: 0,
+    });
+
+    expect(state?.resolvedTheme).toBe("light");
+    expect(state?.nextResolvedTheme).toBe("dark");
+    expect(state?.nextTransitionAt).toBeGreaterThan(
+      new Date("2026-08-13T17:00:00.000Z").getTime(),
+    );
+    expect(state?.nextTransitionAt).toBeLessThan(
+      new Date("2026-08-13T20:00:00.000Z").getTime(),
+    );
+  });
+
+  it("resolves darkness after sunset and points to the next sunrise", () => {
+    const state = getSunCycleThemeState(new Date("2026-08-13T23:00:00.000Z"), {
+      latitude: 0,
+      longitude: 0,
+    });
+
+    expect(state?.resolvedTheme).toBe("dark");
+    expect(state?.nextResolvedTheme).toBe("light");
+    expect(state?.nextTransitionAt).toBeGreaterThan(
+      new Date("2026-08-14T05:00:00.000Z").getTime(),
+    );
+    expect(state?.nextTransitionAt).toBeLessThan(
+      new Date("2026-08-14T08:00:00.000Z").getTime(),
+    );
+  });
+
+  it("requests location at selection time and stores only coarse coordinates", async () => {
+    installMatchMedia(false);
+    const getCurrentPosition = vi.fn((success: PositionCallback) => {
+      success({
+        coords: { latitude: 5.603717, longitude: -0.186964 },
+      } as GeolocationPosition);
+    });
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: { getCurrentPosition },
+    });
+
+    const result = await requestAthenaSunCycleMode();
+
+    expect(result).toEqual({ ok: true });
+    expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.setItem).toHaveBeenCalledWith(
+      ATHENA_SUN_CYCLE_LOCATION_STORAGE_KEY,
+      JSON.stringify({ latitude: 5.6, longitude: -0.19 }),
+    );
+    expect(window.localStorage.setItem).toHaveBeenCalledWith(
+      ATHENA_THEME_STORAGE_KEY,
+      "sun-cycle",
+    );
+  });
+
+  it("keeps the current appearance when location access is denied", async () => {
+    installMatchMedia(false);
+    setAthenaThemeMode("dark");
+    vi.mocked(window.localStorage.setItem).mockClear();
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: {
+        getCurrentPosition: vi.fn(
+          (_success: PositionCallback, error: PositionErrorCallback) =>
+            error({ code: 1 } as GeolocationPositionError),
+        ),
+      },
+    });
+
+    const result = await requestAthenaSunCycleMode();
+
+    expect(result).toEqual({ ok: false, reason: "permission-denied" });
+    expect(window.localStorage.setItem).not.toHaveBeenCalledWith(
+      ATHENA_THEME_STORAGE_KEY,
+      "sun-cycle",
+    );
     expect(document.documentElement).toHaveClass("dark");
   });
 });

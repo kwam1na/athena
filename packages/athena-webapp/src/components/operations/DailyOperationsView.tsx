@@ -3694,7 +3694,15 @@ export function DailyOperationsViewContent({
         }))
       : snapshotOpenRegisterSessions;
   const shouldShowCurrentStoreDayStatus =
-    shouldShowCurrentAutomationBand || openRegisterSessions.length > 0;
+    !isHistoricalDate &&
+    (shouldShowCurrentAutomationBand || openRegisterSessions.length > 0);
+  const historicalStatusSectionCount = [
+    shouldShowHistoricalWorkflowPanel,
+    shouldShowHistoricalAutomationCompletion,
+    isHistoricalDate && openRegisterSessions.length > 0,
+  ].filter(Boolean).length;
+  const shouldShowHistoricalStoreDayStatus =
+    historicalStatusSectionCount > 0;
   const actionableLanes = operationLanes.filter(isActionableLane);
   const hasAutomationReviewEvidence = Boolean(
     snapshot?.automationStatuses?.some(
@@ -3905,14 +3913,14 @@ export function DailyOperationsViewContent({
                   />
                 ) : null}
 
-                {shouldShowHistoricalWorkflowPanel ||
-                shouldShowHistoricalAutomationCompletion ? (
+                {shouldShowHistoricalStoreDayStatus ? (
                   <StoreDayStatusWorkspace
-                    description="Close status and automation activity recorded for this operating date."
-                    hasMultipleSections={
-                      shouldShowHistoricalWorkflowPanel &&
-                      shouldShowHistoricalAutomationCompletion
+                    description={
+                      openRegisterSessions.length > 0
+                        ? "Close status, automation activity, and open registers for this operating date."
+                        : "Close status and automation activity recorded for this operating date."
                     }
+                    hasMultipleSections={historicalStatusSectionCount > 1}
                   >
                     {shouldShowHistoricalWorkflowPanel ? (
                       <HistoricalWorkflowPanel snapshot={snapshot} />
@@ -3926,20 +3934,13 @@ export function DailyOperationsViewContent({
                         completedClose={snapshot.completedClose}
                       />
                     ) : null}
+                    <OpenRegisterSessionsPanel
+                      operatingDate={snapshot.operatingDate}
+                      orgUrlSlug={orgUrlSlug}
+                      sessions={openRegisterSessions}
+                      storeUrlSlug={storeUrlSlug}
+                    />
                   </StoreDayStatusWorkspace>
-                ) : null}
-
-                {!shouldShowCurrentStoreDayStatus ? (
-                  <OpenRegisterSessionsPanel
-                    operatingDate={snapshot.operatingDate}
-                    orgUrlSlug={orgUrlSlug}
-                    sessions={openRegisterSessions}
-                    showTopRule={
-                      shouldShowHistoricalWorkflowPanel ||
-                      shouldShowHistoricalAutomationCompletion
-                    }
-                    storeUrlSlug={storeUrlSlug}
-                  />
                 ) : null}
 
                 <div className="grid gap-layout-md [grid-template-columns:repeat(auto-fit,minmax(min(14rem,100%),1fr))] md:gap-layout-lg">

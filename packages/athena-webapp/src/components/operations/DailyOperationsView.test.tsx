@@ -2636,6 +2636,40 @@ describe("DailyOperationsViewContent", () => {
     );
   });
 
+  it("combines historical close status and open registers in one status workspace", () => {
+    renderContent(operatingSnapshot, {
+      openRegisterSessionsSnapshot: {
+        operatingDate: operatingSnapshot.operatingDate,
+        sessions: [
+          {
+            displayLabel: "M Supplies / Register 1",
+            id: "register-1",
+          },
+        ],
+      },
+    });
+
+    const statusHeadings = screen.getAllByRole("heading", {
+      name: "Store day status",
+    });
+    const statusWorkspace = statusHeadings[0]?.closest("section");
+    const closeStatus = screen
+      .getByRole("heading", { name: "Incomplete store-day close" })
+      .closest("section");
+    const registerStatus = screen
+      .getByRole("heading", { name: "Open register sessions" })
+      .closest("section");
+
+    expect(statusHeadings).toHaveLength(1);
+    expect(statusWorkspace).toContainElement(closeStatus);
+    expect(statusWorkspace).toContainElement(registerStatus);
+    expect(statusWorkspace?.lastElementChild).toHaveClass(
+      "lg:grid-cols-2",
+      "lg:divide-x",
+    );
+    expect(registerStatus).not.toHaveClass("border-t");
+  });
+
   it("surfaces pending approval requests on the leading side of the action strip", () => {
     renderContent({
       ...blockedSnapshot,

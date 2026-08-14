@@ -310,6 +310,65 @@ describe("getCompletedTransactions", () => {
       storeId: "store-1",
     });
   });
+
+  it("uses a register opening date as an unbounded lifecycle start while the session is active", async () => {
+    vi.mocked(listCompletedTransactions).mockResolvedValue([] as never);
+    vi.mocked(resolveReportingCalendarDateRangeWithCtx).mockResolvedValue({
+      kind: "resolved",
+      startAt: 1_000,
+      endAt: 9_999,
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-session-1",
+      storeId: "store-1",
+      status: "active",
+    } as never);
+
+    await getCompletedTransactions({} as never, {
+      registerSessionId: "register-session-1" as Id<"registerSession">,
+      startDate: "2026-08-12",
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(listCompletedTransactions).toHaveBeenCalledWith(expect.anything(), {
+      completedFrom: 1_000,
+      completedTo: undefined,
+      limit: undefined,
+      order: undefined,
+      registerSessionId: "register-session-1",
+      storeId: "store-1",
+    });
+  });
+
+  it("bounds a closed register lifecycle at its recorded closure time", async () => {
+    vi.mocked(listCompletedTransactions).mockResolvedValue([] as never);
+    vi.mocked(resolveReportingCalendarDateRangeWithCtx).mockResolvedValue({
+      kind: "resolved",
+      startAt: 1_000,
+      endAt: 9_999,
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-session-1",
+      closedAt: 8_000,
+      storeId: "store-1",
+      status: "closed",
+    } as never);
+
+    await getCompletedTransactions({} as never, {
+      registerSessionId: "register-session-1" as Id<"registerSession">,
+      startDate: "2026-08-12",
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(listCompletedTransactions).toHaveBeenCalledWith(expect.anything(), {
+      completedFrom: 1_000,
+      completedTo: 8_000,
+      limit: undefined,
+      order: undefined,
+      registerSessionId: "register-session-1",
+      storeId: "store-1",
+    });
+  });
 });
 
 describe("getTodaySummary", () => {

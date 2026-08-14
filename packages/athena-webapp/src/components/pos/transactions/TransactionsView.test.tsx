@@ -13,6 +13,7 @@ const sharedDemoContextMock = vi.fn();
 let tabsOnValueChange:
   | ((value: "today" | "fromDate" | "all") => void)
   | undefined;
+let tabsValue: "today" | "fromDate" | "all" | undefined;
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -147,11 +148,14 @@ vi.mock("@/components/ui/tabs", () => ({
   Tabs: ({
     children,
     onValueChange,
+    value,
   }: {
     children?: React.ReactNode;
     onValueChange?: (value: "today" | "fromDate" | "all") => void;
+    value?: "today" | "fromDate" | "all";
   }) => {
     tabsOnValueChange = onValueChange;
+    tabsValue = value;
 
     return <div>{children}</div>;
   },
@@ -176,6 +180,7 @@ describe("TransactionsView", () => {
     vi.clearAllMocks();
     vi.useRealTimers();
     tabsOnValueChange = undefined;
+    tabsValue = undefined;
     useSearchMock.mockReturnValue({});
     sharedDemoContextMock.mockReturnValue(null);
   });
@@ -492,6 +497,101 @@ describe("TransactionsView", () => {
         "No transactions for Front counter / Register 3 / SION-1",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("uses the register opening date as a lifecycle lower bound", () => {
+    useSearchMock.mockReturnValue({
+      operatingDate: "2026-08-12",
+      registerSessionId: "session-1",
+    });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValueOnce([]).mockReturnValueOnce({
+      registerSession: {
+        registerNumber: "1",
+        status: "active",
+        terminalName: "M Supplies",
+      },
+    });
+
+    render(<TransactionsView />);
+
+    expect(useQueryMock.mock.calls[0]?.[1]).toEqual({
+      limit: 100,
+      registerSessionId: "session-1",
+      startDate: "2026-08-12",
+      storeId: "store-1",
+    });
+    expect(
+      screen.getByText(
+        "Showing transactions linked to M Supplies / Register 1 / SION-1 from Aug 12, 2026",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Register session status: Active"),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("register-session-context")).toHaveClass(
+      "w-fit",
+      "max-w-full",
+    );
+    expect(tabsValue).toBe("fromDate");
+  });
+
+  it("scopes register-session Today and All Time audit segments", () => {
+    useSearchMock.mockReturnValue({
+      operatingDate: "2026-08-12",
+      registerSessionId: "session-1",
+      timeRange: "all",
+    });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValueOnce([]).mockReturnValueOnce({
+      registerSession: { registerNumber: "1" },
+    });
+
+    const { unmount } = render(<TransactionsView />);
+
+    expect(useQueryMock.mock.calls[0]?.[1]).toEqual({
+      limit: 100,
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+    expect(tabsValue).toBe("all");
+
+    unmount();
+    vi.clearAllMocks();
+    useSearchMock.mockReturnValue({
+      operatingDate: "2026-08-12",
+      registerSessionId: "session-1",
+      timeRange: "today",
+    });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValueOnce([]).mockReturnValueOnce({
+      registerSession: { registerNumber: "1" },
+    });
+
+    render(<TransactionsView />);
+
+    expect(useQueryMock.mock.calls[0]?.[1]).toEqual({
+      completedFrom: expect.any(Number),
+      limit: 100,
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+    expect(tabsValue).toBe("today");
   });
 
   it("filters cash-paid transactions across split payment methods", () => {

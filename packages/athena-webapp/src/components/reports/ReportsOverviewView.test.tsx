@@ -301,6 +301,42 @@ describe("ReportsOverviewView", () => {
     expect(screen.getByText("$14,000")).toBeInTheDocument();
   });
 
+  it("places each reporting range beside the period status", async () => {
+    const user = userEvent.setup();
+    renderOverview("today", {
+      ...fixture,
+      weekToDate: snapshot({ dayCount: 5, unsettledDayCount: 1 }),
+    });
+
+    expect(screen.getByRole("tab", { selected: true })).toHaveTextContent(
+      "Today",
+    );
+    expect(screen.getByRole("tab", { selected: true })).not.toHaveTextContent(
+      "·",
+    );
+    expect(screen.getByTestId("report-period-status")).toHaveTextContent(
+      "Mon, Jul 27, 2026",
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Week to date" }));
+
+    expect(screen.getByRole("tab", { selected: true })).toHaveTextContent(
+      "Week to date",
+    );
+    expect(screen.getByRole("tab", { selected: true })).not.toHaveTextContent(
+      "·",
+    );
+    expect(screen.getByTestId("report-period-status")).toHaveTextContent(
+      /1 of 5 reported days awaiting reconciliation\s*·\s*Mon, Jul 27, 2026/,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Trailing 30 days" }));
+
+    expect(screen.getByTestId("report-period-status")).toHaveTextContent(
+      "Sun, Jun 28–Mon, Jul 27, 2026",
+    );
+  });
+
   it("compares the six-month window against its own prior six months", async () => {
     const user = userEvent.setup();
     renderOverview();

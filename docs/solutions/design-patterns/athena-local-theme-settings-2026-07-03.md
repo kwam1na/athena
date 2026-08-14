@@ -39,6 +39,12 @@ Keep theme state in `src/lib/theme.ts` and make every surface use that runtime:
   attributes to the document root before React renders.
 - Let the App settings page call the same setter functions as the header
   shortcut instead of maintaining local theme state.
+- Keep adaptive modes in that same runtime. Request device location only when
+  the operator selects the mode, retain only coarse coordinates locally, and
+  resolve the active appearance before React renders.
+- Schedule the next adaptive transition directly, then recalculate when the
+  browser regains focus or returns from the background so sleep cannot leave
+  the interface in a stale appearance.
 - Keep the old dark palette in CSS under a named variant, even when the new
   palette becomes the default.
 
@@ -57,7 +63,8 @@ tokens, and tests aligned.
 ## Prevention
 
 - Add runtime tests for invalid stored values, explicit mode changes, system
-  preference changes, and dark-palette persistence.
+  preference changes, solar boundaries, denied location access, and
+  dark-palette persistence.
 - Add route/sidebar tests when introducing app-level settings pages so access
   control and navigation stay explicit.
 - Only show palette selection controls when the chosen mode is explicit dark;
