@@ -39,6 +39,7 @@ import {
   internalAction,
   internalMutation,
   internalQuery,
+  type ActionCtx,
   type QueryCtx,
 } from "../_generated/server";
 import {
@@ -356,13 +357,14 @@ type OwedDailyCloseSweepResult = {
  * into its own module through `internal.`, and without it TypeScript cannot
  * break the inference cycle.
  */
-export const runOwedDailyCloseSweep = internalAction({
+export async function runOwedDailyCloseSweepWithCtx(
+  ctx: Pick<ActionCtx, "runMutation" | "runQuery" | "scheduler">,
   args: {
-    cursor: v.optional(v.string()),
-    mode: v.optional(v.union(v.literal("dry_run"), v.literal("apply"))),
-    now: v.optional(v.number()),
+    cursor?: string;
+    mode?: "dry_run" | "apply";
+    now?: number;
   },
-  handler: async (ctx, args): Promise<OwedDailyCloseSweepResult> => {
+): Promise<OwedDailyCloseSweepResult> {
     const mode = args.mode ?? "apply";
     const now = args.now ?? Date.now();
     const page: {
@@ -377,6 +379,24 @@ export const runOwedDailyCloseSweep = internalAction({
       },
     );
     const candidates = page.candidates;
+
+    // Persist continuation before touching any store on this page. Actions do
+    // not provide a transaction across scheduler writes and later mutations;
+    // queuing first ensures one malformed or transiently failing store cannot
+    // strand every policy behind it. Carry the single derived timestamp so
+    // every page makes operating-date and rotation decisions from one sweep
+    // snapshot even when the cron omitted `now`.
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
+        {
+          cursor: page.continueCursor,
+          mode,
+          now,
+        },
+      );
+    }
 
     const results: OwedDailyCloseSweepResult["results"] = [];
     const escalations: Array<{ operatingDate: string; storeId: Id<"store"> }> =
@@ -450,25 +470,21 @@ export const runOwedDailyCloseSweep = internalAction({
       }
     }
 
-    if (!page.isDone) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
-        {
-          cursor: page.continueCursor,
-          mode,
-          ...(args.now === undefined ? {} : { now: args.now }),
-        },
-      );
-    }
-
     return {
       escalations,
       mode,
       results,
       scannedStoreCount: candidates.length,
     };
+}
+
+export const runOwedDailyCloseSweep = internalAction({
+  args: {
+    cursor: v.optional(v.string()),
+    mode: v.optional(v.union(v.literal("dry_run"), v.literal("apply"))),
+    now: v.optional(v.number()),
   },
+  handler: runOwedDailyCloseSweepWithCtx,
 });
 
 function daysBetweenOperatingDates(from: string, to: string) {

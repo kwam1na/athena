@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   OWED_DAILY_CLOSE_LOOKBACK_DAYS,
   OWED_DAILY_CLOSE_MAX_PER_SWEEP,
   dailyCloseSweepResultSettled,
   selectRotatingOwedDailyCloseAttempt,
+  runOwedDailyCloseSweepWithCtx,
   selectOwedDailyCloseDates,
 } from "./owedDailyCloseSweep";
 
@@ -24,6 +25,47 @@ function fullWindow() {
 }
 
 describe("owed daily close selection", () => {
+  it("persists continuation with one derived now before a store failure", async () => {
+    const derivedNow = Date.parse("2026-07-25T00:30:00.000Z");
+    vi.spyOn(Date, "now").mockReturnValue(derivedNow);
+    const scheduled: Array<Record<string, unknown>> = [];
+    const ctx = {
+      runQuery: async () => ({
+        candidates: [
+          {
+            asOfOperatingDate: AS_OF,
+            attempt: ["2026-07-21"],
+            owed: ["2026-07-21"],
+            stale: ["2026-07-21"],
+            storeId: "store-first",
+          },
+        ],
+        continueCursor: "tail-cursor",
+        isDone: false,
+      }),
+      runMutation: async () => {
+        throw new Error("first store failed");
+      },
+      scheduler: {
+        runAfter: async (_delay: number, _reference: unknown, args: unknown) => {
+          scheduled.push(args as Record<string, unknown>);
+          return "scheduled-id";
+        },
+      },
+    };
+
+    await expect(
+      runOwedDailyCloseSweepWithCtx(ctx as never, { mode: "apply" }),
+    ).rejects.toThrow("first store failed");
+    expect(scheduled).toEqual([
+      {
+        cursor: "tail-cursor",
+        mode: "apply",
+        now: derivedNow,
+      },
+    ]);
+    vi.restoreAllMocks();
+  });
   it.each([
     ["hourly", 1],
     ["two-hourly", 2],

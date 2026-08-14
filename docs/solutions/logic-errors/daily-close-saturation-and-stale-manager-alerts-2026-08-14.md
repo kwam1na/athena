@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: high
 tags: [daily-close, automation, notifications, source-completeness, deduplication]
-delivery_diff_fingerprint: adb026b1ca192cde48edd16b3b03fd6c48b25bd15d279e9428f4f39330b5b274
+delivery_diff_fingerprint: f1b03948f9d7115a7bfde4ec846014cb7d8f6489a9d470237b7faa260034ef1e
 ---
 
 # Daily Close saturation must preserve evidence and alert once
@@ -57,8 +57,11 @@ and is excluded from escalation. The escalation mutation also rechecks the
 active completed close inside its transaction.
 
 Enabled policies are read in 50-row indexed pages. Each action schedules the
-next cursor after finishing its page, so the 51st store and beyond are reached
-without turning one action into an unbounded cross-store job.
+next cursor before processing any store on its page, so a throwing first-page
+store cannot strand the 51st store and beyond. Continuations carry the one
+timestamp derived by the root action, keeping operating-date and rotation
+decisions consistent across the sweep without turning one action into an
+unbounded cross-store job.
 
 If a stale intent initially finds no EOD subscribers, a later owed-date retry
 re-arms that same suppressed intent after subscription setup. The intent and

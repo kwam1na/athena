@@ -5,7 +5,7 @@
   <title>Stale Daily Close Manager Alerts</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="adb026b1ca192cde48edd16b3b03fd6c48b25bd15d279e9428f4f39330b5b274">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="f1b03948f9d7115a7bfde4ec846014cb7d8f6489a9d470237b7faa260034ef1e">
   <header data-report-section="header">
     <h1>Stale Daily Close Manager Alerts</h1>
     <p>How bounded close evidence now remains actionable without creating duplicate manager email</p>
@@ -45,7 +45,7 @@
   </section>
   <section data-report-section="changes">
     <h2>What changed and what did not</h2>
-      <p>Changed: human, scheduled, and historic close paths share the source-specific completeness rule; persisted carry-forward counts remain meaningful under saturation; the notification registry owns a new email-only eod.stale_daily_close kind; enabled EOD policies are processed in bounded 50-store pages with scheduled continuation; the bounded three-date attempt window rotates by UTC hour so both hourly and two-hourly schedules cover every four-to-seven-day backlog; only attempted dates escalate; and configured EOD subscribers receive calm manager-facing copy with one EOD Review action.</p>
+      <p>Changed: human, scheduled, and historic close paths share the source-specific completeness rule; persisted carry-forward counts remain meaningful under saturation; the notification registry owns a new email-only eod.stale_daily_close kind; enabled EOD policies are processed in bounded 50-store pages whose continuation is persisted before per-store work; the bounded three-date attempt window rotates by UTC hour so both hourly and two-hourly schedules cover every four-to-seven-day backlog; only attempted dates escalate; and configured EOD subscribers receive calm manager-facing copy with one EOD Review action.</p>
       <p>Unchanged: the seven-day owed lookback, maximum three owed dates per store per sweep, two-day stale threshold, operational stale event, recipient subscriptions, delivery retries, and all true financial or transactional blockers. There is no browser route or direct email send from the sweep.</p>
   </section>
   <section data-report-section="failure-boundaries">
@@ -56,6 +56,7 @@
         <li>If the close completes, preparation returns no email; later dry-run rows do not hide an earlier qualifying skipped or failed run while the close remains open.</li>
         <li>Every other incomplete source continues to block or quarantine completion.</li>
         <li>The stale operational event and notification intent share one Convex mutation, avoiding partial durable state.</li>
+        <li>A throwing store can fail its current page loudly, but cannot erase the already-persisted continuation for later policy pages; every page carries the root sweep timestamp.</li>
       </ul>
   </section>
   <section data-report-section="validation">
