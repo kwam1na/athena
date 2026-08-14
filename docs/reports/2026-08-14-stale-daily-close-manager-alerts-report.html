@@ -5,7 +5,7 @@
   <title>Stale Daily Close Manager Alerts</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="d3ad655637832fae3c74d18ced92c32374c03d73a6ef086a394873cee5946b86">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="8035c815d7ad5629114e446ee7a7fcd14aa72e24052839bf8c55e4f06ad354bf">
   <header data-report-section="header">
     <h1>Stale Daily Close Manager Alerts</h1>
     <p>How bounded close evidence now remains actionable without creating duplicate manager email</p>
@@ -41,7 +41,7 @@
   <section data-report-section="before-after">
     <h2>Before and after</h2>
       <p>Before: the owed sweep retried a historic close, every incomplete source blocked completion, and the stale threshold produced only an operational event. Open-work saturation at 201 rows looked the same as missing financial evidence.</p>
-      <p>After: non-open-work incomplete sources still fail closed. Open-work membership probes the open and in-progress statuses independently up to 500 rows plus a sentinel; either status returning a 501st row marks membership incomplete while preserving observed evidence and count without speculative per-item carry-forward writes. At the stale threshold, the same mutation emits a deduplicated email intent that resolves fresh blocker data and an EOD Review URL at send time.</p>
+      <p>After: non-open-work incomplete sources still fail closed. Open-work membership probes the open and in-progress statuses independently up to 500 rows plus a sentinel; either status returning a 501st row marks membership incomplete while preserving every safely observed ID, item, logical group, and observed count. Unobserved rows are never invented. At the stale threshold, the same mutation emits a deduplicated email intent that resolves fresh blocker data and an EOD Review URL at send time.</p>
   </section>
   <section data-report-section="changes">
     <h2>What changed and what did not</h2>
@@ -51,7 +51,7 @@
   <section data-report-section="failure-boundaries">
     <h2>Failure boundaries</h2>
       <ul>
-        <li>When either open-work status returns a 501st row, Athena records incomplete membership and an observed logical count but cannot enumerate every member; persisted incomplete group arrays remain empty and downstream readers must honor the completeness metadata.</li>
+        <li>When either open-work status returns a 501st row, Athena records incomplete membership and an observed logical count, persists all safely observed handoffs, and excludes the unobserved sentinel; downstream readers must still honor the completeness metadata.</li>
         <li>The store/date dedupe key deliberately sends one stale alert, not a daily reminder sequence; only a prior no-audience suppression may re-arm the same intent after subscription setup, refreshing its age while preserving sent-recipient dedupe.</li>
         <li>If the close completes, preparation returns no email; later dry-run rows do not hide an earlier qualifying skipped or failed run while the close remains open.</li>
         <li>Every other incomplete source continues to block or quarantine completion.</li>
@@ -71,7 +71,7 @@
         <li>Classify completeness per source and document safe fallback semantics instead of relying on one aggregate boolean.</li>
         <li>When bounded evidence proceeds, preserve observed counts and incomplete metadata; never turn truncation into zero.</li>
         <li>Use the notification registry for policy, recipient selection, retry, dedupe, and send-time truth checks.</li>
-        <li>Extend tests at the cap boundary and across repeated, recent, completed, and no-longer-qualifying stale states.</li>
+        <li>Extend tests at the cap boundary through completion, next-Opening handoff, and carry-forward resolution, plus repeated, recent, completed, and no-longer-qualifying stale states.</li>
       </ul>
   </section>
   <section data-report-section="key-files">

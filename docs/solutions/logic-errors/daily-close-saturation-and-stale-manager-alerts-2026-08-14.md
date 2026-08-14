@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: high
 tags: [daily-close, automation, notifications, source-completeness, deduplication]
-delivery_diff_fingerprint: d3ad655637832fae3c74d18ced92c32374c03d73a6ef086a394873cee5946b86
+delivery_diff_fingerprint: 8035c815d7ad5629114e446ee7a7fcd14aa72e24052839bf8c55e4f06ad354bf
 ---
 
 # Daily Close saturation must preserve evidence and alert once
@@ -74,9 +74,10 @@ age, so delayed delivery renders current staleness rather than the age observed
 before the audience was configured.
 
 When operational-work membership is incomplete, the completed close persists
-the incomplete membership marker and observed logical count, but not the
-probe's synthetic incomplete groups. Those groups cannot truthfully identify
-members; the count remains evidence while the item/group arrays stay empty.
+the incomplete membership marker, observed logical count, and every safely
+observed work ID and item. Daily Opening can therefore receive and resolve the
+observed handoffs without claiming exhaustive membership or inventing IDs for
+the unobserved remainder.
 
 ## Why This Works
 

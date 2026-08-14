@@ -870,7 +870,10 @@ describe("daily operations automation adapter", () => {
   it("skips EOD preparation when the review is already completed", async () => {
     const reportSnapshot = {
       carryForwardItems: [],
-      carryForwardWorkItemIds: [],
+      carryForwardWorkItemIds: expect.arrayContaining([
+        "work-cap-1",
+        "work-cap-500",
+      ]),
       closeMetadata: {
         completedAt: Date.UTC(2026, 5, 8, 22),
         completedByUserId: "user-1",
@@ -2802,11 +2805,22 @@ describe("daily operations automation adapter", () => {
       inserts.find((insert) => insert.table === "dailyClose")?.value,
     ).toMatchObject({
       actorType: "automation",
-      carryForwardWorkItemIds: [],
+      carryForwardWorkItemIds: expect.arrayContaining([
+        "work-cap-1",
+        "work-cap-500",
+      ]),
       readiness: { carryForwardCount: 500 },
       reportSnapshot: {
-        carryForwardGroups: [],
-        carryForwardItems: [],
+        carryForwardGroups: expect.arrayContaining([
+          expect.objectContaining({ memberWorkItemIds: ["work-cap-1"] }),
+        ]),
+        carryForwardItems: expect.arrayContaining([
+          expect.objectContaining({
+            metadata: expect.objectContaining({
+              membershipCompleteness: "incomplete",
+            }),
+          }),
+        ]),
         openWorkMembership: {
           completeness: "incomplete",
           observedLogicalCount: 500,
