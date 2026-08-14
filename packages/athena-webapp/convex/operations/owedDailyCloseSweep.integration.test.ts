@@ -398,4 +398,59 @@ describe("owed daily close sweep", () => {
     );
     expect(events).toEqual([]);
   });
+
+  it("continues past 50 enabled policies and escalates the tail store", async () => {
+    const t = convexTest(schema, modules);
+    const stores = [];
+    for (let index = 0; index < 51; index += 1) {
+      stores.push(await seedStore(t));
+    }
+    const tail = stores[50]!;
+    const firstPage = await t.query(
+      internal.operations.owedDailyCloseSweep.listOwedDailyCloseCandidatePage,
+      { now: NOW },
+    );
+    expect(firstPage.isDone).toBe(false);
+    expect(firstPage.candidates).toHaveLength(50);
+
+    await t.action(
+      internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
+      { mode: "apply", now: NOW },
+    );
+    const scheduled = await t.run((ctx) =>
+      ctx.db.system.query("_scheduled_functions").take(500),
+    );
+    expect(
+      scheduled.some(
+        (entry) =>
+          entry.args[0]?.cursor === firstPage.continueCursor,
+      ),
+    ).toBe(true);
+
+    const tailPage = await t.action(
+      internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
+      {
+        cursor: firstPage.continueCursor,
+        mode: "apply",
+        now: NOW,
+      },
+    );
+    expect(tailPage.scannedStoreCount).toBe(1);
+    expect(tailPage.results).toHaveLength(3);
+    expect(tailPage.results.every((result) => result.storeId === tail.storeId)).toBe(
+      true,
+    );
+    const tailIntents = await t.run((ctx) =>
+      ctx.db
+        .query("notificationIntent")
+        .withIndex("by_storeId_and_emittedAt", (q) =>
+          q.eq("storeId", tail.storeId),
+        )
+        .take(10),
+    );
+    expect(tailIntents).toHaveLength(3);
+    expect(
+      tailIntents.every((intent) => intent.kind === "eod.stale_daily_close"),
+    ).toBe(true);
+  }, 20_000);
 });

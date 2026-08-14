@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 12275 nodes · 15117 edges · 2810 communities detected
+- 12275 nodes · 15119 edges · 2810 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -4392,8 +4392,8 @@ Cohesion: 0.52
 Nodes (6): buildCustomerProfileDraft(), buildFullName(), findMatchingCustomerProfile(), normalizeLookupValue(), normalizePhoneNumber(), splitFullName()
 
 ### Community 386 - "Community 386"
-Cohesion: 0.29
-Nodes (0):
+Cohesion: 0.38
+Nodes (3): candidatesForPolicies(), completedOperatingDatesForStore(), selectOwedDailyCloseDates()
 
 ### Community 387 - "Community 387"
 Cohesion: 0.38

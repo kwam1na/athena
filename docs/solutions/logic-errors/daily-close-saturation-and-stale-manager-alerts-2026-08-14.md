@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: high
 tags: [daily-close, automation, notifications, source-completeness, deduplication]
-delivery_diff_fingerprint: 3d160abf4ea34d91f563030a38c71162137fb2632d5764fbe517e00f918c049b
+delivery_diff_fingerprint: adb026b1ca192cde48edd16b3b03fd6c48b25bd15d279e9428f4f39330b5b274
 ---
 
 # Daily Close saturation must preserve evidence and alert once
@@ -56,10 +56,17 @@ its permanent store/date intent. A successful historic close reports `applied`
 and is excluded from escalation. The escalation mutation also rechecks the
 active completed close inside its transaction.
 
+Enabled policies are read in 50-row indexed pages. Each action schedules the
+next cursor after finishing its page, so the 51st store and beyond are reached
+without turning one action into an unbounded cross-store job.
+
 If a stale intent initially finds no EOD subscribers, a later owed-date retry
 re-arms that same suppressed intent after subscription setup. The intent and
 recipient dedupe keys remain unchanged, so recovery does not weaken duplicate
 delivery protection.
+Re-arming also replaces the intent's reference payload with the latest valid
+age, so delayed delivery renders current staleness rather than the age observed
+before the audience was configured.
 
 When operational-work membership is incomplete, the completed close persists
 the incomplete membership marker and observed logical count, but not the

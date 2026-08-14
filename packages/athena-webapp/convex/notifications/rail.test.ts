@@ -415,7 +415,7 @@ describe("reserveIntentDeliveries", () => {
       subjectType: "dailyClose",
       subjectId: `${fixture.storeId}:2026-07-21`,
       payload: {
-        ageInDays: 4,
+        ageInDays: 2,
         operatingDate: "2026-07-21",
         storeId: fixture.storeId,
       },
@@ -477,7 +477,7 @@ describe("reserveIntentDeliveries", () => {
       subjectType: "dailyClose",
       subjectId: `${fixture.storeId}:2026-07-21`,
       payload: {
-        ageInDays: 4,
+        ageInDays: 2,
         operatingDate: "2026-07-21",
         storeId: fixture.storeId,
       },
@@ -517,7 +517,17 @@ describe("reserveIntentDeliveries", () => {
         enabled: true,
       }),
     );
-    await t.mutation(internal.notifications.emit.emitNotification, notification);
+    const rearmedNotification = {
+      ...notification,
+      payload: { ...notification.payload, ageInDays: 7 },
+    };
+    await t.mutation(
+      internal.notifications.emit.emitNotification,
+      rearmedNotification,
+    );
+    expect(
+      await t.run((ctx) => ctx.db.get("notificationIntent", emitted.intentId)),
+    ).toMatchObject({ payload: { ageInDays: 7 } });
     const revived = await t.mutation(
       internal.notifications.dispatch.reserveIntentDeliveries,
       { intentId: emitted.intentId },

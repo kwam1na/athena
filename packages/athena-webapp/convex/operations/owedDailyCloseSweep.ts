@@ -165,19 +165,7 @@ type OwedDailyCloseStoreCandidate = {
   storeId: Id<"store">;
 } & OwedDailyCloseSelection;
 
-async function listEnabledEodPolicies(ctx: QueryCtx) {
-  const policies = await ctx.db
-    .query("automationPolicy")
-    .withIndex("by_domain_action_mode", (q) =>
-      q
-        .eq("domain", DAILY_OPERATIONS_AUTOMATION_DOMAIN)
-        .eq("action", EOD_AUTO_COMPLETE_ACTION)
-        .eq("mode", "enabled"),
-    )
-    .take(50);
-
-  return policies.filter((policy) => policy.paused !== true);
-}
+const OWED_DAILY_CLOSE_POLICY_PAGE_SIZE = 50;
 
 async function completedOperatingDatesForStore(
   ctx: QueryCtx,
@@ -204,14 +192,14 @@ async function completedOperatingDatesForStore(
     .map((close) => close.operatingDate);
 }
 
-export const listOwedDailyCloseCandidates = internalQuery({
-  args: { now: v.optional(v.number()) },
-  handler: async (ctx, args): Promise<OwedDailyCloseStoreCandidate[]> => {
-    const now = args.now ?? Date.now();
-    const policies = await listEnabledEodPolicies(ctx);
+async function candidatesForPolicies(
+  ctx: QueryCtx,
+  policies: Doc<"automationPolicy">[],
+  now: number,
+) {
     const candidates: OwedDailyCloseStoreCandidate[] = [];
 
-    for (const policy of policies) {
+    for (const policy of policies.filter((entry) => entry.paused !== true)) {
       const asOfOperatingDate = operatingDateForPolicy({
         now,
         operatingTimezoneOffsetMinutes: policy.operatingTimezoneOffsetMinutes,
@@ -247,7 +235,51 @@ export const listOwedDailyCloseCandidates = internalQuery({
       });
     }
 
-    return candidates;
+  return candidates;
+}
+
+export const listOwedDailyCloseCandidatePage = internalQuery({
+  args: { cursor: v.optional(v.string()), now: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const page = await ctx.db
+      .query("automationPolicy")
+      .withIndex("by_domain_action_mode", (q) =>
+        q
+          .eq("domain", DAILY_OPERATIONS_AUTOMATION_DOMAIN)
+          .eq("action", EOD_AUTO_COMPLETE_ACTION)
+          .eq("mode", "enabled"),
+      )
+      .paginate({
+        cursor: args.cursor ?? null,
+        numItems: OWED_DAILY_CLOSE_POLICY_PAGE_SIZE,
+      });
+    return {
+      candidates: await candidatesForPolicies(
+        ctx,
+        page.page,
+        args.now ?? Date.now(),
+      ),
+      continueCursor: page.continueCursor,
+      isDone: page.isDone,
+    };
+  },
+});
+
+// Retained as a focused first-page inspection surface for existing tests and
+// support diagnostics. The action below owns continuation across every page.
+export const listOwedDailyCloseCandidates = internalQuery({
+  args: { now: v.optional(v.number()) },
+  handler: async (ctx, args): Promise<OwedDailyCloseStoreCandidate[]> => {
+    const page = await ctx.db
+      .query("automationPolicy")
+      .withIndex("by_domain_action_mode", (q) =>
+        q
+          .eq("domain", DAILY_OPERATIONS_AUTOMATION_DOMAIN)
+          .eq("action", EOD_AUTO_COMPLETE_ACTION)
+          .eq("mode", "enabled"),
+      )
+      .take(OWED_DAILY_CLOSE_POLICY_PAGE_SIZE);
+    return candidatesForPolicies(ctx, page, args.now ?? Date.now());
   },
 });
 
@@ -326,16 +358,25 @@ type OwedDailyCloseSweepResult = {
  */
 export const runOwedDailyCloseSweep = internalAction({
   args: {
+    cursor: v.optional(v.string()),
     mode: v.optional(v.union(v.literal("dry_run"), v.literal("apply"))),
     now: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<OwedDailyCloseSweepResult> => {
     const mode = args.mode ?? "apply";
     const now = args.now ?? Date.now();
-    const candidates: OwedDailyCloseStoreCandidate[] = await ctx.runQuery(
-      internal.operations.owedDailyCloseSweep.listOwedDailyCloseCandidates,
-      args.now === undefined ? {} : { now: args.now },
+    const page: {
+      candidates: OwedDailyCloseStoreCandidate[];
+      continueCursor: string;
+      isDone: boolean;
+    } = await ctx.runQuery(
+      internal.operations.owedDailyCloseSweep.listOwedDailyCloseCandidatePage,
+      {
+        ...(args.cursor ? { cursor: args.cursor } : {}),
+        ...(args.now === undefined ? {} : { now: args.now }),
+      },
     );
+    const candidates = page.candidates;
 
     const results: OwedDailyCloseSweepResult["results"] = [];
     const escalations: Array<{ operatingDate: string; storeId: Id<"store"> }> =
@@ -407,6 +448,18 @@ export const runOwedDailyCloseSweep = internalAction({
           escalations.push({ operatingDate, storeId: candidate.storeId });
         }
       }
+    }
+
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.operations.owedDailyCloseSweep.runOwedDailyCloseSweep,
+        {
+          cursor: page.continueCursor,
+          mode,
+          ...(args.now === undefined ? {} : { now: args.now }),
+        },
+      );
     }
 
     return {

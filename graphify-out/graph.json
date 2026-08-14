@@ -34180,6 +34180,30 @@
       "weight": 1
     },
     {
+      "_src": "oweddailyclosesweep_candidatesforpolicies",
+      "_tgt": "oweddailyclosesweep_completedoperatingdatesforstore",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "relation": "calls",
+      "source": "oweddailyclosesweep_completedoperatingdatesforstore",
+      "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
+      "source_location": "L209",
+      "target": "oweddailyclosesweep_candidatesforpolicies",
+      "weight": 1
+    },
+    {
+      "_src": "oweddailyclosesweep_candidatesforpolicies",
+      "_tgt": "oweddailyclosesweep_selectoweddailyclosedates",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "relation": "calls",
+      "source": "oweddailyclosesweep_selectoweddailyclosedates",
+      "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
+      "source_location": "L221",
+      "target": "oweddailyclosesweep_candidatesforpolicies",
+      "weight": 1
+    },
+    {
       "_src": "packages_athena_webapp_convex_auth_shareddemoticket_ts",
       "_tgt": "shareddemoticket_authorizeshareddemoticket",
       "confidence": "EXTRACTED",
@@ -47459,7 +47483,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L2602",
+      "source_location": "L2612",
       "target": "rail_test_emitapprovalrequestcreated",
       "weight": 1
     },
@@ -47471,7 +47495,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L2911",
+      "source_location": "L2921",
       "target": "rail_test_emitverificationdiscrepancy",
       "weight": 1
     },
@@ -47483,7 +47507,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L1659",
+      "source_location": "L1669",
       "target": "rail_test_insertdelivery",
       "weight": 1
     },
@@ -47531,7 +47555,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L1037",
+      "source_location": "L1047",
       "target": "rail_test_reserveone",
       "weight": 1
     },
@@ -47555,7 +47579,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L2573",
+      "source_location": "L2583",
       "target": "rail_test_seedpendingapprovalrequest",
       "weight": 1
     },
@@ -47567,7 +47591,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L1687",
+      "source_location": "L1697",
       "target": "rail_test_seedsweeperfixture",
       "weight": 1
     },
@@ -47591,7 +47615,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L2859",
+      "source_location": "L2869",
       "target": "rail_test_seedverificationrun",
       "weight": 1
     },
@@ -47603,7 +47627,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_notifications_rail_test_ts",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L2842",
+      "source_location": "L2852",
       "target": "rail_test_stubprodtransport",
       "weight": 1
     },
@@ -55337,13 +55361,25 @@
     },
     {
       "_src": "packages_athena_webapp_convex_operations_oweddailyclosesweep_ts",
+      "_tgt": "oweddailyclosesweep_candidatesforpolicies",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "relation": "contains",
+      "source": "packages_athena_webapp_convex_operations_oweddailyclosesweep_ts",
+      "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
+      "source_location": "L195",
+      "target": "oweddailyclosesweep_candidatesforpolicies",
+      "weight": 1
+    },
+    {
+      "_src": "packages_athena_webapp_convex_operations_oweddailyclosesweep_ts",
       "_tgt": "oweddailyclosesweep_completedoperatingdatesforstore",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "relation": "contains",
       "source": "packages_athena_webapp_convex_operations_oweddailyclosesweep_ts",
       "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
-      "source_location": "L182",
+      "source_location": "L170",
       "target": "oweddailyclosesweep_completedoperatingdatesforstore",
       "weight": 1
     },
@@ -55367,20 +55403,8 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_operations_oweddailyclosesweep_ts",
       "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
-      "source_location": "L421",
+      "source_location": "L474",
       "target": "oweddailyclosesweep_daysbetweenoperatingdates",
-      "weight": 1
-    },
-    {
-      "_src": "packages_athena_webapp_convex_operations_oweddailyclosesweep_ts",
-      "_tgt": "oweddailyclosesweep_listenabledeodpolicies",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1,
-      "relation": "contains",
-      "source": "packages_athena_webapp_convex_operations_oweddailyclosesweep_ts",
-      "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
-      "source_location": "L168",
-      "target": "oweddailyclosesweep_listenabledeodpolicies",
       "weight": 1
     },
     {
@@ -210829,7 +210853,7 @@
       "label": "emitApprovalRequestCreated()",
       "norm_label": "emitapprovalrequestcreated()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L2602"
+      "source_location": "L2612"
     },
     {
       "community": 170,
@@ -210838,7 +210862,7 @@
       "label": "emitVerificationDiscrepancy()",
       "norm_label": "emitverificationdiscrepancy()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L2911"
+      "source_location": "L2921"
     },
     {
       "community": 170,
@@ -210847,7 +210871,7 @@
       "label": "insertDelivery()",
       "norm_label": "insertdelivery()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L1659"
+      "source_location": "L1669"
     },
     {
       "community": 170,
@@ -210883,7 +210907,7 @@
       "label": "reserveOne()",
       "norm_label": "reserveone()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L1037"
+      "source_location": "L1047"
     },
     {
       "community": 170,
@@ -210901,7 +210925,7 @@
       "label": "seedPendingApprovalRequest()",
       "norm_label": "seedpendingapprovalrequest()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L2573"
+      "source_location": "L2583"
     },
     {
       "community": 170,
@@ -210910,7 +210934,7 @@
       "label": "seedSweeperFixture()",
       "norm_label": "seedsweeperfixture()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L1687"
+      "source_location": "L1697"
     },
     {
       "community": 170,
@@ -210928,7 +210952,7 @@
       "label": "seedVerificationRun()",
       "norm_label": "seedverificationrun()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L2859"
+      "source_location": "L2869"
     },
     {
       "community": 170,
@@ -210937,7 +210961,7 @@
       "label": "stubProdTransport()",
       "norm_label": "stubprodtransport()",
       "source_file": "packages/athena-webapp/convex/notifications/rail.test.ts",
-      "source_location": "L1228"
+      "source_location": "L1238"
     },
     {
       "community": 1700,
@@ -249363,11 +249387,20 @@
     {
       "community": 386,
       "file_type": "code",
+      "id": "oweddailyclosesweep_candidatesforpolicies",
+      "label": "candidatesForPolicies()",
+      "norm_label": "candidatesforpolicies()",
+      "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
+      "source_location": "L195"
+    },
+    {
+      "community": 386,
+      "file_type": "code",
       "id": "oweddailyclosesweep_completedoperatingdatesforstore",
       "label": "completedOperatingDatesForStore()",
       "norm_label": "completedoperatingdatesforstore()",
       "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
-      "source_location": "L182"
+      "source_location": "L170"
     },
     {
       "community": 386,
@@ -249385,16 +249418,7 @@
       "label": "daysBetweenOperatingDates()",
       "norm_label": "daysbetweenoperatingdates()",
       "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
-      "source_location": "L421"
-    },
-    {
-      "community": 386,
-      "file_type": "code",
-      "id": "oweddailyclosesweep_listenabledeodpolicies",
-      "label": "listEnabledEodPolicies()",
-      "norm_label": "listenabledeodpolicies()",
-      "source_file": "packages/athena-webapp/convex/operations/owedDailyCloseSweep.ts",
-      "source_location": "L168"
+      "source_location": "L474"
     },
     {
       "community": 386,
