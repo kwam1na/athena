@@ -544,6 +544,191 @@ describe("reserveIntentDeliveries", () => {
     ).toHaveLength(1);
   });
 
+  it("restarts the abandonment clock when an aged stale-close intent is re-armed", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    try {
+      const t = convexTest(schema, modules);
+      const fixture = await t.run(seedOrgStore);
+      const subscriptionId = await t.run((ctx) =>
+        ctx.db.insert("notificationSubscription", {
+          organizationId: fixture.organizationId,
+          category: "eod",
+          channel: "email",
+          recipientEmail: "manager@example.com",
+          enabled: false,
+          createdAt: NOW,
+          updatedAt: NOW,
+        }),
+      );
+      const notification = {
+        kind: "eod.stale_daily_close",
+        organizationId: fixture.organizationId,
+        storeId: fixture.storeId,
+        subjectType: "dailyClose",
+        subjectId: `${fixture.storeId}:2026-07-21`,
+        payload: {
+          ageInDays: 8,
+          operatingDate: "2026-07-21",
+          storeId: fixture.storeId,
+        },
+      };
+      const emitted = await t.mutation(
+        internal.notifications.emit.emitNotification,
+        notification,
+      );
+      expect(
+        await t.mutation(
+          internal.notifications.dispatch.reserveIntentDeliveries,
+          { intentId: emitted.intentId },
+        ),
+      ).toBeNull();
+
+      const rearmAt = NOW + INTENT_ABANDON_AFTER_MS + 60_000;
+      vi.setSystemTime(rearmAt);
+      await t.run((ctx) =>
+        ctx.db.patch("notificationSubscription", subscriptionId, {
+          enabled: true,
+        }),
+      );
+      await t.mutation(
+        internal.notifications.emit.emitNotification,
+        notification,
+      );
+      expect(
+        await t.run((ctx) =>
+          ctx.db.get("notificationIntent", emitted.intentId),
+        ),
+      ).toMatchObject({
+        requeuedAt: rearmAt,
+        status: "pending",
+        sweepAttempts: 0,
+      });
+
+      await t.mutation(internal.notifications.sweeper.sweep, {
+        now: rearmAt + SWEEPER_INTENT_PICKUP_DELAY_MS,
+      });
+      expect(
+        await t.run((ctx) =>
+          ctx.db.get("notificationIntent", emitted.intentId),
+        ),
+      ).toMatchObject({ status: "pending", sweepAttempts: 1 });
+      expect(
+        await t.mutation(
+          internal.notifications.dispatch.reserveIntentDeliveries,
+          { intentId: emitted.intentId },
+        ),
+      ).toMatchObject({
+        leased: [expect.objectContaining({ recipientEmail: "manager@example.com" })],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps sent recipients deduped while reviving only no-audience-suppressed deliveries", async () => {
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedOrgStore);
+    const subscriptionIds = await t.run(async (ctx) => [
+      await ctx.db.insert("notificationSubscription", {
+        organizationId: fixture.organizationId,
+        category: "eod",
+        channel: "email",
+        recipientEmail: "sent@example.com",
+        enabled: true,
+        createdAt: NOW,
+        updatedAt: NOW,
+      }),
+      await ctx.db.insert("notificationSubscription", {
+        organizationId: fixture.organizationId,
+        category: "eod",
+        channel: "email",
+        recipientEmail: "retry@example.com",
+        enabled: true,
+        createdAt: NOW,
+        updatedAt: NOW,
+      }),
+    ]);
+    const notification = {
+      kind: "eod.stale_daily_close",
+      organizationId: fixture.organizationId,
+      storeId: fixture.storeId,
+      subjectType: "dailyClose",
+      subjectId: `${fixture.storeId}:2026-07-21`,
+      payload: {
+        ageInDays: 7,
+        operatingDate: "2026-07-21",
+        storeId: fixture.storeId,
+      },
+    };
+    const emitted = await t.mutation(
+      internal.notifications.emit.emitNotification,
+      notification,
+    );
+    const initial = await t.mutation(
+      internal.notifications.dispatch.reserveIntentDeliveries,
+      { intentId: emitted.intentId },
+    );
+    const sentLease = initial!.leased.find(
+      (lease) => lease.recipientEmail === "sent@example.com",
+    )!;
+    const retryLease = initial!.leased.find(
+      (lease) => lease.recipientEmail === "retry@example.com",
+    )!;
+    await t.mutation(internal.notifications.dispatch.completeDelivery, {
+      deliveryId: sentLease.deliveryId,
+      leaseToken: sentLease.leaseToken,
+      state: "sent",
+      errorCode: "sent",
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.patch("notificationDelivery", retryLease.deliveryId, {
+        status: "retryable_failure",
+        leaseToken: undefined,
+        leaseExpiresAt: undefined,
+        nextAttemptAt: NOW - 1,
+      });
+      for (const subscriptionId of subscriptionIds) {
+        await ctx.db.patch("notificationSubscription", subscriptionId, {
+          enabled: false,
+        });
+      }
+    });
+    expect(
+      await t.mutation(
+        internal.notifications.dispatch.reserveIntentDeliveries,
+        { intentId: emitted.intentId },
+      ),
+    ).toBeNull();
+
+    await t.run(async (ctx) => {
+      for (const subscriptionId of subscriptionIds) {
+        await ctx.db.patch("notificationSubscription", subscriptionId, {
+          enabled: true,
+        });
+      }
+    });
+    await t.mutation(
+      internal.notifications.emit.emitNotification,
+      notification,
+    );
+    const revived = await t.mutation(
+      internal.notifications.dispatch.reserveIntentDeliveries,
+      { intentId: emitted.intentId },
+    );
+    expect(revived?.leased).toEqual([
+      expect.objectContaining({
+        deliveryId: retryLease.deliveryId,
+        recipientEmail: "retry@example.com",
+      }),
+    ]);
+    const deliveries = await listDeliveries(t);
+    expect(
+      deliveries.filter((delivery) => delivery.recipientEmail === "sent@example.com"),
+    ).toEqual([expect.objectContaining({ status: "sent" })]);
+    expect(deliveries).toHaveLength(2);
+  });
+
   it("does not fall back to ADMIN_EMAILS when rows exist but are scoped to another store", async () => {
     const t = convexTest(schema, modules);
     const fixture = await t.run(seedOrgStore);

@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: high
 tags: [daily-close, automation, notifications, source-completeness, deduplication]
-delivery_diff_fingerprint: 8035c815d7ad5629114e446ee7a7fcd14aa72e24052839bf8c55e4f06ad354bf
+delivery_diff_fingerprint: a84960b776e6117a6f9dba10e4efc48a3749876958e6c4fd4e6e4260c6d4a56a
 ---
 
 # Daily Close saturation must preserve evidence and alert once
@@ -68,7 +68,11 @@ turning one action into an unbounded cross-store job.
 If a stale intent initially finds no EOD subscribers, a later owed-date retry
 re-arms that same suppressed intent after subscription setup. The intent and
 recipient dedupe keys remain unchanged, so recovery does not weaken duplicate
-delivery protection.
+delivery protection. Re-arming restarts the intent's abandonment clock and
+sweep-attempt counter, so an intent older than the six-hour recovery window is
+not immediately abandoned before its revived delivery runs. Already-sent
+recipient deliveries remain terminal and deduped; only deliveries suppressed
+by the no-audience path are revived.
 Re-arming also replaces the intent's reference payload with the latest valid
 age, so delayed delivery renders current staleness rather than the age observed
 before the audience was configured.

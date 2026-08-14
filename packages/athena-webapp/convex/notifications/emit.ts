@@ -79,8 +79,10 @@ export async function emitNotificationWithCtx(
       }
       await ctx.db.patch("notificationIntent", existing._id, {
         payload: args.payload,
+        requeuedAt: now,
         status: "pending",
         suppressedReason: undefined,
+        sweepAttempts: 0,
       });
       await ctx.scheduler.runAfter(
         0,
