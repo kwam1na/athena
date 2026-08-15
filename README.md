@@ -1,19 +1,5 @@
 # Athena
 
-Athena is an operating system for a solo business owner. The goal is to put the
-daily control loop of a business in one place: sell in person, sell online,
-track stock, fulfill orders, manage cash, handle services, assign staff work,
-understand customer behavior, and keep enough operational evidence that the
-owner can trust what happened without becoming a full-time systems operator.
-
-Today it is closest to a **retail and service business OS**. It is not a
-complete business OS yet; the honest gaps are listed below.
-
-## Product Tour
-
-Athena centers the operating day: what needs attention, what the business sold,
-how customers paid, and whether the day is ready to close.
-
 ![Athena Daily Operations workspace in dark mode](./docs/product-shots/daily-operations-dark.png)
 
 <table>
@@ -30,6 +16,16 @@ how customers paid, and whether the day is ready to close.
     <td><strong>Review what happened.</strong> Reconcile operating days and inspect sales, product mix, and cost-basis coverage.</td>
   </tr>
 </table>
+
+Athena is an operating system for a solo business owner. The goal is to put the
+daily control loop of a business in one place: sell in person, sell online,
+track stock, fulfill orders, manage cash, handle services, assign staff work,
+understand customer behavior, and keep enough operational evidence that the
+owner can trust what happened without becoming a full-time systems operator.
+
+Today it is closest to a **retail and service business OS**. It is not a
+complete business OS yet; the honest gaps are listed below.
+
 
 ## Status
 
