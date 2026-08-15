@@ -40,14 +40,16 @@ describe("authorizeRegistration", () => {
       api.harnessWaiver.registrationAuthorization.authorizeRegistration,
       args,
     )).rejects.toThrow("Sign in");
-    await expect(t.withIdentity({ email: "other@example.com" }).mutation(
+    const otherUser = await authenticatedTestUser(t, "other@example.com");
+    await expect(otherUser.mutation(
       api.harnessWaiver.registrationAuthorization.authorizeRegistration,
       args,
     )).rejects.toThrow("not authorized");
   });
 
   it("issues a short-lived ticket only for the reviewer and bootstrap secret", async () => {
-    const t = convexTest(schema, modules).withIdentity({ email: "reviewer@example.com" });
+    const base = convexTest(schema, modules);
+    const t = await authenticatedTestUser(base, "reviewer@example.com");
     await expect(t.mutation(
       api.harnessWaiver.registrationAuthorization.authorizeRegistration,
       { bootstrapSecret: "wrong", tokenHash: "b".repeat(64) },
@@ -68,3 +70,15 @@ describe("authorizeRegistration", () => {
     expect(authorization.expiresAt).toBeLessThanOrEqual(Date.now() + 60_000);
   });
 });
+
+async function authenticatedTestUser(
+  t: ReturnType<typeof convexTest>,
+  email: string,
+) {
+  const authUserId = await t.run((ctx) => ctx.db.insert("users", { email }));
+  await t.run((ctx) => ctx.db.insert("athenaUser", {
+    email,
+    normalizedEmail: email.toLowerCase(),
+  }));
+  return t.withIdentity({ subject: `${authUserId}|test-session` });
+}
