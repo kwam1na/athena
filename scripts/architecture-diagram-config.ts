@@ -13,6 +13,12 @@ export type DiagramDefinition = {
 
 export const DIAGRAMS: readonly DiagramDefinition[] = [
   {
+    id: "system-overview",
+    source: "athena-system-overview.html",
+    index: 0,
+    legacyOutput: "system-overview.png",
+  },
+  {
     id: "harness-overview",
     source: "athena-harness-architecture.html",
     index: 0,

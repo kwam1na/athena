@@ -45,7 +45,11 @@ describe("architecture diagram export options", () => {
   });
 
   test("uses stable bundle filenames", () => {
-    expect(bundleFileName(DIAGRAMS[0], "dark")).toBe(
+    const harnessDiagram = DIAGRAMS.find(
+      ({ id }) => id === "harness-overview",
+    );
+    expect(harnessDiagram).toBeDefined();
+    expect(bundleFileName(harnessDiagram!, "dark")).toBe(
       "harness-overview-dark.png",
     );
   });
