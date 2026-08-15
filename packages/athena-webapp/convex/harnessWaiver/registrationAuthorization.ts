@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import { env, mutation } from "../_generated/server";
+import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 import {
   requireConfiguredReviewer,
   requireEnrollmentBootstrap,
@@ -20,10 +21,9 @@ export const authorizeRegistration = mutation({
     tokenHash: v.string(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity?.email) throw new Error("Sign in before enrolling the waiver passkey.");
+    const authenticatedUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
     const reviewerEmail = requireConfiguredReviewer(
-      identity.email,
+      authenticatedUser.email,
       required("ATHENA_WAIVER_REVIEWER_EMAIL", env.ATHENA_WAIVER_REVIEWER_EMAIL),
     );
     await requireEnrollmentBootstrap(
