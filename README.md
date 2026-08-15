@@ -89,9 +89,8 @@ and the [complete harness reference](./docs/harness.md) for every sensor.
 
 ## System Overview
 
-Athena is four layers that share one backend. The Convex deployment in
-`packages/athena-webapp/convex` is the only backend; both frontends and every
-webhook land there.
+Athena’s operator app, storefront, and provider webhooks converge on a 
+single Convex business backend.
 
 [![Athena system overview architecture](./docs/architecture/assets/system-overview.png)](./docs/architecture/athena-system-overview.html)
 
