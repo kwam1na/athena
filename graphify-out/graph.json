@@ -1739,7 +1739,7 @@
       "relation": "calls",
       "source": "architecture_diagram_config_readvalue",
       "source_file": "scripts/architecture-diagram-config.ts",
-      "source_location": "L57",
+      "source_location": "L63",
       "target": "architecture_diagram_config_parseexportoptions",
       "weight": 1
     },
@@ -151259,7 +151259,7 @@
       "relation": "contains",
       "source": "scripts_architecture_diagram_config_ts",
       "source_file": "scripts/architecture-diagram-config.ts",
-      "source_location": "L89",
+      "source_location": "L95",
       "target": "architecture_diagram_config_bundlefilename",
       "weight": 1
     },
@@ -151271,7 +151271,7 @@
       "relation": "contains",
       "source": "scripts_architecture_diagram_config_ts",
       "source_file": "scripts/architecture-diagram-config.ts",
-      "source_location": "L49",
+      "source_location": "L55",
       "target": "architecture_diagram_config_parseexportoptions",
       "weight": 1
     },
@@ -151283,7 +151283,7 @@
       "relation": "contains",
       "source": "scripts_architecture_diagram_config_ts",
       "source_file": "scripts/architecture-diagram-config.ts",
-      "source_location": "L41",
+      "source_location": "L47",
       "target": "architecture_diagram_config_readvalue",
       "weight": 1
     },
@@ -285604,7 +285604,7 @@
       "label": "bundleFileName()",
       "norm_label": "bundlefilename()",
       "source_file": "scripts/architecture-diagram-config.ts",
-      "source_location": "L89"
+      "source_location": "L95"
     },
     {
       "community": 836,
@@ -285613,7 +285613,7 @@
       "label": "parseExportOptions()",
       "norm_label": "parseexportoptions()",
       "source_file": "scripts/architecture-diagram-config.ts",
-      "source_location": "L49"
+      "source_location": "L55"
     },
     {
       "community": 836,
@@ -285622,7 +285622,7 @@
       "label": "readValue()",
       "norm_label": "readvalue()",
       "source_file": "scripts/architecture-diagram-config.ts",
-      "source_location": "L41"
+      "source_location": "L47"
     },
     {
       "community": 836,

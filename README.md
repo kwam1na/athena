@@ -9,6 +9,28 @@ owner can trust what happened without becoming a full-time systems operator.
 Today it is closest to a **retail and service business OS**. It is not a
 complete business OS yet; the honest gaps are listed below.
 
+## Product Tour
+
+Athena centers the operating day: what needs attention, what the business sold,
+how customers paid, and whether the day is ready to close.
+
+![Athena Daily Operations workspace in dark mode](./docs/product-shots/daily-operations-dark.png)
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="./docs/product-shots/pos-light.png" alt="Athena POS register with a populated sale in light mode">
+    </td>
+    <td width="50%">
+      <img src="./docs/product-shots/reports-light.png" alt="Athena Reports workspace with sales metrics and trend chart in light mode">
+    </td>
+  </tr>
+  <tr>
+    <td><strong>Sell in person.</strong> Build a sale, take mixed payments, and keep working through a local-first register.</td>
+    <td><strong>Review what happened.</strong> Reconcile operating days and inspect sales, product mix, and cost-basis coverage.</td>
+  </tr>
+</table>
+
 ## Status
 
 Built and in use:
@@ -47,26 +69,7 @@ Athena is four layers that share one backend. The Convex deployment in
 `packages/athena-webapp/convex` is the only backend; both frontends and every
 webhook land there.
 
-```mermaid
-flowchart TB
-    subgraph Surfaces
-        OP["Operator app<br/>(POS register, operations, reports)"]
-        SF["Storefront<br/>(browse, bag, checkout, orders)"]
-        WH["Webhooks<br/>(Paystack, MTN MoMo, WhatsApp)"]
-    end
-    subgraph Backend["Convex backend"]
-        DOM["Domain commands<br/>pos · storeFront · serviceOps · stockOps · cashControls · operations"]
-        LEDGER["inventoryLedger<br/>(single stock + valuation write path)"]
-        FACTS["reports fact ledger → foldDay → reportDay"]
-        EVID["Evidence rails<br/>operationalEvent · workflowTraces · approvalProofs"]
-    end
-    OP --> DOM
-    SF --> DOM
-    WH --> DOM
-    DOM --> LEDGER
-    DOM --> FACTS
-    DOM --> EVID
-```
+[![Athena system overview architecture](./docs/architecture/assets/system-overview.png)](./docs/architecture/athena-system-overview.html)
 
 ### POS local-first and cloud sync
 

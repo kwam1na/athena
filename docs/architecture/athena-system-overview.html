@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en" data-diagram-profile="athena" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Athena system overview architecture">
+  <title>Athena System Overview</title>
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+  <link href="./diagram-theme.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      padding: 48px 32px;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+
+    main { width: min(100%, 1120px); margin: 0 auto; }
+    .eyebrow { margin-bottom: 8px; color: var(--muted); font: 500 8px/1.5 var(--mono); letter-spacing: 0.18em; text-transform: uppercase; }
+    h1 { margin-bottom: 8px; font: 400 28px/1.08 var(--serif); letter-spacing: -0.02em; }
+    .subtitle { max-width: 720px; margin-bottom: 32px; color: var(--muted); font-size: 16px; line-height: 1.6; }
+    .diagram { overflow-x: auto; }
+    svg { display: block; width: 100%; min-width: 880px; height: auto; }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Architecture · System Overview</p>
+    <h1>One backend turns every channel action into shared business truth</h1>
+    <p class="subtitle">The operator app, storefront, and provider webhooks enter the same Convex command layer. Each accepted business action commits its stock, reporting, and accountability effects together.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 1120 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="athena-system-overview-title athena-system-overview-desc">
+        <title id="athena-system-overview-title">Athena System Overview</title>
+        <desc id="athena-system-overview-desc">Architecture showing the operator app, storefront, and provider webhooks entering one Convex domain-command layer, which writes inventory, reporting, and operational evidence in the same transaction.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="var(--muted)"/>
+          </marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="var(--accent)"/>
+          </marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="var(--link)"/>
+          </marker>
+        </defs>
+
+        <rect width="1120" height="560" fill="var(--paper)"/>
+
+        <!-- Zones -->
+        <rect x="32" y="48" width="288" height="396" rx="8" fill="var(--zone-fill)" stroke="var(--rule-soft)" stroke-width="0.8"/>
+        <rect x="44" y="52" width="72" height="16" rx="4" fill="var(--paper)"/>
+        <text x="80" y="64" fill="var(--soft)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.14em">SURFACES</text>
+
+        <rect x="352" y="48" width="736" height="396" rx="8" fill="var(--zone-fill)" stroke="var(--rule-soft)" stroke-width="0.8"/>
+        <rect x="364" y="52" width="112" height="16" rx="4" fill="var(--paper)"/>
+        <text x="420" y="64" fill="var(--soft)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.14em">CONVEX BACKEND</text>
+
+        <!-- Connectors: drawn before nodes -->
+        <path d="M280 132 H320 Q328 132 328 140 V212 Q328 220 336 220 H408" fill="none" stroke="var(--link)" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <line x1="280" y1="244" x2="408" y2="244" stroke="var(--link)" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <path d="M280 356 H320 Q328 356 328 348 V276 Q328 268 336 268 H408" fill="none" stroke="var(--link)" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+
+        <path d="M608 216 H656 Q664 216 664 176 V132 Q664 124 672 124 H752" fill="none" stroke="var(--accent)" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+        <line x1="608" y1="244" x2="752" y2="244" stroke="var(--accent)" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+        <path d="M608 272 H656 Q664 272 664 312 V356 Q664 364 672 364 H752" fill="none" stroke="var(--accent)" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+
+        <rect x="632" y="92" width="104" height="16" rx="4" fill="var(--paper)"/>
+        <text x="684" y="104" fill="var(--accent)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.06em">ONE TRANSACTION</text>
+
+        <!-- Surface nodes -->
+        <rect x="72" y="92" width="208" height="80" rx="8" fill="var(--paper)"/>
+        <rect x="72" y="92" width="208" height="80" rx="8" fill="var(--muted-tint)" stroke="var(--soft)" stroke-width="1"/>
+        <rect x="84" y="104" width="36" height="16" rx="4" fill="transparent" stroke="var(--muted-45)" stroke-width="0.8"/>
+        <text x="102" y="116" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">APP</text>
+        <text x="176" y="136" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Operator App</text>
+        <text x="176" y="156" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle">POS · operations · reports</text>
+
+        <rect x="72" y="204" width="208" height="80" rx="8" fill="var(--paper)"/>
+        <rect x="72" y="204" width="208" height="80" rx="8" fill="var(--muted-tint)" stroke="var(--soft)" stroke-width="1"/>
+        <rect x="84" y="216" width="36" height="16" rx="4" fill="transparent" stroke="var(--muted-45)" stroke-width="0.8"/>
+        <text x="102" y="228" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">WEB</text>
+        <text x="176" y="248" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Storefront</text>
+        <text x="176" y="268" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle">browse · checkout · orders</text>
+
+        <rect x="72" y="316" width="208" height="80" rx="8" fill="var(--paper)"/>
+        <rect x="72" y="316" width="208" height="80" rx="8" fill="var(--muted-tint)" stroke="var(--soft)" stroke-width="1"/>
+        <rect x="84" y="328" width="64" height="16" rx="4" fill="transparent" stroke="var(--muted-45)" stroke-width="0.8"/>
+        <text x="116" y="340" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">WEBHOOK</text>
+        <text x="176" y="360" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Provider Webhooks</text>
+        <text x="176" y="380" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle">Paystack · MTN MoMo · WhatsApp</text>
+
+        <!-- Backend nodes -->
+        <rect x="408" y="180" width="200" height="128" rx="8" fill="var(--paper)"/>
+        <rect x="408" y="180" width="200" height="128" rx="8" fill="var(--accent-tint)" stroke="var(--accent)" stroke-width="1.2"/>
+        <rect x="420" y="192" width="72" height="16" rx="4" fill="transparent" stroke="var(--accent-45)" stroke-width="0.8"/>
+        <text x="456" y="204" fill="var(--accent)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">COMMANDS</text>
+        <text x="508" y="232" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Domain Command Layer</text>
+        <text x="508" y="256" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle">pos · storefront · stock · cash</text>
+        <text x="508" y="276" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle">services · operations</text>
+
+        <rect x="752" y="84" width="288" height="80" rx="8" fill="var(--paper)"/>
+        <rect x="752" y="84" width="288" height="80" rx="8" fill="var(--subtle-fill)" stroke="var(--muted)" stroke-width="1"/>
+        <rect x="764" y="96" width="56" height="16" rx="4" fill="transparent" stroke="var(--muted-45)" stroke-width="0.8"/>
+        <text x="792" y="108" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">LEDGER</text>
+        <text x="896" y="128" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Inventory &amp; Valuation</text>
+        <text x="896" y="148" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle">inventoryLedger · one stock write path</text>
+
+        <rect x="752" y="204" width="288" height="80" rx="8" fill="var(--paper)"/>
+        <rect x="752" y="204" width="288" height="80" rx="8" fill="var(--subtle-fill)" stroke="var(--muted)" stroke-width="1"/>
+        <rect x="764" y="216" width="52" height="16" rx="4" fill="transparent" stroke="var(--muted-45)" stroke-width="0.8"/>
+        <text x="790" y="228" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">FACTS</text>
+        <text x="896" y="248" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Reporting Fact Ledger</text>
+        <text x="896" y="268" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle">reportFact → foldDay → reportDay</text>
+
+        <rect x="752" y="324" width="288" height="80" rx="8" fill="var(--paper)"/>
+        <rect x="752" y="324" width="288" height="80" rx="8" fill="var(--subtle-fill)" stroke="var(--muted)" stroke-width="1"/>
+        <rect x="764" y="336" width="64" height="16" rx="4" fill="transparent" stroke="var(--muted-45)" stroke-width="0.8"/>
+        <text x="796" y="348" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle" letter-spacing="0.08em">EVIDENCE</text>
+        <text x="896" y="368" fill="var(--ink)" font-size="12" font-weight="600" font-family="var(--sans)" text-anchor="middle">Operational Evidence</text>
+        <text x="896" y="388" fill="var(--muted)" font-size="8" font-family="var(--mono)" text-anchor="middle">events · traces · approval proofs</text>
+
+        <!-- Legend strip -->
+        <line x1="32" y1="484" x2="1088" y2="484" stroke="var(--rule)" stroke-width="0.8"/>
+        <text x="32" y="516" fill="var(--muted)" font-size="8" font-family="var(--mono)" letter-spacing="0.14em">LEGEND</text>
+        <line x1="128" y1="512" x2="164" y2="512" stroke="var(--link)" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text x="176" y="516" fill="var(--muted)" font-size="8" font-family="var(--mono)">CHANNEL INPUT</text>
+        <line x1="320" y1="512" x2="356" y2="512" stroke="var(--accent)" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+        <text x="368" y="516" fill="var(--muted)" font-size="8" font-family="var(--mono)">ATOMIC EFFECT</text>
+        <rect x="520" y="500" width="24" height="24" rx="4" fill="var(--accent-tint)" stroke="var(--accent)" stroke-width="1.2"/>
+        <text x="556" y="516" fill="var(--muted)" font-size="8" font-family="var(--mono)">SHARED COMMAND BOUNDARY</text>
+        <text x="1088" y="516" fill="var(--soft)" font-size="8" font-family="var(--mono)" text-anchor="end">DOC-INLINE · SIMPLIFIED · MIXED</text>
+      </svg>
+    </div>
+  </main>
+</body>
+</html>
