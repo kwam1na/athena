@@ -59,6 +59,34 @@ Not there yet:
   wired. Accounting, banking, payroll, supplier, and broader CRM integrations
   are outside the core loop.
 
+## Agent-Ready Repository Harness
+
+Changes are gated by the harness rather than by convention. Repo-local agent
+guidance routes work to the right package and architecture documentation, while
+the harness validates the exact delivery candidate.
+
+| Command | When |
+| --- | --- |
+| `bun run harness:check` | Quick repo health check. |
+| `bun run harness:test` | After changing anything under `scripts/`. |
+| `bun run pr:athena` | The full delivery ladder; records reusable pre-push proof. |
+| `bun run graphify:check` | Freshness gate for tracked graph artifacts. |
+
+Three behaviors are worth knowing up front:
+
+- **Repair is fail-closed.** Hooks regenerate stale docs and graph artifacts,
+  then stop so the repair can be reviewed and committed.
+- **Pre-push output is bounded.** Complete validation output is retained in a
+  unique temporary log while the terminal receives heartbeats and concise
+  diagnostics.
+- **Substantial changes need a solution note.** `compound:check` blocks
+  behavior-bearing work without a reusable note under `docs/solutions/`.
+  Small edits, test-only changes, and docs-only changes are exempt.
+
+Start with the [package agent router](./packages/AGENTS.md). See the
+[harness architecture](./docs/architecture/harness.md) for the visual overview
+and the [complete harness reference](./docs/harness.md) for every sensor.
+
 ## System Overview
 
 Athena is four layers that share one backend. The Convex deployment in
@@ -69,12 +97,11 @@ webhook land there.
 
 ### POS local-first and cloud sync
 
-[![Athena POS and cloud sync architecture](./docs/architecture/assets/pos-cloud-sync-overview.png)](./docs/architecture/pos-cloud-sync.md)
-
 The POS register records cashier actions locally before synchronizing ordered
-events into canonical cloud records. See the
-[POS and cloud-sync architecture](./docs/architecture/pos-cloud-sync.md) for the system
-boundary, terminal mechanics, and authority model.
+events into canonical cloud records. The
+[POS and cloud-sync architecture](./docs/architecture/pos-cloud-sync.md)
+documents the system boundary, terminal mechanics, reconciliation flow, and
+authority model.
 
 ### The transactional spine
 
@@ -161,7 +188,7 @@ bun run --filter '@athena/storefront-webapp' dev   # storefront
 
 Run `bun install` (or `bun run prepare`) after cloning so Git picks up the
 tracked hooks in `.husky/`. Those hooks run the delivery gates described under
-[Working In This Repo](#working-in-this-repo).
+[Agent-Ready Repository Harness](#agent-ready-repository-harness).
 
 ## Documentation
 
@@ -216,33 +243,6 @@ causes real bugs:
 
 The durable note is
 [Athena Daily Close Is A Store-Day Boundary](./docs/solutions/logic-errors/athena-daily-close-store-day-boundary-2026-05-07.md).
-
-## Working In This Repo
-
-Changes are gated by the harness rather than by convention. The commands you
-will actually reach for:
-
-| Command | When |
-| --- | --- |
-| `bun run harness:check` | Quick repo health check. |
-| `bun run harness:test` | After changing anything under `scripts/`. |
-| `bun run pr:athena` | The full delivery ladder; records reusable pre-push proof. |
-| `bun run graphify:check` | Freshness gate for tracked graph artifacts. |
-
-Three behaviors are worth knowing up front:
-
-- **Repair is fail-closed.** Hooks will regenerate stale docs and graph
-  artifacts for you, then **stop**, so you review and commit the repair instead
-  of pushing a stale ref.
-- **Pre-push output is bounded.** The hook keeps complete validation output in
-  a unique temporary log while the terminal receives heartbeats, a concise
-  success summary, or byte-capped failure diagnostics with the retained path.
-- **Substantial changes need a solution note.** `compound:check` blocks
-  behavior-bearing work that does not also add a note under `docs/solutions/`.
-  Small edits, test-only changes, and docs-only changes pass without one.
-
-[The harness doc](./docs/harness.md) explains each sensor and how to read a
-failure.
 
 ## Deployment
 
