@@ -105,6 +105,17 @@ afterEach(async () => {
 });
 
 describe("harness gate admission", () => {
+  it("reads the default human waiver prompt from the controlling terminal", async () => {
+    const source = await readFile(
+      path.join(import.meta.dirname, "harness-gate-admission.ts"),
+      "utf8",
+    );
+
+    expect(source).toContain('createReadStream("/dev/tty")');
+    expect(source).toContain('createWriteStream("/dev/tty")');
+    expect(source).not.toContain("input: process.stdin");
+  });
+
   it("shares the documentation waiver allow-list with focused admission", () => {
     expect(WAIVABLE_FINDING_CODES["documentation.current"]).toBe(
       WAIVABLE_DOCUMENTATION_FINDING_POLICIES,

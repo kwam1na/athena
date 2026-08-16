@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
+import { createReadStream, createWriteStream } from "node:fs";
 import { chmod, link, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -327,13 +328,12 @@ async function defaultPrompt(
 ) {
   const named =
     obligationIds.length > 0 ? obligationIds.join(", ") : "review.green";
-  console.log(`This prepared candidate is blocked by: ${named}.`);
+  const input = createReadStream("/dev/tty");
+  const output = createWriteStream("/dev/tty");
+  output.write(`This prepared candidate is blocked by: ${named}.\n`);
   for (const remediation of decision.remediation.human)
-    console.log(`- ${remediation}`);
-  const terminal = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
+    output.write(`- ${remediation}\n`);
+  const terminal = createInterface({ input, output });
   try {
     const answer = await terminal.question(
       `Waive ${named} for this invocation? Type 'yes' to continue: `,
@@ -343,6 +343,8 @@ async function defaultPrompt(
     return false;
   } finally {
     terminal.close();
+    input.destroy();
+    output.end();
   }
 }
 
