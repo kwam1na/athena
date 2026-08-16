@@ -3,7 +3,6 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { internalQuery } from "../_generated/server";
-import { v } from "convex/values";
 import type { SharedDemoCapability } from "./policy";
 import { denySharedDemoAction, requireSharedDemoCapability } from "./policy";
 import { SHARED_DEMO_ALLOWED_CAPABILITIES } from "../platform/capabilityCatalog";
@@ -136,70 +135,27 @@ export async function requireReadySharedDemoStoreCapabilityIfApplicable(
   return actor;
 }
 
-/**
- * Derived, not hand-listed.
+/*
+ * `sharedDemoCapabilityValidator` was deleted with them.
  *
- * This used to be 26 `v.literal(...)` lines maintained by hand, and it had
- * drifted: it accepted six capabilities the demo was never granted
- * (`identity.manage`, `permissions.manage`, `billing.manage`,
- * `integrations.manage`, `exports.generate`, `administration.destructive`)
- * and one — `reports.read` — that no longer exists. Deriving from
- * `SHARED_DEMO_ALLOWED_CAPABILITIES` means the accepted argument set cannot
- * drift from the grant set: adding a grant widens it, and nothing else can.
- * `demo.lifecycle` is added because it is the demo's own lifecycle capability,
- * granted by `requireSharedDemoCapability` rather than by the allowlist.
+ * The U12 contract asked for it to be DERIVED from
+ * `SHARED_DEMO_ALLOWED_CAPABILITIES` instead of hand-listed — it had drifted,
+ * accepting six capabilities the demo was never granted plus one that no
+ * longer exists. Deriving it satisfied that. Deleting it satisfies R10's
+ * actual goal more strictly: its only consumer was
+ * `enforceSharedDemoActionCapability` above, so once that went the validator
+ * was dead code, and dead code cannot drift at all.
  */
-const SHARED_DEMO_CHECKABLE_CAPABILITIES = [
-  ...SHARED_DEMO_ALLOWED_CAPABILITIES,
-  "demo.lifecycle",
-] as const satisfies readonly SharedDemoCapability[];
 
-const sharedDemoCapabilityValidator = v.union(
-  ...(SHARED_DEMO_CHECKABLE_CAPABILITIES.map((capability) =>
-    v.literal(capability),
-  ) as [
-    ReturnType<typeof v.literal<SharedDemoCapability>>,
-    ReturnType<typeof v.literal<SharedDemoCapability>>,
-    ...ReturnType<typeof v.literal<SharedDemoCapability>>[],
-  ]),
-);
-
-export const enforceSharedDemoActionCapability = internalQuery({
-  args: {
-    capability: sharedDemoCapabilityValidator,
-    storeId: v.optional(v.id("store")),
-  },
-  returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const actor = args.storeId
-      ? await requireSharedDemoStoreCapabilityIfApplicable(
-          ctx,
-          args.capability,
-          args.storeId,
-        )
-      : await requireSharedDemoCapabilityIfApplicable(ctx, args.capability);
-    return Boolean(actor);
-  },
-});
-
-export const requireAuthenticatedNonDemoEffect = internalQuery({
-  args: {},
-  returns: v.null(),
-  handler: async (ctx) => {
-    const authUserId = await getAuthUserId(ctx);
-    if (!authUserId) throw new Error("Sign in again to continue.");
-    const actor = await getSharedDemoActorWithCtx(ctx);
-    if (actor) denySharedDemoAction();
-    return null;
-  },
-});
-
-export const denySharedDemoEffectIfApplicable = internalQuery({
-  args: {},
-  returns: v.null(),
-  handler: async (ctx) => {
-    const actor = await getSharedDemoActorWithCtx(ctx);
-    if (actor) denySharedDemoAction();
-    return null;
-  },
-});
+/*
+ * `enforceSharedDemoActionCapability`, `requireAuthenticatedNonDemoEffect`, and
+ * `denySharedDemoEffectIfApplicable` were deleted here.
+ *
+ * All three were `internalQuery` wrappers that handlers called via
+ * `ctx.runQuery` to ask "is this the demo?" mid-handler. R10 retired every such
+ * call site: the question is now answered by `actors.sharedDemo` on the
+ * operation definition, before the handler is entered. Keeping them exported
+ * with zero callers left three live Convex functions in the deployment whose
+ * only purpose was a pattern this delivery removed — and a future handler could
+ * have reached for one and quietly reintroduced mid-handler demo checks.
+ */

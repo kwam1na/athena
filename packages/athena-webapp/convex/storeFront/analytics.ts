@@ -365,12 +365,21 @@ async function updateAnalyticsOwnerWithCtx(
 
 /**
  * Internal sibling for `POST /analytics/update-owner`. The signed-in shopper
- * the records move TO is the admitted actor; the guest id being re-owned stays
- * caller-supplied but must belong to the admitted store.
+ * the records move TO is the admitted actor.
+ *
+ * The guest id being re-owned stays caller-supplied, so it is bounded twice:
+ * it must be the guest session the CALLER holds a cookie for (`claimGuestId`,
+ * resolved by the rail from the request, never from the body), and that guest
+ * row must belong to the admitted store. Store alone was not enough — it let
+ * any signed-in shopper absorb a stranger's browsing history by posting their
+ * guest id. The only legitimate merge is the caller's own guest session: at
+ * merge time the browser holds both cookies, which is what the storefront
+ * flow does after sign-in.
  */
 export const updateOwnerInternal = internalMutation({
   args: {
     guestId: v.id("guest"),
+    claimGuestId: v.optional(v.id("guest")),
     owner: ownerArg,
   },
   handler: async (ctx, args) => {
@@ -378,6 +387,14 @@ export const updateOwnerInternal = internalMutation({
     if (!owner.storeFrontUserId) {
       throw new AnalyticsOwnershipError(
         "Re-owning analytics requires a signed-in shopper.",
+      );
+    }
+    if (
+      !args.claimGuestId ||
+      String(args.claimGuestId) !== String(args.guestId)
+    ) {
+      throw new AnalyticsOwnershipError(
+        "You do not have access to this guest session.",
       );
     }
     const guest = await ctx.db.get("guest", args.guestId);

@@ -697,11 +697,17 @@ function handlerBodyStatements(
  * merely contains one somewhere inside a branch or a nested closure?
  *
  * Accepted: `return admit…(def, fn)(ctx, args);`, `await admit…(def, fn)(…)`,
- * a bare expression statement of the same, `const x = admit…(def, fn)`, and a
- * `try` whose block STARTS with one of those — the catch-and-reshape pattern
- * in `convex/notifications/subscriptions.ts`, where a typed admission denial
- * is mapped to a `CommandResult` and every other error rethrown. Nothing runs
+ * a bare expression statement of the same, and a `try` whose block STARTS with
+ * one of those — the catch-and-reshape pattern in
+ * `convex/notifications/subscriptions.ts`, where a typed admission denial is
+ * mapped to a `CommandResult` and every other error rethrown. Nothing runs
  * before the wrapper there, so the positional guarantee holds.
+ *
+ * NOT accepted: `const run = admit…(def, fn);`. That statement only BUILDS the
+ * closure — admission happens later, when `run(ctx, args)` is invoked — so
+ * treating it as "the wrapper ran first" let a handler write rows and call
+ * `ctx.runMutation` before any caller was admitted while the checker reported
+ * it as fully admitted. A declaration is not an invocation.
  *
  * Rejected: a wrapper inside an `if`, a loop, or a callback, or anywhere after
  * another statement — an admission that only happens on some paths, or that
@@ -719,9 +725,7 @@ function statementWrapperMatch(
   let expression: ts.Expression | undefined;
   if (ts.isReturnStatement(statement)) expression = statement.expression;
   else if (ts.isExpressionStatement(statement)) expression = statement.expression;
-  else if (ts.isVariableStatement(statement)) {
-    expression = statement.declarationList.declarations[0]?.initializer;
-  } else return undefined;
+  else return undefined;
 
   // Unwrap `await x` and the outer `(...)(ctx, args)` application.
   for (let depth = 0; depth < 4 && expression; depth += 1) {
@@ -818,6 +822,30 @@ function matchWrapper(
     if (first) {
       const match = statementWrapperMatch(first, names);
       if (match) return match;
+    }
+
+    // The hoisted-const shape: `const run = admitPublicMutation(def, fn)` at
+    // module scope, invoked inside the handler. That is legitimate, but only
+    // when nothing runs ahead of the invocation — so find the invoking
+    // statement and check every statement before it for pre-admission work.
+    for (let index = 0; index < statements.length; index += 1) {
+      const match = statementWrapperMatch(statements[index], names);
+      if (!match) continue;
+      const preceding = statements.slice(0, index);
+      const doesWorkFirst = preceding.some((statement) => {
+        let found = false;
+        const walk = (node: ts.Node) => {
+          if (found) return;
+          if (isPreAdmissionCtxEffect(node) || isPublicDbWriteCall(node)) {
+            found = true;
+            return;
+          }
+          ts.forEachChild(node, walk);
+        };
+        walk(statement);
+        return found;
+      });
+      return doesWorkFirst || index > 0 ? { ...match, notFirst: true } : match;
     }
 
     // A wrapper exists somewhere deeper in the body. Report it as a positional

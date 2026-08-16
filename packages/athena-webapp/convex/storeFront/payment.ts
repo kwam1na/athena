@@ -375,6 +375,21 @@ async function createTransactionWithCtx(
  */
 export const createTransactionInternal = internalAction({
   args: { ...paymentSessionArgs, owner: customerOwnerValidator },
+  // Carried over from the deleted public `createTransaction`. An internal
+  // sibling is still a contract with its caller, and dropping the validator
+  // during internalization silently removed the only runtime check that this
+  // action returns what the route serialises.
+  returns: v.union(
+    v.object({
+      success: v.boolean(),
+      message: v.string(),
+    }),
+    v.object({
+      authorization_url: v.string(),
+      access_code: v.string(),
+      reference: v.string(),
+    }),
+  ),
   handler: async (ctx, { owner, ...args }): Promise<any> => {
     await requireOwnedCheckoutSession(ctx, args.checkoutSessionId, owner);
     return await createTransactionWithCtx(ctx, args);
@@ -532,6 +547,13 @@ async function createPODOrderWithCtx(
 /** Internal sibling for `POST /checkout/:checkoutSessionId` (POD action). */
 export const createPODOrderInternal = internalAction({
   args: { ...paymentSessionArgs, owner: customerOwnerValidator },
+  // Carried over from the deleted public `createPODOrder` — see the note on
+  // `createTransactionInternal` above.
+  returns: v.object({
+    success: v.boolean(),
+    message: v.string(),
+    reference: v.optional(v.string()),
+  }),
   handler: async (ctx, { owner, ...args }): Promise<PaymentResult> => {
     await requireOwnedCheckoutSession(ctx, args.checkoutSessionId, owner);
     return await createPODOrderWithCtx(ctx, args);
@@ -734,6 +756,20 @@ async function verifyPaymentWithCtx(
  */
 export const verifyPaymentInternal = internalAction({
   args: { ...verifyPaymentArgs, owner: customerOwnerValidator },
+  /**
+   * NOT carried over verbatim from the deleted public `verifyPayment`, because
+   * that one was wrong. It declared
+   * `v.union(v.object({verified}), v.object({message}))` — two disjoint arms —
+   * while the handler can return `{ verified: false, message: "No active
+   * session found." }`, which matches NEITHER. On a live path that would have
+   * thrown a return-validation error. `PaymentVerificationResult` in
+   * `convex/types/payment.ts` is `{ verified: boolean; message?: string }`, so
+   * that is what the validator states.
+   */
+  returns: v.object({
+    verified: v.boolean(),
+    message: v.optional(v.string()),
+  }),
   handler: async (
     ctx,
     { owner, ...args },

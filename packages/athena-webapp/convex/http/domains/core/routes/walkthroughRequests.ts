@@ -63,8 +63,14 @@ walkthroughRequestRoutes.post(
         walkthroughHourlyGlobalLimit();
         getWalkthroughHmacVerificationKeys();
         walkthroughPrivacyContact();
-      } catch {
-        console.error("walkthrough_ingress_configuration_invalid");
+      } catch (error) {
+        // This block is exact rather than broad: everything inside the `try`
+        // is a pure resolver over environment configuration — no database, no
+        // callee, no I/O — so anything it throws IS a configuration fault, and
+        // 503 is the documented answer for one. The error is logged with the
+        // line so an operator can see WHICH variable is wrong; before, only a
+        // bare string was logged and the cause was lost.
+        console.error("walkthrough_ingress_configuration_invalid", error);
         return c.json({ error: { code: "temporarily_unavailable" } }, 503);
       }
       const contentLengthHeader = c.req.header("content-length");
@@ -74,11 +80,20 @@ walkthroughRequestRoutes.post(
       try { const parsed: unknown = JSON.parse(ingress.rawBody); if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(); body = parsed as Record<string, unknown>; } catch { return c.json({ error: { code: "request_rejected" } }, 400); }
       if (text(body.website).trim()) return c.json({ accepted: true }, 202);
       if (!isValidBody(body)) return c.json({ error: { code: "request_rejected" } }, 400);
-      try {
-        const result = await c.env.runMutation(internal.marketing.walkthroughRequests.accept, { submissionKey: text(body.submissionKey), payloadDigest: await sha256(canonical(body)), name: text(body.name), workEmail: text(body.workEmail), businessName: text(body.businessName), phone: text(body.phone) || undefined, businessNeed: text(body.businessNeed), submittedAt: Date.now() });
-        if (result.accepted) return c.json({ accepted: true }, 202);
-        return c.json({ error: { code: result.reason === "retry" ? "retry_required" : "temporarily_unavailable" } }, 503);
-      } catch { return c.json({ error: { code: "temporarily_unavailable" } }, 503); }
+      // `accept` reports every outcome it INTENDS the caller to see as data:
+      // `{ accepted: true }`, or `{ accepted: false, reason }` for a rate-limit
+      // ("unavailable") and a replayed-key conflict ("retry"). Those are the
+      // only conditions this route translates, and they are read below.
+      //
+      // Nothing else is caught, deliberately. The `catch` that used to sit here
+      // collapsed a thrown fault — a schema violation, a missing index, a
+      // TypeError — into the SAME 503 the intentional retry path returns, so an
+      // operator watching 503s could not separate "the marketing intake
+      // mutation is broken" from "we are rate-limiting as designed". A fault
+      // now surfaces as a fault.
+      const result = await c.env.runMutation(internal.marketing.walkthroughRequests.accept, { submissionKey: text(body.submissionKey), payloadDigest: await sha256(canonical(body)), name: text(body.name), workEmail: text(body.workEmail), businessName: text(body.businessName), phone: text(body.phone) || undefined, businessNeed: text(body.businessNeed), submittedAt: Date.now() });
+      if (result.accepted) return c.json({ accepted: true }, 202);
+      return c.json({ error: { code: result.reason === "retry" ? "retry_required" : "temporarily_unavailable" } }, 503);
     },
   ),
 );

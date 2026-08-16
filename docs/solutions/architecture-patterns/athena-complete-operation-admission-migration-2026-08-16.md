@@ -14,7 +14,7 @@ applies_when:
   - "HTTP routes authenticate from a cookie id read directly out of the request"
   - "A migration must move ~400 call sites without changing normal-user behavior"
 tags: [athena, convex, operation-admission, shared-demo, authz, static-checker, http-ingress, derived-invariants]
-delivery_diff_fingerprint: 3596601bf861aa683e77e8cae73cb7943ba886e6b5856ce848abc708d1ce4eba
+delivery_diff_fingerprint: 4fed2e844bf5ba3d3ce8a5c4308034732016e03f0a6f6f1669fa7d65b8db2481
 ---
 
 # Completing an Admission Rail — Deriving Invariants Instead of Listing Them
@@ -296,6 +296,55 @@ The shared shape: each was a control that *looked* present at the call site.
 That is the failure mode a rail is supposed to eliminate, and eliminating it
 means the check has to be somewhere a reader cannot mistake for optional.
 
+## What the independent review round caught
+
+Thirteen reviewer personas ran against the closure candidate. They found two P0s
+and a set of P1s, and the pattern in them is worth more than the individual
+fixes: **three of the blocking findings were defects introduced by the closure
+work itself** — the round that was supposed to be the safety net.
+
+- **A webhook break (P0).** Bounding the ingress body inside the rail meant the
+  rail read `c.req.raw.body` directly, while the WhatsApp and MTN MoMo
+  middlewares had already consumed it with `c.req.text()`. A Fetch body stream
+  reads once, so the rail re-verified an EMPTY body against the same declared
+  signature verifier and would have denied every genuine callback with a 403.
+  The middlewares now reconstruct the request (`requestWithBody`), and
+  `readBoundedRequestBody` throws on an already-consumed body so the next
+  instance of this is loud instead of silent.
+- **A checker hole (P1).** The new positional rule accepted
+  `const run = admitPublicMutation(def, fn)` as proof the wrapper ran first. A
+  declaration is not an invocation: a handler could write rows and call
+  `ctx.runMutation` before any caller was admitted and still be reported as
+  admitted. Worse, `isPreAdmissionCtxEffect` — written specifically to catch
+  pre-admission work — was never called from anywhere.
+- **An inverted fault contract (P2, found independently by two reviewers).**
+  Tagging admission failures at the *catch* site marked every error as a
+  denial, so a database error or a throwing scope resolver reached clients as
+  403 "Request rejected." — an expected status on these routes, so nothing
+  retried and no 5xx reached monitoring. Denials are now tagged at the *throw*
+  site with a non-enumerable marker, and anything unmarked surfaces as a 500.
+
+The rest were genuine gaps in the migration: a `bag`/`savedBag` re-owner that
+admitted a caller matching EITHER side of a merge (so a signed-in shopper could
+absorb and destroy a stranger's cart), guest merges bounded by store but not by
+possession, route handlers mapping every fault to an expected client status, and
+lost behavioral coverage on the checkout and sign-in paths.
+
+Two lessons generalise:
+
+**A control that reads as present at the call site is the failure mode, and it
+recurs.** `assertCustomerOwnsRowIfPropagated` was the first instance; the
+either-side merge check, the store-only guest bound, and the catch-all 403 are
+the same shape. Each looked like a guard and guarded nothing on the path it was
+written for.
+
+**Verify that a regression test fails without its fix.** The first test written
+for the webhook P0 asserted `not.toBe(403)` and passed with the fix removed —
+the harness returned 500 for an unrelated reason. That is precisely the
+"passing for the wrong reason" defect this delivery set out to remove, produced
+while removing it. Reverting the fix and watching the test go red is cheap and
+is the only thing that actually establishes the test pins the bug.
+
 ## Residual risks, ranked
 
 Not fixed here — recorded so they are decisions rather than oversights.
@@ -308,32 +357,21 @@ Not fixed here — recorded so they are decisions rather than oversights.
    `/organizations` operator stubs, whose handlers return `{}` and read nothing
    — so there is no live exposure, but the property is easy to misread as
    stronger than it is.
-2. **`checkoutSession.updateCheckoutSession` / `getByIdInternal`** still carry
-   an optional `owner` with the `if (args.owner)` no-op shape. Callers are
-   genuinely mixed (the paystack webhook and `inventory/promoCode.ts` have no
-   customer actor), so converting them needs the sentinel plus edits to three
-   route files. `routes/checkout.ts` calls `updateCheckoutSession` with a
-   caller-supplied session id and no owner even though one is in scope; the
-   route checks ownership earlier, so this is a defence-in-depth gap, not a
-   live hole.
-3. **`userOffers.getEligibility`** takes caller-supplied `storeFrontUserId` and
-   `storeId` and asserts nothing. Its only caller derives both from the
-   admitted claim, so it is not currently exploitable — but the callee has no
-   guard of its own.
-4. **`GET /guests` remains a public bootstrap read**: any caller presenting an
+2. **`GET /guests` remains a public bootstrap read**: any caller presenting an
    arbitrary `guest_id` cookie can read that guest row. Accepted so cookie
    recovery keeps working; now named in code rather than described as safe.
    (The route previously carried a comment claiming "the id is read from the
    cookie, never from the request, so no supplied id can select another
    shopper's row" — a cookie *is* caller-supplied, so the comment asserted
    safety the code did not have.)
-5. **Convex Auth's HTTP route family is not admitted.** It is the trust root,
+3. **Convex Auth's HTTP route family is not admitted.** It is the trust root,
    registered once ahead of the CORS middleware, and `routerComposition.test.ts`
    pins registration order and single registration by source inspection. A
    behavioural precedence test would be stronger.
-6. **`verifyPaymentInternal` has no `returns` validator.** The deleted public
-   `verifyPayment` declared a union its own handler could violate; deleting it
-   made the mismatch latent rather than fixing it.
+4. **Payment audit attribution is still read from client arguments** rather
+   than from the admitted actor, so the audit record states what the caller
+   claimed. Scope-checked as an expansion beyond this contract and deferred to
+   **V26-1241**.
 
 The 41 deleted public functions are enumerated in the U10/U11 hand-off comments
 on V26-1237 / V26-1238 and reflected in the regenerated caller table at
@@ -344,6 +382,7 @@ on V26-1237 / V26-1238 and reflected in the regenerated caller table at
 - [Athena Operation Admission Rail (2026-07-21)](./athena-operation-admission-rail-2026-07-21.md) — established the write rail; superseded in scope by this note.
 - [Athena Shared Demo Read Admission Rail (2026-07-22)](./athena-shared-demo-read-admission-rail-2026-07-22.md) — established the read rail; superseded in scope by this note.
 - [Athena Public Operation Admission (2026-07-24)](./athena-public-operation-admission-2026-07-24.md)
+- [Reconciling divergent WIP read contracts, not deletions (2026-07-23)](../workflow-issues/reconciling-divergent-wip-read-contracts-not-deletions-2026-07-23.md) — the counterweight to this note. That learning says diverging work-in-progress contracts should be RECONCILED rather than deleted; this delivery deleted a great deal. The distinction: that note is about two live contracts that each still have a constituency, where deletion loses information. Here the deleted constructs had no constituency left — an exemption list whose entries were all migrated, registries whose facts the definitions already carried — and every invariant was re-derived rather than dropped. Deleting a duplicate is not the same act as deleting a divergence.
 - Plan: `docs/plans/2026-08-16-002-feat-complete-operation-admission-migration-plan.md`
 - Contract: `packages/athena-webapp/convex/operationAdmission/README.md`
 - Demo coverage: `packages/athena-webapp/docs/shared-demo-backend-coverage.md`

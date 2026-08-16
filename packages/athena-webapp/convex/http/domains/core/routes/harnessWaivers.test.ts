@@ -21,6 +21,8 @@ vi.mock("../../../../_generated/server", async (importOriginal) => ({
 
 import {
   harnessWaiverRoutes,
+  isWaiverApprovalUnavailable,
+  isWaiverConfigurationError,
   parseWaiverCandidate,
   secureSecretMatches,
 } from "./harnessWaivers";
@@ -167,5 +169,142 @@ describe("harness waiver broker authorization", () => {
       error: { code: "temporarily_unavailable" },
     });
     expect(bindings.runQuery).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The rule these tests hold: a status the broker's contract documents is
+ * reserved for the domain condition that earns it, and a fault stays a fault.
+ *
+ * A route that answers every failure with an expected status tells the caller
+ * to stop retrying and tells monitoring nothing broke. Hono renders an escaped
+ * error as 500, so "propagates" is observable as a 5xx here — which is exactly
+ * the signal that used to be missing.
+ */
+describe("harness waiver error classification", () => {
+  it("recognizes only the configuration misses an operator can fix", () => {
+    expect(
+      isWaiverConfigurationError(
+        new Error("ATHENA_WAIVER_BROKER_SECRET is not configured."),
+      ),
+    ).toBe(true);
+    expect(
+      isWaiverConfigurationError(
+        new Error("The waiver reviewer passkey is not enrolled."),
+      ),
+    ).toBe(true);
+    expect(isWaiverConfigurationError(new TypeError("boom"))).toBe(false);
+    // Exact match, never a substring: a drifting message must fail loudly.
+    expect(
+      isWaiverConfigurationError(
+        new Error("ATHENA_WAIVER_RP_ID is not configured. (wrapped)"),
+      ),
+    ).toBe(false);
+  });
+
+  it("recognizes only genuine conflicts over the presented approval", () => {
+    for (const message of [
+      "Passkey approval is unavailable.",
+      "Approval request is expired.",
+      "Approval request is consumed.",
+      "Approval request is not approved.",
+      "Passkey approval candidate does not match the expected candidate.",
+    ]) {
+      expect(isWaiverApprovalUnavailable(new Error(message))).toBe(true);
+    }
+    expect(isWaiverApprovalUnavailable(new TypeError("boom"))).toBe(false);
+    expect(isWaiverApprovalUnavailable("Approval request is expired.")).toBe(false);
+  });
+});
+
+/** The waiver call is the one that carries no `operationId`; admission does. */
+function isWaiverCall(args: unknown) {
+  return (args as { operationId?: string } | undefined)?.operationId === undefined;
+}
+
+async function postRequests(bindings: ReturnType<typeof brokerEnv>) {
+  return harnessWaiverRoutes.request(
+    "http://localhost/requests",
+    {
+      method: "POST",
+      headers: {
+        authorization: "Bearer broker-secret",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(candidate),
+    },
+    bindings,
+  );
+}
+
+async function postConsume(bindings: ReturnType<typeof brokerEnv>) {
+  return harnessWaiverRoutes.request(
+    "http://localhost/requests/approval-1/consume",
+    {
+      method: "POST",
+      headers: {
+        authorization: "Bearer broker-secret",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(candidate),
+    },
+    bindings,
+  );
+}
+
+describe("harness waiver request creation", () => {
+  it("keeps 503 for an unenrolled reviewer passkey", async () => {
+    const bindings = brokerEnv();
+    bindings.runAction.mockRejectedValue(
+      new Error("The waiver reviewer passkey is not enrolled."),
+    );
+
+    const response = await postRequests(bindings);
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: { code: "temporarily_unavailable" },
+    });
+  });
+
+  it("propagates an unexpected action fault instead of reporting 503", async () => {
+    const bindings = brokerEnv();
+    bindings.runAction.mockRejectedValue(new TypeError("boom"));
+
+    const response = await postRequests(bindings);
+
+    // A fault must not wear the "retry later, we are fine" status.
+    expect(response.status).toBe(500);
+  });
+});
+
+describe("harness waiver consumption", () => {
+  it("keeps 409 for an approval that cannot be consumed", async () => {
+    const bindings = brokerEnv();
+    bindings.runMutation.mockImplementation((_reference, args) =>
+      isWaiverCall(args)
+        ? Promise.reject(new Error("Approval request is expired."))
+        : Promise.resolve({ approvalId: "approval-1" }),
+    );
+
+    const response = await postConsume(bindings);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: { code: "approval_unavailable" },
+    });
+  });
+
+  it("propagates an unexpected mutation fault instead of reporting 409", async () => {
+    const bindings = brokerEnv();
+    bindings.runMutation.mockImplementation((_reference, args) =>
+      isWaiverCall(args)
+        ? Promise.reject(new TypeError("boom"))
+        : Promise.resolve({ approvalId: "approval-1" }),
+    );
+
+    const response = await postConsume(bindings);
+
+    expect(response.status).toBe(500);
   });
 });

@@ -2,6 +2,7 @@ import { CUSTOMER_OWNERSHIP_DENIED } from "../../../../storeFront/customerOwners
 import type { Id } from "../../../../_generated/dataModel";
 import type { AdmittedHttpContext } from "../../../../operationAdmission/rail";
 import type { CustomerOwner } from "../../../../storeFront/customerOwnership";
+import { getClaimGuestIdFromIngressRequest } from "../../../utils";
 
 /**
  * The single place a customer-channel route turns an admission into identity.
@@ -76,6 +77,28 @@ export function admittedStorefrontUserId(
   owner: CustomerOwner,
 ): Id<"storeFrontUser"> | undefined {
   return owner.storeFrontUserId;
+}
+
+/**
+ * The guest session the CALLER holds a cookie for, signed in or not.
+ *
+ * Every other value a route forwards is identity, taken from the rail's actor.
+ * This one is not: it is the answer to "does this caller possess that guest
+ * session", and it exists because the rail's actor deliberately drops the
+ * guest side once a shopper is signed in (the account must win for identity).
+ *
+ * The only legitimate guest→account merge is the caller's OWN guest session:
+ * at merge time the browser holds both cookies, which is exactly what the
+ * storefront flow does after sign-in. A merge callee therefore compares the
+ * body-supplied guest id against THIS value, so a signed-in attacker who posts
+ * a stranger's guest id is refused — they hold no such cookie. Possession of
+ * the cookie proves nothing more than possession, which is why the callee
+ * still bounds the guest row to the admitted store on top of this check.
+ */
+export function admittedClaimGuestId(
+  admitted: AdmittedHttpContext,
+): Id<"guest"> | undefined {
+  return getClaimGuestIdFromIngressRequest(admitted.ingress.request);
 }
 
 /**

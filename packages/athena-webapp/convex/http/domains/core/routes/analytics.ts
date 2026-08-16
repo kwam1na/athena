@@ -12,7 +12,10 @@ import {
   admitHttpRead,
   admitHttpRoute,
 } from "../../../../platform/operationAdmission";
-import { admittedCustomerOwner } from "./admittedOwner";
+import {
+  admittedClaimGuestId,
+  admittedCustomerOwner,
+} from "./admittedOwner";
 
 const analyticsRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -61,7 +64,8 @@ analyticsRoutes.post(
   "/update-owner",
   admitHttpRoute(
     updateAnalyticsOwnerRouteOperationDefinition,
-    async (c, { admission, ingress }) => {
+    async (c, admitted) => {
+      const { admission, ingress } = admitted;
       try {
         const { guestId } = JSON.parse(ingress.rawBody || "{}");
 
@@ -73,6 +77,9 @@ analyticsRoutes.post(
           internal.storeFront.analytics.updateOwnerInternal,
           {
             guestId: guestId as Id<"guest">,
+            // Possession, not identity: the callee refuses a guest id the
+            // caller holds no cookie for.
+            claimGuestId: admittedClaimGuestId(admitted),
             owner: admittedCustomerOwner(admission),
           },
         );

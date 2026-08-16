@@ -194,7 +194,16 @@ describe("walkthrough HTTP ingress", () => {
     },
   );
 
-  it("keeps an internal mutation failure recoverable", async () => {
+  /**
+   * `accept` reports the outcomes it means the caller to see as DATA (covered
+   * by the `reason` cases above). A thrown error is therefore never one of
+   * them, and it must not be dressed in the same 503 the intentional
+   * rate-limit path returns — an operator watching 503s could not otherwise
+   * tell "the intake mutation is broken" from "we are limiting as designed".
+   * Hono renders the escaped fault as a 500, which is the signal that was
+   * missing. The private detail still never reaches the caller's body.
+   */
+  it("propagates an internal mutation fault instead of reporting 503", async () => {
     const response = await walkthroughRequestRoutes.request(
       "/",
       {
@@ -206,22 +215,19 @@ describe("walkthrough HTTP ingress", () => {
         body: JSON.stringify(validBody),
       },
       {
-        // Admission succeeds; only the persistence call fails, and its private
-        // detail must not reach the caller.
+        // Admission succeeds; only the persistence call fails.
         runMutation: vi
           .fn()
           .mockImplementation((_reference, args) =>
             (args as { submissionKey?: string })?.submissionKey
-              ? Promise.reject(new Error("private detail"))
+              ? Promise.reject(new TypeError("private detail"))
               : Promise.resolve({}),
           ),
       } as never,
     );
 
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toEqual({
-      error: { code: "temporarily_unavailable" },
-    });
+    expect(response.status).toBe(500);
+    await expect(response.text()).resolves.not.toContain("private detail");
   });
 
   it("rejects invalid fields before invoking persistence", async () => {

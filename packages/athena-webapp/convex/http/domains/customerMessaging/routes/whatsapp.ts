@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+
+import { requestWithBody } from "../../../../operationAdmission/ingressBody";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 
 import { internal } from "../../../../_generated/api";
@@ -35,8 +37,14 @@ function mapWebhookStatus(status: string) {
  * boundary lives where the operation is declared; this middleware is what keeps
  * Meta's status contract exact — 401 for a bad or missing signature, 503 when
  * the app secret is not configured — and it runs before the admission mutation,
- * so a rejected callback leaves no admission row behind. Hono caches the body,
- * so reading it here and again in the rail is one network read.
+ * so a rejected callback leaves no admission row behind.
+ *
+ * The middleware MUST hand the rail a fresh Request. A Fetch body stream is
+ * readable exactly once, and the rail reads `c.req.raw.body` directly rather
+ * than through Hono's `HonoRequest#bodyCache` — so consuming the body here and
+ * calling `next()` would leave the rail reading an empty body, failing its own
+ * declared signature verifier and denying every genuine callback. Reconstruct
+ * the request from the bytes we read, exactly as `boundRequestBody` does.
  */
 whatsappMessagingRoutes.use("*", async (c, next) => {
   if (c.req.method !== "POST") return next();
@@ -48,15 +56,20 @@ whatsappMessagingRoutes.use("*", async (c, next) => {
     return c.json({ error: "Webhook verification is not configured" }, 503);
   }
 
+  const rawBody = await c.req.text();
   const verified = await verifyMetaWebhookSignature({
     appSecret,
-    rawBody: await c.req.text(),
+    rawBody,
     signatureHeader: c.req.header("x-hub-signature-256"),
   });
 
   if (!verified) {
     return c.json({ error: "Webhook verification failed" }, 401);
   }
+
+  // The original stream is spent; give the rail the same bytes to re-verify
+  // and to hand the handler.
+  c.req.raw = requestWithBody(c.req.raw, new TextEncoder().encode(rawBody));
 
   await next();
 });

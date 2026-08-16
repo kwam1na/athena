@@ -1,3 +1,21 @@
+/**
+ * Closed catalog of Athena write capabilities.
+ *
+ * A capability names an effect a caller may CAUSE; its read-side sibling,
+ * `readIntentCatalog.ts`, names a body of data a caller may OBSERVE. The
+ * operation admission rail resolves every write definition against this union,
+ * and shared-demo write policy grants a subset of it (see
+ * `SHARED_DEMO_ALLOWED_CAPABILITIES` below).
+ *
+ * The catalog is CLOSED. Definitions reference ids from this list; they never
+ * coin new ones at a call site. If an operation genuinely fits nothing here,
+ * that is a catalog change reviewed on its own merits — propose it, do not
+ * inline a literal. A capability added carelessly is a permission grant nobody
+ * reviewed.
+ *
+ * Ids are `<area>.<effect>`, ordered alphabetically so a diff to this file is
+ * readable as a policy change.
+ */
 export const ATHENA_CAPABILITY_CATALOG = [
   { id: "administration.destructive", label: "Destructive administration" },
   { id: "administration.maintenance", label: "System maintenance" },

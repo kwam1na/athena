@@ -160,10 +160,40 @@ export class OperationUnauthenticatedError extends Error {
   }
 }
 
+/**
+ * Marks an error as a denial the rail itself raised.
+ *
+ * Non-enumerable so it cannot change `JSON.stringify`, `ConvexError.data`, or
+ * any message-shaped comparison — several handlers still classify denials by
+ * `error.message` or `error.data` in their own catch blocks, and this marker
+ * must be invisible to them.
+ */
+const RAIL_DENIAL_MARKER = "__operationAdmissionDenied";
+
+function markAsRailDenial<E extends Error>(error: E): E {
+  if (!Object.prototype.hasOwnProperty.call(error, RAIL_DENIAL_MARKER)) {
+    Object.defineProperty(error, RAIL_DENIAL_MARKER, {
+      value: true,
+      enumerable: false,
+      configurable: true,
+      writable: false,
+    });
+  }
+  return error;
+}
+
+export function isRailRaisedDenial(error: unknown): boolean {
+  return Boolean(
+    error &&
+      typeof error === "object" &&
+      (error as Record<string, unknown>)[RAIL_DENIAL_MARKER] === true,
+  );
+}
+
 export function operationDenialError(outcome: OperationAdapterDenied): Error {
-  return (
+  return markAsRailDenial(
     outcome.error ??
-    new Error("This operation is not available for the current actor.")
+      new Error("This operation is not available for the current actor."),
   );
 }
 
@@ -179,17 +209,28 @@ export function asOperationAdmissionDenial(error: unknown) {
   const existing = operationAdmissionDenialData(error);
   if (existing) return operationAdmissionDenial(existing);
 
-  return operationAdmissionDenial({
-    kind: OPERATION_ADMISSION_DENIED,
-    message:
-      error instanceof Error
-        ? error.message
-        : "This operation is not available for the current actor.",
-    outcome:
-      error instanceof OperationUnauthenticatedError
-        ? "unauthenticated"
-        : "denied",
-  });
+  if (error instanceof OperationUnauthenticatedError) {
+    return operationAdmissionDenial({
+      kind: OPERATION_ADMISSION_DENIED,
+      message: error.message,
+      outcome: "unauthenticated",
+    });
+  }
+
+  // ONLY convert denials the rail raised. Converting everything inverted the
+  // rule this module states: a database error, a throwing scope resolver, or a
+  // bug in an adapter would reach the caller as 403 "Request rejected." — an
+  // expected status on these routes — so nothing retried and no 5xx reached
+  // monitoring. A storefront outage would have looked like a wall of refusals.
+  if (isRailRaisedDenial(error)) {
+    return operationAdmissionDenial({
+      kind: OPERATION_ADMISSION_DENIED,
+      message: (error as Error).message,
+      outcome: "denied",
+    });
+  }
+
+  return undefined;
 }
 
 /**

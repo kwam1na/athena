@@ -364,6 +364,60 @@ describe("collectConvexIngressFromSource", () => {
       expect(entry.wrapperNotFirst).toBe(true);
     });
 
+    /**
+     * `const run = admitPublicMutation(def, fn)` BUILDS the closure; admission
+     * happens when `run(ctx, args)` is invoked. Treating the declaration as
+     * proof let a handler write rows before any caller was admitted while the
+     * checker called it admitted.
+     */
+    it("rejects a const-bound wrapper declaration as proof of admission", () => {
+      const entry = inlineHandler(`
+            const run = admitPublicMutation(definition, async () => null);
+            await ctx.db.insert("auditLog", { action: "pre-admission" });
+            await ctx.runMutation(internal.some.write, {});
+            return run(ctx, args);
+      `);
+      expect(entry.admitted).toBe(false);
+      expect(entry.wrapperNotFirst).toBe(true);
+    });
+
+    it("rejects a hoisted wrapper invoked after other work", () => {
+      const entry = collectConvexIngressFromSource(
+        "packages/athena-webapp/convex/example/hoistedLate.ts",
+        `${PROLOGUE}
+        const admittedHandler = admitPublicMutation(definition, async () => null);
+
+        export const write = mutation({
+          args: {},
+          handler: async (ctx, args) => {
+            const existing = await ctx.db.get(args.id);
+            return admittedHandler(ctx, args);
+          },
+        });
+      `,
+      )[0];
+      expect(entry.admitted).toBe(false);
+      expect(entry.wrapperNotFirst).toBe(true);
+    });
+
+    it("still accepts a hoisted wrapper invoked as the first statement", () => {
+      const entry = collectConvexIngressFromSource(
+        "packages/athena-webapp/convex/example/hoistedFirst.ts",
+        `${PROLOGUE}
+        const admittedHandler = admitPublicMutation(definition, async () => null);
+
+        export const write = mutation({
+          args: {},
+          handler: async (ctx, args) => {
+            return admittedHandler(ctx, args);
+          },
+        });
+      `,
+      )[0];
+      expect(entry.admitted).toBe(true);
+      expect(entry.wrapperNotFirst).toBeFalsy();
+    });
+
     it("reports no wrapper at all as unadmitted WITHOUT the positional flag", () => {
       const entry = inlineHandler(`
             return await someOtherHelper(ctx, args);

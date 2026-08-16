@@ -13,6 +13,7 @@ import {
   getOrdersRouteReadDefinition,
 } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
 import {
+  admittedClaimGuestId,
   isCustomerOwnershipDenial,
   parseIngressJson,
   requireAdmittedCustomerOwner,
@@ -42,8 +43,9 @@ onlineOrderRoutes.get(
 
     try {
       // The route's own `isAuthorizedResourceOwner` check now lives inside the
-      // callee, which refuses a missing row and a foreign row with the same
-      // answer so the denial cannot be used to probe for order ids.
+      // callee. It returns null for an order that does not exist (404 below)
+      // and refuses one that exists but is not this shopper's (403), which is
+      // the pre-migration contract.
       const order = await c.env.runQuery(
         internal.storeFront.onlineOrder.getForCustomerInternal,
         { identifier: orderId as Id<"onlineOrder">, owner },
@@ -82,6 +84,9 @@ onlineOrderRoutes.post(
           internal.storeFront.onlineOrder.updateOwnerInternal,
           {
             currentOwner: currentOwnerId as Id<"guest">,
+            // The guest session must be one the caller holds a cookie for,
+            // not merely one that shares the admitted store.
+            claimGuestId: admittedClaimGuestId(admitted),
             owner: requireAdmittedCustomerOwner(admitted),
           },
         );

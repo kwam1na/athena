@@ -20,6 +20,7 @@ import {
   getRewardTiersRouteReadDefinition,
 } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
 import {
+  admittedClaimGuestId,
   parseIngressJson,
   requireAdmittedCustomerOwner,
 } from "./admittedCustomer";
@@ -243,6 +244,9 @@ rewardsRoutes.post(
         {
           storeFrontUserId: owner.storeFrontUserId,
           guestId: guestId as Id<"guest">,
+          // Possession, not identity: reward points are transferable value, so
+          // the callee refuses a guest id the caller holds no cookie for.
+          claimGuestId: admittedClaimGuestId(admitted),
           owner,
         },
       );

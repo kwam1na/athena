@@ -15,7 +15,9 @@ import {
 } from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
 import { getSavedBagRouteReadDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
 import {
+  admittedClaimGuestId,
   admittedCustomerId,
+  isCustomerOwnershipDenial,
   parseIngressJson,
   requireAdmittedCustomerOwner,
 } from "./admittedCustomer";
@@ -48,9 +50,11 @@ savedBagRoutes.get(
           return c.json(b);
         }
         return c.json(bag);
-      } catch (e) {
-        console.error(e);
-        return c.json({ error: "Internal server error" }, 400);
+      } catch (error) {
+        if (isCustomerOwnershipDenial(error)) {
+          return c.json({ error: "Forbidden" }, 403);
+        }
+        throw error;
       }
     }
 
@@ -94,21 +98,26 @@ savedBagRoutes.post(
   admitHttpRoute(
     updateSavedBagOwnerRouteOperationDefinition,
     async (c, admitted) => {
-      try {
-        const { currentOwnerId, newOwnerId } = parseIngressJson(admitted);
+      // As on `POST /bags/:bagId/owner`: the destination account is the
+      // admitted shopper, and the guest side is bounded by the caller's own
+      // guest cookie rather than by whatever the body names.
+      const { currentOwnerId } = parseIngressJson(admitted);
 
+      try {
         const b = await c.env.runMutation(
           internal.storeFront.savedBag.updateOwner,
           {
             currentOwner: currentOwnerId as Id<"guest">,
-            newOwner: newOwnerId as Id<"storeFrontUser">,
+            claimGuestId: admittedClaimGuestId(admitted),
             owner: requireAdmittedCustomerOwner(admitted),
           },
         );
         return c.json(b);
-      } catch (e) {
-        console.error(e);
-        return c.json({ error: "Internal server error" }, 400);
+      } catch (error) {
+        if (isCustomerOwnershipDenial(error)) {
+          return c.json({ error: "Forbidden" }, 403);
+        }
+        throw error;
       }
     },
   ),

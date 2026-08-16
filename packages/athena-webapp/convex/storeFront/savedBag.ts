@@ -19,6 +19,7 @@ import {
 } from "../platform/operationAdmission";
 import {
   assertCustomerOwnsRow,
+  assertCustomerOwnsStore,
   customerOwnerActorId,
   customerOwnerValidator,
   denyCustomerOwnership,
@@ -252,15 +253,24 @@ export const deleteSavedBagInternal = internalMutation({
 export const updateOwner = internalMutation({
   args: {
     currentOwner: v.id("guest"),
-    newOwner: v.id("storeFrontUser"),
+    claimGuestId: v.optional(v.id("guest")),
     owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
-    const actorId = String(customerOwnerActorId(args.owner));
+    // Same contract as `bag.updateOwner`, and for the same reason: the
+    // destination is the admitted account (never body-supplied) and the source
+    // guest session must be one the caller demonstrably holds a cookie for.
+    const newOwner = args.owner.storeFrontUserId;
+    if (!newOwner) denyCustomerOwnership();
+
     if (
-      actorId !== String(args.currentOwner) &&
-      actorId !== String(args.newOwner)
+      !args.claimGuestId ||
+      String(args.claimGuestId) !== String(args.currentOwner)
     ) {
+      denyCustomerOwnership();
+    }
+
+    if (String(customerOwnerActorId(args.owner)) !== String(newOwner)) {
       denyCustomerOwnership();
     }
 
@@ -274,9 +284,13 @@ export const updateOwner = internalMutation({
     const newOwnerBag = await ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.newOwner)
+        q.eq("storeFrontUserId", newOwner)
       )
       .first();
+
+    // Neither saved bag may cross tenants.
+    if (savedBag) assertCustomerOwnsStore(args.owner, savedBag.storeId);
+    if (newOwnerBag) assertCustomerOwnsStore(args.owner, newOwnerBag.storeId);
 
     if (!savedBag) {
       return null; // No guest bag exists
@@ -310,7 +324,7 @@ export const updateOwner = internalMutation({
             await ctx.db.patch("savedBagItem", existingItem._id, {
               quantity: existingItem.quantity + item.quantity,
               savedBagId: newOwnerBag._id,
-              storeFrontUserId: args.newOwner,
+              storeFrontUserId: newOwner,
             });
             // Delete the duplicate item
             await ctx.db.delete("savedBagItem", item._id);
@@ -318,7 +332,7 @@ export const updateOwner = internalMutation({
             // Move item to new owner's bag
             await ctx.db.patch("savedBagItem", item._id, {
               savedBagId: newOwnerBag._id,
-              storeFrontUserId: args.newOwner,
+              storeFrontUserId: newOwner,
             });
           }
         })
@@ -329,7 +343,7 @@ export const updateOwner = internalMutation({
     } else {
       // If new owner doesn't have a bag, update the ownership of existing bag
       await ctx.db.patch("savedBag", savedBag._id, {
-        storeFrontUserId: args.newOwner,
+        storeFrontUserId: newOwner,
         updatedAt: Date.now(),
       });
       return await ctx.db.get("savedBag", savedBag._id);

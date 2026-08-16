@@ -40,6 +40,12 @@ export const getStorefrontActorFromRequest = (c: Context) => {
  * store always comes from the claim row itself. A request with neither
  * `user_id` nor `guest_id` yields `undefined` — a customer write route treats
  * that as a terminal denial.
+ *
+ * BOTH cookies travel when both are present. A signed-in shopper mid-merge
+ * still holds their guest cookie, and that cookie is the only proof they
+ * possess the guest session they are asking to absorb. The adapter still
+ * prefers the account for ACTOR IDENTITY (see `resolveStorefrontCustomer`);
+ * the guest id rides along as evidence of possession, not as an identity.
  */
 export const getStorefrontClaimFromRequest = (
   c: Context,
@@ -54,7 +60,35 @@ export const getStorefrontClaimFromRequest = (
 
   return {
     ...(storeFrontUserId ? { storeFrontUserId } : {}),
-    ...(guestId && !storeFrontUserId ? { guestId } : {}),
+    ...(guestId ? { guestId } : {}),
     ...(storeId ? { storeId } : {}),
   };
+};
+
+/**
+ * The `guest_id` cookie the caller actually presented, read off the ingress
+ * `Request` the rail hands the handler.
+ *
+ * This is deliberately NOT an identity: `requireAdmittedCustomerOwner` still
+ * derives the admitted shopper from the rail's actor. It is possession
+ * evidence for the one operation that needs it — merging a guest session into
+ * an account — where the question is not "who are you" but "do you hold this
+ * guest session's cookie". Reading it here rather than off the actor keeps the
+ * actor's identity precedence (account wins) untouched.
+ */
+export const getClaimGuestIdFromIngressRequest = (
+  request: Request,
+): Id<"guest"> | undefined => {
+  const header = request.headers.get("cookie");
+  if (!header) return undefined;
+
+  for (const part of header.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator === -1) continue;
+    if (part.slice(0, separator).trim() !== "guest_id") continue;
+    const value = decodeURIComponent(part.slice(separator + 1).trim());
+    return value ? (value as Id<"guest">) : undefined;
+  }
+
+  return undefined;
 };

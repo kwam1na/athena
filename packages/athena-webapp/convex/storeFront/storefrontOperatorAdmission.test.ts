@@ -56,6 +56,7 @@ vi.mock("../reports/access", async () => {
   };
 });
 
+import { CUSTOMER_OWNERSHIP_DENIED } from "./customerOwnership";
 import * as analytics from "./analytics";
 import * as onlineOrder from "./onlineOrder";
 import * as reviews from "./reviews";
@@ -686,7 +687,7 @@ describe("ownership assertions on internal callees reachable from customer route
         identifier: "order-1",
         owner: FOREIGN_OWNER,
       }),
-    ).rejects.toThrow("You do not have access to this order.");
+    ).rejects.toThrow(CUSTOMER_OWNERSHIP_DENIED);
   });
 
   it("onlineOrder:getForCustomerInternal serves backend callers with no shopper claim", async () => {
@@ -725,7 +726,7 @@ describe("ownership assertions on internal callees reachable from customer route
         checkoutSessionId: "session-1",
         owner: FOREIGN_OWNER,
       }),
-    ).rejects.toThrow("You do not have access to this order.");
+    ).rejects.toThrow(CUSTOMER_OWNERSHIP_DENIED);
   });
 
   it("onlineOrder:updateOwnerInternal refuses a guest session from another store", async () => {
@@ -734,10 +735,46 @@ describe("ownership assertions on internal callees reachable from customer route
     await expect(
       getHandler(onlineOrder.updateOwnerInternal)(ctx, {
         currentOwner: "guest-1",
+        claimGuestId: "guest-1",
         owner: OWNER,
       }),
-    ).rejects.toThrow("You do not have access to this guest session.");
+    ).rejects.toThrow(CUSTOMER_OWNERSHIP_DENIED);
     expect(ctx.writes.patch).not.toHaveBeenCalled();
+  });
+
+  it("onlineOrder:updateOwnerInternal refuses a guest session the caller does not hold", async () => {
+    const ctx = ctxForStore("tenant-store");
+
+    // Same store, so the old store-only bound admitted this: a signed-in
+    // shopper naming a STRANGER's guest id absorbed their order history.
+    await expect(
+      getHandler(onlineOrder.updateOwnerInternal)(ctx, {
+        currentOwner: "guest-stranger",
+        claimGuestId: "guest-mine",
+        owner: OWNER,
+      }),
+    ).rejects.toThrow(CUSTOMER_OWNERSHIP_DENIED);
+
+    // …and with no guest cookie presented at all.
+    await expect(
+      getHandler(onlineOrder.updateOwnerInternal)(ctx, {
+        currentOwner: "guest-stranger",
+        owner: OWNER,
+      }),
+    ).rejects.toThrow(CUSTOMER_OWNERSHIP_DENIED);
+    expect(ctx.writes.patch).not.toHaveBeenCalled();
+  });
+
+  it("onlineOrder:updateOwnerInternal re-owns the caller's OWN guest session", async () => {
+    const ctx = ctxForStore("tenant-store");
+
+    await expect(
+      getHandler(onlineOrder.updateOwnerInternal)(ctx, {
+        currentOwner: "guest-mine",
+        claimGuestId: "guest-mine",
+        owner: OWNER,
+      }),
+    ).resolves.toBeDefined();
   });
 
   it("analytics:updateOwnerInternal refuses a guest session from another store", async () => {

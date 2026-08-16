@@ -492,7 +492,9 @@ describe("customer write routes", () => {
       await onlineOrderRoutes.fetch(
         request("/owner", {
           method: "POST",
-          cookie: "user_id=user-A; store_id=store-1",
+          // The real merge flow: the browser still holds the guest cookie at
+          // sign-in time, and that cookie is what proves possession.
+          cookie: "user_id=user-A; guest_id=guest-A; store_id=store-1",
           origin: ALLOWED_ORIGIN,
           body: { currentOwnerId: "guest-A", newOwnerId: "user-B" },
         }),
@@ -502,9 +504,63 @@ describe("customer write routes", () => {
       const call = test.called(
         internal.storeFront.onlineOrder.updateOwnerInternal,
       );
-      // `newOwner` is gone from the call surface entirely.
+      // `newOwner` is gone from the call surface entirely, and the guest side
+      // travels as the CLAIM's guest id rather than only as the body's.
       expect(call?.args).toEqual({
         currentOwner: "guest-A",
+        claimGuestId: "guest-A",
+        owner: { storeFrontUserId: "user-A", storeId: "store-1" },
+      });
+    });
+  });
+
+  /**
+   * The signed-in actor still wins for IDENTITY when both cookies are present.
+   * Carrying the guest id through must not turn a signed-in shopper into a
+   * guest for any other route.
+   */
+  it("keeps the account as the actor when both cookies are present", async () => {
+    await withOrigin(async () => {
+      const test = harness(STORE_ROWS);
+
+      await bagRoutes.fetch(
+        request("/bag-1/items", {
+          method: "POST",
+          cookie: "user_id=user-A; guest_id=guest-A; store_id=store-1",
+          origin: ALLOWED_ORIGIN,
+          body: { productId: "product-1", quantity: 1 },
+        }),
+        test.env as never,
+      );
+
+      const call = test.called(internal.storeFront.bagItem.addItemToBag);
+      expect(call?.args.owner).toEqual({
+        storeFrontUserId: "user-A",
+        storeId: "store-1",
+      });
+    });
+  });
+
+  it("sends the caller's own guest cookie on a bag merge, not the body's id", async () => {
+    await withOrigin(async () => {
+      const test = harness(STORE_ROWS);
+
+      await bagRoutes.fetch(
+        request("/bag-1/owner", {
+          method: "POST",
+          cookie: "user_id=user-A; guest_id=guest-A; store_id=store-1",
+          origin: ALLOWED_ORIGIN,
+          // A forged guest id in the body. It stays the TARGET; the callee
+          // compares it against `claimGuestId` and refuses the mismatch.
+          body: { currentOwnerId: "guest-stranger", newOwnerId: "user-B" },
+        }),
+        test.env as never,
+      );
+
+      const call = test.called(internal.storeFront.bag.updateOwner);
+      expect(call?.args).toEqual({
+        currentOwner: "guest-stranger",
+        claimGuestId: "guest-A",
         owner: { storeFrontUserId: "user-A", storeId: "store-1" },
       });
     });
@@ -689,4 +745,240 @@ describe("paystack webhook route", () => {
     ).toBe("refund-pending");
     vi.unstubAllEnvs();
   });
+});
+
+/* ------------------------------------------- 5. denial → status mapping */
+
+/**
+ * What status does a shopper actually SEE when a callee refuses them?
+ *
+ * The rule these routes agreed on is narrow on purpose: an ownership refusal
+ * is a 403, and every other error propagates so it surfaces as the fault it
+ * is. Two ways to break it were shipped and are pinned here:
+ *
+ *  - `storeFront/onlineOrder` raised a module-local error class whose message
+ *    the route's `isCustomerOwnershipDenial` predicate never matched, so every
+ *    refusal escaped the catch and rendered as a 500;
+ *  - `routes/user.ts` had no catch at all on its writes (bare 500) and mapped
+ *    its reads to 400 carrying the internal message.
+ *
+ * The 404 branch has to stay reachable too: a callee that throws on a MISSING
+ * row means "not found" can never be answered.
+ */
+describe("ownership denials map to 403, and absence to 404", () => {
+  const OWNERSHIP_DENIAL = new Error(
+    "This storefront resource is not available for this shopper.",
+  );
+
+  function harnessThrowing(fn: any, error: unknown, rows: Rows = STORE_ROWS) {
+    const test = harness(rows);
+    const target = getFunctionName(fn);
+    const wrap = (inner: any) => async (ref: any, args: any) => {
+      if (getFunctionName(ref) === target) throw error;
+      return inner(ref, args);
+    };
+    test.env.runQuery = wrap(test.env.runQuery);
+    test.env.runMutation = wrap(test.env.runMutation);
+    return test;
+  }
+
+  const CUSTOMER_COOKIE = "user_id=user-A; store_id=store-1";
+
+  it("GET /orders/:orderId answers 403 for a foreign order", async () => {
+    await withOrigin(async () => {
+      const test = harnessThrowing(
+        internal.storeFront.onlineOrder.getForCustomerInternal,
+        OWNERSHIP_DENIAL,
+      );
+
+      const response = await onlineOrderRoutes.fetch(
+        request("/order-1", {
+          cookie: CUSTOMER_COOKIE,
+          origin: ALLOWED_ORIGIN,
+        }),
+        test.env as never,
+      );
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: "Forbidden" });
+    });
+  });
+
+  it("GET /orders/:orderId answers 404 for an absent order", async () => {
+    await withOrigin(async () => {
+      // The callee returns null rather than throwing for a row that does not
+      // exist, which is the only way this branch is reachable.
+      const test = harness(STORE_ROWS);
+
+      const response = await onlineOrderRoutes.fetch(
+        request("/order-missing", {
+          cookie: CUSTOMER_COOKIE,
+          origin: ALLOWED_ORIGIN,
+        }),
+        test.env as never,
+      );
+
+      expect(response.status).toBe(404);
+    });
+  });
+
+  it("GET /users/:userId answers 403, not 400, for a foreign id", async () => {
+    await withOrigin(async () => {
+      const test = harnessThrowing(
+        internal.storeFront.user.getById,
+        OWNERSHIP_DENIAL,
+      );
+
+      const response = await userRoutes.fetch(
+        request("/user-B", { cookie: CUSTOMER_COOKIE, origin: ALLOWED_ORIGIN }),
+        test.env as never,
+      );
+
+      expect(response.status).toBe(403);
+      // The internal message never reaches the caller.
+      expect(await response.json()).toEqual({ error: "Forbidden" });
+    });
+  });
+
+  it("PUT /users/:userId answers 403, not 500, for a foreign id", async () => {
+    await withOrigin(async () => {
+      const test = harnessThrowing(
+        internal.storeFront.user.update,
+        OWNERSHIP_DENIAL,
+      );
+
+      const response = await userRoutes.fetch(
+        request("/user-B", {
+          method: "PUT",
+          cookie: CUSTOMER_COOKIE,
+          origin: ALLOWED_ORIGIN,
+          body: { firstName: "Mallory" },
+        }),
+        test.env as never,
+      );
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: "Forbidden" });
+    });
+  });
+
+  it("PUT /users/me answers 403 when the callee refuses", async () => {
+    await withOrigin(async () => {
+      const test = harnessThrowing(
+        internal.storeFront.user.update,
+        OWNERSHIP_DENIAL,
+      );
+
+      const response = await userRoutes.fetch(
+        request("/me", {
+          method: "PUT",
+          cookie: CUSTOMER_COOKIE,
+          origin: ALLOWED_ORIGIN,
+          body: { firstName: "Mallory" },
+        }),
+        test.env as never,
+      );
+
+      expect(response.status).toBe(403);
+    });
+  });
+
+  it("POST /bags/:bagId/owner answers 403 for a refused merge", async () => {
+    await withOrigin(async () => {
+      const test = harnessThrowing(
+        internal.storeFront.bag.updateOwner,
+        OWNERSHIP_DENIAL,
+      );
+
+      const response = await bagRoutes.fetch(
+        request("/bag-1/owner", {
+          method: "POST",
+          cookie: CUSTOMER_COOKIE,
+          origin: ALLOWED_ORIGIN,
+          body: { currentOwnerId: "guest-stranger" },
+        }),
+        test.env as never,
+      );
+
+      expect(response.status).toBe(403);
+    });
+  });
+
+  it("does not dress a genuine fault up as a client error", async () => {
+    await withOrigin(async () => {
+      const test = harnessThrowing(
+        internal.storeFront.user.getById,
+        new Error("index missing"),
+      );
+
+      // Hono renders an uncaught error as a 500. What matters is that it is
+      // NOT reported as a 4xx: a fault answered with 400/403 tells the caller
+      // to stop retrying and tells monitoring nothing is wrong.
+      const response = await userRoutes.fetch(
+        request("/user-B", { cookie: CUSTOMER_COOKIE, origin: ALLOWED_ORIGIN }),
+        test.env as never,
+      );
+
+      expect(response.status).toBe(500);
+    });
+  });
+});
+
+/* ------------------------------------- 6. malformed claim cookies deny */
+
+/**
+ * A claim cookie is caller-supplied text. A corrupted value is not a parseable
+ * Convex id and the row lookup THROWS rather than returning null — so with the
+ * rail no longer absorbing arbitrary admission-path throws as denials, the
+ * adapter has to catch it. A garbage cookie is a refusal, not an outage.
+ */
+describe("malformed claim cookies are denied, not faults", () => {
+  function throwingRowHarness() {
+    const ctx = {
+      auth: { getUserIdentity: async () => null },
+      db: {
+        get: async () => {
+          throw new Error("Invalid argument `id`: not a valid document id");
+        },
+      },
+    } as any;
+
+    const calls: { name: string; args: any }[] = [];
+    const dispatch = async (ref: any, args: any) => {
+      const name = getFunctionName(ref);
+      if (name === ADMIT_WRITE) return await admitOperationWithCtx(ctx, args);
+      if (name === ADMIT_READ) return await admitReadOperationWithCtx(ctx, args);
+      calls.push({ name, args });
+      return null;
+    };
+
+    return {
+      calls,
+      env: { runMutation: dispatch, runQuery: dispatch, runAction: dispatch },
+    };
+  }
+
+  for (const cookie of [
+    "user_id=not-an-id; store_id=store-1",
+    "guest_id=not-an-id; store_id=store-1",
+  ]) {
+    it(`denies "${cookie}" without reaching the handler`, async () => {
+      await withOrigin(async () => {
+        const test = throwingRowHarness();
+
+        const response = await bagRoutes.fetch(
+          request("/bag-1/items", {
+            method: "POST",
+            cookie,
+            origin: ALLOWED_ORIGIN,
+            body: { productId: "product-1", quantity: 1 },
+          }),
+          test.env as never,
+        );
+
+        expect(response.status).toBe(403);
+        expect(test.calls).toEqual([]);
+      });
+    });
+  }
 });

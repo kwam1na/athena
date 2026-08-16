@@ -16,7 +16,9 @@ import {
 } from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
 import { getBagRouteReadDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
 import {
+  admittedClaimGuestId,
   admittedCustomerId,
+  isCustomerOwnershipDenial,
   parseIngressJson,
   requireAdmittedCustomerOwner,
 } from "./admittedCustomer";
@@ -52,9 +54,14 @@ bagRoutes.get(
           return c.json(b);
         }
         return c.json(bag);
-      } catch (e) {
-        console.error(e);
-        return c.json({ error: "Internal server error" }, 400);
+      } catch (error) {
+        // An ownership refusal is a 403; a genuine fault must stay a fault.
+        // Collapsing both into a 400 "Internal server error" hid outages
+        // behind a client-error status.
+        if (isCustomerOwnershipDenial(error)) {
+          return c.json({ error: "Forbidden" }, 403);
+        }
+        throw error;
       }
     }
 
@@ -95,19 +102,29 @@ bagRoutes.post(
 bagRoutes.post(
   "/:bagId/owner",
   admitHttpRoute(updateBagOwnerRouteOperationDefinition, async (c, admitted) => {
-    try {
-      const { currentOwnerId, newOwnerId } = parseIngressJson(admitted);
-      const owner = requireAdmittedCustomerOwner(admitted);
+    // `newOwnerId` is no longer read from the body: the account the bag moves
+    // TO is the admitted shopper. `currentOwnerId` stays caller-supplied but
+    // the callee checks it against `claimGuestId` — the caller's own guest
+    // cookie — so a stranger's guest bag cannot be named here.
+    const { currentOwnerId } = parseIngressJson(admitted);
+    const owner = requireAdmittedCustomerOwner(admitted);
 
+    try {
       const b = await c.env.runMutation(internal.storeFront.bag.updateOwner, {
         currentOwner: currentOwnerId as Id<"guest">,
-        newOwner: newOwnerId as Id<"storeFrontUser">,
+        claimGuestId: admittedClaimGuestId(admitted),
         owner,
       });
       return c.json(b);
-    } catch (e) {
-      console.error(e);
-      return c.json({ error: "Internal server error" }, 400);
+    } catch (error) {
+      // Only an ownership refusal is a 403. Everything else propagates: the
+      // previous blanket `catch` reported every fault as a 400 "Internal
+      // server error", which told the caller to stop retrying and told
+      // monitoring nothing was wrong.
+      if (isCustomerOwnershipDenial(error)) {
+        return c.json({ error: "Forbidden" }, 403);
+      }
+      throw error;
     }
   }),
 );

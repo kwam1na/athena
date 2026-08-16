@@ -23,6 +23,7 @@ import {
 } from "../platform/operationAdmission";
 import {
   assertCustomerOwnsRow,
+  assertCustomerOwnsStore,
   customerOwnerActorId,
   customerOwnerValidator,
   denyCustomerOwnership,
@@ -206,18 +207,33 @@ export const clearBag = internalMutation({
 export const updateOwner = internalMutation({
   args: {
     currentOwner: v.id("guest"),
-    newOwner: v.id("storeFrontUser"),
+    claimGuestId: v.optional(v.id("guest")),
     owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
     // Merging a guest bag into an account is only ever the admitted shopper's
-    // own move: the claim must name one of the two sides, so a bearer id
-    // cannot graft a stranger's guest bag onto their account.
-    const actorId = String(customerOwnerActorId(args.owner));
+    // own move, and BOTH sides are proved here rather than either one.
+    //
+    // Destination: never body-supplied. It is the admitted account, so a guest
+    // caller cannot push their bag into a stranger's account and a signed-in
+    // caller cannot nominate an account other than their own.
+    const newOwner = args.owner.storeFrontUserId;
+    if (!newOwner) denyCustomerOwnership();
+
+    // Source: still body-supplied — it is a TARGET — but bounded by possession.
+    // `claimGuestId` is the caller's own `guest_id` cookie, so a signed-in
+    // attacker who posts a stranger's guest id holds no matching cookie and is
+    // refused. (The previous check admitted a call that matched EITHER side,
+    // which meant a signed-in caller's `currentOwner` was never checked at all.)
     if (
-      actorId !== String(args.currentOwner) &&
-      actorId !== String(args.newOwner)
+      !args.claimGuestId ||
+      String(args.claimGuestId) !== String(args.currentOwner)
     ) {
+      denyCustomerOwnership();
+    }
+
+    // Belt and braces: the actor must still be the admitted account.
+    if (String(customerOwnerActorId(args.owner)) !== String(newOwner)) {
       denyCustomerOwnership();
     }
 
@@ -231,11 +247,16 @@ export const updateOwner = internalMutation({
     const newOwnerBag = await ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.newOwner)
+        q.eq("storeFrontUserId", newOwner)
       )
       .first();
 
-    console.log("updating bag owner.", args.currentOwner, args.newOwner);
+    // Neither bag may cross tenants. The index above is global, so without
+    // this a same-id merge could move rows between stores.
+    if (bag) assertCustomerOwnsStore(args.owner, bag.storeId);
+    if (newOwnerBag) assertCustomerOwnsStore(args.owner, newOwnerBag.storeId);
+
+    console.log("updating bag owner.", args.currentOwner, newOwner);
 
     if (!bag) {
       console.log("bag not found.");
@@ -270,7 +291,7 @@ export const updateOwner = internalMutation({
             await ctx.db.patch("bagItem", existingItem._id, {
               quantity: existingItem.quantity + item.quantity,
               bagId: newOwnerBag._id,
-              storeFrontUserId: args.newOwner,
+              storeFrontUserId: newOwner,
             });
             // Delete the duplicate item
             await ctx.db.delete("bagItem", item._id);
@@ -278,14 +299,14 @@ export const updateOwner = internalMutation({
             // Move item to new owner's bag
             await ctx.db.patch("bagItem", item._id, {
               bagId: newOwnerBag._id,
-              storeFrontUserId: args.newOwner,
+              storeFrontUserId: newOwner,
             });
           }
         })
       );
 
       console.log(
-        `successfully updated bag owner from ${args.currentOwner} to ${args.newOwner}.`
+        `successfully updated bag owner from ${args.currentOwner} to ${newOwner}.`
       );
 
       await ctx.db.delete("bag", bag._id);
@@ -293,12 +314,12 @@ export const updateOwner = internalMutation({
     } else {
       // If new owner doesn't have a bag, update the ownership of existing bag
       await ctx.db.patch("bag", bag._id, {
-        storeFrontUserId: args.newOwner,
+        storeFrontUserId: newOwner,
         updatedAt: Date.now(),
       });
 
       console.log(
-        `successfully updated bag owner from ${args.currentOwner} to ${args.newOwner}.`
+        `successfully updated bag owner from ${args.currentOwner} to ${newOwner}.`
       );
       return await ctx.db.get("bag", bag._id);
     }

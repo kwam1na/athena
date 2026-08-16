@@ -62,10 +62,19 @@ auth.addHttpRoutes(http);
  * makes every customer route reachable from any site the visitor is browsing.
  * The list is exact-string and fails closed: an unset environment value allows
  * no origin at all, and an unlisted origin simply gets no
- * `Access-Control-Allow-Origin` header rather than a wildcard. Hono appends
- * `Vary: Origin` on every non-wildcard configuration, so a shared cache can
- * never serve one origin's response to another.
+ * `Access-Control-Allow-Origin` header rather than a wildcard.
+ *
+ * `Vary: Origin` is set explicitly rather than assumed. The response varies by
+ * request origin, so without it a shared cache may serve one origin's
+ * `Access-Control-Allow-Origin` to another — turning the allowlist into a
+ * cache-poisoning primitive. Relying on the CORS middleware to add it is a
+ * dependency on library behaviour that a version bump can change silently;
+ * this is a security header, so it is stated here where it can be read.
  */
+app.use("*", async (c, next) => {
+  await next();
+  c.res.headers.append("Vary", "Origin");
+});
 app.use(
   "*",
   cors({

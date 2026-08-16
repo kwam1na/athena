@@ -126,8 +126,15 @@ export const getStorefrontUserRouteReadDefinition = customerRead({
  * Guest bootstrap read. It stays public because its whole job is to recover or
  * mint the guest row behind a cookie that may be stale or absent — admitting it
  * as a claim would turn "unknown guest id" into a terminal denial and break the
- * recovery path the storefront depends on. The id is still cookie-sourced, so
- * no request-supplied id can select another shopper's row.
+ * recovery path the storefront depends on.
+ *
+ * ACCEPTED RISK, stated plainly: a cookie IS caller-supplied. Anyone can
+ * present an arbitrary `guest_id` and read that guest row, so this is a known
+ * IDOR on the guest record, accepted so cookie recovery keeps working. An
+ * earlier version of this comment claimed the opposite ("no request-supplied
+ * id can select another shopper's row") — a comment asserting safety the code
+ * does not have is worse than no comment, because it stops the next reader
+ * looking.
  */
 export const getGuestRouteReadDefinition = browseRead({
   intent: "storefront.account.view",

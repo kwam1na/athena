@@ -7,7 +7,7 @@
   <body>
     <article
       data-athena-landed-change-report="v2"
-      data-athena-report-diff-fingerprint="3596601bf861aa683e77e8cae73cb7943ba886e6b5856ce848abc708d1ce4eba"
+      data-athena-report-diff-fingerprint="4fed2e844bf5ba3d3ce8a5c4308034732016e03f0a6f6f1669fa7d65b8db2481"
     >
       <header data-report-section="header">
         <h1>Closing the Admission Rail</h1>
@@ -578,6 +578,68 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
             <code>http</code> write.
           </li>
         </ul>
+        <h3>And what an independent review round caught after that</h3>
+        <p>
+          Thirteen reviewer personas ran against the closure candidate. The
+          notable result is not the count but the source: <strong>three of the
+          blocking findings were defects introduced by the closure work
+          itself</strong> — by the round meant to be the safety net.
+        </p>
+        <ul>
+          <li>
+            <strong>P0 — the webhook break.</strong> Bounding the ingress body
+            inside the rail meant the rail read <code>c.req.raw.body</code>
+            directly, while the WhatsApp and MTN MoMo middlewares had already
+            consumed it with <code>c.req.text()</code>. A Fetch body stream
+            reads once, so the rail re-verified an EMPTY body against the same
+            declared verifier and would have denied <em>every genuine
+            callback</em>. The middlewares now reconstruct the request, and the
+            bounded reader throws on an already-consumed body so the next
+            instance is loud rather than silent.
+          </li>
+          <li>
+            <strong>P0 — the bag re-owner.</strong> The merge admitted a caller
+            matching <em>either</em> side, so a signed-in shopper could name any
+            guest id and absorb — and destroy — that shopper's cart. There was
+            no store bound either. The in-file comment claimed the opposite
+            guarantee.
+          </li>
+          <li>
+            <strong>P1 — a hole in the new checker rule.</strong> It accepted
+            <code>const run = admitPublicMutation(def, fn)</code> as proof the
+            wrapper ran first. A declaration is not an invocation: a handler
+            could write rows before any caller was admitted and still be
+            reported as admitted. And <code>isPreAdmissionCtxEffect</code>,
+            written expressly to catch pre-admission work, was never called from
+            anywhere.
+          </li>
+          <li>
+            <strong>P2, found independently by two reviewers — an inverted
+            fault contract.</strong> Tagging admission failures at the
+            <em>catch</em> site marked every error as a denial, so a database
+            error reached clients as 403 — an expected status here, so nothing
+            retried and no 5xx reached monitoring. Denials are now tagged at the
+            <em>throw</em> site; anything unmarked surfaces as a 500.
+          </li>
+        </ul>
+        <p>
+          The remainder were genuine migration gaps: guest merges bounded by
+          store but not by possession (so a signed-in shopper could absorb a
+          stranger's order history and reward points), route handlers mapping
+          every fault to an expected client status, and lost behavioral coverage
+          on the checkout and sign-in paths.
+        </p>
+        <p>
+          <strong>One lesson from this round is worth more than the fixes.</strong>
+          The first regression test written for the webhook P0 asserted
+          <code>not.toBe(403)</code> — and passed with the fix removed, because
+          the test harness returned 500 for an unrelated reason. That is exactly
+          the "passing for the wrong reason" defect this delivery exists to
+          remove, reproduced while removing it. Reverting the fix and watching
+          the test go red is cheap, and it is the only thing that establishes a
+          test actually pins its bug.
+        </p>
+
         <h3>Residual risks, ranked</h3>
         <p>Recorded so they are decisions rather than oversights.</p>
         <ol>
@@ -591,17 +653,6 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
             misread as stronger than it is.
           </li>
           <li>
-            <code>checkoutSession.updateCheckoutSession</code> and
-            <code>getByIdInternal</code> keep the optional-<code>owner</code>
-            no-op; callers are genuinely mixed. A defence-in-depth gap, not a
-            live hole — the route checks ownership earlier.
-          </li>
-          <li>
-            <code>userOffers.getEligibility</code> asserts nothing on
-            caller-supplied ids. Its only caller derives them from the admitted
-            claim, so not currently exploitable.
-          </li>
-          <li>
             <code>GET /guests</code> stays a public bootstrap read: any caller
             presenting an arbitrary <code>guest_id</code> cookie can read that
             guest row. Accepted so cookie recovery keeps working, and now named
@@ -613,9 +664,10 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
             behaviourally.
           </li>
           <li>
-            <code>verifyPaymentInternal</code> has no <code>returns</code>
-            validator; deleting the public export made an existing mismatch
-            latent rather than fixing it.
+            Payment audit attribution is still read from client arguments rather
+            than the admitted actor, so the audit record states what the caller
+            claimed. Scope-checked as an expansion and deferred to
+            <strong>V26-1241</strong>.
           </li>
         </ol>
       </section>

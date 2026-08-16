@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createAdmissionRail } from "./rail";
+import {
+  asOperationAdmissionDenial,
+  operationDenialError,
+  OperationUnauthenticatedError,
+} from "./adapters";
 import { defineOperation } from "./domains/_shapes";
 import type {
   OperationAdapter,
@@ -470,6 +475,51 @@ describe("http ingress", () => {
       // between "wrong store" and "no such row" is what the fixed body prevents.
       expect(JSON.stringify(result)).not.toContain("store-9");
       vi.unstubAllEnvs();
+    });
+
+    /**
+     * The entry points wrap admission in a catch. Converting EVERY error there
+     * inverted the module's own rule: a database error, a throwing scope
+     * resolver, or an adapter bug reached the caller as 403 "Request
+     * rejected." — an EXPECTED status on these routes — so nothing retried and
+     * no 5xx reached monitoring. Only denials the rail itself raised convert.
+     */
+    it("converts only rail-raised denials, never arbitrary faults", () => {
+      const railDenial = operationDenialError({
+        kind: "denied",
+        recognized: true,
+        reason: "scope_denied",
+      });
+      expect(asOperationAdmissionDenial(railDenial)).toBeDefined();
+
+      expect(
+        asOperationAdmissionDenial(new OperationUnauthenticatedError()),
+      ).toBeDefined();
+
+      // A database error, a bug, a TypeError: not ours to reinterpret.
+      for (const fault of [
+        new TypeError("index missing"),
+        new Error("Server Error: connection reset"),
+        new RangeError("boom"),
+      ]) {
+        expect(asOperationAdmissionDenial(fault), fault.message).toBeUndefined();
+      }
+    });
+
+    it("keeps the denial marker invisible to message and JSON comparisons", () => {
+      // Several handlers still classify denials by error.message in their own
+      // catch blocks; the marker must not disturb them.
+      const denial = operationDenialError({
+        kind: "denied",
+        recognized: true,
+        reason: "scope_denied",
+        error: new Error("This action isn't allowed in the demo."),
+      });
+      expect(denial.message).toBe("This action isn't allowed in the demo.");
+      expect(Object.keys(denial)).not.toContain("__operationAdmissionDenied");
+      expect(JSON.stringify({ ...denial })).not.toContain(
+        "operationAdmissionDenied",
+      );
     });
 
     it("lets a genuine fault propagate instead of disguising it as a denial", async () => {

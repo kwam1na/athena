@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+
+import { requestWithBody } from "../../../../operationAdmission/ingressBody";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import type { Context } from "hono";
 import { ActionCtx } from "../../../../_generated/server";
@@ -33,15 +35,21 @@ mtnMomoRoutes.use("*", async (c, next) => {
     return c.json({ error: "Callback verification is not configured" }, 503);
   }
 
+  const rawBody = await c.req.text();
   const verified = await createMtnMomoCallbackVerifier()({
     headers: c.req.raw.headers,
-    rawBody: await c.req.text(),
+    rawBody,
     request: c.req.raw,
   });
 
   if (!verified) {
     return c.json({ error: "Callback verification failed" }, 401);
   }
+
+  // A Fetch body stream reads once. The rail reads `c.req.raw.body` directly,
+  // not Hono's body cache, so without this reconstruction it would re-verify
+  // an empty body and deny every genuine callback.
+  c.req.raw = requestWithBody(c.req.raw, new TextEncoder().encode(rawBody));
 
   return next();
 });

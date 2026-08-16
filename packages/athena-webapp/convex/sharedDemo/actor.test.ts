@@ -185,3 +185,42 @@ describe("shared demo actor resolution", () => {
     ).rejects.toThrow("isn't allowed in the demo");
   });
 });
+
+/**
+ * R10 named three shared-demo guards for deletion, not deprecation. They were
+ * `internalQuery` wrappers a handler called mid-flight via `ctx.runQuery` to
+ * ask "is this the demo?" — the pattern this migration replaced with
+ * `actors.sharedDemo` on the operation definition, evaluated before the
+ * handler is entered.
+ *
+ * Left exported with zero callers they would still be live Convex functions in
+ * the deployment, and a future handler could reach for one and quietly
+ * reintroduce mid-handler demo checks. This pins the export surface so that
+ * cannot happen by accident.
+ */
+describe("shared demo actor export surface", () => {
+  it("no longer exports the retired mid-handler demo guards", async () => {
+    const actorModule = await import("./actor");
+    for (const retired of [
+      "enforceSharedDemoActionCapability",
+      "requireAuthenticatedNonDemoEffect",
+      "denySharedDemoEffectIfApplicable",
+      "sharedDemoCapabilityValidator",
+    ]) {
+      expect(Object.keys(actorModule)).not.toContain(retired);
+    }
+  });
+
+  it("keeps the with-ctx helpers the rail's adapters still use", async () => {
+    const actorModule = await import("./actor");
+    for (const kept of [
+      "getSharedDemoActorWithCtx",
+      "requireSharedDemoActorWithCtx",
+      "requireSharedDemoCapabilityIfApplicable",
+      "requireSharedDemoStoreCapabilityIfApplicable",
+      "requireReadySharedDemoStoreCapabilityIfApplicable",
+    ]) {
+      expect(Object.keys(actorModule)).toContain(kept);
+    }
+  });
+});

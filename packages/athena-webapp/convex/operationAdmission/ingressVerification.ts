@@ -47,6 +47,36 @@ export async function verifyOperationIngress(
     : { ok: false, reason: "signature_denied" };
 }
 
+/**
+ * A missing verifier secret and a forged signature are the same 403 to the
+ * caller — deliberately, since a webhook endpoint must not tell a prober why it
+ * was refused. But they are not the same event to an operator: "nobody set
+ * `PAYSTACK_SECRET_KEY`" is a deploy that silently rejects every payment
+ * callback forever, while a signature mismatch is the boundary working.
+ *
+ * So the MISSING-CONFIGURATION case, and only that case, emits an operator log.
+ * A signature mismatch stays silent: it is attacker-controlled and logging it
+ * would hand an unauthenticated caller a log-volume lever.
+ *
+ * The log fires once per distinct environment variable per isolate. A webhook
+ * endpoint under load would otherwise repeat the same line on every request,
+ * which buries the signal it exists to raise. Only the variable NAME is
+ * printed — never its value, never the presented signature.
+ */
+const reportedMissingIngressConfiguration = new Set<string>();
+
+function reportMissingIngressConfiguration(
+  environmentVariable: string,
+  detail = "is not configured",
+): void {
+  if (reportedMissingIngressConfiguration.has(environmentVariable)) return;
+  reportedMissingIngressConfiguration.add(environmentVariable);
+  console.error(
+    `operation_admission_ingress_unconfigured: ${environmentVariable} ${detail}; ` +
+      "every request to the routes it verifies is being denied until it is set.",
+  );
+}
+
 /** Constant-time comparison for signature verifiers. */
 export function timingSafeEqualStrings(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -89,8 +119,12 @@ export function createPaystackSignatureVerifier(
   return async (input) => {
     const secret = environment[PAYSTACK_SECRET_ENV];
     // An unconfigured secret is a denial, never an allow: a webhook route with
-    // no secret is an unauthenticated write endpoint.
-    if (typeof secret !== "string" || secret.length === 0) return false;
+    // no secret is an unauthenticated write endpoint. It is also the one denial
+    // reason an operator can fix, so it is the one that gets logged.
+    if (typeof secret !== "string" || secret.length === 0) {
+      reportMissingIngressConfiguration(PAYSTACK_SECRET_ENV);
+      return false;
+    }
 
     const signature = input.headers.get(PAYSTACK_SIGNATURE_HEADER);
     if (typeof signature !== "string" || signature.length === 0) return false;
@@ -137,7 +171,10 @@ export function createWhatsAppSignatureVerifier(
 ): OperationIngressVerifier {
   return async (input) => {
     const secret = environment[WHATSAPP_APP_SECRET_ENV]?.trim();
-    if (!secret) return false;
+    if (!secret) {
+      reportMissingIngressConfiguration(WHATSAPP_APP_SECRET_ENV);
+      return false;
+    }
 
     const header = input.headers.get(WHATSAPP_SIGNATURE_HEADER);
     if (!header?.startsWith(WHATSAPP_SIGNATURE_PREFIX)) return false;
@@ -184,7 +221,10 @@ export function createMtnMomoCallbackVerifier(
 ): OperationIngressVerifier {
   return (input) => {
     const secret = environment[MTN_MOMO_CALLBACK_SECRET_ENV]?.trim();
-    if (!secret) return false;
+    if (!secret) {
+      reportMissingIngressConfiguration(MTN_MOMO_CALLBACK_SECRET_ENV);
+      return false;
+    }
 
     const header = input.headers.get(MTN_MOMO_CALLBACK_SECRET_HEADER);
     if (header && timingSafeEqualStrings(header, secret)) return true;
@@ -216,7 +256,10 @@ export function createHarnessWaiverBrokerVerifier(
 ): OperationIngressVerifier {
   return (input) => {
     const secret = environment[HARNESS_WAIVER_BROKER_SECRET_ENV]?.trim();
-    if (!secret) return false;
+    if (!secret) {
+      reportMissingIngressConfiguration(HARNESS_WAIVER_BROKER_SECRET_ENV);
+      return false;
+    }
     const presented = input.headers
       .get("authorization")
       ?.replace(/^Bearer\s+/i, "");
@@ -252,7 +295,14 @@ export function createMarketingOriginVerifier(
     try {
       allowed = resolveAllowedOrigins();
     } catch {
-      // A malformed configuration denies, like an absent one.
+      // A malformed configuration denies, like an absent one — and, like an
+      // absent one, it is an operator's problem rather than a caller's, so it
+      // is reported. The thrown error is not printed: it is produced by the
+      // configuration resolver and could quote the raw variable.
+      reportMissingIngressConfiguration(
+        MARKETING_ALLOWED_ORIGINS_ENV,
+        "could not be resolved",
+      );
       return false;
     }
     return allowed.includes(origin);

@@ -31,6 +31,18 @@ export async function readBoundedRequestBody(
   request: Request,
   maxBytes: number,
 ): Promise<BoundedBodyResult> {
+  // A spent stream yields `{done: true}` on the first read, so a body that was
+  // already consumed upstream would silently arrive here as an empty one —
+  // and an empty body passes through a signature verifier as a mismatch, not
+  // as an error, denying every genuine webhook with no clue why. Middleware
+  // that reads the body must hand back a reconstructed request (see
+  // `requestWithBody`); failing to is a wiring bug, so say so.
+  if (request.bodyUsed) {
+    throw new Error(
+      "Ingress body was already consumed before admission. Middleware that reads the body must reconstruct the request with requestWithBody() before calling next().",
+    );
+  }
+
   const reader = request.body?.getReader();
   if (!reader) return { kind: "ok", bytes: new Uint8Array() };
 

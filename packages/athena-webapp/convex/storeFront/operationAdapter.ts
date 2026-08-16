@@ -52,17 +52,27 @@ async function resolveStorefrontCustomer(
       : { kind: "unauthenticated" };
   }
 
+  // A claim cookie is caller-supplied text: a corrupted or hand-edited value
+  // is not a parseable Convex id, and `ctx.db.get` THROWS on it rather than
+  // returning null. That throw is not a fault — the caller simply presented an
+  // unusable claim — so it is caught here and answered as `unknown_claim`. The
+  // rail no longer converts arbitrary admission-path throws into denials, so
+  // without this guard a garbage cookie would surface as a 500.
   let storeId: Id<"store"> | undefined;
-  if (storeFrontUserId) {
-    const user = await ctx.db.get("storeFrontUser", storeFrontUserId);
-    if (!user) return customerDenied("unknown_claim");
-    storeId = user.storeId;
-  } else if (guestId) {
-    const guest = await ctx.db.get("guest", guestId);
-    if (!guest) return customerDenied("unknown_claim");
-    // A guest row with no store cannot be clamped, so it cannot be admitted.
-    if (!guest.storeId) return customerDenied("unknown_claim");
-    storeId = guest.storeId;
+  try {
+    if (storeFrontUserId) {
+      const user = await ctx.db.get("storeFrontUser", storeFrontUserId);
+      if (!user) return customerDenied("unknown_claim");
+      storeId = user.storeId;
+    } else if (guestId) {
+      const guest = await ctx.db.get("guest", guestId);
+      if (!guest) return customerDenied("unknown_claim");
+      // A guest row with no store cannot be clamped, so it cannot be admitted.
+      if (!guest.storeId) return customerDenied("unknown_claim");
+      storeId = guest.storeId;
+    }
+  } catch {
+    return customerDenied("unknown_claim");
   }
   if (!storeId) return customerDenied("unknown_claim");
 
@@ -81,6 +91,11 @@ async function resolveStorefrontCustomer(
       assurance: "bearer_id",
       storeId,
       ...(storeFrontUserId ? { storeFrontUserId } : {}),
+      // Identity precedence: the account wins whenever both cookies are
+      // present, so `guestId` names the actor ONLY for a pure guest. A
+      // signed-in shopper's guest cookie is possession evidence, not identity,
+      // and travels to the merge callees separately (see
+      // `admittedClaimGuestId` in the customer-channel routes).
       ...(guestId && !storeFrontUserId ? { guestId } : {}),
     },
     constraints: { storeId },

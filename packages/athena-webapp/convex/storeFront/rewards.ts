@@ -702,18 +702,27 @@ async function awardPointsForGuestOrdersWithCtx(
 
 /**
  * Internal sibling for `POST /rewards/award-guest-orders`. This merges a guest
- * history into an account, so BOTH ids must be the admitted shopper's: the
- * account is the claim itself, and the guest row must be one the same claim
- * covers (same store, and the guest side of the same claim when present).
+ * history into an account, so BOTH ids must be the admitted shopper's.
+ *
+ * The account is the claim itself. The guest side is bounded twice: it must be
+ * the guest session the CALLER holds a cookie for (`claimGuestId`, resolved by
+ * the rail from the request, never from the body), and that guest row must
+ * belong to the admitted store. Store alone was not enough — reward points are
+ * transferable value, so a store-only bound let any signed-in shopper claim a
+ * stranger's guest order history and the points attached to it.
  */
 export const awardPointsForGuestOrdersInternal = internalMutation({
   args: {
     storeFrontUserId: v.id("storeFrontUser"),
     guestId: v.id("guest"),
+    claimGuestId: v.optional(v.id("guest")),
     owner: customerOwnerValidator,
   },
-  handler: async (ctx, { owner, ...args }) => {
+  handler: async (ctx, { owner, claimGuestId, ...args }) => {
     if (String(args.storeFrontUserId) !== String(customerOwnerActorId(owner))) {
+      denyCustomerOwnership();
+    }
+    if (!claimGuestId || String(claimGuestId) !== String(args.guestId)) {
       denyCustomerOwnership();
     }
     const guest = await ctx.db.get("guest", args.guestId);

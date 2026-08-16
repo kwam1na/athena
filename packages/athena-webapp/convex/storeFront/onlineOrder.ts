@@ -28,6 +28,7 @@ import {
   isDuplicateOnlineOrderReadDefinition,
   listOnlineOrdersByStoreFrontUserReadDefinition,
 } from "../operationAdmission/domains/u7_storefrontOperator_readDefinitions";
+import { denyCustomerOwnership } from "./customerOwnership";
 import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import {
   decideSharedDemoEffect,
@@ -123,21 +124,21 @@ type OnlineOrderOwner = {
   storeId: Id<"store">;
 };
 
-class OnlineOrderOwnershipError extends Error {
-  constructor(message = "You do not have access to this order.") {
-    super(message);
-    this.name = "OnlineOrderOwnershipError";
-  }
-}
-
+/**
+ * Ownership refusals here raise the SHARED `CUSTOMER_OWNERSHIP_DENIED` error,
+ * not a module-local error class.
+ *
+ * The HTTP routes classify refusals with `isCustomerOwnershipDenial`, which
+ * matches on that shared message. A bespoke error class with its own wording
+ * never matched, so every refusal escaped the route's catch and Convex
+ * rendered it as a 500 — a refusal reported as a server fault.
+ */
 function ownerActorId(
   owner: OnlineOrderOwner,
 ): Id<"storeFrontUser"> | Id<"guest"> {
   const actorId = owner.storeFrontUserId ?? owner.guestId;
   if (!actorId) {
-    throw new OnlineOrderOwnershipError(
-      "Admitted owner carries no shopper id.",
-    );
+    denyCustomerOwnership();
   }
   return actorId;
 }
@@ -156,7 +157,7 @@ function assertOwnedOrder(
     order.storeId !== owner.storeId ||
     order.storeFrontUserId !== ownerActorId(owner)
   ) {
-    throw new OnlineOrderOwnershipError();
+    denyCustomerOwnership();
   }
 }
 
@@ -848,6 +849,11 @@ export const getForCustomerInternal = internalQuery({
     const order = await getOnlineOrderWithCtx(ctx, {
       identifier: args.identifier,
     });
+    // An absent order returns null so the route can answer 404; a PRESENT
+    // order that is not this shopper's is refused, so the route answers 403.
+    // Throwing on null too would have made the route's 404 branch
+    // unreachable — every miss would have read as "Forbidden".
+    if (!order) return null;
     if (args.owner) assertOwnedOrder(order, args.owner);
     return order;
   },
@@ -2516,27 +2522,35 @@ async function updateOnlineOrderOwnerWithCtx(
 
 /**
  * Internal sibling for `POST /orders/owner`. The shopper the orders move TO is
- * the admitted actor, and the guest session being re-owned must belong to the
- * admitted store — so a caller can no longer transfer an arbitrary guest's
- * orders to an arbitrary account.
+ * the admitted actor, and the guest session being re-owned must be one the
+ * caller POSSESSES — `claimGuestId` is their own `guest_id` cookie, carried
+ * through by the route. Proving only that the guest row shared the admitted
+ * store let any signed-in shopper absorb a stranger's order history, with its
+ * delivery addresses and contact details, by posting that stranger's guest id.
+ *
+ * The only legitimate merge is the caller's own guest session: at merge time
+ * the browser holds both cookies, which is what the storefront flow does.
  */
 export const updateOwnerInternal = internalMutation({
   args: {
     currentOwner: v.id("guest"),
+    claimGuestId: v.optional(v.id("guest")),
     owner: ownerArg,
   },
   handler: async (ctx, args) => {
     const { owner } = args;
     if (!owner.storeFrontUserId) {
-      throw new OnlineOrderOwnershipError(
-        "Re-owning orders requires a signed-in shopper.",
-      );
+      denyCustomerOwnership();
+    }
+    if (
+      !args.claimGuestId ||
+      String(args.claimGuestId) !== String(args.currentOwner)
+    ) {
+      denyCustomerOwnership();
     }
     const guest = await ctx.db.get("guest", args.currentOwner);
     if (!guest || guest.storeId !== owner.storeId) {
-      throw new OnlineOrderOwnershipError(
-        "You do not have access to this guest session.",
-      );
+      denyCustomerOwnership();
     }
     return await updateOnlineOrderOwnerWithCtx(ctx, {
       currentOwner: args.currentOwner,

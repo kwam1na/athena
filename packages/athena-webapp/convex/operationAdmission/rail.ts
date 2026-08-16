@@ -421,7 +421,8 @@ export function createAdmissionRail(config: AdmissionRailConfig) {
       requireValidWriteDefinition(definition);
       const read = await readIngress(c, true);
       if (read.kind === "too_large") {
-        return c.json({ error: { code: "request_rejected" } }, 413);
+        // Same body shape as the 401/403 denials above: one `error` string.
+        return c.json({ error: "Request body too large." }, 413);
       }
       const ingress = read.ingress;
 
@@ -513,7 +514,9 @@ export function createAdmissionRail(config: AdmissionRailConfig) {
         definition,
       );
     } catch (error) {
-      throw asOperationAdmissionDenial(error);
+      // A rail-raised denial is re-thrown as typed data HTTP ingress can map;
+      // anything else is a genuine fault and must keep surfacing as a 500.
+      throw asOperationAdmissionDenial(error) ?? error;
     }
     await config.capture?.(ctx, admission);
     return projectOperationAdmission(admission);
@@ -539,7 +542,7 @@ export function createAdmissionRail(config: AdmissionRailConfig) {
         definition,
       );
     } catch (error) {
-      throw asOperationAdmissionDenial(error);
+      throw asOperationAdmissionDenial(error) ?? error;
     }
     return projectOperationAdmission(admission);
   }
@@ -564,6 +567,15 @@ export type AdmissionRail = ReturnType<typeof createAdmissionRail>;
  * to scope resolvers. Identity never comes from here — it comes from the
  * ingress claim and the admitted actor.
  */
+/**
+ * Admission arguments from the request, PATH LAST.
+ *
+ * A path parameter is part of the route the router already matched; a query
+ * string is free-form caller input. Spreading query last let `?storeId=…`
+ * override the `:storeId` the route matched, so a definition scoping itself
+ * with `storeIdArg` could be clamped to a store the path never named. Path
+ * wins.
+ */
 function requestArgs(c: Context): Record<string, unknown> {
-  return { ...c.req.param(), ...c.req.query() };
+  return { ...c.req.query(), ...c.req.param() };
 }
