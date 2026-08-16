@@ -7,9 +7,26 @@ import {
 } from "../_generated/server";
 import { v } from "convex/values";
 import { addressSchema } from "../schemas/storeFront";
-import { api, internal } from "../_generated/api";
+import { internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 import { SYNTHETIC_MONITOR_ORIGIN } from "./syntheticMonitor";
+import {
+  findLinkedAccountsReadDefinition,
+  getAllStoreFrontUsersReadDefinition,
+  getAllUserActivityReadDefinition,
+  getLastViewedProductReadDefinition,
+  getLastViewedProductsReadDefinition,
+  getMostRecentActivityReadDefinition,
+  getOnlineOrderByIdReadDefinition,
+  getUserByIdentifierReadDefinition,
+} from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
+import { admitPublicQuery } from "../platform/operationAdmission";
+import {
+  assertCustomerOwnsStoreIfPropagated,
+  customerOwnerActorId,
+  customerOwnerValidator,
+  denyCustomerOwnership,
+} from "./customerOwnership";
 
 const entity = "storeFrontUser";
 
@@ -46,16 +63,26 @@ export function assertStoreFrontActorMatchesStore(
 
 export const getAll = query({
   args: {},
-  handler: async (ctx) => {
+  handler: admitPublicQuery(getAllStoreFrontUsersReadDefinition, async (ctx) => {
     return await ctx.db.query(entity).collect();
   },
+  ),
 });
 
 export const getById = internalQuery({
   args: {
     id: v.id(entity),
+    owner: v.optional(customerOwnerValidator),
   },
   handler: async (ctx, args) => {
+    // `GET /me` and `GET /users/:userId` both reach here with a bare id; the
+    // admitted claim decides whose row that may be.
+    if (
+      args.owner &&
+      String(args.id) !== String(customerOwnerActorId(args.owner))
+    ) {
+      denyCustomerOwnership();
+    }
     try {
       return await ctx.db.get("storeFrontUser", args.id);
     } catch (e) {
@@ -73,8 +100,19 @@ export const update = internalMutation({
     phoneNumber: v.optional(v.string()),
     shippingAddress: v.optional(addressSchema),
     billingAddress: v.optional(addressSchema),
+    owner: v.optional(customerOwnerValidator),
   },
   handler: async (ctx, args) => {
+    // `PUT /me` and `PUT /users/:userId` patch a bare id; only the admitted
+    // shopper's own row may be written, and only inside their own store.
+    if (args.owner) {
+      if (String(args.id) !== String(customerOwnerActorId(args.owner))) {
+        denyCustomerOwnership();
+      }
+      const existing = await ctx.db.get("storeFrontUser", args.id);
+      assertCustomerOwnsStoreIfPropagated(args.owner, existing?.storeId);
+    }
+
     const updates: Record<string, any> = {};
 
     if (args.email) {
@@ -110,16 +148,27 @@ export const getByIdentifier = query({
   args: {
     id: v.union(v.id(entity), v.id("guest")),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getUserByIdentifierReadDefinition,
+    async (
+      ctx,
+      args: { id: Id<"storeFrontUser"> | Id<"guest"> },
+    ) => {
     return await getStoreFrontActorById(ctx, args.id);
   },
+  ),
 });
 
 export const findLinkedAccounts = query({
   args: {
     userId: v.union(v.id(entity), v.id("guest")),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    findLinkedAccountsReadDefinition,
+    async (
+      ctx,
+      args: { userId: Id<"storeFrontUser"> | Id<"guest"> },
+    ) => {
     // Get the user to find their email
     const user = await getStoreFrontActorById(ctx, args.userId);
     if (!user || !user.email) {
@@ -150,13 +199,19 @@ export const findLinkedAccounts = query({
       guestUsers,
     };
   },
+  ),
 });
 
 export const getAllUserActivity = query({
   args: {
     id: v.union(v.id(entity), v.id("guest")),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getAllUserActivityReadDefinition,
+    async (
+      ctx,
+      args: { id: Id<"storeFrontUser"> | Id<"guest"> },
+    ) => {
     // Get the user's analytics data
     const analytics = await ctx.db
       .query("analytics")
@@ -214,6 +269,7 @@ export const getAllUserActivity = query({
 
     return enrichedAnalytics;
   },
+  ),
 });
 
 export const getAllUserActivityInternal = internalQuery({
@@ -292,13 +348,17 @@ export const getStoreUserActivityInternal = internalQuery({
   },
 });
 
-export const getLastViewedProduct = query({
-  args: {
-    id: v.union(v.id(entity), v.id("guest")),
-    category: v.optional(v.string()),
-    minAgeHours: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
+type LastViewedProductArgs = {
+  id: Id<"storeFrontUser"> | Id<"guest">;
+  category?: string;
+  minAgeHours?: number;
+};
+
+async function getLastViewedProductWithCtx(
+  ctx: QueryCtx,
+  args: LastViewedProductArgs,
+) {
+  {
     const minAgeMs = (args.minAgeHours ?? 24) * 60 * 60 * 1000;
     const cutoff = Date.now() - minAgeMs;
 
@@ -441,6 +501,42 @@ export const getLastViewedProduct = query({
 
     console.log(`No available products found for user ${args.id}`);
     return null;
+  }
+}
+
+export const getLastViewedProduct = query({
+  args: {
+    id: v.union(v.id(entity), v.id("guest")),
+    category: v.optional(v.string()),
+    minAgeHours: v.optional(v.number()),
+  },
+  handler: admitPublicQuery(
+    getLastViewedProductReadDefinition,
+    async (ctx, args: LastViewedProductArgs) =>
+      getLastViewedProductWithCtx(ctx, args),
+  ),
+});
+
+/**
+ * Internal sibling for `GET /upsells`. The upsell is computed from the
+ * ADMITTED shopper's own browsing history, so the query string cannot ask for
+ * what someone else looked at.
+ */
+export const getLastViewedProductInternal = internalQuery({
+  args: {
+    id: v.union(v.id(entity), v.id("guest")),
+    category: v.optional(v.string()),
+    minAgeHours: v.optional(v.number()),
+    owner: customerOwnerValidator,
+  },
+  handler: async (ctx, { owner, ...args }) => {
+    if (String(args.id) !== String(customerOwnerActorId(owner))) {
+      denyCustomerOwnership();
+    }
+    return await getLastViewedProductWithCtx(ctx, {
+      ...args,
+      id: customerOwnerActorId(owner),
+    });
   },
 });
 
@@ -451,7 +547,16 @@ export const getLastViewedProducts = query({
     limit: v.number(),
   },
   returns: v.array(v.any()),
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getLastViewedProductsReadDefinition,
+    async (
+      ctx,
+      args: {
+        id: Id<"storeFrontUser"> | Id<"guest">;
+        category?: string;
+        limit: number;
+      },
+    ) => {
     const availableProducts: any[] = [];
 
     // Helper function to check if a specific SKU is available
@@ -583,6 +688,7 @@ export const getLastViewedProducts = query({
     );
     return availableProducts;
   },
+  ),
 });
 
 export const getLastViewedProductsInternal = internalQuery({
@@ -667,9 +773,15 @@ export const getOnlineOrderById = query({
   args: {
     id: v.id("onlineOrder"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getOnlineOrderByIdReadDefinition,
+    async (
+      ctx,
+      args: { id: Id<"onlineOrder"> },
+    ) => {
     return await ctx.db.get("onlineOrder", args.id);
   },
+  ),
 });
 
 // Get just the most recent user activity for efficient status checking
@@ -677,7 +789,12 @@ export const getMostRecentActivity = query({
   args: {
     id: v.union(v.id(entity), v.id("guest")),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getMostRecentActivityReadDefinition,
+    async (
+      ctx,
+      args: { id: Id<"storeFrontUser"> | Id<"guest"> },
+    ) => {
     // Get only the most recent analytics record
     const analytics = await ctx.db
       .query("analytics")
@@ -690,4 +807,5 @@ export const getMostRecentActivity = query({
 
     return analytics;
   },
+  ),
 });

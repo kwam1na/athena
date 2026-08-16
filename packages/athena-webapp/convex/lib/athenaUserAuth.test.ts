@@ -160,7 +160,7 @@ describe("Athena user auth boundary", () => {
     expect(getSharedDemoActorWithCtx).not.toHaveBeenCalled();
   });
 
-  it("does not map a shared-demo actor into Athena user semantics without an explicit legacy capability option", async () => {
+  it("does not map a shared-demo actor into Athena user semantics", async () => {
     vi.mocked(getAuthUserId).mockResolvedValue("demo-auth" as never);
     vi.mocked(getSharedDemoActorWithCtx).mockResolvedValue({
       athenaUserId: "demo-athena",
@@ -184,7 +184,13 @@ describe("Athena user auth boundary", () => {
     expect(getSharedDemoActorWithCtx).not.toHaveBeenCalled();
   });
 
-  it("preserves the shared-demo Athena user bridge for explicit read allowlists", async () => {
+  /**
+   * The retired `{ sharedDemoCapability: "reports.read" }` bridge. It is not
+   * merely unused — it is unreachable, because the option no longer exists at
+   * the type level and the module no longer imports demo policy at all. Only
+   * an admitted actor (the test below) maps a demo principal onto an identity.
+   */
+  it("offers no capability option that re-opens the demo identity bridge", async () => {
     const demoUser = {
       _id: "demo-athena" as Id<"athenaUser">,
       email: "synthetic@demo.invalid",
@@ -207,12 +213,11 @@ describe("Athena user auth boundary", () => {
       },
     };
 
+    expect(getAuthenticatedAthenaUserWithCtx).toHaveLength(1);
     await expect(
-      getAuthenticatedAthenaUserWithCtx(ctx as never, {
-        sharedDemoCapability: "reports.read",
-      }),
-    ).resolves.toEqual(demoUser);
-    expect(getAuthUserId).not.toHaveBeenCalled();
+      getAuthenticatedAthenaUserWithCtx(ctx as never),
+    ).resolves.toBeNull();
+    expect(getSharedDemoActorWithCtx).not.toHaveBeenCalled();
   });
 
   it("resolves the actor from operation admission context", async () => {
@@ -247,7 +252,7 @@ describe("Athena user auth boundary", () => {
     expect(getSharedDemoActorWithCtx).not.toHaveBeenCalled();
   });
 
-  it("does not admit shared-demo write capabilities through the generic Athena user helper", async () => {
+  it("never consults shared-demo policy, whatever the caller does", async () => {
     vi.mocked(getAuthUserId).mockResolvedValue("demo-auth" as never);
     vi.mocked(getSharedDemoActorWithCtx).mockResolvedValue({
       athenaUserId: "demo-athena",
@@ -266,9 +271,7 @@ describe("Athena user auth boundary", () => {
     };
 
     await expect(
-      getAuthenticatedAthenaUserWithCtx(ctx as never, {
-        sharedDemoCapability: "pos.sale.complete",
-      }),
+      getAuthenticatedAthenaUserWithCtx(ctx as never),
     ).resolves.toBeNull();
     expect(getSharedDemoActorWithCtx).not.toHaveBeenCalled();
   });

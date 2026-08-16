@@ -1,6 +1,12 @@
 import { v } from "convex/values";
-import { query, type QueryCtx } from "../_generated/server";
+import { internalQuery, query, type QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
+import { getHomepageSnapshotReadDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
+import { admitPublicQuery } from "../platform/operationAdmission";
+import {
+  assertCustomerOwnsStoreIfPropagated,
+  customerOwnerValidator,
+} from "./customerOwnership";
 import { normalizeStoreConfig } from "../inventory/storeConfigV2";
 import {
   presentPublicBannerMessage,
@@ -709,5 +715,28 @@ export const get = query({
     nowMs: v.number(),
   },
   returns: v.union(homepageSnapshotV1Validator, v.null()),
-  handler: (ctx, args) => getHomepageSnapshotWithCtx(ctx, args),
+  handler: admitPublicQuery(
+    getHomepageSnapshotReadDefinition,
+    async (ctx, args: { storeId: Id<"store">; nowMs: number }) =>
+      getHomepageSnapshotWithCtx(ctx, args),
+  ),
+});
+
+/**
+ * Internal sibling for `GET /homepageSnapshot`. The storefront homepage is
+ * merchandising, not shopper-scoped data, so the only ownership fact that
+ * matters is the store: a claim clamped to store A cannot render store B.
+ * `owner` is optional because the same snapshot is also served to genuinely
+ * anonymous browse traffic, which carries no claim at all.
+ */
+export const getInternal = internalQuery({
+  args: {
+    storeId: v.id("store"),
+    nowMs: v.number(),
+    owner: v.optional(customerOwnerValidator),
+  },
+  handler: async (ctx, { owner, ...args }) => {
+    assertCustomerOwnsStoreIfPropagated(owner, args.storeId);
+    return await getHomepageSnapshotWithCtx(ctx, args);
+  },
 });

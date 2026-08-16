@@ -8,6 +8,21 @@ import { localDateStartAt } from "../lib/storeScheduleTime";
 import { listOpenSyncedSaleInventoryReviewGroupsWithCompleteness } from "../operations/operationalWorkItems";
 import { requireReportsStoreAccess } from "./access";
 import {
+  getAcceptedWeeklyDetailReadDefinition,
+  getActiveWeeklyBriefingReadDefinition,
+  getOverviewReadDefinition,
+  getRangeResultReadDefinition,
+  getSkuDetailReadDefinition,
+  listAcceptedWeeklyHistoryReadDefinition,
+  listDaysReadDefinition,
+  listPeriodSkusReadDefinition,
+  listRangeSkuMixReadDefinition,
+  listRangeSkuMovementReadDefinition,
+  listSkuDayTransactionsReadDefinition,
+} from "../operationAdmission/domains/u8_reports_readDefinitions";
+import { admitPublicQuery } from "../platform/operationAdmission";
+import type { OperationQueryCtx } from "../operationAdmission/types";
+import {
   addWeekMetrics,
   combineRevisionPaymentMix,
   combineWeekCompleteness,
@@ -622,7 +637,12 @@ function toSkuPeriodRow(doc: Doc<"reportPeriodSkuRollup">): ReportSkuPeriodRow {
 
 export const getOverview = query({
   args: { storeId: v.id("store") },
-  handler: async (ctx, args): Promise<ReportOverviewData | null> => {
+  handler: admitPublicQuery(
+    getOverviewReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store"> },
+    ): Promise<ReportOverviewData | null> => {
     await requireReportsStoreAccess(ctx, args.storeId);
 
     // Steady-state read budget: 1 doc — the reportOverview singleton via
@@ -753,7 +773,8 @@ export const getOverview = query({
       dailyTrend,
       trust: doc.trust,
     };
-  },
+    },
+  ),
 });
 
 // ---------------------------------------------------------------------------
@@ -769,7 +790,12 @@ export const getOverview = query({
  */
 export const getActiveWeeklyBriefing = query({
   args: { storeId: v.id("store") },
-  handler: async (ctx, args): Promise<ReportWeekBriefing> => {
+  handler: admitPublicQuery(
+    getActiveWeeklyBriefingReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store"> },
+    ): Promise<ReportWeekBriefing> => {
     const { store } = await requireReportsStoreAccess(ctx, args.storeId);
     if (
       !isWeeklyReportingEnabledForStoreDoc(String(args.storeId), store)
@@ -825,7 +851,8 @@ export const getActiveWeeklyBriefing = query({
       current: currentProjection,
       acceptedBaseline: baseline ? toAcceptedWeeklyProjection(baseline) : null,
     };
-  },
+    },
+  ),
 });
 
 /**
@@ -840,7 +867,15 @@ export const listAcceptedWeeklyHistory = query({
     storeId: v.id("store"),
     paginationOpts: paginationOptsValidator,
   },
-  handler: async (ctx, args): Promise<ReportWeekHistoryPage> => {
+  handler: admitPublicQuery(
+    listAcceptedWeeklyHistoryReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: {
+        storeId: Id<"store">;
+        paginationOpts: { cursor: string | null; numItems: number };
+      },
+    ): Promise<ReportWeekHistoryPage> => {
     requireWeeklyHistoryPagination(args.paginationOpts);
     const { store } = await requireReportsStoreAccess(ctx, args.storeId);
     if (
@@ -859,7 +894,8 @@ export const listAcceptedWeeklyHistory = query({
       ...page,
       page: page.page.map(toAcceptedWeeklyProjection),
     };
-  },
+    },
+  ),
 });
 
 /**
@@ -871,7 +907,12 @@ export const listAcceptedWeeklyHistory = query({
  */
 export const getAcceptedWeeklyDetail = query({
   args: { storeId: v.id("store"), reportId: v.string() },
-  handler: async (ctx, args): Promise<ReportWeekAcceptedProjection | null> => {
+  handler: admitPublicQuery(
+    getAcceptedWeeklyDetailReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store">; reportId: string },
+    ): Promise<ReportWeekAcceptedProjection | null> => {
     const cycleStartDate = cycleStartDateForWeeklyReportId(args.reportId);
     const { store } = await requireReportsStoreAccess(ctx, args.storeId);
     if (
@@ -886,7 +927,8 @@ export const getAcceptedWeeklyDetail = query({
       )
       .unique();
     return accepted ? toAcceptedWeeklyProjection(accepted) : null;
-  },
+    },
+  ),
 });
 
 // ---------------------------------------------------------------------------
@@ -899,7 +941,12 @@ export const listDays = query({
     startDate: v.string(),
     endDate: v.string(),
   },
-  handler: async (ctx, args): Promise<ReportDayRow[]> => {
+  handler: admitPublicQuery(
+    listDaysReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store">; startDate: string; endDate: string },
+    ): Promise<ReportDayRow[]> => {
     await requireReportsStoreAccess(ctx, args.storeId);
     requireValidDateRange(
       args.startDate,
@@ -921,7 +968,8 @@ export const listDays = query({
       .take(REPORT_DRILLDOWN_RANGE_MAX_DAYS);
 
     return rows.map(toReportDayRow);
-  },
+    },
+  ),
 });
 
 // ---------------------------------------------------------------------------
@@ -934,10 +982,16 @@ export const listRangeSkuMix = query({
     startDate: v.string(),
     endDate: v.string(),
   },
-  handler: async (ctx, args): Promise<ReportSkuMixData> => {
-    await requireReportsStoreAccess(ctx, args.storeId);
-    return readRangeSkuMixWithCtx(ctx, args);
-  },
+  handler: admitPublicQuery(
+    listRangeSkuMixReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store">; startDate: string; endDate: string },
+    ): Promise<ReportSkuMixData> => {
+      await requireReportsStoreAccess(ctx, args.storeId);
+      return readRangeSkuMixWithCtx(ctx, args);
+    },
+  ),
 });
 
 /**
@@ -1054,7 +1108,12 @@ export const listRangeSkuMovement = query({
     startDate: v.string(),
     endDate: v.string(),
   },
-  handler: async (ctx, args): Promise<ReportSkuMovementData> => {
+  handler: admitPublicQuery(
+    listRangeSkuMovementReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store">; startDate: string; endDate: string },
+    ): Promise<ReportSkuMovementData> => {
     await requireReportsStoreAccess(ctx, args.storeId);
     // Legacy rollout reader (the Units moved sheet uses the async
     // snapshot); it keeps the narrow synchronous cap (U7).
@@ -1148,7 +1207,8 @@ export const listRangeSkuMovement = query({
       netUnits: totalUnitsSold - totalUnitsReturned,
       skuCount: rows.length,
     };
-  },
+    },
+  ),
 });
 
 // ---------------------------------------------------------------------------
@@ -1308,9 +1368,16 @@ export const listPeriodSkus = query({
     sortBy: v.union(v.literal("revenue"), v.literal("units")),
     cursor: v.optional(v.string()),
   },
-  handler: async (
-    ctx,
-    args,
+  handler: admitPublicQuery(
+    listPeriodSkusReadDefinition,
+    async (
+    ctx: OperationQueryCtx,
+    args: {
+      storeId: Id<"store">;
+      periodKey: string;
+      sortBy: "revenue" | "units";
+      cursor?: string;
+    },
   ): Promise<{
     rows: ReportSkuPeriodRow[];
     continueCursor: string | null;
@@ -1489,7 +1556,8 @@ export const listPeriodSkus = query({
             isReportingTodayInProgress(day.status),
         ),
     };
-  },
+    },
+  ),
 });
 
 /**
@@ -1612,9 +1680,16 @@ export const getSkuDetail = query({
     startDate: v.string(),
     endDate: v.string(),
   },
-  handler: async (
-    ctx,
-    args,
+  handler: admitPublicQuery(
+    getSkuDetailReadDefinition,
+    async (
+    ctx: OperationQueryCtx,
+    args: {
+      storeId: Id<"store">;
+      productSkuId: Id<"productSku">;
+      startDate: string;
+      endDate: string;
+    },
   ): Promise<{
     days: (ReportSkuPeriodRow & { operatingDate: string })[];
     totals: ReportSkuPeriodRow | null;
@@ -1686,7 +1761,8 @@ export const getSkuDetail = query({
     );
 
     return { days, totals, priorPeriodTotals, identity };
-  },
+    },
+  ),
 });
 
 // ---------------------------------------------------------------------------
@@ -1699,9 +1775,15 @@ export const listSkuDayTransactions = query({
     productSkuId: v.id("productSku"),
     operatingDate: v.string(),
   },
-  handler: async (
-    ctx,
-    args,
+  handler: admitPublicQuery(
+    listSkuDayTransactionsReadDefinition,
+    async (
+    ctx: OperationQueryCtx,
+    args: {
+      storeId: Id<"store">;
+      productSkuId: Id<"productSku">;
+      operatingDate: string;
+    },
   ): Promise<{
     transactions: ReportSkuTransactionEvidence[];
     truncated: boolean;
@@ -1819,7 +1901,8 @@ export const listSkuDayTransactions = query({
 
     transactions.sort((left, right) => right.occurredAt - left.occurredAt);
     return { transactions, truncated };
-  },
+    },
+  ),
 });
 
 function sum(
@@ -1845,7 +1928,12 @@ function sum(
 
 export const getRangeResult = query({
   args: { storeId: v.id("store"), requestKey: v.string() },
-  handler: async (ctx, args): Promise<ReportRangeSummary | null> => {
+  handler: admitPublicQuery(
+    getRangeResultReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store">; requestKey: string },
+    ): Promise<ReportRangeSummary | null> => {
     await requireReportsStoreAccess(ctx, args.storeId);
 
     // Read budget: 1 doc — reportRangeResult via by_storeId_requestKey.
@@ -1872,5 +1960,6 @@ export const getRangeResult = query({
       computedAt: doc.computedAt,
       expiresAt: doc.expiresAt,
     };
-  },
+    },
+  ),
 });

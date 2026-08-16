@@ -2,21 +2,103 @@ import {
   mutation,
   query,
   action,
+  internalMutation,
+  internalQuery,
   MutationCtx,
   QueryCtx,
 } from "../_generated/server";
 import { v } from "convex/values";
 import { Id } from "../_generated/dataModel";
-import { api, internal } from "../_generated/api";
+import { internal } from "../_generated/api";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { sendFeedbackRequestOperationDefinition } from "../operationAdmission/definitions";
-import { admitPublicAction } from "../platform/operationAdmission";
+import {
+  admitPublicAction,
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  approveReviewOperationDefinition,
+  createReviewOperationDefinition,
+  deleteReviewOperationDefinition,
+  markReviewHelpfulOperationDefinition,
+  publishReviewOperationDefinition,
+  rejectReviewOperationDefinition,
+  unpublishReviewOperationDefinition,
+  updateReviewOperationDefinition,
+} from "../operationAdmission/domains/u7_storefrontOperator_definitions";
+import {
+  getReviewByOrderItemReadDefinition,
+  getUnapprovedReviewsCountReadDefinition,
+  hasReviewForOrderItemReadDefinition,
+  hasUserReviewForOrderItemReadDefinition,
+  listReviewsByProductReadDefinition,
+  listReviewsByProductSkuReadDefinition,
+  listReviewsByUserAndProductSkuReadDefinition,
+  listReviewsByUserReadDefinition,
+  listStoreReviewsReadDefinition,
+} from "../operationAdmission/domains/u7_storefrontOperator_readDefinitions";
 import { sendFeedbackRequestEmail } from "../mailersend";
 import { getProductName } from "../utils";
 import { ok, userError } from "../../shared/commandResult";
 
 const entity = "review" as const;
 const MAX_REVIEWS = 500;
+
+/**
+ * The admitted storefront actor, propagated from an HTTP route into an
+ * internal callee. Internal functions have no `ctx.operationAdmission`, so the
+ * route passes the facts the rail admitted — never anything the client sent.
+ * See the storefront_customer decision in the migration plan.
+ */
+const ownerArg = v.object({
+  guestId: v.optional(v.id("guest")),
+  storeFrontUserId: v.optional(v.id("storeFrontUser")),
+  storeId: v.id("store"),
+});
+
+type ReviewOwner = {
+  guestId?: Id<"guest">;
+  storeFrontUserId?: Id<"storeFrontUser">;
+  storeId: Id<"store">;
+};
+
+class ReviewOwnershipError extends Error {
+  constructor(message = "You do not have access to this review.") {
+    super(message);
+    this.name = "ReviewOwnershipError";
+  }
+}
+
+/** The single caller-identity the admitted actor stands for. */
+function ownerActorId(owner: ReviewOwner): Id<"storeFrontUser"> | Id<"guest"> {
+  const actorId = owner.storeFrontUserId ?? owner.guestId;
+  if (!actorId) {
+    throw new ReviewOwnershipError("Admitted owner carries no shopper id.");
+  }
+  return actorId;
+}
+
+/**
+ * A same-store shopper claim grants nothing beyond "holds this id": every
+ * caller-supplied review id is asserted against the admitted actor before the
+ * row is read or written.
+ */
+async function requireOwnedReview(
+  ctx: MutationCtx | QueryCtx,
+  reviewId: Id<"review">,
+  owner: ReviewOwner,
+) {
+  const review = await ctx.db.get("review", reviewId);
+  if (
+    !review ||
+    review.storeId !== owner.storeId ||
+    review.createdByStoreFrontUserId !== ownerActorId(owner)
+  ) {
+    throw new ReviewOwnershipError();
+  }
+  return review;
+}
 
 async function getStoreFrontActorById(
   ctx: MutationCtx | QueryCtx,
@@ -54,15 +136,60 @@ type UpdateReviewArgs = {
   ratings?: RatingDimension[];
 };
 
+const createReviewArgs = {
+  orderId: v.id("onlineOrder"),
+  orderNumber: v.string(),
+  orderItemId: v.id("onlineOrderItem"),
+  productId: v.id("product"),
+  productSkuId: v.id("productSku"),
+  storeId: v.id("store"),
+  createdByStoreFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+  title: v.string(),
+  content: v.optional(v.string()),
+  ratings: v.array(
+    v.object({
+      key: v.string(),
+      label: v.string(),
+      value: v.number(),
+      optional: v.optional(v.boolean()),
+    })
+  ),
+};
+
+type CreateReviewArgs = {
+  orderId: Id<"onlineOrder">;
+  orderNumber: string;
+  orderItemId: Id<"onlineOrderItem">;
+  productId: Id<"product">;
+  productSkuId: Id<"productSku">;
+  storeId: Id<"store">;
+  createdByStoreFrontUserId: Id<"storeFrontUser"> | Id<"guest">;
+  title: string;
+  content?: string;
+  ratings: RatingDimension[];
+};
+
 export const create = mutation({
+  args: createReviewArgs,
+  handler: admitPublicMutation(
+    createReviewOperationDefinition,
+    async (ctx: MutationCtx, args: CreateReviewArgs) =>
+      createReviewWithCtx(ctx, args),
+  ),
+});
+
+/**
+ * Internal sibling for `POST /reviews`. The store and the review's author come
+ * from the admitted actor, never from the request body, and the named order
+ * item must belong to the named order inside that store.
+ */
+export const createInternal = internalMutation({
   args: {
     orderId: v.id("onlineOrder"),
     orderNumber: v.string(),
     orderItemId: v.id("onlineOrderItem"),
     productId: v.id("product"),
     productSkuId: v.id("productSku"),
-    storeId: v.id("store"),
-    createdByStoreFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
     title: v.string(),
     content: v.optional(v.string()),
     ratings: v.array(
@@ -73,8 +200,38 @@ export const create = mutation({
         optional: v.optional(v.boolean()),
       })
     ),
+    owner: ownerArg,
   },
   handler: async (ctx, args) => {
+    const { owner, ...rest } = args;
+    const actorId = ownerActorId(owner);
+
+    const order = await ctx.db.get("onlineOrder", rest.orderId);
+    if (
+      !order ||
+      order.storeId !== owner.storeId ||
+      order.storeFrontUserId !== actorId
+    ) {
+      throw new ReviewOwnershipError("You do not have access to this order.");
+    }
+
+    const orderItem = await ctx.db.get("onlineOrderItem", rest.orderItemId);
+    if (!orderItem || orderItem.orderId !== rest.orderId) {
+      throw new ReviewOwnershipError(
+        "Order item does not belong to this order.",
+      );
+    }
+
+    return await createReviewWithCtx(ctx, {
+      ...rest,
+      storeId: owner.storeId,
+      createdByStoreFrontUserId: actorId,
+    });
+  },
+});
+
+async function createReviewWithCtx(ctx: MutationCtx, args: CreateReviewArgs) {
+  {
     const {
       orderId,
       orderItemId,
@@ -214,43 +371,94 @@ export const create = mutation({
     }
 
     return review;
-  },
-});
+  }
+}
+
+async function getReviewByOrderItemWithCtx(
+  ctx: QueryCtx,
+  args: { orderItemId: string },
+) {
+  const { orderItemId } = args;
+
+  const review = await ctx.db
+    .query(entity)
+    .withIndex("by_orderItemId", (q) =>
+      q.eq("orderItemId", orderItemId as Id<"onlineOrderItem">)
+    )
+    .first();
+
+  return review;
+}
 
 export const getByOrderItem = query({
   args: {
     orderItemId: v.string(),
   },
-  handler: async (ctx, args: { orderItemId: string }) => {
-    const { orderItemId } = args;
-
-    const review = await ctx.db
-      .query(entity)
-      .withIndex("by_orderItemId", (q) =>
-        q.eq("orderItemId", orderItemId as Id<"onlineOrderItem">)
-      )
-      .first();
-
-    return review;
-  },
+  handler: admitPublicQuery(
+    getReviewByOrderItemReadDefinition,
+    getReviewByOrderItemWithCtx,
+  ),
 });
+
+/** Internal sibling for `GET /reviews/order-item/:orderItemId`. */
+export const getByOrderItemInternal = internalQuery({
+  args: {
+    orderItemId: v.string(),
+  },
+  handler: getReviewByOrderItemWithCtx,
+});
+
+async function hasReviewForOrderItemWithCtx(
+  ctx: QueryCtx,
+  args: { orderItemId: Id<"onlineOrderItem"> },
+) {
+  const { orderItemId } = args;
+
+  const review = await ctx.db
+    .query(entity)
+    .withIndex("by_orderItemId", (q) => q.eq("orderItemId", orderItemId))
+    .first();
+
+  return review !== null;
+}
 
 export const hasReviewForOrderItem = query({
   args: {
     orderItemId: v.id("onlineOrderItem"),
   },
   returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const { orderItemId } = args;
-
-    const review = await ctx.db
-      .query(entity)
-      .withIndex("by_orderItemId", (q) => q.eq("orderItemId", orderItemId))
-      .first();
-
-    return review !== null;
-  },
+  handler: admitPublicQuery(
+    hasReviewForOrderItemReadDefinition,
+    hasReviewForOrderItemWithCtx,
+  ),
 });
+
+/** Internal sibling for `GET /reviews/order-item/:orderItemId/exists`. */
+export const hasReviewForOrderItemInternal = internalQuery({
+  args: {
+    orderItemId: v.id("onlineOrderItem"),
+  },
+  returns: v.boolean(),
+  handler: hasReviewForOrderItemWithCtx,
+});
+
+async function hasUserReviewForOrderItemWithCtx(
+  ctx: QueryCtx,
+  args: {
+    orderItemId: Id<"onlineOrderItem">;
+    userId: Id<"storeFrontUser"> | Id<"guest">;
+  },
+) {
+  const { orderItemId, userId } = args;
+
+  const review = await ctx.db
+    .query(entity)
+    .withIndex("by_orderItemId", (q) => q.eq("orderItemId", orderItemId))
+    .filter((q) => q.eq(q.field("createdByStoreFrontUserId"), userId))
+    .first();
+
+  return review !== null;
+}
 
 export const hasUserReviewForOrderItem = query({
   args: {
@@ -258,18 +466,40 @@ export const hasUserReviewForOrderItem = query({
     userId: v.union(v.id("storeFrontUser"), v.id("guest")),
   },
   returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const { orderItemId, userId } = args;
-
-    const review = await ctx.db
-      .query(entity)
-      .withIndex("by_orderItemId", (q) => q.eq("orderItemId", orderItemId))
-      .filter((q) => q.eq(q.field("createdByStoreFrontUserId"), userId))
-      .first();
-
-    return review !== null;
-  },
+  handler: admitPublicQuery(
+    hasUserReviewForOrderItemReadDefinition,
+    hasUserReviewForOrderItemWithCtx,
+  ),
 });
+
+/**
+ * Internal sibling for `GET /reviews/order-item/:orderItemId/user-exists`. The
+ * shopper whose reviews are counted is the admitted actor, not a `userId` the
+ * caller chose.
+ */
+export const hasUserReviewForOrderItemInternal = internalQuery({
+  args: {
+    orderItemId: v.id("onlineOrderItem"),
+    owner: ownerArg,
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) =>
+    hasUserReviewForOrderItemWithCtx(ctx, {
+      orderItemId: args.orderItemId,
+      userId: ownerActorId(args.owner),
+    }),
+});
+
+async function updateReviewWithCtx(ctx: MutationCtx, args: UpdateReviewArgs) {
+  const { id, ...updates } = args;
+
+  const review = await ctx.db.patch("review", id, {
+    ...updates,
+    updatedAt: new Date().getTime(),
+  });
+
+  return review;
+}
 
 export const update = mutation({
   args: {
@@ -287,15 +517,39 @@ export const update = mutation({
       )
     ),
   },
-  handler: async (ctx, args: UpdateReviewArgs) => {
-    const { id, ...updates } = args;
+  handler: admitPublicMutation(
+    updateReviewOperationDefinition,
+    async (ctx: MutationCtx, args: UpdateReviewArgs) =>
+      updateReviewWithCtx(ctx, args),
+  ),
+});
 
-    const review = await ctx.db.patch("review", id, {
-      ...updates,
-      updatedAt: new Date().getTime(),
-    });
-
-    return review;
+/**
+ * Internal sibling for `PATCH /reviews/:id`. Establishes the ownership
+ * assertion the route never had: a bearer id may only edit its own review, and
+ * only inside the store it was admitted for.
+ */
+export const updateInternal = internalMutation({
+  args: {
+    id: v.id(entity),
+    title: v.optional(v.string()),
+    content: v.optional(v.string()),
+    ratings: v.optional(
+      v.array(
+        v.object({
+          key: v.string(),
+          label: v.string(),
+          value: v.number(),
+          optional: v.optional(v.boolean()),
+        })
+      )
+    ),
+    owner: ownerArg,
+  },
+  handler: async (ctx, args) => {
+    const { owner, ...updates } = args;
+    await requireOwnedReview(ctx, updates.id, owner);
+    return await updateReviewWithCtx(ctx, updates);
   },
 });
 
@@ -303,81 +557,150 @@ export const deleteReview = mutation({
   args: {
     id: v.id(entity),
   },
-  handler: async (ctx, args: { id: Id<"review"> }) => {
-    const { id } = args;
+  handler: admitPublicMutation(
+    deleteReviewOperationDefinition,
+    async (ctx: MutationCtx, args: { id: Id<"review"> }) => {
+      await ctx.db.delete("review", args.id);
+    },
+  ),
+});
 
-    await ctx.db.delete("review", id);
+/**
+ * Internal sibling for `DELETE /reviews/:id`, with the same ownership
+ * assertion as `updateInternal`.
+ */
+export const deleteReviewInternal = internalMutation({
+  args: {
+    id: v.id(entity),
+    owner: ownerArg,
+  },
+  handler: async (ctx, args) => {
+    await requireOwnedReview(ctx, args.id, args.owner);
+    await ctx.db.delete("review", args.id);
   },
 });
+
+async function getReviewsByProductSkuIdWithCtx(
+  ctx: QueryCtx,
+  args: { productSkuId: string },
+) {
+  const { productSkuId } = args;
+
+  const reviews = await ctx.db
+    .query(entity)
+    .withIndex("by_productSkuId", (q) =>
+      q.eq("productSkuId", productSkuId as Id<"productSku">)
+    )
+    .take(MAX_REVIEWS);
+
+  return reviews;
+}
 
 export const getByProductSkuId = query({
   args: {
     productSkuId: v.string(),
   },
-  handler: async (ctx, args: { productSkuId: string }) => {
-    const { productSkuId } = args;
-
-    const reviews = await ctx.db
-      .query(entity)
-      .withIndex("by_productSkuId", (q) =>
-        q.eq("productSkuId", productSkuId as Id<"productSku">)
-      )
-      .take(MAX_REVIEWS);
-
-    return reviews;
-  },
+  handler: admitPublicQuery(
+    listReviewsByProductSkuReadDefinition,
+    getReviewsByProductSkuIdWithCtx,
+  ),
 });
+
+/** Internal sibling for the anonymous `GET /reviews/product-sku/:productSkuId`. */
+export const getByProductSkuIdInternal = internalQuery({
+  args: {
+    productSkuId: v.string(),
+  },
+  handler: getReviewsByProductSkuIdWithCtx,
+});
+
+async function getReviewsByUserWithCtx(
+  ctx: QueryCtx,
+  args: { userId: Id<"storeFrontUser"> | Id<"guest"> },
+) {
+  const { userId } = args;
+
+  const reviews = await ctx.db
+    .query(entity)
+    .withIndex("by_createdByStoreFrontUserId", (q) =>
+      q.eq("createdByStoreFrontUserId", userId)
+    )
+    .take(MAX_REVIEWS);
+
+  return reviews;
+}
 
 export const getByUser = query({
   args: {
     userId: v.union(v.id("storeFrontUser"), v.id("guest")),
   },
-  handler: async (
-    ctx,
-    args: { userId: Id<"storeFrontUser"> | Id<"guest"> }
-  ) => {
-    const { userId } = args;
-
-    const reviews = await ctx.db
-      .query(entity)
-      .withIndex("by_createdByStoreFrontUserId", (q) =>
-        q.eq("createdByStoreFrontUserId", userId)
-      )
-      .take(MAX_REVIEWS);
-
-    return reviews;
-  },
+  handler: admitPublicQuery(
+    listReviewsByUserReadDefinition,
+    getReviewsByUserWithCtx,
+  ),
 });
+
+/**
+ * Internal sibling for `GET /reviews/user`. The shopper is the admitted actor,
+ * so one bearer id can no longer list another shopper's reviews.
+ */
+export const getByUserInternal = internalQuery({
+  args: {
+    owner: ownerArg,
+  },
+  handler: async (ctx, args) =>
+    getReviewsByUserWithCtx(ctx, { userId: ownerActorId(args.owner) }),
+});
+
+async function getReviewsByUserAndProductSkuIdWithCtx(
+  ctx: QueryCtx,
+  args: { userId: Id<"storeFrontUser"> | Id<"guest">; productSkuId: string },
+) {
+  const { userId, productSkuId } = args;
+
+  const reviews = await ctx.db
+    .query(entity)
+    .withIndex("by_createdByStoreFrontUserId_productSkuId", (q) =>
+      q
+        .eq("createdByStoreFrontUserId", userId)
+        .eq("productSkuId", productSkuId as Id<"productSku">)
+    )
+    .take(MAX_REVIEWS);
+
+  return reviews;
+}
 
 export const getByUserAndProductSkuId = query({
   args: {
     userId: v.union(v.id("storeFrontUser"), v.id("guest")),
     productSkuId: v.id("productSku"),
   },
-  handler: async (
-    ctx,
-    args: { userId: Id<"storeFrontUser"> | Id<"guest">; productSkuId: string }
-  ) => {
-    const { userId, productSkuId } = args;
+  handler: admitPublicQuery(
+    listReviewsByUserAndProductSkuReadDefinition,
+    getReviewsByUserAndProductSkuIdWithCtx,
+  ),
+});
 
-    const reviews = await ctx.db
-      .query(entity)
-      .withIndex("by_createdByStoreFrontUserId_productSkuId", (q) =>
-        q
-          .eq("createdByStoreFrontUserId", userId)
-          .eq("productSkuId", productSkuId as Id<"productSku">)
-      )
-      .take(MAX_REVIEWS);
-
-    return reviews;
+/** Internal sibling for `GET /reviews/user/product-sku/:productSkuId`. */
+export const getByUserAndProductSkuIdInternal = internalQuery({
+  args: {
+    productSkuId: v.id("productSku"),
+    owner: ownerArg,
   },
+  handler: async (ctx, args) =>
+    getReviewsByUserAndProductSkuIdWithCtx(ctx, {
+      productSkuId: args.productSkuId,
+      userId: ownerActorId(args.owner),
+    }),
 });
 
 export const getAllReviewsForStore = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args: { storeId: Id<"store"> }) => {
+  handler: admitPublicQuery(
+    listStoreReviewsReadDefinition,
+    async (ctx: QueryCtx, args: { storeId: Id<"store"> }) => {
     const { storeId } = args;
 
     const reviews = await ctx.db
@@ -398,7 +721,8 @@ export const getAllReviewsForStore = query({
     );
 
     return reviewsWithImages;
-  },
+    },
+  ),
 });
 
 export const approve = mutation({
@@ -407,8 +731,10 @@ export const approve = mutation({
     userId: v.id("athenaUser"),
   },
   returns: commandResultValidator(v.null()),
-  handler: async (
-    ctx,
+  handler: admitPublicMutation(
+    approveReviewOperationDefinition,
+    async (
+    ctx: MutationCtx,
     args: { id: Id<"review">; userId: Id<"athenaUser"> }
   ) => {
     const { id, userId } = args;
@@ -430,7 +756,8 @@ export const approve = mutation({
     });
 
     return ok(null);
-  },
+    },
+  ),
 });
 
 export const reject = mutation({
@@ -439,8 +766,10 @@ export const reject = mutation({
     userId: v.id("athenaUser"),
   },
   returns: commandResultValidator(v.null()),
-  handler: async (
-    ctx,
+  handler: admitPublicMutation(
+    rejectReviewOperationDefinition,
+    async (
+    ctx: MutationCtx,
     args: { id: Id<"review">; userId: Id<"athenaUser"> }
   ) => {
     const { id, userId } = args;
@@ -462,7 +791,8 @@ export const reject = mutation({
     });
 
     return ok(null);
-  },
+    },
+  ),
 });
 
 export const publish = mutation({
@@ -471,8 +801,10 @@ export const publish = mutation({
     userId: v.id("athenaUser"),
   },
   returns: commandResultValidator(v.null()),
-  handler: async (
-    ctx,
+  handler: admitPublicMutation(
+    publishReviewOperationDefinition,
+    async (
+    ctx: MutationCtx,
     args: { id: Id<"review">; userId: Id<"athenaUser"> }
   ) => {
     const { id, userId } = args;
@@ -494,7 +826,8 @@ export const publish = mutation({
     });
 
     return ok(null);
-  },
+    },
+  ),
 });
 
 export const unpublish = mutation({
@@ -503,8 +836,10 @@ export const unpublish = mutation({
     userId: v.id("athenaUser"),
   },
   returns: commandResultValidator(v.null()),
-  handler: async (
-    ctx,
+  handler: admitPublicMutation(
+    unpublishReviewOperationDefinition,
+    async (
+    ctx: MutationCtx,
     args: { id: Id<"review">; userId: Id<"athenaUser"> }
   ) => {
     const { id, userId } = args;
@@ -526,14 +861,15 @@ export const unpublish = mutation({
     });
 
     return ok(null);
-  },
+    },
+  ),
 });
 
-export const getByProductId = query({
-  args: {
-    productId: v.string(),
-  },
-  handler: async (ctx, args: { productId: string }): Promise<any[]> => {
+async function getReviewsByProductIdWithCtx(
+  ctx: QueryCtx,
+  args: { productId: string },
+): Promise<any[]> {
+  {
     const { productId } = args;
 
     const reviews = await ctx.db
@@ -568,15 +904,35 @@ export const getByProductId = query({
     );
 
     return reviewsWithExtras;
+  }
+}
+
+export const getByProductId = query({
+  args: {
+    productId: v.string(),
   },
+  handler: admitPublicQuery(
+    listReviewsByProductReadDefinition,
+    getReviewsByProductIdWithCtx,
+  ),
 });
 
-export const markHelpful = mutation({
+/** Internal sibling for the anonymous `GET /reviews/product/:productId`. */
+export const getByProductIdInternal = internalQuery({
   args: {
-    reviewId: v.id(entity),
-    userId: v.union(v.id("storeFrontUser"), v.id("guest")),
+    productId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: getReviewsByProductIdWithCtx,
+});
+
+async function markReviewHelpfulWithCtx(
+  ctx: MutationCtx,
+  args: {
+    reviewId: Id<"review">;
+    userId: Id<"storeFrontUser"> | Id<"guest">;
+  },
+) {
+  {
     const { reviewId, userId } = args;
     const review = await ctx.db.get("review", reviewId);
     if (!review) throw new Error("Review not found");
@@ -601,6 +957,39 @@ export const markHelpful = mutation({
       helpfulUserIds,
     });
     return { helpfulCount: newHelpfulCount };
+  }
+}
+
+export const markHelpful = mutation({
+  args: {
+    reviewId: v.id(entity),
+    userId: v.union(v.id("storeFrontUser"), v.id("guest")),
+  },
+  handler: admitPublicMutation(
+    markReviewHelpfulOperationDefinition,
+    markReviewHelpfulWithCtx,
+  ),
+});
+
+/**
+ * Internal sibling for `POST /reviews/:reviewId/helpful`. The voter is the
+ * admitted actor, and the review must live in the admitted store — a bearer id
+ * cannot vote as someone else or reach across stores.
+ */
+export const markHelpfulInternal = internalMutation({
+  args: {
+    reviewId: v.id(entity),
+    owner: ownerArg,
+  },
+  handler: async (ctx, args) => {
+    const review = await ctx.db.get("review", args.reviewId);
+    if (!review || review.storeId !== args.owner.storeId) {
+      throw new ReviewOwnershipError("You do not have access to this review.");
+    }
+    return await markReviewHelpfulWithCtx(ctx, {
+      reviewId: args.reviewId,
+      userId: ownerActorId(args.owner),
+    });
   },
 });
 
@@ -715,7 +1104,9 @@ export const getUnapprovedReviewsCount = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getUnapprovedReviewsCountReadDefinition,
+    async (ctx: QueryCtx, args: { storeId: Id<"store"> }) => {
     const { storeId } = args;
 
     const reviews = await ctx.db
@@ -730,5 +1121,6 @@ export const getUnapprovedReviewsCount = query({
       .take(MAX_REVIEWS);
 
     return reviews.length;
-  },
+    },
+  ),
 });

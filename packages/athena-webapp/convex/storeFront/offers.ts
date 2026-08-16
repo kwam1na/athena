@@ -9,7 +9,6 @@ import {
 } from "../_generated/server";
 import { v } from "convex/values";
 import { Id } from "../_generated/dataModel";
-import { api } from "../_generated/api";
 import { internal } from "../_generated/api";
 import { z } from "zod";
 import { QueryCtx } from "../_generated/server";
@@ -18,9 +17,34 @@ import {
   sendDiscountReminderEmail,
 } from "../mailersend";
 import { currencyFormatter, getProductName } from "../utils";
+import { createOfferOperationDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
+import {
+  getOffersByEmailReadDefinition,
+  getOffersByPromoCodeIdReadDefinition,
+  getOffersByStoreIdReadDefinition,
+  getOffersByStorefrontUserIdReadDefinition,
+} from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  assertCustomerOwnsStore,
+  customerOwnerActorId,
+  customerOwnerValidator,
+  denyCustomerOwnership,
+} from "./customerOwnership";
 import { getProductDiscountValue } from "../inventory/utils";
 import { recordStoreFrontCustomerMilestone } from "./helpers/customerEngagementEvents";
 import { toDisplayAmount } from "../lib/currency";
+
+type CreateOfferArgs = {
+  email: string;
+  promoCodeId: Id<"promoCode">;
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">;
+  storeId: Id<"store">;
+  ipAddress?: string;
+};
 
 const entity = "offer" as const;
 const MAX_OFFERS = 500;
@@ -201,14 +225,32 @@ const createOffer = async (
 // Create a new offer
 export const create = mutation({
   args: createArgs,
-  handler: async (ctx, args) => {
-    return await createOffer(ctx, args);
-  },
+  handler: admitPublicMutation(
+    createOfferOperationDefinition,
+    async (ctx, args: CreateOfferArgs) => createOffer(ctx, args),
+  ),
 });
 
+/**
+ * Internal sibling for `POST /offers`. Every id in the body is checked against
+ * the admitted shopper: an offer may only be claimed FOR that shopper, in the
+ * store their claim clamped to, against a promo code that belongs to it.
+ * `owner` is optional only because the pre-existing backend caller
+ * (`sendOfferEmail` reminders) has no shopper claim to propagate.
+ */
 export const createInternal = internalMutation({
-  args: createArgs,
-  handler: async (ctx, args) => {
+  args: { ...createArgs, owner: v.optional(customerOwnerValidator) },
+  handler: async (ctx, { owner, ...args }) => {
+    if (owner) {
+      assertCustomerOwnsStore(owner, args.storeId);
+      if (
+        String(args.storeFrontUserId) !== String(customerOwnerActorId(owner))
+      ) {
+        denyCustomerOwnership();
+      }
+      const promoCode = await ctx.db.get("promoCode", args.promoCodeId);
+      assertCustomerOwnsStore(owner, promoCode?.storeId);
+    }
     return await createOffer(ctx, args);
   },
 });
@@ -634,13 +676,16 @@ export const getByStoreId = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query(entity)
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .order("desc")
-      .take(MAX_OFFERS);
-  },
+  handler: admitPublicQuery(
+    getOffersByStoreIdReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      return await ctx.db
+        .query(entity)
+        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+        .order("desc")
+        .take(MAX_OFFERS);
+    },
+  ),
 });
 
 // Get offers by promo code ID
@@ -648,13 +693,18 @@ export const getByPromoCodeId = query({
   args: {
     promoCodeId: v.id("promoCode"),
   },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query(entity)
-      .withIndex("by_promoCodeId", (q) => q.eq("promoCodeId", args.promoCodeId))
-      .order("desc")
-      .take(MAX_OFFERS);
-  },
+  handler: admitPublicQuery(
+    getOffersByPromoCodeIdReadDefinition,
+    async (ctx, args: { promoCodeId: Id<"promoCode"> }) => {
+      return await ctx.db
+        .query(entity)
+        .withIndex("by_promoCodeId", (q) =>
+          q.eq("promoCodeId", args.promoCodeId),
+        )
+        .order("desc")
+        .take(MAX_OFFERS);
+    },
+  ),
 });
 
 // Get offers by email
@@ -662,13 +712,16 @@ export const getByEmail = query({
   args: {
     email: v.string(),
   },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query(entity)
-      .withIndex("by_email", (q) => q.eq("email", args.email))
-      .order("desc")
-      .take(MAX_OFFERS);
-  },
+  handler: admitPublicQuery(
+    getOffersByEmailReadDefinition,
+    async (ctx, args: { email: string }) => {
+      return await ctx.db
+        .query(entity)
+        .withIndex("by_email", (q) => q.eq("email", args.email))
+        .order("desc")
+        .take(MAX_OFFERS);
+    },
+  ),
 });
 
 // Get offers by storefront user ID
@@ -729,7 +782,12 @@ export const getByStorefrontUserId = query({
       ),
     }),
   ),
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getOffersByStorefrontUserIdReadDefinition,
+    async (
+      ctx,
+      args: { storeFrontUserId: Id<"storeFrontUser"> | Id<"guest"> },
+    ) => {
     const offers = await ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId", (q) =>
@@ -757,6 +815,47 @@ export const getByStorefrontUserId = query({
     }));
 
     return offersWithPromoCodes;
+    },
+  ),
+});
+
+/**
+ * Internal sibling for `GET /offers`. The offers are read for the ADMITTED
+ * shopper id, so the query string cannot select another shopper's offers.
+ */
+export const getByStorefrontUserIdInternal = internalQuery({
+  args: {
+    storeFrontUserId: v.union(v.id("guest"), v.id("storeFrontUser")),
+    owner: customerOwnerValidator,
+  },
+  handler: async (ctx, args) => {
+    if (
+      String(args.storeFrontUserId) !== String(customerOwnerActorId(args.owner))
+    ) {
+      denyCustomerOwnership();
+    }
+
+    const offers = await ctx.db
+      .query(entity)
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", customerOwnerActorId(args.owner)),
+      )
+      .order("desc")
+      .take(MAX_OFFERS);
+
+    const promoCodeIds = [...new Set(offers.map((offer) => offer.promoCodeId))];
+    const promoCodes = await Promise.all(
+      promoCodeIds.map(async (promoCodeId) => {
+        const promoCode = await ctx.db.get("promoCode", promoCodeId);
+        return { id: promoCodeId, data: promoCode };
+      }),
+    );
+    const promoCodeMap = new Map(promoCodes.map((pc) => [pc.id, pc.data]));
+
+    return offers.map((offer) => ({
+      ...offer,
+      promoCode: promoCodeMap.get(offer.promoCodeId) || undefined,
+    }));
   },
 });
 

@@ -12,7 +12,14 @@ import {
   requestManualRestoreOperationDefinition,
   resetBrowserExperienceOperationDefinition,
 } from "../operationAdmission/definitions";
-import { admitPublicMutation } from "../platform/operationAdmission";
+import {
+  getSharedDemoContextReadDefinition,
+  getSharedDemoRegisterBootstrapReadDefinition,
+} from "../operationAdmission/domains/u9_platform_readDefinitions";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import { resolveStoreTimezone } from "../reports/operatingDay";
 import { requireSharedDemoActorWithCtx } from "./actor";
 import {
@@ -105,42 +112,54 @@ type BindRegisterBaselineToTerminalArgs = {
   terminalId: Id<"posTerminal">;
 };
 
+/**
+ * Both reads admit every actor kind on purpose. They are how ANY caller asks
+ * "am I in the demo?", the webapp issues them from ordinary signed-in and
+ * signed-out sessions, and their contract is to answer `null` when no demo
+ * principal is present. Denying a normal or anonymous caller at admission would
+ * turn that `null` into a thrown denial on every ordinary page load, so the
+ * handler's own `requireSharedDemoActorWithCtx` stays the thing that separates
+ * a demo answer from `null`.
+ */
 export const getContext = query({
   args: {},
   returns: contextResult,
-  handler: async (ctx) => {
-    let actor;
-    try {
-      actor = await requireSharedDemoActorWithCtx(ctx);
-    } catch {
-      return null;
-    }
-    const state = await ctx.db
-      .query("sharedDemoRestoreState")
-      .withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId))
-      .unique();
-    if (!state) return null;
-    // Derived from the CRON's schedule, not from the store's timezone: this
-    // value must name the moment the reset actually happens, and the cron
-    // fires at midnight UTC (`crons.ts`). The two coincide today because the
-    // demo store runs `Africa/Accra`, but the schedule is what is promised.
-    const day = 86_400_000;
-    const timezone = await resolveStoreTimezone(ctx, actor.storeId, Date.now());
-    return {
-      baselineVersion: state.baselineVersion,
-      kind: "shared_demo" as const,
-      nextRestoreAt: (Math.floor(Date.now() / day) + 1) * day,
-      restore: {
-        completedAt: state.completedAt,
-        epoch: state.epoch,
-        failureCode: state.failureCode,
-        startedAt: state.startedAt,
-        status: state.status,
-      },
-      storeId: actor.storeId,
-      timezone,
-    };
-  },
+  handler: admitPublicQuery(
+    getSharedDemoContextReadDefinition,
+    async (ctx) => {
+      let actor;
+      try {
+        actor = await requireSharedDemoActorWithCtx(ctx);
+      } catch {
+        return null;
+      }
+      const state = await ctx.db
+        .query("sharedDemoRestoreState")
+        .withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId))
+        .unique();
+      if (!state) return null;
+      // Derived from the CRON's schedule, not from the store's timezone: this
+      // value must name the moment the reset actually happens, and the cron
+      // fires at midnight UTC (`crons.ts`). The two coincide today because the
+      // demo store runs `Africa/Accra`, but the schedule is what is promised.
+      const day = 86_400_000;
+      const timezone = await resolveStoreTimezone(ctx, actor.storeId, Date.now());
+      return {
+        baselineVersion: state.baselineVersion,
+        kind: "shared_demo" as const,
+        nextRestoreAt: (Math.floor(Date.now() / day) + 1) * day,
+        restore: {
+          completedAt: state.completedAt,
+          epoch: state.epoch,
+          failureCode: state.failureCode,
+          startedAt: state.startedAt,
+          status: state.status,
+        },
+        storeId: actor.storeId,
+        timezone,
+      };
+    },
+  ),
 });
 
 export const getRegisterBootstrap = query({
@@ -173,50 +192,53 @@ export const getRegisterBootstrap = query({
       }),
     }),
   ),
-  handler: async (ctx) => {
-    let actor;
-    try {
-      actor = await requireSharedDemoActorWithCtx(ctx);
-    } catch {
-      return null;
-    }
+  handler: admitPublicQuery(
+    getSharedDemoRegisterBootstrapReadDefinition,
+    async (ctx) => {
+      let actor;
+      try {
+        actor = await requireSharedDemoActorWithCtx(ctx);
+      } catch {
+        return null;
+      }
 
-    const [terminals, staffProfiles] = await Promise.all([
-      ctx.db
-        .query("posTerminal")
-        .withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId))
-        .take(50),
-      ctx.db
-        .query("staffProfile")
-        .withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId))
-        .take(50),
-    ]);
-    const records = selectSharedDemoRegisterBootstrapRecords({
-      staffProfiles,
-      storeId: actor.storeId,
-      terminals,
-    });
-    if (!records) return null;
-    const { staffProfile, terminal } = records;
+      const [terminals, staffProfiles] = await Promise.all([
+        ctx.db
+          .query("posTerminal")
+          .withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId))
+          .take(50),
+        ctx.db
+          .query("staffProfile")
+          .withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId))
+          .take(50),
+      ]);
+      const records = selectSharedDemoRegisterBootstrapRecords({
+        staffProfiles,
+        storeId: actor.storeId,
+        terminals,
+      });
+      if (!records) return null;
+      const { staffProfile, terminal } = records;
 
-    return {
-      kind: "shared_demo" as const,
-      storeId: actor.storeId,
-      staff: {
-        activeRoles: ["cashier"],
-        displayName: staffProfile.fullName,
-        staffProfileId: staffProfile._id,
-      },
-      terminal: {
-        _id: terminal._id,
-        displayName: terminal.displayName,
-        loginMode: terminal.loginMode,
-        registerNumber: terminal.registerNumber,
-        status: terminal.status,
-        transactionCapability: terminal.transactionCapability,
-      },
-    };
-  },
+      return {
+        kind: "shared_demo" as const,
+        storeId: actor.storeId,
+        staff: {
+          activeRoles: ["cashier"],
+          displayName: staffProfile.fullName,
+          staffProfileId: staffProfile._id,
+        },
+        terminal: {
+          _id: terminal._id,
+          displayName: terminal.displayName,
+          loginMode: terminal.loginMode,
+          registerNumber: terminal.registerNumber,
+          status: terminal.status,
+          transactionCapability: terminal.transactionCapability,
+        },
+      };
+    },
+  ),
 });
 
 export const requestManualRestore = mutation({

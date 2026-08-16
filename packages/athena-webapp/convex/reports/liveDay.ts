@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 
 import { query } from "../_generated/server";
-import type { Doc } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import type {
   ReportDayMetrics,
   ReportLiveOperatingDay,
@@ -10,6 +10,12 @@ import type {
   ReportSkuDayMetrics,
 } from "../../shared/reportsContract";
 import { requireReportsStoreAccess } from "./access";
+import {
+  getLiveOperatingDayReadDefinition,
+  listLiveSkuStockReadDefinition,
+} from "../operationAdmission/domains/u8_reports_readDefinitions";
+import { admitPublicQuery } from "../platform/operationAdmission";
+import type { OperationQueryCtx } from "../operationAdmission/types";
 
 /**
  * The single open operating day, read straight from the rows a sale writes.
@@ -163,7 +169,12 @@ export const getLiveOperatingDay = query({
       }),
     ),
   }),
-  handler: async (ctx, args): Promise<ReportLiveOperatingDay> => {
+  handler: admitPublicQuery(
+    getLiveOperatingDayReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { operatingDate: string; storeId: Id<"store"> },
+    ): Promise<ReportLiveOperatingDay> => {
     await requireReportsStoreAccess(ctx, args.storeId);
 
     if (!OPERATING_DATE_PATTERN.test(args.operatingDate)) {
@@ -222,7 +233,8 @@ export const getLiveOperatingDay = query({
       operatingDate: args.operatingDate,
       skus,
     };
-  },
+    },
+  ),
 });
 
 /**
@@ -253,18 +265,24 @@ export const listLiveSkuStock = query({
       sku: v.union(v.string(), v.null()),
     }),
   ),
-  handler: async (ctx, args): Promise<ReportLiveSkuStockRow[]> => {
-    await requireReportsStoreAccess(ctx, args.storeId);
+  handler: admitPublicQuery(
+    listLiveSkuStockReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store"> },
+    ): Promise<ReportLiveSkuStockRow[]> => {
+      await requireReportsStoreAccess(ctx, args.storeId);
 
-    const skus = await ctx.db
-      .query("productSku")
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .take(LIVE_STOCK_SKU_LIMIT);
+      const skus = await ctx.db
+        .query("productSku")
+        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+        .take(LIVE_STOCK_SKU_LIMIT);
 
-    return skus.map((sku) => ({
-      identity: toSkuIdentity(sku),
-      productSkuId: String(sku._id),
-      sku: sku.sku?.trim() || null,
-    }));
-  },
+      return skus.map((sku) => ({
+        identity: toSkuIdentity(sku),
+        productSkuId: String(sku._id),
+        sku: sku.sku?.trim() || null,
+      }));
+    },
+  ),
 });

@@ -2,10 +2,28 @@ import {
   internalMutation,
   internalQuery,
   mutation,
+  MutationCtx,
   QueryCtx,
   query,
 } from "../_generated/server";
 import { v } from "convex/values";
+import type { Id } from "../_generated/dataModel";
+import { deleteSavedBagOperationDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
+import {
+  getAllSavedBagsReadDefinition,
+  getSavedBagByIdReadDefinition,
+} from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  assertCustomerOwnsRow,
+  assertCustomerOwnsRowIfPropagated,
+  customerOwnerActorId,
+  customerOwnerValidator,
+  denyCustomerOwnership,
+} from "./customerOwnership";
 
 const entity = "savedBag";
 const MAX_SAVED_BAGS = 500;
@@ -23,17 +41,25 @@ async function listSavedBagItems(
 
 export const getAll = query({
   args: {},
-  handler: async (ctx) => {
+  handler: admitPublicQuery(getAllSavedBagsReadDefinition, async (ctx) => {
     return await ctx.db.query(entity).take(MAX_SAVED_BAGS);
-  },
+  }),
 });
 
 export const create = internalMutation({
   args: {
     storeId: v.id("store"),
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+    owner: v.optional(customerOwnerValidator),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { owner, ...args }) => {
+    // A saved bag may only ever be created for the admitted shopper, in the
+    // store their claim clamped to.
+    assertCustomerOwnsRowIfPropagated(owner, {
+      storeFrontUserId: args.storeFrontUserId,
+      storeId: args.storeId,
+    });
+
     const id = await ctx.db.insert(entity, {
       ...args,
       updatedAt: Date.now(),
@@ -48,12 +74,9 @@ export const create = internalMutation({
   },
 });
 
-export const getById = query({
-  args: {
-    id: v.id(entity),
-  },
-  handler: async (ctx, args) => {
-    const bag = await ctx.db.get("savedBag", args.id);
+async function loadSavedBagById(ctx: QueryCtx, id: Id<"savedBag">) {
+  {
+    const bag = await ctx.db.get("savedBag", id);
     if (!bag) return null;
 
     const items = await listSavedBagItems(ctx, bag._id);
@@ -98,14 +121,45 @@ export const getById = query({
       ...bag,
       items: itemsWithProductDetails,
     };
+  }
+}
+
+export const getById = query({
+  args: {
+    id: v.id(entity),
+  },
+  handler: admitPublicQuery(
+    getSavedBagByIdReadDefinition,
+    async (ctx, args: { id: Id<"savedBag"> }) =>
+      loadSavedBagById(ctx, args.id),
+  ),
+});
+
+export const getByIdInternal = internalQuery({
+  args: {
+    id: v.id(entity),
+    owner: customerOwnerValidator,
+  },
+  handler: async (ctx, args) => {
+    const bag = await ctx.db.get("savedBag", args.id);
+    assertCustomerOwnsRow(args.owner, bag);
+    return await loadSavedBagById(ctx, args.id);
   },
 });
 
 export const getByUserId = internalQuery({
   args: {
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+    owner: v.optional(customerOwnerValidator),
   },
   handler: async (ctx, args) => {
+    if (
+      args.owner &&
+      String(args.storeFrontUserId) !==
+        String(customerOwnerActorId(args.owner))
+    ) {
+      denyCustomerOwnership();
+    }
     const bag = await ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId", (q) =>
@@ -160,21 +214,41 @@ export const getByUserId = internalQuery({
   },
 });
 
+async function deleteSavedBagWithCtx(ctx: MutationCtx, id: Id<"savedBag">) {
+  await ctx.db.delete("savedBag", id);
+
+  const items = await ctx.db
+    .query("savedBagItem")
+    .withIndex("by_savedBagId", (q) => q.eq("savedBagId", id))
+    .take(MAX_SAVED_BAG_ITEMS);
+
+  await Promise.all(
+    items.map((item) => ctx.db.delete("savedBagItem", item._id)),
+  );
+
+  return { message: "Bag and its items deleted" };
+}
+
 export const deleteSavedBag = mutation({
   args: {
     id: v.id(entity),
   },
+  handler: admitPublicMutation(
+    deleteSavedBagOperationDefinition,
+    async (ctx, args: { id: Id<"savedBag"> }) =>
+      deleteSavedBagWithCtx(ctx, args.id),
+  ),
+});
+
+export const deleteSavedBagInternal = internalMutation({
+  args: {
+    id: v.id(entity),
+    owner: customerOwnerValidator,
+  },
   handler: async (ctx, args) => {
-    await ctx.db.delete("savedBag", args.id);
-
-    const items = await ctx.db
-      .query("savedBagItem")
-      .withIndex("by_savedBagId", (q) => q.eq("savedBagId", args.id))
-      .take(MAX_SAVED_BAG_ITEMS);
-
-    await Promise.all(items.map((item) => ctx.db.delete("savedBagItem", item._id)));
-
-    return { message: "Bag and its items deleted" };
+    const bag = await ctx.db.get("savedBag", args.id);
+    assertCustomerOwnsRow(args.owner, bag);
+    return await deleteSavedBagWithCtx(ctx, args.id);
   },
 });
 
@@ -182,8 +256,19 @@ export const updateOwner = internalMutation({
   args: {
     currentOwner: v.id("guest"),
     newOwner: v.id("storeFrontUser"),
+    owner: v.optional(customerOwnerValidator),
   },
   handler: async (ctx, args) => {
+    if (args.owner) {
+      const actorId = String(customerOwnerActorId(args.owner));
+      if (
+        actorId !== String(args.currentOwner) &&
+        actorId !== String(args.newOwner)
+      ) {
+        denyCustomerOwnership();
+      }
+    }
+
     const savedBag = await ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId", (q) =>

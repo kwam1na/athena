@@ -1,12 +1,24 @@
 import { v } from "convex/values";
 
 import { mutation, query } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import {
+  remoteAssistEndSupportSessionOperationDefinition,
+  remoteAssistStartSessionOperationDefinition,
+} from "../operationAdmission/domains/u9_platform_definitions";
+import {
+  getClientByRuntimeReadDefinition,
+  getCurrentSessionByClientReadDefinition,
+} from "../operationAdmission/domains/u9_platform_readDefinitions";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import {
   remoteAssistAccessPolicyValidator,
   remoteAssistCapabilitiesValidator,
@@ -25,6 +37,30 @@ import {
 import type { RemoteAssistSession } from "./application/types";
 import { createRemoteAssistReadRepository } from "./infrastructure/remoteAssistReadRepository";
 import { createRemoteAssistRepository } from "./infrastructure/remoteAssistRepository";
+
+type GetClientByRuntimeArgs = {
+  organizationId: Id<"organization">;
+  runtimeIdentity: string;
+  runtimeType: Doc<"remoteAssistClient">["runtimeType"];
+};
+
+type GetCurrentSessionByClientArgs = {
+  clientId: Id<"remoteAssistClient">;
+};
+
+type StartSessionArgs = {
+  clientId: Id<"remoteAssistClient">;
+  metadata?: Record<string, unknown>;
+  reason: string;
+  requestedMode: Doc<"remoteAssistSession">["requestedMode"];
+  transportProvider?: Doc<"remoteAssistSession">["transportProvider"];
+  transportRoomId?: string;
+};
+
+type EndSupportSessionArgs = {
+  reason: string;
+  sessionId: Id<"remoteAssistSession">;
+};
 
 const remoteAssistClientReturnValidator = v.object({
   _id: v.id("remoteAssistClient"),
@@ -84,18 +120,21 @@ export const getClientByRuntime = query({
     runtimeType: remoteAssistRuntimeTypeValidator,
   },
   returns: v.union(remoteAssistClientReturnValidator, v.null()),
-  handler: async (ctx, args) => {
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You do not have access to view Remote Assist clients.",
-      organizationId: args.organizationId,
-      userId: athenaUser._id,
-    });
+  handler: admitPublicQuery(
+    getClientByRuntimeReadDefinition,
+    async (ctx, args: GetClientByRuntimeArgs) => {
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You do not have access to view Remote Assist clients.",
+        organizationId: args.organizationId,
+        userId: athenaUser._id,
+      });
 
-    const repository = createRemoteAssistReadRepository(ctx);
-    return repository.getClientByRuntime(args);
-  },
+      const repository = createRemoteAssistReadRepository(ctx);
+      return repository.getClientByRuntime(args);
+    },
+  ),
 });
 
 export const getCurrentSessionByClient = query({
@@ -103,26 +142,29 @@ export const getCurrentSessionByClient = query({
     clientId: v.id("remoteAssistClient"),
   },
   returns: v.union(remoteAssistSessionReturnValidator, v.null()),
-  handler: async (ctx, args) => {
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    const repository = createRemoteAssistReadRepository(ctx);
-    const client = await repository.getClient(args.clientId);
-    if (!client) {
-      return null;
-    }
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin"],
-      failureMessage: "You do not have access to view this Remote Assist session.",
-      organizationId: client.organizationId as Id<"organization">,
-      userId: athenaUser._id,
-    });
+  handler: admitPublicQuery(
+    getCurrentSessionByClientReadDefinition,
+    async (ctx, args: GetCurrentSessionByClientArgs) => {
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      const repository = createRemoteAssistReadRepository(ctx);
+      const client = await repository.getClient(args.clientId);
+      if (!client) {
+        return null;
+      }
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin"],
+        failureMessage: "You do not have access to view this Remote Assist session.",
+        organizationId: client.organizationId as Id<"organization">,
+        userId: athenaUser._id,
+      });
 
-    const session = await repository.getCurrentSessionForClient({
-      clientId: args.clientId,
-      now: Date.now(),
-    });
-    return session ? toRemoteAssistSessionReturn(session) : null;
-  },
+      const session = await repository.getCurrentSessionForClient({
+        clientId: args.clientId,
+        now: Date.now(),
+      });
+      return session ? toRemoteAssistSessionReturn(session) : null;
+    },
+  ),
 });
 
 export const startSession = mutation({
@@ -135,43 +177,46 @@ export const startSession = mutation({
     transportRoomId: v.optional(v.string()),
   },
   returns: commandResultValidator(remoteAssistSessionReturnValidator),
-  handler: async (ctx, args) => {
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    const repository = createRemoteAssistRepository(ctx);
-    const client = await repository.getClient(args.clientId);
-    if (!client) {
-      return {
-        kind: "user_error",
-        error: {
-          code: "not_found",
-          message: "Remote Assist client was not found.",
-        },
-      } as const;
-    }
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin"],
-      failureMessage: "You do not have access to start Remote Assist sessions.",
-      organizationId: client.organizationId as Id<"organization">,
-      userId: athenaUser._id,
-    });
-
-    return startRemoteAssistSession(repository, {
-      actor: {
-        organizationId: client.organizationId,
-        remoteAssistAllowed: true,
-        role: "full_admin",
-        storeIds: client.storeId ? [client.storeId] : undefined,
+  handler: admitPublicMutation(
+    remoteAssistStartSessionOperationDefinition,
+    async (ctx, args: StartSessionArgs) => {
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      const repository = createRemoteAssistRepository(ctx);
+      const client = await repository.getClient(args.clientId);
+      if (!client) {
+        return {
+          kind: "user_error",
+          error: {
+            code: "not_found",
+            message: "Remote Assist client was not found.",
+          },
+        } as const;
+      }
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin"],
+        failureMessage: "You do not have access to start Remote Assist sessions.",
+        organizationId: client.organizationId as Id<"organization">,
         userId: athenaUser._id,
-      },
-      clientId: args.clientId,
-      metadata: args.metadata,
-      now: Date.now(),
-      reason: args.reason,
-      requestedMode: args.requestedMode,
-      transportProvider: args.transportProvider,
-      transportRoomId: args.transportRoomId,
-    });
-  },
+      });
+
+      return startRemoteAssistSession(repository, {
+        actor: {
+          organizationId: client.organizationId,
+          remoteAssistAllowed: true,
+          role: "full_admin",
+          storeIds: client.storeId ? [client.storeId] : undefined,
+          userId: athenaUser._id,
+        },
+        clientId: args.clientId,
+        metadata: args.metadata,
+        now: Date.now(),
+        reason: args.reason,
+        requestedMode: args.requestedMode,
+        transportProvider: args.transportProvider,
+        transportRoomId: args.transportRoomId,
+      });
+    },
+  ),
 });
 
 export const endSupportSession = mutation({
@@ -180,32 +225,35 @@ export const endSupportSession = mutation({
     sessionId: v.id("remoteAssistSession"),
   },
   returns: commandResultValidator(remoteAssistSessionReturnValidator),
-  handler: async (ctx, args) => {
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    const repository = createRemoteAssistRepository(ctx);
-    const session = await repository.getSession(args.sessionId);
-    if (!session) {
-      return {
-        kind: "user_error",
-        error: {
-          code: "not_found",
-          message: "Remote Assist session was not found.",
-        },
-      } as const;
-    }
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin"],
-      failureMessage: "You do not have access to end this Remote Assist session.",
-      organizationId: session.organizationId as Id<"organization">,
-      userId: athenaUser._id,
-    });
-    return endRemoteAssistSession(repository, {
-      actorUserId: athenaUser._id,
-      now: Date.now(),
-      reason: args.reason,
-      sessionId: args.sessionId,
-    });
-  },
+  handler: admitPublicMutation(
+    remoteAssistEndSupportSessionOperationDefinition,
+    async (ctx, args: EndSupportSessionArgs) => {
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      const repository = createRemoteAssistRepository(ctx);
+      const session = await repository.getSession(args.sessionId);
+      if (!session) {
+        return {
+          kind: "user_error",
+          error: {
+            code: "not_found",
+            message: "Remote Assist session was not found.",
+          },
+        } as const;
+      }
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin"],
+        failureMessage: "You do not have access to end this Remote Assist session.",
+        organizationId: session.organizationId as Id<"organization">,
+        userId: athenaUser._id,
+      });
+      return endRemoteAssistSession(repository, {
+        actorUserId: athenaUser._id,
+        now: Date.now(),
+        reason: args.reason,
+        sessionId: args.sessionId,
+      });
+    },
+  ),
 });
 
 function toRemoteAssistSessionReturn(session: RemoteAssistSession) {

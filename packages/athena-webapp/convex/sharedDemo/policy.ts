@@ -77,6 +77,11 @@ export const SHARED_DEMO_ALLOWED_READ_INTENTS = [
   // (`sharedDemo/public:getContext`, `:getRegisterBootstrap`) on every demo
   // page; without this grant the demo cannot render at all.
   "demo.context.view",
+  // The webapp's identity probe (`app:getCurrentUser`,
+  // `inventory/athenaUser:getAuthenticatedUser`) runs unconditionally on every
+  // page; the retired `reports.read` auth bridge answered it for the demo
+  // principal, so the intent replaces that bridge rather than widening reach.
+  "identity.view",
   "inventory.catalog.view",
   "online_orders.view",
   "operations.workItems.view",

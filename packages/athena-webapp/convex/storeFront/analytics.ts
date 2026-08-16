@@ -1,6 +1,37 @@
 import { v } from "convex/values";
-import { internalQuery, mutation, query, QueryCtx } from "../_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+  MutationCtx,
+  QueryCtx,
+} from "../_generated/server";
 import { Doc, Id } from "../_generated/dataModel";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  clearAnalyticsOperationDefinition,
+  createAnalyticsEventOperationDefinition,
+  updateAnalyticsOwnerOperationDefinition,
+} from "../operationAdmission/domains/u7_storefrontOperator_definitions";
+import {
+  getAnalyticsByPromoCodeReadDefinition,
+  getAnalyticsEventReadDefinition,
+  getAnalyticsWorkspaceSummaryReadDefinition,
+  getConsolidatedAnalyticsReadDefinition,
+  getEnhancedAnalyticsReadDefinition,
+  getProductViewCountReadDefinition,
+  getRevenueAnalyticsReadDefinition,
+  getStoreActivityTimelineReadDefinition,
+  getStorefrontObservabilityReportReadDefinition,
+  getTopProductsReadDefinition,
+  getVisitorInsightsReadDefinition,
+  listAnalyticsPagedReadDefinition,
+  listAnalyticsReadDefinition,
+} from "../operationAdmission/domains/u7_storefrontOperator_readDefinitions";
 import {
   buildStorefrontObservabilityReport,
   STOREFRONT_OBSERVABILITY_ACTION,
@@ -9,6 +40,40 @@ import { SYNTHETIC_MONITOR_ORIGIN } from "./syntheticMonitor";
 import { requireReportsStoreAccess } from "../reports/access";
 
 const entity = "analytics";
+
+/**
+ * The admitted storefront actor, propagated from an HTTP route into an
+ * internal callee. Internal functions have no `ctx.operationAdmission`, so the
+ * route passes the facts the rail admitted — never anything the client sent.
+ */
+const ownerArg = v.object({
+  guestId: v.optional(v.id("guest")),
+  storeFrontUserId: v.optional(v.id("storeFrontUser")),
+  storeId: v.id("store"),
+});
+
+type AnalyticsOwner = {
+  guestId?: Id<"guest">;
+  storeFrontUserId?: Id<"storeFrontUser">;
+  storeId: Id<"store">;
+};
+
+class AnalyticsOwnershipError extends Error {
+  constructor(message = "You do not have access to this analytics record.") {
+    super(message);
+    this.name = "AnalyticsOwnershipError";
+  }
+}
+
+function ownerActorId(
+  owner: AnalyticsOwner,
+): Id<"storeFrontUser"> | Id<"guest"> {
+  const actorId = owner.storeFrontUserId ?? owner.guestId;
+  if (!actorId) {
+    throw new AnalyticsOwnershipError("Admitted owner carries no shopper id.");
+  }
+  return actorId;
+}
 const MAX_ANALYTICS_RESULTS = 500;
 const MAX_ANALYTICS_MUTATIONS = 1000;
 const MAX_PRODUCT_VIEW_RECORDS = 2000;
@@ -232,6 +297,28 @@ async function getSkuMapForProducts(
   return skuMap;
 }
 
+type CreateAnalyticsArgs = {
+  storeId: Id<"store">;
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">;
+  origin?: string;
+  action: string;
+  data: Record<string, any>;
+  device?: string;
+  productId?: Id<"product">;
+};
+
+async function createAnalyticsWithCtx(
+  ctx: MutationCtx,
+  args: CreateAnalyticsArgs,
+) {
+  const id = await ctx.db.insert(entity, {
+    ...args,
+    promoCodeId: extractPromoCodeId(args.data),
+  });
+
+  return await ctx.db.get("analytics", id);
+}
+
 export const create = mutation({
   args: {
     storeId: v.id("store"),
@@ -242,40 +329,99 @@ export const create = mutation({
     device: v.optional(v.string()),
     productId: v.optional(v.id("product")),
   },
-  handler: async (ctx, args) => {
-    const id = await ctx.db.insert(entity, {
-      ...args,
-      promoCodeId: extractPromoCodeId(args.data),
-    });
+  handler: admitPublicMutation(
+    createAnalyticsEventOperationDefinition,
+    createAnalyticsWithCtx,
+  ),
+});
 
-    return await ctx.db.get("analytics", id);
+/**
+ * Internal sibling for the anonymous `POST /analytics` beacon. The store and
+ * the shopper the event is attributed to come from the admitted actor, so a
+ * caller can no longer write events into another store or under another
+ * shopper's id.
+ */
+export const createInternal = internalMutation({
+  args: {
+    origin: v.optional(v.string()),
+    action: v.string(),
+    data: v.record(v.string(), v.any()),
+    device: v.optional(v.string()),
+    productId: v.optional(v.id("product")),
+    owner: ownerArg,
+  },
+  handler: async (ctx, args) => {
+    const { owner, ...rest } = args;
+    return await createAnalyticsWithCtx(ctx, {
+      ...rest,
+      storeId: owner.storeId,
+      storeFrontUserId: ownerActorId(owner),
+    });
   },
 });
+
+async function updateAnalyticsOwnerWithCtx(
+  ctx: MutationCtx,
+  args: { guestId: Id<"guest">; userId: Id<"storeFrontUser"> },
+) {
+  // Get all analytics records for the guest user
+  const records = await ctx.db
+    .query(entity)
+    .withIndex("by_storeFrontUserId", (q) =>
+      q.eq("storeFrontUserId", args.guestId),
+    )
+    .take(MAX_ANALYTICS_MUTATIONS);
+
+  // Update each record in parallel to associate with the authenticated user
+  await Promise.all(
+    records.map((record) =>
+      ctx.db.patch("analytics", record._id, {
+        storeFrontUserId: args.userId,
+      }),
+    ),
+  );
+
+  return { updated: records.length };
+}
 
 export const updateOwner = mutation({
   args: {
     guestId: v.id("guest"),
     userId: v.id("storeFrontUser"),
   },
+  handler: admitPublicMutation(
+    updateAnalyticsOwnerOperationDefinition,
+    updateAnalyticsOwnerWithCtx,
+  ),
+});
+
+/**
+ * Internal sibling for `POST /analytics/update-owner`. The signed-in shopper
+ * the records move TO is the admitted actor; the guest id being re-owned stays
+ * caller-supplied but must belong to the admitted store.
+ */
+export const updateOwnerInternal = internalMutation({
+  args: {
+    guestId: v.id("guest"),
+    owner: ownerArg,
+  },
   handler: async (ctx, args) => {
-    // Get all analytics records for the guest user
-    const records = await ctx.db
-      .query(entity)
-      .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.guestId),
-      )
-      .take(MAX_ANALYTICS_MUTATIONS);
-
-    // Update each record in parallel to associate with the authenticated user
-    await Promise.all(
-      records.map((record) =>
-        ctx.db.patch("analytics", record._id, {
-          storeFrontUserId: args.userId,
-        }),
-      ),
-    );
-
-    return { updated: records.length };
+    const { owner } = args;
+    if (!owner.storeFrontUserId) {
+      throw new AnalyticsOwnershipError(
+        "Re-owning analytics requires a signed-in shopper.",
+      );
+    }
+    const guest = await ctx.db.get("guest", args.guestId);
+    if (!guest || guest.storeId !== owner.storeId) {
+      throw new AnalyticsOwnershipError(
+        "You do not have access to this guest session.",
+      );
+    }
+    return await updateAnalyticsOwnerWithCtx(ctx, {
+      guestId: args.guestId,
+      userId: owner.storeFrontUserId,
+    });
   },
 });
 
@@ -285,7 +431,16 @@ export const getAll = query({
     action: v.optional(v.string()),
     productId: v.optional(v.id("product")),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    listAnalyticsReadDefinition,
+    async (
+    ctx: QueryCtx,
+    args: {
+      storeId: Id<"store">;
+      action?: string;
+      productId?: Id<"product">;
+    },
+  ) => {
     // TODO: Add pagination
     // if (process.env.STAGE === "prod") {
     //   return await ctx.db
@@ -327,7 +482,8 @@ export const getAll = query({
       .order("desc")
       .take(250);
     // .collect();
-  },
+    },
+  ),
 });
 
 export const getAllInternal = internalQuery({
@@ -376,7 +532,12 @@ export const getWorkspaceSummary = query({
     storeId: v.id("store"),
     currentTimeMs: v.number(),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getAnalyticsWorkspaceSummaryReadDefinition,
+    async (
+    ctx: QueryCtx,
+    args: { storeId: Id<"store">; currentTimeMs: number },
+  ) => {
     await requireReportsStoreAccess(ctx, args.storeId);
     const startOfDay = new Date(args.currentTimeMs).setHours(0, 0, 0, 0);
     const sevenDaysAgo = args.currentTimeMs - 7 * 24 * 60 * 60 * 1000;
@@ -574,7 +735,8 @@ export const getWorkspaceSummary = query({
       topUsers,
       topProducts,
     };
-  },
+    },
+  ),
 });
 
 export const getAllPaginated = query({
@@ -583,7 +745,12 @@ export const getAllPaginated = query({
     cursor: v.union(v.string(), v.null()),
     action: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    listAnalyticsPagedReadDefinition,
+    async (
+    ctx: QueryCtx,
+    args: { storeId: Id<"store">; cursor: string | null; action?: string },
+  ) => {
     const indexedQuery = args.action
       ? ctx.db
           .query(entity)
@@ -610,24 +777,27 @@ export const getAllPaginated = query({
       cursor: continueCursor,
       isDone,
     };
-  },
+    },
+  ),
 });
 
 export const get = query({
   args: {
     id: v.id("analytics"),
   },
-  handler: async (ctx, args) => {
-    return await ctx.db.get("analytics", args.id);
-  },
+  handler: admitPublicQuery(
+    getAnalyticsEventReadDefinition,
+    async (ctx: QueryCtx, args: { id: Id<"analytics"> }) => {
+      return await ctx.db.get("analytics", args.id);
+    },
+  ),
 });
 
-export const getProductViewCount = query({
-  args: {
-    productId: v.id("product"),
-    currentDayStartMs: v.number(),
-  },
-  handler: async (ctx, args) => {
+async function getProductViewCountWithCtx(
+  ctx: QueryCtx,
+  args: { productId: Id<"product">; currentDayStartMs: number },
+) {
+  {
     const [viewedProductRecords, legacyViewProductRecords] = await Promise.all([
       ctx.db
         .query(entity)
@@ -654,21 +824,44 @@ export const getProductViewCount = query({
       daily: dailyRecords.length,
       total: totalRecords.length,
     };
+  }
+}
+
+export const getProductViewCount = query({
+  args: {
+    productId: v.id("product"),
+    currentDayStartMs: v.number(),
   },
+  handler: admitPublicQuery(
+    getProductViewCountReadDefinition,
+    getProductViewCountWithCtx,
+  ),
+});
+
+/** Internal sibling for the anonymous `GET /analytics/product-view-count`. */
+export const getProductViewCountInternal = internalQuery({
+  args: {
+    productId: v.id("product"),
+    currentDayStartMs: v.number(),
+  },
+  handler: getProductViewCountWithCtx,
 });
 
 export const getByPromoCodeId = query({
   args: {
     promoCodeId: v.id("promoCode"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getAnalyticsByPromoCodeReadDefinition,
+    async (ctx: QueryCtx, args: { promoCodeId: Id<"promoCode"> }) => {
     return await ctx.db
       .query(entity)
       .withIndex("by_promoCodeId", (q) => q.eq("promoCodeId", args.promoCodeId))
       .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
       .order("desc")
       .take(MAX_PROMO_CODE_ANALYTICS_RESULTS);
-  },
+    },
+  ),
 });
 
 export const clear = mutation({
@@ -677,7 +870,16 @@ export const clear = mutation({
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
     action: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    clearAnalyticsOperationDefinition,
+    async (
+    ctx: MutationCtx,
+    args: {
+      storeId: Id<"store">;
+      storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">;
+      action?: string;
+    },
+  ) => {
     if (args.action) {
       const records = await ctx.db
         .query(entity)
@@ -714,8 +916,15 @@ export const clear = mutation({
         deleted: records.length,
       };
     }
-  },
+    },
+  ),
 });
+
+type AnalyticsRangeArgs = {
+  storeId: Id<"store">;
+  startDate?: number;
+  endDate?: number;
+};
 
 export const getEnhancedAnalytics = query({
   args: {
@@ -723,7 +932,9 @@ export const getEnhancedAnalytics = query({
     startDate: v.optional(v.number()),
     endDate: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getEnhancedAnalyticsReadDefinition,
+    async (ctx: QueryCtx, args: AnalyticsRangeArgs) => {
     const analytics = await getAnalyticsByStoreQuery(
       ctx,
       args.storeId,
@@ -808,7 +1019,8 @@ export const getEnhancedAnalytics = query({
       deviceBreakdown,
       rawAnalytics: analytics,
     };
-  },
+    },
+  ),
 });
 
 export const getRevenueAnalytics = query({
@@ -817,7 +1029,9 @@ export const getRevenueAnalytics = query({
     startDate: v.optional(v.number()),
     endDate: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getRevenueAnalyticsReadDefinition,
+    async (ctx: QueryCtx, args: AnalyticsRangeArgs) => {
     const orders = await getCompletedOrdersQuery(
       ctx,
       args.storeId,
@@ -850,7 +1064,8 @@ export const getRevenueAnalytics = query({
       averageOrderValue: Math.round(averageOrderValue * 100) / 100,
       revenueByDay,
     };
-  },
+    },
+  ),
 });
 
 export const getTopProducts = query({
@@ -860,7 +1075,9 @@ export const getTopProducts = query({
     endDate: v.optional(v.number()),
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getTopProductsReadDefinition,
+    async (ctx: QueryCtx, args: AnalyticsRangeArgs & { limit?: number }) => {
     const analytics = await getAnalyticsByStoreQuery(
       ctx,
       args.storeId,
@@ -893,7 +1110,8 @@ export const getTopProducts = query({
       .map(([productId, views]) => ({ productId, views }));
 
     return sortedProducts;
-  },
+    },
+  ),
 });
 
 export const getVisitorInsights = query({
@@ -902,7 +1120,9 @@ export const getVisitorInsights = query({
     startDate: v.optional(v.number()),
     endDate: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getVisitorInsightsReadDefinition,
+    async (ctx: QueryCtx, args: AnalyticsRangeArgs) => {
     const currentAnalytics = await getAnalyticsByStoreQuery(
       ctx,
       args.storeId,
@@ -958,7 +1178,8 @@ export const getVisitorInsights = query({
       peakHour: peakHour ? parseInt(peakHour) : null,
       visitorsByHour,
     };
-  },
+    },
+  ),
 });
 
 export const getStoreActivityTimeline = query({
@@ -999,7 +1220,17 @@ export const getStoreActivityTimeline = query({
   //     ),
   //   })
   // ),
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getStoreActivityTimelineReadDefinition,
+    async (
+    ctx: QueryCtx,
+    args: {
+      storeId: Id<"store">;
+      limit?: number;
+      timeRange?: "24h" | "7d" | "30d" | "all";
+      currentTimeMs: number;
+    },
+  ) => {
     const { storeId, limit = 20, timeRange = "24h" } = args;
 
     // Calculate time filter
@@ -1117,7 +1348,8 @@ export const getStoreActivityTimeline = query({
     });
 
     return enrichedAnalytics;
-  },
+    },
+  ),
 });
 
 export const getStorefrontObservabilityReport = query({
@@ -1126,7 +1358,9 @@ export const getStorefrontObservabilityReport = query({
     startDate: v.optional(v.number()),
     endDate: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getStorefrontObservabilityReportReadDefinition,
+    async (ctx: QueryCtx, args: AnalyticsRangeArgs) => {
     const analytics = await getAnalyticsByStoreAndActionQuery(
       ctx,
       args.storeId,
@@ -1139,7 +1373,8 @@ export const getStorefrontObservabilityReport = query({
       .take(MAX_STOREFRONT_OBSERVABILITY_RESULTS);
 
     return buildStorefrontObservabilityReport(analytics);
-  },
+    },
+  ),
 });
 
 export const getConsolidatedAnalytics = query({
@@ -1148,7 +1383,9 @@ export const getConsolidatedAnalytics = query({
     startDate: v.optional(v.number()),
     endDate: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getConsolidatedAnalyticsReadDefinition,
+    async (ctx: QueryCtx, args: AnalyticsRangeArgs) => {
     // OPTIMIZATION: Single query to get all analytics data needed for dashboard
     const analytics = await getAnalyticsByStoreQuery(
       ctx,
@@ -1310,5 +1547,6 @@ export const getConsolidatedAnalytics = query({
       },
       topProducts,
     };
-  },
+    },
+  ),
 });

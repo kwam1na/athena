@@ -41,8 +41,18 @@ function getHandler(definition: unknown) {
 
 describe("storefront refund money contract", () => {
   it("simulates provider refunds for demo actors while preserving order writes", async () => {
+    // The exported handler now opens with the rail's admission mutation, and
+    // the demo flag is read from the admitted actor rather than from the
+    // retired `enforceSharedDemoActionCapability` return value.
     const runMutation = vi
       .fn()
+      .mockResolvedValueOnce({
+        actor: { athenaUserId: "demo-user", kind: "shared_demo" },
+        constraints: { storeId: "demo-store" },
+        decision: { adapter: "shared_demo", outcome: "admitted" },
+        operationId: "storeFront/payment.refundPayment",
+        provenance: {},
+      })
       .mockResolvedValueOnce({
         refundAmount: 2_500,
         reservationId: "reservation-1",
@@ -62,7 +72,8 @@ describe("storefront refund money contract", () => {
 
     expect(result).toEqual(ok({ message: "Refund simulated in the demo." }));
     expect(paystackMock.initiateRefund).not.toHaveBeenCalled();
-    expect(runMutation).toHaveBeenCalledTimes(2);
+    // One admission hop plus the two domain writes the contract already had.
+    expect(runMutation).toHaveBeenCalledTimes(3);
   });
 
   it("accepts representative changed payment action return contracts", () => {

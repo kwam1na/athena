@@ -25,7 +25,22 @@ import {
   type ReportSkuMovementRow,
 } from "../../shared/reportsContract";
 import { requireReportsStoreAccess } from "./access";
-import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+import {
+  ensureMovementRangeOperationDefinition,
+  retryMovementRangeOperationDefinition,
+} from "../operationAdmission/domains/u8_reports_definitions";
+import {
+  getMovementRangeReadDefinition,
+  getMovementRangePageReadDefinition,
+} from "../operationAdmission/domains/u8_reports_readDefinitions";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 import { stableStringHash } from "./fingerprint";
 import { resolveSkuIdentity } from "./queries";
 import {
@@ -490,19 +505,25 @@ export const ensureMovementRange = mutation({
     startDate: v.string(),
     endDate: v.string(),
   },
-  handler: async (ctx, args): Promise<MovementEnsureResult> => {
-    // Generation authority: shared-demo actors are denied server-side
-    // (reporting.generate is not a demo-allowed capability), independent of
-    // any client demo gating; then the full-admin reports gate runs.
-    await requireSharedDemoCapabilityIfApplicable(ctx, "reporting.generate");
-    const { athenaUser } = await requireReportsStoreAccess(ctx, args.storeId);
-    return ensureMovementRangeCore(ctx, {
-      storeId: args.storeId,
-      principalKey: String(athenaUser._id),
-      startDate: args.startDate,
-      endDate: args.endDate,
-    });
-  },
+  // Generation authority: shared-demo actors are denied at admission
+  // (`reporting.generate` is not a demo-allowed capability, so the definition
+  // declares `sharedDemo: "deny"`), independent of any client demo gating;
+  // then the full-admin reports gate runs.
+  handler: admitPublicMutation(
+    ensureMovementRangeOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: { storeId: Id<"store">; startDate: string; endDate: string },
+    ): Promise<MovementEnsureResult> => {
+      const { athenaUser } = await requireReportsStoreAccess(ctx, args.storeId);
+      return ensureMovementRangeCore(ctx, {
+        storeId: args.storeId,
+        principalKey: String(athenaUser._id),
+        startDate: args.startDate,
+        endDate: args.endDate,
+      });
+    },
+  ),
 });
 
 // ---------------------------------------------------------------------------
@@ -512,15 +533,20 @@ export const ensureMovementRange = mutation({
 
 export const retryMovementRange = mutation({
   args: { storeId: v.id("store"), requestKey: v.string() },
-  handler: async (ctx, args): Promise<MovementEnsureResult> => {
-    await requireSharedDemoCapabilityIfApplicable(ctx, "reporting.generate");
-    const { athenaUser } = await requireReportsStoreAccess(ctx, args.storeId);
-    return retryTerminalMovementRequest(ctx, {
-      storeId: args.storeId,
-      requestKey: args.requestKey,
-      principalKey: String(athenaUser._id),
-    });
-  },
+  handler: admitPublicMutation(
+    retryMovementRangeOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: { storeId: Id<"store">; requestKey: string },
+    ): Promise<MovementEnsureResult> => {
+      const { athenaUser } = await requireReportsStoreAccess(ctx, args.storeId);
+      return retryTerminalMovementRequest(ctx, {
+        storeId: args.storeId,
+        requestKey: args.requestKey,
+        principalKey: String(athenaUser._id),
+      });
+    },
+  ),
 });
 
 /**
@@ -684,7 +710,12 @@ function readableMovementHeader(
  */
 export const getMovementRange = query({
   args: { storeId: v.id("store"), requestKey: v.string() },
-  handler: async (ctx, args): Promise<MovementRangeStatus> => {
+  handler: admitPublicQuery(
+    getMovementRangeReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store">; requestKey: string },
+    ): Promise<MovementRangeStatus> => {
     await requireReportsStoreAccess(ctx, args.storeId);
     const row = readableMovementHeader(
       await ctx.db
@@ -702,7 +733,8 @@ export const getMovementRange = query({
       endDate: row.endDate,
       lifecycle: deriveMovementRequestLifecycle(row),
     };
-  },
+    },
+  ),
 });
 
 export type ReportMovementPageRow = ReportSkuMovementRow & { rank: number };
@@ -735,7 +767,12 @@ export const getMovementRangePage = query({
     requestKey: v.string(),
     page: v.number(),
   },
-  handler: async (ctx, args): Promise<MovementRangePage> => {
+  handler: admitPublicQuery(
+    getMovementRangePageReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store">; requestKey: string; page: number },
+    ): Promise<MovementRangePage> => {
     requireValidMovementPage(args.page);
     await requireReportsStoreAccess(ctx, args.storeId);
 
@@ -808,5 +845,6 @@ export const getMovementRangePage = query({
       pageCount,
       rows,
     };
-  },
+    },
+  ),
 });

@@ -685,6 +685,10 @@ const schema = defineSchema({
   featuredItem: defineTable(featuredItemSchema).index("by_storeId", [
     "storeId",
   ]),
+  // `storeId` is the guest's admission clamp — see `schemas/storeFront/guest.ts`
+  // for why the column stays optional while the write path does not, and
+  // `storeFront/guestStoreIdBackfill.ts` for the one-time drain that must run
+  // before the next storefront deploy.
   guest: defineTable(guestSchema)
     .index("by_storeId", ["storeId"])
     .index("by_marker", ["marker"]),

@@ -15,6 +15,13 @@ import { internal } from "../_generated/api";
 import { action, internalAction } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { waiverCandidateSchema } from "../schemas/harnessWaiver";
+import {
+  waiverBeginRegistrationOperationDefinition,
+  waiverCompleteApprovalOperationDefinition,
+  waiverCompleteRegistrationOperationDefinition,
+  waiverGetApprovalOptionsOperationDefinition,
+} from "../operationAdmission/domains/u9_platform_definitions";
+import { admitPublicAction } from "../platform/operationAdmission";
 import { waiverPasskeyConfig } from "./config";
 import {
   type WaiverCandidate,
@@ -58,64 +65,78 @@ export function verificationPolicy(challenge: string, origin: string, rpId: stri
   };
 }
 
+/**
+ * The four ceremony actions are PRE-AUTH: the harness client holds an
+ * enrollment token and the reviewer's approval page holds an opaque approval
+ * token, and neither request carries an Athena session. Their definitions
+ * therefore admit `public`, and the token/challenge checks inside each body
+ * remain the real boundary — admission adds the actor, capability, and
+ * provenance record around them without narrowing who may start a ceremony.
+ */
 export const beginRegistration = action({
   args: { authorizationToken: v.string() },
-  handler: async (ctx, args) => {
-    const authorization = await ctx.runMutation(
-      internal.harnessWaiver.storage.consumeRegistrationAuthorization,
-      { tokenHash: await sha256(args.authorizationToken), now: Date.now() },
-    );
-    const reviewerEmail = authorization.reviewerEmail;
-    const existing = await ctx.runQuery(internal.harnessWaiver.storage.getPasskey, {});
-    if (existing) throw new Error("A waiver passkey is already enrolled.");
-    const config = waiverPasskeyConfig();
-    const options = await generateRegistrationOptions(
-      registrationCeremonyPolicy(reviewerEmail, config.rpId),
-    );
-    await ctx.runMutation(internal.harnessWaiver.storage.saveRegistrationChallenge, {
-      challenge: options.challenge,
-      reviewerEmail,
-      expiresAt: Date.now() + REGISTRATION_TTL_MS,
-    });
-    return options;
-  },
+  handler: admitPublicAction(
+    waiverBeginRegistrationOperationDefinition,
+    async (ctx, args: { authorizationToken: string }) => {
+      const authorization = await ctx.runMutation(
+        internal.harnessWaiver.storage.consumeRegistrationAuthorization,
+        { tokenHash: await sha256(args.authorizationToken), now: Date.now() },
+      );
+      const reviewerEmail = authorization.reviewerEmail;
+      const existing = await ctx.runQuery(internal.harnessWaiver.storage.getPasskey, {});
+      if (existing) throw new Error("A waiver passkey is already enrolled.");
+      const config = waiverPasskeyConfig();
+      const options = await generateRegistrationOptions(
+        registrationCeremonyPolicy(reviewerEmail, config.rpId),
+      );
+      await ctx.runMutation(internal.harnessWaiver.storage.saveRegistrationChallenge, {
+        challenge: options.challenge,
+        reviewerEmail,
+        expiresAt: Date.now() + REGISTRATION_TTL_MS,
+      });
+      return options;
+    },
+  ),
 });
 
 export const completeRegistration = action({
   args: { challenge: v.string(), response: v.any() },
-  handler: async (ctx, args) => {
-    const response = args.response as RegistrationResponseJSON;
-    const registration = await ctx.runQuery(
-      internal.harnessWaiver.storage.getRegistrationChallenge,
-      { challenge: args.challenge },
-    );
-    if (!registration || registration.expiresAt <= Date.now() || registration.consumedAt) {
-      throw new Error("Registration challenge is unavailable.");
-    }
-    const reviewerEmail = registration.reviewerEmail;
-    const config = waiverPasskeyConfig();
-    const verification = await verifyRegistrationResponse({
-      response,
-      ...verificationPolicy(registration.challenge, config.origin, config.rpId),
-    });
-    if (!verification.verified) throw new Error("Passkey registration was not verified.");
-    const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
-    await ctx.runMutation(internal.harnessWaiver.storage.completeRegistration, {
-      challenge: registration.challenge,
-      reviewerEmail,
-      credentialId: credential.id,
-      publicKey: credential.publicKey.buffer.slice(
-        credential.publicKey.byteOffset,
-        credential.publicKey.byteOffset + credential.publicKey.byteLength,
-      ),
-      counter: credential.counter,
-      transports: response.response.transports ?? [],
-      deviceType: credentialDeviceType,
-      backedUp: credentialBackedUp,
-      now: Date.now(),
-    });
-    return { enrolled: true };
-  },
+  handler: admitPublicAction(
+    waiverCompleteRegistrationOperationDefinition,
+    async (ctx, args: { challenge: string; response: unknown }) => {
+      const response = args.response as RegistrationResponseJSON;
+      const registration = await ctx.runQuery(
+        internal.harnessWaiver.storage.getRegistrationChallenge,
+        { challenge: args.challenge },
+      );
+      if (!registration || registration.expiresAt <= Date.now() || registration.consumedAt) {
+        throw new Error("Registration challenge is unavailable.");
+      }
+      const reviewerEmail = registration.reviewerEmail;
+      const config = waiverPasskeyConfig();
+      const verification = await verifyRegistrationResponse({
+        response,
+        ...verificationPolicy(registration.challenge, config.origin, config.rpId),
+      });
+      if (!verification.verified) throw new Error("Passkey registration was not verified.");
+      const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
+      await ctx.runMutation(internal.harnessWaiver.storage.completeRegistration, {
+        challenge: registration.challenge,
+        reviewerEmail,
+        credentialId: credential.id,
+        publicKey: credential.publicKey.buffer.slice(
+          credential.publicKey.byteOffset,
+          credential.publicKey.byteOffset + credential.publicKey.byteLength,
+        ),
+        counter: credential.counter,
+        transports: response.response.transports ?? [],
+        deviceType: credentialDeviceType,
+        backedUp: credentialBackedUp,
+        now: Date.now(),
+      });
+      return { enrolled: true };
+    },
+  ),
 });
 
 export const createApprovalRequest = internalAction({
@@ -159,69 +180,78 @@ export const createApprovalRequest = internalAction({
 
 export const getApprovalOptions = action({
   args: { token: v.string() },
-  handler: async (ctx, args): Promise<{
-    approvalId: Id<"harnessWaiverApproval">;
-    candidate: WaiverCandidate;
-    options: Awaited<ReturnType<typeof generateAuthenticationOptions>>;
-  }> => {
-    const approval: Doc<"harnessWaiverApproval"> | null = await ctx.runQuery(
-      internal.harnessWaiver.storage.getApprovalByTokenHash,
-      { publicTokenHash: await sha256(args.token) },
-    );
-    if (!approval || approval.status !== "pending" || approval.expiresAt <= Date.now()) {
-      throw new Error("Approval request is unavailable.");
-    }
-    const credential: Doc<"harnessWaiverPasskey"> | null = await ctx.runQuery(
-      internal.harnessWaiver.storage.getPasskey,
-      {},
-    );
-    if (!credential) throw new Error("The waiver reviewer passkey is not enrolled.");
-    return {
-      approvalId: approval._id,
-      candidate: approval.candidate,
-      options: await generateAuthenticationOptions({
-        rpID: waiverPasskeyConfig().rpId,
-        challenge: approval.challenge,
-        allowCredentials: [{
-          id: credential.credentialId,
-          transports: credential.transports as AuthenticatorTransportFuture[],
-        }],
-        userVerification: "required",
-      }),
-    };
-  },
+  handler: admitPublicAction(
+    waiverGetApprovalOptionsOperationDefinition,
+    async (
+      ctx,
+      args: { token: string },
+    ): Promise<{
+      approvalId: Id<"harnessWaiverApproval">;
+      candidate: WaiverCandidate;
+      options: Awaited<ReturnType<typeof generateAuthenticationOptions>>;
+    }> => {
+      const approval: Doc<"harnessWaiverApproval"> | null = await ctx.runQuery(
+        internal.harnessWaiver.storage.getApprovalByTokenHash,
+        { publicTokenHash: await sha256(args.token) },
+      );
+      if (!approval || approval.status !== "pending" || approval.expiresAt <= Date.now()) {
+        throw new Error("Approval request is unavailable.");
+      }
+      const credential: Doc<"harnessWaiverPasskey"> | null = await ctx.runQuery(
+        internal.harnessWaiver.storage.getPasskey,
+        {},
+      );
+      if (!credential) throw new Error("The waiver reviewer passkey is not enrolled.");
+      return {
+        approvalId: approval._id,
+        candidate: approval.candidate,
+        options: await generateAuthenticationOptions({
+          rpID: waiverPasskeyConfig().rpId,
+          challenge: approval.challenge,
+          allowCredentials: [{
+            id: credential.credentialId,
+            transports: credential.transports as AuthenticatorTransportFuture[],
+          }],
+          userVerification: "required",
+        }),
+      };
+    },
+  ),
 });
 
 export const completeApproval = action({
   args: { token: v.string(), response: v.any() },
-  handler: async (ctx, args) => {
-    const approval = await ctx.runQuery(internal.harnessWaiver.storage.getApprovalByTokenHash, {
-      publicTokenHash: await sha256(args.token),
-    });
-    if (!approval || approval.status !== "pending" || approval.expiresAt <= Date.now()) {
-      throw new Error("Approval request is unavailable.");
-    }
-    const credential = await ctx.runQuery(internal.harnessWaiver.storage.getPasskey, {});
-    if (!credential) throw new Error("The waiver reviewer passkey is not enrolled.");
-    const config = waiverPasskeyConfig();
-    const verification = await verifyAuthenticationResponse({
-      response: args.response as AuthenticationResponseJSON,
-      ...verificationPolicy(approval.challenge, config.origin, config.rpId),
-      credential: {
-        id: credential.credentialId,
-        publicKey: new Uint8Array(credential.publicKey),
-        counter: credential.counter,
-        transports: credential.transports as AuthenticatorTransportFuture[],
-      },
-    });
-    if (!verification.verified) throw new Error("Passkey approval was not verified.");
-    await ctx.runMutation(internal.harnessWaiver.storage.approve, {
-      approvalId: approval._id as Id<"harnessWaiverApproval">,
-      credentialId: credential.credentialId,
-      newCounter: verification.authenticationInfo.newCounter,
-      approvedAt: Date.now(),
-      consumeExpiresAt: Date.now() + APPROVED_CONSUMPTION_TTL_MS,
-    });
-    return { approved: true };
-  },
+  handler: admitPublicAction(
+    waiverCompleteApprovalOperationDefinition,
+    async (ctx, args: { token: string; response: unknown }) => {
+      const approval = await ctx.runQuery(internal.harnessWaiver.storage.getApprovalByTokenHash, {
+        publicTokenHash: await sha256(args.token),
+      });
+      if (!approval || approval.status !== "pending" || approval.expiresAt <= Date.now()) {
+        throw new Error("Approval request is unavailable.");
+      }
+      const credential = await ctx.runQuery(internal.harnessWaiver.storage.getPasskey, {});
+      if (!credential) throw new Error("The waiver reviewer passkey is not enrolled.");
+      const config = waiverPasskeyConfig();
+      const verification = await verifyAuthenticationResponse({
+        response: args.response as AuthenticationResponseJSON,
+        ...verificationPolicy(approval.challenge, config.origin, config.rpId),
+        credential: {
+          id: credential.credentialId,
+          publicKey: new Uint8Array(credential.publicKey),
+          counter: credential.counter,
+          transports: credential.transports as AuthenticatorTransportFuture[],
+        },
+      });
+      if (!verification.verified) throw new Error("Passkey approval was not verified.");
+      await ctx.runMutation(internal.harnessWaiver.storage.approve, {
+        approvalId: approval._id as Id<"harnessWaiverApproval">,
+        credentialId: credential.credentialId,
+        newCounter: verification.authenticationInfo.newCounter,
+        approvedAt: Date.now(),
+        consumeExpiresAt: Date.now() + APPROVED_CONSUMPTION_TTL_MS,
+      });
+      return { approved: true };
+    },
+  ),
 });

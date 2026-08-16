@@ -1,16 +1,28 @@
 import { v } from "convex/values";
 
-import { mutation } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 import { patchRegisterSessionWithAuthority } from "./operations/registerSessionAuthorityRevision";
-import { requireAuthenticatedAthenaUserWithCtx } from "./lib/athenaUserAuth";
 
-export const patchBadTransaction = mutation({
+/**
+ * One-off repair tool, now `internalMutation`.
+ *
+ * It had no caller: nothing in the webapp, the POS client, `convex/**`, or the
+ * repo scripts referenced `devPatchBadTransaction:patchBadTransaction`, and it
+ * is invoked by hand against a deployment. Rather than admit an operator-only
+ * repair as public ingress, the export is internalized — the boundary becomes
+ * "only a deployment operator or another backend function can call it", which
+ * is strictly narrower than any admission policy could be. The retired
+ * `requireAuthenticatedAthenaUserWithCtx` guard is subsumed by that: an
+ * internal function is not reachable from a client at all. (Had a caller
+ * existed, the plan's alternative was `administration.maintenance`, which is
+ * the capability the catalog already names for this module.)
+ */
+export const patchBadTransaction = internalMutation({
   args: {
     transactionId: v.id("posTransaction"),
     expectedTransactionNumber: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireAuthenticatedAthenaUserWithCtx(ctx);
     const transaction = await ctx.db.get("posTransaction", args.transactionId);
     if (!transaction) {
       throw new Error("Transaction not found");

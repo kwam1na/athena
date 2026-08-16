@@ -2,22 +2,27 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { OperationMutationCtx } from "../operationAdmission/types";
-import type { AthenaCapability } from "../platform/capabilityCatalog";
-import { getSharedDemoActorWithCtx } from "../sharedDemo/actor";
 import { AthenaUnauthenticatedError } from "./athenaUnauthenticated";
 
 export { AthenaUnauthenticatedError };
+
+/**
+ * Generic Athena-user authentication.
+ *
+ * This module is deliberately shared-demo-UNAWARE. A demo principal reaches an
+ * Athena identity through the operation admission rail — the shared-demo
+ * adapter admits it and publishes `ctx.operationAdmission.actor` — never
+ * through a capability option threaded down from a handler. The old
+ * `{ sharedDemoCapability: "reports.read" }` bridge (and the allowlist that
+ * decided which capabilities it honoured) is gone with U8: reads that a demo
+ * visitor may perform are declared on read definitions and enforced by the
+ * rail, so no caller can re-open a demo identity path by passing an argument.
+ */
 
 type AthenaAuthCtx =
   | Pick<QueryCtx, "auth" | "db">
   | Pick<MutationCtx, "auth" | "db">;
 type OrganizationMemberRole = "full_admin" | "pos_only";
-type AthenaUserAuthOptions = { sharedDemoCapability: AthenaCapability };
-type AthenaUserAuthReadCapability = "reports.read";
-
-const SHARED_DEMO_ATHENA_USER_READ_CAPABILITIES = new Set<AthenaCapability>([
-  "reports.read",
-]);
 
 export function normalizeAthenaUserEmail(email: string) {
   return email.trim().toLowerCase();
@@ -106,12 +111,6 @@ async function getAuthenticatedUserRecord(ctx: AthenaAuthCtx) {
   };
 }
 
-function isSharedDemoAthenaUserReadCapability(
-  capability: AthenaCapability,
-): capability is AthenaUserAuthReadCapability {
-  return SHARED_DEMO_ATHENA_USER_READ_CAPABILITIES.has(capability);
-}
-
 function getOperationAdmissionActorUserId(ctx: AthenaAuthCtx) {
   const actor = (ctx as Partial<OperationMutationCtx>).operationAdmission?.actor;
   if (!actor) return undefined;
@@ -134,24 +133,12 @@ function getOperationAdmissionActorUserId(ctx: AthenaAuthCtx) {
   }
 }
 
-export async function getAuthenticatedAthenaUserWithCtx(
-  ctx: AthenaAuthCtx,
-  options?: AthenaUserAuthOptions,
-) {
+export async function getAuthenticatedAthenaUserWithCtx(ctx: AthenaAuthCtx) {
   const admittedUserId = getOperationAdmissionActorUserId(ctx);
   if (admittedUserId) {
     return ctx.db.get("athenaUser", admittedUserId);
   }
 
-  if (
-    options &&
-    isSharedDemoAthenaUserReadCapability(options.sharedDemoCapability)
-  ) {
-    const demoActor = await getSharedDemoActorWithCtx(ctx);
-    if (demoActor) {
-      return ctx.db.get("athenaUser", demoActor.athenaUserId);
-    }
-  }
   const authUserRecord = await getAuthenticatedUserRecord(ctx);
 
   if (!authUserRecord) {
@@ -163,9 +150,8 @@ export async function getAuthenticatedAthenaUserWithCtx(
 
 export async function requireAuthenticatedAthenaUserWithCtx(
   ctx: AthenaAuthCtx,
-  options?: AthenaUserAuthOptions,
 ) {
-  const athenaUser = await getAuthenticatedAthenaUserWithCtx(ctx, options);
+  const athenaUser = await getAuthenticatedAthenaUserWithCtx(ctx);
 
   if (!athenaUser) {
     throw new AthenaUnauthenticatedError();
@@ -176,7 +162,6 @@ export async function requireAuthenticatedAthenaUserWithCtx(
 
 export async function requireAuthenticatedAthenaUserIndexedWithCtx(
   ctx: AthenaAuthCtx,
-  options?: AthenaUserAuthOptions,
 ) {
   const admittedUserId = getOperationAdmissionActorUserId(ctx);
   if (admittedUserId) {
@@ -185,17 +170,6 @@ export async function requireAuthenticatedAthenaUserIndexedWithCtx(
     return athenaUser;
   }
 
-  if (
-    options &&
-    isSharedDemoAthenaUserReadCapability(options.sharedDemoCapability)
-  ) {
-    const demoActor = await getSharedDemoActorWithCtx(ctx);
-    if (demoActor) {
-      const athenaUser = await ctx.db.get("athenaUser", demoActor.athenaUserId);
-      if (!athenaUser) throw new AthenaUnauthenticatedError();
-      return athenaUser;
-    }
-  }
   const authUserRecord = await getAuthenticatedUserRecord(ctx);
 
   if (!authUserRecord) {

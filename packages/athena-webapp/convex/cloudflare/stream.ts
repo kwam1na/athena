@@ -1,11 +1,49 @@
 import { action } from "../_generated/server";
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
 import { normalizeStoreConfig } from "../inventory/storeConfigV2";
+import {
+  streamAddStreamReelVersionOperationDefinition,
+  streamDeleteStreamReelVersionOperationDefinition,
+  streamDeleteVideoOperationDefinition,
+  streamGetDirectUploadUrlOperationDefinition,
+  streamGetVideoStatusOperationDefinition,
+  streamSetActiveStreamReelOperationDefinition,
+} from "../operationAdmission/domains/u9_platform_definitions";
+import { admitPublicAction } from "../platform/operationAdmission";
 
 const CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4";
-const requireAuthenticatedNonDemoEffectRef =
-  (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect;
+
+type GetDirectUploadUrlArgs = { maxDurationSeconds?: number };
+type GetVideoStatusArgs = { streamUid: string };
+type DeleteVideoArgs = { streamUid: string };
+type AddStreamReelVersionArgs = {
+  hlsUrl: string;
+  storeId: Id<"store">;
+  streamUid: string;
+  thumbnailUrl?: string;
+};
+type DeleteStreamReelVersionArgs = { storeId: Id<"store">; version: number };
+type SetActiveStreamReelArgs = {
+  hlsUrl: string;
+  storeId: Id<"store">;
+  version: number;
+};
+
+/**
+ * Admission successor for the retired per-handler
+ * `requireAuthenticatedNonDemoEffect` internal query.
+ *
+ * Every action in this module used to open with
+ * `ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {})`. That single guard
+ * said two things, and the definitions now say both explicitly: an
+ * authenticated Athena user only (`normalUser: "admit"`, `public: "deny"`) and
+ * never a demo principal (`sharedDemo: "deny"`, reinforced by the declared
+ * `integration.dispatch` gateway, which a demo actor may not dispatch). The
+ * check now runs in the admission mutation before the handler body, so a denied
+ * caller never reaches the Cloudflare API at all.
+ */
 
 function getCloudflareConfig() {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -29,38 +67,40 @@ export const getDirectUploadUrl = action({
   args: {
     maxDurationSeconds: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
-    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
-    const { accountId, apiToken } = getCloudflareConfig();
-    const maxDuration = args.maxDurationSeconds || 300; // 5 min default
+  handler: admitPublicAction(
+    streamGetDirectUploadUrlOperationDefinition,
+    async (ctx, args: GetDirectUploadUrlArgs) => {
+      const { accountId, apiToken } = getCloudflareConfig();
+      const maxDuration = args.maxDurationSeconds || 300; // 5 min default
 
-    const response = await fetch(
-      `${CLOUDFLARE_API_BASE}/accounts/${accountId}/stream/direct_upload`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiToken}`,
-          "Content-Type": "application/json",
+      const response = await fetch(
+        `${CLOUDFLARE_API_BASE}/accounts/${accountId}/stream/direct_upload`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            maxDurationSeconds: maxDuration,
+            requireSignedURLs: false,
+          }),
         },
-        body: JSON.stringify({
-          maxDurationSeconds: maxDuration,
-          requireSignedURLs: false,
-        }),
-      },
-    );
+      );
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to get upload URL: ${error}`);
-    }
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Failed to get upload URL: ${error}`);
+      }
 
-    const data = await response.json();
+      const data = await response.json();
 
-    return {
-      uploadUrl: data.result.uploadURL as string,
-      streamUid: data.result.uid as string,
-    };
-  },
+      return {
+        uploadUrl: data.result.uploadURL as string,
+        streamUid: data.result.uid as string,
+      };
+    },
+  ),
 });
 
 /**
@@ -71,37 +111,39 @@ export const getVideoStatus = action({
   args: {
     streamUid: v.string(),
   },
-  handler: async (ctx, args) => {
-    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
-    const { accountId, apiToken } = getCloudflareConfig();
+  handler: admitPublicAction(
+    streamGetVideoStatusOperationDefinition,
+    async (ctx, args: GetVideoStatusArgs) => {
+      const { accountId, apiToken } = getCloudflareConfig();
 
-    const response = await fetch(
-      `${CLOUDFLARE_API_BASE}/accounts/${accountId}/stream/${args.streamUid}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${apiToken}`,
+      const response = await fetch(
+        `${CLOUDFLARE_API_BASE}/accounts/${accountId}/stream/${args.streamUid}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${apiToken}`,
+          },
         },
-      },
-    );
+      );
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to get video status: ${error}`);
-    }
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Failed to get video status: ${error}`);
+      }
 
-    const data = await response.json();
-    const video = data.result;
+      const data = await response.json();
+      const video = data.result;
 
-    return {
-      uid: video.uid as string,
-      status: video.status as { state: string; pctComplete?: string },
-      readyToStream: video.readyToStream as boolean,
-      playback: video.playback as { hls: string; dash: string } | undefined,
-      duration: video.duration as number | undefined,
-      thumbnail: video.thumbnail as string | undefined,
-    };
-  },
+      return {
+        uid: video.uid as string,
+        status: video.status as { state: string; pctComplete?: string },
+        readyToStream: video.readyToStream as boolean,
+        playback: video.playback as { hls: string; dash: string } | undefined,
+        duration: video.duration as number | undefined,
+        thumbnail: video.thumbnail as string | undefined,
+      };
+    },
+  ),
 });
 
 /**
@@ -111,27 +153,29 @@ export const deleteVideo = action({
   args: {
     streamUid: v.string(),
   },
-  handler: async (ctx, args) => {
-    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
-    const { accountId, apiToken } = getCloudflareConfig();
+  handler: admitPublicAction(
+    streamDeleteVideoOperationDefinition,
+    async (ctx, args: DeleteVideoArgs) => {
+      const { accountId, apiToken } = getCloudflareConfig();
 
-    const response = await fetch(
-      `${CLOUDFLARE_API_BASE}/accounts/${accountId}/stream/${args.streamUid}`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${apiToken}`,
+      const response = await fetch(
+        `${CLOUDFLARE_API_BASE}/accounts/${accountId}/stream/${args.streamUid}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${apiToken}`,
+          },
         },
-      },
-    );
+      );
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to delete video: ${error}`);
-    }
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Failed to delete video: ${error}`);
+      }
 
-    return { success: true };
-  },
+      return { success: true };
+    },
+  ),
 });
 
 /**
@@ -145,48 +189,50 @@ export const addStreamReelVersion = action({
     hlsUrl: v.string(),
     thumbnailUrl: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<{ success: true; version: number }> => {
-    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
-    const store: any = await ctx.runQuery(internal.inventory.stores.findById, {
-      id: args.storeId,
-    });
+  handler: admitPublicAction(
+    streamAddStreamReelVersionOperationDefinition,
+    async (ctx, args: AddStreamReelVersionArgs): Promise<{ success: true; version: number }> => {
+      const store: any = await ctx.runQuery(internal.inventory.stores.findById, {
+        id: args.storeId,
+      });
 
-    if (!store) {
-      throw new Error("Store not found");
-    }
+      if (!store) {
+        throw new Error("Store not found");
+      }
 
-    const normalizedConfig = normalizeStoreConfig(store.config);
-    const existingReels: any[] = normalizedConfig.media.reels.streamReels || [];
+      const normalizedConfig = normalizeStoreConfig(store.config);
+      const existingReels: any[] = normalizedConfig.media.reels.streamReels || [];
 
-    // Auto-increment version
-    const maxVersion: number = existingReels.reduce(
-      (max: number, reel: { version: number }) => Math.max(max, reel.version),
-      0,
-    );
-    const newVersion: number = maxVersion + 1;
+      // Auto-increment version
+      const maxVersion: number = existingReels.reduce(
+        (max: number, reel: { version: number }) => Math.max(max, reel.version),
+        0,
+      );
+      const newVersion: number = maxVersion + 1;
 
-    const newReel = {
-      version: newVersion,
-      source: "stream" as const,
-      streamUid: args.streamUid,
-      hlsUrl: args.hlsUrl,
-      thumbnailUrl: args.thumbnailUrl,
-      createdAt: Date.now(),
-    };
+      const newReel = {
+        version: newVersion,
+        source: "stream" as const,
+        streamUid: args.streamUid,
+        hlsUrl: args.hlsUrl,
+        thumbnailUrl: args.thumbnailUrl,
+        createdAt: Date.now(),
+      };
 
-    await ctx.runMutation(internal.inventory.stores.patchConfigV2Internal, {
-      id: args.storeId,
-      patch: {
-        media: {
-          reels: {
-            streamReels: [...existingReels, newReel],
+      await ctx.runMutation(internal.inventory.stores.patchConfigV2Internal, {
+        id: args.storeId,
+        patch: {
+          media: {
+            reels: {
+              streamReels: [...existingReels, newReel],
+            },
           },
         },
-      },
-    });
+      });
 
-    return { success: true, version: newVersion };
-  },
+      return { success: true, version: newVersion };
+    },
+  ),
 });
 
 /**
@@ -197,65 +243,67 @@ export const deleteStreamReelVersion = action({
     storeId: v.id("store"),
     version: v.number(),
   },
-  handler: async (ctx, args): Promise<{ success: true }> => {
-    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
-    const store: any = await ctx.runQuery(internal.inventory.stores.findById, {
-      id: args.storeId,
-    });
+  handler: admitPublicAction(
+    streamDeleteStreamReelVersionOperationDefinition,
+    async (ctx, args: DeleteStreamReelVersionArgs): Promise<{ success: true }> => {
+      const store: any = await ctx.runQuery(internal.inventory.stores.findById, {
+        id: args.storeId,
+      });
 
-    if (!store) {
-      throw new Error("Store not found");
-    }
+      if (!store) {
+        throw new Error("Store not found");
+      }
 
-    const normalizedConfig = normalizeStoreConfig(store.config);
-    const existingReels: any[] = normalizedConfig.media.reels.streamReels || [];
-    const reelToDelete = existingReels.find(
-      (r: { version: number }) => r.version === args.version,
-    );
+      const normalizedConfig = normalizeStoreConfig(store.config);
+      const existingReels: any[] = normalizedConfig.media.reels.streamReels || [];
+      const reelToDelete = existingReels.find(
+        (r: { version: number }) => r.version === args.version,
+      );
 
-    if (!reelToDelete) {
-      throw new Error("Reel version not found");
-    }
+      if (!reelToDelete) {
+        throw new Error("Reel version not found");
+      }
 
-    // Delete from Cloudflare Stream
-    if (reelToDelete.streamUid) {
-      const { accountId, apiToken } = getCloudflareConfig();
-      await fetch(
-        `${CLOUDFLARE_API_BASE}/accounts/${accountId}/stream/${reelToDelete.streamUid}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${apiToken}`,
+      // Delete from Cloudflare Stream
+      if (reelToDelete.streamUid) {
+        const { accountId, apiToken } = getCloudflareConfig();
+        await fetch(
+          `${CLOUDFLARE_API_BASE}/accounts/${accountId}/stream/${reelToDelete.streamUid}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${apiToken}`,
+            },
+          },
+        );
+      }
+
+      // Remove from store config
+      const updatedReels = existingReels.filter(
+        (r: { version: number }) => r.version !== args.version,
+      );
+
+      // If the deleted version was active, clear it
+      const patch: Record<string, any> = {
+        media: {
+          reels: {
+            streamReels: updatedReels,
           },
         },
-      );
-    }
+      };
+      if (normalizedConfig.media.reels.activeVersion === args.version) {
+        patch.media.reels.activeVersion = null;
+        patch.media.reels.activeHlsUrl = null;
+      }
 
-    // Remove from store config
-    const updatedReels = existingReels.filter(
-      (r: { version: number }) => r.version !== args.version,
-    );
+      await ctx.runMutation(internal.inventory.stores.patchConfigV2Internal, {
+        id: args.storeId,
+        patch,
+      });
 
-    // If the deleted version was active, clear it
-    const patch: Record<string, any> = {
-      media: {
-        reels: {
-          streamReels: updatedReels,
-        },
-      },
-    };
-    if (normalizedConfig.media.reels.activeVersion === args.version) {
-      patch.media.reels.activeVersion = null;
-      patch.media.reels.activeHlsUrl = null;
-    }
-
-    await ctx.runMutation(internal.inventory.stores.patchConfigV2Internal, {
-      id: args.storeId,
-      patch,
-    });
-
-    return { success: true };
-  },
+      return { success: true };
+    },
+  ),
 });
 
 /**
@@ -267,38 +315,40 @@ export const setActiveStreamReel = action({
     version: v.number(),
     hlsUrl: v.string(),
   },
-  handler: async (ctx, args): Promise<{ success: true }> => {
-    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
-    const store: any = await ctx.runQuery(internal.inventory.stores.findById, {
-      id: args.storeId,
-    });
+  handler: admitPublicAction(
+    streamSetActiveStreamReelOperationDefinition,
+    async (ctx, args: SetActiveStreamReelArgs): Promise<{ success: true }> => {
+      const store: any = await ctx.runQuery(internal.inventory.stores.findById, {
+        id: args.storeId,
+      });
 
-    if (!store) {
-      throw new Error("Store not found");
-    }
+      if (!store) {
+        throw new Error("Store not found");
+      }
 
-    const normalizedConfig = normalizeStoreConfig(store.config);
-    const existingReels: any[] = normalizedConfig.media.reels.streamReels || [];
-    const reel = existingReels.find(
-      (r: { version: number }) => r.version === args.version,
-    );
+      const normalizedConfig = normalizeStoreConfig(store.config);
+      const existingReels: any[] = normalizedConfig.media.reels.streamReels || [];
+      const reel = existingReels.find(
+        (r: { version: number }) => r.version === args.version,
+      );
 
-    if (!reel) {
-      throw new Error("Reel version not found");
-    }
+      if (!reel) {
+        throw new Error("Reel version not found");
+      }
 
-    await ctx.runMutation(internal.inventory.stores.patchConfigV2Internal, {
-      id: args.storeId,
-      patch: {
-        media: {
-          reels: {
-            activeVersion: args.version,
-            activeHlsUrl: args.hlsUrl,
+      await ctx.runMutation(internal.inventory.stores.patchConfigV2Internal, {
+        id: args.storeId,
+        patch: {
+          media: {
+            reels: {
+              activeVersion: args.version,
+              activeHlsUrl: args.hlsUrl,
+            },
           },
         },
-      },
-    });
+      });
 
-    return { success: true };
-  },
+      return { success: true };
+    },
+  ),
 });
