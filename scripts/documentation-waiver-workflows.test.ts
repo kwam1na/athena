@@ -20,9 +20,21 @@ describe("documentation waiver workflow trust chain", () => {
     expect(request).toContain("Passkey approval timed out");
     expect(request).toContain("Create iPhone passkey approval request");
     expect(request).toContain("Wait for iPhone passkey approval");
-    expect(request.indexOf("GITHUB_STEP_SUMMARY")).toBeLessThan(
-      request.indexOf("Wait for iPhone passkey approval"),
+    expect(request).toContain("create-approval-request:");
+    expect(request).toContain("needs: create-approval-request");
+    expect(request).toContain("actions/download-artifact@v4");
+    const runScopedArtifact = "athena-passkey-approval-request-${{ github.run_id }}";
+    expect(request.split(runScopedArtifact)).toHaveLength(3);
+    expect(request).not.toContain("github.run_attempt");
+    const producerJob = request.slice(
+      request.indexOf("create-approval-request:"),
+      request.indexOf("relay-request:"),
     );
+    const relayJob = request.slice(request.indexOf("relay-request:"));
+    expect(producerJob).toContain("GITHUB_STEP_SUMMARY");
+    expect(producerJob).toContain("overwrite: true");
+    expect(producerJob).not.toContain("Wait for iPhone passkey approval");
+    expect(relayJob).toContain("Wait for iPhone passkey approval");
     expect(request).toContain("relay_run_id: String(context.runId)");
     expect(request).toContain("group: documentation-waiver-request-${{ inputs.head_sha }}");
     expect(issuer).toContain("group: documentation-waiver-issuer-${{ inputs.head_sha }}");

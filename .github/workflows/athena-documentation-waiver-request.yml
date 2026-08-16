@@ -23,10 +23,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  relay-request:
-    name: Relay waiver request as repository automation
+  create-approval-request:
+    name: Create passkey approval request
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
     steps:
       - name: Create iPhone passkey approval request
         env:
@@ -66,6 +66,26 @@ jobs:
             echo
             echo "[Approve this exact candidate with Face ID]($approval_url)"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish passkey approval request
+        uses: actions/upload-artifact@v4
+        with:
+          name: athena-passkey-approval-request-${{ github.run_id }}
+          path: passkey-request.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 1
+
+  relay-request:
+    name: Relay waiver request as repository automation
+    needs: create-approval-request
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download passkey approval request
+        uses: actions/download-artifact@v4
+        with:
+          name: athena-passkey-approval-request-${{ github.run_id }}
 
       - name: Wait for iPhone passkey approval
         env:
