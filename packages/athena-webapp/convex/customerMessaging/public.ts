@@ -2,21 +2,12 @@ import { v } from "convex/values";
 
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
-import {
-  action,
-  internalQuery,
-  query,
-  type QueryCtx,
-} from "../_generated/server";
+import { action, internalQuery, type QueryCtx } from "../_generated/server";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
 import { getTransactionById as getTransactionByIdQuery } from "../pos/application/queries/getTransactions";
-import {
-  admitPublicAction,
-  admitPublicQuery,
-} from "../platform/operationAdmission";
+import { admitPublicAction } from "../platform/operationAdmission";
 import { sendPosReceiptLinkOperationDefinition } from "../operationAdmission/domains/u5_operations_definitions";
-import { getReceiptByShareTokenReadDefinition } from "../operationAdmission/domains/u5_operations_readDefinitions";
 import { buildReceiptShareUrl, getWhatsAppReceiptConfig } from "./whatsappConfig";
 import { sendWhatsAppReceiptTemplate } from "./whatsappClient";
 import { maskReceiptPhone, normalizeReceiptPhone } from "./domain";
@@ -121,19 +112,8 @@ async function readReceiptByShareTokenWithCtx(
   return transaction ? toPublicReceiptTransaction(transaction) : null;
 }
 
-export const getReceiptByShareToken = query({
-  args: {
-    token: v.string(),
-  },
-  handler: admitPublicQuery(
-    getReceiptByShareTokenReadDefinition,
-    async (ctx, args: { token: string }) =>
-      readReceiptByShareTokenWithCtx(ctx, args),
-  ),
-});
-
 /**
- * Internal sibling of `getReceiptByShareToken`, added ahead of the HTTP
+ * Internal sibling of the retired public `getReceiptByShareToken`, added ahead of the HTTP
  * receipt route being flipped off `api.*`. Identical arguments and identical
  * behaviour — the share token is still the whole authorization.
  */

@@ -48,35 +48,6 @@ function resolveStoreFromRow(
   };
 }
 
-/**
- * The storefront identity columns are a union of two tables, so the store has
- * to be derived by normalizing the id rather than by guessing a table. An id
- * that belongs to neither resolves to "no constraint" — admission then denies
- * on the actor rather than admitting an unclamped write.
- */
-function resolveStoreFromStorefrontActor(
-  idArg: string,
-): OperationScopeResolver {
-  return async (ctx, args) => {
-    const id = args[idArg];
-    if (typeof id !== "string") return {};
-
-    const storeFrontUserId = ctx.db.normalizeId("storeFrontUser", id);
-    if (storeFrontUserId) {
-      const user = await ctx.db.get("storeFrontUser", storeFrontUserId);
-      return user?.storeId ? { storeId: user.storeId } : {};
-    }
-
-    const guestId = ctx.db.normalizeId("guest", id);
-    if (!guestId) return {};
-    const guest = await ctx.db.get("guest", guestId);
-    // A guest row with no store cannot clamp anything. It is left unresolved
-    // rather than defaulted — the same contract the storefront adapter applies
-    // to a claim cookie, and the reason the U6 backfill never invents a store.
-    return guest?.storeId ? { storeId: guest.storeId } : {};
-  };
-}
-
 /** onlineOrder resolved by its Paystack transaction id (refund path). */
 const resolveStoreFromExternalTransaction: OperationScopeResolver = async (
   ctx,
@@ -88,22 +59,6 @@ const resolveStoreFromExternalTransaction: OperationScopeResolver = async (
     .query("onlineOrder")
     .withIndex("by_externalTransactionId", (q) =>
       q.eq("externalTransactionId", externalTransactionId),
-    )
-    .first();
-  return order ? { storeId: order.storeId as Id<"store"> } : {};
-};
-
-/** onlineOrder resolved by its Paystack reference (verification path). */
-const resolveStoreFromExternalReference: OperationScopeResolver = async (
-  ctx,
-  args,
-) => {
-  const externalReference = args.externalReference;
-  if (typeof externalReference !== "string") return {};
-  const order = await ctx.db
-    .query("onlineOrder")
-    .withIndex("by_externalReference", (q) =>
-      q.eq("externalReference", externalReference),
     )
     .first();
   return order ? { storeId: order.storeId as Id<"store"> } : {};
@@ -144,29 +99,6 @@ function storefrontWrite(args: {
   });
 }
 
-// --- storeFront/auth ------------------------------------------------------
-// Pre-auth email OTP. `identity.authenticate` is not demo-granted, and
-// `sendVerificationCodeViaProvider` carried
-// `denySharedDemoEffectIfApplicable` outright — both become the same explicit
-// `sharedDemo: "deny"`, now enforced before the provider call rather than
-// inside it.
-
-export const verifyCodeOperationDefinition = storefrontWrite({
-  capability: "identity.authenticate",
-  functionName: "storeFront/auth:verifyCode",
-  operationId: "storeFront/auth.verifyCode",
-  publicAccess: "admit",
-});
-
-export const sendVerificationCodeViaProviderOperationDefinition =
-  storefrontWrite({
-    capability: "identity.authenticate",
-    functionName: "storeFront/auth:sendVerificationCodeViaProvider",
-    kind: "action",
-    operationId: "storeFront/auth.sendVerificationCodeViaProvider",
-    publicAccess: "admit",
-  });
-
 // --- storeFront/bag -------------------------------------------------------
 
 export const deleteBagOperationDefinition = storefrontWrite({
@@ -176,32 +108,6 @@ export const deleteBagOperationDefinition = storefrontWrite({
   scope: { kind: "store", resolve: resolveStoreFromRow("bag", "id") },
 });
 
-// --- storeFront/checkoutSession -------------------------------------------
-
-export const createCheckoutSessionOperationDefinition = storefrontWrite({
-  capability: "orders.create",
-  functionName: "storeFront/checkoutSession:create",
-  operationId: "storeFront/checkoutSession.create",
-});
-
-/**
- * `cancelOrder` ran `requireAuthenticatedNonDemoEffect` as its first statement:
- * an identity was required and a demo principal was refused. The successor is
- * `normalUser: "admit"` + `public: "deny"` (identity required) and
- * `sharedDemo: "deny"` (demo refused) — evaluated before the action body, so
- * the refusal now lands before any session read.
- */
-export const cancelOrderOperationDefinition = storefrontWrite({
-  capability: "orders.manage",
-  functionName: "storeFront/checkoutSession:cancelOrder",
-  kind: "action",
-  operationId: "storeFront/checkoutSession.cancelOrder",
-  scope: {
-    kind: "store",
-    resolve: resolveStoreFromRow("checkoutSession", "id"),
-  },
-});
-
 // --- storeFront/guest -----------------------------------------------------
 
 export const deleteGuestOperationDefinition = storefrontWrite({
@@ -209,14 +115,6 @@ export const deleteGuestOperationDefinition = storefrontWrite({
   functionName: "storeFront/guest:deleteGuest",
   operationId: "storeFront/guest.deleteGuest",
   scope: { kind: "store", resolve: resolveStoreFromRow("guest", "id") },
-});
-
-// --- storeFront/offers ----------------------------------------------------
-
-export const createOfferOperationDefinition = storefrontWrite({
-  capability: "storefront.content.manage",
-  functionName: "storeFront/offers:create",
-  operationId: "storeFront/offers.create",
 });
 
 // --- storeFront/payment ---------------------------------------------------
@@ -232,39 +130,6 @@ const PAYMENT_COLLECT_EFFECTS = {
   mode: "protected" as const,
   gateways: ["payment.collect"] as const,
 };
-
-export const createTransactionOperationDefinition = storefrontWrite({
-  capability: "billing.manage",
-  effects: PAYMENT_COLLECT_EFFECTS,
-  functionName: "storeFront/payment:createTransaction",
-  kind: "action",
-  operationId: "storeFront/payment.createTransaction",
-  scope: {
-    kind: "store",
-    resolve: resolveStoreFromRow("checkoutSession", "checkoutSessionId"),
-  },
-});
-
-export const createPODOrderOperationDefinition = storefrontWrite({
-  capability: "billing.manage",
-  effects: PAYMENT_COLLECT_EFFECTS,
-  functionName: "storeFront/payment:createPODOrder",
-  kind: "action",
-  operationId: "storeFront/payment.createPODOrder",
-  scope: {
-    kind: "store",
-    resolve: resolveStoreFromRow("checkoutSession", "checkoutSessionId"),
-  },
-});
-
-export const verifyPaymentOperationDefinition = storefrontWrite({
-  capability: "billing.manage",
-  effects: PAYMENT_COLLECT_EFFECTS,
-  functionName: "storeFront/payment:verifyPayment",
-  kind: "action",
-  operationId: "storeFront/payment.verifyPayment",
-  scope: { kind: "store", resolve: resolveStoreFromExternalReference },
-});
 
 export const refundPaymentOperationDefinition = storefrontWrite({
   capability: "payments.refund",
@@ -310,36 +175,10 @@ export const findOrderTransactionsOperationDefinition = paystackLedgerAction(
 
 // --- storeFront/rewards ---------------------------------------------------
 
-export const redeemPointsOperationDefinition = storefrontWrite({
-  capability: "rewards.manage",
-  functionName: "storeFront/rewards:redeemPoints",
-  operationId: "storeFront/rewards.redeemPoints",
-});
-
 export const createRewardTierOperationDefinition = storefrontWrite({
   capability: "rewards.manage",
   functionName: "storeFront/rewards:createRewardTier",
   operationId: "storeFront/rewards.createRewardTier",
-});
-
-export const awardPointsForPastOrderOperationDefinition = storefrontWrite({
-  capability: "rewards.manage",
-  functionName: "storeFront/rewards:awardPointsForPastOrder",
-  operationId: "storeFront/rewards.awardPointsForPastOrder",
-  scope: {
-    kind: "store",
-    resolve: resolveStoreFromRow("onlineOrder", "orderId"),
-  },
-});
-
-export const awardPointsForGuestOrdersOperationDefinition = storefrontWrite({
-  capability: "rewards.manage",
-  functionName: "storeFront/rewards:awardPointsForGuestOrders",
-  operationId: "storeFront/rewards.awardPointsForGuestOrders",
-  scope: {
-    kind: "store",
-    resolve: resolveStoreFromStorefrontActor("storeFrontUserId"),
-  },
 });
 
 // --- storeFront/savedBag --------------------------------------------------
@@ -364,24 +203,13 @@ export const createSupportTicketOperationDefinition = storefrontWrite({
 
 export const U6_STOREFRONT_CUSTOMER_OPERATION_DEFINITIONS: readonly OperationDefinition[] =
   [
-    verifyCodeOperationDefinition,
-    sendVerificationCodeViaProviderOperationDefinition,
     deleteBagOperationDefinition,
-    createCheckoutSessionOperationDefinition,
-    cancelOrderOperationDefinition,
     deleteGuestOperationDefinition,
-    createOfferOperationDefinition,
-    createTransactionOperationDefinition,
-    createPODOrderOperationDefinition,
-    verifyPaymentOperationDefinition,
     refundPaymentOperationDefinition,
     getAllTransactionsOperationDefinition,
     checkTransactionStatusOperationDefinition,
     findOrderTransactionsOperationDefinition,
-    redeemPointsOperationDefinition,
     createRewardTierOperationDefinition,
-    awardPointsForPastOrderOperationDefinition,
-    awardPointsForGuestOrdersOperationDefinition,
     deleteSavedBagOperationDefinition,
     createSupportTicketOperationDefinition,
   ];

@@ -19,16 +19,13 @@ import {
 import {
   createOnlineOrderOperationDefinition,
   updateOnlineOrderItemsOperationDefinition,
-  updateOnlineOrderOwnerOperationDefinition,
 } from "../operationAdmission/domains/u7_storefrontOperator_definitions";
 import {
-  getCustomerOnlineOrderReadDefinition,
   getOnlineOrderByCheckoutSessionReadDefinition,
   getOnlineOrderByExternalReferenceReadDefinition,
   getOnlineOrderItemsReadDefinition,
   getReturnExchangeOverviewReadDefinition,
   isDuplicateOnlineOrderReadDefinition,
-  listCustomerOnlineOrdersReadDefinition,
   listOnlineOrdersByStoreFrontUserReadDefinition,
 } from "../operationAdmission/domains/u7_storefrontOperator_readDefinitions";
 import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
@@ -821,14 +818,6 @@ async function listCustomerOrdersWithCtx(
   }
 }
 
-export const getAll = query({
-  args: { storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")) },
-  handler: admitPublicQuery(
-    listCustomerOnlineOrdersReadDefinition,
-    listCustomerOrdersWithCtx,
-  ),
-});
-
 /**
  * Internal sibling for `GET /orders`. The shopper whose orders are listed is
  * the admitted actor, so a bearer id can no longer list another shopper's
@@ -842,16 +831,6 @@ export const getAllForCustomerInternal = internalQuery({
     });
     return orders.filter((order) => order.storeId === args.owner.storeId);
   },
-});
-
-export const get = query({
-  args: {
-    identifier: v.union(v.id("onlineOrder"), v.string()),
-  },
-  handler: admitPublicQuery(
-    getCustomerOnlineOrderReadDefinition,
-    getOnlineOrderWithCtx,
-  ),
 });
 
 /**
@@ -2534,17 +2513,6 @@ async function updateOnlineOrderOwnerWithCtx(
     return true;
   }
 }
-
-export const updateOwner = mutation({
-  args: {
-    currentOwner: v.id("guest"),
-    newOwner: v.id("storeFrontUser"),
-  },
-  handler: admitPublicMutation(
-    updateOnlineOrderOwnerOperationDefinition,
-    updateOnlineOrderOwnerWithCtx,
-  ),
-});
 
 /**
  * Internal sibling for `POST /orders/owner`. The shopper the orders move TO is

@@ -4,7 +4,7 @@ import { loadBagWithItems } from "./helpers/bag";
 import { getBagItemsForStoreReadDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
 import { admitPublicQuery } from "../platform/operationAdmission";
 import {
-  assertCustomerOwnsRowIfPropagated,
+  assertCustomerOwnsRow,
   customerOwnerValidator,
   type CustomerOwner,
 } from "./customerOwnership";
@@ -24,24 +24,23 @@ const MAX_BAGS_FOR_STORE = 500;
  *
  * The fix is the `owner` parameter: the admitted `storefront_customer` actor is
  * propagated from the route and every caller-supplied id is resolved to its row
- * and checked against it. `owner` is optional here because these functions
- * already have live route callers that wave B2 (U10) updates; when the route
- * propagates it the assertion is live, and U10's route tests pin it.
+ * and checked against it. `owner` is required — every caller of these three is
+ * a storefront route with an admitted claim, so there is no shape of this call
+ * that legitimately skips the assertion.
  */
 
 /** Resolve the bag an item belongs to so the item inherits its parent's owner. */
 async function requireOwnedBagItem(
   ctx: MutationCtx,
   itemId: Id<"bagItem">,
-  owner: CustomerOwner | undefined,
+  owner: CustomerOwner,
 ) {
   const item = await ctx.db.get(entity, itemId);
-  if (!owner) return item;
   // The join row carries the shopper id; the store comes from the parent bag,
   // so both halves of the claim are checked rather than just one.
-  assertCustomerOwnsRowIfPropagated(owner, item);
+  assertCustomerOwnsRow(owner, item);
   const bag = item ? await ctx.db.get("bag", item.bagId) : null;
-  assertCustomerOwnsRowIfPropagated(owner, bag);
+  assertCustomerOwnsRow(owner, bag);
   return item;
 }
 
@@ -53,18 +52,16 @@ export const addItemToBag = internalMutation({
     productSku: v.string(),
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
     quantity: v.number(),
-    owner: v.optional(customerOwnerValidator),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, { owner, ...args }) => {
-    if (owner) {
-      // The bag must belong to the admitted shopper AND the identity written
-      // onto the new item must be the admitted shopper, not the request body's.
-      const bag = await ctx.db.get("bag", args.bagId);
-      assertCustomerOwnsRowIfPropagated(owner, bag);
-      assertCustomerOwnsRowIfPropagated(owner, {
-        storeFrontUserId: args.storeFrontUserId,
-      });
-    }
+    // The bag must belong to the admitted shopper AND the identity written
+    // onto the new item must be the admitted shopper, not the request body's.
+    const bag = await ctx.db.get("bag", args.bagId);
+    assertCustomerOwnsRow(owner, bag);
+    assertCustomerOwnsRow(owner, {
+      storeFrontUserId: args.storeFrontUserId,
+    });
 
     const newItem = { ...args, updatedAt: Date.now() };
 
@@ -96,7 +93,7 @@ export const updateItemInBag = internalMutation({
   args: {
     itemId: v.id(entity),
     quantity: v.number(),
-    owner: v.optional(customerOwnerValidator),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
     await requireOwnedBagItem(ctx, args.itemId, args.owner);
@@ -109,7 +106,7 @@ export const updateItemInBag = internalMutation({
 export const deleteItemFromBag = internalMutation({
   args: {
     itemId: v.id(entity),
-    owner: v.optional(customerOwnerValidator),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
     await requireOwnedBagItem(ctx, args.itemId, args.owner);

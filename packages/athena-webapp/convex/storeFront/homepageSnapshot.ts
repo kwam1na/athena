@@ -1,12 +1,6 @@
 import { v } from "convex/values";
-import { internalQuery, query, type QueryCtx } from "../_generated/server";
+import { internalQuery, type QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
-import { getHomepageSnapshotReadDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
-import { admitPublicQuery } from "../platform/operationAdmission";
-import {
-  assertCustomerOwnsStoreIfPropagated,
-  customerOwnerValidator,
-} from "./customerOwnership";
 import { normalizeStoreConfig } from "../inventory/storeConfigV2";
 import {
   presentPublicBannerMessage,
@@ -709,34 +703,19 @@ export async function getHomepageSnapshotWithCtx(
   });
 }
 
-export const get = query({
-  args: {
-    storeId: v.id("store"),
-    nowMs: v.number(),
-  },
-  returns: v.union(homepageSnapshotV1Validator, v.null()),
-  handler: admitPublicQuery(
-    getHomepageSnapshotReadDefinition,
-    async (ctx, args: { storeId: Id<"store">; nowMs: number }) =>
-      getHomepageSnapshotWithCtx(ctx, args),
-  ),
-});
-
 /**
  * Internal sibling for `GET /homepageSnapshot`. The storefront homepage is
- * merchandising, not shopper-scoped data, so the only ownership fact that
- * matters is the store: a claim clamped to store A cannot render store B.
- * `owner` is optional because the same snapshot is also served to genuinely
- * anonymous browse traffic, which carries no claim at all.
+ * merchandising, not shopper-scoped data, and the same snapshot is served to
+ * genuinely anonymous browse traffic, so there is no ownership concept here:
+ * `storeId` names the store to render and nothing read is shopper-scoped.
  */
 export const getInternal = internalQuery({
   args: {
     storeId: v.id("store"),
     nowMs: v.number(),
-    owner: v.optional(customerOwnerValidator),
   },
-  handler: async (ctx, { owner, ...args }) => {
-    assertCustomerOwnsStoreIfPropagated(owner, args.storeId);
+  returns: v.union(homepageSnapshotV1Validator, v.null()),
+  handler: async (ctx, args) => {
     return await getHomepageSnapshotWithCtx(ctx, args);
   },
 });

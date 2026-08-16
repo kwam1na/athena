@@ -4,31 +4,43 @@ The shared demo is a server-side principal and store mode. Unknown writes and
 unknown external effects are denied. UI visibility is not an authorization
 control.
 
-Athena's public mutation/action surface is currently classified by the platform
-capability catalog in `convex/platform/capabilityCatalog.ts`. Module defaults
-cover coherent domains and exact-function overrides separate sensitive
-operations such as refunds, destructive administration, terminal registration,
-and payment collection. The static coverage test discovers every exported
-public Convex mutation and action and fails when any function is unclassified.
+## Where demo authority is declared
 
-The operation-admission migration pairs this platform capability catalog with
-public-write structural coverage in `convex/operationAdmission`. Shared demo
-consumes that platform catalog through its adapter instead of owning
-write-admission proof. Migrated shared-demo writes must now enter through an
-operation definition plus adapter-backed admission context. The generic
-Athena-user auth helper keeps only the explicit shared-demo read bridge; write
-capabilities must enter through operation admission or remain in exact legacy
-exemptions until migrated. Remaining legacy write groups stay tracked by
-migration inventory and domain-specific policy until they receive operation
-definitions.
+**Every** backend ingress — public Convex mutation, query, and action, and
+every Hono route — now declares an operation definition and runs through the
+admission rail. There is no migration inventory, no exemption list, and no
+"legacy write group" left: `bun scripts/convex-operation-admission-check.ts`
+exits 0 with zero findings, and `convex/operationAdmission/coverage.test.ts`
+asserts it. See `convex/operationAdmission/README.md` for the contract.
 
-The demo allowlist is a separate list of capability IDs. Classification does
-not grant access: every newly discovered capability remains denied until it is
-added to `SHARED_DEMO_ALLOWED_CAPABILITIES` and wired through a store-clamped,
-restore-fenced server boundary. `SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY`
-records only the residual legacy runtime enforcement bindings; it is not the
-capability catalog. Migrated public-write coverage is owned by operation
-definitions plus explicit migration exemptions.
+The demo's reach is therefore stated in exactly two closed grant sets and one
+field per operation:
+
+| what | where |
+| --- | --- |
+| Which write capabilities the demo holds | `SHARED_DEMO_ALLOWED_CAPABILITIES` (`convex/platform/capabilityCatalog.ts`) |
+| Which read intents the demo holds | `SHARED_DEMO_ALLOWED_READ_INTENTS` (`convex/sharedDemo/policy.ts`) |
+| Whether a given operation admits the demo | `actors.sharedDemo: "admit" \| "deny"` on its definition |
+
+Being *classified* never grants access. An operation admits the demo only when
+it says so AND its capability/intent is in the matching grant set — asserted
+statically in both directions by `sharedDemo/policy.test.ts`:
+
+- **forward** — every granted capability and intent has at least one
+  demo-admitted definition representing it, so a grant cannot outlive the
+  surface it was added for;
+- **reverse** — no demo-admitted definition declares an ungranted capability or
+  intent, so demo reach cannot widen without editing a grant set.
+
+Four hand-maintained registries used to approximate this and have been deleted:
+`SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY`, `SHARED_DEMO_GATEWAY_ENFORCEMENT_BINDINGS`,
+`classifyAthenaPublicWrite` with its module→capability map, and the hand-listed
+`sharedDemoCapabilityValidator`. Each is now derived from the definitions
+(`deriveSharedDemoRepresentedCapabilities`, `deriveSharedDemoGatewayBindings`,
+the definition's own `capability`, and `SHARED_DEMO_ALLOWED_CAPABILITIES`
+respectively). They were deleted because they had each drifted: the validator
+accepted six capabilities the demo was never granted, and the gateway-binding
+check passed by matching identifiers that survived only inside comments.
 
 ## Athena view surfaces
 
@@ -70,13 +82,13 @@ This surface allowlist is not an authorization boundary. It controls what the
 demo presents; the server capability allowlist below remains authoritative for
 reads, writes, and external effects.
 
-Existing shared-demo read allowlists are intentionally unchanged by the
-operation-admission cleanup. Public reads/queries, public actions, broad
-provider dispatch migration, and shared-demo seeding/restore redesign remain
-out of scope until separately planned. New or migrated write admission should
-not be added back to `convex/lib/athenaUserAuth.ts`; use
-`convex/operationAdmission` and the shared-demo operation adapter for migrated
-public writes.
+Public reads, public actions, and every HTTP route are now admitted too, so
+there is no longer a category of ingress that sits outside the rail. Admission
+never belongs in `convex/lib/athenaUserAuth.ts`: declare it on the operation
+definition and let the shared-demo adapter apply policy. The demo read grants
+themselves were not widened by the migration — `SHARED_DEMO_ALLOWED_READ_INTENTS`
+is the same closed set, and `readIntentGrants.test.ts` plus the reverse-direction
+assertion in `policy.test.ts` fence it from both sides.
 
 ## Athena capability families
 
@@ -110,11 +122,20 @@ public writes.
 | Reports | Read-only existing projections |
 | Staff authentication | Shared manager sign-in and bounded approval proofs |
 
-Identity, permissions, billing, integrations, exports, refunds/payment effects,
-destructive administration, and store deletion are denied. The current
-shared-demo policy registry is `convex/sharedDemo/policy.ts`; future
-public-write authority should be declared in `convex/operationAdmission` and
-adapted by `convex/sharedDemo/operationAdapter.ts`.
+Identity, permissions, billing, integrations, exports, payment collection,
+destructive administration, and store deletion are denied.
+
+Four capabilities are deliberately **not** demo-granted even though the demo
+shows adjacent surfaces, and this narrowing was preserved rather than quietly
+widened during the migration: `pos.session.manage`, `expenses.view`,
+`storefront.reviews.view`, and `storefront.analytics.view`. Whether the demo
+should demonstrate them is a product question, not a migration question.
+
+Demo authority is declared on the operation definition
+(`convex/operationAdmission/domains/**`) and adapted by
+`convex/sharedDemo/operationAdapter.ts`. `convex/sharedDemo/policy.ts` owns the
+read-intent grant set and the external-effect classifications; it no longer
+owns a public-function inventory.
 
 ## External effects
 
@@ -187,9 +208,9 @@ visitor was on, because the denial error exposes no capability or reason.
 
 Every demo-reachable write now routes through operation admission, so
 `shared_demo.action_admitted` covers the whole demo write surface. Convex
-*actions* cannot use `admitPublicMutation` — they have no `db` — so they enter
-the rail through `convex/operationAdmission/actionAdmission.ts`, calling
-`admitOperationForAction` via `ctx.runMutation`, which carries the caller's
+*actions* cannot use `admitPublicMutation` — they have no `db` — so they use
+`admitPublicAction`, which calls the registered `admitOperation` internal
+mutation via `ctx.runMutation`, carrying the caller's
 identity and applies the same definition, capability, store clamp, restore
 fence, and gateway policy.
 
@@ -197,9 +218,10 @@ One semantic differs there and is not papered over: an action is not
 transactional, so its admission and recorded event commit on their own. An
 action's row means "admitted and started"; a mutation's row means "committed".
 
-The two remaining `reports.read` entries in the shared-demo inventory are
-queries. They are reads, not actions, and public read migration stays out of
-scope per the read-admission plan.
+The `reports.read` write capability is deleted. It only ever existed so the
+demo could READ the Reports surface, which is what a read intent is for; its
+successor is `reports.view` in `SHARED_DEMO_ALLOWED_READ_INTENTS`. Reports
+queries are admitted like every other read and emit no admitted-action event.
 
 Every `shared_demo` event is `support`-visible and non-compilable. This is a
 privacy boundary, not a preference: demo visitors are store admins of the one

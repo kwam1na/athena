@@ -3,12 +3,10 @@ import { CheckoutSession, CheckoutSessionItem, ProductSku } from "../../types";
 import { api, internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 import {
-  action,
   ActionCtx,
   internalAction,
   internalMutation,
   internalQuery,
-  mutation,
   MutationCtx,
   query,
   QueryCtx,
@@ -38,20 +36,10 @@ import {
 } from "../automation/scheduledRunLedger";
 import { applyCommerceInventoryEffectWithCtx } from "../inventoryLedger/commerceEffects";
 import {
-  cancelOrderOperationDefinition,
-  createCheckoutSessionOperationDefinition,
-} from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
-import {
   getActiveCheckoutSessionReadDefinition,
   getActiveCheckoutSessionsForStoreReadDefinition,
-  getCheckoutSessionByIdReadDefinition,
-  getPendingCheckoutSessionsReadDefinition,
 } from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
-import {
-  admitPublicAction,
-  admitPublicMutation,
-  admitPublicQuery,
-} from "../platform/operationAdmission";
+import { admitPublicQuery } from "../platform/operationAdmission";
 import {
   assertCustomerOwnsRow,
   assertCustomerOwnsStore,
@@ -677,15 +665,6 @@ async function createCheckoutSessionWithCtx(
   }
 }
 
-export const create = mutation({
-  args: createCheckoutSessionArgs,
-  handler: admitPublicMutation(
-    createCheckoutSessionOperationDefinition,
-    async (ctx, args: CreateCheckoutSessionArgs) =>
-      createCheckoutSessionWithCtx(ctx, args),
-  ),
-});
-
 /**
  * Internal sibling for `POST /checkout`. A checkout session may only be opened
  * FOR the admitted shopper, in their own store, from a bag they own — the
@@ -923,22 +902,6 @@ export const getActiveCheckoutSessionsForStore = query({
       )
       .collect();
     },
-  ),
-});
-
-/**
- * `cancelOrder` opened with `requireAuthenticatedNonDemoEffect`: an identity
- * was demanded and a shared-demo principal refused. Both now live on the
- * definition (`normalUser: "admit"` / `public: "deny"` and
- * `sharedDemo: "deny"`), so the refusal happens before the session is read and
- * before the Paystack refund call is made — not after.
- */
-export const cancelOrder = action({
-  args: { id: v.id("checkoutSession") },
-  handler: admitPublicAction(
-    cancelOrderOperationDefinition,
-    async (ctx, args: { id: Id<"checkoutSession"> }) =>
-      cancelOrderWithCtx(ctx, args),
   ),
 });
 
@@ -2252,17 +2215,6 @@ async function listPendingCheckoutSessions(
   }
 }
 
-export const getPendingCheckoutSessions = query({
-  args: { storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")) },
-  handler: admitPublicQuery(
-    getPendingCheckoutSessionsReadDefinition,
-    async (
-      ctx,
-      args: { storeFrontUserId: Id<"storeFrontUser"> | Id<"guest"> },
-    ) => listPendingCheckoutSessions(ctx, args.storeFrontUserId),
-  ),
-});
-
 /**
  * Internal sibling for `GET /checkout/pending`. Pending sessions are read for
  * the ADMITTED shopper, never for an id supplied in the query string.
@@ -2303,61 +2255,6 @@ export const getUnverifiedPaidSessions = internalQuery({
       )
       .collect();
   },
-});
-
-export const getById = query({
-  args: { sessionId: v.id("checkoutSession") },
-  handler: admitPublicQuery(
-    getCheckoutSessionByIdReadDefinition,
-    async (ctx, args: { sessionId: Id<"checkoutSession"> }) => {
-    const session = await ctx.db.get("checkoutSession", args.sessionId);
-    if (!session) return null;
-
-    const sessionItems = await listSessionItemsForRead(ctx, args.sessionId);
-
-    const sessionItemsWithImages = await Promise.all(
-      sessionItems.map(async (item) => {
-        const [product, productSku] = await Promise.all([
-          ctx.db.get("product", item.productId),
-          ctx.db.get("productSku", item.productSkuId),
-        ]);
-
-        let category: string | undefined;
-
-        let colorName;
-
-        if (productSku?.color) {
-          const color = await ctx.db.get("color", productSku.color);
-          colorName = color?.name;
-        }
-
-        if (product) {
-          const productCategory = await ctx.db.get(
-            "category",
-            product.categoryId,
-          );
-          category = productCategory?.name;
-        }
-
-        return {
-          ...item,
-          productCategory: category,
-          isVisible: product?.isVisible,
-          length: productSku?.length,
-          price: productSku?.price,
-          colorName,
-          productName: product?.name,
-          productImage: productSku?.images?.[0] ?? null,
-        };
-      }),
-    );
-
-    return {
-      ...session,
-      items: sessionItemsWithImages,
-    };
-    },
-  ),
 });
 
 /**

@@ -8340,6 +8340,47 @@ describe("daily close exported handler admission", () => {
     },
   );
 
+  // The three mutations used to probe admission with `resolveWriteAdmission`
+  // and only then run `admitPublicMutation`, admitting twice per call. The
+  // denial is now mapped in a catch around the single wrapper call, which
+  // widens what that catch can see: it no longer observes only the probe's
+  // throw, but anything raised under the wrapper. The case above pins the
+  // mapped denial; this one pins the other half of the predicate — a failure
+  // that is not an authorization denial must still propagate as a throw and
+  // never be laundered into a `CommandResult`.
+  it.each([
+    [
+      "completeDailyClose",
+      completeDailyClose,
+      ADMISSION_ARGS.completeDailyClose,
+    ],
+    ["reopenDailyClose", reopenDailyClose, ADMISSION_ARGS.reopenDailyClose],
+    [
+      "resolveDailyCloseCarryForward",
+      resolveDailyCloseCarryForward,
+      ADMISSION_ARGS.resolveDailyCloseCarryForward,
+    ],
+  ])(
+    "rethrows a non-denial failure raised under the wrapper on %s",
+    async (_name, fn, args) => {
+      // Not an authorization message, so the predicate must not claim it.
+      vi.mocked(
+        athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+      ).mockRejectedValue(new Error("actor lookup exploded"));
+      const { db, inserts, patches } = createDb({
+        dailyClose: [completedDailyCloseRow()],
+        store: [store],
+      });
+
+      await expect(
+        getHandler(fn)({ db } as unknown as MutationCtx, args as never),
+      ).rejects.toThrow("actor lookup exploded");
+
+      expect(inserts).toEqual([]);
+      expect(patches).toEqual([]);
+    },
+  );
+
   it("denies an unadmitted caller on the opening context query", async () => {
     const { db } = createDb({
       dailyClose: [completedDailyCloseRow()],

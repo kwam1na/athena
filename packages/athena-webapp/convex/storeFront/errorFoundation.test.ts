@@ -29,8 +29,8 @@ import { update } from "./onlineOrder";
 import { sendOrderUpdateEmail } from "./onlineOrderUtilFns";
 import {
   approve,
-  hasReviewForOrderItem,
-  hasUserReviewForOrderItem,
+  hasReviewForOrderItemInternal,
+  hasUserReviewForOrderItemInternal,
   publish,
   reject,
   sendFeedbackRequest,
@@ -283,8 +283,8 @@ describe("storefront error foundation", () => {
     assertConformsToExportedReturns(sendOrderUpdateEmail, ok({
       message: "Order received email recorded.",
     }));
-    assertConformsToExportedReturns(hasReviewForOrderItem, true);
-    assertConformsToExportedReturns(hasUserReviewForOrderItem, false);
+    assertConformsToExportedReturns(hasReviewForOrderItemInternal, true);
+    assertConformsToExportedReturns(hasUserReviewForOrderItemInternal, false);
     assertConformsToExportedReturns(approve, ok(null));
     assertConformsToExportedReturns(reject, ok(null));
     assertConformsToExportedReturns(publish, ok(null));

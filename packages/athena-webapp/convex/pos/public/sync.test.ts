@@ -1087,6 +1087,65 @@ describe("resolveLocalSyncReview public mutation", () => {
   });
 });
 
+/**
+ * Both sync mutations used to probe admission with `resolveWriteAdmission`
+ * before running `admitPublicMutation`, so the rail resolved twice per call.
+ * The denial is now mapped in a catch around the single wrapper call.
+ *
+ * The rail denial and the in-handler terminal denial are NOT the same result:
+ * the terminal path carries `metadata.terminalAuthorizationFailure`, the rail
+ * path does not. Asserting exact equality keeps the two distinguishable, which
+ * is what the webapp branches on.
+ */
+describe("POS sync rail admission denial mapping", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    // No identity resolves anywhere, so the rail denies before the handler.
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+      new Error("Sign in again to continue."),
+    );
+  });
+
+  it("maps a rail admission denial on ingestLocalEvents to its userError, not a throw", async () => {
+    const ctx = buildCtx();
+
+    const result = await getHandler(ingestLocalEvents)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: SYNC_SECRET_HASH,
+      events: [buildEvent()],
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to sync this POS terminal.",
+      },
+    });
+    expect(mocks.ingestLocalEventsWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("maps a rail admission denial on resolveLocalSyncReview to its userError, not a throw", async () => {
+    const ctx = buildCtx();
+
+    const result = await getHandler(resolveLocalSyncReview)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      localEventIds: ["event-review-1"],
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to resolve POS sync reviews.",
+      },
+    });
+    expect(mocks.resolveLocalSyncReviewWithCtx).not.toHaveBeenCalled();
+  });
+});
+
 describe("register closeout notification intents", () => {
   beforeEach(() => {
     vi.resetAllMocks();

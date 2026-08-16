@@ -4,8 +4,8 @@ import {
   BEST_SELLERS_LIMIT,
   FEATURED_ITEMS_LIMIT,
   buildHomepageSnapshotV1,
-  get,
   getHomepageSnapshotWithCtx,
+  getInternal,
   hydrateHomepageRowsUntil,
   HOMEPAGE_SNAPSHOT_CONTRACT_VERSION,
 } from "./homepageSnapshot";
@@ -590,7 +590,7 @@ describe("homepage snapshot presenter", () => {
     expect(snapshot.shopLook?.id).toBe("shop-look");
     expect(JSON.stringify(snapshot)).not.toContain("omission");
     expect(JSON.stringify(snapshot)).not.toContain("_creationTime");
-    expect(() => assertConformsToExportedReturns(get, snapshot)).not.toThrow();
+    expect(() => assertConformsToExportedReturns(getInternal, snapshot)).not.toThrow();
   });
 
   it("sorts legacy unranked best sellers after ranked rows", () => {

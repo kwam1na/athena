@@ -19,10 +19,12 @@ import {
   admitPublicQuery,
 } from "../platform/operationAdmission";
 import {
-  assertCustomerOwnsStoreIfPropagated,
+  assertCustomerOwnsStore,
   customerOwnerActorId,
+  customerOwnerOrServerInitiatedValidator,
   customerOwnerValidator,
   denyCustomerOwnership,
+  isServerInitiated,
 } from "./customerOwnership";
 
 const entity = "guest";
@@ -36,14 +38,28 @@ export const getAll = query({
   }),
 });
 
+/**
+ * Read a guest row by id.
+ *
+ * `owner` is REQUIRED, but accepts `SERVER_INITIATED_OWNER`: the only caller,
+ * the PUBLIC `GET /guests` bootstrap route, reads the guest id straight out of
+ * a cookie and has no admitted owner to check it against.
+ *
+ * RESIDUAL RISK (known and accepted, not an oversight): because that route is
+ * public by design — it exists so a shopper who has lost their session can
+ * recover it, see the U10 scope decision — any caller may present an arbitrary
+ * `guest_id` cookie and read back that guest row, including another shopper's.
+ * This is an accepted IDOR on the guest record. Every path that carries a real
+ * admitted claim must pass it rather than the sentinel.
+ */
 export const getById = internalQuery({
   args: {
     id: v.id(entity),
-    owner: v.optional(customerOwnerValidator),
+    owner: customerOwnerOrServerInitiatedValidator,
   },
   handler: async (ctx, args) => {
     if (
-      args.owner &&
+      !isServerInitiated(args.owner) &&
       String(args.id) !== String(customerOwnerActorId(args.owner))
     ) {
       denyCustomerOwnership();
@@ -121,18 +137,16 @@ export const update = internalMutation({
     firstName: v.optional(v.string()),
     lastName: v.optional(v.string()),
     phoneNumber: v.optional(v.string()),
-    owner: v.optional(customerOwnerValidator),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
-    if (args.owner) {
-      // A guest may only ever patch their own row: the id in the path is
-      // checked against the admitted claim, not merely trusted.
-      if (String(args.id) !== String(customerOwnerActorId(args.owner))) {
-        denyCustomerOwnership();
-      }
-      const guest = await ctx.db.get("guest", args.id);
-      assertCustomerOwnsStoreIfPropagated(args.owner, guest?.storeId);
+    // A guest may only ever patch their own row: the id in the path is
+    // checked against the admitted claim, not merely trusted.
+    if (String(args.id) !== String(customerOwnerActorId(args.owner))) {
+      denyCustomerOwnership();
     }
+    const guest = await ctx.db.get("guest", args.id);
+    assertCustomerOwnsStore(args.owner, guest?.storeId);
 
     const updates: Record<string, any> = {};
     if (args.email) {

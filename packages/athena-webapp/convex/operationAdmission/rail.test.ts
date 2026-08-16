@@ -377,7 +377,7 @@ describe("http ingress", () => {
     vi.unstubAllEnvs();
   });
 
-  it("reads the body once and hands the same string to the handler", async () => {
+  it("bounds the body, reads it once, and hands the same string to the handler", async () => {
     vi.stubEnv("ATHENA_STOREFRONT_ALLOWED_ORIGINS", "https://shop.test");
     const runMutation = vi.fn(async () => ({
       actor: { kind: "storefront_customer", assurance: "bearer_id" },
@@ -392,6 +392,7 @@ describe("http ingress", () => {
       runMutation,
     });
     const handler = vi.fn(async (_c, admitted) => admitted.ingress.rawBody);
+    const originalRequest = c.req.raw;
 
     const result = await railWithEntrypoints().admitHttpRoute(
       customerWrite as never,
@@ -399,8 +400,123 @@ describe("http ingress", () => {
     )(c as never);
 
     expect(result).toBe('{"quantity":2}');
-    expect(c.req.text).toHaveBeenCalledTimes(1);
+    // The rail streams the raw body under a size bound rather than calling
+    // `c.req.text()`, so the assertion is that the ORIGINAL stream is spent
+    // exactly once and the handler still sees the identical bytes a verifier
+    // would have signed over.
+    expect(originalRequest.bodyUsed).toBe(true);
+    expect(c.req.raw).not.toBe(originalRequest);
+    expect(await c.req.raw.text()).toBe('{"quantity":2}');
     expect(runMutation).toHaveBeenCalledTimes(1);
+    vi.unstubAllEnvs();
+  });
+
+  /**
+   * A refusal must not be reported as a server fault. Before this, a denial
+   * thrown inside the admission mutation escaped the Hono handler and Convex
+   * rendered it as 500 — so clients retried, monitoring paged, and the body
+   * carried the internal error text.
+   */
+  describe("admission denial status", () => {
+    const denialContext = (data: unknown) => {
+      const error = Object.assign(new Error("denied"), { data });
+      return honoContext({
+        origin: "https://shop.test",
+        runMutation: vi.fn(async () => {
+          throw error;
+        }),
+      });
+    };
+
+    it("maps an unauthenticated admission to 401", async () => {
+      vi.stubEnv("ATHENA_STOREFRONT_ALLOWED_ORIGINS", "https://shop.test");
+      const handler = vi.fn();
+      const c = denialContext({
+        kind: "operation_admission_denied",
+        message: "Sign in again to continue.",
+        outcome: "unauthenticated",
+      });
+
+      const result = await railWithEntrypoints().admitHttpRoute(
+        customerWrite as never,
+        handler,
+      )(c as never);
+
+      expect(result).toMatchObject({ status: 401 });
+      expect(handler).not.toHaveBeenCalled();
+      vi.unstubAllEnvs();
+    });
+
+    it("maps a refused admission to 403 with a body that reveals nothing", async () => {
+      vi.stubEnv("ATHENA_STOREFRONT_ALLOWED_ORIGINS", "https://shop.test");
+      const handler = vi.fn();
+      const c = denialContext({
+        kind: "operation_admission_denied",
+        message: "wrong store: store-9",
+        outcome: "denied",
+        reason: "scope_denied",
+      });
+
+      const result = await railWithEntrypoints().admitHttpRoute(
+        customerWrite as never,
+        handler,
+      )(c as never);
+
+      expect(result).toMatchObject({
+        status: 403,
+        payload: { error: "Request rejected." },
+      });
+      // The denial reason never reaches the caller: probing the difference
+      // between "wrong store" and "no such row" is what the fixed body prevents.
+      expect(JSON.stringify(result)).not.toContain("store-9");
+      vi.unstubAllEnvs();
+    });
+
+    it("lets a genuine fault propagate instead of disguising it as a denial", async () => {
+      vi.stubEnv("ATHENA_STOREFRONT_ALLOWED_ORIGINS", "https://shop.test");
+      const handler = vi.fn();
+      const c = honoContext({
+        origin: "https://shop.test",
+        runMutation: vi.fn(async () => {
+          throw new TypeError("index missing");
+        }),
+      });
+
+      await expect(
+        railWithEntrypoints().admitHttpRoute(
+          customerWrite as never,
+          handler,
+        )(c as never),
+      ).rejects.toThrow("index missing");
+      expect(handler).not.toHaveBeenCalled();
+      vi.unstubAllEnvs();
+    });
+  });
+
+  it("rejects an oversize body with 413 before any admission row", async () => {
+    vi.stubEnv("ATHENA_STOREFRONT_ALLOWED_ORIGINS", "https://shop.test");
+    const runMutation = vi.fn();
+    const c = honoContext({
+      body: "x".repeat(2_048),
+      origin: "https://shop.test",
+      runMutation,
+    });
+    const handler = vi.fn();
+
+    const result = await rail({
+      entrypoints: {
+        admitOperation: "admitOperation" as never,
+        admitReadOperation: "admitReadOperation" as never,
+      },
+      extractIngressClaim: () => ({ storeFrontUserId: "user-1" as never }),
+      maxIngressBodyBytes: 1_024,
+    }).admitHttpRoute(customerWrite as never, handler)(c as never);
+
+    expect(result).toMatchObject({ status: 413 });
+    // Bounded BEFORE admission: an oversize request leaves no admission row
+    // and never reaches the handler.
+    expect(runMutation).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
     vi.unstubAllEnvs();
   });
 

@@ -19,7 +19,6 @@ import {
 import {
   getCategoryByIdReadDefinition,
   listCategoriesReadDefinition,
-  listCategoriesWithSubcategoriesReadDefinition,
 } from "../operationAdmission/domains/u3_inventoryCatalog_readDefinitions";
 import type {
   OperationMutationCtx,
@@ -96,17 +95,6 @@ export const getAllInternal = internalQuery({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => listCategoriesWithCtx(ctx, args),
-});
-
-export const getCategoriesWithSubcategories = query({
-  args: {
-    storeId: v.id("store"),
-  },
-  handler: admitPublicQuery(
-    listCategoriesWithSubcategoriesReadDefinition,
-    async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) =>
-      listCategoriesWithSubcategoriesWithCtx(ctx, args),
-  ),
 });
 
 /** Internal sibling for the anonymous `GET /categories` route (B2 flips it). */

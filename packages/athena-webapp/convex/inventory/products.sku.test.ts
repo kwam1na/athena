@@ -7,7 +7,7 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import {
   backfillUndefinedSkuVisibilityFromProducts,
-  getInventoryBySkuIds,
+  getInventoryBySkuIdsInternal,
 } from "./productSku";
 import {
   archive,
@@ -2250,7 +2250,7 @@ describe("product archiving", () => {
 
 describe("product catalog visibility", () => {
   it("keeps admitted product mutation return contracts executable", () => {
-    assertConformsToExportedReturns(getInventoryBySkuIds, [
+    assertConformsToExportedReturns(getInventoryBySkuIdsInternal, [
       {
         _id: "productSku001",
         inventoryCount: 2,

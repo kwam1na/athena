@@ -3,12 +3,13 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import {
-  classifySharedDemoPublicFunction,
   decideSharedDemoEffect,
+  deriveSharedDemoRepresentedCapabilities,
+  deriveSharedDemoRepresentedReadIntents,
   requireSharedDemoCapability,
   requireSharedDemoOrderFulfillmentUpdate,
   requireSharedDemoRegisterSessionSyncReview,
-  SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY,
+  SHARED_DEMO_ALLOWED_READ_INTENTS,
   validateSharedDemoCoverage,
 } from "./policy";
 import {
@@ -16,6 +17,7 @@ import {
   SHARED_DEMO_ALLOWED_CAPABILITIES,
 } from "../platform/capabilityCatalog";
 import { OPERATION_ADMISSION_DEFINITIONS } from "../operationAdmission/definitions";
+import { OPERATION_READ_ADMISSION_DEFINITIONS } from "../operationAdmission/readDefinitions";
 
 describe("shared demo policy", () => {
   it("keeps the demo allowlist separate from Athena's complete capability catalog", () => {
@@ -40,7 +42,6 @@ describe("shared demo policy", () => {
       "pos.sync.write",
       "pos.transaction.correct",
       "pos.transaction.void",
-      "reports.read",
       "reviews.manage",
       "staff.authenticate",
       "staff.communication.write",
@@ -51,7 +52,6 @@ describe("shared demo policy", () => {
     expect(requireSharedDemoCapability("pos.sale.complete")).toBe(
       "pos.sale.complete",
     );
-    expect(requireSharedDemoCapability("reports.read")).toBe("reports.read");
     expect(requireSharedDemoCapability("catalog.maintain")).toBe(
       "catalog.maintain",
     );
@@ -61,63 +61,6 @@ describe("shared demo policy", () => {
     expect(() =>
       requireSharedDemoCapability("billing.update" as never),
     ).toThrow("This action isn't allowed in the demo.");
-  });
-
-  it("classifies known Athena writes before applying the demo allowlist", () => {
-    expect(
-      classifySharedDemoPublicFunction(
-        "cashControls/closeouts:correctRegisterSessionOpeningFloat",
-      ),
-    ).toEqual({
-      capability: "cash.control.write",
-      decision: "declared",
-      demoDecision: "allowed",
-    });
-    expect(
-      classifySharedDemoPublicFunction("inventory/products:create"),
-    ).toEqual({
-      capability: "catalog.manage",
-      decision: "declared",
-      demoDecision: "denied",
-    });
-    expect(
-      classifySharedDemoPublicFunction("pos/public/catalog:quickAddSku"),
-    ).toEqual({
-      capability: "catalog.quick_add",
-      decision: "declared",
-      demoDecision: "allowed",
-    });
-    expect(
-      classifySharedDemoPublicFunction(
-        "operations/approvalRequests:decideApprovalRequest",
-      ),
-    ).toEqual({
-      capability: "approvals.manage",
-      decision: "declared",
-      demoDecision: "allowed",
-    });
-    expect(
-      classifySharedDemoPublicFunction(
-        "operations/staffCredentials:authenticateStaffCredentialForApproval",
-      ),
-    ).toEqual({
-      capability: "staff.authenticate",
-      decision: "declared",
-      demoDecision: "allowed",
-    });
-    expect(
-      classifySharedDemoPublicFunction(
-        "sharedDemo/public:requestManualRestore",
-      ),
-    ).toEqual({
-      capability: "demo.lifecycle",
-      decision: "declared",
-      demoDecision: "allowed",
-    });
-    expect(classifySharedDemoPublicFunction("unknown/module:write")).toEqual({
-      decision: "denied",
-      reason: "unclassified",
-    });
   });
 
   it("defaults unknown effects to denied and never calls live providers", async () => {
@@ -139,35 +82,80 @@ describe("shared demo policy", () => {
     expect(live).not.toHaveBeenCalled();
   });
 
-  it("keeps the legacy shared-demo classification registry complete and unique until operationAdmission owns structural coverage", () => {
-    expect(validateSharedDemoCoverage()).toEqual([]);
+  it("keeps demo coverage complete and unique, derived from the definitions", () => {
+    expect(
+      validateSharedDemoCoverage(
+        OPERATION_ADMISSION_DEFINITIONS,
+        OPERATION_READ_ADMISSION_DEFINITIONS,
+      ),
+    ).toEqual([]);
   });
 
-  it("maps every legacy representative classification to an actual exported Convex function", () => {
-    const admittedFunctionNames = new Set(
-      OPERATION_ADMISSION_DEFINITIONS.map(
-        (definition) => definition.functionName,
-      ),
+  /**
+   * Forward direction: a grant with nothing implementing it.
+   *
+   * `SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY` used to answer this by hand —
+   * a list of `functionName -> capability` pairs that a test then confirmed
+   * still existed on disk. It could claim representation for a function whose
+   * demo guard had since been removed, because "the export exists" and "the
+   * demo can reach it" are different facts and only the first was checked.
+   */
+  it("represents every granted demo capability with an admitted definition", () => {
+    const represented = deriveSharedDemoRepresentedCapabilities(
+      OPERATION_ADMISSION_DEFINITIONS,
     );
+    for (const capability of SHARED_DEMO_ALLOWED_CAPABILITIES) {
+      expect([...represented], capability).toContain(capability);
+    }
+  });
 
-    for (const entry of SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY) {
-      const [moduleName, exportName] = entry.functionName.split(":");
+  it("represents every granted demo read intent with an admitted read definition", () => {
+    const represented = deriveSharedDemoRepresentedReadIntents(
+      OPERATION_READ_ADMISSION_DEFINITIONS,
+    );
+    for (const intent of SHARED_DEMO_ALLOWED_READ_INTENTS) {
+      expect([...represented], intent).toContain(intent);
+    }
+  });
+
+  /**
+   * Reverse direction, and the one that actually protects the demo boundary:
+   * a definition that admits the demo for something the demo was never
+   * granted. The legacy inventory could not express this at all — it only
+   * listed representatives, so a newly added `sharedDemo: "admit"` on an
+   * ungranted capability was invisible to it.
+   */
+  it("never admits the demo for an ungranted capability or read intent", () => {
+    const granted = new Set<string>([
+      ...SHARED_DEMO_ALLOWED_CAPABILITIES,
+      "demo.lifecycle",
+    ]);
+    for (const capability of deriveSharedDemoRepresentedCapabilities(
+      OPERATION_ADMISSION_DEFINITIONS,
+    )) {
+      expect(granted.has(capability), capability).toBe(true);
+    }
+
+    const grantedIntents = new Set<string>(SHARED_DEMO_ALLOWED_READ_INTENTS);
+    for (const intent of deriveSharedDemoRepresentedReadIntents(
+      OPERATION_READ_ADMISSION_DEFINITIONS,
+    )) {
+      expect(grantedIntents.has(intent), intent).toBe(true);
+    }
+  });
+
+  it("names a real Convex export for every demo-admitted definition", () => {
+    for (const definition of OPERATION_ADMISSION_DEFINITIONS) {
+      if (definition.actors.sharedDemo !== "admit") continue;
+      if (!definition.functionName) continue;
+      const [moduleName, exportName] = definition.functionName.split(":");
       const source = readFileSync(
         resolve(__dirname, `../${moduleName}.ts`),
         "utf8",
       );
-      expect(source, entry.functionName).toMatch(
+      expect(source, definition.functionName).toMatch(
         new RegExp(`export const ${exportName}\\s*=`),
       );
-      if (
-        entry.capability !== "reports.read" &&
-        !admittedFunctionNames.has(entry.functionName)
-      ) {
-        expect(
-          source,
-          `${entry.functionName} must invoke ${entry.capability}`,
-        ).toContain(`"${entry.capability}"`);
-      }
     }
   });
 

@@ -23,7 +23,6 @@ import {
 } from "../platform/operationAdmission";
 import {
   assertCustomerOwnsRow,
-  assertCustomerOwnsRowIfPropagated,
   customerOwnerActorId,
   customerOwnerValidator,
   denyCustomerOwnership,
@@ -44,12 +43,12 @@ export const create = internalMutation({
   args: {
     storeId: v.id("store"),
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
-    owner: v.optional(customerOwnerValidator),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, { owner, ...args }) => {
     // A bag may only ever be created FOR the admitted shopper, in the store
     // their claim clamped to — the body's copy of those ids is not trusted.
-    assertCustomerOwnsRowIfPropagated(owner, {
+    assertCustomerOwnsRow(owner, {
       storeFrontUserId: args.storeFrontUserId,
       storeId: args.storeId,
     });
@@ -89,13 +88,11 @@ export const getById = query({
 export const getByIdInternal = internalQuery({
   args: {
     id: v.id(entity),
-    owner: v.optional(customerOwnerValidator),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
-    if (args.owner) {
-      const bag = await ctx.db.get("bag", args.id);
-      assertCustomerOwnsRow(args.owner, bag);
-    }
+    const bag = await ctx.db.get("bag", args.id);
+    assertCustomerOwnsRow(args.owner, bag);
     return await loadBagById(ctx, args.id);
   },
 });
@@ -189,13 +186,11 @@ export const deleteBagInternal = internalMutation({
 export const clearBag = internalMutation({
   args: {
     id: v.id(entity),
-    owner: v.optional(customerOwnerValidator),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
-    if (args.owner) {
-      const bag = await ctx.db.get("bag", args.id);
-      assertCustomerOwnsRow(args.owner, bag);
-    }
+    const bag = await ctx.db.get("bag", args.id);
+    assertCustomerOwnsRow(args.owner, bag);
 
     const items = await ctx.db
       .query("bagItem")
@@ -212,20 +207,18 @@ export const updateOwner = internalMutation({
   args: {
     currentOwner: v.id("guest"),
     newOwner: v.id("storeFrontUser"),
-    owner: v.optional(customerOwnerValidator),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
-    if (args.owner) {
-      // Merging a guest bag into an account is only ever the admitted
-      // shopper's own move: the claim must name one of the two sides, so a
-      // bearer id cannot graft a stranger's guest bag onto their account.
-      const actorId = String(customerOwnerActorId(args.owner));
-      if (
-        actorId !== String(args.currentOwner) &&
-        actorId !== String(args.newOwner)
-      ) {
-        denyCustomerOwnership();
-      }
+    // Merging a guest bag into an account is only ever the admitted shopper's
+    // own move: the claim must name one of the two sides, so a bearer id
+    // cannot graft a stranger's guest bag onto their account.
+    const actorId = String(customerOwnerActorId(args.owner));
+    if (
+      actorId !== String(args.currentOwner) &&
+      actorId !== String(args.newOwner)
+    ) {
+      denyCustomerOwnership();
     }
 
     const bag = await ctx.db

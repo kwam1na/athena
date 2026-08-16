@@ -156,26 +156,6 @@ export const getActiveCheckoutSessionReadDefinition = storefrontRead({
   },
 });
 
-export const getPendingCheckoutSessionsReadDefinition = storefrontRead({
-  functionName: "storeFront/checkoutSession:getPendingCheckoutSessions",
-  intent: "online_orders.view",
-  operationId: "storeFront/checkoutSession.getPendingCheckoutSessions.read",
-  scope: {
-    kind: "store",
-    resolve: resolveStoreFromStorefrontActor("storeFrontUserId"),
-  },
-});
-
-export const getCheckoutSessionByIdReadDefinition = storefrontRead({
-  functionName: "storeFront/checkoutSession:getById",
-  intent: "online_orders.view",
-  operationId: "storeFront/checkoutSession.getById.read",
-  scope: {
-    kind: "store",
-    resolve: resolveStoreFromRow("checkoutSession", "sessionId"),
-  },
-});
-
 // --- storeFront/customerBehaviorTimeline ----------------------------------
 
 function customerBehaviorRead(functionName: string, operationId: string) {
@@ -233,14 +213,6 @@ export const getReturningVisitorsForDayReadDefinition = storefrontRead({
   operationId: "storeFront/guest.getReturningVisitorsForDay.read",
 });
 
-// --- storeFront/homepageSnapshot ------------------------------------------
-
-export const getHomepageSnapshotReadDefinition = storefrontRead({
-  functionName: "storeFront/homepageSnapshot:get",
-  intent: "storefront.catalog.view",
-  operationId: "storeFront/homepageSnapshot.get.read",
-});
-
 // --- storeFront/offers ----------------------------------------------------
 
 export const getOffersByStoreIdReadDefinition = storefrontRead({
@@ -266,58 +238,12 @@ export const getOffersByEmailReadDefinition = storefrontRead({
   scope: { kind: "none" },
 });
 
-export const getOffersByStorefrontUserIdReadDefinition = storefrontRead({
-  functionName: "storeFront/offers:getByStorefrontUserId",
-  intent: "storefront.account.view",
-  operationId: "storeFront/offers.getByStorefrontUserId.read",
-  scope: {
-    kind: "store",
-    resolve: resolveStoreFromStorefrontActor("storeFrontUserId"),
-  },
-});
-
 // --- storeFront/rewards ---------------------------------------------------
-
-export const getUserPointsReadDefinition = storefrontRead({
-  functionName: "storeFront/rewards:getUserPoints",
-  intent: "storefront.rewards.view",
-  operationId: "storeFront/rewards.getUserPoints.read",
-});
 
 export const getRewardTiersReadDefinition = storefrontRead({
   functionName: "storeFront/rewards:getTiers",
   intent: "storefront.rewards.view",
   operationId: "storeFront/rewards.getTiers.read",
-});
-
-export const getPointHistoryReadDefinition = storefrontRead({
-  functionName: "storeFront/rewards:getPointHistory",
-  intent: "storefront.rewards.view",
-  operationId: "storeFront/rewards.getPointHistory.read",
-  scope: {
-    kind: "store",
-    resolve: resolveStoreFromStorefrontActor("storeFrontUserId"),
-  },
-});
-
-export const getPastEligibleOrdersReadDefinition = storefrontRead({
-  functionName: "storeFront/rewards:getPastEligibleOrders",
-  intent: "storefront.rewards.view",
-  operationId: "storeFront/rewards.getPastEligibleOrders.read",
-  scope: {
-    kind: "store",
-    resolve: resolveStoreFromStorefrontActor("storeFrontUserId"),
-  },
-});
-
-export const getOrderPointsReadDefinition = storefrontRead({
-  functionName: "storeFront/rewards:getOrderPoints",
-  intent: "storefront.rewards.view",
-  operationId: "storeFront/rewards.getOrderPoints.read",
-  scope: {
-    kind: "store",
-    resolve: resolveStoreFromRow("onlineOrder", "orderId"),
-  },
 });
 
 // --- storeFront/savedBag --------------------------------------------------
@@ -382,13 +308,6 @@ export const getMostRecentActivityReadDefinition = storefrontAccountRead(
   "id",
 );
 
-export const getLastViewedProductReadDefinition = storefrontRead({
-  functionName: "storeFront/user:getLastViewedProduct",
-  intent: "storefront.catalog.view",
-  operationId: "storeFront/user.getLastViewedProduct.read",
-  scope: { kind: "store", resolve: resolveStoreFromStorefrontActor("id") },
-});
-
 export const getLastViewedProductsReadDefinition = storefrontRead({
   functionName: "storeFront/user:getLastViewedProducts",
   intent: "storefront.catalog.view",
@@ -421,8 +340,6 @@ export const U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS: readonly Operati
     getBagItemsForStoreReadDefinition,
     getActiveCheckoutSessionReadDefinition,
     getActiveCheckoutSessionsForStoreReadDefinition,
-    getCheckoutSessionByIdReadDefinition,
-    getPendingCheckoutSessionsReadDefinition,
     getCustomerBehaviorTimelineReadDefinition,
     getCustomerBehaviorSummaryReadDefinition,
     getCustomerObservabilityTimelineReadDefinition,
@@ -430,23 +347,16 @@ export const U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS: readonly Operati
     getUniqueVisitorsForDayReadDefinition,
     getUniqueVisitorsReadDefinition,
     getReturningVisitorsForDayReadDefinition,
-    getHomepageSnapshotReadDefinition,
     getOffersByStoreIdReadDefinition,
     getOffersByPromoCodeIdReadDefinition,
     getOffersByEmailReadDefinition,
-    getOffersByStorefrontUserIdReadDefinition,
-    getUserPointsReadDefinition,
     getRewardTiersReadDefinition,
-    getPointHistoryReadDefinition,
-    getPastEligibleOrdersReadDefinition,
-    getOrderPointsReadDefinition,
     getAllSavedBagsReadDefinition,
     getSavedBagByIdReadDefinition,
     getAllStoreFrontUsersReadDefinition,
     getUserByIdentifierReadDefinition,
     findLinkedAccountsReadDefinition,
     getAllUserActivityReadDefinition,
-    getLastViewedProductReadDefinition,
     getLastViewedProductsReadDefinition,
     getOnlineOrderByIdReadDefinition,
     getMostRecentActivityReadDefinition,

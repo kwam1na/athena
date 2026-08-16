@@ -65,7 +65,6 @@ import {
   mixUnitsSoldSortKey,
 } from "../../shared/reportsContract";
 import {
-  classifyAthenaPublicWrite,
   isSharedDemoCapabilityAllowed,
 } from "../platform/capabilityCatalog";
 import {
@@ -1563,12 +1562,20 @@ describe("terminal retry", () => {
 
 describe("public boundary", () => {
   it("both public mutations are registered for the generation capability, which the shared demo may never hold", () => {
-    expect(
-      classifyAthenaPublicWrite("reports/skuMixRange:ensureMixRange"),
-    ).toEqual({ capability: "reporting.generate", decision: "classified" });
-    expect(
-      classifyAthenaPublicWrite("reports/skuMixRange:retryMixRange"),
-    ).toEqual({ capability: "reporting.generate", decision: "classified" });
+    // Was `classifyAthenaPublicWrite(...)` against a hand-maintained
+    // module -> capability map. The map is deleted; the definition IS the
+    // registration, so the capability is read off it directly.
+    for (const definition of [
+      ensureMixRangeOperationDefinition,
+      retryMixRangeOperationDefinition,
+    ]) {
+      expect(definition.capability, definition.functionName).toBe(
+        "reporting.generate",
+      );
+      expect(definition.actors.sharedDemo, definition.functionName).toBe(
+        "deny",
+      );
+    }
     expect(isSharedDemoCapabilityAllowed("reporting.generate")).toBe(false);
   });
 

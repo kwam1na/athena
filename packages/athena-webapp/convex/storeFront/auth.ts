@@ -1,9 +1,7 @@
 import { v } from "convex/values";
 import {
-  action,
   internalAction,
   internalMutation,
-  mutation,
   MutationCtx,
 } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
@@ -11,16 +9,7 @@ import { sendVerificationCode } from "../mailersend";
 import { internal } from "../_generated/api";
 import { SignJWT } from "jose";
 import {
-  sendVerificationCodeViaProviderOperationDefinition,
-  verifyCodeOperationDefinition,
-} from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
-import {
-  admitPublicAction,
-  admitPublicMutation,
-} from "../platform/operationAdmission";
-import {
   assertCustomerOwnsStore,
-  assertCustomerOwnsStoreIfPropagated,
   customerOwnerActorId,
   customerOwnerValidator,
   denyCustomerOwnership,
@@ -188,31 +177,20 @@ async function verifyCodeWithCtx(ctx: MutationCtx, args: VerifyCodeArgs) {
   }
 }
 
-export const verifyCode = mutation({
-  args: verifyCodeArgs,
-  handler: admitPublicMutation(
-    verifyCodeOperationDefinition,
-    async (ctx, args: VerifyCodeArgs) => verifyCodeWithCtx(ctx, args),
-  ),
-});
-
 /**
- * Internal sibling for the `POST /auth/verify` route (wave B2 flips it here).
+ * Internal sibling for the `POST /auth/verify` route.
  *
- * `owner` is optional because this IS the pre-auth step: a shopper arriving to
- * prove an email may hold only a guest marker, or no claim at all. When the
- * route does have an admitted claim it must propagate it, and the code is then
- * only accepted for that shopper's own id and store — a bearer id for another
- * shopper cannot mint a session here.
+ * This IS the pre-auth step, but a shopper still arrives holding a claim — a
+ * guest marker if nothing else — so `owner` is required: the route's rail
+ * always resolves one. The code is only ever accepted for that shopper's own
+ * id and store, so a bearer id for another shopper cannot mint a session here.
  */
 export const verifyCodeInternal = internalMutation({
-  args: { ...verifyCodeArgs, owner: v.optional(customerOwnerValidator) },
+  args: { ...verifyCodeArgs, owner: customerOwnerValidator },
   handler: async (ctx, { owner, ...args }) => {
-    if (owner) {
-      assertCustomerOwnsStore(owner, args.storeId);
-      if (String(args.userId) !== String(customerOwnerActorId(owner))) {
-        denyCustomerOwnership();
-      }
+    assertCustomerOwnsStore(owner, args.storeId);
+    if (String(args.userId) !== String(customerOwnerActorId(owner))) {
+      denyCustomerOwnership();
     }
     return await verifyCodeWithCtx(ctx, args);
   },
@@ -291,32 +269,17 @@ async function sendVerificationCodeViaProviderWithCtx(
 }
 
 /**
- * The retired `denySharedDemoEffectIfApplicable` call is now
- * `actors.sharedDemo: "deny"` on the definition: the refusal happens at
- * admission, before the OTP row is written and before the provider is called,
- * rather than inside the body after the fact.
- */
-export const sendVerificationCodeViaProvider = action({
-  args: sendVerificationCodeViaProviderArgs,
-  handler: admitPublicAction(
-    sendVerificationCodeViaProviderOperationDefinition,
-    async (ctx, args: SendVerificationCodeViaProviderArgs): Promise<any> =>
-      sendVerificationCodeViaProviderWithCtx(ctx, args),
-  ),
-});
-
-/**
- * Internal sibling for the `POST /auth/verify` route. `owner` is optional for
- * the same pre-auth reason as `verifyCodeInternal`; when propagated, a code may
- * only be sent for the store the claim clamped to.
+ * Internal sibling for the `POST /auth/verify` route. `owner` is required for
+ * the same reason as `verifyCodeInternal`: a code may only ever be sent for the
+ * store the admitted claim clamped to.
  */
 export const sendVerificationCodeViaProviderInternal = internalAction({
   args: {
     ...sendVerificationCodeViaProviderArgs,
-    owner: v.optional(customerOwnerValidator),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, { owner, ...args }): Promise<any> => {
-    assertCustomerOwnsStoreIfPropagated(owner, args.storeId);
+    assertCustomerOwnsStore(owner, args.storeId);
     return await sendVerificationCodeViaProviderWithCtx(ctx, args);
   },
 });

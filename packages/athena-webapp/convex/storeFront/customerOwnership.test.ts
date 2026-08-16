@@ -10,9 +10,15 @@
  * `bagItem.addItemToBag` patched and inserted into any `bagId`, while
  * `updateItemInBag` and `deleteItemFromBag` acted on a bare `itemId`.
  *
- * The second half of the file covers the guest-store backfill, which exists so
- * a legacy guest row can be clamped at all — and refuses to guess when it
- * cannot be.
+ * `owner` is now REQUIRED on every one of these callees. The transitional
+ * "assert only if propagated" helpers — which silently skipped the assertion
+ * when `owner` was absent, reading at the call site exactly like a live
+ * check — are gone.
+ * Where genuinely no customer actor exists, the call passes the explicit
+ * `SERVER_INITIATED_OWNER` sentinel instead, covered at the end of this file.
+ *
+ * The guest-store backfill section covers the migration that lets a legacy
+ * guest row be clamped at all — and refuses to guess when it cannot be.
  */
 
 import { convexTest } from "convex-test";
@@ -21,6 +27,7 @@ import { describe, expect, it } from "vitest";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
+import { SERVER_INITIATED_OWNER } from "./customerOwnership";
 
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
@@ -260,11 +267,11 @@ describe("storefront bearer ownership", () => {
   });
 
   /**
-   * The pre-B2 contract: these callees still have live route callers that pass
-   * no `owner` yet, so an absent claim must keep the old behaviour rather than
-   * fail closed and break the storefront mid-wave.
+   * The migration has landed, so `owner` is REQUIRED rather than optional.
+   * Omitting it used to be a silent no-op that read like a live check; it now
+   * fails closed at the argument validator before the handler ever runs.
    */
-  it("keeps pre-migration behaviour when no owner is propagated yet", async () => {
+  it("refuses the call outright when no owner is passed at all", async () => {
     const t = convexTest(schema, modules);
     const seed = await seedTwoShoppers(t);
 
@@ -273,9 +280,346 @@ describe("storefront bearer ownership", () => {
         ctx.runMutation(internal.storeFront.bagItem.updateItemInBag, {
           itemId: seed.bobBag.itemId,
           quantity: 7,
+        } as never),
+      ),
+    ).rejects.toThrow(/ArgumentValidationError|owner/i);
+
+    // Terminal: Bob's item is untouched, not merely un-updated.
+    await expect(
+      t.run(async (ctx) =>
+        (await ctx.db.get("bagItem", seed.bobBag.itemId))?.quantity,
+      ),
+    ).resolves.toBe(1);
+  });
+});
+
+/* ------------------------------------------------- the rest of the callees */
+
+/**
+ * The nine other storefront-reachable internal callees whose `owner` went from
+ * optional to required. Each is exercised with a mismatched claim: a valid id
+ * for one shopper presented by another, or the right shopper clamped to the
+ * wrong store.
+ */
+describe("required owner on the remaining storefront callees", () => {
+  it("bag.create refuses to create a bag for someone else", async () => {
+    const t = convexTest(schema, modules);
+    const seed = await seedTwoShoppers(t);
+
+    await expect(
+      t.run((ctx) =>
+        ctx.runMutation(internal.storeFront.bag.create, {
+          owner: { guestId: seed.alice, storeId: seed.storeId },
+          storeFrontUserId: seed.bob,
+          storeId: seed.storeId,
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
+  });
+
+  it("bag.clearBag refuses to empty another shopper's bag", async () => {
+    const t = convexTest(schema, modules);
+    const seed = await seedTwoShoppers(t);
+
+    await expect(
+      t.run((ctx) =>
+        ctx.runMutation(internal.storeFront.bag.clearBag, {
+          id: seed.bobBag.bagId,
+          owner: { guestId: seed.alice, storeId: seed.storeId },
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
+
+    await expect(
+      t.run(async (ctx) =>
+        (
+          await ctx.db
+            .query("bagItem")
+            .withIndex("by_bagId", (q) => q.eq("bagId", seed.bobBag.bagId))
+            .take(10)
+        ).length,
+      ),
+    ).resolves.toBe(1);
+  });
+
+  it("bag.updateOwner refuses a merge that names neither side of the claim", async () => {
+    const t = convexTest(schema, modules);
+    const seed = await seedTwoShoppers(t);
+    const newAccount = await t.run(async (ctx) =>
+      ctx.db.insert("storeFrontUser", {
+        email: "mallory@test",
+        organizationId: (await ctx.db.get("store", seed.storeId))!
+          .organizationId,
+        storeId: seed.storeId,
+      }),
+    );
+
+    await expect(
+      t.run((ctx) =>
+        ctx.runMutation(internal.storeFront.bag.updateOwner, {
+          // Alice tries to graft Bob's guest bag onto a fresh account.
+          currentOwner: seed.bob,
+          newOwner: newAccount,
+          owner: { guestId: seed.alice, storeId: seed.storeId },
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
+  });
+
+  it("savedBag.create and savedBag.getByUserId refuse another shopper's id", async () => {
+    const t = convexTest(schema, modules);
+    const seed = await seedTwoShoppers(t);
+    const alice = { guestId: seed.alice, storeId: seed.storeId };
+
+    await expect(
+      t.run((ctx) =>
+        ctx.runMutation(internal.storeFront.savedBag.create, {
+          owner: alice,
+          storeFrontUserId: seed.bob,
+          storeId: seed.storeId,
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
+
+    await expect(
+      t.run((ctx) =>
+        ctx.runQuery(internal.storeFront.savedBag.getByUserId, {
+          owner: alice,
+          storeFrontUserId: seed.bob,
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
+  });
+
+  it("savedBag.updateOwner refuses a merge that names neither side of the claim", async () => {
+    const t = convexTest(schema, modules);
+    const seed = await seedTwoShoppers(t);
+    const newAccount = await t.run(async (ctx) =>
+      ctx.db.insert("storeFrontUser", {
+        email: "mallory2@test",
+        organizationId: (await ctx.db.get("store", seed.storeId))!
+          .organizationId,
+        storeId: seed.storeId,
+      }),
+    );
+
+    await expect(
+      t.run((ctx) =>
+        ctx.runMutation(internal.storeFront.savedBag.updateOwner, {
+          currentOwner: seed.bob,
+          newOwner: newAccount,
+          owner: { guestId: seed.alice, storeId: seed.storeId },
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
+  });
+
+  it("user.getById and user.update refuse another shopper's row", async () => {
+    const t = convexTest(schema, modules);
+    const seed = await seedTwoShoppers(t);
+    const organizationId = await t.run(
+      async (ctx) => (await ctx.db.get("store", seed.storeId))!.organizationId,
+    );
+    const [aliceUser, bobUser] = await t.run(async (ctx) => [
+      await ctx.db.insert("storeFrontUser", {
+        email: "alice@test",
+        organizationId,
+        storeId: seed.storeId,
+      }),
+      await ctx.db.insert("storeFrontUser", {
+        email: "bob@test",
+        organizationId,
+        storeId: seed.storeId,
+      }),
+    ]);
+    const alice = { storeFrontUserId: aliceUser, storeId: seed.storeId };
+
+    await expect(
+      t.run((ctx) =>
+        ctx.runQuery(internal.storeFront.user.getById, {
+          id: bobUser,
+          owner: alice,
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
+
+    await expect(
+      t.run((ctx) =>
+        ctx.runMutation(internal.storeFront.user.update, {
+          firstName: "Mallory",
+          id: bobUser,
+          owner: alice,
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
+
+    // Alice's own row still updates, and only inside her own store.
+    await t.run((ctx) =>
+      ctx.runMutation(internal.storeFront.user.update, {
+        firstName: "Alice",
+        id: aliceUser,
+        owner: alice,
+      }),
+    );
+    await expect(
+      t.run(async (ctx) =>
+        (await ctx.db.get("storeFrontUser", aliceUser))?.firstName,
+      ),
+    ).resolves.toBe("Alice");
+
+    await expect(
+      t.run((ctx) =>
+        ctx.runMutation(internal.storeFront.user.update, {
+          firstName: "Elsewhere",
+          id: aliceUser,
+          owner: { storeFrontUserId: aliceUser, storeId: seed.otherStoreId },
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
+  });
+
+  it("guest.update refuses to patch another guest's row", async () => {
+    const t = convexTest(schema, modules);
+    const seed = await seedTwoShoppers(t);
+
+    await expect(
+      t.run((ctx) =>
+        ctx.runMutation(internal.storeFront.guest.update, {
+          firstName: "Mallory",
+          id: seed.bob,
+          owner: { guestId: seed.alice, storeId: seed.storeId },
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
+
+    // Right guest, wrong store: the row's own store has to match too.
+    await expect(
+      t.run((ctx) =>
+        ctx.runMutation(internal.storeFront.guest.update, {
+          firstName: "Alice",
+          id: seed.alice,
+          owner: { guestId: seed.alice, storeId: seed.otherStoreId },
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
+  });
+
+  it("auth.verifyCodeInternal refuses a userId that is not the admitted one", async () => {
+    const t = convexTest(schema, modules);
+    const seed = await seedTwoShoppers(t);
+    const organizationId = await t.run(
+      async (ctx) => (await ctx.db.get("store", seed.storeId))!.organizationId,
+    );
+
+    await expect(
+      t.run((ctx) =>
+        ctx.runMutation(internal.storeFront.auth.verifyCodeInternal, {
+          code: "123456",
+          email: "bob@test",
+          organizationId,
+          owner: { guestId: seed.alice, storeId: seed.storeId },
+          storeId: seed.storeId,
+          userId: seed.bob,
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
+
+    // Right shopper, wrong store.
+    await expect(
+      t.run((ctx) =>
+        ctx.runMutation(internal.storeFront.auth.verifyCodeInternal, {
+          code: "123456",
+          email: "alice@test",
+          organizationId,
+          owner: { guestId: seed.alice, storeId: seed.otherStoreId },
+          storeId: seed.storeId,
+          userId: seed.alice,
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
+  });
+});
+
+/* ------------------------------------------------ explicit server-initiated */
+
+/**
+ * The two call sites where no customer actor exists. `owner` is still required
+ * there — it just accepts `SERVER_INITIATED_OWNER`, so "no ownership check
+ * here" is a visible argument rather than an omitted one.
+ */
+describe("SERVER_INITIATED_OWNER", () => {
+  it("guest.getById reads without a check for the sentinel, and asserts otherwise", async () => {
+    const t = convexTest(schema, modules);
+    const seed = await seedTwoShoppers(t);
+
+    // The public `GET /guests` bootstrap path: no admitted owner exists.
+    // This is the accepted IDOR on the guest record — Bob's row comes back.
+    await expect(
+      t.run((ctx) =>
+        ctx.runQuery(internal.storeFront.guest.getById, {
+          id: seed.bob,
+          owner: SERVER_INITIATED_OWNER,
+        }),
+      ),
+    ).resolves.toMatchObject({ marker: "bob" });
+
+    // A REAL claim is still asserted: the sentinel is the only thing that skips.
+    await expect(
+      t.run((ctx) =>
+        ctx.runQuery(internal.storeFront.guest.getById, {
+          id: seed.bob,
+          owner: { guestId: seed.alice, storeId: seed.storeId },
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
+  });
+
+  it("offers.createInternal mints a server-initiated offer, but asserts a real claim", async () => {
+    const t = convexTest(schema, modules);
+    const seed = await seedTwoShoppers(t);
+    const promoCodeId = await t.run(async (ctx) => {
+      const athenaUserId = (
+        await ctx.db.query("athenaUser").first()
+      )!._id;
+      return ctx.db.insert("promoCode", {
+        active: true,
+        code: "FIRSTREVIEW",
+        createdByUserId: athenaUserId,
+        discountType: "percentage",
+        discountValue: 10,
+        displayText: "10% off",
+        span: "entire-order",
+        storeId: seed.storeId,
+        validFrom: Date.now() - 1000,
+        validTo: Date.now() + 1_000_000,
+      });
+    });
+
+    // The first-review reward flow in `reviews.ts`: no customer actor at all.
+    await expect(
+      t.run((ctx) =>
+        ctx.runMutation(internal.storeFront.offers.createInternal, {
+          email: "bob@test",
+          owner: SERVER_INITIATED_OWNER,
+          promoCodeId,
+          storeFrontUserId: seed.bob,
+          storeId: seed.storeId,
         }),
       ),
     ).resolves.toBeDefined();
+
+    // A real claim is still checked: Alice cannot mint an offer for Bob.
+    await expect(
+      t.run((ctx) =>
+        ctx.runMutation(internal.storeFront.offers.createInternal, {
+          email: "bob@test",
+          owner: { guestId: seed.alice, storeId: seed.storeId },
+          promoCodeId,
+          storeFrontUserId: seed.bob,
+          storeId: seed.storeId,
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
   });
 });
 

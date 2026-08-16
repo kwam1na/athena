@@ -1,3 +1,4 @@
+import { CUSTOMER_OWNERSHIP_DENIED } from "../../../../storeFront/customerOwnership";
 import type { Id } from "../../../../_generated/dataModel";
 import type { AdmittedHttpContext } from "../../../../operationAdmission/rail";
 import type { CustomerOwner } from "../../../../storeFront/customerOwnership";
@@ -75,4 +76,23 @@ export function admittedStorefrontUserId(
   owner: CustomerOwner,
 ): Id<"storeFrontUser"> | undefined {
   return owner.storeFrontUserId;
+}
+
+/**
+ * Did this error come from an ownership refusal, or is it a real fault?
+ *
+ * Routes that translate a denial into a 403 must not use a bare `catch {}` to
+ * do it. A catch-all turns every bug in the callee — a validator mismatch, a
+ * missing index, a thrown `TypeError` — into "Forbidden", which is both a lie
+ * to the caller and an outage that monitoring cannot see, because 403 is an
+ * expected status on these routes. It also makes any adjacent 404 unreachable:
+ * a callee that throws instead of returning `null` never gets there.
+ *
+ * `CUSTOMER_OWNERSHIP_DENIED` is deliberately identical for a missing row and
+ * a foreign row, so mapping it to 403 leaks nothing about which one it was.
+ */
+export function isCustomerOwnershipDenial(error: unknown): boolean {
+  return (
+    error instanceof Error && error.message.includes(CUSTOMER_OWNERSHIP_DENIED)
+  );
 }

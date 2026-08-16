@@ -9,19 +9,8 @@ import {
 } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { recordStoreFrontCustomerMilestone } from "./helpers/customerEngagementEvents";
-import {
-  awardPointsForGuestOrdersOperationDefinition,
-  awardPointsForPastOrderOperationDefinition,
-  createRewardTierOperationDefinition,
-  redeemPointsOperationDefinition,
-} from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
-import {
-  getOrderPointsReadDefinition,
-  getPastEligibleOrdersReadDefinition,
-  getPointHistoryReadDefinition,
-  getRewardTiersReadDefinition,
-  getUserPointsReadDefinition,
-} from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
+import { createRewardTierOperationDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
+import { getRewardTiersReadDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
 import {
   admitPublicMutation,
   admitPublicQuery,
@@ -122,32 +111,6 @@ async function listPointHistory(
     .collect();
 }
 
-// Get user's current points
-export const getUserPoints = query({
-  args: {
-    storeFrontUserId: v.id("storeFrontUser"),
-    storeId: v.id("store"),
-  },
-  handler: admitPublicQuery(
-    getUserPointsReadDefinition,
-    async (
-      ctx,
-      args: { storeFrontUserId: Id<"storeFrontUser">; storeId: Id<"store"> },
-    ) => {
-      const pointsRecord = await ctx.db
-        .query("rewardPoints")
-        .withIndex("by_user_store", (q) =>
-          q
-            .eq("storeFrontUserId", args.storeFrontUserId)
-            .eq("storeId", args.storeId)
-        )
-        .first();
-
-      return pointsRecord?.points || 0;
-    },
-  ),
-});
-
 // Get all reward tiers for a store
 export const getTiers = query({
   args: {
@@ -163,18 +126,6 @@ export const getTiers = query({
         .filter((q) => q.eq(q.field("isActive"), true))
         .collect();
     },
-  ),
-});
-
-// Get user's point history
-export const getPointHistory = query({
-  args: {
-    storeFrontUserId: v.id("storeFrontUser"),
-  },
-  handler: admitPublicQuery(
-    getPointHistoryReadDefinition,
-    async (ctx, args: { storeFrontUserId: Id<"storeFrontUser"> }) =>
-      listPointHistory(ctx, args.storeFrontUserId),
   ),
 });
 
@@ -369,18 +320,6 @@ async function redeemPointsWithCtx(ctx: MutationCtx, args: RedeemPointsArgs) {
   }
 }
 
-export const redeemPoints = mutation({
-  args: {
-    storeFrontUserId: v.id("storeFrontUser"),
-    storeId: v.id("store"),
-    rewardTierId: v.id("rewardTiers"),
-  },
-  handler: admitPublicMutation(
-    redeemPointsOperationDefinition,
-    async (ctx, args: RedeemPointsArgs) => redeemPointsWithCtx(ctx, args),
-  ),
-});
-
 /**
  * Internal sibling for `POST /rewards/redeem`. Points are spent from the
  * ADMITTED shopper's balance, in their own store, against a tier that belongs
@@ -488,20 +427,6 @@ async function listPastEligibleOrders(
   }
 }
 
-export const getPastEligibleOrders = query({
-  args: {
-    storeFrontUserId: v.id("storeFrontUser"),
-    email: v.string(),
-  },
-  handler: admitPublicQuery(
-    getPastEligibleOrdersReadDefinition,
-    async (
-      ctx,
-      args: { storeFrontUserId: Id<"storeFrontUser">; email: string },
-    ) => listPastEligibleOrders(ctx, args),
-  ),
-});
-
 /**
  * Internal sibling for `GET /rewards/eligible-past-orders`. The recovery flow
  * matches historical GUEST orders by email, so the email is not an ownership
@@ -605,18 +530,6 @@ async function awardPointsForPastOrderWithCtx(
   }
 }
 
-export const awardPointsForPastOrder = mutation({
-  args: {
-    storeFrontUserId: v.id("storeFrontUser"),
-    orderId: v.id("onlineOrder"),
-  },
-  handler: admitPublicMutation(
-    awardPointsForPastOrderOperationDefinition,
-    async (ctx, args: AwardPointsForPastOrderArgs) =>
-      awardPointsForPastOrderWithCtx(ctx, args),
-  ),
-});
-
 /**
  * Internal sibling for `POST /rewards/award-past-order`. Points land on the
  * ADMITTED account, and the order must belong to the store the claim clamped
@@ -636,43 +549,6 @@ export const awardPointsForPastOrderInternal = internalMutation({
     assertCustomerOwnsStore(owner, order?.storeId);
     return await awardPointsForPastOrderWithCtx(ctx, args);
   },
-});
-
-// Get reward points for a specific order
-export const getOrderPoints = query({
-  args: {
-    orderId: v.id("onlineOrder"),
-  },
-  handler: admitPublicQuery(
-    getOrderPointsReadDefinition,
-    async (ctx, args: { orderId: Id<"onlineOrder"> }) => {
-    // First, check if there's a transaction for this order
-    const transaction = await ctx.db
-      .query("rewardTransactions")
-      .withIndex("by_order", (q) => q.eq("orderId", args.orderId))
-      .first();
-
-    if (transaction) {
-      return {
-        points: transaction.points,
-        transaction,
-      };
-    }
-
-    // If no transaction found, get the order to calculate potential points
-    const order = await ctx.db.get("onlineOrder", args.orderId);
-    if (!order) {
-      return { points: 0 };
-    }
-
-    // Calculate potential points (1 point per GH₵10 spent, rounded down)
-    const potentialPoints = Math.floor(order.amount / 1000);
-
-    return {
-      points: order.hasVerifiedPayment ? potentialPoints : 0,
-    };
-    },
-  ),
 });
 
 type AwardPointsForGuestOrdersArgs = {
@@ -823,18 +699,6 @@ async function awardPointsForGuestOrdersWithCtx(
     };
   }
 }
-
-export const awardPointsForGuestOrders = mutation({
-  args: {
-    storeFrontUserId: v.id("storeFrontUser"),
-    guestId: v.id("guest"),
-  },
-  handler: admitPublicMutation(
-    awardPointsForGuestOrdersOperationDefinition,
-    async (ctx, args: AwardPointsForGuestOrdersArgs) =>
-      awardPointsForGuestOrdersWithCtx(ctx, args),
-  ),
-});
 
 /**
  * Internal sibling for `POST /rewards/award-guest-orders`. This merges a guest

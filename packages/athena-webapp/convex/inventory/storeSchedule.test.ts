@@ -661,6 +661,43 @@ describe("store schedule version staging and coexistence", () => {
       ctx.db.query("storeSchedule").collect(),
     );
 
+  const getHandler = (definition: unknown) =>
+    (definition as { _handler: Function })._handler;
+
+  // The exported command used to probe admission with `resolveWriteAdmission`
+  // and only then run `admitPublicMutation`, admitting twice per call. The
+  // denial is now mapped in a catch around the single wrapper call, and the
+  // caller-visible `CommandResult` must be byte-for-byte what it was: a
+  // `user_error`, never a throw, and no schedule row written.
+  it("maps a rail admission denial on the public command to the store-hours userError", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+
+    // No identity on the ctx, so the rail denies before the domain body runs.
+    const result = await t.run(async (ctx) =>
+      getHandler(upsertStoreScheduleCommand)(ctx, {
+        storeId,
+        timezone: SCHEDULE_TIMEZONE,
+        weeklyClosedDays: [0],
+        weeklyWindows: [
+          { dayOfWeek: 1, startMinute: 9 * 60, endMinute: 18 * 60 },
+        ],
+        dateExceptions: [],
+        effectiveFrom: Date.now(),
+        reportingCycleStartsOn: 1,
+      }),
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to manage store hours.",
+      },
+    });
+    expect(await listVersions(t)).toEqual([]);
+  });
+
   it("hands over at the boundary even when the truncated version keeps a stale active status", async () => {
     const t = convexTest(schema, modules);
     const { organizationId, storeId } = await seedStore(t);

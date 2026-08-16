@@ -28,16 +28,10 @@ import { SHARED_DEMO_ALLOWED_READ_INTENTS } from "../sharedDemo/policy";
 import { SHARED_DEMO_ALLOWED_CAPABILITIES } from "../platform/capabilityCatalog";
 import {
   U6_STOREFRONT_CUSTOMER_OPERATION_DEFINITIONS,
-  cancelOrderOperationDefinition,
   checkTransactionStatusOperationDefinition,
-  createPODOrderOperationDefinition,
-  createTransactionOperationDefinition,
   findOrderTransactionsOperationDefinition,
   getAllTransactionsOperationDefinition,
   refundPaymentOperationDefinition,
-  sendVerificationCodeViaProviderOperationDefinition,
-  verifyCodeOperationDefinition,
-  verifyPaymentOperationDefinition,
 } from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
 import {
   U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS,
@@ -58,7 +52,7 @@ const DENIED_ANONYMOUSLY = /Sign in again to continue\./;
 /* ------------------------------------------------------------- 1. contract */
 
 describe("U6 operation definitions", () => {
-  it("declares 11 mutations, 9 actions, and 37 reads", () => {
+  it("declares 5 mutations, 4 actions, and 28 reads", () => {
     const byKind = U6_STOREFRONT_CUSTOMER_OPERATION_DEFINITIONS.reduce<
       Record<string, number>
     >((counts, definition) => {
@@ -66,8 +60,8 @@ describe("U6 operation definitions", () => {
       return counts;
     }, {});
 
-    expect(byKind).toEqual({ action: 9, mutation: 11 });
-    expect(U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS).toHaveLength(37);
+    expect(byKind).toEqual({ action: 4, mutation: 5 });
+    expect(U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS).toHaveLength(28);
   });
 
   it("passes rail definition validation and declares every actor explicitly", () => {
@@ -126,16 +120,15 @@ describe("U6 operation definitions", () => {
   });
 
   // `public: "admit"` is the one place an operation gives up identity entirely,
-  // so the set is enumerated rather than spot-checked.
-  it("admits anonymous callers on exactly the two pre-auth OTP operations", () => {
+  // so the set is enumerated rather than spot-checked. The pre-auth OTP pair
+  // that used to sit here now reaches the domain only through its HTTP route,
+  // so no U6 Convex operation gives up identity any more.
+  it("admits anonymous callers on no U6 operation", () => {
     expect(
       U6_STOREFRONT_CUSTOMER_OPERATION_DEFINITIONS.filter(
         (definition) => definition.actors.public === "admit",
       ).map((definition) => definition.functionName),
-    ).toEqual([
-      "storeFront/auth:verifyCode",
-      "storeFront/auth:sendVerificationCodeViaProvider",
-    ]);
+    ).toEqual([]);
 
     expect(
       U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS.filter(
@@ -161,22 +154,6 @@ describe("U6 operation definitions", () => {
  * definition field that now carries it.
  */
 describe("U6 retired guard successors", () => {
-  it.each([
-    // enforceSharedDemoActionCapability("billing.manage") -> capability +
-    // declared gateway + demo denial (billing.manage is not demo-granted).
-    ["payment:createTransaction", createTransactionOperationDefinition],
-    ["payment:createPODOrder", createPODOrderOperationDefinition],
-    ["payment:verifyPayment", verifyPaymentOperationDefinition],
-  ])("re-expresses the demo capability check on %s", (_site, definition) => {
-    expect(definition.capability).toBe("billing.manage");
-    expect(definition.effects).toEqual({
-      mode: "protected",
-      gateways: ["payment.collect"],
-    });
-    expect(definition.actors.sharedDemo).toBe("deny");
-    expect(definition.actors.public).toBe("deny");
-  });
-
   /**
    * The one payment path the demo keeps. `payments.refund` is granted and the
    * `payment.refund` gateway is classified `simulated`, so a demo visitor still
@@ -198,7 +175,6 @@ describe("U6 retired guard successors", () => {
 
   it.each([
     // requireAuthenticatedNonDemoEffect -> identity required + demo denied
-    ["checkoutSession:cancelOrder", cancelOrderOperationDefinition],
     ["paystackActions:getAllTransactions", getAllTransactionsOperationDefinition],
     [
       "paystackActions:checkTransactionStatus",
@@ -218,24 +194,6 @@ describe("U6 retired guard successors", () => {
     expect(definition.actors.public).toBe("deny");
     // "and a demo principal is refused"
     expect(definition.actors.sharedDemo).toBe("deny");
-  });
-
-  /**
-   * `denySharedDemoEffectIfApplicable` refused the demo but demanded no
-   * identity — this is the pre-auth OTP send, whose caller cannot be signed in
-   * yet. The successor keeps exactly that asymmetry.
-   */
-  it("re-expresses denySharedDemoEffectIfApplicable on auth:sendVerificationCodeViaProvider", () => {
-    expect(sendVerificationCodeViaProviderOperationDefinition.actors).toEqual({
-      normalUser: "admit",
-      public: "admit",
-      sharedDemo: "deny",
-    });
-  });
-
-  it("keeps the pre-auth code exchange anonymous", () => {
-    expect(verifyCodeOperationDefinition.actors.public).toBe("admit");
-    expect(verifyCodeOperationDefinition.actors.sharedDemo).toBe("deny");
   });
 
   // No U6 handler called requireNonDemoFoundation*, so no definition may
@@ -283,45 +241,6 @@ async function seedStore(t: ReturnType<typeof convexTest>) {
 }
 
 describe("U6 exported handler admission", () => {
-  it("still lets an anonymous shopper run the pre-auth code exchange", async () => {
-    const t = convexTest(schema, modules);
-    const seed = await seedStore(t);
-    await t.run(async (ctx) => {
-      await ctx.db.insert("storeFrontVerificationCode", {
-        code: "123456",
-        email: "shopper@test",
-        expiration: Date.now() + 600_000,
-        isUsed: false,
-        storeId: seed.storeId,
-      });
-    });
-
-    // Admitted anonymously: the result is the DOMAIN outcome, not a denial.
-    // A wrong code is the assertion on purpose — the success path mints a JWT,
-    // which the Convex test runtime cannot sign, and the point here is that
-    // admission let an identity-less caller reach the handler at all.
-    await expect(
-      t.mutation(api.storeFront.auth.verifyCode, {
-        code: "000000",
-        email: "shopper@test",
-        organizationId: seed.organizationId,
-        storeId: seed.storeId,
-        userId: seed.guestId,
-      }),
-    ).resolves.toEqual({
-      error: true,
-      message: "Invalid verification code",
-    });
-
-    // The stored code is still unused, so nothing about the anonymous path
-    // consumed state before the domain check ran.
-    await expect(
-      t.run(async (ctx) =>
-        (await ctx.db.query("storeFrontVerificationCode").first())?.isUsed,
-      ),
-    ).resolves.toBe(false);
-  });
-
   it("denies anonymous callers everywhere else, before any read or write", async () => {
     const t = convexTest(schema, modules);
     const seed = await seedStore(t);

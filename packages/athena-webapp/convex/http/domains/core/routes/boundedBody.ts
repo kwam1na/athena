@@ -1,49 +1,29 @@
 import type { Context, Next } from "hono";
 
+import {
+  readBoundedRequestBody,
+  requestWithBody,
+} from "../../../../operationAdmission/ingressBody";
+
 /**
- * Body size bounds for the public marketing ingress routes.
+ * Route-specific body bounds, tighter than the rail's default.
  *
- * Admission changed where the body is read: the rail reads it once, before the
- * handler, so that an origin or signature verifier covers precisely the bytes
- * the handler goes on to parse. That read is unbounded — it waits for the
- * stream to end — so on an unauthenticated route a slow or endless body would
- * otherwise pin the request. The bound therefore moves in FRONT of the rail, as
- * middleware: it streams the request itself, cancels the reader the moment the
- * limit is crossed, and hands the rail a request whose body is the bytes it
- * already accepted. Running before admission also means an oversize request
- * leaves no admission row behind it.
+ * The rail now bounds EVERY admitted `http` write body before admission (see
+ * `operationAdmission/ingressBody.ts`), so this middleware is no longer what
+ * stands between an unauthenticated route and an endless stream. It remains
+ * for the two public marketing routes, which want a much smaller cap than the
+ * global default — 1 KiB for funnel events, and an env-configured limit for
+ * walkthrough requests — and which answer 413 in their own response shape.
+ *
+ * The streaming implementation is shared with the rail rather than duplicated,
+ * so there is one bounded-read behaviour to reason about.
  */
 export async function readBoundedBody(
   request: Request,
   maxBytes: number,
 ): Promise<Uint8Array | null> {
-  const reader = request.body?.getReader();
-  if (!reader) return new Uint8Array();
-
-  const chunks: Uint8Array[] = [];
-  let byteLength = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      byteLength += value.byteLength;
-      if (byteLength > maxBytes) {
-        await reader.cancel("request body exceeds limit");
-        return null;
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  const body = new Uint8Array(byteLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return body;
+  const result = await readBoundedRequestBody(request, maxBytes);
+  return result.kind === "too_large" ? null : result.bytes;
 }
 
 /**
@@ -69,17 +49,7 @@ export function boundRequestBody(resolveMaxBytes: () => number) {
 
     // Hand the rail a request carrying exactly the bytes we accepted: the
     // original stream is spent, and re-reading it would fail.
-    c.req.raw = new Request(c.req.raw.url, {
-      method: c.req.raw.method,
-      headers: c.req.raw.headers,
-      body:
-        bytes.byteLength > 0
-          ? (bytes.buffer.slice(
-              bytes.byteOffset,
-              bytes.byteOffset + bytes.byteLength,
-            ) as ArrayBuffer)
-          : undefined,
-    });
+    c.req.raw = requestWithBody(c.req.raw, bytes);
 
     return next();
   };

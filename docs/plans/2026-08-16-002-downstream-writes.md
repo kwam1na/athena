@@ -10,6 +10,11 @@ admitted store id rather than trusting the ingress decision.
 | Ingress | Kind | Operation | Internal mutation | Depth |
 |---|---|---|---|---:|
 | `storeFront/onlineOrderUtilFns:sendOrderUpdateEmail` | action | `storeFront/onlineOrderUtilFns.sendOrderUpdateEmail` | `internal.storeFront.onlineOrder.updateInternal` | 1 |
+| `storeFront/payment:refundPayment` | action | `storeFront/payment.refundPayment` | `internal.storeFront.onlineOrder.finalizeRefundInternal` | 1 |
+| `storeFront/payment:refundPayment` | action | `storeFront/payment.refundPayment` | `internal.storeFront.onlineOrder.releaseRefundReservationInternal` | 1 |
+| `storeFront/payment:refundPayment` | action | `storeFront/payment.refundPayment` | `internal.storeFront.onlineOrder.reserveRefundInternal` | 1 |
+| `storeFront/payment:refundPayment` | action | `storeFront/payment.refundPayment` | `internal.storeFront.onlineOrder.returnItemsToStockInternal` | 1 |
+| `storeFront/payment:refundPayment` | action | `storeFront/payment.refundPayment` | `internal.storeFront.onlineOrder.updateOrderItemsInternal` | 1 |
 | `storeFront/reviews:sendFeedbackRequest` | action | `storeFront/reviews.sendFeedbackRequest` | `internal.storeFront.onlineOrderItem.updateInternal` | 1 |
 
-Rows: 2
+Rows: 7

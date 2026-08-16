@@ -10,7 +10,6 @@ import "../inventory/storeSchedule";
 import type { Id } from "../_generated/dataModel";
 import * as sharedDemoActor from "../sharedDemo/actor";
 import {
-  getReceiptByShareToken,
   getReceiptByShareTokenInternal,
   sendPosReceiptLink,
   toPublicReceiptTransaction,
@@ -64,7 +63,7 @@ beforeEach(() => {
   vi.mocked(getTransactionById).mockReset();
 });
 
-describe("customer messaging receipt share admission", () => {
+describe("customer messaging receipt share reads", () => {
   it("still resolves a share link for an anonymous holder of the token", async () => {
     vi.mocked(resolveReceiptShareToken).mockResolvedValue({
       transactionId: "txn_1",
@@ -73,7 +72,7 @@ describe("customer messaging receipt share admission", () => {
       RECEIPT_TRANSACTION as never,
     );
 
-    const receipt = await getHandler(getReceiptByShareToken)(
+    const receipt = await getHandler(getReceiptByShareTokenInternal)(
       { auth: { getUserIdentity: async () => null }, db: {} },
       { token: "share-token" },
     );
@@ -88,46 +87,12 @@ describe("customer messaging receipt share admission", () => {
     vi.mocked(resolveReceiptShareToken).mockResolvedValue(null as never);
 
     await expect(
-      getHandler(getReceiptByShareToken)(
+      getHandler(getReceiptByShareTokenInternal)(
         { auth: { getUserIdentity: async () => null }, db: {} },
         { token: "unknown" },
       ),
     ).resolves.toBeNull();
     expect(getTransactionById).not.toHaveBeenCalled();
-  });
-
-  it("gives the internal sibling identical behaviour to the public query", async () => {
-    vi.mocked(resolveReceiptShareToken).mockResolvedValue({
-      transactionId: "txn_1",
-    } as never);
-    vi.mocked(getTransactionById).mockResolvedValue(
-      RECEIPT_TRANSACTION as never,
-    );
-    const ctx = { auth: { getUserIdentity: async () => null }, db: {} };
-
-    await expect(
-      getHandler(getReceiptByShareTokenInternal)(ctx, { token: "share-token" }),
-    ).resolves.toEqual(
-      await getHandler(getReceiptByShareToken)(ctx, { token: "share-token" }),
-    );
-  });
-
-  it("denies a shared-demo visitor the receipt share read", async () => {
-    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
-      athenaUserId: "demo-owner" as Id<"athenaUser">,
-      authUserId: "auth-demo" as Id<"users">,
-      kind: "shared_demo",
-      organizationId: "org-1" as Id<"organization">,
-      storeId: "store-1" as Id<"store">,
-    });
-
-    await expect(
-      getHandler(getReceiptByShareToken)(
-        { auth: { getUserIdentity: vi.fn() }, db: {} },
-        { token: "share-token" },
-      ),
-    ).rejects.toThrow("This action isn't allowed in the demo.");
-    expect(resolveReceiptShareToken).not.toHaveBeenCalled();
   });
 });
 

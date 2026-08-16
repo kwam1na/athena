@@ -1,3 +1,5 @@
+import { ConvexError } from "convex/values";
+
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type {
@@ -5,6 +7,7 @@ import type {
   OperationAdapter,
   OperationAdapterAdmitted,
   OperationAdapterDenied,
+  OperationAdapterDeniedReason,
   OperationAdapterOutcome,
   OperationAdmissionContext,
   OperationAdmissionCtx,
@@ -92,11 +95,101 @@ export function createPublicOperationAdapter(): OperationAdapter {
   };
 }
 
+/**
+ * Marker carried on every admission failure the rail itself raises.
+ *
+ * HTTP ingress needs to answer "was this refused, or did it break?" on the far
+ * side of a `ctx.runMutation` boundary, where the original Error class is
+ * gone. Classifying by message text there would reintroduce exactly the
+ * string-matching this rail removed from the adapters, so the outcome travels
+ * as DATA on a `ConvexError` instead.
+ *
+ * `outcome` distinguishes "no identity at all" (401) from "identified and
+ * refused" (403). Anything without this marker is a real fault and must keep
+ * surfacing as a 500.
+ */
+export const OPERATION_ADMISSION_DENIED = "operation_admission_denied" as const;
+
+export type OperationAdmissionDenialData = {
+  kind: typeof OPERATION_ADMISSION_DENIED;
+  message: string;
+  outcome: "denied" | "unauthenticated";
+  reason?: OperationAdapterDeniedReason;
+};
+
+export function operationAdmissionDenial(
+  data: OperationAdmissionDenialData,
+): ConvexError<OperationAdmissionDenialData> {
+  return new ConvexError(data);
+}
+
+/**
+ * Read the denial marker off an error that may have crossed a Convex
+ * boundary. Convex preserves `ConvexError.data` across `runMutation`, so this
+ * works on both sides.
+ */
+export function operationAdmissionDenialData(
+  error: unknown,
+): OperationAdmissionDenialData | undefined {
+  const data = (error as { data?: unknown } | undefined)?.data;
+  if (
+    data &&
+    typeof data === "object" &&
+    (data as { kind?: unknown }).kind === OPERATION_ADMISSION_DENIED
+  ) {
+    return data as OperationAdmissionDenialData;
+  }
+  return undefined;
+}
+
+/**
+ * The chain ran out of adapters without any of them claiming the caller.
+ *
+ * A distinct class, not a distinct message: HTTP ingress must map this to 401
+ * and a genuine refusal to 403, and deciding that by comparing message text is
+ * the failure mode this rail exists to remove. The message is unchanged from
+ * the plain `Error` it replaces, so existing call sites and assertions that
+ * match on it are unaffected.
+ */
+export class OperationUnauthenticatedError extends Error {
+  readonly operationAdmissionOutcome = "unauthenticated" as const;
+
+  constructor(message = "Sign in again to continue.") {
+    super(message);
+    this.name = "OperationUnauthenticatedError";
+  }
+}
+
 export function operationDenialError(outcome: OperationAdapterDenied): Error {
   return (
     outcome.error ??
     new Error("This operation is not available for the current actor.")
   );
+}
+
+/**
+ * Re-throw an admission failure as a typed denial that survives a Convex
+ * `runMutation` / `runQuery` boundary.
+ *
+ * Applied only at the registered entry points, which exist solely for actions
+ * and HTTP routes. Direct mutation and query call sites never pass through
+ * here, so their error contracts are untouched.
+ */
+export function asOperationAdmissionDenial(error: unknown) {
+  const existing = operationAdmissionDenialData(error);
+  if (existing) return operationAdmissionDenial(existing);
+
+  return operationAdmissionDenial({
+    kind: OPERATION_ADMISSION_DENIED,
+    message:
+      error instanceof Error
+        ? error.message
+        : "This operation is not available for the current actor.",
+    outcome:
+      error instanceof OperationUnauthenticatedError
+        ? "unauthenticated"
+        : "denied",
+  });
 }
 
 /**
@@ -131,5 +224,5 @@ export async function resolveAdmissionChain<
     }
   }
 
-  throw new Error("Sign in again to continue.");
+  throw new OperationUnauthenticatedError();
 }

@@ -12,7 +12,8 @@ const COOKIE_DOMAIN = "wigclub.store";
 const COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 const HOMEPAGE_MERCHANDISING_BUCKET_MS = 60_000;
 // Anonymous browse read: the snapshot carries no shopper-scoped data, so the
-// internal sibling is called without an `owner`.
+// internal sibling has no `owner` parameter at all — there is no ownership
+// concept on this path, only the `storeId` that names what to render.
 const homepageSnapshotQuery = internal.storeFront.homepageSnapshot.getInternal;
 
 type CookieToSet = {

@@ -282,6 +282,98 @@ describe("collectConvexIngressFromSource", () => {
     expect(preWrite[0].admitted).toBe(false);
   });
 
+  /**
+   * The positional rule. "The wrapper is called somewhere in this body" is not
+   * admission: anything ahead of it runs for a caller nobody admitted, and a
+   * wrapper nested in a branch admits on some paths only.
+   */
+  describe("wrapper position", () => {
+    const PROLOGUE = `
+        import { mutation } from "../_generated/server";
+        import { admitPublicMutation } from "../platform/operationAdmission";
+        import { definition } from "../operationAdmission/definitions";
+    `;
+
+    const inlineHandler = (body: string) =>
+      collectConvexIngressFromSource(
+        "packages/athena-webapp/convex/example/position.ts",
+        `${PROLOGUE}
+        export const write = mutation({
+          args: {},
+          handler: async (ctx, args) => {${body}},
+        });
+      `,
+      )[0];
+
+    it("accepts the wrapper as the first statement", () => {
+      const entry = inlineHandler(`
+            return await admitPublicMutation(definition, async () => null)(ctx, args);
+      `);
+      expect(entry.admitted).toBe(true);
+      expect(entry.wrapperNotFirst).toBeFalsy();
+    });
+
+    it("accepts a try whose block starts with the wrapper", () => {
+      const entry = inlineHandler(`
+            try {
+              return await admitPublicMutation(definition, async () => null)(ctx, args);
+            } catch (error) {
+              return { kind: "user_error", error: String(error) };
+            }
+      `);
+      expect(entry.admitted).toBe(true);
+      expect(entry.wrapperNotFirst).toBeFalsy();
+    });
+
+    it.each([
+      [
+        "a read before admission",
+        `const row = await ctx.db.get(args.id);
+         return admitPublicMutation(definition, async () => row)(ctx, args);`,
+      ],
+      [
+        "a runQuery before admission",
+        `const seen = await ctx.runQuery(internal.some.probe, {});
+         return admitPublicMutation(definition, async () => seen)(ctx, args);`,
+      ],
+      [
+        "a runMutation before admission",
+        `await ctx.runMutation(internal.some.write, {});
+         return admitPublicMutation(definition, async () => null)(ctx, args);`,
+      ],
+      [
+        "a scheduler call before admission",
+        `await ctx.scheduler.runAfter(0, internal.some.job, {});
+         return admitPublicMutation(definition, async () => null)(ctx, args);`,
+      ],
+      [
+        "a second admission probe before the wrapper",
+        `await resolveWriteAdmission(ctx, args, definition);
+         return admitPublicMutation(definition, async () => null)(ctx, args);`,
+      ],
+      [
+        "the wrapper nested in a branch",
+        `if (args.mode === "admit") {
+           return admitPublicMutation(definition, async () => null)(ctx, args);
+         }
+         return null;`,
+      ],
+    ])("rejects %s", (_label, body) => {
+      const entry = inlineHandler(`\n${body}\n`);
+      expect(entry.admitted).toBe(false);
+      expect(entry.wrapperNotFirst).toBe(true);
+    });
+
+    it("reports no wrapper at all as unadmitted WITHOUT the positional flag", () => {
+      const entry = inlineHandler(`
+            return await someOtherHelper(ctx, args);
+      `);
+      expect(entry.admitted).toBe(false);
+      // Different remediation: "add the wrapper" vs "move the wrapper first".
+      expect(entry.wrapperNotFirst).toBeFalsy();
+    });
+  });
+
   it("discovers destructured convexAuth registrar exports", () => {
     const ingress = collectConvexIngressFromSource(
       "packages/athena-webapp/convex/auth.ts",

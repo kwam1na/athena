@@ -60,7 +60,6 @@ import {
   REPORT_RANGE_TTL_MS,
 } from "../../shared/reportsContract";
 import {
-  classifyAthenaPublicWrite,
   isSharedDemoCapabilityAllowed,
 } from "../platform/capabilityCatalog";
 import {
@@ -1419,11 +1418,18 @@ describe("terminal retry", () => {
 
 describe("public boundary", () => {
   it("is registered for the generation capability, which the shared demo may never hold", () => {
-    expect(
-      classifyAthenaPublicWrite(
-        "reports/skuMovementRange:ensureMovementRange",
-      ),
-    ).toEqual({ capability: "reporting.generate", decision: "classified" });
+    // Was `classifyAthenaPublicWrite(...)` against a hand-maintained
+    // module -> capability map. The map is deleted; the definition IS the
+    // registration, so the capability is read off it directly.
+    expect(ensureMovementRangeOperationDefinition.functionName).toBe(
+      "reports/skuMovementRange:ensureMovementRange",
+    );
+    expect(ensureMovementRangeOperationDefinition.capability).toBe(
+      "reporting.generate",
+    );
+    expect(ensureMovementRangeOperationDefinition.actors.sharedDemo).toBe(
+      "deny",
+    );
     expect(isSharedDemoCapabilityAllowed("reporting.generate")).toBe(false);
   });
 

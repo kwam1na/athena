@@ -99,14 +99,36 @@ export function assertCustomerOwnsRow(
 }
 
 /**
- * The optional form used by internal functions that already existed and are
- * still called by not-yet-migrated HTTP routes (wave B2 flips those call
- * sites). When `owner` is present the assertion is live; when it is absent the
- * callee keeps its pre-migration behaviour so the tree stays green between
- * waves. U10/U11 make every storefront-reachable call site pass it.
+ * An explicitly unowned call: no customer actor exists for this path.
+ *
+ * Required rather than optional so that "no ownership check here" is a
+ * deliberate, greppable decision at the call site instead of an omitted
+ * argument that silently skips the assertion.
  */
-export function assertCustomerOwnsRowIfPropagated(
-  owner: CustomerOwner | undefined,
+export const SERVER_INITIATED_OWNER = { kind: "server_initiated" } as const;
+
+export type CustomerOwnerOrServerInitiated =
+  | CustomerOwner
+  | typeof SERVER_INITIATED_OWNER;
+
+export const customerOwnerOrServerInitiatedValidator = v.union(
+  customerOwnerValidator,
+  v.object({ kind: v.literal("server_initiated") }),
+);
+
+/** Narrow the sentinel apart from a real admitted claim. */
+export function isServerInitiated(
+  owner: CustomerOwnerOrServerInitiated,
+): owner is typeof SERVER_INITIATED_OWNER {
+  return "kind" in owner && owner.kind === "server_initiated";
+}
+
+/**
+ * `assertCustomerOwnsRow`, but skipping the check for — and ONLY for — the
+ * explicit `SERVER_INITIATED_OWNER` sentinel. Any real claim is asserted.
+ */
+export function assertCustomerOwnsRowUnlessServerInitiated(
+  owner: CustomerOwnerOrServerInitiated,
   row:
     | {
         storeFrontUserId?: Id<"storeFrontUser"> | Id<"guest"> | string;
@@ -115,14 +137,18 @@ export function assertCustomerOwnsRowIfPropagated(
     | null
     | undefined,
 ): void {
-  if (!owner) return;
+  if (isServerInitiated(owner)) return;
   assertCustomerOwnsRow(owner, row);
 }
 
-export function assertCustomerOwnsStoreIfPropagated(
-  owner: CustomerOwner | undefined,
+/**
+ * `assertCustomerOwnsStore`, but skipping the check for — and ONLY for — the
+ * explicit `SERVER_INITIATED_OWNER` sentinel. Any real claim is asserted.
+ */
+export function assertCustomerOwnsStoreUnlessServerInitiated(
+  owner: CustomerOwnerOrServerInitiated,
   storeId: Id<"store"> | string | undefined | null,
 ): void {
-  if (!owner) return;
+  if (isServerInitiated(owner)) return;
   assertCustomerOwnsStore(owner, storeId);
 }

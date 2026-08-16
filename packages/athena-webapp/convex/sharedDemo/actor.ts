@@ -6,6 +6,7 @@ import { internalQuery } from "../_generated/server";
 import { v } from "convex/values";
 import type { SharedDemoCapability } from "./policy";
 import { denySharedDemoAction, requireSharedDemoCapability } from "./policy";
+import { SHARED_DEMO_ALLOWED_CAPABILITIES } from "../platform/capabilityCatalog";
 import { isSharedDemoEnabled } from "./config";
 import { requireReadySharedDemoWriteWithCtx } from "./restore";
 
@@ -135,33 +136,32 @@ export async function requireReadySharedDemoStoreCapabilityIfApplicable(
   return actor;
 }
 
+/**
+ * Derived, not hand-listed.
+ *
+ * This used to be 26 `v.literal(...)` lines maintained by hand, and it had
+ * drifted: it accepted six capabilities the demo was never granted
+ * (`identity.manage`, `permissions.manage`, `billing.manage`,
+ * `integrations.manage`, `exports.generate`, `administration.destructive`)
+ * and one — `reports.read` — that no longer exists. Deriving from
+ * `SHARED_DEMO_ALLOWED_CAPABILITIES` means the accepted argument set cannot
+ * drift from the grant set: adding a grant widens it, and nothing else can.
+ * `demo.lifecycle` is added because it is the demo's own lifecycle capability,
+ * granted by `requireSharedDemoCapability` rather than by the allowlist.
+ */
+const SHARED_DEMO_CHECKABLE_CAPABILITIES = [
+  ...SHARED_DEMO_ALLOWED_CAPABILITIES,
+  "demo.lifecycle",
+] as const satisfies readonly SharedDemoCapability[];
+
 const sharedDemoCapabilityValidator = v.union(
-  v.literal("approvals.manage"),
-  v.literal("customer.messaging.send"),
-  v.literal("expense.manage"),
-  v.literal("pos.sale.complete"),
-  v.literal("pos.sync.write"),
-  v.literal("pos.transaction.correct"),
-  v.literal("inventory.adjust"),
-  v.literal("cash.control.write"),
-  v.literal("catalog.maintain"),
-  v.literal("catalog.quick_add"),
-  v.literal("orders.fulfill"),
-  v.literal("orders.manage"),
-  v.literal("orders.return"),
-  v.literal("reviews.manage"),
-  v.literal("staff.communication.write"),
-  v.literal("daily_operations.write"),
-  v.literal("reports.read"),
-  v.literal("staff.authenticate"),
-  v.literal("identity.manage"),
-  v.literal("permissions.manage"),
-  v.literal("billing.manage"),
-  v.literal("integrations.manage"),
-  v.literal("exports.generate"),
-  v.literal("payments.refund"),
-  v.literal("administration.destructive"),
-  v.literal("demo.lifecycle"),
+  ...(SHARED_DEMO_CHECKABLE_CAPABILITIES.map((capability) =>
+    v.literal(capability),
+  ) as [
+    ReturnType<typeof v.literal<SharedDemoCapability>>,
+    ReturnType<typeof v.literal<SharedDemoCapability>>,
+    ...ReturnType<typeof v.literal<SharedDemoCapability>>[],
+  ]),
 );
 
 export const enforceSharedDemoActionCapability = internalQuery({

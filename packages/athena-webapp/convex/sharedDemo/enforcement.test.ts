@@ -45,6 +45,9 @@ vi.mock("../platform/operationAdmission", async (importOriginal) => {
   };
 });
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { getAuthUserId } from "@convex-dev/auth/server";
 import {
   requireReadySharedDemoStoreCapabilityIfApplicable,
@@ -52,19 +55,33 @@ import {
   requireSharedDemoStoreCapabilityIfApplicable,
 } from "./actor";
 import { requireReadySharedDemoWriteWithCtx } from "./restore";
-import { create as createInvite } from "../inventory/inviteCode";
-import {
-  patchConfigV2Command,
-  remove as removeStore,
-} from "../inventory/stores";
-import { createStaffCredential } from "../operations/staffCredentials";
+import { classifySharedDemoExternalGateway } from "./policy";
+import { OPERATION_ADMISSION_DEFINITIONS } from "../operationAdmission/definitions";
+import { remove as removeStore } from "../inventory/stores";
 import { decideApprovalRequest } from "../operations/approvalRequests";
 import { processReturnExchange } from "../storeFront/onlineOrder";
-import { createTransaction, refundPayment } from "../storeFront/payment";
-import {
-  createStaffProfile,
-  updateStaffProfile,
-} from "../operations/staffProfiles";
+
+/** The handler-local demo guards this migration retired. */
+const RETIRED_HANDLER_GUARDS = [
+  "requireSharedDemoCapabilityIfApplicable",
+  "requireSharedDemoStoreCapabilityIfApplicable",
+  "enforceSharedDemoActionCapability",
+  "denySharedDemoEffectIfApplicable",
+  "requireAuthenticatedNonDemoEffect",
+] as const;
+
+/**
+ * Module source with comments removed.
+ *
+ * The migrated modules deliberately keep `// Retired: ...` comments naming the
+ * guard each definition replaced; a naive substring check would read those as
+ * live call sites.
+ */
+function strippedSource(relativePath: string) {
+  return readFileSync(resolve(__dirname, relativePath), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+}
 
 const invoke = (fn: unknown, ctx: unknown, args: unknown) =>
   (fn as { _handler: (ctx: unknown, args: unknown) => Promise<unknown> })._handler(
@@ -78,30 +95,48 @@ describe("actual public shared-demo enforcement boundaries", () => {
     vi.mocked(getAuthUserId).mockResolvedValue(null as never);
   });
 
+  /**
+   * These six used to be asserted by mocking `requireSharedDemoCapabilityIfApplicable`
+   * and checking the handler called it before touching `ctx.db`. That guard is
+   * retired: the denial now happens in the rail, before the handler is entered
+   * at all, so there is no in-handler call left to observe and the old shape
+   * could only be kept alive by re-adding the guard it was written to police.
+   *
+   * The successor fact is the declaration — `actors.sharedDemo: "deny"` on the
+   * operation — plus the absence of the retired identifier from the module.
+   * Runtime denial through the real rail is covered per-function by the unit
+   * admission suites (`inventoryIdentityAdmission.test.ts`,
+   * `operationsAdmission.test.ts`).
+   */
   it.each([
-    [createStaffCredential, "identity.manage", {}],
-    [createInvite, "permissions.manage", {}],
-    [removeStore, "administration.destructive", { id: "store" }],
-    [patchConfigV2Command, "integrations.manage", { id: "store", patch: {} }],
-    [createStaffProfile, "staff.manage", {}],
-    [updateStaffProfile, "staff.manage", {}],
-  ] as const)("denies a representative actual function before its write", async (fn, capability, args) => {
-    vi.mocked(requireSharedDemoCapabilityIfApplicable).mockRejectedValueOnce(
-      new Error("This action is unavailable in the demo."),
-    );
-    const ctx = { db: { delete: vi.fn(), insert: vi.fn(), patch: vi.fn() } };
+    [
+      "operations/staffCredentials:createStaffCredential",
+      "identity.manage",
+    ],
+    ["inventory/inviteCode:create", "permissions.manage"],
+    ["inventory/stores:remove", "administration.destructive"],
+    ["inventory/stores:patchConfigV2Command", "integrations.manage"],
+    ["operations/staffProfiles:createStaffProfile", "staff.manage"],
+    ["operations/staffProfiles:updateStaffProfile", "staff.manage"],
+  ] as const)(
+    "denies a representative actual function at the rail, not in the handler",
+    (functionName, capability) => {
+      const definition = OPERATION_ADMISSION_DEFINITIONS.find(
+        (candidate) => candidate.functionName === functionName,
+      );
+      expect(definition, functionName).toBeDefined();
+      expect(definition?.capability, functionName).toBe(capability);
+      expect(definition?.actors.sharedDemo, functionName).toBe("deny");
 
-    await expect(invoke(fn, ctx, args)).rejects.toThrow(
-      "This action is unavailable in the demo.",
-    );
-    expect(requireSharedDemoCapabilityIfApplicable).toHaveBeenCalledWith(
-      ctx,
-      capability,
-    );
-    expect(ctx.db.delete).not.toHaveBeenCalled();
-    expect(ctx.db.insert).not.toHaveBeenCalled();
-    expect(ctx.db.patch).not.toHaveBeenCalled();
-  });
+      const [moduleName] = functionName.split(":");
+      const code = strippedSource(`../${moduleName}.ts`);
+      for (const retired of RETIRED_HANDLER_GUARDS) {
+        expect(code, `${moduleName} still calls ${retired}`).not.toContain(
+          `${retired}(`,
+        );
+      }
+    },
+  );
 
   it("routes demo return and exchange writes through the loaded order store clamp", async () => {
     const sentinel = new Error("boundary reached");
@@ -126,18 +161,55 @@ describe("actual public shared-demo enforcement boundaries", () => {
     );
   });
 
-  it.each([
-    [createTransaction, "billing.manage"],
-    [refundPayment, "payments.refund"],
-  ] as const)("denies an actual payment action before provider or mutation work", async (fn, capability) => {
-    const denial = new Error("This action is unavailable in the demo.");
-    const ctx = {
-      runMutation: vi.fn(),
-      runQuery: vi.fn().mockRejectedValue(denial),
-    };
-    await expect(invoke(fn, ctx, {})).rejects.toThrow(denial.message);
-    expect(ctx.runQuery).toHaveBeenCalledWith(expect.anything(), { capability });
-    expect(ctx.runMutation).not.toHaveBeenCalled();
+  /**
+   * The payment actions used to open with a `ctx.runQuery` into
+   * `enforceSharedDemoActionCapability`, and this asserted that the query ran
+   * before any provider or mutation work. Both call sites are retired.
+   *
+   * The successor is stronger, because it is a property of the declaration
+   * rather than of one handler's statement order: a payment action is either
+   * demo-denied outright, or it is demo-admitted and every external gateway it
+   * binds classifies as `simulated`. Either way a demo principal cannot reach
+   * a live payment provider — which is what the old ordering assertion was
+   * protecting.
+   */
+  it("keeps every payment operation away from a live provider in the demo", () => {
+    // Enumerated from the definitions, not hand-listed: this delivery deleted
+    // three route-only payment exports, and a hard-coded list would have gone
+    // stale the moment they went.
+    const paymentOperations = OPERATION_ADMISSION_DEFINITIONS.filter(
+      (definition) =>
+        definition.functionName?.startsWith("storeFront/payment:") ||
+        definition.functionName?.startsWith("storeFront/paystackActions:"),
+    );
+    expect(paymentOperations.length).toBeGreaterThan(0);
+
+    for (const definition of paymentOperations) {
+      const name = definition.functionName!;
+      // Every payment operation names the provider gateway it can reach, so
+      // "can the demo reach a live provider?" is answerable from declarations.
+      expect(definition.effects.mode, name).toBe("protected");
+      const gateways =
+        definition.effects.mode === "protected"
+          ? definition.effects.gateways
+          : [];
+      expect(gateways.length, name).toBeGreaterThan(0);
+
+      if (definition.actors.sharedDemo !== "admit") continue;
+      for (const gateway of gateways) {
+        expect(
+          classifySharedDemoExternalGateway(gateway).decision,
+          `${name} -> ${gateway}`,
+        ).toBe("simulated");
+      }
+    }
+  });
+
+  it("leaves no retired demo guard behind in the payment module", () => {
+    const code = strippedSource("../storeFront/payment.ts");
+    for (const retired of RETIRED_HANDLER_GUARDS) {
+      expect(code, retired).not.toContain(`${retired}(`);
+    }
   });
 
   it("preserves the existing normal store-removal behavior", async () => {

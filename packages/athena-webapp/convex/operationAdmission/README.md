@@ -4,8 +4,142 @@ The single admission boundary for backend ingress. Every public Convex
 mutation, query, and action and every Hono route declares an operation
 definition and runs through one canonical wrapper per ingress kind.
 
+There is no exemption list, no inventory, and no "migrate this later" state: an
+ingress is admitted or the checker fails.
+
 Plan: `docs/plans/2026-08-16-002-feat-complete-operation-admission-migration-plan.md`.
-This file describes the U1a end-state contract; U12 finishes the docs.
+Solution note: `docs/solutions/architecture-patterns/athena-complete-operation-admission-migration-2026-08-16.md`.
+
+## Adding a public function — the whole contract
+
+Start here. Everything below this section is reference for when a step is not
+obvious.
+
+1. **Pick the ingress kind.** `mutation` / `query` / `action` for a Convex
+   function; `http` / `http_read` for a Hono route. Reads (`query`,
+   `http_read`) declare an `access.intent` from `platform/readIntentCatalog.ts`;
+   writes declare a `capability` from `platform/capabilityCatalog.ts`. **Both
+   catalogs are closed.** If nothing fits, that is a policy question — propose
+   the id, do not coin one at the call site.
+2. **Write the definition** in your domain module under `domains/`, using a
+   shape from `domains/_shapes.ts` where one fits. Export the const: tests
+   assert against definitions by name, not by searching the registry.
+3. **State every actor.** `actors.public` is required and is never implied.
+   `normalUser` and `sharedDemo` are required. `storefrontCustomer` is valid
+   **only** on `http` / `http_read`.
+   - `sharedDemo: "admit"` is legal only when the capability is in
+     `SHARED_DEMO_ALLOWED_CAPABILITIES` (writes) or the intent is in
+     `SHARED_DEMO_ALLOWED_READ_INTENTS` (reads). Both directions are asserted
+     statically in `sharedDemo/policy.test.ts`, so an admit for an ungranted
+     capability fails the suite rather than silently widening demo reach.
+   - `public: "admit"` means genuinely anonymous — pre-auth, webhook, or public
+     browse. It clamps nothing.
+4. **Scope it.** `store` / `organization` scope is what stops an authenticated
+   caller reaching another tenant's rows. `none` is a claim that the operation
+   is genuinely global; expect to justify it.
+5. **Wrap the export** with the canonical wrapper for the kind, imported from
+   the composition root:
+
+   ```ts
+   import { admitPublicMutation } from "../platform/operationAdmission";
+
+   export const recordThing = mutation({
+     args: recordThingArgs,
+     handler: admitPublicMutation(recordThingOperationDefinition, recordThingWithCtx),
+   });
+   ```
+
+   | kind | wrapper | entry point |
+   |---|---|---|
+   | `mutation` | `admitPublicMutation` | direct (`ctx.db` available) |
+   | `query` | `admitPublicQuery` | direct |
+   | `action` | `admitPublicAction` | `admitOperation` internal mutation |
+   | `http` | `admitHttpRoute` | `admitOperation` internal mutation |
+   | `http_read` | `admitHttpRead` | `admitReadOperation` internal query |
+
+6. **Never call `api.*` from an admitted body.** Use the `internal.*` sibling.
+   The checker flags self-calls, because an `api.*` hop re-enters the rail with
+   the *server's* identity and launders the caller's actor.
+7. **Derive identity from `ctx.operationAdmission`, never from arguments.** Any
+   `owner` / `storeId` / `userId` an internal callee needs comes from the
+   admitted actor. A caller-supplied id is an argument to validate, not an
+   identity to trust.
+8. **Run the checker**: `bun scripts/convex-operation-admission-check.ts`
+   (add `--path <prefix>` while iterating). Zero findings, exit 0.
+
+### The wrapper must run FIRST
+
+Not "somewhere in the handler". The canonical wrapper has to be the handler
+expression itself, or the first unconditional statement of the handler body.
+Anything ahead of it — a `ctx.db` read, a `ctx.runQuery` / `runMutation` /
+`runAction`, a `ctx.scheduler` call — runs for a caller nobody has admitted,
+and a wrapper nested inside an `if` admits on some paths only. The checker
+raises `wrapper-not-first` for both.
+
+One shape is accepted besides the direct call: a `try` whose block *starts*
+with the wrapper, so a handler can catch a typed denial and reshape it into a
+`CommandResult` (see `convex/notifications/subscriptions.ts`). Nothing runs
+before the wrapper there, so the guarantee holds.
+
+```ts
+// GOOD — the wrapper is the handler
+handler: admitPublicMutation(def, recordThingWithCtx)
+
+// GOOD — first statement, denial mapped in the catch
+handler: async (ctx, args) => {
+  try {
+    return await admitPublicMutation(def, recordThingWithCtx)(ctx, args);
+  } catch (error) {
+    const mapped = mapDenial(error);
+    if (mapped) return mapped;
+    throw error;
+  }
+}
+
+// BAD — the read runs for an un-admitted caller
+handler: async (ctx, args) => {
+  const row = await ctx.db.get(args.id);
+  return admitPublicMutation(def, recordThingWithCtx)(ctx, args);
+}
+```
+
+There is no `resolveWriteAdmission` export to probe admission separately with.
+It was removed: every call site paired it with a second wrapper call, admitting
+the same request twice and doing the probe first.
+
+### The four things that are not obvious
+
+- **Dynamic capabilities are all-of, not any-of.** A batch that mixes a granted
+  and an ungranted capability is denied whole, before the handler runs — it is
+  never partially applied. A resolved capability outside `candidates` is
+  declaration drift and denies the call.
+- **`storefront_customer` is proof of possession, not authentication.** See the
+  Actors section; internal callees must still assert ownership.
+- **`target` guards protect rows from every actor, including a full admin.**
+  They are not actor policy. See Target resource guards.
+- **`ingressVerification` runs before admission**, on the raw request, so a
+  failed webhook signature leaves no admission row and no capture.
+- **A scope constraint from an argument is a CLAMP, not an authorization.**
+  `resolveOperationScope` records `args[storeIdArg]` as the constraint; it does
+  not verify the caller belongs to that store. The constraint is what confines
+  the *handler* (and what `target` guards evaluate against); proving the caller
+  may act in that store is still the handler's or the callee's job. Prefer
+  `{ resolve }` when the scope can be derived from something the caller does
+  not supply.
+
+### Framework entry points
+
+`FRAMEWORK_ENTRY_POINTS` in the checker names the only ingress that is *not*
+admitted: the Convex Auth registrar exports (`auth:auth`, `auth:signIn`,
+`auth:signOut`, `auth:store`) and the HTTP route family `auth.addHttpRoutes`
+installs. Convex Auth is the trust root — it MINTS the principals the adapters
+later resolve, so it cannot be admitted by them.
+
+The list is verified **both ways**: an entry naming a registrar that discovery
+no longer finds is a finding, and a discovered registrar not named in the list
+is a finding. That is what keeps it from becoming an exemption list. Adding an
+entry is a deliberate act with a stated reason, not a way to silence the
+checker.
 
 ## Shape
 
@@ -111,6 +245,19 @@ re-applies it.
 
 ## HTTP ingress
 
+Denials have a fixed status contract: **401** when no adapter claimed the
+caller, **403** for an actual refusal, with a fixed body. They are never 500 —
+a refusal reported as a server fault makes clients retry, pages monitoring, and
+leaks the internal error text. The 401/403 split is read from typed data on the
+error, never from its message, because the classification happens on the far
+side of a `runMutation` boundary where the original error class is gone.
+
+Every admitted `http` write body is read under a size bound before admission
+(`operationAdmission/ingressBody.ts`, `DEFAULT_INGRESS_MAX_BODY_BYTES`), so an
+oversize or endless body is a 413 that leaves no admission row. A route wanting
+a tighter cap layers its own middleware in front.
+
+
 `admitHttpRoute` reads the raw body **once**, runs `ingressVerification` on the
 raw request **before** the admission mutation (a verification failure leaves no
 admission row and no capture), then admits and hands the handler
@@ -124,9 +271,30 @@ deny, and an unset allowlist allows nothing.
 ## Per-unit domain modules
 
 `domains/_shapes.ts` holds the shared definition shapes and `domains/uN_<name>_definitions.ts` / `domains/uN_<name>_readDefinitions.ts` hold one array per
-Phase B unit (underscored — Convex module path components allow only alphanumerics, underscores, periods), composed once
-into `definitions.ts` / `readDefinitions.ts`. A Phase B unit fills its own pair
-and edits neither composing file.
+migration unit (underscored — Convex module path components allow only alphanumerics, underscores, periods), composed once
+into `definitions.ts` / `readDefinitions.ts`.
+
+The `uN_` prefixes are historical — they name the delivery unit that migrated
+each group, not a runtime concept. Add a new definition to the domain module
+that owns its area; the composing registries need no edit.
+
+## The definition set is dynamic
+
+`OPERATION_ADMISSION_DEFINITIONS` / `OPERATION_READ_ADMISSION_DEFINITIONS` are
+the only registries, and everything else is derived from them rather than
+maintained alongside them. This migration deleted four hand-kept lists that had
+each drifted from the code they described:
+
+| deleted | derived successor |
+|---|---|
+| `SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY` | `deriveSharedDemoRepresentedCapabilities(definitions)` |
+| `SHARED_DEMO_GATEWAY_ENFORCEMENT_BINDINGS` | `deriveSharedDemoGatewayBindings(definitions)` |
+| `classifyAthenaPublicWrite` + its module map | the definition's own `capability` |
+| hand-listed `sharedDemoCapabilityValidator` | derived from `SHARED_DEMO_ALLOWED_CAPABILITIES` |
+
+The rule this encodes: if a fact is already stated on a definition, do not
+restate it in a list that a human has to remember to update. Derive it, and
+assert the derivation in both directions.
 
 ## One import path per wrapper
 
@@ -139,8 +307,22 @@ no longer carries a registered default identity port or a hand-assembled
 adapter-set argument: the identity port is a required construction argument and
 every adapter is built once, here, at the composition root. Handlers that must
 catch a denial and translate it into a `CommandResult` use
-`resolveWriteAdmission` — the same chain and guards, without invoking a
-handler.
+a `try` whose first statement is the wrapper call, catching the typed denial
+and mapping it.
+
+## Environment prerequisites
+
+Every HTTP verifier fails closed, so an unset variable does not degrade — the
+corresponding ingress denies everything.
+
+| variable | unset behaviour |
+|---|---|
+| `ATHENA_STOREFRONT_ALLOWED_ORIGINS` | every storefront customer write 403s; CORS sends no `Access-Control-Allow-Origin` at all, never `*` |
+| `PAYSTACK_SECRET_KEY` | the Paystack webhook rejects every delivery — payment callbacks stop |
+| `WHATSAPP_WEBHOOK_APP_SECRET` | WhatsApp webhook rejects |
+| `MTN_MOMO_COLLECTIONS_CALLBACK_SECRET` | MTN MoMo callback rejects; must ALSO be appended to the registered callback URL as `callbackSecret=…` |
+| `WALKTHROUGH_ALLOWED_ORIGINS` | marketing walkthrough and funnel writes deny (resolved once, in `convex/marketing/walkthroughConfig.ts`, and injected into the verifier) |
+| `ATHENA_WAIVER_BROKER_SECRET` | harness waiver routes deny |
 
 ## Validation
 

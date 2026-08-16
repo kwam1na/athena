@@ -149,8 +149,37 @@ describe("U11 ingress verifiers", () => {
     ).toBe(false);
 
     expect(
-      await createMarketingOriginVerifier({})({
+      // Empty allowlist denies, same fail-closed shape as an absent one.
+      await createMarketingOriginVerifier(() => [])({
         headers: new Headers({ Origin: "https://athena.example" }),
+        rawBody: "{}",
+        request: new Request("https://athena.example/marketing/funnel-events"),
+      }),
+    ).toBe(false);
+
+    // One resolver, shared with the handler: an origin the injected resolver
+    // allows (including a local origin enabled via
+    // WALKTHROUGH_ALLOW_LOCAL_ORIGINS) is admitted, and one it does not is not.
+    expect(
+      await createMarketingOriginVerifier(() => ["http://localhost:3000"])({
+        headers: new Headers({ Origin: "http://localhost:3000" }),
+        rawBody: "{}",
+        request: new Request("https://athena.example/marketing/funnel-events"),
+      }),
+    ).toBe(true);
+    expect(
+      await createMarketingOriginVerifier(() => ["https://marketing.test"])({
+        headers: new Headers({ Origin: "https://evil.test" }),
+        rawBody: "{}",
+        request: new Request("https://athena.example/marketing/funnel-events"),
+      }),
+    ).toBe(false);
+    // A resolver that throws on malformed config denies rather than admitting.
+    expect(
+      await createMarketingOriginVerifier(() => {
+        throw new Error("malformed WALKTHROUGH_ALLOWED_ORIGINS");
+      })({
+        headers: new Headers({ Origin: "https://marketing.test" }),
         rawBody: "{}",
         request: new Request("https://athena.example/marketing/funnel-events"),
       }),

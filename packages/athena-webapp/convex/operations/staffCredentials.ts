@@ -25,7 +25,6 @@ import type { OperationMutationCtx } from "../operationAdmission/types";
 import {
   admitPublicMutation,
   admitPublicQuery,
-  resolveWriteAdmission,
 } from "../platform/operationAdmission";
 import { operationalRoleValidator, type OperationalRole } from "./staffRoles";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
@@ -1248,11 +1247,10 @@ export const createStaffCredential = mutation({
   returns: commandResultValidator(v.any()),
   handler: async (ctx, args) => {
     try {
-      await resolveWriteAdmission(
-        ctx,
-        args,
+      return await admitPublicMutation(
         createStaffCredentialOperationDefinition,
-      );
+        createStaffCredentialAdmittedHandler,
+      )(ctx, args);
     } catch (error) {
       if (!isStaffCredentialAdmissionAuthorizationError(error)) {
         throw error;
@@ -1262,11 +1260,6 @@ export const createStaffCredential = mutation({
         message: "You do not have access to manage staff credentials.",
       });
     }
-
-    return admitPublicMutation(
-      createStaffCredentialOperationDefinition,
-      createStaffCredentialAdmittedHandler,
-    )(ctx, args);
   },
 });
 
@@ -1351,11 +1344,10 @@ export const updateStaffCredential = mutation({
   returns: commandResultValidator(v.any()),
   handler: async (ctx, args) => {
     try {
-      await resolveWriteAdmission(
-        ctx,
-        args,
+      return await admitPublicMutation(
         updateStaffCredentialOperationDefinition,
-      );
+        updateStaffCredentialAdmittedHandler,
+      )(ctx, args);
     } catch (error) {
       if (!isStaffCredentialAdmissionAuthorizationError(error)) {
         throw error;
@@ -1365,11 +1357,6 @@ export const updateStaffCredential = mutation({
         message: "You do not have access to manage staff credentials.",
       });
     }
-
-    return admitPublicMutation(
-      updateStaffCredentialOperationDefinition,
-      updateStaffCredentialAdmittedHandler,
-    )(ctx, args);
   },
 });
 

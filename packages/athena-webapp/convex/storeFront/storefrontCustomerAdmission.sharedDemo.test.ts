@@ -28,16 +28,10 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 
 import { createSharedDemoOperationAdapter } from "../sharedDemo/operationAdapter";
 import {
-  cancelOrderOperationDefinition,
   checkTransactionStatusOperationDefinition,
-  createPODOrderOperationDefinition,
-  createTransactionOperationDefinition,
   findOrderTransactionsOperationDefinition,
   getAllTransactionsOperationDefinition,
   refundPaymentOperationDefinition,
-  sendVerificationCodeViaProviderOperationDefinition,
-  verifyCodeOperationDefinition,
-  verifyPaymentOperationDefinition,
 } from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
 
 const DEMO_PRINCIPAL = {
@@ -86,24 +80,7 @@ describe("U6 shared-demo admission", () => {
    * denial with a typed reason and nothing executed.
    */
   it.each([
-    // enforceSharedDemoActionCapability("billing.manage")
-    [
-      "payment:createTransaction",
-      createTransactionOperationDefinition,
-      { checkoutSessionId: "demo-session" },
-    ],
-    [
-      "payment:createPODOrder",
-      createPODOrderOperationDefinition,
-      { checkoutSessionId: "demo-session" },
-    ],
-    [
-      "payment:verifyPayment",
-      verifyPaymentOperationDefinition,
-      { externalReference: "ref-1" },
-    ],
     // requireAuthenticatedNonDemoEffect
-    ["checkoutSession:cancelOrder", cancelOrderOperationDefinition, { id: "demo-session" }],
     ["paystackActions:getAllTransactions", getAllTransactionsOperationDefinition, {}],
     [
       "paystackActions:checkTransactionStatus",
@@ -115,14 +92,6 @@ describe("U6 shared-demo admission", () => {
       findOrderTransactionsOperationDefinition,
       { customerEmail: "shopper@test", orderCreatedAt: 0 },
     ],
-    // denySharedDemoEffectIfApplicable
-    [
-      "auth:sendVerificationCodeViaProvider",
-      sendVerificationCodeViaProviderOperationDefinition,
-      { storeId: "demo-store" },
-    ],
-    // storefront.session.manage / identity.authenticate are ungranted
-    ["auth:verifyCode", verifyCodeOperationDefinition, { storeId: "demo-store" }],
   ])("denies a demo visitor on %s with a recognized reason", async (
     _site,
     definition,

@@ -158,9 +158,9 @@ describe("U3 inventory catalog operation definitions", () => {
     ATHENA_CAPABILITY_CATALOG.map(({ id }) => id),
   );
 
-  it("declares 50 write definitions and 40 read definitions", () => {
+  it("declares 50 write definitions and 38 read definitions", () => {
     expect(U3_INVENTORY_CATALOG_OPERATION_DEFINITIONS.length).toBe(50);
-    expect(U3_INVENTORY_CATALOG_READ_OPERATION_DEFINITIONS.length).toBe(40);
+    expect(U3_INVENTORY_CATALOG_READ_OPERATION_DEFINITIONS.length).toBe(38);
   });
 
   it("validates every write definition against the rail contract", () => {
@@ -207,10 +207,8 @@ describe("U3 inventory catalog operation definitions", () => {
         "inventory/bannerMessage:getPublicActive",
         "inventory/bestSeller:getAll",
         "inventory/categories:getAll",
-        "inventory/categories:getCategoriesWithSubcategories",
         "inventory/colors:getAll",
         "inventory/featuredItem:getAll",
-        "inventory/productSku:getInventoryBySkuIds",
         "inventory/products:getByIdOrSlug",
         "inventory/promoCode:getAll",
         "inventory/subcategories:getAll",
@@ -606,12 +604,6 @@ describe("internal siblings behave like their public originals", () => {
       { storeId: "tenant-store" },
     ],
     [
-      "categories:getCategoriesWithSubcategories",
-      categories.getCategoriesWithSubcategories,
-      categories.getCategoriesWithSubcategoriesInternal,
-      { storeId: "tenant-store" },
-    ],
-    [
       "colors:getAll",
       colors.getAll,
       colors.getAllInternal,
@@ -628,12 +620,6 @@ describe("internal siblings behave like their public originals", () => {
       promoCode.getAll,
       promoCode.getAllInternal,
       { storeId: "tenant-store" },
-    ],
-    [
-      "productSku:getInventoryBySkuIds",
-      productSku.getInventoryBySkuIds,
-      productSku.getInventoryBySkuIdsInternal,
-      { skuIds: [] },
     ],
   ];
 

@@ -156,14 +156,6 @@ export const listCategoriesReadDefinition = defineInventoryCatalogRead(
   "admit",
 );
 
-export const listCategoriesWithSubcategoriesReadDefinition = defineIntentRead({
-  functionName: "inventory/categories:getCategoriesWithSubcategories",
-  intent: "storefront.catalog.view",
-  operationId: "inventory.categories.getCategoriesWithSubcategories.read",
-  publicAccess: "admit",
-  scope: { kind: "store" as const, storeIdArg: "storeId" },
-});
-
 export const getCategoryByIdReadDefinition = defineInventoryCatalogRead(
   "inventory/categories:getById",
   "inventory.categories.getById.read",
@@ -286,30 +278,6 @@ export const getProductSkuByIdReadDefinition = defineRowScopedCatalogRead({
   table: "productSku",
 });
 
-/**
- * Served to anonymous shoppers through POST /storefront/inventory/batch, which
- * is why it is a shopper-facing intent rather than the operator catalog.
- */
-export const getInventoryBySkuIdsReadDefinition = defineIntentRead({
-  functionName: "inventory/productSku:getInventoryBySkuIds",
-  intent: "storefront.catalog.view",
-  operationId: "inventory.productSku.getInventoryBySkuIds.read",
-  publicAccess: "admit",
-  scope: {
-    kind: "store" as const,
-    resolve: async (ctx: ScopeResolverCtx, args: Record<string, unknown>) => {
-      const skuIds = args.skuIds;
-      if (!Array.isArray(skuIds)) return {};
-      for (const skuId of skuIds) {
-        if (typeof skuId !== "string") continue;
-        const sku = await ctx.db.get("productSku", skuId as never);
-        if (sku) return { storeId: sku.storeId };
-      }
-      return {};
-    },
-  },
-});
-
 // ---------------------------------------------------------------------------
 // inventory/promoCode
 // ---------------------------------------------------------------------------
@@ -416,7 +384,6 @@ export const U3_INVENTORY_CATALOG_READ_OPERATION_DEFINITIONS: readonly Operation
     listInventoryImportReviewSkuContextReadDefinition,
     listProductPageProvisionalSkuBindingReadDefinition,
     listCategoriesReadDefinition,
-    listCategoriesWithSubcategoriesReadDefinition,
     getCategoryByIdReadDefinition,
     listColorsReadDefinition,
     getColorByIdReadDefinition,
@@ -433,7 +400,6 @@ export const U3_INVENTORY_CATALOG_READ_OPERATION_DEFINITIONS: readonly Operation
     getProductSkuReadDefinition,
     batchGetProductsReadDefinition,
     getProductSkuByIdReadDefinition,
-    getInventoryBySkuIdsReadDefinition,
     listPromoCodesReadDefinition,
     getPromoCodeByIdReadDefinition,
     listPromoCodeItemsReadDefinition,

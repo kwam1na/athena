@@ -48,6 +48,13 @@ export type IngressRegistration = {
   admitted: boolean;
   /** `true` when the wrapper name was recognized but imported elsewhere. */
   wrapperOffComposition?: boolean;
+
+  /**
+   * `true` when a wrapper call exists inside the handler but not as the
+   * handler expression or its first unconditional statement — work runs
+   * before the caller is admitted.
+   */
+  wrapperNotFirst?: boolean;
 };
 
 export type OperationAdmissionDefinition = {
@@ -644,14 +651,129 @@ function isPublicDbWriteCall(node: ts.Node) {
   return ts.isPropertyAccessExpression(target) && target.name.text === "db";
 }
 
-type WrapperMatch = { wrapper: string; kind: IngressKind; fromRoot: boolean };
+/**
+ * Work an inline handler must not do before admission.
+ *
+ * The earlier rule only rejected a public `ctx.db` write ahead of the wrapper,
+ * which let a handler read the database, call another Convex function, or
+ * schedule work before the caller had been admitted. Reading before admission
+ * is a disclosure, and `ctx.runMutation` before admission is a write by
+ * another name — neither is caught by looking for `ctx.db.insert`.
+ */
+function isPreAdmissionCtxEffect(node: ts.Node) {
+  if (!ts.isCallExpression(node)) return false;
+  const expression = node.expression;
+  if (!ts.isPropertyAccessExpression(expression)) return false;
+
+  const method = expression.name.text;
+  const target = expression.expression;
+
+  // ctx.runQuery / ctx.runMutation / ctx.runAction
+  if (
+    ["runQuery", "runMutation", "runAction"].includes(method) &&
+    ts.isIdentifier(target)
+  ) {
+    return true;
+  }
+
+  if (!ts.isPropertyAccessExpression(target)) return false;
+  // ctx.db.* (any access, read or write) and ctx.scheduler.*
+  return target.name.text === "db" || target.name.text === "scheduler";
+}
+
+/**
+ * The statement list an inline handler body runs, or `undefined` for a
+ * concise arrow body (`(ctx, args) => admitPublicMutation(...)(ctx, args)`),
+ * which has no statements that could precede the wrapper.
+ */
+function handlerBodyStatements(
+  expression: ts.ArrowFunction | ts.FunctionExpression,
+): readonly ts.Statement[] | undefined {
+  return ts.isBlock(expression.body) ? expression.body.statements : undefined;
+}
+
+/**
+ * Is `statement` the wrapper invocation itself, rather than something that
+ * merely contains one somewhere inside a branch or a nested closure?
+ *
+ * Accepted: `return admit…(def, fn)(ctx, args);`, `await admit…(def, fn)(…)`,
+ * a bare expression statement of the same, `const x = admit…(def, fn)`, and a
+ * `try` whose block STARTS with one of those — the catch-and-reshape pattern
+ * in `convex/notifications/subscriptions.ts`, where a typed admission denial
+ * is mapped to a `CommandResult` and every other error rethrown. Nothing runs
+ * before the wrapper there, so the positional guarantee holds.
+ *
+ * Rejected: a wrapper inside an `if`, a loop, or a callback, or anywhere after
+ * another statement — an admission that only happens on some paths, or that
+ * happens after work, is not admission.
+ */
+function statementWrapperMatch(
+  statement: ts.Statement,
+  names: WrapperNames,
+): WrapperMatch | undefined {
+  if (ts.isTryStatement(statement)) {
+    const first = statement.tryBlock.statements[0];
+    return first ? statementWrapperMatch(first, names) : undefined;
+  }
+
+  let expression: ts.Expression | undefined;
+  if (ts.isReturnStatement(statement)) expression = statement.expression;
+  else if (ts.isExpressionStatement(statement)) expression = statement.expression;
+  else if (ts.isVariableStatement(statement)) {
+    expression = statement.declarationList.declarations[0]?.initializer;
+  } else return undefined;
+
+  // Unwrap `await x` and the outer `(...)(ctx, args)` application.
+  for (let depth = 0; depth < 4 && expression; depth += 1) {
+    const direct = matchDirectWrapper(expression, names);
+    if (direct) return direct;
+    if (ts.isAwaitExpression(expression)) {
+      expression = expression.expression;
+      continue;
+    }
+    if (ts.isCallExpression(expression)) {
+      expression = expression.expression;
+      continue;
+    }
+    if (ts.isParenthesizedExpression(expression)) {
+      expression = expression.expression;
+      continue;
+    }
+    if (ts.isIdentifier(expression)) {
+      const kind = names.bound.get(expression.text);
+      return kind
+        ? { wrapper: expression.text, kind, fromRoot: true }
+        : undefined;
+    }
+    return undefined;
+  }
+  return undefined;
+}
+
+type WrapperMatch = {
+  wrapper: string;
+  kind: IngressKind;
+  fromRoot: boolean;
+  /**
+   * A wrapper was found inside an inline handler, but not as the handler
+   * expression and not as the first unconditional statement — so work can run
+   * before the caller is admitted.
+   */
+  notFirst?: boolean;
+};
 
 /**
  * Decide whether `expression` routes through an admission wrapper.
  *
- * Accepts a direct wrapper call, an identifier bound to one, or a handler
- * body that calls one — the last only when no public `ctx.db` write can run
- * before it, because "wrapper somewhere in the body" is not admission.
+ * Accepts a direct wrapper call, an identifier bound to one, or an inline
+ * handler whose FIRST unconditional statement is the wrapper invocation.
+ *
+ * The rule is positional on purpose. "The wrapper is called somewhere in this
+ * body" is not admission: a statement before it runs for an un-admitted
+ * caller, and a wrapper call nested in an `if` or a `try` runs only on some
+ * paths. The earlier version of this function walked the whole body and only
+ * objected to a public `ctx.db` write appearing first, which accepted handlers
+ * that read the database or called `ctx.runMutation` ahead of admission.
  */
 function matchWrapper(
   expression: ts.Expression | undefined,
@@ -670,30 +792,56 @@ function matchWrapper(
   }
 
   if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) {
-    let match: WrapperMatch | undefined;
-    let sawPublicWrite = false;
-    const visit = (node: ts.Node) => {
-      if (match || sawPublicWrite) return;
-      if (isPublicDbWriteCall(node)) {
-        sawPublicWrite = true;
-        return;
+    const statements = handlerBodyStatements(expression);
+
+    // Concise arrow body: `(ctx, args) => admitPublicMutation(def, fn)(ctx, args)`.
+    // Nothing can precede the wrapper, so unwrap and accept.
+    if (!statements) {
+      let body = expression.body as ts.Expression;
+      for (let depth = 0; depth < 4; depth += 1) {
+        const match = matchDirectWrapper(body, names);
+        if (match) return match;
+        if (ts.isAwaitExpression(body) || ts.isParenthesizedExpression(body)) {
+          body = body.expression;
+          continue;
+        }
+        if (ts.isCallExpression(body)) {
+          body = body.expression;
+          continue;
+        }
+        break;
       }
-      const nested = matchDirectWrapper(node as ts.Expression, names);
+      return undefined;
+    }
+
+    const first = statements[0];
+    if (first) {
+      const match = statementWrapperMatch(first, names);
+      if (match) return match;
+    }
+
+    // A wrapper exists somewhere deeper in the body. Report it as a positional
+    // failure rather than silently accepting or silently rejecting: "not
+    // admitted at all" and "admitted too late" need different remediation.
+    let deep: WrapperMatch | undefined;
+    const visit = (node: ts.Node) => {
+      if (deep) return;
+      const nested = matchDirectWrapper(node, names);
       if (nested) {
-        match = nested;
+        deep = nested;
         return;
       }
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
         const kind = names.bound.get(node.expression.text);
         if (kind) {
-          match = { wrapper: node.expression.text, kind, fromRoot: true };
+          deep = { wrapper: node.expression.text, kind, fromRoot: true };
           return;
         }
       }
       ts.forEachChild(node, visit);
     };
     visit(expression.body);
-    return sawPublicWrite ? undefined : match;
+    return deep ? { ...deep, notFirst: true } : undefined;
   }
 
   return undefined;
@@ -813,7 +961,10 @@ export function collectConvexIngressFromSource(
       exportName,
       wrapper: match?.wrapper,
       wrapperOffComposition: match ? !match.fromRoot : undefined,
-      admitted: Boolean(match),
+      wrapperNotFirst: match?.notFirst,
+      // A late wrapper is not admission: work already ran for an un-admitted
+      // caller, so this counts as unadmitted AND raises its own finding.
+      admitted: Boolean(match) && !match?.notFirst,
     });
   };
 
@@ -912,6 +1063,8 @@ type RawRouteRegistration = {
   wrapper?: string;
   wrapperFromRoot: boolean;
   wrapperKind?: IngressKind;
+  /** A wrapper exists but runs after other work — see `matchWrapper`. */
+  wrapperNotFirst?: boolean;
 };
 
 type RouterMount = {
@@ -1073,7 +1226,8 @@ function collectRouteModuleFacts(
               filePath,
               line: lineOf(sourceFile, node),
               handler,
-              admitted: Boolean(match),
+              admitted: Boolean(match) && !match?.notFirst,
+              wrapperNotFirst: match?.notFirst,
               wrapper: match?.wrapper,
               wrapperFromRoot: match?.fromRoot ?? true,
               wrapperKind: match?.kind,
@@ -1103,7 +1257,8 @@ function collectRouteModuleFacts(
                 filePath,
                 line: lineOf(sourceFile, node),
                 handler,
-                admitted: Boolean(match),
+                admitted: Boolean(match) && !match?.notFirst,
+                wrapperNotFirst: match?.notFirst,
                 wrapper: match?.wrapper,
                 wrapperFromRoot: match?.fromRoot ?? true,
                 wrapperKind: match?.kind,
@@ -1211,6 +1366,7 @@ function resolveRouteRegistrations(
         wrapperOffComposition: registration.wrapper
           ? !registration.wrapperFromRoot
           : undefined,
+        wrapperNotFirst: registration.wrapperNotFirst,
         admitted: registration.admitted,
       });
       registrations.set(id, registration);
@@ -1252,6 +1408,7 @@ function resolveRouteRegistrations(
         moduleName: toConvexModuleName(registration.filePath),
         route: { method: registration.method, path: registration.localPath },
         wrapper: registration.wrapper,
+        wrapperNotFirst: registration.wrapperNotFirst,
         admitted: registration.admitted,
       });
       registrations.set(id, registration);
@@ -2140,6 +2297,21 @@ export async function collectOperationAdmissionCheckResult(
         rationale:
           "Only the composition root registers the adapters, resource guards, and capture port. A wrapper imported from the rail core runs a different, policy-free chain.",
         remediation: `Import ${entry.wrapper ?? "the wrapper"} from convex/platform/operationAdmission.`,
+      });
+    }
+
+    if (entry.wrapperNotFirst) {
+      push({
+        id: `wrapper-not-first-${slugifyForFindingId(entry.id)}`,
+        severity: "high",
+        title: "Admission wrapper does not run first in the handler",
+        filePath: entry.filePath,
+        line: entry.line,
+        functionName: entry.id,
+        rationale:
+          "The wrapper is called somewhere inside the handler rather than as the handler itself or its first unconditional statement. Any statement ahead of it runs for a caller who has not been admitted, and a wrapper nested in a branch or a try block admits on some paths only. Reading rows, calling ctx.runQuery/runMutation/runAction, or scheduling work before admission defeats the rail even when no direct ctx.db write is involved.",
+        remediation:
+          "Make the canonical wrapper the handler expression itself, or the first statement of the handler body. If the handler needs to translate a denial into a CommandResult, wrap the wrapper call in a catch rather than doing work before it (see convex/notifications/subscriptions.ts).",
       });
     }
 

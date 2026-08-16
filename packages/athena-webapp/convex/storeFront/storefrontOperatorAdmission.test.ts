@@ -164,9 +164,9 @@ describe("U7 storefront operator operation definitions", () => {
     ATHENA_CAPABILITY_CATALOG.map(({ id }) => id),
   );
 
-  it("declares 14 write definitions and 30 read definitions", () => {
-    expect(U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS.length).toBe(14);
-    expect(U7_STOREFRONT_OPERATOR_READ_OPERATION_DEFINITIONS.length).toBe(30);
+  it("declares 7 write definitions and 20 read definitions", () => {
+    expect(U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS.length).toBe(7);
+    expect(U7_STOREFRONT_OPERATOR_READ_OPERATION_DEFINITIONS.length).toBe(20);
   });
 
   it("validates every write definition against the rail contract", () => {
@@ -221,22 +221,14 @@ describe("U7 storefront operator operation definitions", () => {
     ]);
   });
 
-  it("admits anonymous writers only on the writes storefront routes reach today", () => {
+  // The storefront-reached writes now enter only through their HTTP routes and
+  // their `internal.*` siblings, so no U7 write gives up identity any more.
+  it("admits anonymous writers on no operator write", () => {
     const anonymous = U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS.filter(
       (definition) => definition.actors.public === "admit",
     ).map((definition) => definition.functionName);
 
-    expect(anonymous.sort()).toEqual(
-      [
-        "storeFront/analytics:create",
-        "storeFront/analytics:updateOwner",
-        "storeFront/onlineOrder:updateOwner",
-        "storeFront/reviews:create",
-        "storeFront/reviews:deleteReview",
-        "storeFront/reviews:markHelpful",
-        "storeFront/reviews:update",
-      ].sort(),
-    );
+    expect(anonymous).toEqual([]);
   });
 
   it("denies anonymous callers on every operator surface", () => {
@@ -265,17 +257,7 @@ describe("U7 storefront operator operation definitions", () => {
 
     expect(anonymous.sort()).toEqual(
       [
-        "storeFront/analytics:getProductViewCount",
-        "storeFront/onlineOrder:get",
-        "storeFront/onlineOrder:getAll",
         "storeFront/onlineOrder:getByCheckoutSessionId",
-        "storeFront/reviews:getByOrderItem",
-        "storeFront/reviews:getByProductId",
-        "storeFront/reviews:getByProductSkuId",
-        "storeFront/reviews:getByUser",
-        "storeFront/reviews:getByUserAndProductSkuId",
-        "storeFront/reviews:hasReviewForOrderItem",
-        "storeFront/reviews:hasUserReviewForOrderItem",
       ].sort(),
     );
   });
@@ -396,16 +378,6 @@ describe("operator write admission by actor", () => {
 
 describe("analytics writes deny the shared demo (ungranted capability)", () => {
   it.each([
-    ["analytics:create", analytics.create, {
-      storeId: "demo-store",
-      storeFrontUserId: "shopper-1",
-      action: "viewed_product",
-      data: {},
-    }],
-    ["analytics:updateOwner", analytics.updateOwner, {
-      guestId: "guest-1",
-      userId: "shopper-1",
-    }],
     ["analytics:clear", analytics.clear, {
       storeId: "demo-store",
       storeFrontUserId: "shopper-1",
@@ -529,17 +501,6 @@ describe("read admission", () => {
     ).rejects.toThrow(DEMO_DENIAL);
   });
 
-  it("admits an anonymous reader on a storefront-route read", async () => {
-    const ctx = ctxForStore("tenant-store");
-    mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
-      new AthenaUnauthenticatedError(),
-    );
-
-    await expect(
-      getHandler(reviews.getByProductId)(ctx, { productId: "product-1" }),
-    ).resolves.toEqual([]);
-  });
-
   it("denies an anonymous reader on the moderation queue", async () => {
     const ctx = ctxForStore("tenant-store");
     mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
@@ -558,56 +519,7 @@ describe("read admission", () => {
 // Internal siblings: same behaviour, plus the ownership assertions
 // ---------------------------------------------------------------------------
 
-describe("internal siblings behave like their public originals", () => {
-  const SIBLINGS: Array<[string, unknown, unknown, Record<string, unknown>]> = [
-    [
-      "analytics:getProductViewCount",
-      analytics.getProductViewCount,
-      analytics.getProductViewCountInternal,
-      { productId: "product-1", currentDayStartMs: 0 },
-    ],
-    [
-      "reviews:getByOrderItem",
-      reviews.getByOrderItem,
-      reviews.getByOrderItemInternal,
-      { orderItemId: "item-1" },
-    ],
-    [
-      "reviews:hasReviewForOrderItem",
-      reviews.hasReviewForOrderItem,
-      reviews.hasReviewForOrderItemInternal,
-      { orderItemId: "item-1" },
-    ],
-    [
-      "reviews:getByProductSkuId",
-      reviews.getByProductSkuId,
-      reviews.getByProductSkuIdInternal,
-      { productSkuId: "sku-1" },
-    ],
-    [
-      "reviews:getByProductId",
-      reviews.getByProductId,
-      reviews.getByProductIdInternal,
-      { productId: "product-1" },
-    ],
-  ];
-
-  it.each(SIBLINGS)(
-    "%s returns the same value from both exports",
-    async (_name, publicFn, internalFn, args) => {
-      const publicResult = await getHandler(publicFn)(
-        ctxForStore("tenant-store"),
-        args,
-      );
-      const internalResult = await getHandler(internalFn)(
-        ctxForStore("tenant-store"),
-        args,
-      );
-
-      expect(internalResult).toEqual(publicResult);
-    },
-  );
-
+describe("internal siblings are the only remaining entry points", () => {
   it("exposes an internal sibling for every route-reached function", () => {
     for (const fn of [
       analytics.createInternal,

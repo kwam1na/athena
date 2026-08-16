@@ -183,26 +183,6 @@ export const getServiceCaseDetailsReadDefinition = storeScopedRead({
   },
 });
 
-// --- customerMessaging ----------------------------------------------------
-// The receipt share link is opened by a shopper holding the token and nothing
-// else, so this read stays genuinely anonymous (`public: "admit"`). The token
-// row IS the authorization: an unknown or expired token resolves to null. It
-// carries no store argument, so there is nothing to clamp — hence `scope:
-// none` rather than a store scope that would always resolve empty.
-
-export const getReceiptByShareTokenReadDefinition = defineReadOperation({
-  kind: "query" as const,
-  functionName: "customerMessaging/public:getReceiptByShareToken",
-  operationId: "customerMessaging.public.getReceiptByShareToken.read",
-  access: { kind: "read" as const, intent: "customer_messaging.view" },
-  scope: { kind: "none" as const },
-  actors: {
-    normalUser: "admit" as const,
-    sharedDemo: "deny" as const,
-    public: "admit" as const,
-  },
-});
-
 export const U5_OPERATIONS_READ_OPERATION_DEFINITIONS: readonly OperationReadDefinition[] =
   [
     getDailyCloseOpeningContextReadDefinition,
@@ -222,5 +202,4 @@ export const U5_OPERATIONS_READ_OPERATION_DEFINITIONS: readonly OperationReadDef
     listServiceCatalogItemsReadDefinition,
     listActiveServiceCasesReadDefinition,
     getServiceCaseDetailsReadDefinition,
-    getReceiptByShareTokenReadDefinition,
   ];

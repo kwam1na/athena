@@ -21,6 +21,7 @@ import {
   createStorefrontTrackingOriginVerifier,
   createWhatsAppSignatureVerifier,
 } from "../operationAdmission/ingressVerification";
+import { walkthroughAllowedOrigins } from "../marketing/walkthroughConfig";
 import { createAdmissionRail } from "../operationAdmission/rail";
 import {
   createNormalUserReadOperationAdapter,
@@ -107,7 +108,10 @@ export const operationAdmissionRail = createAdmissionRail({
   // and compares in constant time; the rail core only sequences them.
   ingressVerifiers: {
     [HARNESS_WAIVER_BROKER_VERIFIER]: createHarnessWaiverBrokerVerifier(),
-    [MARKETING_ORIGIN_VERIFIER]: createMarketingOriginVerifier(),
+    // One resolver for WALKTHROUGH_ALLOWED_ORIGINS, shared with the handler.
+    [MARKETING_ORIGIN_VERIFIER]: createMarketingOriginVerifier(
+      walkthroughAllowedOrigins,
+    ),
     [MTN_MOMO_CALLBACK_VERIFIER]: createMtnMomoCallbackVerifier(),
     [PAYSTACK_SIGNATURE_VERIFIER]: createPaystackSignatureVerifier(),
     [STOREFRONT_TRACKING_ORIGIN_VERIFIER]:
@@ -136,10 +140,14 @@ export const admitReadOperationWithCtx =
 
 export type { OperationScopeConstraints };
 
-/**
- * Full-chain admission resolution for the handful of handlers that must catch
- * the denial and translate it into a `CommandResult` rather than let it
- * propagate. Same chain and same guards as `admitPublicMutation` — it just
- * hands back the admission instead of invoking a handler with it.
+/*
+ * `resolveWriteAdmission` is deliberately NOT re-exported.
+ *
+ * It existed so a handler could resolve admission, catch the denial, and map
+ * it to a `CommandResult`. In practice every call site paired it with a second
+ * `admitPublicMutation` call, admitting the same request twice and doing the
+ * probe BEFORE the wrapper — so work ran for a caller nobody had admitted yet.
+ * The checker now rejects that shape (`wrapper-not-first`), and all nine sites
+ * were converted to a single admission with the mapping in a catch around the
+ * wrapper call. Exporting it again would re-open the double-admission door.
  */
-export const resolveWriteAdmission = operationAdmissionRail.resolveWriteAdmission;

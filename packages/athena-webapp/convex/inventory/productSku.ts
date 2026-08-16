@@ -22,7 +22,6 @@ import {
   uploadProductSkuImagesOperationDefinition,
 } from "../operationAdmission/domains/u3_inventoryCatalog_definitions";
 import {
-  getInventoryBySkuIdsReadDefinition,
   getProductSkuByIdReadDefinition,
 } from "../operationAdmission/domains/u3_inventoryCatalog_readDefinitions";
 import type { OperationActionCtx } from "../operationAdmission/rail";
@@ -153,16 +152,6 @@ const inventoryBySkuIdsValidator = v.array(
     quantityAvailable: v.number(),
   })
 );
-
-export const getInventoryBySkuIds = query({
-  args: { skuIds: v.array(v.id("productSku")) },
-  returns: inventoryBySkuIdsValidator,
-  handler: admitPublicQuery(
-    getInventoryBySkuIdsReadDefinition,
-    async (ctx: OperationQueryCtx, args: { skuIds: Id<"productSku">[] }) =>
-      getInventoryBySkuIdsWithCtx(ctx, args),
-  ),
-});
 
 /**
  * Internal sibling for the anonymous `POST /storefront/inventory/batch` route.

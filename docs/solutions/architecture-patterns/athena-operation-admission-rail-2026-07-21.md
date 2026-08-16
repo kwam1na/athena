@@ -1,7 +1,7 @@
 ---
 title: Athena Operation Admission Rail
 date: 2026-07-21
-last_updated: 2026-07-21
+last_updated: 2026-08-16
 category: docs/solutions/architecture-patterns
 module: Athena Convex public write admission
 problem_type: architecture_pattern
@@ -13,10 +13,23 @@ applies_when:
   - "Shared-demo write access must use the same domain path as normal users without becoming full administrator auth"
   - "A migration wave needs exact inventory coverage before all writes can move to a new admission layer"
 tags: [athena, convex, operation-admission, shared-demo, authz, static-checker]
-delivery_diff_fingerprint: 12d9d738fe19efab33087015f2182983b4a217eba50b6e25d52a08db47edf907
+delivery_diff_fingerprint: 3596601bf861aa683e77e8cae73cb7943ba886e6b5856ce848abc708d1ce4eba
 ---
 
 # Athena Operation Admission Rail
+
+> **Update 2026-08-16:** this note describes the **partial** write rail — the
+> migration wave that moved demo-reachable public mutations onto operation
+> admission while the rest of backend ingress stayed on helper-level checks, with
+> a migration inventory tracking the remainder. It is superseded by
+> [Athena Complete Operation Admission Migration](athena-complete-operation-admission-migration-2026-08-16.md),
+> which extends the same pattern to **all** backend ingress: every public
+> mutation, query, and action and every Hono route, one canonical wrapper per
+> ingress kind imported from the composition root
+> `packages/athena-webapp/convex/platform/operationAdmission.ts`, no exemption
+> list and no migration inventory. The pattern below is the record of how the
+> rail was established and still explains why it is shaped this way; treat the
+> module paths, wrapper names, and coverage claims as historical.
 
 ## Problem
 

@@ -19,28 +19,18 @@ import {
 } from "../platform/operationAdmission";
 import {
   approveReviewOperationDefinition,
-  createReviewOperationDefinition,
-  deleteReviewOperationDefinition,
-  markReviewHelpfulOperationDefinition,
   publishReviewOperationDefinition,
   rejectReviewOperationDefinition,
   unpublishReviewOperationDefinition,
-  updateReviewOperationDefinition,
 } from "../operationAdmission/domains/u7_storefrontOperator_definitions";
 import {
-  getReviewByOrderItemReadDefinition,
   getUnapprovedReviewsCountReadDefinition,
-  hasReviewForOrderItemReadDefinition,
-  hasUserReviewForOrderItemReadDefinition,
-  listReviewsByProductReadDefinition,
-  listReviewsByProductSkuReadDefinition,
-  listReviewsByUserAndProductSkuReadDefinition,
-  listReviewsByUserReadDefinition,
   listStoreReviewsReadDefinition,
 } from "../operationAdmission/domains/u7_storefrontOperator_readDefinitions";
 import { sendFeedbackRequestEmail } from "../mailersend";
 import { getProductName } from "../utils";
 import { ok, userError } from "../../shared/commandResult";
+import { SERVER_INITIATED_OWNER } from "./customerOwnership";
 
 const entity = "review" as const;
 const MAX_REVIEWS = 500;
@@ -136,26 +126,6 @@ type UpdateReviewArgs = {
   ratings?: RatingDimension[];
 };
 
-const createReviewArgs = {
-  orderId: v.id("onlineOrder"),
-  orderNumber: v.string(),
-  orderItemId: v.id("onlineOrderItem"),
-  productId: v.id("product"),
-  productSkuId: v.id("productSku"),
-  storeId: v.id("store"),
-  createdByStoreFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
-  title: v.string(),
-  content: v.optional(v.string()),
-  ratings: v.array(
-    v.object({
-      key: v.string(),
-      label: v.string(),
-      value: v.number(),
-      optional: v.optional(v.boolean()),
-    })
-  ),
-};
-
 type CreateReviewArgs = {
   orderId: Id<"onlineOrder">;
   orderNumber: string;
@@ -168,15 +138,6 @@ type CreateReviewArgs = {
   content?: string;
   ratings: RatingDimension[];
 };
-
-export const create = mutation({
-  args: createReviewArgs,
-  handler: admitPublicMutation(
-    createReviewOperationDefinition,
-    async (ctx: MutationCtx, args: CreateReviewArgs) =>
-      createReviewWithCtx(ctx, args),
-  ),
-});
 
 /**
  * Internal sibling for `POST /reviews`. The store and the review's author come
@@ -328,12 +289,16 @@ async function createReviewWithCtx(ctx: MutationCtx, args: CreateReviewArgs) {
                   `[FirstReviewOffer] No duplicate offer found, creating offer for user ${createdByStoreFrontUserId}`
                 );
 
-                // Create the offer
+                // Create the offer. This is a server-initiated flow: the offer
+                // is minted by the first-review reward rule, not requested by
+                // an admitted shopper, so there is no customer actor to check
+                // the ids against.
                 await ctx.runMutation(internal.storeFront.offers.createInternal, {
                   email: user.email,
                   promoCodeId: promoCode._id,
                   storeFrontUserId: createdByStoreFrontUserId,
                   storeId: storeId,
+                  owner: SERVER_INITIATED_OWNER,
                 });
 
                 console.log(
@@ -390,16 +355,6 @@ async function getReviewByOrderItemWithCtx(
   return review;
 }
 
-export const getByOrderItem = query({
-  args: {
-    orderItemId: v.string(),
-  },
-  handler: admitPublicQuery(
-    getReviewByOrderItemReadDefinition,
-    getReviewByOrderItemWithCtx,
-  ),
-});
-
 /** Internal sibling for `GET /reviews/order-item/:orderItemId`. */
 export const getByOrderItemInternal = internalQuery({
   args: {
@@ -421,17 +376,6 @@ async function hasReviewForOrderItemWithCtx(
 
   return review !== null;
 }
-
-export const hasReviewForOrderItem = query({
-  args: {
-    orderItemId: v.id("onlineOrderItem"),
-  },
-  returns: v.boolean(),
-  handler: admitPublicQuery(
-    hasReviewForOrderItemReadDefinition,
-    hasReviewForOrderItemWithCtx,
-  ),
-});
 
 /** Internal sibling for `GET /reviews/order-item/:orderItemId/exists`. */
 export const hasReviewForOrderItemInternal = internalQuery({
@@ -459,18 +403,6 @@ async function hasUserReviewForOrderItemWithCtx(
 
   return review !== null;
 }
-
-export const hasUserReviewForOrderItem = query({
-  args: {
-    orderItemId: v.id("onlineOrderItem"),
-    userId: v.union(v.id("storeFrontUser"), v.id("guest")),
-  },
-  returns: v.boolean(),
-  handler: admitPublicQuery(
-    hasUserReviewForOrderItemReadDefinition,
-    hasUserReviewForOrderItemWithCtx,
-  ),
-});
 
 /**
  * Internal sibling for `GET /reviews/order-item/:orderItemId/user-exists`. The
@@ -501,29 +433,6 @@ async function updateReviewWithCtx(ctx: MutationCtx, args: UpdateReviewArgs) {
   return review;
 }
 
-export const update = mutation({
-  args: {
-    id: v.id(entity),
-    title: v.optional(v.string()),
-    content: v.optional(v.string()),
-    ratings: v.optional(
-      v.array(
-        v.object({
-          key: v.string(),
-          label: v.string(),
-          value: v.number(),
-          optional: v.optional(v.boolean()),
-        })
-      )
-    ),
-  },
-  handler: admitPublicMutation(
-    updateReviewOperationDefinition,
-    async (ctx: MutationCtx, args: UpdateReviewArgs) =>
-      updateReviewWithCtx(ctx, args),
-  ),
-});
-
 /**
  * Internal sibling for `PATCH /reviews/:id`. Establishes the ownership
  * assertion the route never had: a bearer id may only edit its own review, and
@@ -551,18 +460,6 @@ export const updateInternal = internalMutation({
     await requireOwnedReview(ctx, updates.id, owner);
     return await updateReviewWithCtx(ctx, updates);
   },
-});
-
-export const deleteReview = mutation({
-  args: {
-    id: v.id(entity),
-  },
-  handler: admitPublicMutation(
-    deleteReviewOperationDefinition,
-    async (ctx: MutationCtx, args: { id: Id<"review"> }) => {
-      await ctx.db.delete("review", args.id);
-    },
-  ),
 });
 
 /**
@@ -596,16 +493,6 @@ async function getReviewsByProductSkuIdWithCtx(
   return reviews;
 }
 
-export const getByProductSkuId = query({
-  args: {
-    productSkuId: v.string(),
-  },
-  handler: admitPublicQuery(
-    listReviewsByProductSkuReadDefinition,
-    getReviewsByProductSkuIdWithCtx,
-  ),
-});
-
 /** Internal sibling for the anonymous `GET /reviews/product-sku/:productSkuId`. */
 export const getByProductSkuIdInternal = internalQuery({
   args: {
@@ -629,16 +516,6 @@ async function getReviewsByUserWithCtx(
 
   return reviews;
 }
-
-export const getByUser = query({
-  args: {
-    userId: v.union(v.id("storeFrontUser"), v.id("guest")),
-  },
-  handler: admitPublicQuery(
-    listReviewsByUserReadDefinition,
-    getReviewsByUserWithCtx,
-  ),
-});
 
 /**
  * Internal sibling for `GET /reviews/user`. The shopper is the admitted actor,
@@ -669,17 +546,6 @@ async function getReviewsByUserAndProductSkuIdWithCtx(
 
   return reviews;
 }
-
-export const getByUserAndProductSkuId = query({
-  args: {
-    userId: v.union(v.id("storeFrontUser"), v.id("guest")),
-    productSkuId: v.id("productSku"),
-  },
-  handler: admitPublicQuery(
-    listReviewsByUserAndProductSkuReadDefinition,
-    getReviewsByUserAndProductSkuIdWithCtx,
-  ),
-});
 
 /** Internal sibling for `GET /reviews/user/product-sku/:productSkuId`. */
 export const getByUserAndProductSkuIdInternal = internalQuery({
@@ -907,16 +773,6 @@ async function getReviewsByProductIdWithCtx(
   }
 }
 
-export const getByProductId = query({
-  args: {
-    productId: v.string(),
-  },
-  handler: admitPublicQuery(
-    listReviewsByProductReadDefinition,
-    getReviewsByProductIdWithCtx,
-  ),
-});
-
 /** Internal sibling for the anonymous `GET /reviews/product/:productId`. */
 export const getByProductIdInternal = internalQuery({
   args: {
@@ -959,17 +815,6 @@ async function markReviewHelpfulWithCtx(
     return { helpfulCount: newHelpfulCount };
   }
 }
-
-export const markHelpful = mutation({
-  args: {
-    reviewId: v.id(entity),
-    userId: v.union(v.id("storeFrontUser"), v.id("guest")),
-  },
-  handler: admitPublicMutation(
-    markReviewHelpfulOperationDefinition,
-    markReviewHelpfulWithCtx,
-  ),
-});
 
 /**
  * Internal sibling for `POST /reviews/:reviewId/helpful`. The voter is the

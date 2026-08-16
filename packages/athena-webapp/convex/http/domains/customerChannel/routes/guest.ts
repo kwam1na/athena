@@ -18,6 +18,7 @@ import {
   parseIngressJson,
   requireAdmittedCustomerOwner,
 } from "./admittedCustomer";
+import { SERVER_INITIATED_OWNER } from "../../../../storeFront/customerOwnership";
 
 const guestRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -28,8 +29,16 @@ guestRoutes.get(
     // Deliberately public rather than claim-only: this is the route that
     // RECOVERS a stale or unknown guest cookie, so admitting it as a claim
     // would turn "unknown guest id" into a terminal denial and break the
-    // bootstrap it exists for. The id is still read from the cookie, never
-    // from the request, so no supplied id can select another shopper's row.
+    // bootstrap it exists for.
+    //
+    // RESIDUAL RISK (known and accepted — see the U10 scope decision): the
+    // guest id comes from a cookie, and a cookie is caller-supplied. Any
+    // caller can therefore present an arbitrary `guest_id` and read back that
+    // guest row, including one belonging to another shopper. There is no
+    // admitted owner on this path to check it against, so the read below
+    // passes SERVER_INITIATED_OWNER: the missing check is deliberate and
+    // greppable rather than an omitted argument. This is an accepted IDOR on
+    // the guest record, the price of keeping bootstrap recovery public.
     const guestId = getCookie(c, "guest_id");
 
     const marker = c.req.query("marker");
@@ -43,6 +52,7 @@ guestRoutes.get(
     try {
       const guest = await c.env.runQuery(internal.storeFront.guest.getById, {
         id: guestId as Id<"guest">,
+        owner: SERVER_INITIATED_OWNER,
       });
 
       return c.json(guest);

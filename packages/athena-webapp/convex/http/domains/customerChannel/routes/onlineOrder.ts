@@ -13,6 +13,7 @@ import {
   getOrdersRouteReadDefinition,
 } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
 import {
+  isCustomerOwnershipDenial,
   parseIngressJson,
   requireAdmittedCustomerOwner,
 } from "./admittedCustomer";
@@ -53,8 +54,15 @@ onlineOrderRoutes.get(
       }
 
       return c.json(order);
-    } catch {
-      return c.json({ error: "Forbidden" }, 403);
+    } catch (error) {
+      // Only an ownership refusal becomes 403. Anything else is a fault and
+      // must surface as one: a bare `catch {}` here reported every bug in the
+      // callee as "Forbidden", which hid outages behind an expected status and
+      // made the 404 above unreachable whenever the callee threw.
+      if (isCustomerOwnershipDenial(error)) {
+        return c.json({ error: "Forbidden" }, 403);
+      }
+      throw error;
     }
   }),
 );
@@ -78,9 +86,15 @@ onlineOrderRoutes.post(
           },
         );
         return c.json(b);
-      } catch (e) {
-        console.error(e);
-        return c.json({ error: "Internal server error" }, 400);
+      } catch (error) {
+        // Same rule as the read above: an ownership refusal is a 403, and
+        // everything else propagates. Reporting a genuine fault as a 400
+        // ("Internal server error" under a client-error status) told the
+        // caller to stop retrying and told monitoring nothing was wrong.
+        if (isCustomerOwnershipDenial(error)) {
+          return c.json({ error: "Forbidden" }, 403);
+        }
+        throw error;
       }
     },
   ),

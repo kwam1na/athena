@@ -50,30 +50,6 @@ function rowStoreScope(table: string, argName: string): OperationScopeResolver {
   };
 }
 
-/**
- * The storefront actor id is a union of `storeFrontUser` and `guest`, so the
- * resolver normalizes against both tables before deriving the store. A guest
- * row without `storeId` resolves to no constraint (U6 owns the backfill that
- * makes it required).
- */
-function storeFrontActorStoreScope(argName: string): OperationScopeResolver {
-  return async (ctx: ScopeCtx, args) => {
-    const id = idArg(args, argName);
-    if (!id) return {};
-    const storeFrontUserId = ctx.db.normalizeId("storeFrontUser", id);
-    if (storeFrontUserId) {
-      const user = await ctx.db.get("storeFrontUser", storeFrontUserId);
-      return user?.storeId ? { storeId: user.storeId } : {};
-    }
-    const guestId = ctx.db.normalizeId("guest", id);
-    if (guestId) {
-      const guest = await ctx.db.get("guest", guestId);
-      return guest?.storeId ? { storeId: guest.storeId } : {};
-    }
-    return {};
-  };
-}
-
 function storeFrontWrite(args: {
   capability: OperationDefinition["capability"];
   functionName: string;
@@ -102,26 +78,8 @@ function storeFrontWrite(args: {
 }
 
 // --- storeFront/analytics --------------------------------------------------
-// `storefront.analytics.write` is not a demo-granted capability, so all three
-// writes deny the shared demo.
-
-export const createAnalyticsEventOperationDefinition = storeFrontWrite({
-  capability: "storefront.analytics.write",
-  functionName: "storeFront/analytics:create",
-  operationId: "storeFront/analytics.create",
-  // `POST /analytics` is the anonymous storefront tracking beacon.
-  publicAccess: "admit",
-});
-
-export const updateAnalyticsOwnerOperationDefinition = storeFrontWrite({
-  capability: "storefront.analytics.write",
-  functionName: "storeFront/analytics:updateOwner",
-  operationId: "storeFront/analytics.updateOwner",
-  // `POST /analytics/update-owner` runs immediately after a shopper signs in;
-  // the store comes from the guest row being re-owned, never from the caller.
-  publicAccess: "admit",
-  scope: { kind: "store", resolve: storeFrontActorStoreScope("guestId") },
-});
+// `storefront.analytics.write` is not a demo-granted capability, so this write
+// denies the shared demo.
 
 export const clearAnalyticsOperationDefinition = storeFrontWrite({
   capability: "storefront.analytics.write",
@@ -166,56 +124,9 @@ export const updateOnlineOrderItemsOperationDefinition = storeFrontWrite({
   sharedDemo: "admit",
 });
 
-export const updateOnlineOrderOwnerOperationDefinition = storeFrontWrite({
-  capability: "orders.manage",
-  functionName: "storeFront/onlineOrder:updateOwner",
-  operationId: "storeFront/onlineOrder.updateOwner",
-  // `POST /orders/owner` re-owns a guest's orders at sign-in.
-  publicAccess: "admit",
-  scope: { kind: "store", resolve: storeFrontActorStoreScope("currentOwner") },
-  sharedDemo: "admit",
-});
-
 // --- storeFront/reviews ----------------------------------------------------
 // `reviews.manage` is demo-granted, so every review write admits the demo
-// inside its own store; the store clamp comes from the review/order row.
-
-export const createReviewOperationDefinition = storeFrontWrite({
-  capability: "reviews.manage",
-  functionName: "storeFront/reviews:create",
-  operationId: "storeFront/reviews.create",
-  // `POST /reviews` — a shopper claim exists but is not authentication; U10
-  // gives the route its own `storefrontCustomer` definition.
-  publicAccess: "admit",
-  sharedDemo: "admit",
-});
-
-export const updateReviewOperationDefinition = storeFrontWrite({
-  capability: "reviews.manage",
-  functionName: "storeFront/reviews:update",
-  operationId: "storeFront/reviews.update",
-  publicAccess: "admit",
-  scope: { kind: "store", resolve: rowStoreScope("review", "id") },
-  sharedDemo: "admit",
-});
-
-export const deleteReviewOperationDefinition = storeFrontWrite({
-  capability: "reviews.manage",
-  functionName: "storeFront/reviews:deleteReview",
-  operationId: "storeFront/reviews.deleteReview",
-  publicAccess: "admit",
-  scope: { kind: "store", resolve: rowStoreScope("review", "id") },
-  sharedDemo: "admit",
-});
-
-export const markReviewHelpfulOperationDefinition = storeFrontWrite({
-  capability: "reviews.manage",
-  functionName: "storeFront/reviews:markHelpful",
-  operationId: "storeFront/reviews.markHelpful",
-  publicAccess: "admit",
-  scope: { kind: "store", resolve: rowStoreScope("review", "reviewId") },
-  sharedDemo: "admit",
-});
+// inside its own store; the store clamp comes from the review row.
 
 /** Moderation: operator-only, so anonymous callers are denied outright. */
 function reviewModerationOperation(functionName: string, operationId: string) {
@@ -250,16 +161,9 @@ export const unpublishReviewOperationDefinition = reviewModerationOperation(
 
 export const U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS: readonly OperationDefinition[] =
   [
-    createAnalyticsEventOperationDefinition,
-    updateAnalyticsOwnerOperationDefinition,
     clearAnalyticsOperationDefinition,
     createOnlineOrderOperationDefinition,
     updateOnlineOrderItemsOperationDefinition,
-    updateOnlineOrderOwnerOperationDefinition,
-    createReviewOperationDefinition,
-    updateReviewOperationDefinition,
-    deleteReviewOperationDefinition,
-    markReviewHelpfulOperationDefinition,
     approveReviewOperationDefinition,
     rejectReviewOperationDefinition,
     publishReviewOperationDefinition,

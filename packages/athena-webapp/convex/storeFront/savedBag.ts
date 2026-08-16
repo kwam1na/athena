@@ -19,7 +19,6 @@ import {
 } from "../platform/operationAdmission";
 import {
   assertCustomerOwnsRow,
-  assertCustomerOwnsRowIfPropagated,
   customerOwnerActorId,
   customerOwnerValidator,
   denyCustomerOwnership,
@@ -50,12 +49,12 @@ export const create = internalMutation({
   args: {
     storeId: v.id("store"),
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
-    owner: v.optional(customerOwnerValidator),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, { owner, ...args }) => {
     // A saved bag may only ever be created for the admitted shopper, in the
     // store their claim clamped to.
-    assertCustomerOwnsRowIfPropagated(owner, {
+    assertCustomerOwnsRow(owner, {
       storeFrontUserId: args.storeFrontUserId,
       storeId: args.storeId,
     });
@@ -150,13 +149,11 @@ export const getByIdInternal = internalQuery({
 export const getByUserId = internalQuery({
   args: {
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
-    owner: v.optional(customerOwnerValidator),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
     if (
-      args.owner &&
-      String(args.storeFrontUserId) !==
-        String(customerOwnerActorId(args.owner))
+      String(args.storeFrontUserId) !== String(customerOwnerActorId(args.owner))
     ) {
       denyCustomerOwnership();
     }
@@ -256,17 +253,15 @@ export const updateOwner = internalMutation({
   args: {
     currentOwner: v.id("guest"),
     newOwner: v.id("storeFrontUser"),
-    owner: v.optional(customerOwnerValidator),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
-    if (args.owner) {
-      const actorId = String(customerOwnerActorId(args.owner));
-      if (
-        actorId !== String(args.currentOwner) &&
-        actorId !== String(args.newOwner)
-      ) {
-        denyCustomerOwnership();
-      }
+    const actorId = String(customerOwnerActorId(args.owner));
+    if (
+      actorId !== String(args.currentOwner) &&
+      actorId !== String(args.newOwner)
+    ) {
+      denyCustomerOwnership();
     }
 
     const savedBag = await ctx.db

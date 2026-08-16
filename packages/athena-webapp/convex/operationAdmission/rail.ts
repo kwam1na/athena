@@ -6,7 +6,16 @@ import type {
   MutationCtx,
   QueryCtx,
 } from "../_generated/server";
-import { resolveAdmissionChain } from "./adapters";
+import {
+  DEFAULT_INGRESS_MAX_BODY_BYTES,
+  readBoundedRequestBody,
+  requestWithBody,
+} from "./ingressBody";
+import {
+  asOperationAdmissionDenial,
+  operationAdmissionDenialData,
+  resolveAdmissionChain,
+} from "./adapters";
 import {
   OPERATION_ADMISSION_DEFINITIONS,
   validateOperationDefinition,
@@ -68,6 +77,12 @@ export type AdmissionRailConfig = {
   entrypoints?: AdmissionEntrypoints;
   /** Extracts the storefront claim from an HTTP request. */
   extractIngressClaim?: (c: Context) => OperationIngressClaim | undefined;
+  /**
+   * Cap on an admitted HTTP write body, applied to EVERY `http` write before
+   * admission. Defaults to `DEFAULT_INGRESS_MAX_BODY_BYTES`. A route needing a
+   * tighter bound still layers its own middleware in front.
+   */
+  maxIngressBodyBytes?: number;
 };
 
 /**
@@ -319,13 +334,36 @@ export function createAdmissionRail(config: AdmissionRailConfig) {
     return config.entrypoints;
   }
 
-  async function readIngress(c: Context, withBody: boolean) {
-    const request = c.req.raw;
-    // Read the body exactly once and hand the same string to both the verifier
-    // and the handler, so a signature covers precisely what the handler acts
-    // on and the Request body is never consumed twice.
-    const rawBody = withBody ? await c.req.text() : "";
-    return { rawBody, request } satisfies OperationIngress;
+  /**
+   * Read the body exactly once and hand the same string to both the verifier
+   * and the handler, so a signature covers precisely what the handler acts on
+   * and the Request body is never consumed twice.
+   *
+   * The read is BOUNDED for every admitted write, not just the routes that
+   * remembered to add middleware, and it is bounded before admission so an
+   * oversize request leaves no admission row.
+   */
+  async function readIngress(
+    c: Context,
+    withBody: boolean,
+  ): Promise<
+    { kind: "ok"; ingress: OperationIngress } | { kind: "too_large" }
+  > {
+    if (!withBody) {
+      return {
+        kind: "ok",
+        ingress: { rawBody: "", request: c.req.raw },
+      };
+    }
+
+    const maxBytes = config.maxIngressBodyBytes ?? DEFAULT_INGRESS_MAX_BODY_BYTES;
+    const bounded = await readBoundedRequestBody(c.req.raw, maxBytes);
+    if (bounded.kind === "too_large") return { kind: "too_large" };
+
+    const request = requestWithBody(c.req.raw, bounded.bytes);
+    c.req.raw = request;
+    const rawBody = new TextDecoder().decode(bounded.bytes);
+    return { kind: "ok", ingress: { rawBody, request } };
   }
 
   async function verifyIngressOrDeny(
@@ -356,10 +394,36 @@ export function createAdmissionRail(config: AdmissionRailConfig) {
    * Ingress verification runs on the raw request BEFORE the admission
    * mutation, so a failed verification leaves no admission row and no capture.
    */
+  /**
+   * The fixed HTTP contract for an admission refusal.
+   *
+   * Without this, a denial thrown inside the admission mutation escapes the
+   * Hono handler and Convex renders it as a **500** — a refusal reported as a
+   * server fault. That is wrong in three ways: clients retry 5xx, monitoring
+   * pages on it, and the response body leaks the internal error text.
+   *
+   * `unauthenticated` (no adapter claimed the caller) is 401; an actual
+   * refusal is 403. The distinction comes from typed data on the error, never
+   * from its message. The body is fixed so a denial reveals nothing about why
+   * — probing the difference between "wrong store" and "no such row" is the
+   * exact thing the ownership denials are shaped to prevent.
+   */
+  function admissionDenialResponse(c: Context, error: unknown) {
+    const denial = operationAdmissionDenialData(error);
+    if (!denial) return undefined;
+    return denial.outcome === "unauthenticated"
+      ? c.json({ error: "Authentication required." }, 401)
+      : c.json({ error: "Request rejected." }, 403);
+  }
+
   function admitHttpRoute(definition: OperationDefinition, handler: HttpHandler) {
     return async (c: Context): Promise<Response> => {
       requireValidWriteDefinition(definition);
-      const ingress = await readIngress(c, true);
+      const read = await readIngress(c, true);
+      if (read.kind === "too_large") {
+        return c.json({ error: { code: "request_rejected" } }, 413);
+      }
+      const ingress = read.ingress;
 
       const verification = await verifyIngressOrDeny(c, definition, ingress);
       if (!verification.ok) {
@@ -367,15 +431,22 @@ export function createAdmissionRail(config: AdmissionRailConfig) {
       }
 
       const entrypoints = requireEntrypoints();
-      const admission = await (
-        c.env as unknown as ActionCtx
-      ).runMutation(entrypoints.admitOperation, {
-        operationId: definition.operationId,
-        operationArgs: {
-          ...requestArgs(c),
-          ...ingressClaimArgs(c),
-        },
-      });
+      let admission;
+      try {
+        admission = await (
+          c.env as unknown as ActionCtx
+        ).runMutation(entrypoints.admitOperation, {
+          operationId: definition.operationId,
+          operationArgs: {
+            ...requestArgs(c),
+            ...ingressClaimArgs(c),
+          },
+        });
+      } catch (error) {
+        const denial = admissionDenialResponse(c, error);
+        if (denial) return denial;
+        throw error;
+      }
 
       return handler(c, { admission, ingress });
     };
@@ -390,6 +461,7 @@ export function createAdmissionRail(config: AdmissionRailConfig) {
   ) {
     return async (c: Context): Promise<Response> => {
       requireValidReadDefinition(definition);
+      // Reads carry no body: nothing to bound, and nothing to hand a verifier.
       const ingress = { rawBody: "", request: c.req.raw };
 
       const verification = await verifyIngressOrDeny(c, definition, ingress);
@@ -398,15 +470,22 @@ export function createAdmissionRail(config: AdmissionRailConfig) {
       }
 
       const entrypoints = requireEntrypoints();
-      const admission = await (
-        c.env as unknown as ActionCtx
-      ).runQuery(entrypoints.admitReadOperation, {
-        operationId: definition.operationId,
-        operationArgs: {
-          ...requestArgs(c),
-          ...ingressClaimArgs(c),
-        },
-      });
+      let admission;
+      try {
+        admission = await (
+          c.env as unknown as ActionCtx
+        ).runQuery(entrypoints.admitReadOperation, {
+          operationId: definition.operationId,
+          operationArgs: {
+            ...requestArgs(c),
+            ...ingressClaimArgs(c),
+          },
+        });
+      } catch (error) {
+        const denial = admissionDenialResponse(c, error);
+        if (denial) return denial;
+        throw error;
+      }
 
       return handler(c, { admission, ingress });
     };
@@ -424,11 +503,18 @@ export function createAdmissionRail(config: AdmissionRailConfig) {
       );
     }
     requireValidWriteDefinition(definition);
-    const admission = await resolveWriteAdmission(
-      ctx,
-      args.operationArgs,
-      definition,
-    );
+    // Tag admission failures so HTTP ingress can tell "refused" from "broke"
+    // on the far side of the runMutation boundary without reading messages.
+    let admission: OperationAdmissionContext;
+    try {
+      admission = await resolveWriteAdmission(
+        ctx,
+        args.operationArgs,
+        definition,
+      );
+    } catch (error) {
+      throw asOperationAdmissionDenial(error);
+    }
     await config.capture?.(ctx, admission);
     return projectOperationAdmission(admission);
   }
@@ -445,11 +531,16 @@ export function createAdmissionRail(config: AdmissionRailConfig) {
       );
     }
     requireValidReadDefinition(definition);
-    const admission = await resolveReadAdmission(
-      ctx,
-      args.operationArgs,
-      definition,
-    );
+    let admission: OperationAdmissionContext;
+    try {
+      admission = await resolveReadAdmission(
+        ctx,
+        args.operationArgs,
+        definition,
+      );
+    } catch (error) {
+      throw asOperationAdmissionDenial(error);
+    }
     return projectOperationAdmission(admission);
   }
 

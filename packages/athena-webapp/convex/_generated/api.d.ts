@@ -251,6 +251,7 @@ import type * as operationAdmission_domains_u8_reports_readDefinitions from "../
 import type * as operationAdmission_domains_u9_platform_definitions from "../operationAdmission/domains/u9_platform_definitions.js";
 import type * as operationAdmission_domains_u9_platform_readDefinitions from "../operationAdmission/domains/u9_platform_readDefinitions.js";
 import type * as operationAdmission_effects from "../operationAdmission/effects.js";
+import type * as operationAdmission_ingressBody from "../operationAdmission/ingressBody.js";
 import type * as operationAdmission_ingressVerification from "../operationAdmission/ingressVerification.js";
 import type * as operationAdmission_rail from "../operationAdmission/rail.js";
 import type * as operationAdmission_readAdapters from "../operationAdmission/readAdapters.js";
@@ -903,6 +904,7 @@ declare const fullApi: ApiFromModules<{
   "operationAdmission/domains/u9_platform_definitions": typeof operationAdmission_domains_u9_platform_definitions;
   "operationAdmission/domains/u9_platform_readDefinitions": typeof operationAdmission_domains_u9_platform_readDefinitions;
   "operationAdmission/effects": typeof operationAdmission_effects;
+  "operationAdmission/ingressBody": typeof operationAdmission_ingressBody;
   "operationAdmission/ingressVerification": typeof operationAdmission_ingressVerification;
   "operationAdmission/rail": typeof operationAdmission_rail;
   "operationAdmission/readAdapters": typeof operationAdmission_readAdapters;

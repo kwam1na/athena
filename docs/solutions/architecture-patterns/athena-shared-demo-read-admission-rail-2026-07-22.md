@@ -1,6 +1,7 @@
 ---
 title: Athena Read Admission Rail
 date: 2026-07-22
+last_updated: 2026-08-16
 category: docs/solutions/architecture-patterns
 module: Athena Convex public read admission
 problem_type: architecture_pattern
@@ -12,10 +13,25 @@ applies_when:
   - "A shared-demo read surface is using ad hoc store checks or write capability bridges"
   - "A migration wave needs exact read inventory coverage while reporting reads stay out of scope"
 tags: [athena, convex, read-admission, shared-demo, authz, operations, pos]
-delivery_diff_fingerprint: ae34f9fd3e67654363c099a024c7f95e12f153e7343fc32c273ed1df9a32257d
+delivery_diff_fingerprint: 3596601bf861aa683e77e8cae73cb7943ba886e6b5856ce848abc708d1ce4eba
 ---
 
 # Athena Read Admission Rail
+
+> **Update 2026-08-16:** this note describes the **partial** read rail — the
+> migration wave that moved demo-reachable public queries onto read admission
+> while reporting reads and the rest of backend ingress stayed out of scope. It
+> is superseded by
+> [Athena Complete Operation Admission Migration](athena-complete-operation-admission-migration-2026-08-16.md),
+> which extends the same pattern to **all** backend ingress: every public query
+> and HTTP read is admitted through `admitPublicQuery` / `admitHttpRead`,
+> imported from the composition root
+> `packages/athena-webapp/convex/platform/operationAdmission.ts`. The
+> transitional `withOperationReadAdmission` name and the
+> `operationAdmission/publicQuery.ts` re-export module described below are gone,
+> and there is no longer a read inventory or exemption list. The read-intent
+> discipline this note establishes — read metadata on explicit read intents, not
+> on write capabilities — still holds.
 
 ## Problem
 

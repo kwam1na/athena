@@ -14,7 +14,6 @@ import {
   findLinkedAccountsReadDefinition,
   getAllStoreFrontUsersReadDefinition,
   getAllUserActivityReadDefinition,
-  getLastViewedProductReadDefinition,
   getLastViewedProductsReadDefinition,
   getMostRecentActivityReadDefinition,
   getOnlineOrderByIdReadDefinition,
@@ -22,7 +21,7 @@ import {
 } from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
 import { admitPublicQuery } from "../platform/operationAdmission";
 import {
-  assertCustomerOwnsStoreIfPropagated,
+  assertCustomerOwnsStore,
   customerOwnerActorId,
   customerOwnerValidator,
   denyCustomerOwnership,
@@ -72,15 +71,12 @@ export const getAll = query({
 export const getById = internalQuery({
   args: {
     id: v.id(entity),
-    owner: v.optional(customerOwnerValidator),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
     // `GET /me` and `GET /users/:userId` both reach here with a bare id; the
     // admitted claim decides whose row that may be.
-    if (
-      args.owner &&
-      String(args.id) !== String(customerOwnerActorId(args.owner))
-    ) {
+    if (String(args.id) !== String(customerOwnerActorId(args.owner))) {
       denyCustomerOwnership();
     }
     try {
@@ -100,18 +96,16 @@ export const update = internalMutation({
     phoneNumber: v.optional(v.string()),
     shippingAddress: v.optional(addressSchema),
     billingAddress: v.optional(addressSchema),
-    owner: v.optional(customerOwnerValidator),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
     // `PUT /me` and `PUT /users/:userId` patch a bare id; only the admitted
     // shopper's own row may be written, and only inside their own store.
-    if (args.owner) {
-      if (String(args.id) !== String(customerOwnerActorId(args.owner))) {
-        denyCustomerOwnership();
-      }
-      const existing = await ctx.db.get("storeFrontUser", args.id);
-      assertCustomerOwnsStoreIfPropagated(args.owner, existing?.storeId);
+    if (String(args.id) !== String(customerOwnerActorId(args.owner))) {
+      denyCustomerOwnership();
     }
+    const existing = await ctx.db.get("storeFrontUser", args.id);
+    assertCustomerOwnsStore(args.owner, existing?.storeId);
 
     const updates: Record<string, any> = {};
 
@@ -503,19 +497,6 @@ async function getLastViewedProductWithCtx(
     return null;
   }
 }
-
-export const getLastViewedProduct = query({
-  args: {
-    id: v.union(v.id(entity), v.id("guest")),
-    category: v.optional(v.string()),
-    minAgeHours: v.optional(v.number()),
-  },
-  handler: admitPublicQuery(
-    getLastViewedProductReadDefinition,
-    async (ctx, args: LastViewedProductArgs) =>
-      getLastViewedProductWithCtx(ctx, args),
-  ),
-});
 
 /**
  * Internal sibling for `GET /upsells`. The upsell is computed from the

@@ -23,11 +23,8 @@ vi.mock("../services/orderEmailService", () => ({
 import { ok } from "../../shared/commandResult";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import {
-  createPODOrder,
-  createTransaction,
   autoVerifyUnverifiedPayments,
   refundPayment,
-  verifyPayment,
 } from "./payment";
 import {
   getRemainingRefundableBalance,
@@ -77,21 +74,6 @@ describe("storefront refund money contract", () => {
   });
 
   it("accepts representative changed payment action return contracts", () => {
-    assertConformsToExportedReturns(createTransaction, {
-      success: false,
-      message: "Session not found",
-    });
-    assertConformsToExportedReturns(createTransaction, {
-      access_code: "access-code",
-      authorization_url: "https://pay.example/authorize",
-      reference: "payment-reference",
-    });
-    assertConformsToExportedReturns(createPODOrder, {
-      success: true,
-      message: "Order created.",
-      reference: "pod-reference",
-    });
-    assertConformsToExportedReturns(verifyPayment, { verified: true });
     assertConformsToExportedReturns(refundPayment, ok({ message: "Refund queued." }));
   });
 

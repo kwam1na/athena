@@ -12,18 +12,13 @@ import {
   admitPublicMutation,
   admitPublicQuery,
 } from "../platform/operationAdmission";
-import {
-  clearAnalyticsOperationDefinition,
-  createAnalyticsEventOperationDefinition,
-  updateAnalyticsOwnerOperationDefinition,
-} from "../operationAdmission/domains/u7_storefrontOperator_definitions";
+import { clearAnalyticsOperationDefinition } from "../operationAdmission/domains/u7_storefrontOperator_definitions";
 import {
   getAnalyticsByPromoCodeReadDefinition,
   getAnalyticsEventReadDefinition,
   getAnalyticsWorkspaceSummaryReadDefinition,
   getConsolidatedAnalyticsReadDefinition,
   getEnhancedAnalyticsReadDefinition,
-  getProductViewCountReadDefinition,
   getRevenueAnalyticsReadDefinition,
   getStoreActivityTimelineReadDefinition,
   getStorefrontObservabilityReportReadDefinition,
@@ -319,22 +314,6 @@ async function createAnalyticsWithCtx(
   return await ctx.db.get("analytics", id);
 }
 
-export const create = mutation({
-  args: {
-    storeId: v.id("store"),
-    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
-    origin: v.optional(v.string()),
-    action: v.string(),
-    data: v.record(v.string(), v.any()),
-    device: v.optional(v.string()),
-    productId: v.optional(v.id("product")),
-  },
-  handler: admitPublicMutation(
-    createAnalyticsEventOperationDefinition,
-    createAnalyticsWithCtx,
-  ),
-});
-
 /**
  * Internal sibling for the anonymous `POST /analytics` beacon. The store and
  * the shopper the event is attributed to come from the admitted actor, so a
@@ -383,17 +362,6 @@ async function updateAnalyticsOwnerWithCtx(
 
   return { updated: records.length };
 }
-
-export const updateOwner = mutation({
-  args: {
-    guestId: v.id("guest"),
-    userId: v.id("storeFrontUser"),
-  },
-  handler: admitPublicMutation(
-    updateAnalyticsOwnerOperationDefinition,
-    updateAnalyticsOwnerWithCtx,
-  ),
-});
 
 /**
  * Internal sibling for `POST /analytics/update-owner`. The signed-in shopper
@@ -826,17 +794,6 @@ async function getProductViewCountWithCtx(
     };
   }
 }
-
-export const getProductViewCount = query({
-  args: {
-    productId: v.id("product"),
-    currentDayStartMs: v.number(),
-  },
-  handler: admitPublicQuery(
-    getProductViewCountReadDefinition,
-    getProductViewCountWithCtx,
-  ),
-});
 
 /** Internal sibling for the anonymous `GET /analytics/product-view-count`. */
 export const getProductViewCountInternal = internalQuery({

@@ -43,7 +43,6 @@ import { ensureTimezoneAuthorityForScheduleWithCtx } from "../storeTime/ensureTi
 import {
   admitPublicMutation,
   admitPublicQuery,
-  resolveWriteAdmission,
 } from "../platform/operationAdmission";
 import { upsertStoreScheduleCommandOperationDefinition } from "../operationAdmission/domains/u3_inventoryCatalog_definitions";
 import {
@@ -530,11 +529,19 @@ export const upsertStoreScheduleCommand = mutation({
   returns: commandResultValidator(storeScheduleSummaryValidator),
   handler: async (ctx, args) => {
     try {
-      await resolveWriteAdmission(
-        ctx,
-        args,
+      return await admitPublicMutation(
         upsertStoreScheduleCommandOperationDefinition,
-      );
+        (admittedCtx: OperationMutationCtx, admittedArgs: typeof args) =>
+          upsertStoreScheduleCommandWithCtx(
+            admittedCtx,
+            {
+              ...admittedArgs,
+              source: "admin",
+              status: "active",
+            },
+            { enforceFullAdminAccess: true },
+          ),
+      )(ctx, args);
     } catch (error) {
       if (!isStoreScheduleAdmissionAuthorizationError(error)) {
         throw error;
@@ -544,20 +551,6 @@ export const upsertStoreScheduleCommand = mutation({
         message: "You do not have access to manage store hours.",
       });
     }
-
-    return admitPublicMutation(
-      upsertStoreScheduleCommandOperationDefinition,
-      (admittedCtx: OperationMutationCtx, admittedArgs: typeof args) =>
-        upsertStoreScheduleCommandWithCtx(
-          admittedCtx,
-          {
-            ...admittedArgs,
-            source: "admin",
-            status: "active",
-          },
-          { enforceFullAdminAccess: true },
-        ),
-    )(ctx, args);
   },
 });
 

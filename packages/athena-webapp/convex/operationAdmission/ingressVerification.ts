@@ -232,20 +232,30 @@ export const MARKETING_ALLOWED_ORIGINS_ENV = "WALKTHROUGH_ALLOWED_ORIGINS";
  * The marketing site is not the storefront, so it carries its own exact-match
  * origin list. Unset means no origin at all, the same fail-closed shape as the
  * storefront allowlist.
+ *
+ * The allowlist is INJECTED rather than parsed here. `WALKTHROUGH_ALLOWED_ORIGINS`
+ * already had a resolver in `convex/marketing/walkthroughConfig.ts` that also
+ * honours `WALKTHROUGH_ALLOW_LOCAL_ORIGINS`, and a second parser in the rail
+ * core silently disagreed with it: with local origins enabled the handler
+ * would accept a localhost caller the verifier had already refused. Two
+ * parsers of one variable is two policies. The rail core cannot import
+ * marketing config (its import allowlist forbids it), so the composition root
+ * supplies the one resolver and this function only compares.
  */
 export function createMarketingOriginVerifier(
-  environment: Record<string, string | undefined> = process.env,
+  resolveAllowedOrigins: () => readonly string[],
 ): OperationIngressVerifier {
   return (input) => {
     const origin = input.headers.get("Origin");
     if (!origin || origin === "null") return false;
-    const raw = environment[MARKETING_ALLOWED_ORIGINS_ENV];
-    if (typeof raw !== "string") return false;
-    return raw
-      .split(",")
-      .map((candidate) => candidate.trim())
-      .filter((candidate) => candidate.length > 0)
-      .includes(origin);
+    let allowed: readonly string[];
+    try {
+      allowed = resolveAllowedOrigins();
+    } catch {
+      // A malformed configuration denies, like an absent one.
+      return false;
+    }
+    return allowed.includes(origin);
   };
 }
 

@@ -34,12 +34,7 @@ import {
   type ScheduledCronFamily,
 } from "../automation/scheduledRunLedger";
 
-import {
-  createPODOrderOperationDefinition,
-  createTransactionOperationDefinition,
-  refundPaymentOperationDefinition,
-  verifyPaymentOperationDefinition,
-} from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
+import { refundPaymentOperationDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
 import { admitPublicAction } from "../platform/operationAdmission";
 import {
   assertCustomerOwnsRow,
@@ -373,26 +368,6 @@ async function createTransactionWithCtx(
   }
 }
 
-export const createTransaction = action({
-  args: paymentSessionArgs,
-  returns: v.union(
-    v.object({
-      success: v.boolean(),
-      message: v.string(),
-    }),
-    v.object({
-      authorization_url: v.string(),
-      access_code: v.string(),
-      reference: v.string(),
-    }),
-  ),
-  handler: admitPublicAction(
-    createTransactionOperationDefinition,
-    async (ctx, args: PaymentSessionArgs): Promise<any> =>
-      createTransactionWithCtx(ctx, args),
-  ),
-});
-
 /**
  * Internal sibling for `POST /checkout/:checkoutSessionId` (pay action). The
  * session named in the path must belong to the admitted shopper before a live
@@ -553,20 +528,6 @@ async function createPODOrderWithCtx(
     }
   }
 }
-
-export const createPODOrder = action({
-  args: paymentSessionArgs,
-  returns: v.object({
-    success: v.boolean(),
-    message: v.string(),
-    reference: v.optional(v.string()),
-  }),
-  handler: admitPublicAction(
-    createPODOrderOperationDefinition,
-    async (ctx, args: PaymentSessionArgs): Promise<PaymentResult> =>
-      createPODOrderWithCtx(ctx, args),
-  ),
-});
 
 /** Internal sibling for `POST /checkout/:checkoutSessionId` (POD action). */
 export const createPODOrderInternal = internalAction({
@@ -765,23 +726,6 @@ async function verifyPaymentWithCtx(
     }
   }
 }
-
-export const verifyPayment = action({
-  args: verifyPaymentArgs,
-  returns: v.union(
-    v.object({
-      verified: v.boolean(),
-    }),
-    v.object({
-      message: v.string(),
-    }),
-  ),
-  handler: admitPublicAction(
-    verifyPaymentOperationDefinition,
-    async (ctx, args: VerifyPaymentArgs): Promise<PaymentVerificationResult> =>
-      verifyPaymentWithCtx(ctx, args),
-  ),
-});
 
 /**
  * Internal sibling for `GET /checkout/verify/:reference`. Verification runs for

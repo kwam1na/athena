@@ -1,0 +1,986 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Closing the Admission Rail</title>
+  </head>
+  <body>
+    <article
+      data-athena-landed-change-report="v2"
+      data-athena-report-diff-fingerprint="3596601bf861aa683e77e8cae73cb7943ba886e6b5856ce848abc708d1ce4eba"
+    >
+      <header data-report-section="header">
+        <h1>Closing the Admission Rail</h1>
+        <ul data-report-pills>
+          <li>Delivery candidate</li>
+          <li>Branch codex/backend-operations-admission-migration</li>
+          <li>Zero checker findings</li>
+          <li>9,003 tests green</li>
+        </ul>
+        <dl data-report-meta>
+          <dt>Status</dt>
+          <dd>Delivery candidate — not merged, not deployed</dd>
+          <dt>PR</dt>
+          <dd>None — single integration branch by directive</dd>
+          <dt>Linear</dt>
+          <dd>V26-1226 … V26-1239 (14 units)</dd>
+          <dt>Base</dt>
+          <dd>origin/main</dd>
+          <dt>Plan</dt>
+          <dd>docs/plans/2026-08-16-002-feat-complete-operation-admission-migration-plan.md</dd>
+          <dt>Solution note</dt>
+          <dd>docs/solutions/architecture-patterns/athena-complete-operation-admission-migration-2026-08-16.md</dd>
+          <dt>Deploy</dt>
+          <dd>Pending — five environment variables and one data backfill are prerequisites</dd>
+          <dt>Root alignment</dt>
+          <dd>Pending</dd>
+        </dl>
+      </header>
+
+      <section data-report-section="summary">
+        <h2>Executive summary</h2>
+        <p>
+          Athena had a security rail that worked and that nobody finished
+          adopting. Two earlier deliveries built an admission boundary for
+          backend writes and reads, but both stopped at the surfaces the shared
+          demo could reach. Everything else kept its old, ad-hoc authorization —
+          and the list of "everything else" was written down, in the codebase, as
+          a 189-entry exemption list that had stopped shrinking.
+        </p>
+        <p>
+          This delivery finishes the job and then removes the machinery that made
+          being unfinished expressible. Every public Convex mutation, query, and
+          action, and every Hono HTTP route, now declares an operation definition
+          and runs through one canonical wrapper per ingress kind. The checker
+          discovers 609 ingress points and admits 605; the remaining four, plus
+          the HTTP route family Convex Auth installs, are the framework entry
+          points described below. It exits 0 with zero findings, and there is no
+          exemption construct left anywhere in the tree — not renamed, not
+          emptied-but-present.
+        </p>
+        <p>
+          The largest real-world exposure closed here was not the unmigrated
+          Convex functions. It was the 93 HTTP routes, which the storefront
+          webapp uses <em>exclusively</em>, and which read a shopper's
+          <code>user_id</code> / <code>guest_id</code> cookie and treated it as
+          identity — passing it straight into backend calls, behind a CORS
+          middleware that reflected any origin.
+        </p>
+      </section>
+
+      <section data-report-section="problem">
+        <h2>What was actually wrong</h2>
+        <p>
+          The rail's promise was one sentence: <strong>capability declared ⇒
+          admission installed</strong>. If a function said "this requires
+          <code>cash.control.write</code>", the rail guaranteed that the caller
+          actually held it, in the right store, before the handler ran.
+        </p>
+        <p>That promise held for roughly a quarter of the backend.</p>
+        <ul>
+          <li>
+            <strong>411 unadmitted Convex exports.</strong> 189 raw public
+            mutations against 57 admitted, plus 184 raw queries and 38 raw
+            actions.
+          </li>
+          <li>
+            <strong>An exemption list that had become a second policy.</strong>
+            189 entries, structurally indistinguishable from the backlog it
+            represented. Its own documentation described it as "a deliberate map
+            of what has not yet moved through the front desk" — which is exactly
+            what a migration tool looks like right up until it stops shrinking.
+          </li>
+          <li>
+            <strong>93 HTTP routes with no admission at all.</strong> Each route
+            independently decided how much to trust the cookie. There was no
+            shared answer, so there was nothing to review.
+          </li>
+          <li>
+            <strong>Four hand-maintained registries</strong> restating, by hand,
+            facts the definitions already carried — and all four had drifted.
+          </li>
+          <li>
+            <strong>About fifty handler-local demo guards</strong>, each stating
+            "not the demo" at one statement inside one function, and each only as
+            good as its position in that function.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="mental-model">
+        <h2>The mental model</h2>
+        <p>
+          Think of the backend as a building with many doors. Before this
+          delivery, some doors had a front desk that checked your badge against
+          what you were trying to do. The rest had a handwritten note taped
+          inside saying <em>"if it's the demo visitor, turn them away"</em> —
+          and a clipboard by the entrance listing which doors still only had
+          notes.
+        </p>
+        <p>The three problems with notes taped to doors:</p>
+        <ol>
+          <li>
+            <strong>Position matters.</strong> A note halfway down a corridor
+            stops nobody who entered from the other end. A guard placed after
+            the first database read has already leaked whatever that read
+            returned.
+          </li>
+          <li>
+            <strong>Nobody can audit them in aggregate.</strong> To answer "can
+            the demo reach payment collection?" you had to read every handler,
+            and the answer changed whenever anyone edited one.
+          </li>
+          <li>
+            <strong>The clipboard becomes the map.</strong> Once "not yet
+            covered" is a first-class, permanent state, it stops being a
+            countdown and starts being a category.
+          </li>
+        </ol>
+        <p>
+          The rail replaces notes with a <em>declaration at the door</em>: every
+          entrance states who may pass, what capability it requires, which store
+          it is scoped to, and which external systems it can reach. The front
+          desk enforces that before you are inside — so the guarantee no longer
+          depends on where in the corridor someone remembered to stand.
+        </p>
+        <p>
+          The vocabulary maps onto that picture directly. A
+          <strong>capability</strong> is what the badge must say for a write
+          ("cash controls"); a <strong>read intent</strong> is its equivalent
+          for reads, kept separate because being allowed to see something is not
+          being allowed to change it. <strong>Scope</strong> is which store or
+          organization the door leads into. <strong>Readiness</strong> is
+          whether the room is in a state to be entered at all. A
+          <strong>gateway</strong> is a door leading out of the building
+          entirely — to a payment provider, an email sender. A
+          <strong>target guard</strong> is a rope around one exhibit that stops
+          everyone, including staff. The <strong>composition root</strong> is
+          the one office that hires the desk clerks and writes their rules; the
+          rail core is the desk procedure, which knows nothing about who works
+          there. And <code>ctx.operationAdmission</code> is the visitor badge
+          the handler is handed — the only place it may learn who it is serving.
+        </p>
+        <p>
+          The second, subtler idea: <strong>if a fact is already on the
+          declaration, never write it down a second time.</strong> Four of the
+          things deleted here were lists that restated declarations. Each one
+          could disagree with reality, and each one did.
+        </p>
+      </section>
+
+      <section data-report-section="before-after">
+        <h2>Before and after</h2>
+        <h3>A Convex mutation</h3>
+        <pre><code>// before — policy interleaved with domain logic, position-sensitive
+export const recordThing = mutation({
+  args: recordThingArgs,
+  handler: async (ctx, args) =&gt; {
+    await requireSharedDemoCapabilityIfApplicable(ctx, "daily_operations.write");
+    await requireNonDemoFoundationMutation(ctx, { storeId: args.storeId });
+    return recordThingWithCtx(ctx, args);
+  },
+});
+
+// after — policy declared, enforced before the handler is entered
+export const recordThing = mutation({
+  args: recordThingArgs,
+  handler: admitPublicMutation(recordThingOperationDefinition, recordThingWithCtx),
+});</code></pre>
+        <h3>An HTTP customer write</h3>
+        <p>
+          This is the one that mattered. Before, the route read the cookie and
+          used it as identity:
+        </p>
+        <pre><code>// before — a cookie read inline by the route IS the identity
+//   getStorefrontUserFromRequest = getCookie(c, "user_id") || getCookie(c, "guest_id")
+//   getStoreDataFromRequest      = getCookie(c, "store_id")
+const userId = getStorefrontUserFromRequest(c);
+const { storeId } = getStoreDataFromRequest(c);
+await ctx.runMutation(api.storeFront.reviews.create, {
+  createdByStoreFrontUserId: userId,   // an unverified cookie value
+  storeId,                             // an unverified cookie value
+  ...body,
+});
+
+// after — the rail admits, and the ADMITTED actor supplies identity
+admitHttpRoute(createReviewRouteOperationDefinition, async (c, admitted) =&gt; {
+  const body = parseIngressJson&lt;CreateReviewRequest&gt;(admitted);
+  // Author and store both come from the admitted claim; storeId and
+  // createdByStoreFrontUserId are no longer arguments at all.
+  const owner = requireAdmittedCustomerOwner(admitted);
+  await ctx.runMutation(internal.storeFront.reviews.createInternal, {
+    ...body,
+    owner,
+  });
+});</code></pre>
+        <p>
+          Three things changed at once. The caller's identity now comes from the
+          admitted actor rather than from a cookie the route read for itself —
+          the rail resolves the claim to a row and derives the store from that
+          row, cross-checking the <code>store_id</code> cookie rather than
+          trusting it. The call target moved from <code>api.*</code> to
+          <code>internal.*</code>, because an <code>api.*</code> hop re-enters
+          the rail carrying the <em>server's</em> identity and launders the
+          caller's actor. And the route must declare an origin allowlist,
+          because a <code>SameSite=None</code> bearer cookie is reachable
+          cross-origin and needs a second, independent fence.
+        </p>
+        <h3>The layer map</h3>
+        <pre><code>ingress ──► canonical wrapper ──► composition root ──► rail core ──► handler
+             admitPublicMutation      registers policy      pure logic:
+             admitPublicQuery         (demo adapters,       definitions,
+             admitPublicAction         customer adapter,    adapter chain,
+             admitHttpRoute            foundation guards)   target guards,
+             admitHttpRead                                  verification</code></pre>
+        <p>
+          The rail core imports <strong>only</strong> itself, generated code, and
+          three catalogs. A path-prefix allowlist lint enforces that, with
+          fixtures proving that importing the composition root or a policy module
+          fails. This is what makes "the generic rail must not know about the
+          demo" structural rather than aspirational.
+        </p>
+      </section>
+
+      <section data-report-section="key-files">
+        <h2>Key files</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Why it matters</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>convex/operationAdmission/README.md</code></td>
+              <td>The contract. Start here: the add-a-public-function checklist, the four non-obvious rules, and the framework entry points.</td>
+            </tr>
+            <tr>
+              <td><code>convex/operationAdmission/types.ts</code></td>
+              <td>Defines what a declaration can say — actors, scope, readiness, effects, target guards, ingress verification.</td>
+            </tr>
+            <tr>
+              <td><code>convex/operationAdmission/rail.ts</code></td>
+              <td>Sequencing: verification, then identity, then scope, then target guards, then the handler. Identity resolves before scope so a scope-resolver failure can never downgrade an authenticated caller.</td>
+            </tr>
+            <tr>
+              <td><code>convex/platform/operationAdmission.ts</code></td>
+              <td>The composition root, and the only import path for all five wrappers. Registers every adapter, guard, and verifier exactly once.</td>
+            </tr>
+            <tr>
+              <td><code>convex/operationAdmission/domains/**</code></td>
+              <td>The definition arrays, one pair per migration unit (<code>u2</code>–<code>u11</code>), composed into the two registries. This is where you add a declaration.</td>
+            </tr>
+            <tr>
+              <td><code>convex/operationAdmission/ingressVerification.ts</code></td>
+              <td>Paystack, WhatsApp, and MTN MoMo signature verifiers plus origin allowlists and bearer checks. All fail closed on absent config and compare constant-time.</td>
+            </tr>
+            <tr>
+              <td><code>convex/storeFront/customerOwnership.ts</code></td>
+              <td>The <code>owner</code> type and the assertions that enforce it — <code>assertCustomerOwnsRow</code> / <code>assertCustomerOwnsStore</code>. A required parameter makes the owner <em>available</em>; these calls are what make it <em>binding</em>, and nothing structural forces a new callee to make them. See "Residual risks".</td>
+            </tr>
+            <tr>
+              <td><code>convex/platform/storefrontOrigins.ts</code></td>
+              <td>Env-backed, exact-match, fail-closed origin allowlist. An unset allowlist allows nothing — never <code>*</code>.</td>
+            </tr>
+            <tr>
+              <td><code>convex/sharedDemo/policy.ts</code></td>
+              <td>Demo read-intent grants and external-effect classification, plus the three derivation functions that replaced the deleted registries.</td>
+            </tr>
+            <tr>
+              <td><code>convex/platform/capabilityCatalog.ts</code></td>
+              <td>The closed write-capability catalog and the demo grant set. <code>classifyAthenaPublicWrite</code> and its module map are gone from here.</td>
+            </tr>
+            <tr>
+              <td><code>convex/http/domains/customerChannel/routes/admittedCustomer.ts</code></td>
+              <td>The single place a route turns an admission into identity — <code>requireAdmittedCustomerOwner</code> and friends. The most useful entry point for understanding the customer channel.</td>
+            </tr>
+            <tr>
+              <td><code>scripts/convex-operation-admission-check.ts</code></td>
+              <td>AST discovery of every ingress kind. The coverage sensor, and the thing that makes "no exemption construct" enforceable.</td>
+            </tr>
+            <tr>
+              <td><code>convex/operationAdmission/coverage.test.ts</code></td>
+              <td>Asserts the checker reports zero findings. Red by design for the whole migration; green only at closure.</td>
+            </tr>
+            <tr>
+              <td><code>convex/operationAdmission/importAllowlist.test.ts</code></td>
+              <td>Path-prefix allowlist on the rail core, with fixtures proving a policy import fails.</td>
+            </tr>
+            <tr>
+              <td><code>convex/http.ts</code></td>
+              <td>CORS moved from a reflect-any-origin callback to the exact-match allowlist.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="changes">
+        <h2>What changed, and what deliberately did not</h2>
+        <h3>Changed</h3>
+        <ul>
+          <li>
+            <strong>605 ingress points admitted</strong> — 244 queries, 232
+            mutations, 35 actions, 45 HTTP writes, 49 HTTP reads. The only
+            non-admitted ingress is Convex Auth: four registrar exports
+            (<code>auth</code>, <code>signIn</code>, <code>signOut</code>,
+            <code>store</code>) <strong>and the HTTP route family
+            <code>auth.addHttpRoutes</code> installs</strong> — a
+            browser-reachable sign-in surface that is deliberately outside the
+            rail. Auth is the trust root that MINTS the principals the adapters
+            resolve, so admitting it with them would be circular.
+          </li>
+          <li>
+            <strong>One wrapper name per ingress kind.</strong>
+            <code>admitPublicMutation</code> and <code>admitPublicQuery</code>
+            are renames of the existing <code>withOperationMutationAdmission</code>
+            / <code>withOperationReadAdmission</code>, not new machinery; the
+            transitional re-export modules are gone, so there is exactly one
+            import path per wrapper.
+          </li>
+          <li>
+            <strong>A new actor kind, <code>storefront_customer</code></strong>,
+            valid only on HTTP ingress. It records
+            <code>assurance: "bearer_id"</code> in provenance, because a cookie
+            id is proof of possession, not authentication. Declaring it on a
+            Convex-function kind is a validation error — a plain argument is not
+            a claim boundary.
+          </li>
+          <li>
+            <strong>40 orphaned public exports deleted.</strong> Once routes
+            switched to internal siblings, these had zero callers anywhere.
+            <code>storeFront/auth</code> now has no public exports at all.
+          </li>
+          <li>
+            <strong>The framework entry-point list is not an exemption list
+            wearing a hat</strong> — the obvious objection, and worth answering
+            directly. It is five hand-written entries the checker will not fail
+            on. What keeps it honest is that it is verified in BOTH directions:
+            an entry naming a registrar discovery no longer finds is a finding,
+            and a discovered registrar not named in the list is a finding. The
+            old exemption list was one-directional, which is why it could grow
+            silently. Adding an entry here is a deliberate act with a stated
+            reason that a reviewer sees.
+          </li>
+          <li>
+            <strong>Four hand-maintained registries deleted and derived</strong>
+            — see the drift table in the solution note.
+            <code>reports.read</code>, a write capability that existed only so
+            the demo could <em>read</em> Reports, is replaced by the
+            <code>reports.view</code> read intent.
+          </li>
+          <li>
+            <strong>The fail-open catch is gone.</strong>
+            <code>resolveOperationAdmission</code> used to catch any throw and
+            retry against the public adapter — including scope-resolver failures.
+            Denials are now typed data, and no adapter classifies by
+            error-message text.
+          </li>
+        </ul>
+        <h3>Deliberately unchanged</h3>
+        <ul>
+          <li>
+            <strong>Demo reach was not widened.</strong> Not one capability or
+            read intent was added to either grant set. Four narrowings were
+            preserved rather than quietly resolved:
+            <code>pos.session.manage</code>, <code>expenses.view</code>,
+            <code>storefront.reviews.view</code>,
+            <code>storefront.analytics.view</code>. Whether the demo should
+            demonstrate them is a product question.
+          </li>
+          <li>
+            <strong>Route paths and payloads.</strong> No URL or request shape
+            changed. The route count reads 93 before and 94 after only because
+            the MTN MoMo webhook is registered with <code>.on(["POST","PUT"])</code>
+            and is now counted as the two ingress points it always was.
+          </li>
+          <li>
+            <strong>Normal-user behavior.</strong> Characterization-first per
+            unit, with exported-handler parity tests.
+          </li>
+          <li>
+            <strong>Roles, membership, staff credentials, approvals, demo
+            fixtures and restore.</strong> Explicitly out of scope.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="failure-boundaries">
+        <h2>Live behavior changes worth naming</h2>
+        <p>
+          A migration that claims to change nothing is usually lying about
+          something. These are the real caller-visible differences.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Change</th>
+              <th>Why</th>
+              <th>Risk</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Cookieless customer-scoped reads fail closed instead of returning a benign <code>null</code> / <code>{points: 0}</code></td>
+              <td>That is what "customer-scoped reads are claim-only" means. A guest cookie still admits.</td>
+              <td>Medium — only a caller with neither <code>user_id</code> nor <code>guest_id</code> is affected</td>
+            </tr>
+            <tr>
+              <td><code>GET /orders/:orderId</code> returns 403, not 404, for a non-existent order</td>
+              <td>Missing and foreign rows are refused identically. That is the anti-probe property, not an accident.</td>
+              <td>Low — deliberate</td>
+            </tr>
+            <tr>
+              <td><code>POST /tracking-events</code> no longer records an actor</td>
+              <td>It derived an actor and abuse-partition key from a cookie on a route that verifies nothing, so any caller could write onto another visitor's timeline.</td>
+              <td><strong>Flagged for product confirmation</strong> — storefront tracking loses shopper attribution</td>
+            </tr>
+            <tr>
+              <td>CORS is an exact-match allowlist; unset means no <code>Access-Control-Allow-Origin</code> at all</td>
+              <td>The reflect-any-origin callback made <code>SameSite=None</code> claim cookies reachable from anywhere.</td>
+              <td>High if the env var is missed at deploy — fails closed, loudly</td>
+            </tr>
+            <tr>
+              <td>Customer-write denials surface as a thrown admission error where handlers previously returned 400/404</td>
+              <td>Inherent to the customer-write shape: denial happens before the handler.</td>
+              <td>Low</td>
+            </tr>
+          </tbody>
+        </table>
+        <h3>Deploy prerequisites — all fail-closed by construction</h3>
+        <p>
+          Five environment variables must be set or the corresponding ingress
+          denies everything: <code>ATHENA_STOREFRONT_ALLOWED_ORIGINS</code>,
+          <code>WHATSAPP_WEBHOOK_APP_SECRET</code>,
+          <code>MTN_MOMO_COLLECTIONS_CALLBACK_SECRET</code> (which must
+          <em>also</em> be appended to the registered MTN callback URL as
+          <code>callbackSecret=…</code>),
+          <code>WALKTHROUGH_ALLOWED_ORIGINS</code>, and
+          <code>ATHENA_WAIVER_BROKER_SECRET</code>.
+        </p>
+        <p>
+          One data prerequisite: the <strong>guest <code>storeId</code>
+          backfill</strong> must run before deploy.
+          <code>POST /guests</code> now requires a store, so guest rows without
+          one cannot be re-owned afterwards. The backfill is deliberately
+          conservative — derive only from an authoritative related row, leave
+          unresolvable rows unset so they deny, never default to a store.
+        </p>
+      </section>
+
+      <section data-report-section="mechanics">
+        <h2>Two mechanics worth understanding</h2>
+        <h3>Derive, then assert in both directions</h3>
+        <p>
+          Deriving an invariant from the declarations is half the work. The
+          direction you assert it in decides which failure you catch.
+        </p>
+        <pre><code>// forward — a grant that nothing implements (a stale grant)
+for (const capability of SHARED_DEMO_ALLOWED_CAPABILITIES) {
+  expect([...represented]).toContain(capability);
+}
+
+// reverse — an operation admitting the demo for something ungranted
+for (const capability of represented) {
+  expect(granted.has(capability)).toBe(true);
+}</code></pre>
+        <p>
+          The deleted inventory could only ever express the forward direction: it
+          was a list of representatives, so a newly added
+          <code>sharedDemo: "admit"</code> on an ungranted capability was
+          invisible to it. The reverse direction is the one that actually fences
+          the boundary — and it costs nothing once the set is derived.
+        </p>
+        <h3>A test can pass for the wrong reason</h3>
+        <p>
+          The gateway-binding check asserted that each module's source contained
+          the name of its demo guard, via <code>toContain</code>. Those guards
+          were retired during this migration — but each retirement deliberately
+          left a comment naming the guard it replaced, so the substring was
+          still there. From <code>convex/inventory/organizations.ts</code>:
+        </p>
+        <pre><code>// `requireNonDemoFoundationMutation({ athenaUserId: createdByUserId })`
+// retired here and re-expressed as `target.protectDemoFoundation` bound to
+// `createdByUserId`, so the guard still runs for every actor kind.
+handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code></pre>
+        <p>
+          The comment is good practice — it is the audit trail from retired call
+          site to successor. It also meant the check stayed green for the entire
+          migration while the thing it checked was being deleted underneath it.
+          The same shape appeared in the foundation-binding check, which
+          "verified" that modules still called
+          <code>requireNonDemoFoundationMutation</code> when every remaining
+          occurrence in those files was inside such a comment.
+        </p>
+        <p>
+          That is worse than having no test. A missing test leaves a gap you can
+          find; a test passing for the wrong reason fills the gap with false
+          confidence and stops anyone looking. The same reasoning is why no
+          source-regex "is this ingress admitted?" assertion was added here: an
+          admitted export still reads
+          <code>export const x = mutation({ handler: admitPublicMutation(...) })</code>,
+          so source shape distinguishes nothing. That question needs the AST, and
+          the checker already answers it as a gate.
+        </p>
+        <p>
+          One honest caveat. No <em>adapter</em> classifies by error-message
+          text any more — that was the fail-open shape this delivery removed.
+          But a handful of handlers still do, inside their own catch blocks
+          (<code>message !== "Sign in again to continue."</code> and similar),
+          when translating a denial into a <code>CommandResult</code>. The
+          practice is gone from the policy layer, not from the codebase.
+        </p>
+      </section>
+
+      <section data-report-section="review-findings">
+        <h2>What review caught that the migration did not</h2>
+        <p>
+          Four controls that <em>looked</em> present at the call site. Each was
+          introduced by a unit that could not see the whole, and each surfaced
+          only when closure went looking — which is the argument for having a
+          closure unit at all.
+        </p>
+        <ul>
+          <li>
+            <strong>A wrapper "somewhere in the handler" is not admission.</strong>
+            The checker accepted an inline handler if a wrapper call appeared
+            anywhere in its body and no <code>ctx.db</code> write came first.
+            That let nine handlers read the database, call
+            <code>ctx.runQuery</code>/<code>runMutation</code>, or run a
+            <em>second</em> admission probe before the caller was admitted. The
+            rule is now positional, violations raise
+            <code>wrapper-not-first</code>, all nine were converted to a single
+            admission, and <code>resolveWriteAdmission</code> is no longer
+            exported so the double-admission shape cannot come back.
+          </li>
+          <li>
+            <strong>A refusal was reported as a server fault.</strong> HTTP
+            admission denials escaped the Hono handler and rendered as
+            <strong>500</strong> — so clients retried, monitoring paged, and the
+            body carried the internal error text. Now 401 for unauthenticated,
+            403 for refused, fixed body.
+          </li>
+          <li>
+            <strong>An optional argument disguised a skipped check.</strong>
+            <code>assertCustomerOwnsRowIfPropagated</code> returned silently
+            when <code>owner</code> was absent. It was a deliberate transitional
+            measure — and the transition finished without anyone removing it.
+            Eighteen callees (not the nine a first pass found: several inlined
+            the same shape rather than calling the helper) now take a required
+            <code>owner</code>, and genuine absence is explicit via
+            <code>SERVER_INITIATED_OWNER</code>.
+          </li>
+          <li>
+            <strong>Body bounds covered the routes someone thought about.</strong>
+            Two public marketing routes carried size-limit middleware; the other
+            forty-plus admitted writes read an unbounded body before admission.
+            The bound now lives in the rail and applies to every
+            <code>http</code> write.
+          </li>
+        </ul>
+        <h3>Residual risks, ranked</h3>
+        <p>Recorded so they are decisions rather than oversights.</p>
+        <ol>
+          <li>
+            <strong>Argument-derived scope is a clamp, not an authorization.</strong>
+            <code>resolveOperationScope</code> records
+            <code>args[storeIdArg]</code> without verifying membership; handlers
+            still carry that. Only the three inert <code>/organizations</code>
+            operator stubs resolve scope this way on HTTP today, and their
+            handlers read nothing — so no live exposure, but it is easy to
+            misread as stronger than it is.
+          </li>
+          <li>
+            <code>checkoutSession.updateCheckoutSession</code> and
+            <code>getByIdInternal</code> keep the optional-<code>owner</code>
+            no-op; callers are genuinely mixed. A defence-in-depth gap, not a
+            live hole — the route checks ownership earlier.
+          </li>
+          <li>
+            <code>userOffers.getEligibility</code> asserts nothing on
+            caller-supplied ids. Its only caller derives them from the admitted
+            claim, so not currently exploitable.
+          </li>
+          <li>
+            <code>GET /guests</code> stays a public bootstrap read: any caller
+            presenting an arbitrary <code>guest_id</code> cookie can read that
+            guest row. Accepted so cookie recovery keeps working, and now named
+            in code rather than described as safe.
+          </li>
+          <li>
+            Convex Auth's HTTP route family is unadmitted by design; registration
+            order and single registration are pinned by source inspection, not
+            behaviourally.
+          </li>
+          <li>
+            <code>verifyPaymentInternal</code> has no <code>returns</code>
+            validator; deleting the public export made an existing mismatch
+            latent rather than fixing it.
+          </li>
+        </ol>
+      </section>
+
+      <section data-report-section="validation">
+        <h2>Validation and review evidence</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Sensor</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>bun scripts/convex-operation-admission-check.ts</code></td>
+              <td>Exit 0, zero findings. Discovered 609 ingress points — 244 queries, 232 mutations, 35 actions, 45 http, 49 http_read, 4 registrar — of which 605 are admitted.</td>
+            </tr>
+            <tr>
+              <td><code>bun run test</code> (full webapp suite)</td>
+              <td>756 files, 9,024 tests. One pre-existing flake (below); everything else green.</td>
+            </tr>
+            <tr>
+              <td><code>bunx tsc --noEmit</code></td>
+              <td>0 errors</td>
+            </tr>
+            <tr>
+              <td><code>lint:convex:changed</code></td>
+              <td>Exit 0 — pagination anti-pattern and return-validator contract checks passed</td>
+            </tr>
+            <tr>
+              <td><code>operationAdmission/coverage.test.ts</code></td>
+              <td>Green — zero findings, no orphan ingress files, generated caller table current</td>
+            </tr>
+            <tr>
+              <td><code>docs:links:check</code>, <code>harness:check</code>, <code>graphify:check</code></td>
+              <td>Passed</td>
+            </tr>
+            <tr>
+              <td>Deploy / root alignment</td>
+              <td><strong>Pending.</strong> No PR and no deploy by directive; the env prerequisites above gate any deploy.</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          <strong>The one red test is a pre-existing flake, not a regression,
+          and the evidence is unusually clean.</strong>
+          <code>src/routes/…/reports/weekly.lifecycle.test.tsx</code> was
+          flagged as "known pre-existing red" before closure began. It passed in
+          one full-suite run and failed in another; it passes in isolation and
+          passes when the whole <code>src/routes/_authed</code> tree is run (17
+          files, 158 tests). Decisively:
+          <code>git diff origin/main -- packages/athena-webapp/src/</code> is
+          <strong>empty</strong> — this branch changed no frontend source at
+          all, so nothing here can have caused it. It is order- or
+          parallelism-dependent, and it belongs to whoever owns that suite.
+        </p>
+        <p>
+          The migration ran as fourteen Linear units across four waves. Phase A
+          built the rail and closed both catalogs; wave B1 migrated the Convex
+          functions; wave B2 migrated the HTTP routes (which had to follow,
+          because route bodies call internal siblings B1 created); closure
+          deleted the legacy constructs and re-derived their invariants. Each
+          unit's sensor was the checker scoped with <code>--path</code>, because
+          the full gate was red by design until closure.
+        </p>
+      </section>
+
+      <section data-report-section="guidance">
+        <h2>Guidance</h2>
+        <h3>Adding a public function</h3>
+        <p>
+          The full checklist is in
+          <code>convex/operationAdmission/README.md</code>. The short version:
+          declare it in the domain module for its area, state every actor
+          (<code>actors.public</code> is required and never implied), scope it to
+          a store or organization, wrap the export with the canonical wrapper
+          from the composition root, and run the checker. The checker also runs
+          in the merge gate and is asserted by <code>coverage.test.ts</code> —
+          which is why "no exemption construct" stays true rather than decaying.
+        </p>
+        <h3>The four things people get wrong</h3>
+        <ul>
+          <li>
+            <strong>Calling <code>api.*</code> from an admitted body.</strong> It
+            re-enters the rail with the server's identity and launders the
+            caller's actor. Use the <code>internal.*</code> sibling.
+          </li>
+          <li>
+            <strong>Taking identity from arguments.</strong> Every
+            <code>owner</code> / <code>storeId</code> / <code>userId</code> an
+            internal callee needs comes from <code>ctx.operationAdmission</code>.
+            A caller-supplied id is an argument to validate, not an identity to
+            trust.
+          </li>
+          <li>
+            <strong>Assuming a dynamic capability is any-of.</strong> It is
+            all-of: a batch mixing a granted and an ungranted capability is
+            denied whole, before the handler runs.
+          </li>
+          <li>
+            <strong>Testing the <code>*WithCtx</code> helper.</strong> That
+            skips the boundary under test. Test the exported handler.
+          </li>
+        </ul>
+        <h3>Transferable lessons</h3>
+        <ul>
+          <li>
+            <strong>A migration-tolerance construct needs a deletion date built
+            into its definition of done.</strong> Otherwise "not yet covered"
+            becomes a permanent category rather than a countdown.
+          </li>
+          <li>
+            <strong>If a fact is already declared, do not restate it in a
+            list.</strong> The list is a second source of truth with no mechanism
+            keeping it honest.
+          </li>
+          <li>
+            <strong>Retire a runtime guard by promoting it to a declaration, not
+            by deleting the line.</strong> A declaration enforced before handler
+            entry is order-independent.
+          </li>
+          <li>
+            <strong>Sequence a large parallel migration by pre-creating the
+            shared surfaces.</strong> Closing both catalogs and pre-creating
+            per-unit domain modules in Phase A is what let eleven units run
+            without editing a shared file.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="quiz" data-quiz-pass-threshold="8">
+        <h2>Comprehension quiz</h2>
+        <p>Ten questions. Eight correct to pass.</p>
+        <ol data-quiz>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why was the exemption list deleted rather than emptied?</p>
+            <ol data-quiz-options>
+              <li>Emptying it would have broken the checker's type signature.</li>
+              <li>Its entries were needed as the caller table's input.</li>
+              <li data-quiz-correct>An empty list can be refilled in one commit.</li>
+              <li>It duplicated the framework entry-point list.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The structure was the problem, not its contents. While "not yet
+              covered" remains expressible, a migration can quietly settle into
+              being a permanent two-policy system.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              The gateway-binding check stayed green while the guards it checked
+              were deleted. What made that possible?
+            </p>
+            <ol data-quiz-options>
+              <li>A stale CI filter skipped the whole shared-demo suite.</li>
+              <li>It asserted against the demo fixture store only.</li>
+              <li>It cached results between runs.</li>
+              <li data-quiz-correct>It matched the guard name inside retirement comments.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Each retirement left a comment naming the guard it replaced — good
+              audit practice — and a substring check cannot tell a comment from
+              a call site.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Which failure does the reverse-direction demo assertion catch that
+              the forward one cannot?
+            </p>
+            <ol data-quiz-options>
+              <li>A granted capability that no admitted operation implements.</li>
+              <li data-quiz-correct>An operation admitting the demo for an ungranted capability.</li>
+              <li>A capability declared twice in the catalog.</li>
+              <li>A read intent used on a write definition.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Forward finds stale grants; reverse finds widening. The legacy
+              inventory listed representatives, so it could only ever express
+              the forward direction.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why may an admitted handler never call <code>api.*</code>?</p>
+            <ol data-quiz-options>
+              <li>The hop skips the definition's target resource guards.</li>
+              <li>Convex rejects self-referential API calls at runtime.</li>
+              <li data-quiz-correct>The hop re-admits using the server's identity.</li>
+              <li>It double-counts the operation in the capture port.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Re-entering the rail means being admitted again, and the second
+              admission sees the server rather than the shopper. Target guards
+              do run on every admitted kind, so that distractor is wrong.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Where must the canonical wrapper appear inside an inline handler?
+            </p>
+            <ol data-quiz-options>
+              <li>Anywhere, provided no <code>ctx.db</code> write happens to precede it.</li>
+              <li>Anywhere, provided it runs on every code path.</li>
+              <li>After argument validation but before any database access.</li>
+              <li data-quiz-correct>As the handler itself or its first unconditional statement.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The first option was the old, too-weak rule: it permitted reads,
+              <code>ctx.runQuery</code>, and scheduling ahead of admission. A
+              <code>try</code> block starting with the wrapper is the one
+              accepted variation.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why is a failed HTTP admission a 401 or 403 rather than a 500?
+            </p>
+            <ol data-quiz-options>
+              <li>Convex cannot serialize a thrown error across an HTTP route.</li>
+              <li data-quiz-correct>A refusal reported as a fault gets retried and pages on-call.</li>
+              <li>Hono requires an explicit status on every response.</li>
+              <li>The capture port records only 4xx outcomes.</li>
+            </ol>
+            <p data-quiz-explanation>
+              It also leaked the internal error text. The 401/403 split is read
+              from typed data on the error, never from its message, because the
+              original error class is gone across the boundary.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Which ingress is deliberately NOT admitted, and what keeps that
+              list from becoming a new exemption list?
+            </p>
+            <ol data-quiz-options>
+              <li>Internal functions; they are unreachable from outside.</li>
+              <li>Webhooks; their signature verifiers replace admission.</li>
+              <li data-quiz-correct>Convex Auth; the list is verified in both directions.</li>
+              <li>Read queries; they perform no writes.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Auth mints the principals the adapters resolve, so admitting it
+              with them would be circular. A stale entry and an unlisted
+              registrar are both findings, which the old one-directional
+              exemption list could not manage.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why did HTTP route migration have to follow the Convex function
+              migration?
+            </p>
+            <ol data-quiz-options>
+              <li>Route definitions reuse the function definitions' operation ids.</li>
+              <li>The checker could not discover routes until functions were admitted.</li>
+              <li>CORS had to be allowlisted before any route could be declared.</li>
+              <li data-quiz-correct>Routes call <code>internal.*</code> siblings the function units create.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Internalization was two-step on purpose — add the sibling keeping
+              the public export, then flip the routes and delete the orphan — so
+              every intermediate state compiles.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              A definition scopes itself with <code>storeIdArg: "storeId"</code>
+              and admits normal users. What does the rail guarantee?
+            </p>
+            <ol data-quiz-options>
+              <li>The caller is a member of that store.</li>
+              <li data-quiz-correct>Only that the handler is confined to the store named.</li>
+              <li>The store exists and is not archived.</li>
+              <li>Nothing; argument-derived scope is rejected at validation.</li>
+            </ol>
+            <p data-quiz-explanation>
+              <code>resolveOperationScope</code> records the argument as the
+              constraint without verifying membership. It is a clamp, not an
+              authorization — proving the caller may act there is still the
+              handler's job.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why was no source-regex "is this ingress admitted?" check added to
+              the shared-demo suites?
+            </p>
+            <ol data-quiz-options>
+              <li>Those suites run before the definition registries are composed.</li>
+              <li>Regex assertions are disallowed by the repo lint rules.</li>
+              <li>The type checker already rejects unadmitted exports.</li>
+              <li data-quiz-correct>An admitted export and a raw one have the same source shape.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Both read <code>mutation({ handler: ... })</code>. Writing a
+              weaker version of a check the AST tool already performs is exactly
+              how this codebase acquired a test that passed without verifying
+              anything.
+            </p>
+          </li>
+        </ol>
+      </section>
+
+      <section data-report-section="subagent-evidence">
+        <h2>Subagent evidence</h2>
+        <p>
+          This report was assembled from four subagent investigations plus direct
+          reading of the diff, the plan, and the sensors.
+        </p>
+        <dl>
+          <dt>Delivered-diff analyst</dt>
+          <dd>
+            Analyzed <code>git diff origin/main</code> across the rail core,
+            composition root, definition arrays, HTTP routes, and migrated Convex
+            modules. Contributed the changed-file map, the before/after ingress
+            shapes, the new security mechanisms
+            (<code>storefront_customer</code>, the <code>owner</code> parameter,
+            the ingress verifiers), and the ranked reviewer risk list that
+            informed the live-behavior table.
+          </dd>
+          <dt>Decision historian</dt>
+          <dd>
+            Read the plan in full, the three superseded solution notes, the three
+            prior landed-change reports, and the branch commit messages.
+            Contributed the contested-decision analysis (why the exemption
+            construct was deleted rather than emptied; why internalization was
+            two-step; why <code>storefront_customer</code> is confined to HTTP
+            kinds; why the fail-open catch was removed), the deferred-scope
+            list, and the claims in prior reports this delivery contradicts.
+          </dd>
+          <dt>Legacy-deletion executor</dt>
+          <dd>
+            Removed the 40 orphaned public exports, their definitions, and the
+            count and enumeration assertions in the unit admission suites.
+            Contributed the exact before/after assertion counts and flagged a
+            latent return-validator mismatch on the deleted
+            <code>verifyPayment</code> export — the deleted public action
+            declared a return union its own handler could violate, and the
+            surviving <code>verifyPaymentInternal</code> has no
+            <code>returns</code> validator, so the mismatch is latent rather
+            than fixed. Tracked as a follow-up alongside two ownership gaps in
+            <code>checkoutSession</code> and <code>userOffers</code>; all three
+            are listed under "Residual risks" in the solution note.
+          </dd>
+          <dt>Documentation linker</dt>
+          <dd>
+            Added rail discovery links to the agent architecture, code-map, and
+            testing docs, and supersession pointers to the two prior solution
+            notes. Established the repo's supersession convention from
+            precedent: a dated blockquote under the H1, not a frontmatter field.
+          </dd>
+          <dt>Adversarial report reviewer</dt>
+          <dd>
+            Checked every concrete claim here against the source. Found that the
+            "before" code sample misattributed the vulnerability to the request
+            body when it was a cookie read; that the framework entry points
+            number five, not four, because Convex Auth also installs an
+            unadmitted HTTP route family; that <code>PAYSTACK_SECRET_KEY</code>
+            was missing from the deploy prerequisites; and that the correct
+            answer was the longest option in all ten quiz questions. All four
+            are corrected above.
+          </dd>
+        </dl>
+      </section>
+    </article>
+  </body>
+</html>

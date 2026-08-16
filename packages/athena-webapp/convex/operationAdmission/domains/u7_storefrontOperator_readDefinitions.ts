@@ -67,67 +67,6 @@ function storeFrontActorStoreScope(argName: string): OperationScopeResolver {
   };
 }
 
-/** The order behind an order item, for item-scoped reads. */
-const orderItemStoreScope: OperationScopeResolver = async (
-  ctx: ScopeCtx,
-  args,
-) => {
-  const id = idArg(args, "orderItemId");
-  if (!id) return {};
-  const item = await ctx.db.get("onlineOrderItem", id as never);
-  if (!item) return {};
-  const order = await ctx.db.get("onlineOrder", item.orderId);
-  return order ? { storeId: order.storeId } : {};
-};
-
-/** The product SKU behind a review read. */
-const productSkuStoreScope: OperationScopeResolver = async (
-  ctx: ScopeCtx,
-  args,
-) => {
-  const id = idArg(args, "productSkuId");
-  if (!id) return {};
-  const sku = await ctx.db.get("productSku", id as never);
-  return sku?.storeId ? { storeId: sku.storeId } : {};
-};
-
-/**
- * `storeFront/onlineOrder:get` accepts an order id, an external reference, or
- * a checkout session id. The resolver reproduces the handler's own lookup
- * order so admission clamps the SAME order the body will read — the identical
- * resolver `getOnlineOrderReadDefinition` (the operator sibling
- * `getForOperations`) already uses.
- */
-const onlineOrderIdentifierScope: OperationScopeResolver = async (
-  ctx: ScopeCtx,
-  args,
-) => {
-  const identifier = idArg(args, "identifier");
-  if (!identifier) return {};
-  const onlineOrderId = ctx.db.normalizeId("onlineOrder", identifier);
-  let order = onlineOrderId
-    ? await ctx.db.get("onlineOrder", onlineOrderId)
-    : null;
-  if (!order) {
-    order = await ctx.db
-      .query("onlineOrder")
-      .withIndex("by_externalReference", (q) =>
-        q.eq("externalReference", identifier),
-      )
-      .first();
-  }
-  const checkoutSessionId = ctx.db.normalizeId("checkoutSession", identifier);
-  if (!order && checkoutSessionId) {
-    order = await ctx.db
-      .query("onlineOrder")
-      .withIndex("by_checkoutSessionId", (q) =>
-        q.eq("checkoutSessionId", checkoutSessionId),
-      )
-      .first();
-  }
-  return order ? { storeId: order.storeId } : {};
-};
-
 const checkoutSessionOrderScope: OperationScopeResolver = async (
   ctx: ScopeCtx,
   args,
@@ -215,14 +154,6 @@ export const getAnalyticsWorkspaceSummaryReadDefinition = analyticsRead({
   operationId: "storeFront/analytics.getWorkspaceSummary.read",
 });
 
-export const getProductViewCountReadDefinition = analyticsRead({
-  functionName: "storeFront/analytics:getProductViewCount",
-  operationId: "storeFront/analytics.getProductViewCount.read",
-  // `GET /analytics/product-view-count` is the anonymous product-page badge.
-  publicAccess: "admit",
-  scope: { kind: "store", resolve: rowStoreScope("product", "productId") },
-});
-
 export const getAnalyticsByPromoCodeReadDefinition = analyticsRead({
   functionName: "storeFront/analytics:getByPromoCodeId",
   operationId: "storeFront/analytics.getByPromoCodeId.read",
@@ -284,25 +215,6 @@ function onlineOrderRead(args: {
   });
 }
 
-export const listCustomerOnlineOrdersReadDefinition = onlineOrderRead({
-  functionName: "storeFront/onlineOrder:getAll",
-  operationId: "storeFront/onlineOrder.getAll.read",
-  // `GET /orders` — the shopper's own order list.
-  publicAccess: "admit",
-  scope: {
-    kind: "store",
-    resolve: storeFrontActorStoreScope("storeFrontUserId"),
-  },
-});
-
-export const getCustomerOnlineOrderReadDefinition = onlineOrderRead({
-  functionName: "storeFront/onlineOrder:get",
-  operationId: "storeFront/onlineOrder.get.read",
-  // `GET /orders/:orderId` and the paystack webhook.
-  publicAccess: "admit",
-  scope: { kind: "store", resolve: onlineOrderIdentifierScope },
-});
-
 export const getOnlineOrderByCheckoutSessionReadDefinition = onlineOrderRead({
   functionName: "storeFront/onlineOrder:getByCheckoutSessionId",
   operationId: "storeFront/onlineOrder.getByCheckoutSessionId.read",
@@ -363,55 +275,6 @@ function reviewRead(args: {
   });
 }
 
-export const getReviewByOrderItemReadDefinition = reviewRead({
-  functionName: "storeFront/reviews:getByOrderItem",
-  operationId: "storeFront/reviews.getByOrderItem.read",
-  publicAccess: "admit",
-  scope: { kind: "store", resolve: orderItemStoreScope },
-});
-
-export const hasReviewForOrderItemReadDefinition = reviewRead({
-  functionName: "storeFront/reviews:hasReviewForOrderItem",
-  operationId: "storeFront/reviews.hasReviewForOrderItem.read",
-  publicAccess: "admit",
-  scope: { kind: "store", resolve: orderItemStoreScope },
-});
-
-export const hasUserReviewForOrderItemReadDefinition = reviewRead({
-  functionName: "storeFront/reviews:hasUserReviewForOrderItem",
-  operationId: "storeFront/reviews.hasUserReviewForOrderItem.read",
-  publicAccess: "admit",
-  scope: { kind: "store", resolve: orderItemStoreScope },
-});
-
-export const listReviewsByProductSkuReadDefinition = reviewRead({
-  functionName: "storeFront/reviews:getByProductSkuId",
-  operationId: "storeFront/reviews.getByProductSkuId.read",
-  publicAccess: "admit",
-  scope: { kind: "store", resolve: productSkuStoreScope },
-});
-
-export const listReviewsByProductReadDefinition = reviewRead({
-  functionName: "storeFront/reviews:getByProductId",
-  operationId: "storeFront/reviews.getByProductId.read",
-  publicAccess: "admit",
-  scope: { kind: "store", resolve: rowStoreScope("product", "productId") },
-});
-
-export const listReviewsByUserReadDefinition = reviewRead({
-  functionName: "storeFront/reviews:getByUser",
-  operationId: "storeFront/reviews.getByUser.read",
-  publicAccess: "admit",
-  scope: { kind: "store", resolve: storeFrontActorStoreScope("userId") },
-});
-
-export const listReviewsByUserAndProductSkuReadDefinition = reviewRead({
-  functionName: "storeFront/reviews:getByUserAndProductSkuId",
-  operationId: "storeFront/reviews.getByUserAndProductSkuId.read",
-  publicAccess: "admit",
-  scope: { kind: "store", resolve: productSkuStoreScope },
-});
-
 export const listStoreReviewsReadDefinition = reviewRead({
   functionName: "storeFront/reviews:getAllReviewsForStore",
   operationId: "storeFront/reviews.getAllReviewsForStore.read",
@@ -428,7 +291,6 @@ export const U7_STOREFRONT_OPERATOR_READ_OPERATION_DEFINITIONS: readonly Operati
     listAnalyticsPagedReadDefinition,
     getAnalyticsEventReadDefinition,
     getAnalyticsWorkspaceSummaryReadDefinition,
-    getProductViewCountReadDefinition,
     getAnalyticsByPromoCodeReadDefinition,
     getEnhancedAnalyticsReadDefinition,
     getRevenueAnalyticsReadDefinition,
@@ -437,21 +299,12 @@ export const U7_STOREFRONT_OPERATOR_READ_OPERATION_DEFINITIONS: readonly Operati
     getStoreActivityTimelineReadDefinition,
     getStorefrontObservabilityReportReadDefinition,
     getConsolidatedAnalyticsReadDefinition,
-    listCustomerOnlineOrdersReadDefinition,
-    getCustomerOnlineOrderReadDefinition,
     getOnlineOrderByCheckoutSessionReadDefinition,
     getOnlineOrderByExternalReferenceReadDefinition,
     listOnlineOrdersByStoreFrontUserReadDefinition,
     getOnlineOrderItemsReadDefinition,
     getReturnExchangeOverviewReadDefinition,
     isDuplicateOnlineOrderReadDefinition,
-    getReviewByOrderItemReadDefinition,
-    hasReviewForOrderItemReadDefinition,
-    hasUserReviewForOrderItemReadDefinition,
-    listReviewsByProductSkuReadDefinition,
-    listReviewsByProductReadDefinition,
-    listReviewsByUserReadDefinition,
-    listReviewsByUserAndProductSkuReadDefinition,
     listStoreReviewsReadDefinition,
     getUnapprovedReviewsCountReadDefinition,
   ];
