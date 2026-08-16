@@ -23,7 +23,7 @@ tags:
   - github-actions
   - passkey-approval
   - job-summary
-delivery_diff_fingerprint: 3777dc9934038efbf30090f56dff063791124d52aa3e8de49b86767e57c59e0c
+delivery_diff_fingerprint: 8977d1cd84767eb3439c956bb993892e9ef11a49d6eee437fa115ccb75a6ab6f
 ---
 
 # Review Findings Carry a Scope Axis, and Delivery Runs Leave a Durable Record
@@ -198,3 +198,10 @@ suite can finish successfully after the remote has already closed an idle
 connection. Terminal heartbeats do not keep that transport alive. Run
 `pr:athena` before push and make the hook proof-only: it should admit an exact,
 reusable candidate proof or fail immediately with the preparation command.
+
+**Capture and visibility are separate responsibilities.** The delivery runner
+needs provider stdout to parse skip telemetry, but waiting for the whole stream
+before forwarding it makes healthy multi-minute validation look hung. Consume
+each stdout and stderr chunk once, forward it immediately, and accumulate the
+same decoded bytes for post-run parsing. A regression test should hold the
+second chunk open and prove the first chunk is visible before stream completion.

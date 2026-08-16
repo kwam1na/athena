@@ -107,6 +107,25 @@ function commandToString(command: string[]) {
     .join(" ");
 }
 
+export async function captureAndForwardProcessStream(
+  stream: ReadableStream<Uint8Array> | null | undefined,
+  forward: (chunk: Uint8Array) => unknown | Promise<unknown>,
+) {
+  if (!stream) return "";
+
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let captured = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    captured += decoder.decode(value, { stream: true });
+    await forward(value);
+  }
+  captured += decoder.decode();
+  return captured;
+}
+
 async function runProcess(
   command: string[],
   options: { cwd: string; env?: NodeJS.ProcessEnv },
@@ -119,16 +138,14 @@ async function runProcess(
     env: options.env,
   });
   const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
+    captureAndForwardProcessStream(process.stdout, (chunk) =>
+      Bun.write(Bun.stdout, chunk),
+    ),
+    captureAndForwardProcessStream(process.stderr, (chunk) =>
+      Bun.write(Bun.stderr, chunk),
+    ),
     process.exited,
   ]);
-  if (stdout) {
-    await Bun.write(Bun.stdout, stdout);
-  }
-  if (stderr) {
-    await Bun.write(Bun.stderr, stderr);
-  }
   return {
     exitCode,
     providerSkippedEvents: parseProviderSkippedEvents(stdout),
