@@ -23,7 +23,7 @@ tags:
   - github-actions
   - passkey-approval
   - job-summary
-delivery_diff_fingerprint: 6d9062682d4695b53a6242d32db8358e2e93c5ed5601037d93bbede9670fe2c1
+delivery_diff_fingerprint: 3777dc9934038efbf30090f56dff063791124d52aa3e8de49b86767e57c59e0c
 ---
 
 # Review Findings Carry a Scope Axis, and Delivery Runs Leave a Durable Record

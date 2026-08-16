@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   defaultScenarios,
+  promptForHarnessWaiver,
   runHarnessGateAdmission,
   WAIVABLE_FINDING_CODES,
   writeHarnessGateDecisionEvent,
@@ -105,15 +106,29 @@ afterEach(async () => {
 });
 
 describe("harness gate admission", () => {
-  it("reads the default human waiver prompt from the controlling terminal", async () => {
-    const source = await readFile(
-      path.join(import.meta.dirname, "harness-gate-admission.ts"),
-      "utf8",
+  it("reads the default human waiver prompt from one controlling-terminal descriptor", async () => {
+    const writes: string[] = [];
+    const close = vi.fn();
+    const accepted = await promptForHarnessWaiver(
+      { remediation: { human: ["Review the candidate."] } } as never,
+      ["review.green"],
+      {
+        open: () => 42,
+        write: (descriptor, text) => {
+          expect(descriptor).toBe(42);
+          writes.push(text);
+        },
+        readLine: (descriptor) => {
+          expect(descriptor).toBe(42);
+          return "yes";
+        },
+        close,
+      },
     );
 
-    expect(source).toContain('createReadStream("/dev/tty")');
-    expect(source).toContain('createWriteStream("/dev/tty")');
-    expect(source).not.toContain("input: process.stdin");
+    expect(accepted).toBe(true);
+    expect(writes.join("")).toContain("Waive review.green");
+    expect(close).toHaveBeenCalledWith(42);
   });
 
   it("shares the documentation waiver allow-list with focused admission", () => {

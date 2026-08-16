@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
-import { createReadStream, createWriteStream } from "node:fs";
+import {
+  closeSync,
+  constants,
+  openSync,
+  readSync,
+  writeSync,
+} from "node:fs";
 import { chmod, link, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createInterface } from "node:readline/promises";
 import { promisify } from "node:util";
 
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
@@ -322,29 +327,55 @@ function withInvocationWaiver(
  * "yes" can now cover more than review evidence, and consent to a headline that
  * names only one of them is not consent to the rest.
  */
-async function defaultPrompt(
+type PromptTerminal = {
+  open: () => number;
+  write: (descriptor: number, text: string) => void;
+  readLine: (descriptor: number) => string;
+  close: (descriptor: number) => void;
+};
+
+const DEFAULT_PROMPT_TERMINAL: PromptTerminal = {
+  open: () => openSync("/dev/tty", constants.O_RDWR),
+  write: (descriptor, text) => {
+    writeSync(descriptor, text);
+  },
+  readLine: (descriptor) => {
+    const bytes: number[] = [];
+    const byte = Buffer.alloc(1);
+    while (bytes.length < 32 && readSync(descriptor, byte, 0, 1, null) === 1) {
+      if (byte[0] === 10 || byte[0] === 13) break;
+      bytes.push(byte[0]);
+    }
+    return Buffer.from(bytes).toString("utf8");
+  },
+  close: closeSync,
+};
+
+export async function promptForHarnessWaiver(
   decision: GateObligationDecision,
   obligationIds: readonly string[] = [],
+  terminal: PromptTerminal = DEFAULT_PROMPT_TERMINAL,
 ) {
   const named =
     obligationIds.length > 0 ? obligationIds.join(", ") : "review.green";
-  const input = createReadStream("/dev/tty");
-  const output = createWriteStream("/dev/tty");
-  output.write(`This prepared candidate is blocked by: ${named}.\n`);
-  for (const remediation of decision.remediation.human)
-    output.write(`- ${remediation}\n`);
-  const terminal = createInterface({ input, output });
+  const descriptor = terminal.open();
   try {
-    const answer = await terminal.question(
+    terminal.write(
+      descriptor,
+      `This prepared candidate is blocked by: ${named}.\n`,
+    );
+    for (const remediation of decision.remediation.human)
+      terminal.write(descriptor, `- ${remediation}\n`);
+    terminal.write(
+      descriptor,
       `Waive ${named} for this invocation? Type 'yes' to continue: `,
     );
+    const answer = terminal.readLine(descriptor);
     return answer.trim().toLowerCase() === "yes";
   } catch {
     return false;
   } finally {
-    terminal.close();
-    input.destroy();
-    output.end();
+    terminal.close(descriptor);
   }
 }
 
@@ -608,7 +639,7 @@ export async function runHarnessGateAdmission(
   let waivedObligationIds: readonly string[] = [];
   if (!decision.admitted && canOfferInvocationWaiver(decision, context)) {
     waivedObligationIds = waivableBlockedObligationIds(decision, context);
-    const accepted = await (options.promptForWaiver ?? defaultPrompt)(
+    const accepted = await (options.promptForWaiver ?? promptForHarnessWaiver)(
       decision,
       waivedObligationIds,
     );
