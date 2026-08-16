@@ -23,7 +23,7 @@ tags:
   - github-actions
   - passkey-approval
   - job-summary
-delivery_diff_fingerprint: 00b2b887b6de5b7be71ec6c718c886042d78775e04e4665cdfeb3510f2d8ae35
+delivery_diff_fingerprint: 6814195accb90b859c3a64d7ab4e3a34a2dad4c41c8cb1a15e707b45ac1ea914
 ---
 
 # Review Findings Carry a Scope Axis, and Delivery Runs Leave a Durable Record
@@ -186,9 +186,11 @@ wrapper that calls the deterministic documentation sensor directly makes the
 registry's human waiver unreachable even when `humanWaiverAllowed` is correct.
 Route interactive pre-push checks through `delivery:documentation-admission`,
 keep the raw sensor for CI, and test that agents never receive the prompt. When
-the hook captures validator output in a background process, detect and prompt on
-the controlling terminal explicitly; `stdout.isTTY` is false by construction in
-that wrapper and cannot identify the invoking human.
+a hook or nested delivery runner captures validator output, resolve human
+interactivity from the controlling terminal at the shared execution-context
+boundary; `stdout.isTTY` can be false by construction and cannot identify the
+invoking human. Agent signals and authorized CI classification must take
+precedence so a controlling terminal never upgrades automation authority.
 
 **Do not hold a remote transport open while proving a local candidate.** Git
 opens the SSH connection before invoking `pre-push`, so a merge-grade local
