@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { defineReadOperation } from "./readDefinitions";
-import { admitPublicQuery } from "./publicQuery";
+import { admitPublicQuery } from "../platform/operationAdmission";
 
 const definition = defineReadOperation({
+  kind: "query" as const,
   operationId: "test.read",
-  access: { kind: "read", intent: "test.view" },
+  access: { kind: "read", intent: "pos.view" as const },
   scope: { kind: "store", storeIdArg: "storeId" },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
 });
 
 describe("operation admission public query wrapper", () => {
@@ -52,7 +53,7 @@ describe("operation admission public query wrapper", () => {
   it("does not invoke the domain handler when read admission metadata is invalid", async () => {
     const domainHandler = vi.fn();
     const wrapped = admitPublicQuery(
-      { ...definition, access: { kind: "read", intent: "" } },
+      { ...definition, access: { kind: "read", intent: "" as never } },
       domainHandler,
       {
         resolveAdmission: vi.fn(),

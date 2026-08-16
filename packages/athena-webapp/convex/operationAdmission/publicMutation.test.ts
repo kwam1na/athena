@@ -1,15 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { defineOperation } from "./definitions";
-import { admitPublicMutation } from "./publicMutation";
+import { admitPublicMutation } from "../platform/operationAdmission";
 
 const definition = defineOperation({
+  kind: "mutation" as const,
   operationId: "test.operation",
   capability: "daily_operations.write",
   scope: { kind: "store", storeIdArg: "storeId" },
   readiness: { kind: "store_write" },
   effects: { mode: "none" },
-  actors: { normalUser: "admit", sharedDemo: "deny" },
+  actors: { normalUser: "admit", sharedDemo: "deny", public: "deny" },
 });
 
 describe("operation admission public mutation wrapper", () => {

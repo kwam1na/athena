@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { defineOperation } from "./definitions";
-import { resolveOperationAdmission } from "./adapters";
+import {
+  createPublicOperationAdapter,
+  resolveOperationAdmission,
+} from "./adapters";
 import type { OperationAdapter } from "./types";
 
 const definition = defineOperation({
@@ -10,7 +13,8 @@ const definition = defineOperation({
   scope: { kind: "store", storeIdArg: "storeId" },
   readiness: { kind: "store_write" },
   effects: { mode: "none" },
-  actors: { normalUser: "admit", sharedDemo: "deny" },
+  kind: "mutation" as const,
+  actors: { normalUser: "admit", sharedDemo: "deny", public: "deny" },
 });
 
 describe("operation admission adapters", () => {
@@ -34,7 +38,7 @@ describe("operation admission adapters", () => {
         { db: {} } as never,
         { storeId: "store-1" },
         definition,
-        { normalAdapter, sharedDemoAdapter },
+        [sharedDemoAdapter, normalAdapter],
       ),
     ).rejects.toThrow("This action isn't allowed in the demo.");
     expect(normalAdapter.resolve).not.toHaveBeenCalled();
@@ -55,7 +59,7 @@ describe("operation admission adapters", () => {
     };
     const sharedDemoAdapter: OperationAdapter = {
       kind: "shared_demo" as const,
-      resolve: vi.fn(async () => ({ kind: "not_applicable" as const })),
+      resolve: vi.fn(async () => ({ kind: "unauthenticated" as const })),
     };
 
     await expect(
@@ -63,7 +67,7 @@ describe("operation admission adapters", () => {
         { db: {} } as never,
         { storeId: "store-1" },
         definition,
-        { normalAdapter, sharedDemoAdapter },
+        [sharedDemoAdapter, normalAdapter],
       ),
     ).resolves.toMatchObject({
       actor: { kind: "normal_user", athenaUserId: "user-1" },
@@ -73,7 +77,7 @@ describe("operation admission adapters", () => {
   it("admits an anonymous caller for a public-opted-in mutation", async () => {
     const anonymousNormalAdapter: OperationAdapter = {
       kind: "normal_user" as const,
-      resolve: vi.fn(async () => ({ kind: "not_applicable" as const })),
+      resolve: vi.fn(async () => ({ kind: "unauthenticated" as const })),
     };
 
     const publicDefinition = defineOperation({
@@ -82,6 +86,7 @@ describe("operation admission adapters", () => {
       scope: { kind: "store", storeIdArg: "storeId" },
       readiness: { kind: "store_write" },
       effects: { mode: "none" },
+      kind: "mutation" as const,
       actors: { normalUser: "admit", sharedDemo: "deny", public: "admit" },
     });
 
@@ -90,7 +95,7 @@ describe("operation admission adapters", () => {
         { db: {} } as never,
         { storeId: "store-1" },
         publicDefinition,
-        { normalAdapter: anonymousNormalAdapter },
+        [anonymousNormalAdapter, createPublicOperationAdapter()],
       ),
     ).resolves.toMatchObject({
       actor: { kind: "public" },
@@ -101,7 +106,7 @@ describe("operation admission adapters", () => {
   it("rejects an anonymous caller when the mutation does not opt public in", async () => {
     const anonymousNormalAdapter: OperationAdapter = {
       kind: "normal_user" as const,
-      resolve: vi.fn(async () => ({ kind: "not_applicable" as const })),
+      resolve: vi.fn(async () => ({ kind: "unauthenticated" as const })),
     };
 
     await expect(
@@ -109,7 +114,7 @@ describe("operation admission adapters", () => {
         { db: {} } as never,
         { storeId: "store-1" },
         definition,
-        { normalAdapter: anonymousNormalAdapter },
+        [anonymousNormalAdapter, createPublicOperationAdapter()],
       ),
     ).rejects.toThrow("Sign in again to continue.");
   });

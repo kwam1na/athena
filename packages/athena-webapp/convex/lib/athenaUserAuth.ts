@@ -4,6 +4,9 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { OperationMutationCtx } from "../operationAdmission/types";
 import type { AthenaCapability } from "../platform/capabilityCatalog";
 import { getSharedDemoActorWithCtx } from "../sharedDemo/actor";
+import { AthenaUnauthenticatedError } from "./athenaUnauthenticated";
+
+export { AthenaUnauthenticatedError };
 
 type AthenaAuthCtx =
   | Pick<QueryCtx, "auth" | "db">
@@ -111,8 +114,24 @@ function isSharedDemoAthenaUserReadCapability(
 
 function getOperationAdmissionActorUserId(ctx: AthenaAuthCtx) {
   const actor = (ctx as Partial<OperationMutationCtx>).operationAdmission?.actor;
-  if (!actor || actor.kind === "public") return undefined;
-  return actor.athenaUserId;
+  if (!actor) return undefined;
+  // Exhaustive by actor kind: an actor kind that carries no Athena identity
+  // (anonymous, or a storefront shopper holding only a bearer claim) must
+  // never be mapped onto one, and a new kind must fail to compile here rather
+  // than silently fall into the identified branch.
+  switch (actor.kind) {
+    case "normal_user":
+    case "shared_demo":
+      return actor.athenaUserId;
+    case "storefront_customer":
+    case "public":
+      return undefined;
+    default: {
+      const exhaustive: never = actor;
+      void exhaustive;
+      return undefined;
+    }
+  }
 }
 
 export async function getAuthenticatedAthenaUserWithCtx(
@@ -149,7 +168,7 @@ export async function requireAuthenticatedAthenaUserWithCtx(
   const athenaUser = await getAuthenticatedAthenaUserWithCtx(ctx, options);
 
   if (!athenaUser) {
-    throw new Error("Sign in again to continue.");
+    throw new AthenaUnauthenticatedError();
   }
 
   return athenaUser;
@@ -162,7 +181,7 @@ export async function requireAuthenticatedAthenaUserIndexedWithCtx(
   const admittedUserId = getOperationAdmissionActorUserId(ctx);
   if (admittedUserId) {
     const athenaUser = await ctx.db.get("athenaUser", admittedUserId);
-    if (!athenaUser) throw new Error("Sign in again to continue.");
+    if (!athenaUser) throw new AthenaUnauthenticatedError();
     return athenaUser;
   }
 
@@ -173,14 +192,14 @@ export async function requireAuthenticatedAthenaUserIndexedWithCtx(
     const demoActor = await getSharedDemoActorWithCtx(ctx);
     if (demoActor) {
       const athenaUser = await ctx.db.get("athenaUser", demoActor.athenaUserId);
-      if (!athenaUser) throw new Error("Sign in again to continue.");
+      if (!athenaUser) throw new AthenaUnauthenticatedError();
       return athenaUser;
     }
   }
   const authUserRecord = await getAuthenticatedUserRecord(ctx);
 
   if (!authUserRecord) {
-    throw new Error("Sign in again to continue.");
+    throw new AthenaUnauthenticatedError();
   }
 
   const athenaUser = await findAthenaUserByEmailIndexedWithCtx(
@@ -188,7 +207,7 @@ export async function requireAuthenticatedAthenaUserIndexedWithCtx(
     authUserRecord.normalizedEmail,
   );
   if (!athenaUser) {
-    throw new Error("Sign in again to continue.");
+    throw new AthenaUnauthenticatedError();
   }
 
   return athenaUser;

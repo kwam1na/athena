@@ -15,10 +15,7 @@ const demoAdmission = {
   },
   constraints: { storeId: "store_demo" },
   decision: { adapter: "shared_demo" as const, outcome: "admitted" as const },
-  operation: {
-    operationId: "storeFront/reviews.sendFeedbackRequest",
-    capability: "reviews.manage",
-  },
+  operationId: "storeFront/reviews.sendFeedbackRequest",
   provenance: {},
 };
 
@@ -35,6 +32,10 @@ describe("operation definition lookup", () => {
       // Both send customer email, so both must declare a protected gateway
       // for the demo adapter to simulate rather than deny.
       expect(definition!.effects.mode, operationId).toBe("protected");
+      // An action is not transactional: it fences on store_ready at admission
+      // and the internal mutation that writes re-applies store_write.
+      expect(definition!.kind, operationId).toBe("action");
+      expect(definition!.readiness.kind, operationId).toBe("store_ready");
     }
   });
 });
@@ -47,42 +48,13 @@ describe("admitting an operation from an action", () => {
         operationId: "storeFront/reviews.sendFeedbackRequest",
         operationArgs: { orderId: "order_1" },
       },
-      {
-        capture: vi.fn(),
-        resolveAdmission: vi.fn().mockResolvedValue(demoAdmission),
-      },
+      { admit: vi.fn().mockResolvedValue(demoAdmission) },
     );
 
     expect(result).toEqual({
       actorKind: "shared_demo",
       storeId: "store_demo",
     });
-  });
-
-  it("records the admitted action so demo visibility covers action writes", async () => {
-    const capture = vi.fn();
-
-    await admitActionOperationWithCtx(
-      {} as never,
-      {
-        operationId: "storeFront/reviews.sendFeedbackRequest",
-        operationArgs: {},
-      },
-      { capture, resolveAdmission: vi.fn().mockResolvedValue(demoAdmission) },
-    );
-
-    expect(capture).toHaveBeenCalledTimes(1);
-    expect(capture.mock.calls[0][1]).toBe(demoAdmission);
-  });
-
-  it("refuses an operation id that has no definition", async () => {
-    await expect(
-      admitActionOperationWithCtx(
-        {} as never,
-        { operationId: "storeFront/reviews.notARealOperation", operationArgs: {} },
-        { capture: vi.fn(), resolveAdmission: vi.fn() },
-      ),
-    ).rejects.toThrow(/Unknown operation admission definition/);
   });
 
   it("propagates a denial instead of letting the action proceed", async () => {
@@ -94,10 +66,11 @@ describe("admitting an operation from an action", () => {
           operationArgs: {},
         },
         {
-          capture: vi.fn(),
-          resolveAdmission: vi
+          admit: vi
             .fn()
-            .mockRejectedValue(new Error("This action isn't allowed in the demo.")),
+            .mockRejectedValue(
+              new Error("This action isn't allowed in the demo."),
+            ),
         },
       ),
     ).rejects.toThrow("This action isn't allowed in the demo.");

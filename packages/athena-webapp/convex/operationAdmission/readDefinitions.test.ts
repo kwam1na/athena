@@ -18,7 +18,7 @@ describe("operation read admission definitions", () => {
       expect.arrayContaining([
         expect.objectContaining({
           access: { kind: "read", intent: "daily_operations.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "operations/dailyOperations:getDailyOperationsSnapshot",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
@@ -31,33 +31,33 @@ describe("operation read admission definitions", () => {
       expect.arrayContaining([
         expect.objectContaining({
           access: { kind: "read", intent: "inventory.cost_overlay.view" },
-          actors: { normalUser: "admit", sharedDemo: "deny" },
+          actors: { normalUser: "admit", sharedDemo: "deny", public: "deny" },
           functionName:
             "inventory/inventoryImportCostOverlay:getCostOverlayRun",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "inventory.cost_overlay.view" },
-          actors: { normalUser: "admit", sharedDemo: "deny" },
+          actors: { normalUser: "admit", sharedDemo: "deny", public: "deny" },
           functionName:
             "inventory/inventoryImportCostOverlay:resolveCostOverlayRunFromUrl",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "inventory.cost_overlay.view" },
-          actors: { normalUser: "admit", sharedDemo: "deny" },
+          actors: { normalUser: "admit", sharedDemo: "deny", public: "deny" },
           functionName:
             "inventory/inventoryImportCostOverlay:listCostOverlayRows",
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "inventory.cost_overlay.view" },
-          actors: { normalUser: "admit", sharedDemo: "deny" },
+          actors: { normalUser: "admit", sharedDemo: "deny", public: "deny" },
           functionName:
             "inventory/inventoryImportCostOverlay:listRecentCostOverlayRuns",
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "inventory.cost_overlay.view" },
-          actors: { normalUser: "admit", sharedDemo: "deny" },
+          actors: { normalUser: "admit", sharedDemo: "deny", public: "deny" },
           functionName:
             "inventory/inventoryImportCostOverlay:getLatestCostOverlaySourceDescriptor",
         }),
@@ -70,20 +70,20 @@ describe("operation read admission definitions", () => {
       expect.arrayContaining([
         expect.objectContaining({
           access: { kind: "read", intent: "operations.workItems.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName:
             "operations/operationalWorkItems:getOpenWorkCountSummary",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "operations.workItems.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "operations/operationalWorkItems:getQueueSnapshot",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "operations.workItems.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName:
             "operations/operationalWorkItems:getPendingApprovalCountSummary",
           scope: { kind: "store", storeIdArg: "storeId" },
@@ -97,25 +97,25 @@ describe("operation read admission definitions", () => {
       expect.arrayContaining([
         expect.objectContaining({
           access: { kind: "read", intent: "daily_close.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "operations/dailyClose:getDailyCloseSnapshot",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "daily_close.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "operations/dailyClose:getDailyCloseLifecycleGate",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "daily_close.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "operations/dailyClose:listCompletedDailyCloseHistory",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "daily_close.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName:
             "operations/dailyClose:getCompletedDailyCloseHistoryDetail",
           scope: { kind: "store", storeIdArg: "storeId" },
@@ -129,82 +129,82 @@ describe("operation read admission definitions", () => {
       expect.arrayContaining([
         expect.objectContaining({
           access: { kind: "read", intent: "cash_controls.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "cashControls/deposits:getDashboardSnapshot",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "cash_controls.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName:
             "cashControls/registerSessionActivity:listRegisterSessionActivity",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "stock_adjustments.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName:
             "stockOps/cycleCountDrafts:getActiveCycleCountDraftSummary",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "pos.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "pos/public/register:getState",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "pos.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "pos/public/terminals:listTerminals",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "pos.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "inventory/posSessions:getStoreActiveSessionOperations",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "pos.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "inventory/posSessions:getActiveSession",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "pos.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "inventory/posSessions:getStoreSessions",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "pos.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName:
             "pos/public/catalog:listRegisterCatalogAvailabilitySnapshot",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "pos.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "pos/public/catalog:getRegisterCatalogRevision",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "pos.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "operations/staffProfiles:listStaffProfiles",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "pos.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "serviceOps/catalog:listPosServiceCatalogSnapshot",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "daily_operations.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "operations/dailyOpening:getDailyOpeningSnapshot",
           scope: { kind: "store", storeIdArg: "storeId" },
         }),
@@ -217,19 +217,19 @@ describe("operation read admission definitions", () => {
       expect.arrayContaining([
         expect.objectContaining({
           access: { kind: "read", intent: "organization.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "inventory/organizations:getAll",
           scope: { kind: "none" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "organization.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "inventory/organizations:getByIdOrSlug",
           scope: { kind: "none" },
         }),
         expect.objectContaining({
           access: { kind: "read", intent: "organization.view" },
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
           functionName: "inventory/stores:getAll",
           scope: { kind: "organization", organizationIdArg: "organizationId" },
         }),
@@ -275,10 +275,11 @@ describe("operation read admission definitions", () => {
     expect(
       validateReadOperationDefinition(
         defineReadOperation({
+          kind: "query" as const,
           operationId: "",
-          access: { kind: "read", intent: "" },
+          access: { kind: "read", intent: "" as never },
           scope: { kind: "store" } as never,
-          actors: { normalUser: "admit", sharedDemo: "admit" },
+          actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
         }),
       ),
     ).toEqual(

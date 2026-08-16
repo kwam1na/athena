@@ -1,91 +1,20 @@
-import type { MutationCtx } from "../_generated/server";
-import {
-  createNormalUserOperationAdapter,
-  resolveOperationAdmission,
-} from "./adapters";
-import { validateOperationDefinition } from "./definitions";
-import { createSharedDemoOperationAdapter } from "../sharedDemo/operationAdapter";
-import { captureSharedDemoAdmittedActionWithCtx } from "../contextTracking/sharedDemoActionCapture";
-import type {
-  OperationAdmissionContext,
-  OperationDefinition,
-  OperationMutationCtx,
-} from "./types";
-
-type DomainHandler<Args extends Record<string, unknown>, Result> = (
-  ctx: OperationMutationCtx,
-  args: Args,
-) => Promise<Result>;
-
-type AdmissionResolver<Args extends Record<string, unknown>> = (
-  ctx: MutationCtx,
-  args: Args,
-  definition: OperationDefinition,
-) => Promise<OperationAdmissionContext>;
-
-export function admitPublicMutation<
-  Args extends Record<string, unknown>,
-  Result,
->(
-  definition: OperationDefinition,
-  handler: DomainHandler<Args, Result>,
-  options: {
-    resolveAdmission?: AdmissionResolver<Args>;
-  } = {},
-) {
-  return async (ctx: MutationCtx, args: Args): Promise<Result> => {
-    const definitionErrors = validateOperationDefinition(definition);
-    if (definitionErrors.length > 0) {
-      throw new Error(
-        `Invalid operation admission definition: ${definitionErrors.join("; ")}`,
-      );
-    }
-
-    const operationAdmission = await (
-      options.resolveAdmission ??
-      ((resolverCtx, resolverArgs, resolverDefinition) =>
-        resolveOperationAdmission(
-          resolverCtx,
-          resolverArgs,
-          resolverDefinition,
-          {
-            normalAdapter: createNormalUserOperationAdapter(),
-          },
-        ))
-    )(ctx, args, definition);
-
-    // Demo visitors are the only actors observed here. The append shares this
-    // transaction on purpose: if the handler throws, the observation rolls
-    // back with it, so recorded actions are ones that actually happened.
-    await captureSharedDemoAdmittedActionWithCtx(ctx, operationAdmission);
-
-    return handler(
-      Object.assign(Object.create(Object.getPrototypeOf(ctx)), ctx, {
-        operationAdmission,
-      }) as OperationMutationCtx,
-      args,
-    );
-  };
-}
-
-type SharedDemoMutationHandler = (
-  ctx: OperationMutationCtx,
-  args: any,
-) => Promise<any>;
-
-export function withOperationMutationAdmission<
-  Handler extends SharedDemoMutationHandler,
->(definition: OperationDefinition, handler: Handler) {
-  return admitPublicMutation(definition, handler, {
-    resolveAdmission: resolveSharedDemoOperationAdmission,
-  }) as (ctx: MutationCtx, args: Parameters<Handler>[1]) => ReturnType<Handler>;
-}
-
-export function resolveSharedDemoOperationAdmission<
-  Args extends Record<string, unknown>,
->(ctx: MutationCtx, args: Args, definition: OperationDefinition) {
-  return resolveOperationAdmission(ctx, args, definition, {
-    normalAdapter: createNormalUserOperationAdapter(),
-    sharedDemoAdapter: createSharedDemoOperationAdapter(),
-  });
-}
+/**
+ * TRANSITIONAL module — retired by U1c.
+ *
+ * The canonical wrappers live at the composition root
+ * (`convex/platform/operationAdmission.ts`). This file exists only so the 134
+ * pre-existing call sites keep compiling under their current import path until
+ * U1c renames them; it is the reason `publicMutation.ts` appears in the
+ * rail-core import-allowlist exemption list, and it is deleted with the legacy
+ * names.
+ *
+ * `withOperationMutationAdmission` is now a thin alias of `admitPublicMutation`
+ * with the FULL default adapter chain, so a shared-demo principal is evaluated
+ * by the demo adapter on every definition rather than only where the caller
+ * remembered to register it.
+ */
+export {
+  admitPublicMutation,
+  resolveSharedDemoOperationAdmission,
+  withOperationMutationAdmission,
+} from "../platform/operationAdmission";

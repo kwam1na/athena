@@ -20,7 +20,13 @@ export function isPublicOperationActor(actor: OperationActor) {
 export function getOperationActorAthenaUserId(
   actor: OperationActor,
 ): Id<"athenaUser"> | undefined {
-  return actor.kind === "public" ? undefined : actor.athenaUserId;
+  return actor.kind === "normal_user" || actor.kind === "shared_demo"
+    ? actor.athenaUserId
+    : undefined;
+}
+
+export function isStorefrontCustomerOperationActor(actor: OperationActor) {
+  return actor.kind === "storefront_customer";
 }
 
 /**
@@ -31,8 +37,9 @@ export function getOperationActorAthenaUserId(
 export function requireOperationActorAthenaUserId(
   actor: OperationActor,
 ): Id<"athenaUser"> {
-  if (actor.kind === "public") {
+  const athenaUserId = getOperationActorAthenaUserId(actor);
+  if (!athenaUserId) {
     throw new Error("Sign in again to continue.");
   }
-  return actor.athenaUserId;
+  return athenaUserId;
 }

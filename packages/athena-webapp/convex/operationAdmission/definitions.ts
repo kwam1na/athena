@@ -2,20 +2,35 @@ import {
   ATHENA_CAPABILITY_CATALOG,
   type AthenaCapability,
 } from "../platform/capabilityCatalog";
+import { isDynamicOperationCapability } from "./capabilities";
+import { validateOperationTarget } from "./resourceGuards";
 import type { OperationDefinition } from "./types";
+import {
+  defineOperation,
+  orderStoreWriteOperation,
+  storeWriteOperation,
+  transactionStoreWriteOperation,
+} from "./domains/_shapes";
+import { U2_POS_OPERATION_DEFINITIONS } from "./domains/u2_pos_definitions";
+import { U3_INVENTORY_CATALOG_OPERATION_DEFINITIONS } from "./domains/u3_inventoryCatalog_definitions";
+import { U4_INVENTORY_IDENTITY_OPERATION_DEFINITIONS } from "./domains/u4_inventoryIdentity_definitions";
+import { U5_OPERATIONS_OPERATION_DEFINITIONS } from "./domains/u5_operations_definitions";
+import { U6_STOREFRONT_CUSTOMER_OPERATION_DEFINITIONS } from "./domains/u6_storefrontCustomer_definitions";
+import { U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS } from "./domains/u7_storefrontOperator_definitions";
+import { U8_REPORTS_OPERATION_DEFINITIONS } from "./domains/u8_reports_definitions";
+import { U9_PLATFORM_OPERATION_DEFINITIONS } from "./domains/u9_platform_definitions";
+import { U10_HTTP_CUSTOMER_OPERATION_DEFINITIONS } from "./domains/u10_httpCustomer_definitions";
+import { U11_HTTP_CORE_OPERATION_DEFINITIONS } from "./domains/u11_httpCore_definitions";
+
+export { defineOperation };
 
 const KNOWN_CAPABILITIES = new Set<AthenaCapability>(
   ATHENA_CAPABILITY_CATALOG.map(({ id }) => id),
 );
 
-export function defineOperation<T extends OperationDefinition>(
-  definition: T,
-): T {
-  return definition;
-}
-
 export const resolveSyncedSaleInventoryReviewGroupOperationDefinition =
   defineOperation({
+    kind: "mutation" as const,
     functionName:
       "operations/openWorkInventoryReviews:resolveSyncedSaleInventoryReviewGroup",
     operationId:
@@ -27,10 +42,15 @@ export const resolveSyncedSaleInventoryReviewGroupOperationDefinition =
       expectedEpochArg: "expectedDemoRestoreEpoch",
     },
     effects: { mode: "none" },
-    actors: { normalUser: "admit", sharedDemo: "admit" },
+    actors: {
+    normalUser: "admit",
+    sharedDemo: "admit",
+    public: "deny",
+  },
   });
 
 export const decideApprovalRequestOperationDefinition = defineOperation({
+    kind: "mutation" as const,
   functionName: "operations/approvalRequests:decideApprovalRequest",
   operationId: "operations/approvalRequests.decideApprovalRequest",
   capability: "approvals.manage",
@@ -52,20 +72,30 @@ export const decideApprovalRequestOperationDefinition = defineOperation({
   },
   readiness: { kind: "store_write" },
   effects: { mode: "none" },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: {
+    normalUser: "admit",
+    sharedDemo: "admit",
+    public: "deny",
+  },
 });
 
 export const requestManualRestoreOperationDefinition = defineOperation({
+    kind: "mutation" as const,
   functionName: "sharedDemo/public:requestManualRestore",
   operationId: "sharedDemo/public.requestManualRestore",
   capability: "demo.lifecycle",
   scope: { kind: "none" },
   readiness: { kind: "none" },
   effects: { mode: "none" },
-  actors: { normalUser: "deny", sharedDemo: "admit" },
+  actors: {
+    normalUser: "deny",
+    sharedDemo: "admit",
+    public: "deny",
+  },
 });
 
 export const resetBrowserExperienceOperationDefinition = defineOperation({
+    kind: "mutation" as const,
   functionName: "sharedDemo/public:resetBrowserExperience",
   operationId: "sharedDemo/public.resetBrowserExperience",
   capability: "demo.lifecycle",
@@ -80,11 +110,16 @@ export const resetBrowserExperienceOperationDefinition = defineOperation({
   },
   readiness: { kind: "none" },
   effects: { mode: "none" },
-  actors: { normalUser: "deny", sharedDemo: "admit" },
+  actors: {
+    normalUser: "deny",
+    sharedDemo: "admit",
+    public: "deny",
+  },
 });
 
 export const bindRegisterBaselineToTerminalOperationDefinition =
   defineOperation({
+    kind: "mutation" as const,
     functionName: "sharedDemo/public:bindRegisterBaselineToTerminal",
     operationId: "sharedDemo/public.bindRegisterBaselineToTerminal",
     capability: "demo.lifecycle",
@@ -102,98 +137,12 @@ export const bindRegisterBaselineToTerminalOperationDefinition =
       expectedEpochArg: "expectedEpoch",
     },
     effects: { mode: "none" },
-    actors: { normalUser: "deny", sharedDemo: "admit" },
-  });
-
-function storeWriteOperation(args: {
-  capability: AthenaCapability;
-  expectedEpochArg?: string;
-  functionName: string;
-  operationId: string;
-}) {
-  return defineOperation({
-    functionName: args.functionName,
-    operationId: args.operationId,
-    capability: args.capability,
-    scope: { kind: "store" as const, storeIdArg: "storeId" },
-    readiness: {
-      kind: "store_write" as const,
-      expectedEpochArg: args.expectedEpochArg,
-    },
-    effects: { mode: "none" as const },
-    actors: { normalUser: "admit" as const, sharedDemo: "admit" as const },
-  });
-}
-
-function transactionStoreWriteOperation(args: {
-  capability: AthenaCapability;
-  functionName: string;
-  operationId: string;
-}) {
-  return defineOperation({
-    functionName: args.functionName,
-    operationId: args.operationId,
-    capability: args.capability,
-    scope: {
-      kind: "store",
-      resolve: async (ctx, operationArgs) => {
-        const transactionId = operationArgs.transactionId;
-        if (typeof transactionId !== "string") return {};
-        const transaction = await ctx.db.get(
-          "posTransaction",
-          transactionId as never,
-        );
-        return transaction ? { storeId: transaction.storeId } : {};
-      },
-    },
-    readiness: { kind: "store_write" },
-    effects: { mode: "none" },
-    actors: { normalUser: "admit", sharedDemo: "admit" },
-  });
-}
-
-function orderStoreWriteOperation(args: {
-  capability: AthenaCapability;
-  effects?:
-    { mode: "protected"; gateways: readonly string[] } | { mode: "none" };
-  functionName: string;
-  operationId: string;
-  publicAccess?: "admit" | "deny";
-}) {
-  return defineOperation({
-    functionName: args.functionName,
-    operationId: args.operationId,
-    capability: args.capability,
-    scope: {
-      kind: "store",
-      resolve: async (ctx, operationArgs) => {
-        const orderId = operationArgs.orderId;
-        if (typeof orderId === "string") {
-          const order = await ctx.db.get("onlineOrder", orderId as never);
-          return order ? { storeId: order.storeId } : {};
-        }
-        const externalReference = operationArgs.externalReference;
-        if (typeof externalReference === "string") {
-          const order = await ctx.db
-            .query("onlineOrder")
-            .withIndex("by_externalReference", (q) =>
-              q.eq("externalReference", externalReference),
-            )
-            .first();
-          return order ? { storeId: order.storeId } : {};
-        }
-        return {};
-      },
-    },
-    readiness: { kind: "store_write" },
-    effects: args.effects ?? { mode: "none" },
     actors: {
-      normalUser: "admit",
-      sharedDemo: "admit",
-      public: args.publicAccess ?? "deny",
-    },
+    normalUser: "deny",
+    sharedDemo: "admit",
+    public: "deny",
+  },
   });
-}
 
 export const completeTransactionOperationDefinition = storeWriteOperation({
   functionName: "pos/public/transactions:completeTransaction",
@@ -386,6 +335,7 @@ function cycleCountDraftStoreWriteOperation(args: {
   storeIdArg?: string;
 }) {
   return defineOperation({
+    kind: "mutation" as const,
     functionName: args.functionName,
     operationId: args.operationId,
     capability: "inventory.adjust",
@@ -402,7 +352,11 @@ function cycleCountDraftStoreWriteOperation(args: {
         },
     readiness: { kind: "store_write" as const },
     effects: { mode: "none" as const },
-    actors: { normalUser: "admit" as const, sharedDemo: "admit" as const },
+    actors: {
+      normalUser: "admit" as const,
+      sharedDemo: "admit" as const,
+      public: "deny" as const,
+    },
   });
 }
 
@@ -479,6 +433,7 @@ export const returnAllItemsToStockOperationDefinition =
   });
 
 export const returnItemsToStockOperationDefinition = defineOperation({
+    kind: "mutation" as const,
   functionName: "storeFront/onlineOrder:returnItemsToStock",
   operationId: "storeFront/onlineOrder.returnItemsToStock",
   capability: "orders.return",
@@ -498,30 +453,43 @@ export const returnItemsToStockOperationDefinition = defineOperation({
   },
   readiness: { kind: "store_write" },
   effects: { mode: "none" },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: {
+    normalUser: "admit",
+    sharedDemo: "admit",
+    public: "deny",
+  },
 });
 
 // Customer-email actions. These are Convex actions, not mutations, so they
-// enter the rail through `actionAdmission` rather than `admitPublicMutation`.
-// Both declare a protected gateway so the demo adapter simulates the send
-// instead of denying the operation outright.
+// enter the rail through the registered admission mutation rather than
+// `admitPublicMutation`. An action is not transactional, so it cannot claim
+// `store_write` semantics: it declares `store_ready`, the admission-time
+// restore fence, and any demo-reachable write it performs re-applies the
+// write fence inside the internal mutation that performs it. Both declare a
+// protected gateway so the demo adapter simulates the send instead of denying
+// the operation outright.
 export const sendOrderUpdateEmailOperationDefinition = orderStoreWriteOperation({
+  kind: "action",
   functionName: "storeFront/onlineOrderUtilFns:sendOrderUpdateEmail",
   operationId: "storeFront/onlineOrderUtilFns.sendOrderUpdateEmail",
   capability: "customer.messaging.send",
   effects: { mode: "protected", gateways: ["order_notification.send"] },
+  readiness: { kind: "store_ready" },
 });
 
 export const sendFeedbackRequestOperationDefinition = orderStoreWriteOperation({
+  kind: "action",
   functionName: "storeFront/reviews:sendFeedbackRequest",
   operationId: "storeFront/reviews.sendFeedbackRequest",
   capability: "reviews.manage",
   effects: { mode: "protected", gateways: ["customer_message.send"] },
+  readiness: { kind: "store_ready" },
 });
 
 // Line-item edits resolve their store through the item's own order, so the
 // admitted scope is the row's store rather than anything the caller names.
 export const updateOnlineOrderItemOperationDefinition = defineOperation({
+    kind: "mutation" as const,
   functionName: "storeFront/onlineOrderItem:update",
   operationId: "storeFront/onlineOrderItem.update",
   capability: "orders.manage",
@@ -538,7 +506,11 @@ export const updateOnlineOrderItemOperationDefinition = defineOperation({
   },
   readiness: { kind: "store_write" },
   effects: { mode: "none" },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: {
+    normalUser: "admit",
+    sharedDemo: "admit",
+    public: "deny",
+  },
 });
 
 function inventoryImportReviewPayloadWriteOperation(
@@ -547,13 +519,18 @@ function inventoryImportReviewPayloadWriteOperation(
     | "finalizeInventoryImportReviewVersionPayload",
 ) {
   return defineOperation({
+    kind: "mutation" as const,
     functionName: `inventory/catalogImport:${functionName}`,
     operationId: `inventory.catalogImport.${functionName}`,
     capability: "inventory.import",
     scope: { kind: "store" as const, storeIdArg: "storeId" },
     readiness: { kind: "store_write" as const },
     effects: { mode: "none" as const },
-    actors: { normalUser: "admit" as const, sharedDemo: "deny" as const },
+    actors: {
+      normalUser: "admit" as const,
+      sharedDemo: "deny" as const,
+      public: "deny" as const,
+    },
   });
 }
 
@@ -580,13 +557,18 @@ function costOverlayStoreWriteOperation(
     | "abandonCostOverlayRun",
 ) {
   return defineOperation({
+    kind: "mutation" as const,
     functionName: `inventory/inventoryImportCostOverlay:${functionName}`,
     operationId: `inventory.inventoryImportCostOverlay.${functionName}`,
     capability: "inventory.import",
     scope: { kind: "store" as const, storeIdArg: "storeId" },
     readiness: { kind: "store_write" as const },
     effects: { mode: "none" as const },
-    actors: { normalUser: "admit" as const, sharedDemo: "deny" as const },
+    actors: {
+      normalUser: "admit" as const,
+      sharedDemo: "deny" as const,
+      public: "deny" as const,
+    },
   });
 }
 
@@ -617,19 +599,25 @@ export const abandonCostOverlayRunOperationDefinition =
 // never a caller-supplied org, and the handlers re-authorize against the same
 // row-derived org.
 export const addNotificationSubscriptionOperationDefinition = defineOperation({
+    kind: "mutation" as const,
   functionName: "notifications/subscriptions:addSubscription",
   operationId: "notifications/subscriptions.addSubscription",
   capability: "organization.manage",
   scope: { kind: "organization", organizationIdArg: "organizationId" },
   readiness: { kind: "none" },
   effects: { mode: "none" },
-  actors: { normalUser: "admit", sharedDemo: "deny" },
+  actors: {
+    normalUser: "admit",
+    sharedDemo: "deny",
+    public: "deny",
+  },
 });
 
 function notificationSubscriptionRowWriteOperation(
   functionName: "setSubscriptionEnabled" | "removeSubscription",
 ) {
   return defineOperation({
+    kind: "mutation" as const,
     functionName: `notifications/subscriptions:${functionName}`,
     operationId: `notifications/subscriptions.${functionName}`,
     capability: "organization.manage",
@@ -649,7 +637,11 @@ function notificationSubscriptionRowWriteOperation(
     },
     readiness: { kind: "none" },
     effects: { mode: "none" },
-    actors: { normalUser: "admit", sharedDemo: "deny" },
+    actors: {
+    normalUser: "admit",
+    sharedDemo: "deny",
+    public: "deny",
+  },
   });
 }
 
@@ -659,7 +651,7 @@ export const setNotificationSubscriptionEnabledOperationDefinition =
 export const removeNotificationSubscriptionOperationDefinition =
   notificationSubscriptionRowWriteOperation("removeSubscription");
 
-export const OPERATION_ADMISSION_DEFINITIONS = [
+const OPERATION_ADMISSION_BASE_DEFINITIONS = [
   resolveSyncedSaleInventoryReviewGroupOperationDefinition,
   decideApprovalRequestOperationDefinition,
   requestManualRestoreOperationDefinition,
@@ -721,6 +713,27 @@ export const OPERATION_ADMISSION_DEFINITIONS = [
   removeNotificationSubscriptionOperationDefinition,
 ] as const satisfies readonly OperationDefinition[];
 
+/**
+ * Every write/action/http definition in the backend.
+ *
+ * Per-unit domain modules are composed here once (U1a) so no Phase B unit ever
+ * edits this file: an owning unit fills its own `domains/uN-*.definitions.ts`
+ * array and nothing else.
+ */
+export const OPERATION_ADMISSION_DEFINITIONS: readonly OperationDefinition[] = [
+  ...OPERATION_ADMISSION_BASE_DEFINITIONS,
+  ...U2_POS_OPERATION_DEFINITIONS,
+  ...U3_INVENTORY_CATALOG_OPERATION_DEFINITIONS,
+  ...U4_INVENTORY_IDENTITY_OPERATION_DEFINITIONS,
+  ...U5_OPERATIONS_OPERATION_DEFINITIONS,
+  ...U6_STOREFRONT_CUSTOMER_OPERATION_DEFINITIONS,
+  ...U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS,
+  ...U8_REPORTS_OPERATION_DEFINITIONS,
+  ...U9_PLATFORM_OPERATION_DEFINITIONS,
+  ...U10_HTTP_CUSTOMER_OPERATION_DEFINITIONS,
+  ...U11_HTTP_CORE_OPERATION_DEFINITIONS,
+];
+
 export function validateOperationDefinition(
   definition: OperationDefinition,
 ): string[] {
@@ -729,9 +742,23 @@ export function validateOperationDefinition(
   if (!definition.operationId.trim()) {
     errors.push("Operation id is required.");
   }
-  if (!KNOWN_CAPABILITIES.has(definition.capability)) {
+
+  if (isDynamicOperationCapability(definition.capability)) {
+    if (definition.capability.candidates.length === 0) {
+      errors.push("Dynamic capability must declare at least one candidate.");
+    }
+    for (const candidate of definition.capability.candidates) {
+      if (!KNOWN_CAPABILITIES.has(candidate)) {
+        errors.push(`Unknown operation capability: ${candidate}`);
+      }
+    }
+    if (typeof definition.capability.resolve !== "function") {
+      errors.push("Dynamic capability must declare a resolver.");
+    }
+  } else if (!KNOWN_CAPABILITIES.has(definition.capability)) {
     errors.push(`Unknown operation capability: ${definition.capability}`);
   }
+
   if (definition.scope.kind === "store") {
     if (!definition.scope.storeIdArg && !definition.scope.resolve) {
       errors.push("Store scope must declare storeIdArg or resolve.");
@@ -744,21 +771,96 @@ export function validateOperationDefinition(
       );
     }
   }
+
+  if (definition.actors.public === undefined) {
+    errors.push("Operation must declare actors.public.");
+  }
+
+  const isHttpKind = definition.kind === "http";
+  const isTransactional = definition.kind === "mutation";
+
+  // An action or HTTP body is not transactional, so it cannot claim write
+  // semantics at admission time. It declares the restore fence instead, and
+  // the internal mutation that performs the write re-applies store_write.
+  if (!isTransactional && definition.readiness.kind === "store_write") {
+    errors.push(
+      `Readiness store_write is only valid on mutation kinds (${definition.kind} declared it).`,
+    );
+  }
+  if (isTransactional && definition.readiness.kind === "store_ready") {
+    errors.push(
+      "Readiness store_ready is only valid on action and http kinds.",
+    );
+  }
   if (
     definition.actors.sharedDemo === "admit" &&
     definition.capability !== "demo.lifecycle" &&
-    definition.readiness.kind !== "store_write"
+    ((isTransactional && definition.readiness.kind !== "store_write") ||
+      (!isTransactional && definition.readiness.kind !== "store_ready"))
   ) {
     errors.push(
-      "Shared-demo writable operations must declare store_write readiness.",
+      isTransactional
+        ? "Shared-demo writable operations must declare store_write readiness."
+        : "Shared-demo admitted action and http operations must declare store_ready readiness.",
     );
   }
+
   if (
     definition.effects.mode === "protected" &&
     definition.effects.gateways.length === 0
   ) {
     errors.push("Protected effects must declare at least one gateway.");
   }
+
+  if (definition.actors.storefrontCustomer === "admit") {
+    if (!isHttpKind) {
+      errors.push(
+        "actors.storefrontCustomer is only valid on http and http_read kinds.",
+      );
+    }
+    if (definition.scope.kind !== "store") {
+      errors.push(
+        "Storefront-customer operations must declare a store scope.",
+      );
+    }
+    // A cookieless request to a customer write route is a terminal denial, not
+    // an anonymous admission: the two actors cannot both be admitted there.
+    if (isHttpKind && definition.actors.public === "admit") {
+      errors.push(
+        "An http write may not admit both storefrontCustomer and public.",
+      );
+    }
+    if (
+      isHttpKind &&
+      definition.ingressVerification?.kind !== "origin_allowlist"
+    ) {
+      errors.push(
+        "Storefront-customer http writes must declare ingressVerification origin_allowlist.",
+      );
+    }
+  }
+
+  if (isHttpKind) {
+    if (definition.actors.storefrontCustomer === undefined) {
+      errors.push("http definitions must declare actors.storefrontCustomer.");
+    }
+    // Public webhook ingress has no identity at all: its only boundary is the
+    // declared verifier, so it may not be omitted.
+    if (
+      definition.actors.public === "admit" &&
+      definition.ingressVerification === undefined
+    ) {
+      errors.push(
+        "Public http definitions must declare ingressVerification.",
+      );
+    }
+  } else if (definition.ingressVerification !== undefined) {
+    errors.push(
+      "ingressVerification is only valid on http and http_read kinds.",
+    );
+  }
+
+  errors.push(...validateOperationTarget(definition));
 
   return errors;
 }

@@ -11,6 +11,7 @@ import {
   SHARED_DEMO_ALLOWED_CAPABILITIES,
   type AthenaCapability,
 } from "../platform/capabilityCatalog";
+import type { AthenaReadIntent } from "../platform/readIntentCatalog";
 
 export const SHARED_DEMO_UNAVAILABLE = SHARED_DEMO_ACTION_DENIED_MESSAGE;
 
@@ -51,6 +52,35 @@ export const SHARED_DEMO_EFFECT_CLASSIFICATIONS = [
   { gateway: "export.deliver", decision: "denied" },
   { gateway: "integration.dispatch", decision: "denied" },
 ] as const;
+
+/**
+ * Closed grant set for shared-demo READS.
+ *
+ * Read intents are not write capabilities, so demo read reach gets its own
+ * list rather than being inferred from `SHARED_DEMO_ALLOWED_CAPABILITIES`.
+ * Seeded in U1a from the intents of every read definition that is currently
+ * `sharedDemo: "admit"`; `readIntentGrants.test.ts` asserts that derivation,
+ * so a demo read can neither widen nor narrow silently.
+ */
+export const SHARED_DEMO_ALLOWED_READ_INTENTS = [
+  "cash_controls.view",
+  "daily_close.view",
+  "daily_operations.view",
+  "inventory.catalog.view",
+  "online_orders.view",
+  "operations.workItems.view",
+  "organization.view",
+  "pos.view",
+  "stock_adjustments.view",
+] as const satisfies readonly AthenaReadIntent[];
+
+const SHARED_DEMO_ALLOWED_READ_INTENT_SET = new Set<string>(
+  SHARED_DEMO_ALLOWED_READ_INTENTS,
+);
+
+export function isSharedDemoReadIntentAllowed(intent: string) {
+  return SHARED_DEMO_ALLOWED_READ_INTENT_SET.has(intent);
+}
 
 export const SHARED_DEMO_POLICY = { defaultDecision: "denied" } as const;
 const SHARED_DEMO_LIFECYCLE_CAPABILITY = "demo.lifecycle";

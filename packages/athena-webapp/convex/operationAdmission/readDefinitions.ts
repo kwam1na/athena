@@ -1,105 +1,30 @@
 import type { Id } from "../_generated/dataModel";
+import { isAthenaReadIntent } from "../platform/readIntentCatalog";
 import type { OperationReadDefinition } from "./types";
+import {
+  defineCashControlsRead,
+  defineDailyCloseRead,
+  defineDailyOperationsRead,
+  defineInventoryCatalogRead,
+  defineOnlineOrdersRead,
+  defineOperationalWorkRead,
+  defineOrganizationRead,
+  definePosRead,
+  defineReadOperation,
+  defineStockAdjustmentsRead,
+} from "./domains/_shapes";
+import { U2_POS_READ_OPERATION_DEFINITIONS } from "./domains/u2_pos_readDefinitions";
+import { U3_INVENTORY_CATALOG_READ_OPERATION_DEFINITIONS } from "./domains/u3_inventoryCatalog_readDefinitions";
+import { U4_INVENTORY_IDENTITY_READ_OPERATION_DEFINITIONS } from "./domains/u4_inventoryIdentity_readDefinitions";
+import { U5_OPERATIONS_READ_OPERATION_DEFINITIONS } from "./domains/u5_operations_readDefinitions";
+import { U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS } from "./domains/u6_storefrontCustomer_readDefinitions";
+import { U7_STOREFRONT_OPERATOR_READ_OPERATION_DEFINITIONS } from "./domains/u7_storefrontOperator_readDefinitions";
+import { U8_REPORTS_READ_OPERATION_DEFINITIONS } from "./domains/u8_reports_readDefinitions";
+import { U9_PLATFORM_READ_OPERATION_DEFINITIONS } from "./domains/u9_platform_readDefinitions";
+import { U10_HTTP_CUSTOMER_READ_OPERATION_DEFINITIONS } from "./domains/u10_httpCustomer_readDefinitions";
+import { U11_HTTP_CORE_READ_OPERATION_DEFINITIONS } from "./domains/u11_httpCore_readDefinitions";
 
-export function defineReadOperation<T extends OperationReadDefinition>(
-  definition: T,
-) {
-  return definition;
-}
-
-function defineDailyOperationsRead(functionName: string, operationId: string) {
-  return defineReadOperation({
-    functionName,
-    operationId,
-    access: { kind: "read", intent: "daily_operations.view" },
-    scope: { kind: "store", storeIdArg: "storeId" },
-    actors: { normalUser: "admit", sharedDemo: "admit" },
-  });
-}
-
-function defineOperationalWorkRead(functionName: string, operationId: string) {
-  return defineReadOperation({
-    functionName,
-    operationId,
-    access: { kind: "read", intent: "operations.workItems.view" },
-    scope: { kind: "store", storeIdArg: "storeId" },
-    actors: { normalUser: "admit", sharedDemo: "admit" },
-  });
-}
-
-function defineDailyCloseRead(functionName: string, operationId: string) {
-  return defineReadOperation({
-    functionName,
-    operationId,
-    access: { kind: "read", intent: "daily_close.view" },
-    scope: { kind: "store", storeIdArg: "storeId" },
-    actors: { normalUser: "admit", sharedDemo: "admit" },
-  });
-}
-
-function definePosRead(functionName: string, operationId: string) {
-  return defineReadOperation({
-    functionName,
-    operationId,
-    access: { kind: "read", intent: "pos.view" },
-    scope: { kind: "store", storeIdArg: "storeId" },
-    actors: { normalUser: "admit", sharedDemo: "admit" },
-  });
-}
-
-function defineCashControlsRead(functionName: string, operationId: string) {
-  return defineReadOperation({
-    functionName,
-    operationId,
-    access: { kind: "read", intent: "cash_controls.view" },
-    scope: { kind: "store", storeIdArg: "storeId" },
-    actors: { normalUser: "admit", sharedDemo: "admit" },
-  });
-}
-
-function defineStockAdjustmentsRead(functionName: string, operationId: string) {
-  return defineReadOperation({
-    functionName,
-    operationId,
-    access: { kind: "read", intent: "stock_adjustments.view" },
-    scope: { kind: "store", storeIdArg: "storeId" },
-    actors: { normalUser: "admit", sharedDemo: "admit" },
-  });
-}
-
-function defineInventoryCatalogRead(
-  functionName: string,
-  operationId: string,
-  publicAccess: "admit" | "deny" = "deny",
-) {
-  return defineReadOperation({
-    functionName,
-    operationId,
-    access: { kind: "read", intent: "inventory.catalog.view" },
-    scope: { kind: "store", storeIdArg: "storeId" },
-    actors: { normalUser: "admit", sharedDemo: "admit", public: publicAccess },
-  });
-}
-
-function defineOnlineOrdersRead(functionName: string, operationId: string) {
-  return defineReadOperation({
-    functionName,
-    operationId,
-    access: { kind: "read", intent: "online_orders.view" },
-    scope: { kind: "store", storeIdArg: "storeId" },
-    actors: { normalUser: "admit", sharedDemo: "admit" },
-  });
-}
-
-function defineOrganizationRead(functionName: string, operationId: string) {
-  return defineReadOperation({
-    functionName,
-    operationId,
-    access: { kind: "read", intent: "organization.view" },
-    scope: { kind: "organization", organizationIdArg: "organizationId" },
-    actors: { normalUser: "admit", sharedDemo: "admit" },
-  });
-}
+export { defineReadOperation };
 
 export const getDailyOperationsSnapshotReadDefinition =
   defineDailyOperationsRead(
@@ -285,19 +210,29 @@ export const listInventorySnapshotPageReadDefinition =
   );
 
 export const listAthenaUserOrganizationsReadDefinition = defineReadOperation({
+    kind: "query" as const,
   functionName: "inventory/organizations:getAll",
   operationId: "inventory.organizations.getAll.read",
   access: { kind: "read", intent: "organization.view" },
   scope: { kind: "none" },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: {
+    normalUser: "admit",
+    sharedDemo: "admit",
+    public: "deny",
+  },
 });
 
 export const getOrganizationByIdOrSlugReadDefinition = defineReadOperation({
+    kind: "query" as const,
   functionName: "inventory/organizations:getByIdOrSlug",
   operationId: "inventory.organizations.getByIdOrSlug.read",
   access: { kind: "read", intent: "organization.view" },
   scope: { kind: "none" },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: {
+    normalUser: "admit",
+    sharedDemo: "admit",
+    public: "deny",
+  },
 });
 
 export const listOrganizationStoresReadDefinition = defineOrganizationRead(
@@ -316,6 +251,7 @@ export const getPosCompletedTransactionsReadDefinition = definePosRead(
 );
 
 export const getPosTransactionReadDefinition = defineReadOperation({
+    kind: "query" as const,
   functionName: "pos/public/transactions:getTransaction",
   operationId: "pos.public.transactions.getTransaction.read",
   access: { kind: "read", intent: "pos.view" },
@@ -333,7 +269,11 @@ export const getPosTransactionReadDefinition = defineReadOperation({
       return transaction ? { storeId: transaction.storeId } : {};
     },
   },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: {
+    normalUser: "admit",
+    sharedDemo: "admit",
+    public: "deny",
+  },
 });
 
 export const getPosTransactionsByStoreReadDefinition = definePosRead(
@@ -342,6 +282,7 @@ export const getPosTransactionsByStoreReadDefinition = definePosRead(
 );
 
 export const getPosTransactionByIdReadDefinition = defineReadOperation({
+    kind: "query" as const,
   functionName: "pos/public/transactions:getTransactionById",
   operationId: "pos.public.transactions.getTransactionById.read",
   access: { kind: "read", intent: "pos.view" },
@@ -359,7 +300,11 @@ export const getPosTransactionByIdReadDefinition = defineReadOperation({
       return transaction ? { storeId: transaction.storeId } : {};
     },
   },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: {
+    normalUser: "admit",
+    sharedDemo: "admit",
+    public: "deny",
+  },
 });
 
 export const getPosStoreActiveSessionOperationsReadDefinition = definePosRead(
@@ -378,6 +323,7 @@ export const getPosStoreSessionsReadDefinition = definePosRead(
 );
 
 export const getPosSessionItemsReadDefinition = defineReadOperation({
+    kind: "query" as const,
   functionName: "inventory/posSessionItems:getSessionItems",
   operationId: "inventory.posSessionItems.getSessionItems.read",
   access: { kind: "read", intent: "pos.view" },
@@ -395,7 +341,11 @@ export const getPosSessionItemsReadDefinition = defineReadOperation({
       return session ? { storeId: session.storeId } : {};
     },
   },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: {
+    normalUser: "admit",
+    sharedDemo: "admit",
+    public: "deny",
+  },
 });
 
 export const getPosRecentTransactionsWithCustomersReadDefinition =
@@ -462,6 +412,7 @@ export const findPotentialPosCustomerMatchesReadDefinition = definePosRead(
 );
 
 export const getPosCustomerByIdReadDefinition = defineReadOperation({
+    kind: "query" as const,
   functionName: "pos/public/customers:getCustomerById",
   operationId: "pos.public.customers.getCustomerById.read",
   access: { kind: "read", intent: "pos.view" },
@@ -479,10 +430,15 @@ export const getPosCustomerByIdReadDefinition = defineReadOperation({
       return customer ? { storeId: customer.storeId } : {};
     },
   },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: {
+    normalUser: "admit",
+    sharedDemo: "admit",
+    public: "deny",
+  },
 });
 
 export const getPosCustomerTransactionsReadDefinition = defineReadOperation({
+    kind: "query" as const,
   functionName: "pos/public/customers:getCustomerTransactions",
   operationId: "pos.public.customers.getCustomerTransactions.read",
   access: { kind: "read", intent: "pos.view" },
@@ -500,11 +456,16 @@ export const getPosCustomerTransactionsReadDefinition = defineReadOperation({
       return customer ? { storeId: customer.storeId } : {};
     },
   },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: {
+    normalUser: "admit",
+    sharedDemo: "admit",
+    public: "deny",
+  },
 });
 
 export const findPosCustomerByStoreFrontUserReadDefinition =
   defineReadOperation({
+    kind: "query" as const,
     functionName: "pos/public/customers:findByStoreFrontUser",
     operationId: "pos.public.customers.findByStoreFrontUser.read",
     access: { kind: "read", intent: "pos.view" },
@@ -522,7 +483,11 @@ export const findPosCustomerByStoreFrontUserReadDefinition =
         return storeFrontUser ? { storeId: storeFrontUser.storeId } : {};
       },
     },
-    actors: { normalUser: "admit", sharedDemo: "admit" },
+    actors: {
+    normalUser: "admit",
+    sharedDemo: "admit",
+    public: "deny",
+  },
   });
 
 export const listPosTerminalsReadDefinition = definePosRead(
@@ -576,6 +541,7 @@ export const getWorkflowTraceByLookupReadDefinition = definePosRead(
 );
 
 export const getOnlineOrderReadDefinition = defineReadOperation({
+    kind: "query" as const,
   functionName: "storeFront/onlineOrder:getForOperations",
   operationId: "storeFront.onlineOrder.getForOperations.read",
   access: { kind: "read", intent: "online_orders.view" },
@@ -613,7 +579,11 @@ export const getOnlineOrderReadDefinition = defineReadOperation({
       return order ? { storeId: order.storeId } : {};
     },
   },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: {
+    normalUser: "admit",
+    sharedDemo: "admit",
+    public: "deny",
+  },
 });
 
 export const listOnlineOrdersReadDefinition = defineOnlineOrdersRead(
@@ -646,11 +616,16 @@ function defineInventoryCostOverlayRead(
     | "getCostOverlayUndoPreview",
 ) {
   return defineReadOperation({
+    kind: "query" as const,
     functionName: `inventory/inventoryImportCostOverlay:${functionName}`,
     operationId: `inventory.inventoryImportCostOverlay.${functionName}.read`,
     access: { kind: "read" as const, intent: "inventory.cost_overlay.view" },
     scope: { kind: "store" as const, storeIdArg: "storeId" },
-    actors: { normalUser: "admit" as const, sharedDemo: "deny" as const },
+    actors: {
+      normalUser: "admit" as const,
+      sharedDemo: "deny" as const,
+      public: "deny" as const,
+    },
   });
 }
 
@@ -672,12 +647,17 @@ export const getCostOverlayUndoPreviewReadDefinition =
 // demo is denied; the handler additionally requires full_admin membership of
 // the requested organization.
 export const listNotificationSubscriptionsReadDefinition = defineReadOperation({
+    kind: "query" as const,
   functionName: "notifications/subscriptions:listSubscriptionsForOrganization",
   operationId:
     "notifications.subscriptions.listSubscriptionsForOrganization.read",
   access: { kind: "read", intent: "notifications.subscriptions.view" },
   scope: { kind: "organization", organizationIdArg: "organizationId" },
-  actors: { normalUser: "admit", sharedDemo: "deny" },
+  actors: {
+    normalUser: "admit",
+    sharedDemo: "deny",
+    public: "deny",
+  },
 });
 
 // Recipient-picker membership read exposes member emails, so shared demo is
@@ -685,16 +665,21 @@ export const listNotificationSubscriptionsReadDefinition = defineReadOperation({
 // requested organization, mirroring listNotificationSubscriptionsReadDefinition.
 export const listOrganizationMemberRecipientCandidatesReadDefinition =
   defineReadOperation({
+    kind: "query" as const,
     functionName:
       "notifications/subscriptions:listOrganizationMemberRecipientCandidates",
     operationId:
       "notifications.subscriptions.listOrganizationMemberRecipientCandidates.read",
     access: { kind: "read", intent: "notifications.subscriptions.view" },
     scope: { kind: "organization", organizationIdArg: "organizationId" },
-    actors: { normalUser: "admit", sharedDemo: "deny" },
+    actors: {
+    normalUser: "admit",
+    sharedDemo: "deny",
+    public: "deny",
+  },
   });
 
-export const OPERATION_READ_ADMISSION_DEFINITIONS = [
+const OPERATION_READ_ADMISSION_BASE_DEFINITIONS = [
   getDailyOperationsSnapshotReadDefinition,
   getDailyOperationsDetailSnapshotReadDefinition,
   getDailyOperationsWeekAnalyticsSnapshotReadDefinition,
@@ -778,6 +763,27 @@ export const OPERATION_READ_ADMISSION_DEFINITIONS = [
   listOrganizationMemberRecipientCandidatesReadDefinition,
 ] as const;
 
+/**
+ * Every read (query/http_read) definition in the backend.
+ *
+ * Composed once in U1a from the per-unit domain modules so no Phase B unit
+ * edits this file.
+ */
+export const OPERATION_READ_ADMISSION_DEFINITIONS: readonly OperationReadDefinition[] =
+  [
+    ...OPERATION_READ_ADMISSION_BASE_DEFINITIONS,
+    ...U2_POS_READ_OPERATION_DEFINITIONS,
+    ...U3_INVENTORY_CATALOG_READ_OPERATION_DEFINITIONS,
+    ...U4_INVENTORY_IDENTITY_READ_OPERATION_DEFINITIONS,
+    ...U5_OPERATIONS_READ_OPERATION_DEFINITIONS,
+    ...U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS,
+    ...U7_STOREFRONT_OPERATOR_READ_OPERATION_DEFINITIONS,
+    ...U8_REPORTS_READ_OPERATION_DEFINITIONS,
+    ...U9_PLATFORM_READ_OPERATION_DEFINITIONS,
+    ...U10_HTTP_CUSTOMER_READ_OPERATION_DEFINITIONS,
+    ...U11_HTTP_CORE_READ_OPERATION_DEFINITIONS,
+  ];
+
 export function validateReadOperationDefinition(
   definition: OperationReadDefinition,
 ) {
@@ -787,9 +793,21 @@ export function validateReadOperationDefinition(
   }
   if (!definition.access.intent.trim()) {
     errors.push("Operation read definition must declare an access intent.");
+  } else if (!isAthenaReadIntent(definition.access.intent)) {
+    errors.push(
+      `Unknown operation read intent: ${definition.access.intent}`,
+    );
   }
   if (definition.access.kind !== "read") {
     errors.push("Operation read definition must use read access.");
+  }
+  if (definition.kind !== "query" && definition.kind !== "http_read") {
+    errors.push(
+      `Operation read definition must declare a read kind (got ${definition.kind}).`,
+    );
+  }
+  if (definition.actors.public === undefined) {
+    errors.push("Operation read definition must declare actors.public.");
   }
   if (
     definition.scope.kind === "store" &&
@@ -806,6 +824,27 @@ export function validateReadOperationDefinition(
     errors.push(
       "Organization scope must declare organizationIdArg or resolve.",
     );
+  }
+  if (definition.kind === "http_read") {
+    if (definition.actors.storefrontCustomer === undefined) {
+      errors.push(
+        "http_read definitions must declare actors.storefrontCustomer.",
+      );
+    }
+  } else if (definition.ingressVerification !== undefined) {
+    errors.push(
+      "ingressVerification is only valid on http and http_read kinds.",
+    );
+  }
+  if (definition.actors.storefrontCustomer === "admit") {
+    if (definition.kind !== "http_read") {
+      errors.push(
+        "actors.storefrontCustomer is only valid on http and http_read kinds.",
+      );
+    }
+    if (definition.scope.kind !== "store") {
+      errors.push("Storefront-customer reads must declare a store scope.");
+    }
   }
   return errors;
 }

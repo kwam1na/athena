@@ -11,6 +11,30 @@ import { requireReadySharedDemoWriteWithCtx } from "./restore";
 
 type AuthCtx = Pick<QueryCtx, "auth" | "db"> | Pick<MutationCtx, "auth" | "db">;
 
+export type SharedDemoActorDenialReason = "demo_disabled" | "session_expired";
+
+/**
+ * A recognized shared-demo principal failure, carrying its reason as data.
+ *
+ * Adapters classify on `reason`, never on message text — the message stays
+ * user-facing and may change without moving a policy decision.
+ */
+export class SharedDemoActorError extends Error {
+  readonly reason: SharedDemoActorDenialReason;
+
+  constructor(reason: SharedDemoActorDenialReason, message: string) {
+    super(message);
+    this.name = "SharedDemoActorError";
+    this.reason = reason;
+  }
+}
+
+export function isSharedDemoActorError(
+  error: unknown,
+): error is SharedDemoActorError {
+  return error instanceof SharedDemoActorError;
+}
+
 export async function getSharedDemoActorWithCtx(
   ctx: AuthCtx,
   options: {
@@ -39,10 +63,16 @@ export async function getSharedDemoActorWithCtx(
     return null;
   }
   if (!isSharedDemoEnabled(options.environment ?? process.env)) {
-    throw new Error("The demo is unavailable in this environment.");
+    throw new SharedDemoActorError(
+      "demo_disabled",
+      "The demo is unavailable in this environment.",
+    );
   }
   if (principal.admissionExpiresAt <= (options.now ?? Date.now())) {
-    throw new Error("The demo session has expired. Open the demo again.");
+    throw new SharedDemoActorError(
+      "session_expired",
+      "The demo session has expired. Open the demo again.",
+    );
   }
 
   return {

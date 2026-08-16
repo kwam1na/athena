@@ -1,0 +1,151 @@
+import { internal } from "../_generated/api";
+import { captureSharedDemoAdmittedActionWithCtx } from "../contextTracking/sharedDemoActionCapture";
+import { getStorefrontClaimFromRequest } from "../http/utils";
+import { isAthenaUnauthenticatedError } from "../lib/athenaUnauthenticated";
+import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
+import {
+  createNormalUserOperationAdapter,
+  createPublicOperationAdapter,
+  registerAthenaIdentityPort,
+} from "../operationAdmission/adapters";
+import { createAdmissionRail } from "../operationAdmission/rail";
+import {
+  createNormalUserReadOperationAdapter,
+  createPublicReadOperationAdapter,
+} from "../operationAdmission/readAdapters";
+import type { MutationCtx } from "../_generated/server";
+import type {
+  OperationDefinition,
+  OperationMutationCtx,
+  OperationResourceGuards,
+  OperationScopeConstraints,
+} from "../operationAdmission/types";
+import { createSharedDemoOperationAdapter } from "../sharedDemo/operationAdapter";
+import { createSharedDemoReadOperationAdapter } from "../sharedDemo/readOperationAdapter";
+import {
+  requireNonDemoFoundationExternalRefs,
+  requireNonDemoFoundationMutation,
+} from "../sharedDemo/foundation";
+import {
+  createStorefrontCustomerOperationAdapter,
+  createStorefrontCustomerReadOperationAdapter,
+} from "../storeFront/operationAdapter";
+
+/**
+ * Composition root for the operation admission rail.
+ *
+ * This is the ONLY module that knows both the rail and the policies it
+ * enforces. The rail core (`convex/operationAdmission/**`) imports nothing but
+ * itself, `_generated`, and the platform catalogs; every adapter, resource
+ * guard, capture port, and ingress verifier is registered here, so adding an
+ * actor kind later is a registration rather than a change to the rail.
+ *
+ * Adapter order is trust order: shared demo -> normal user -> storefront
+ * customer -> public. The chain falls through only on `unauthenticated` /
+ * `not_applicable`; a recognized denial from any adapter is terminal.
+ */
+
+/**
+ * Identity port for the normal-user adapter.
+ *
+ * "No Athena identity here" is `null`, so the chain may fall through to a
+ * lower-trust adapter; anything else is a failure that propagates.
+ */
+const resolveAthenaUser = async (
+  ctx: Parameters<typeof requireAuthenticatedAthenaUserWithCtx>[0],
+) => {
+  try {
+    return await requireAuthenticatedAthenaUserWithCtx(ctx);
+  } catch (error) {
+    // Typed, not textual: only "there is no Athena identity here" becomes a
+    // fall-through. Every other failure — a broken scope lookup, a database
+    // error — propagates, which is what removes the old catch-all that could
+    // re-admit any throw as `public`.
+    if (isAthenaUnauthenticatedError(error)) return null;
+    throw error;
+  }
+};
+
+registerAthenaIdentityPort(resolveAthenaUser);
+
+const resourceGuards: OperationResourceGuards = {
+  protectDemoFoundation: (target) => {
+    requireNonDemoFoundationMutation(target);
+  },
+  protectDemoFoundationExternalRefs: (refs) => {
+    requireNonDemoFoundationExternalRefs([...refs]);
+  },
+};
+
+export const operationAdmissionRail = createAdmissionRail({
+  adapters: [
+    createSharedDemoOperationAdapter(),
+    createNormalUserOperationAdapter({ resolveAthenaUser }),
+    createStorefrontCustomerOperationAdapter(),
+    createPublicOperationAdapter(),
+  ],
+  readAdapters: [
+    createSharedDemoReadOperationAdapter(),
+    createNormalUserReadOperationAdapter({ resolveAthenaUser }),
+    createStorefrontCustomerReadOperationAdapter(),
+    createPublicReadOperationAdapter(),
+  ],
+  resourceGuards,
+  capture: captureSharedDemoAdmittedActionWithCtx,
+  ingressVerifiers: {},
+  entrypoints: {
+    admitOperation: internal.platform.admissionEntrypoints.admitOperation,
+    admitReadOperation:
+      internal.platform.admissionEntrypoints.admitReadOperation,
+  },
+  extractIngressClaim: getStorefrontClaimFromRequest,
+});
+
+export const admitHttpRead = operationAdmissionRail.admitHttpRead;
+export const admitHttpRoute = operationAdmissionRail.admitHttpRoute;
+export const admitPublicAction = operationAdmissionRail.admitPublicAction;
+export const admitPublicMutation = operationAdmissionRail.admitPublicMutation;
+export const admitPublicQuery = operationAdmissionRail.admitPublicQuery;
+
+/** Handlers behind the registered internal admission entry points. */
+export const admitOperationWithCtx =
+  operationAdmissionRail.admitOperationWithCtx;
+export const admitReadOperationWithCtx =
+  operationAdmissionRail.admitReadOperationWithCtx;
+
+export type { OperationScopeConstraints };
+
+/**
+ * Transitional aliases.
+ *
+ * `withOperationMutationAdmission` / `withOperationReadAdmission` are the old
+ * two-name-per-kind surface. They are now thin aliases of the canonical
+ * wrappers with the FULL default adapter chain — the difference the old names
+ * used to carry (shared demo registered or not) no longer exists, so a demo
+ * principal is evaluated by the demo adapter on every definition. U1c renames
+ * the 134 call sites and deletes these.
+ */
+type LegacyMutationHandler = (
+  ctx: OperationMutationCtx,
+  args: any,
+) => Promise<any>;
+
+export function withOperationMutationAdmission<
+  Handler extends LegacyMutationHandler,
+>(definition: OperationDefinition, handler: Handler) {
+  return operationAdmissionRail.admitPublicMutation(
+    definition,
+    handler as never,
+  ) as (ctx: MutationCtx, args: Parameters<Handler>[1]) => ReturnType<Handler>;
+}
+
+export const withOperationReadAdmission =
+  operationAdmissionRail.admitPublicQuery;
+
+/**
+ * Full-chain admission resolution for handlers that must catch the denial and
+ * translate it (rather than let it propagate). Successor of the old
+ * `resolveSharedDemoOperationAdmission`; U1c folds the remaining call site in.
+ */
+export const resolveSharedDemoOperationAdmission =
+  operationAdmissionRail.resolveWriteAdmission;
